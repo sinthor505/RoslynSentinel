@@ -5,6 +5,21 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Git tool: listed-scope commit rejected staged deletions and ignored tracked paths; shell-parity gaps - fixed 2026-09-30
+
+`blocking_error_git_commit_listed_scope_rejects_staged_deletions_and_ignored_tracked_paths.md` (moved to
+`docs/current/blockers/resolved/`) documented `Git(commit, scope: listed)` failing on already-staged
+deletions and tracked files under gitignored directories, leaving a half-staged index and burying the
+cause under CRLF warnings. Fixed, with the shell-parity gaps found alongside it, by
+`plan_git_tool_listed_scope_and_shell_parity.md` in phases (commits `d8af128`, `b692dfc`, `d439eec`,
+`59e3599`, `c124b51`, `e3852f9`, `0ecc527`, plus the Phase 6 commit `002384a`): path classification and atomic
+refusal for stage/commit, hook rule alignment, read-side parity, a single `ref` parameter (reset now
+requires one), idempotent `createBranch`, `pull --no-rebase`, non-interactive git, refusal to amend a
+pushed HEAD, `abort` + `InProgress` + `mainline`, and specific `Git*` error codes with `Detail`
+(`GitError` stays the fallback). This also closes the TODO entry "`Git(operation: status)` has no
+pagination for dirty trees": `status` now takes `maxEntries` (found 2026-09-25) - raising the cap
+rather than adding offset paging. Still open: `worktree`/`stash`/`tag` (see TODO.md).
+
 ## MoveMember couldn't move nested types and didn't detect un-moved same-class dependencies — fixed 2026-09-28
 
 `blocking_error_movemember_nested_class_dependency_not_moved.md` (moved to

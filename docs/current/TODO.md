@@ -154,6 +154,8 @@ hash/`refA..refB`/`refA...refB` range, first-commit-safe via the empty-tree fall
 commit's metadata + diff, same range/first-commit handling as `diff`), `stage`/`add`, `unstage`,
 `commit`, `revert`, `branch`, `checkout`, `push`, `fetch`, `pull` (plain merge or `--rebase`).
 
+**2026-09-30: the listed-scope stage/commit rewrite, read-side parity (`status` `maxEntries`, rename origin, `nameOnly`/`stat`), single `ref` param, `abort`/`InProgress`/`mainline` and specific error codes all shipped via `plan_git_tool_listed_scope_and_shell_parity.md` - see `CLOSED.md`.**
+
 Still missing:
 
 - **`worktree`** (add / list / remove) — PlanStepRunner drives worktrees directly, so this is the
@@ -170,6 +172,17 @@ Still missing:
 Why it matters beyond convenience: each uncovered operation is a permanent, sanctioned hole in the
 dog-fooding chokepoint, so those code paths never get exercised and never surface the bugs that
 dog-fooding exists to find.
+
+## `GitImpl` generic catch blocks put `ex.Message` into `Error`
+
+**Found:** 2026-09-30, during the Git listed-scope/shell-parity plan (Phases 1-6). About 16
+`catch (Exception ex)` blocks in `RoslynSentinel.Tools.Basic/GitImpl.cs` build a failed result from
+`ex.Message`, which can leak raw exception text (and potentially internal paths) into the tool's
+`Error`/`ResultError.Message`, against the CLAUDE.md rule that raw exceptions never reach a tool result.
+
+**Suggested approach:** route these through one helper that logs the exception server-side and returns a
+fixed, actionable message (plus a `GitError` code and `Detail` naming the operation and a next step), and
+add a test that forces an exception path and asserts no exception text is exposed.
 
 ## `docCommentId` parameter audit across all tools — not started
 
@@ -568,19 +581,3 @@ Three concrete gaps, all still open:
   memory) is still unresolved — same open question as the prior occurrence,
   `blocking_error_session_halt_from_out_of_band_rm_mid_spike.md`.
 
-## `Git(operation: "status")` has no pagination for dirty trees larger than 10 files
-
-**Found:** 2026-09-25, while scoping a `git commit` to a specific file inside a 115-file dirty tree
-(see `docs/current/blockers/resolved/blocking_error_git_diff_target_head_vs_working_inconsistency.md`,
-which this was split out of — that doc's `target: "HEAD"` diff bug is fixed; this pagination gap is
-not, and was never a duplicate of it).
-
-**What:** `status` returns only 10 unstaged-file entries per call, with `isTruncated: true` when more
-exist, but the tool's schema has no `offset`/`limit`/`page` parameter to retrieve the remainder. The
-truncation itself is not a correctness bug — `totalUnstagedCount` was verified accurate against real
-shell `git status --short` — but there is currently no way to enumerate a large dirty tree's full file
-list in a bounded number of MCP `Git` calls.
-
-**Suggested approach:** add an `offset`/`limit` (or cursor) pair to `status`'s schema, mirroring the
-pagination pattern already used elsewhere in this repo's tools (e.g. `hasMorePages` on list-shaped
-results), and document how to page through `isTruncated: true`.
