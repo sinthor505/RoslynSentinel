@@ -124,6 +124,7 @@ $targetProject = Join-Path $repoRoot $flavorToProject[$Flavor]
 # Simplest correct fix: stop every RoslynSentinel* process up front, unconditionally, before any
 # build/test. Restarting anything stopped here is the caller's job once the script finishes.
 $allRunning = Get-Process | Where-Object { $_.ProcessName -like '*RoslynSentinel*' }
+$allRunning = $null # forcing all running processes to stop is no longer required
 if ($allRunning) {
     Write-Host "Stopping all running RoslynSentinel processes before build/test (any of them can transitively lock this build):" -ForegroundColor Yellow
     foreach ($proc in $allRunning) {
