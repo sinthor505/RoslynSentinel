@@ -99,17 +99,52 @@ public static class ServerStartupHelpers
             : value.Split(',').Select(n => n.Trim()).Where(n => n.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Every tool class carries a "Sentinel" prefix (e.g. WorkspaceTools,
-    /// GitTools), so a shortened --include-tools/--exclude-tools name like "GitTools"
-    /// can be resolved by prepending it unconditionally when it's not already present.
+    /// Every tool-class name the registry knows about (both servers' mode maps plus the codemod
+    /// class), used to resolve a user-typed --include-tools/--exclude-tools name to the exact
+    /// registered spelling.
+    /// </summary>
+    private static readonly HashSet<string> KnownToolClassNames =
+        new(
+            ToolClassRegistry.BasicModeToToolClasses.Values
+                .Concat(ToolClassRegistry.AdvancedModeToToolClasses.Values)
+                .SelectMany(classes => classes)
+                .Append(ToolClassRegistry.CodemodToolClass),
+            StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Resolves each --include-tools/--exclude-tools name to the class name actually registered,
+    /// accepting it with or without a legacy "Sentinel" prefix. Most classes are registered
+    /// unprefixed (WorkspaceTools, GitTools) but a few keep the prefix (SentinelSymbolTools), and
+    /// older launch scripts type the shortened form ("SymbolTools"). This previously prepended
+    /// "Sentinel" to every name unconditionally, so "--exclude-tools=GitTools" became
+    /// "SentinelGitTools" and silently matched nothing - which would have made the SubAgent
+    /// recursion guard (--exclude-tools=SubAgentTools,SubAgentEvalTools) a no-op. A name matching
+    /// no registered class is returned unchanged rather than guessed at.
     /// </summary>
     private static HashSet<string> NormalizeToolClassNames(HashSet<string> names)
     {
+        const string prefix = "Sentinel";
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var name in names)
         {
-            result.Add(name.StartsWith("Sentinel", StringComparison.OrdinalIgnoreCase) ? name : "Sentinel" + name);
+            if (KnownToolClassNames.Contains(name))
+            {
+                result.Add(name);
+            }
+            else if (KnownToolClassNames.Contains(prefix + name))
+            {
+                result.Add(prefix + name);
+            }
+            else if (name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                && KnownToolClassNames.Contains(name[prefix.Length..]))
+            {
+                result.Add(name[prefix.Length..]);
+            }
+            else
+            {
+                result.Add(name);
+            }
         }
 
         return result;
