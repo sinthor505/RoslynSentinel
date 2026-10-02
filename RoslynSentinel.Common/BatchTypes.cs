@@ -566,6 +566,11 @@ public class AttributeEdit
     public string FilePath { get; set; } = "";
     public string TargetName { get; set; } = "";
     public string ExistingAttribute { get; set; } = "";
+    /// <summary>Alias for <see cref="ExistingAttribute"/> (supply one or the other; both with different values is rejected). The attribute to add/replace/remove.</summary>
+    public string? Attribute
+    {
+        get; set;
+    }
     public AttributeModifyAction Action
     {
         get; set;

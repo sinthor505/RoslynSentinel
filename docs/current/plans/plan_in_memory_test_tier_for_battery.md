@@ -1,6 +1,6 @@
 # Plan: Move engine-correctness Battery tests onto an in-memory workspace tier
 
-**Status:** IN PROGRESS 2026-10-02. Committed: fakes, `DiskWriteRoundTripTests`, `ModifyModifierBatchTests` (in-memory). NOT committed: `ModifyAttributeBatchTests`, `ModifyBaseTypeBatchTests` and the subagent's engine/tool changes (it was still running at wrap-up; see Step 0).
+**Status:** IN PROGRESS 2026-10-02. Step 0 landed: commit 5bc79a1 (fakes, `DiskWriteRoundTripTests`, `ModifyModifierBatchTests`) plus a second commit for the batch-edit fixes and the converted `ModifyAttributeBatchTests`/`ModifyBaseTypeBatchTests` (Build 0 errors, 48/48 batch tests pass). Steps 1-3 remain.
 
 ## Problem
 Battery.Basic was the slowest project. Test-level parallelism (commit 3037e5b) fixed serialization, leaving it CPU-bound:
@@ -33,12 +33,19 @@ Two tiers:
 ## Steps
 
 ### Step 0 - Land the in-flight work
-- Files still uncommitted at wrap-up: `RoslynSentinel.Tests.Battery.Basic/ModifyAttributeBatchTests.cs`, `ModifyBaseTypeBatchTests.cs`
-  (my in-memory conversion plus the subagent's new regression tests), and the subagent's changes in
-  `RoslynSentinel.Common/{BatchTypes,RoslynFormattingHelper,ToolParams}.cs`, new `Common/ReplaceNodesResult.cs`,
+- Done (second commit): `ModifyAttributeBatchTests.cs` and `ModifyBaseTypeBatchTests.cs` converted to in-memory, plus the
+  subagent's fixes in `Common/{BatchTypes,RoslynFormattingHelper,ToolParams}.cs`, new `Common/ReplaceNodesResult.cs`,
   `Engines.Basic/MemberRefactoringEngine.cs`, new `Engines.Basic/BaseTypeTextEditBuilder.cs`,
-  `Tools.Basic/{RefactoringStructuralImpl,RefactoringStructuralTools}.cs`. Its work was not confirmed finished or building;
-  I asked it to wrap up and report. Build, run the batch fixtures, review the diff, then commit these together.
+  `Tools.Basic/{RefactoringStructuralImpl,RefactoringStructuralTools}.cs`: ModifyBaseType batch applies as text spans
+  (overlap -> `CannotEdit` naming both edits), `ReplaceNodesFormattedAsync` returns `ReplaceNodesResult` with
+  `UnlocatedNodes` (modifier batch refuses to write when a node is unlocated), and `attribute` is an alias for
+  `existingAttribute` (add/replace/remove, singular and batch; conflicting values rejected naming both).
+- Known leftovers from that work: the modifier-batch unlocated-node error path is covered only by a helper-level test
+  (no tool-level test possible); single-edit `ModifyAttribute(action: remove)` on a type-level target fails with "target
+  not found" (`RemoveAttributeAsync` excludes type candidates, the batch path supports them) - not fixed; only the
+  base-type fold change got no mutation check beyond the helper test; the alias tests have no mutation check.
+- Verified at commit time: Build 0 errors; `ModifyAttributeBatchTests|ModifyBaseTypeBatchTests|ModifyModifierBatchTests` 48/48.
+  The full solution suite was not run.
 - Change: a background subagent was dispatched to (1) make `ApplyBaseTypeBatchAsync` safe for nested type + container
   (apply as spans against the original snapshot, like ModifyAttribute commit 44ecdc0), (2) make
   `ReplaceNodesFormattedAsync` stop silently skipping a replacement it cannot locate (surface it; update all callers),

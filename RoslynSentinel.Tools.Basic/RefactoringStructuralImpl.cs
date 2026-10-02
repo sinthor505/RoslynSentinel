@@ -167,6 +167,26 @@ public class RefactoringStructuralImpl
         return new SentinelCallToolResult<AppliedChangeSummary>() { IsSuccess = true, StatusMessage = description, SuccessData = summary };
     }
 
+    /// <summary>
+    /// 'attribute' is an accepted alias for 'existingAttribute' (small models reach for the shorter name on action: add,
+    /// where nothing "exists" yet). Returns the effective attribute source, or null with <paramref name="error"/> set when
+    /// both were supplied with different values - silently preferring one would apply an attribute the caller did not
+    /// necessarily mean.
+    /// </summary>
+    private static string? ResolveAttributeAlias(string? existingAttribute, string? attribute, string where, out string? error)
+    {
+        error = null;
+        static string Normalize(string value) => value.Trim().TrimStart('[').TrimEnd(']').Trim();
+        if (!string.IsNullOrWhiteSpace(existingAttribute) && !string.IsNullOrWhiteSpace(attribute)
+            && !string.Equals(Normalize(existingAttribute), Normalize(attribute), StringComparison.Ordinal))
+        {
+            error = $"{where}: 'attribute' and 'existingAttribute' are aliases for the same value but were both supplied with different values ('{attribute}' vs '{existingAttribute}'). Supply only one of them.";
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(existingAttribute) ? attribute : existingAttribute;
+    }
+
     private async Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyAttributeBatch(List<AttributeEdit> edits, bool dryRun, bool returnDiff, CancellationToken cancellationToken)
     {
         if (edits.Count > MaxModifierFamilyEditsPerBatch)
@@ -190,9 +210,18 @@ public class RefactoringStructuralImpl
             {
                 perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): targetName is required.");
             }
-            if (string.IsNullOrEmpty(edits[i].ExistingAttribute))
+            var resolvedAttributeSource = ResolveAttributeAlias(edits[i].ExistingAttribute, edits[i].Attribute, $"edits[{i}] ({edits[i].FilePath})", out var aliasError);
+            if (aliasError != null)
             {
-                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): existingAttribute is required.");
+                perEditErrors.Add(aliasError);
+            }
+            else
+            {
+                edits[i].ExistingAttribute = resolvedAttributeSource ?? "";
+                if (string.IsNullOrEmpty(edits[i].ExistingAttribute))
+                {
+                    perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): existingAttribute (or its alias 'attribute') is required.");
+                }
             }
             if (edits[i].Action == AttributeModifyAction.replace && string.IsNullOrEmpty(edits[i].NewAttribute))
             {
@@ -844,6 +873,7 @@ public class RefactoringStructuralImpl
         string? existingAttribute = null,
         AttributeModifyAction? action = null,
         string? newAttribute = null,
+        string? attribute = null,
         string? contextSnippet = null,
         string? lineBefore = null,
         string? lineAfter = null,
@@ -853,7 +883,7 @@ public class RefactoringStructuralImpl
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
-        bool hasSingularEdit = filepath.HasValue || !string.IsNullOrEmpty(targetName) || !string.IsNullOrEmpty(existingAttribute) || action.HasValue;
+        bool hasSingularEdit = filepath.HasValue || !string.IsNullOrEmpty(targetName) || !string.IsNullOrEmpty(existingAttribute) || !string.IsNullOrEmpty(attribute) || action.HasValue;
         bool hasBatchEdit = edits != null;
 
         if (hasSingularEdit && hasBatchEdit)
@@ -880,13 +910,25 @@ public class RefactoringStructuralImpl
             return await ModifyAttributeBatch(edits, dryRun, returnDiff, cancellationToken);
         }
 
+        var resolvedAttributeSource = ResolveAttributeAlias(existingAttribute, attribute, "ModifyAttribute", out var aliasError);
+        if (aliasError != null)
+        {
+            return new SentinelCallToolResult<AppliedChangeSummary>()
+            {
+                IsSuccess = false,
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, aliasError)
+            };
+        }
+
+        existingAttribute = resolvedAttributeSource;
+
         if (!filepath.HasValue || string.IsNullOrEmpty(targetName) || string.IsNullOrEmpty(existingAttribute) || !action.HasValue)
         {
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsSuccess = false,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyAttribute: 'filepath', 'targetName', 'existingAttribute', and 'action' are all required, unless 'edits' is supplied instead.")
+                    "ModifyAttribute: 'filepath', 'targetName', 'existingAttribute' (or its alias 'attribute'), and 'action' are all required, unless 'edits' is supplied instead.")
             };
         }
 

@@ -111,8 +111,15 @@ public static class RoslynFormattingHelper
     /// current root before building its replacement, the same idiom already used in
     /// <c>AdvancedRefactoringEngine</c> for chained method-body rewrites. Each old node's leading/
     /// trailing trivia is preserved onto its replacement by default, same as the single-pair overload.
+    /// <para>
+    /// A replacement whose old node cannot be located (for example because an ancestor of it was replaced earlier in the
+    /// same fold, which takes the descendant's pending replacement with it) is not applied and is reported in
+    /// <see cref="ReplaceNodesResult.UnlocatedNodes"/>. Callers must check <see cref="ReplaceNodesResult.AllReplacementsApplied"/>
+    /// and refuse to write the text when it is false. Edits whose targets can nest should use text-span edits against
+    /// one original snapshot instead (see <c>AttributeTextEditBuilder</c>).
+    /// </para>
     /// </summary>
-    public static async Task<string> ReplaceNodesFormattedAsync(Document document, SyntaxNode root, Dictionary<SyntaxNode, SyntaxNode> replacements, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld)
+    public static async Task<ReplaceNodesResult> ReplaceNodesFormattedAsync(Document document, SyntaxNode root, Dictionary<SyntaxNode, SyntaxNode> replacements, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld)
     {
         var originalSourceText = await document.GetTextAsync(cancellationToken);
         var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
@@ -121,11 +128,15 @@ public static class RoslynFormattingHelper
         var annotation = new SyntaxAnnotation();
 
         var currentRoot = trackedRoot;
+        var unlocatedNodes = new List<SyntaxNode>();
         foreach (var (oldNode, newNode) in replacements)
         {
             var currentOldNode = currentRoot.GetCurrentNode(oldNode);
             if (currentOldNode == null)
             {
+                // Never skip silently: an ancestor replaced earlier in this fold takes this node's replacement with it.
+                // The caller must see this and refuse to write a result that is missing the edit.
+                unlocatedNodes.Add(oldNode);
                 continue;
             }
 
@@ -137,7 +148,7 @@ public static class RoslynFormattingHelper
 
         var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(currentRoot), annotation, cancellationToken: cancellationToken);
         var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
-        return EolUtilities.NormalizeEol(formattedText, dominantEol);
+        return new ReplaceNodesResult(EolUtilities.NormalizeEol(formattedText, dominantEol), unlocatedNodes);
     }
 
     /// <summary>

@@ -1151,11 +1151,23 @@ public class MemberRefactoringEngine
             return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
         }
 
+        var replaced = await RoslynFormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken);
+        if (!replaced.AllReplacementsApplied)
+        {
+            // A replacement whose target could not be located in the evolving tree used to be skipped silently, so the
+            // tool reported success for an edit that was never written. Name each affected edit and refuse to write.
+            var unlocated = edits
+                .Where(e => resolvedTargets.TryGetValue(e.Index, out var node) && replaced.UnlocatedNodes.Contains(node))
+                .Select(e => $"edits[{e.Index}] ({e.TargetName}): the target could not be located after other edits in this batch changed the tree (it is nested inside, or overlaps, another edit's target in '{filePath}'). Split these edits into separate calls.")
+                .ToList();
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", unlocated.Count > 0 ? unlocated : [$"'{filePath}': {replaced.UnlocatedNodes.Count} edit(s) could not be applied because their targets could not be located. Split these edits into separate calls."]) };
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
+            UpdatedText = replaced.Text
         };
     }
 
@@ -4682,8 +4694,9 @@ public class MemberRefactoringEngine
     /// <summary>
     /// Batch form of <see cref="AddBaseTypeAsync"/>/<see cref="RemoveBaseTypeAsync"/>: same execution
     /// model as <see cref="ApplyModifierBatchAsync"/> -> _symbolNavigationEngine. Resolve every edit's type target against ONE
-    /// original root, reject same-node collisions, fold all replacements into one
-    /// <see cref="RoslynFormattingHelper.ReplaceNodesFormattedAsync"/> call.
+    /// original root, reject same-node collisions, then apply all edits as text spans
+    /// against the original text via <see cref="AttributeTextEditBuilder.TryApply"/> (so a nested type and its containing
+    /// type compose); overlapping spans are rejected with a message naming both edits. AppliedEditIndexes lists the edits applied.
     /// </summary>
     public async Task<DocumentEditResult> ApplyBaseTypeBatchAsync(FilePathWrapper filePath, IReadOnlyList<(int Index, string TypeName, string BaseTypeName, AddRemoveAction Action, string? ContextSnippet, string? LineBefore, string? LineAfter)> edits, CancellationToken cancellationToken = default)
     {
@@ -4749,7 +4762,11 @@ public class MemberRefactoringEngine
             return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
         }
 
-        var replacements = new Dictionary<SyntaxNode, SyntaxNode>();
+        // Text-span edits against the ORIGINAL text (same approach as ApplyAttributeBatchAsync). Folding ReplaceNode over
+        // type nodes silently dropped a nested type's edit when its containing type was also edited, because the
+        // replacement of an ancestor discards the descendant's pending replacement.
+        var textEdits = new List<AttributeTextEditBuilder.TextEdit>();
+        var appliedIndexes = new List<int>();
         foreach (var edit in edits)
         {
             var container = resolvedTargets[edit.Index];
@@ -4760,18 +4777,19 @@ public class MemberRefactoringEngine
                     errors.Add($"edits[{edit.Index}] ({edit.TypeName}): base type already exists.");
                     continue;
                 }
-                var baseType = SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(edit.BaseTypeName));
-                replacements[container] = container.AddBaseListTypes(baseType);
+                textEdits.Add(BaseTypeTextEditBuilder.BuildAddEdit(edit.Index, container, edit.BaseTypeName));
+                appliedIndexes.Add(edit.Index);
             }
             else
             {
-                if (container.BaseList == null)
+                var removeEdit = BaseTypeTextEditBuilder.BuildRemoveEdit(edit.Index, container, edit.BaseTypeName);
+                if (removeEdit is null)
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TypeName}): base type not found.");
+                    errors.Add($"edits[{edit.Index}] ({edit.TypeName}): base type '{edit.BaseTypeName}' not found.");
                     continue;
                 }
-                var remaining = container.BaseList.Types.Where(t => !t.ToString().Contains(edit.BaseTypeName)).ToList();
-                replacements[container] = remaining.Count == 0 ? container.WithBaseList(null) : container.WithBaseList(container.BaseList.WithTypes(SyntaxFactory.SeparatedList(remaining)));
+                textEdits.Add(removeEdit.Value);
+                appliedIndexes.Add(edit.Index);
             }
         }
 
@@ -4780,11 +4798,18 @@ public class MemberRefactoringEngine
             return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
         }
 
+        var updatedText = AttributeTextEditBuilder.TryApply(sourceText, textEdits, out var overlapError);
+        if (updatedText is null)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = overlapError ?? "Edits change overlapping source text. Split these into separate calls." };
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
+            UpdatedText = updatedText,
+            AppliedEditIndexes = appliedIndexes
         };
     }
 }

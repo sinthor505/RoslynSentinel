@@ -111,7 +111,7 @@ public static class ToolParams
     // Added by ModifyAttribute batch support
     public const string AttributeEdits =
     "Batch form: apply several add/replace/remove-attribute edits in one call instead of one call per " +
-    "edit. Mutually exclusive with filepath/targetName/existingAttribute/action/newAttribute - supply " +
+    "edit. Each item takes existingAttribute or its alias attribute (not both with different values). Mutually exclusive with filepath/targetName/existingAttribute/attribute/action/newAttribute - supply " +
     "either the singular params or this array, never both. Every edit's target is resolved against " +
     "each file's ORIGINAL syntax tree (not against the result of an earlier edit in this same array), " +
     "then all edits for a file are applied together and written as one atomic change. Two edits in the " +

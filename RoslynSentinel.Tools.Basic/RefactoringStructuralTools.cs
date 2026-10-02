@@ -171,19 +171,21 @@ public class RefactoringStructuralTools
 
     [McpServerTool(Name = "ModifyAttribute")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds, replaces, or removes an [Attribute] on a type or member. Use ChangeAccessibility for accessibility keywords and ModifyModifier for other modifier keywords, not this tool.")]
+    [Description("Adds, replaces, or removes an [Attribute] on a type or member. The attribute source goes in existingAttribute (alias: attribute - either name works for add/replace/remove, in the singular params and in each edits[] item). Use ChangeAccessibility for accessibility keywords and ModifyModifier for other modifier keywords, not this tool.")]
     public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyAttribute(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'edits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filePath = null,
         [Description("For overloaded/duplicate-named targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: false)] string? targetName = null,
-        [Description("The attribute to add/replace/remove. May include or omit the surrounding [ ] brackets.")]
+        [Description("The attribute to add/replace/remove. May include or omit the surrounding [ ] brackets. 'attribute' is an accepted alias - supply either one; supplying both with different values is rejected.")]
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string? existingAttribute = null,
         [Consumes(DataTag.Action, required: false)] AttributeModifyAction? action = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for action=replace, unused for add/remove.
         [Description("Required for action=replace - the attribute to replace existingAttribute with. Not used for add/remove.")]
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string? newAttribute = null,
+        [Description("Alias for existingAttribute (handy for action=add: the attribute to add, e.g. \"Obsolete\" or \"[Obsolete]\"). Supply either attribute or existingAttribute; supplying both with different values is rejected.")]
+        [ExternalInputRequired(DataTag.AttributeName, required: false)] string? attribute = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
@@ -192,7 +194,7 @@ public class RefactoringStructuralTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default) =>
-        _impl.ModifyAttribute(reason, filePath, targetName, existingAttribute, action, newAttribute, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
+        _impl.ModifyAttribute(reason, filePath, targetName, existingAttribute, action, newAttribute, attribute, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyModifier", UseStructuredContent = false, OutputSchemaType = typeof(ModifyModifierResultEnvelope))]
     [Produces(DataTag.ChangeId)]
