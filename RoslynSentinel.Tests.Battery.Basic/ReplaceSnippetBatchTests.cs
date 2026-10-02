@@ -4,19 +4,48 @@
 // batchEdits to one file, batchEdits spanning multiple files, overlap rejection, and the either/or validation
 // against the singular filepath/oldContent/newContent parameters.
 //
-// A real on-disk solution (TestSolutionFixture + PersistentWorkspaceManager) is used, matching
-// ReplaceSnippetSizeGuardTests, because batch cases assert on file contents after apply.
+// About the tool's code-correctness, so it runs on an InMemoryWorkspace (no temp directory, MSBuild load or disk
+// write). See ModifyAttributeBatchTests for the pattern. Disk-level fidelity (BOM, EOL) lives in DiskWriteRoundTripTests.
 
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Parallelizable(ParallelScope.All)]
 public class ReplaceSnippetBatchTests
 {
+    private const string StatusRelativePath = "ContosoOrders.Core/OrderStatus.cs";
+    private const string LineRelativePath = "ContosoOrders.Core/OrderLine.cs";
+
+    private const string StatusSource = """
+    namespace ContosoOrders.Core;
+
+    public enum OrderStatus
+    {
+        Pending,
+        Shipped,
+    }
+    """;
+
+    private const string LineSource = """
+    namespace ContosoOrders.Core;
+
+    public record OrderLine(string Sku, int Quantity);
+    """;
+
+    private static InMemoryWorkspace CreateWorkspace() =>
+        InMemoryWorkspace.Create((StatusRelativePath, StatusSource), (LineRelativePath, LineSource));
+
+    private static string FirstLine(string text) => text.Split('\n')[0].TrimEnd('\r');
+
+    private static string LastNonEmptyLine(string text) =>
+        text.Split('\n').Reverse().First(l => !string.IsNullOrWhiteSpace(l)).TrimEnd('\r');
+
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
     {
         var config = new SentinelConfiguration();
@@ -41,18 +70,15 @@ public class ReplaceSnippetBatchTests
     [Test]
     public async Task ReplaceSnippet_BatchTwoEditsSameFile_BothApplyAgainstOriginalSnapshotAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
 
-        var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "OrderStatus.cs");
-        var originalContent = await File.ReadAllTextAsync(targetFile);
-        var lines = originalContent.Split('\n');
+        var targetFile = workspace.PathOf(StatusRelativePath);
+        var originalContent = workspace.ReadText(StatusRelativePath);
         // Two distinct, non-adjacent anchor lines in the same file -> both resolved against the
         // one original snapshot, not against each other's output.
-        var firstAnchor = lines[0].TrimEnd('\r');
-        var lastNonEmptyLine = lines.Reverse().First(l => !string.IsNullOrWhiteSpace(l)).TrimEnd('\r');
+        var firstAnchor = FirstLine(originalContent);
+        var lastNonEmptyLine = LastNonEmptyLine(originalContent);
 
         var result = await tools.ReplaceSnippet(
             reason: "test batch same file",
@@ -69,15 +95,13 @@ public class ReplaceSnippetBatchTests
     [Test]
     public async Task ReplaceSnippet_BatchAcrossTwoFiles_AppliesBothInOneCallAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
 
-        var fileA = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "OrderLine.cs");
-        var fileB = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "OrderStatus.cs");
-        var anchorA = (await File.ReadAllTextAsync(fileA)).Split('\n')[0].TrimEnd('\r');
-        var anchorB = (await File.ReadAllTextAsync(fileB)).Split('\n')[0].TrimEnd('\r');
+        var fileA = workspace.PathOf(LineRelativePath);
+        var fileB = workspace.PathOf(StatusRelativePath);
+        var anchorA = FirstLine(workspace.ReadText(LineRelativePath));
+        var anchorB = FirstLine(workspace.ReadText(StatusRelativePath));
 
         var result = await tools.ReplaceSnippet(
             reason: "test batch across files",
@@ -90,8 +114,8 @@ public class ReplaceSnippetBatchTests
 
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
 
-        var newContentA = await File.ReadAllTextAsync(fileA);
-        var newContentB = await File.ReadAllTextAsync(fileB);
+        var newContentA = workspace.ReadText(LineRelativePath);
+        var newContentB = workspace.ReadText(StatusRelativePath);
         Assert.Multiple(() =>
         {
             Assert.That(newContentA, Does.Contain("// touched-a"));
@@ -102,14 +126,12 @@ public class ReplaceSnippetBatchTests
     [Test]
     public async Task ReplaceSnippet_BatchOverlappingMatchesSameFile_RejectsWithoutWritingAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
 
-        var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "OrderStatus.cs");
-        var originalContent = await File.ReadAllTextAsync(targetFile);
-        var firstLine = originalContent.Split('\n')[0].TrimEnd('\r');
+        var targetFile = workspace.PathOf(StatusRelativePath);
+        var originalContent = workspace.ReadText(StatusRelativePath);
+        var firstLine = FirstLine(originalContent);
         // Second edit's oldContent is a substring of the first edit's oldContent, in the same file
         // -> the two matched spans necessarily overlap.
         var overlappingFragment = firstLine.Length > 4 ? firstLine[..^2] : firstLine;
@@ -126,21 +148,19 @@ public class ReplaceSnippetBatchTests
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("overlap"));
 
-        var unchangedContent = await File.ReadAllTextAsync(targetFile);
+        var unchangedContent = workspace.ReadText(StatusRelativePath);
         Assert.That(unchangedContent, Is.EqualTo(originalContent), "an overlap rejection must not write anything");
     }
 
     [Test]
     public async Task ReplaceSnippet_BatchOneEditNotFound_RejectsWholeBatchWithoutWritingAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
 
-        var fileA = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "OrderLine.cs");
-        var originalContentA = await File.ReadAllTextAsync(fileA);
-        var anchorA = originalContentA.Split('\n')[0].TrimEnd('\r');
+        var fileA = workspace.PathOf(LineRelativePath);
+        var originalContentA = workspace.ReadText(LineRelativePath);
+        var anchorA = FirstLine(originalContentA);
 
         var result = await tools.ReplaceSnippet(
             reason: "test batch partial failure",
@@ -153,7 +173,7 @@ public class ReplaceSnippetBatchTests
 
         Assert.That(result.IsSuccess, Is.False);
 
-        var unchangedContentA = await File.ReadAllTextAsync(fileA);
+        var unchangedContentA = workspace.ReadText(LineRelativePath);
         Assert.That(unchangedContentA, Is.EqualTo(originalContentA),
             "one unmatched edit in a batch must roll back the whole batch, not partially apply it");
     }
@@ -161,13 +181,11 @@ public class ReplaceSnippetBatchTests
     [Test]
     public async Task ReplaceSnippet_BothEditsAndSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
 
-        var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "OrderStatus.cs");
-        var anchor = (await File.ReadAllTextAsync(targetFile)).Split('\n')[0].TrimEnd('\r');
+        var targetFile = workspace.PathOf(StatusRelativePath);
+        var anchor = FirstLine(workspace.ReadText(StatusRelativePath));
 
         var result = await tools.ReplaceSnippet(
             reason: "test both supplied",
@@ -184,10 +202,8 @@ public class ReplaceSnippetBatchTests
     [Test]
     public async Task ReplaceSnippet_EmptyEditsArray_RejectsAsInvalidArgumentAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
 
         var result = await tools.ReplaceSnippet(
             reason: "test empty batchEdits",
@@ -201,12 +217,10 @@ public class ReplaceSnippetBatchTests
     [Test]
     public async Task ReplaceSnippet_BatchExceedsMaxEditsCap_RejectsBeforeAnchoringAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
 
-        var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "OrderStatus.cs");
+        var targetFile = workspace.PathOf(StatusRelativePath);
         var edits = Enumerable.Range(0, 21)
             .Select(i => new SnippetEdit { FilePath = targetFile, OldContent = $"nonexistent-{i}", NewContent = "x" })
             .ToList();
@@ -226,13 +240,11 @@ public class ReplaceSnippetBatchTests
         // The single-edit path always carried escape-hatch advice on a size rejection; the batch
         // path used to list the per-edit bounds with no way forward. Two oversized edits must still
         // yield exactly one advice sentence, led by Member(replace).
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
 
-        var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "OrderStatus.cs");
-        var anchor = (await File.ReadAllTextAsync(targetFile)).Split('\n')[0].TrimEnd('\r');
+        var targetFile = workspace.PathOf(StatusRelativePath);
+        var anchor = FirstLine(workspace.ReadText(StatusRelativePath));
 
         var result = await tools.ReplaceSnippet(
             reason: "test batch oversize advice",
@@ -257,13 +269,11 @@ public class ReplaceSnippetBatchTests
     [Test]
     public async Task ReplaceSnippet_BatchNonSizeError_DoesNotAppendEscapeHatchAdviceAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
 
-        var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "OrderStatus.cs");
-        var anchor = (await File.ReadAllTextAsync(targetFile)).Split('\n')[0].TrimEnd('\r');
+        var targetFile = workspace.PathOf(StatusRelativePath);
+        var anchor = FirstLine(workspace.ReadText(StatusRelativePath));
 
         var result = await tools.ReplaceSnippet(
             reason: "test batch missing newContent",
