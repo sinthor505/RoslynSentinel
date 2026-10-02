@@ -7,6 +7,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Advanced;
 

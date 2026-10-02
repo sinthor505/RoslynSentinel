@@ -150,7 +150,7 @@ public class CacheWarmupWorker { public void Initialize() { } }");
     public async Task ConvertToBackgroundService_ClassNotFound_ThrowsException()
     {
         SetSource("public class Foo { }", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "NonExistentClass"));
+        Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "NonExistentClass"));
     }
 
     [Test]
