@@ -38,6 +38,10 @@ public class PreviewInstanceMoveCallSitesTests
     [TearDown]
     public void TearDown()
     {
+        // Keep SetUp/TearDown for disk-tier tests: MoveMemberAsync_UnresolvedCallSite_OpensLedgerThatBlocksUnrelatedFileAsync
+        // (line 485) and CrossProjectSiblingField_ClassifiesAsValidNotNoCandidateIntroducibleAsync (line 835) require
+        // PersistentWorkspaceManager (for IScopedOperationLedger.TryOpen) and TestSolutionBuilder.CreateTwoProjectSolution
+        // (for cross-project compilation checks), respectively. Both cannot be simulated in InMemoryWorkspace.
         _workspaceManager?.Dispose();
         _fixture?.Dispose();
     }
