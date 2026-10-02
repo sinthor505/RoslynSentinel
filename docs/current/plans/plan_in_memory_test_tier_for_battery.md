@@ -1,0 +1,81 @@
+# Plan: Move engine-correctness Battery tests onto an in-memory workspace tier
+
+**Status:** IN PROGRESS 2026-10-02. Committed: fakes, `DiskWriteRoundTripTests`, `ModifyModifierBatchTests` (in-memory). NOT committed: `ModifyAttributeBatchTests`, `ModifyBaseTypeBatchTests` and the subagent's engine/tool changes (it was still running at wrap-up; see Step 0).
+
+## Problem
+Battery.Basic was the slowest project. Test-level parallelism (commit 3037e5b) fixed serialization, leaving it CPU-bound:
+933 test-seconds, 78 s wall on 16 cores. Most tests check engine/tool code-correctness but each pays for a
+temp directory, MSBuild load and real disk write through `PersistentWorkspaceManager` (drift, ledger, operation
+blobs). Disk-level concerns (BOM, line endings, watcher, drift, undo, path case) should be owned by a few dedicated
+tests, not re-exercised by every test.
+
+## Decision
+Two tiers:
+- **In-memory tier (most tests):** `InMemoryWorkspace.Create((relPath, source)...)` over `FakeWorkspaceManager`
+  (Roslyn `AdhocWorkspace`; apply updates the in-memory `CurrentSolution` and returns `PreImages`). The real tool
+  classes, validation and compile gate run unchanged. Marked `[Parallelizable(ParallelScope.All)]`.
+- **Disk tier (small):** `DiskWriteRoundTrip` helper + `DiskWriteRoundTripTests` push text through `FileIoHelper`
+  into a temp file and assert raw bytes (CRLF/LF/mixed preserved, no BOM added, UTF-8 round trip). Other real-disk
+  tests (watcher, drift, undo, path-case, subprocess) stay on `TestSolutionFixture`.
+
+## Execution rules
+- Build 0 errors before any commit; stage files explicitly via `Git(scope: listed)`; Co-Authored-By trailer.
+- Run `RunTest` calls sequentially, never two at once: they contend on the build and cause false 5-minute
+  full-build timeouts (seen once: `RunFullBuildAsync_CalledTwiceWithObsoleteCallSite_...`; passed alone).
+- In-memory projects need a global-usings document (the helper adds `GlobalUsings.InMemory.cs`) or the compile
+  gate rejects `[Serializable]`, `Task`, etc. `PathOf` uses `Path.GetFullPath` because
+  `DocumentLookup` is not separator-insensitive.
+- Dog-fooding applies (CLAUDE.md). New files: `WriteFile(operation: CreateFile)`; `CreateFile` only scaffolds a type.
+- Baseline: 3 known `RoslynSentinel.Tests` failures (`Scope_DoesNotLeakIntoConcurrentUnscopedWorkAsync`,
+  `ExcludeTools_ClassThatKeepsItsPrefix_IsRemovedByShortenedName`,
+  `IncludeTools_ShortenedPrefixedClassName_ActivatesThePrefixedClass`) - assumed pre-existing, not proven against a baseline run.
+
+## Steps
+
+### Step 0 - Land the in-flight work
+- Files still uncommitted at wrap-up: `RoslynSentinel.Tests.Battery.Basic/ModifyAttributeBatchTests.cs`, `ModifyBaseTypeBatchTests.cs`
+  (my in-memory conversion plus the subagent's new regression tests), and the subagent's changes in
+  `RoslynSentinel.Common/{BatchTypes,RoslynFormattingHelper,ToolParams}.cs`, new `Common/ReplaceNodesResult.cs`,
+  `Engines.Basic/MemberRefactoringEngine.cs`, new `Engines.Basic/BaseTypeTextEditBuilder.cs`,
+  `Tools.Basic/{RefactoringStructuralImpl,RefactoringStructuralTools}.cs`. Its work was not confirmed finished or building;
+  I asked it to wrap up and report. Build, run the batch fixtures, review the diff, then commit these together.
+- Change: a background subagent was dispatched to (1) make `ApplyBaseTypeBatchAsync` safe for nested type + container
+  (apply as spans against the original snapshot, like ModifyAttribute commit 44ecdc0), (2) make
+  `ReplaceNodesFormattedAsync` stop silently skipping a replacement it cannot locate (surface it; update all callers),
+  (3) accept `attribute` as an alias for `existingAttribute` on ModifyAttribute `action: add` (singular and batch;
+  update descriptions; reject conflicting values). It was told to add in-memory regression tests to the two batch fixtures.
+  Its result had not arrived when this doc was written - check `git status`/`Git diff` and re-run its tests before trusting it.
+- Done when: Build 0 errors; `RunTest` Battery.Basic filtered to `ModifyAttributeBatchTests|ModifyModifierBatchTests|ModifyBaseTypeBatchTests`
+  and `RoslynSentinel.Tests` filtered to `DiskWriteRoundTripTests` pass; then commit the listed files.
+
+### Step 1 - Classify and convert the rest of the slow tests
+- Files: remaining slow Battery.Basic fixtures. Earlier classification found ~65 slow tests, of which ~33 are done;
+  ~26 more are convertible (`ReplaceSnippet`, `ApplyDiff` size guard, `InsertAfter` EOL, `AddMember`, preview candidates,
+  `MoveMember`). The rest genuinely need disk (BOM, EOL on real files, watcher, drift, undo, path-case, subprocess).
+- Change: write the classification table (test -> in-memory | disk) into a finding/reference doc; convert the in-memory ones
+  with the pattern in `ModifyAttributeBatchTests.cs` (`InMemoryWorkspace.Create`, `workspace.PathOf`, `workspace.ReadText`,
+  static `BuildTools(workspace.Manager)`). Tests that asserted BOM/EOL via disk move to `DiskWriteRoundTripTests` or stay on disk.
+- Done when: converted fixtures pass; for each, a quick mutation check shows the in-memory test still fails on the original bug.
+
+### Step 2 - Re-measure
+- Change: run Battery.Basic alone (no concurrent RunTest) and compare to baseline. Measured after the pilot:
+  382/382 pass, 1m20 (80 s) wall alone - no wall gain yet because only 33 tests were converted. Check for flakiness
+  (several runs); `NonParallelizable` global-exclusion semantics are unverified.
+- Done when: wall time and test-seconds recorded in this doc.
+
+### Step 3 - Optional follow-ups
+- `scripts/Get-TestSlowest.ps1` to list slowest tests from the trx.
+- Cap workers in `Test-Parallel.ps1` (step 4 of the original speed plan).
+- Tiered test protocol: omit Battery.*/ModelEval.* during incremental work; run them when a batch is complete.
+- Confirm the 3 `RoslynSentinel.Tests` baseline failures against a clean run.
+- Disk-tier coverage gaps: `PersistentWorkspaceManager.ApplyProposedChangesAsync` BOM-preservation on an existing BOM file
+  (only `FileIoHelper` is covered so far).
+
+## Out of scope
+- Rewriting disk-specific tests (watcher, drift, undo, path-case) onto the fake.
+- Changing production apply behavior.
+
+## Risks and open decisions
+- The remaining Battery.Basic cost being per-test workspace setup is a hypothesis; never timed in isolation.
+- Header comment in `InMemoryWorkspace.cs` references `DiskWriteRoundTrip`; that helper now exists in `RoslynSentinel.Tests/DiskWriteRoundTripTests.cs` (verify the comment's wording still fits).
+- The subagent result (Step 0) is unverified at the time of writing.

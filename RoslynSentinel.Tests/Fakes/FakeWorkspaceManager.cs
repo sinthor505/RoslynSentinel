@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynSentinel.Tests.Fakes;
 
@@ -57,8 +58,48 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     }
     public int WorkspaceVersion => 0;
 
-    public Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
-        => throw new NotImplementedException();
+    public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
+    {
+        var solution = CurrentSolution ?? throw new SolutionNotLoadedException("Solution not loaded.");
+        var preImages = new Dictionary<string, string?>();
+        var succeeded = new List<string>();
+
+        foreach (var (path, newText) in changes)
+        {
+            string key = path;
+            var documentId = solution.GetDocumentIdsWithFilePath(key).FirstOrDefault();
+            if (documentId is null)
+            {
+                preImages[key] = null;
+                var project = solution.Projects.First();
+                solution = solution.AddDocument(DocumentId.CreateNewId(project.Id), Path.GetFileName(key), SourceText.From(newText), filePath: key);
+            }
+            else
+            {
+                preImages[key] = (await solution.GetDocument(documentId)!.GetTextAsync(cancellationToken)).ToString();
+                solution = solution.WithDocumentText(documentId, SourceText.From(newText));
+            }
+
+            succeeded.Add(key);
+        }
+
+        foreach (var path in deletePaths ?? [])
+        {
+            string key = path;
+            var documentId = solution.GetDocumentIdsWithFilePath(key).FirstOrDefault();
+            if (documentId is null)
+            {
+                continue;
+            }
+
+            preImages[key] = (await solution.GetDocument(documentId)!.GetTextAsync(cancellationToken)).ToString();
+            solution = solution.RemoveDocument(documentId);
+            succeeded.Add(key);
+        }
+
+        CurrentSolution = solution;
+        return new ApplyChangesResult(Success: true, SucceededFiles: succeeded, FailedFiles: [], Summary: $"Applied {succeeded.Count} file(s) in memory.", WorkspaceInSync: true, PreImages: preImages);
+    }
     public BatchResultSummary? CheckBreaker() => throw new NotImplementedException();
     // Always under limit -> tests exercising real rate-limit behavior use their own IRateLimiter (see RunTestTests).
     public string? CheckRateLimit(string toolName, int defaultLimit) => null;

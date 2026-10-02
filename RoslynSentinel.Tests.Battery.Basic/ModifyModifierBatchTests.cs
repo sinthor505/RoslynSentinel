@@ -1,12 +1,15 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
 
+// About ModifyModifier's code-correctness, so it runs on an InMemoryWorkspace (no temp directory, MSBuild load or disk
+// write). See ModifyAttributeBatchTests for the pattern.
 [TestFixture]
-
+[Parallelizable(ParallelScope.All)]
 public class ModifyModifierBatchTests
 {
     private const string FixtureRelativePath = "ContosoOrders.Core/ModifierBatchFixture.cs";
@@ -42,23 +45,22 @@ public class ModifyModifierBatchTests
     [Test]
     public async Task ModifyModifier_BatchTwoEditsSameFile_BothApplyAgainstOriginalSnapshotAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var path = workspace.PathOf(FixtureRelativePath);
 
         var result = await tools.ModifyModifier(
             reason: "batch test same file two edits",
             edits:
             [
-                new ModifierEdit { FilePath = FixtureRelativePath, TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
-            new ModifierEdit { FilePath = FixtureRelativePath, TargetName = "MethodTwo", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
+                new ModifierEdit { FilePath = path, TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
+                new ModifierEdit { FilePath = path, TargetName = "MethodTwo", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
 
-        var newContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
+        var newContent = workspace.ReadText(FixtureRelativePath);
         Assert.Multiple(() =>
         {
             Assert.That(newContent, Does.Contain("static void MethodOne"));
@@ -69,10 +71,6 @@ public class ModifyModifierBatchTests
     [Test]
     public async Task ModifyModifier_BatchAcrossTwoFiles_AppliesBothInOneCallAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-
         const string secondRelativePath = "ContosoOrders.Core/ModifierBatchFixtureSecond.cs";
         const string secondSource = """
         namespace ContosoOrders.Core;
@@ -82,93 +80,86 @@ public class ModifyModifierBatchTests
             void MethodThree() { }
         }
         """;
-        await fixture.AddFileToSolution(workspaceManager, secondRelativePath, secondSource);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource), (secondRelativePath, secondSource));
+        var tools = BuildTools(workspace.Manager);
 
         var result = await tools.ModifyModifier(
             reason: "batch test across two files",
             edits:
             [
-                new ModifierEdit { FilePath = FixtureRelativePath, TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
-            new ModifierEdit { FilePath = secondRelativePath, TargetName = "MethodThree", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
+                new ModifierEdit { FilePath = workspace.PathOf(FixtureRelativePath), TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
+                new ModifierEdit { FilePath = workspace.PathOf(secondRelativePath), TargetName = "MethodThree", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
 
-        var contentA = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
-        var contentB = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, secondRelativePath));
         Assert.Multiple(() =>
         {
-            Assert.That(contentA, Does.Contain("static void MethodOne"));
-            Assert.That(contentB, Does.Contain("static void MethodThree"));
+            Assert.That(workspace.ReadText(FixtureRelativePath), Does.Contain("static void MethodOne"));
+            Assert.That(workspace.ReadText(secondRelativePath), Does.Contain("static void MethodThree"));
         });
     }
 
     [Test]
     public async Task ModifyModifier_BatchSameNodeTwice_RejectsWithoutWritingAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
-        var originalContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var path = workspace.PathOf(FixtureRelativePath);
+        var originalContent = workspace.ReadText(FixtureRelativePath);
 
         var result = await tools.ModifyModifier(
             reason: "batch test same node collision",
             edits:
             [
-                new ModifierEdit { FilePath = FixtureRelativePath, TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
-            new ModifierEdit { FilePath = FixtureRelativePath, TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@virtual, Action = AddRemoveAction.add },
+                new ModifierEdit { FilePath = path, TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
+                new ModifierEdit { FilePath = path, TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@virtual, Action = AddRemoveAction.add },
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
 
-        var newContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
-        Assert.That(newContent, Is.EqualTo(originalContent), "a same-node collision must not write anything");
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(originalContent), "a same-node collision must not write anything");
     }
 
     [Test]
     public async Task ModifyModifier_BatchOneEditTargetNotFound_RejectsWholeBatchWithoutWritingAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
-        var originalContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var path = workspace.PathOf(FixtureRelativePath);
+        var originalContent = workspace.ReadText(FixtureRelativePath);
 
         var result = await tools.ModifyModifier(
             reason: "batch test one edit not found",
             edits:
             [
-                new ModifierEdit { FilePath = FixtureRelativePath, TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
-            new ModifierEdit { FilePath = FixtureRelativePath, TargetName = "MethodDoesNotExist", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
+                new ModifierEdit { FilePath = path, TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
+                new ModifierEdit { FilePath = path, TargetName = "MethodDoesNotExist", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
 
-        var newContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, FixtureRelativePath));
-        Assert.That(newContent, Is.EqualTo(originalContent),
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(originalContent),
             "one unresolvable edit in a batch must roll back the whole batch, not partially apply it");
     }
 
     [Test]
     public async Task ModifyModifier_BothEditsAndSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var path = workspace.PathOf(FixtureRelativePath);
 
         var result = await tools.ModifyModifier(
             reason: "batch test both supplied",
-            filePath: FixtureRelativePath,
+            filePath: path,
             targetName: "MethodOne",
             modifier: NonAccessibilityModifier.@static,
             action: AddRemoveAction.add,
-            edits: [new ModifierEdit { FilePath = FixtureRelativePath, TargetName = "MethodTwo", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add }],
+            edits: [new ModifierEdit { FilePath = path, TargetName = "MethodTwo", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
@@ -178,10 +169,8 @@ public class ModifyModifierBatchTests
     [Test]
     public async Task ModifyModifier_NeitherEditsNorSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
 
         var result = await tools.ModifyModifier(reason: "batch test neither supplied", dryRun: false, returnDiff: false, cancellationToken: default);
 
@@ -192,10 +181,8 @@ public class ModifyModifierBatchTests
     [Test]
     public async Task ModifyModifier_EmptyEditsArray_RejectsAsInvalidArgumentAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
 
         var result = await tools.ModifyModifier(reason: "batch test empty edits", edits: [], dryRun: false, returnDiff: false, cancellationToken: default);
 
@@ -206,13 +193,12 @@ public class ModifyModifierBatchTests
     [Test]
     public async Task ModifyModifier_BatchExceedsMaxEditsCap_RejectsBeforeResolvingTargetsAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var path = workspace.PathOf(FixtureRelativePath);
 
         var edits = Enumerable.Range(0, 21)
-            .Select(i => new ModifierEdit { FilePath = FixtureRelativePath, TargetName = $"NonexistentMethod{i}", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add })
+            .Select(i => new ModifierEdit { FilePath = path, TargetName = $"NonexistentMethod{i}", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add })
             .ToList();
 
         var result = await tools.ModifyModifier(reason: "batch test over cap", edits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
