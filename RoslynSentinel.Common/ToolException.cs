@@ -82,6 +82,21 @@ public sealed class ToolAmbiguousMatchException : ToolException
 }
 
 /// <summary>
+/// The target was found and the arguments are well-formed, but the requested change or query
+/// CANNOT apply to it (e.g. asking a concrete, non-virtual method for its implementations). Distinct
+/// from <see cref="ToolNotFoundException"/> (fix the name) -> pick a different target. Maps to
+/// <see cref="ToolErrorCode.TargetIneligible"/>.
+/// </summary>
+public sealed class ToolTargetIneligibleException : ToolException
+{
+    public override string ErrorCode => ToolErrorCode.TargetIneligible;
+
+    public ToolTargetIneligibleException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
 /// A unified diff's hunk could not be applied -> its declared position and content didn't match
 /// the file even after <see cref="DiffEngine"/>'s re-anchoring search. The remediation (regenerate
 /// the diff against current content) is specific enough to warrant its own code rather than

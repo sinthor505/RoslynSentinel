@@ -1510,7 +1510,7 @@ public class SymbolNavigationEngine
 
             if (contextSnippet != null)
             {
-                symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken) ?? throw new InvalidOperationException(
+                symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken) ?? throw new ToolNotFoundException(
                         $"FindCallers: contextSnippet did not resolve to a symbol in '{filePath}'. " +
                         $"This is NOT a confirmed zero-references result for '{symbolName}' - the lookup " +
                         "never ran. " + DescribeNameOnlyCandidates(decls, symbolName) +
@@ -1536,7 +1536,7 @@ public class SymbolNavigationEngine
 
                 if (symbol == null)
                 {
-                    throw new InvalidOperationException(
+                    throw new ToolNotFoundException(
                         $"FindCallers: symbolName '{symbolName}' was not found declared in '{filePath}'. " +
                         "This is NOT a confirmed zero-references result - the lookup never ran. Verify the " +
                         "name against GetFileOutline, or omit filePath to search by name across the solution.");
@@ -1601,7 +1601,7 @@ public class SymbolNavigationEngine
                     // same-named symbol from anywhere in the solution instead - the root cause
                     // traced in docs/current/blockers/resolved/blocking_error_member_replace_containername_regression_setup_overload.md's
                     // investigation, reproduced here in the solution-wide by-name path.
-                    throw new InvalidOperationException(
+                    throw new ToolNotFoundException(
                         $"FindCallers: contextSnippet did not resolve to a symbol for symbolName " +
                         $"'{symbolName}' in any of the {memberMatches.Count} candidate location(s) found " +
                         "across the solution. This is NOT a confirmed zero-references result - the lookup " +
@@ -1619,7 +1619,7 @@ public class SymbolNavigationEngine
                     // still leaves more than one same-named candidate -> FirstOrDefault() here
                     // would silently pick an arbitrary one across the whole solution. Force the
                     // caller to disambiguate instead of returning results for the wrong symbol.
-                    throw new InvalidOperationException(
+                    throw new ToolAmbiguousMatchException(
                         $"FindCallers: symbolName '{symbolName}' is ambiguous - {narrowed.Count} candidates " +
                         "found across the solution and no contextSnippet was supplied to disambiguate. " +
                         "This is NOT a confirmed result for any single symbol - resolution stopped before " +
@@ -1635,7 +1635,7 @@ public class SymbolNavigationEngine
         if (symbol == null)
         {
             var nearMissHint = await DescribeNearMissCandidatesAsync(solution, symbolName, cancellationToken);
-            throw new InvalidOperationException(
+            throw new ToolNotFoundException(
                 $"FindCallers: symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                 (contextSnippet != null ? " with the supplied contextSnippet" : "") + ". " +
                 "This is NOT a confirmed zero-references result - the lookup never ran. " + nearMissHint +
@@ -1860,7 +1860,7 @@ public class SymbolNavigationEngine
                     // on the floor and PreferImplementableMember(...).FirstOrDefault() picked an
                     // arbitrary same-named symbol from anywhere in the solution instead - the same
                     // defect shape fixed above in FindCallersAsync.
-                    throw new InvalidOperationException(
+                    throw new ToolNotFoundException(
                         $"FindImplementations: contextSnippet did not resolve to a symbol for symbolName " +
                         $"'{symbolName}' in any of the {memberMatches.Count} candidate location(s) found " +
                         "across the solution. This is NOT a confirmed zero-implementations result - the " +
@@ -1878,7 +1878,7 @@ public class SymbolNavigationEngine
                     // still leaves more than one same-named candidate -> FirstOrDefault() here
                     // would silently pick an arbitrary one across the whole solution. Force the
                     // caller to disambiguate instead of returning results for the wrong symbol.
-                    throw new InvalidOperationException(
+                    throw new ToolAmbiguousMatchException(
                         $"FindImplementations: symbolName '{symbolName}' is ambiguous - {narrowed.Count} " +
                         "candidates found across the solution and no contextSnippet was supplied to " +
                         "disambiguate. This is NOT a confirmed result for any single symbol - resolution " +
@@ -1916,7 +1916,7 @@ public class SymbolNavigationEngine
         if (symbol == null)
         {
             var nearMissHint = await DescribeNearMissCandidatesAsync(solution, symbolName, cancellationToken);
-            throw new InvalidOperationException(
+            throw new ToolNotFoundException(
                 "FindImplementations: " + (scopedResolutionFailure ??
                     ($"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                     (contextSnippet != null ? " with the supplied contextSnippet" : "") + ".")) +
@@ -1939,7 +1939,7 @@ public class SymbolNavigationEngine
             || symbol.ContainingType?.TypeKind == TypeKind.Interface;
         if (!skipStructuralCheck && !isImplementable)
         {
-            throw new InvalidOperationException(
+            throw new ToolTargetIneligibleException(
                 $"FindImplementations: symbolName '{symbolName}' resolved to {symbol.Kind} " +
                 $"'{symbol.ToDisplayString()}' on {symbol.ContainingType?.TypeKind.ToString().ToLowerInvariant() ?? "an unknown container"} " +
                 $"'{symbol.ContainingType?.Name ?? "?"}', which is concrete, non-virtual, and not an interface " +

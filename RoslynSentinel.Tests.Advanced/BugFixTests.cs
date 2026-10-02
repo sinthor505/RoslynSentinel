@@ -1208,7 +1208,7 @@ public class Consumer
     public void DoWork() { }
 }";
             SetSource(src, "Standalone.cs");
-            var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => await _navigationEngine.FindImplementationsForMemberAsync(null, "DoWork", contextSnippet: null));
+            var ex = Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _navigationEngine.FindImplementationsForMemberAsync(null, "DoWork", contextSnippet: null));
             Assert.That(ex!.Message, Does.Contain("structurally incapable of having implementations"));
             Assert.That(ex.Message, Does.Contain("DoWork"));
         }
@@ -1225,9 +1225,30 @@ public class Foo : IFoo
     public Task<string> GetSolutionRoot() => Task.FromResult(""root"");
 }";
             SetSource(src, "Foo.cs");
-            var ex = Assert.ThrowsAsync<InvalidOperationException>(async () => await _navigationEngine.FindImplementationsForMemberAsync(null, "GetSolutionRo", contextSnippet: null));
+            var ex = Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindImplementationsForMemberAsync(null, "GetSolutionRo", contextSnippet: null));
             Assert.That(ex!.Message, Does.Contain("Did you mean"));
             Assert.That(ex.Message, Does.Contain("GetSolutionRoot"));
+        }
+
+        // ── 9i: FindCallers/FindImplementations failures carry their own error code (finding_batch_edit_errors_lose_tool_exception_code) ───
+        [Test]
+        public void FindCallersAsync_NoFilePath_OverloadedAcrossClasses_ThrowsAmbiguousMatch()
+        {
+            const string src = @"public class First { public void Run() { } }
+public class Second { public void Run() { } }";
+            SetSource(src, "Dup.cs");
+            var ex = Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _navigationEngine.FindCallersAsync(null, "Run", contextSnippet: null));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+            Assert.That(ex.Message, Does.Contain("is ambiguous"));
+        }
+
+        [Test]
+        public void FindCallersAsync_NoFilePath_UnknownName_ThrowsNotFound()
+        {
+            const string src = @"public class Only { public void Run() { } }";
+            SetSource(src, "Only.cs");
+            var ex = Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindCallersAsync(null, "NoSuchMethodAnywhere", contextSnippet: null));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         // ── 9e: FindServicesNotRegistered -> IWebHostEnvironment etc. not flagged ──

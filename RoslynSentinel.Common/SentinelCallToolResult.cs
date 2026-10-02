@@ -130,6 +130,15 @@ public static class ToolErrorCode
     /// failure) -> this is an expected, recoverable rejection: fix the listed diagnostics and retry.
     /// </summary>
     public const string ValidationFailed = "ValidationFailed";
+
+    /// <summary>
+    /// The target was found and the arguments are well-formed, but the requested change CANNOT be
+    /// made to it (e.g. the method is not an extension method, has no body, or has no parameters).
+    /// Distinct from <see cref="NotFound"/> (fix the name) and <see cref="InvalidArgument"/> (fix the
+    /// argument) -> pick a different target. A target that is already in the requested state is an
+    /// idempotent no-op, not this error.
+    /// </summary>
+    public const string TargetIneligible = "TargetIneligible";
 }
 
 // ── Envelope ──────────────────────────────────────────────────────────────────

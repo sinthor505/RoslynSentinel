@@ -1,6 +1,6 @@
 # Finding: batch edit tools and engine catch sites discard ToolException.ErrorCode
 
-**Status:** PARTIALLY FIXED 2026-10-01. The ReplaceSnippet batch error code and the oldContent wording are fixed and tested; the engine-result, Modify* batch, FindReferences and audit items below are open.
+**Status:** PARTIALLY FIXED 2026-10-01. The ReplaceSnippet batch error code, the oldContent wording, the FindCallers/FindImplementations codes and the `TargetIneligible` vocabulary are fixed and tested; the engine-result, Modify* batch and audit-sweep items below are open.
 
 ## Context
 A `ReplaceSnippet` batch call failed with message `contextSnippet is ambiguous (6 matches): ...` but
@@ -65,8 +65,16 @@ signal and the environment computed it correctly, then dropped it.
    instead of `InvalidOperationException`, so the Modify* batch engines can propagate a code.
    Check its callers' `catch (InvalidOperationException)` blocks first (e.g.
    `MemberRefactoringEngine.ApplyModifierBatchAsync`).
-6. OPEN. Trace why `FindReferences` maps a multi-candidate `symbolName` to `Exception` rather than
-   `Ambiguous`.
+6. DONE. Cause: `SymbolNavigationEngine.FindCallersAsync` / `FindImplementationsForMemberAsync`
+   threw bare `InvalidOperationException` for ambiguity, unresolved names and snippets, and the
+   "structurally incapable of implementations" case; `ToolErrorMapper` maps anything that is not a
+   `ToolException` to `Exception`. They now throw `ToolAmbiguousMatchException` /
+   `ToolNotFoundException` / `ToolTargetIneligibleException` (new, `ToolException.cs`). No caller
+   caught `InvalidOperationException` from them. Tests: `BugFixTests` 9g/9h updated, 9i added.
+7. DONE. Vocabulary decision: new `ToolErrorCode.TargetIneligible` ("found and well-formed, but the
+   change cannot be made to this target"), chosen over `NotApplicable` because that reads as
+   "eligible but a no-op". A target already in the requested state is an idempotent no-op
+   (success / `EditOutcome.NoChange`), not this error. The audit sweep below that uses it is OPEN.
 
 ## Audit: error codes that disagree with their message (2026-10-01)
 Text-only pass over `ResultError(ToolErrorCode.X, "...")` sites; the condition guarding each branch
@@ -85,14 +93,15 @@ user's in-flight `Exception` -> `NotFound` edits when this ran; rows below are w
 | `WorkspaceTools.cs` 385 (RetryFailedChanges) | InvalidArgument | "File not found." | NotFound |
 | Engines: `MemberRefactoringEngine` 2620, 3874; `LogicOptimizationEngine` 1399; `ThreadSafetyEngine` 55; `AsyncOptimizationEngine` 120 | (message only) | "Method not found or has no parameters / already static / has no body" | Same conflation, one layer down |
 
-**Gap in the vocabulary:** `ToolErrorCode` has no value for "target exists but the transformation
-does not apply" (not eligible, already static, already immutable, not an extension method). Those
-cases currently fall into `Exception` (wrong: it is expected and recoverable) or `InvalidArgument`
-(wrong: the argument is well-formed). Needs a decision before the sweep: a new code
-(e.g. `NotApplicable`) vs reusing `InvalidArgument` with a message that names the unmet
-precondition. The "not found or not eligible" wording is the symptom; the root cause is that the
-call sites had no distinct code to reach for. Whichever is chosen, each conflated branch must be
-split so a model can tell "fix the name" from "pick a different target".
+**Gap in the vocabulary (closed 2026-10-01):** `ToolErrorCode` had no value for "target exists but
+the transformation does not apply" (not eligible, not an extension method, no body). Those cases
+fell into `Exception` (wrong: expected and recoverable) or `InvalidArgument` (wrong: the argument is
+well-formed). `TargetIneligible` now exists. The "not found or not eligible" wording is the symptom;
+the root cause was that call sites had no distinct code to reach for. Each conflated branch in the
+table above must still be split so a model can tell "fix the name" (`NotFound`) from "pick a
+different target" (`TargetIneligible`); "already static / already immutable" becomes an idempotent
+no-op instead. Rows in `CodemodTools.cs` and `AdvancedRefactoringTools.cs` were held back because
+those files had uncommitted edits from another session.
 
 ## Out of scope
 `catch (ToolException)` sites in `SymbolNavigationEngine` (400, 404, 418, 1589, 1849) and
