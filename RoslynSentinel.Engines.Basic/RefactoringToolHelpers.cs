@@ -38,6 +38,11 @@ public static class RefactoringToolHelpers
     };
 
     /// <summary>
+    /// Maps a document-edit result to the error code the agent sees, preferring ErrorCode if set.
+    /// </summary>
+    public static string ErrorCodeFor(DocumentEditResult result) => result.ErrorCode ?? ErrorCodeFor(result.Outcome);
+
+    /// <summary>
     /// Guards against staging an unintended empty-file overwrite: when a document-edit engine
     /// method can't locate its target (wrong name, wrong attribute/modifier, etc.), it returns
     /// Outcome != Modified and leaves UpdatedText at its string.Empty default rather than null ->
@@ -61,7 +66,7 @@ public static class RefactoringToolHelpers
         return new SentinelCallToolResult<object>
         {
             IsSuccess = false,
-            ErrorData =  new ResultError(ErrorCodeFor(updated.Outcome),
+            ErrorData =  new ResultError(ErrorCodeFor(updated),
                 $"{operationName}: no change produced for '{filePath}' ({updated.Outcome}). {updated.Message}")
         };
     }

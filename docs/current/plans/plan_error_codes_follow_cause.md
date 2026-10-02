@@ -104,6 +104,19 @@ Typed exceptions are the single carrier, in this order of leverage:
   one-line rule to `CLAUDE.md` Working conventions ("an expected, recoverable failure throws a
   `ToolException` subclass; never a BCL exception"), and append a journal line.
 
+## Progress (resume here)
+Updated 2026-10-01. Update this block after every committed slice; `git log` is the source of truth.
+- Step 1: DONE except two deliberately-left groups. Commits: 7342c6a, 8bdce08, 54585b1, 9f7336d, 33aa68a, 92b11b3, f4f5229, 469e57b, e6eb666, 57a5cb1.
+  - LEFT: `AsyncOptimizationEngine` bridge/event-handler throws (~394-456, ~616-662) consumed by `AsyncBatchEngine` catches 452/585/1225/1248, and `FindMigrationCandidatesAsync` ArgumentException (~2268) consumed by `AsyncifyTools` 136/241. Convert throws + catches in one atomic change (Sonnet-tier or senior).
+  - LEFT: `MsToolAugmentEngine` (~581, uses `MsAugmentResult.Fail`) - belongs to slice S2-3.
+  - LEFT (judgment): internal-state throws ("syntax root", "semantic model", "compilation", "No solution is loaded" in `AntiPatternEngine` ~2448, which could become `SolutionNotLoadedException`).
+- Step 2 slices (one commit each, each builds green on its own):
+  - S2-1: `DocumentEditResult.ErrorCode` + `RefactoringToolHelpers.ErrorCodeFor(DocumentEditResult)` + `RequireUpdatedText` uses it + unit test. [x] (next commit after 57a5cb1: "S2-1")
+  - S2-2: route hand-built switches (`RefactoringStructuralImpl` ~427-437, `RefactoringExtractionDocsImpl` ~264-270) through it. [ ]
+  - S2-3: `MsAugmentResult.Fail(message, code)` and its consumer (`RefactoringExtractionDocsImpl` ~314-320). [ ]
+  - S2-4: pilot - `ThreadSafetyEngine.ConvertLockToSemaphoreSlimAsync` catch copies `ToolException.ErrorCode` into the result; test. [ ]
+- Step 2b of the plan (NoChange classification, report only): not started. [ ]
+
 ## Out of scope
 - Renaming or reorganising `ToolErrorCode` beyond `TargetIneligible`.
 - `catch (ToolException)` fallback sites already judged deliberate (`SymbolNavigationEngine` 400, 404,

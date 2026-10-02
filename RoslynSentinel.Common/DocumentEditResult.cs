@@ -1,4 +1,4 @@
-﻿namespace RoslynSentinel.Common
+namespace RoslynSentinel.Common
 {
     public enum EditOutcome
     {
@@ -21,6 +21,9 @@
     {
 
         public Dictionary<FilePathWrapper, string> Changes { get; init; } = new Dictionary<FilePathWrapper, string>();
+
+        /// <summary>Optional ToolErrorCode value copied from the ToolException that caused the failure; when set it takes precedence over the code derived from Outcome.</summary>
+        public string? ErrorCode { get; init; }
 
         public DocumentEditResult()
         {
