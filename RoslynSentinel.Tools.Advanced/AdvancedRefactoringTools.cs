@@ -767,7 +767,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = false,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"Introduce({newType}): context snippet '{contextSnippet}' not matched in '{filePath}'.")
+                    ErrorData = new ResultError(ToolErrorCode.NotFound, $"Introduce({newType}): context snippet '{contextSnippet}' not matched in '{filePath}'.")
                 };
             // Not wired into MemberChangedContentResult: the new declaration's text isn't caller-
             // supplied or separately exposed -> IntroduceVariable/Field/ParameterAsync only return
@@ -1003,7 +1003,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"SyncInterface implement: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(filePath)}'. " + "Verify both names are spelled correctly (case-sensitive). Use LocateSymbol to confirm the interface exists in the solution.")
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"SyncInterface implement: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(filePath)}'. " + "Verify both names are spelled correctly (case-sensitive). Use LocateSymbol to confirm the interface exists in the solution.")
                     };
                 var implChanges = new Dictionary<FilePathWrapper, string>
                 {
@@ -1043,7 +1043,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"SyncInterface sync: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(filePath)}'. " + "Verify both names are spelled correctly (case-sensitive). Use LocateSymbol to confirm the interface exists in the solution.")
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"SyncInterface sync: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(filePath)}'. " + "Verify both names are spelled correctly (case-sensitive). Use LocateSymbol to confirm the interface exists in the solution.")
                     };
                 var syncChanges = new Dictionary<FilePathWrapper, string>
                 {
@@ -1136,7 +1136,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"Inline/variable: variable '{targetName}' not found in '{filePath}'.")
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"Inline/variable: variable '{targetName}' not found in '{filePath}'.")
                     };
                 var varChanges = new Dictionary<FilePathWrapper, string>
                 {
@@ -1163,7 +1163,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"Inline/field: field '{targetName}' not found in '{filePath}'.")
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"Inline/field: field '{targetName}' not found in '{filePath}'.")
                     };
                 var fieldChanges = new Dictionary<FilePathWrapper, string>
                 {
@@ -1196,7 +1196,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"Inline/parameter: parameter '{targetName}' not found in method '{methodName}' in '{filePath}'.")
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"Inline/parameter: parameter '{targetName}' not found in method '{methodName}' in '{filePath}'.")
                     };
                 var paramChanges = new Dictionary<FilePathWrapper, string>
                 {
@@ -1587,7 +1587,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"MoveType/outerScope: nested type '{typeName}' not found in '{filePath}'.")
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"MoveType/outerScope: nested type '{typeName}' not found in '{filePath}'.")
                     };
                 var outerChanges = new Dictionary<FilePathWrapper, string>
                 {

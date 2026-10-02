@@ -1075,7 +1075,7 @@ public class CodemodTools
                             return new SentinelCallToolResult<object>
                             {
                                 IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_property_safe ({direction}): property '{propName}' not found or not eligible in '{filePath}'. " + "Possible causes: property name is wrong (case-sensitive), property already has the target style, " + "or contextSnippet did not uniquely identify it. Use GetFileOutline to list available properties.")
+                                ErrorData = new ResultError(ToolErrorCode.NotFound, $"convert_property_safe ({direction}): property '{propName}' not found or not eligible in '{filePath}'. " + "Possible causes: property name is wrong (case-sensitive), property already has the target style, " + "or contextSnippet did not uniquely identify it. Use GetFileOutline to list available properties.")
                             };
                         }
 
@@ -1095,7 +1095,7 @@ public class CodemodTools
                             return new SentinelCallToolResult<object>
                             {
                                 IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_property_to_methods: property '{propName}' not found in '{filePath}'. " + "Use GetFileOutline to list available properties (name is case-sensitive).")
+                                ErrorData = new ResultError(ToolErrorCode.NotFound, $"convert_property_to_methods: property '{propName}' not found in '{filePath}'. " + "Use GetFileOutline to list available properties (name is case-sensitive).")
                             };
                         }
 
@@ -1114,7 +1114,7 @@ public class CodemodTools
                             return new SentinelCallToolResult<object>
                             {
                                 IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_to_background_service: class '{className}' not found or not eligible in '{filePath}'. " + "The class must not already implement BackgroundService. Use GetFileOutline to verify.")
+                                ErrorData = new ResultError(ToolErrorCode.NotFound, $"convert_to_background_service: class '{className}' not found or not eligible in '{filePath}'. " + "The class must not already implement BackgroundService. Use GetFileOutline to verify.")
                             };
                         }
 
@@ -1190,7 +1190,7 @@ public class CodemodTools
                             return new SentinelCallToolResult<object>
                             {
                                 IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"record_to_class: record '{className}' not found in '{filePath}'. " + "The type must be declared as a 'record'. Use GetFileOutline to verify.")
+                                ErrorData = new ResultError(ToolErrorCode.NotFound, $"record_to_class: record '{className}' not found in '{filePath}'. " + "The type must be declared as a 'record'. Use GetFileOutline to verify.")
                             };
                         }
 
