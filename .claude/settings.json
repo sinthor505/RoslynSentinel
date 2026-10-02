@@ -1,5 +1,27 @@
 {
+  "statusLine": {
+    "type": "command",
+    "command": "powershell -NoProfile -ExecutionPolicy Bypass -File C:/Users/Administrator/source/repos/RoslynSentinel/.claude/hooks/usage-statusline.ps1"
+  },
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe",
+            "args": [
+              "-NoProfile",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/usage-nudge.ps1"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell|Grep|.*__ReplaceSnippet|.*__Git",
@@ -19,6 +41,23 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe",
+            "args": [
+              "-NoProfile",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/usage-nudge.ps1"
+            ],
+            "timeout": 10
+          }
+        ]
+      },
       {
         "matcher": ".*__Build",
         "hooks": [
