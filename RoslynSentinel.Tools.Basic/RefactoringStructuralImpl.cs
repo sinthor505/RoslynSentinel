@@ -434,7 +434,7 @@ public class RefactoringStructuralImpl
                         EditOutcome.TargetNotFound => $"Member: member '{memberName}' not found in '{filePathResolved}'.",
                         _ => $"Member: no changes produced for '{memberName}' in '{filePathResolved}' ({result.Outcome}). {result.Message}"
                     };
-                    return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(RefactoringToolHelpers.ErrorCodeFor(result.Outcome), errorReason) };
+                    return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(RefactoringToolHelpers.ErrorCodeFor(result), errorReason) };
                 }
 
                 var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };

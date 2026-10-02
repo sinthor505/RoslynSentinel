@@ -268,7 +268,7 @@ public class RefactoringExtractionDocsImpl
                     EditOutcome.CannotConvert => $"ExtractLocalVariable: could not extract '{variableName}' in '{filePathResolved}'. {result.Message}",
                     _ => $"ExtractLocalVariable: no change produced for '{variableName}' in '{filePathResolved}' ({result.Outcome}). {result.Message}"
                 };
-                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, errorReason) };
+                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(RefactoringToolHelpers.ErrorCodeFor(result), errorReason) };
             }
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };

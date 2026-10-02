@@ -112,7 +112,7 @@ Updated 2026-10-01. Update this block after every committed slice; `git log` is 
   - LEFT (judgment): internal-state throws ("syntax root", "semantic model", "compilation", "No solution is loaded" in `AntiPatternEngine` ~2448, which could become `SolutionNotLoadedException`).
 - Step 2 slices (one commit each, each builds green on its own):
   - S2-1: `DocumentEditResult.ErrorCode` + `RefactoringToolHelpers.ErrorCodeFor(DocumentEditResult)` + `RequireUpdatedText` uses it + unit test. [x] (next commit after 57a5cb1: "S2-1")
-  - S2-2: route hand-built switches (`RefactoringStructuralImpl` ~427-437, `RefactoringExtractionDocsImpl` ~264-270) through it. [ ]
+  - S2-2: route hand-built switches (`RefactoringStructuralImpl` ~427-437, `RefactoringExtractionDocsImpl` ~264-270) through it. [x] S2-1 = a537ece; S2-2 = next commit
   - S2-3: `MsAugmentResult.Fail(message, code)` and its consumer (`RefactoringExtractionDocsImpl` ~314-320). [ ]
   - S2-4: pilot - `ThreadSafetyEngine.ConvertLockToSemaphoreSlimAsync` catch copies `ToolException.ErrorCode` into the result; test. [ ]
 - Step 2b of the plan (NoChange classification, report only): not started. [ ]
