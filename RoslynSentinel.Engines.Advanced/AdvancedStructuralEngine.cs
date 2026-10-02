@@ -342,7 +342,7 @@ public class StructuralRefactoringEngine
             "add-braces" => ApplyAddBraces(root, line),
             "remove-braces" => ApplyRemoveBraces(root, line),
             "extract-constant" => ApplyExtractConstant(root, line),
-            _ => throw new ArgumentException($"Unknown micro-refactoring '{refactoringId}'. " + "Known IDs: type-to-var, remove-unused-local, add-braces, remove-braces, extract-constant.")
+            _ => throw new ToolInvalidArgumentException($"Unknown micro-refactoring '{refactoringId}'. " + "Known IDs: type-to-var, remove-unused-local, add-braces, remove-braces, extract-constant.")
         };
         return new DocumentEditResult
         {
@@ -1578,7 +1578,7 @@ public class StructuralRefactoringEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var methodNode = (root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName)) ?? throw new InvalidOperationException("Method not found.");
+        var methodNode = (root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName)) ?? throw new ToolNotFoundException($"Method '{methodName}' not found in type.");
         if (methodNode.ReturnType is not TupleTypeSyntax tupleType)
         {
             throw new ToolTargetIneligibleException("Method does not return a named tuple.");

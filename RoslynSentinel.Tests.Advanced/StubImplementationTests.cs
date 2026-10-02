@@ -401,7 +401,7 @@ class C {
     public async Task RunMicroRefactoring_UnknownId_ThrowsArgumentException()
     {
         SetSource("class C { void M() {} }");
-        Assert.ThrowsAsync<ArgumentException>(async () => await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "nonexistent-refactoring", 1), "Unknown refactoring ID should throw ArgumentException with list of known IDs");
+        Assert.ThrowsAsync<ToolInvalidArgumentException>(async () => await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "nonexistent-refactoring", 1), "Unknown refactoring ID should throw ToolInvalidArgumentException with list of known IDs");
     }
 
     [Test]
