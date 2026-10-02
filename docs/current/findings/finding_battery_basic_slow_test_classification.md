@@ -1,6 +1,6 @@
 # Finding: Battery.Basic's remaining slow fixtures mostly need the disk tier; one big in-memory candidate is left
 
-**Status:** OPEN 2026-10-02. Seven fixtures converted to the in-memory tier; the rest are classified below, with the disk-required ones still hypotheses unless marked "confirmed".
+**Status:** OPEN 2026-10-02. Eight fixtures converted to the in-memory tier (MutatingToolRejectionMessageTests added); the rest are classified below, with the disk-required ones still hypotheses unless marked "confirmed".
 
 ## Context
 After test-level parallelism (commit 3037e5b) Battery.Basic was CPU-bound: ~933 test-seconds, ~78 s wall on 16 cores.
@@ -19,7 +19,7 @@ Pre-conversion test-seconds, top fixtures (tests / seconds):
 | RunTestTests | 11 | 88 | disk (spawns dotnet test) | hypothesis, not read |
 | ModifyModifierBatchTests | 8 | 72 | in-memory | converted (5bc79a1) |
 | ModifyAttributeBatchTests | 8 | 71 | in-memory | converted (830337c) |
-| MutatingToolRejectionMessageTests | 3 | 71 | disk? | hypothesis, not read |
+| MutatingToolRejectionMessageTests | 3 | 71 | in-memory | converted (f2be3c2) |
 | ModifyBaseTypeBatchTests | 8 | 70 | in-memory | converted (830337c) |
 | LargeResultOffloadFilterTests | 3 | 60 | disk (offload files) | hypothesis, not read |
 | OrientationBreakerFilterTests | 5 | 58 | unknown | not read |
@@ -52,8 +52,8 @@ legitimately need the disk, plus `PreviewInstanceMoveCallSitesTests` (112 s), th
    cross-project test.
 2. Decision needed: make the whole-file size guard read old content from the workspace document instead of the disk
    (production change, would let `ApplyDiffSizeGuardTests` run in-memory). Otherwise leave it on the disk tier.
-3. Read the "hypothesis" fixtures before judging them; `OrientationBreakerFilterTests` and
-   `MutatingToolRejectionMessageTests` may be in-memory-able (filters/messages, not disk behaviour).
+3. Read the "hypothesis" fixtures before judging them; `OrientationBreakerFilterTests` is confirmed disk
+   (real MCP + LoadSolution). `MutatingToolRejectionMessageTests` confirmed in-memory (now converted).
 4. Optional: mutation checks for the converted fixtures; run Battery.Basic several times to look for flakiness.
 
 ## Out of scope
