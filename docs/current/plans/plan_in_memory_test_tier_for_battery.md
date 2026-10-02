@@ -66,8 +66,13 @@ Two tiers:
 
 ### Step 2 - Re-measure
 - Change: run Battery.Basic alone (no concurrent RunTest) and compare to baseline. Measured after the pilot:
-  382/382 pass, 1m20 (80 s) wall alone - no wall gain yet because only 33 tests were converted. Check for flakiness
-  (several runs); `NonParallelizable` global-exclusion semantics are unverified.
+  382/382 pass, 1m20 (80 s) wall alone - no wall gain yet because only 33 tests were converted. After the tiptoe
+  conversions (ReplaceSnippetBatch/ErrorCode/SizeGuard, MemberSingleDeclaration, MemberInsertAfterEol; 22 more tests;
+  commits 39be3d3, c4865a4, 8042edf, 8fa4c6c): 397 pass, 6 skip, 1m04 test duration alone (baseline 1m10) - small gain,
+  the remaining cost is the disk-bound fixtures. Classification: docs/current/findings/finding_battery_basic_slow_test_classification.md.
+  Parked: ApplyDiffSizeGuardTests (guard reads old content from real disk), PreviewInstanceMoveCallSitesTests (897 lines,
+  shared SetUp, ledger and cross-project tests). Check for flakiness (several runs); `NonParallelizable`
+  global-exclusion semantics are unverified.
 - Done when: wall time and test-seconds recorded in this doc.
 
 ### Step 3 - Optional follow-ups
