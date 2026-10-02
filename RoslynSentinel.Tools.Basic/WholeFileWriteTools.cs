@@ -32,7 +32,7 @@ public class WholeFileWriteTools
     [Description("Writes a whole file to disk, creating or overwriting it. Use ApplyUnifiedDiff for partial edits.")]
     public async Task<SentinelCallToolResult<object>> WriteFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("CreateFile: file must not already exist. ReplaceFile: file must already exist.")]
+        [Description("CreateFile (or its alias Create): file must not already exist (errors if it does). ReplaceFile (or its alias Replace): overwrites the file, and creates it if it does not exist.")]
         [ExternalInputRequired(DataTag.Action)] WriteFileOperation operation,
         [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
         [Description("Full file content. Parent directories are created automatically.")] string content,
@@ -43,21 +43,12 @@ public class WholeFileWriteTools
         try
         {
             bool exists = File.Exists(filePathResolved);
-            if (operation == WriteFileOperation.CreateFile && exists)
+            if (operation is WriteFileOperation.CreateFile or WriteFileOperation.Create && exists)
             {
                 return new SentinelCallToolResult<object>()
                 {
                     IsSuccess = false,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"WriteFile: '{filePathResolved}' already exists. Use operation=ReplaceFile to overwrite an existing file.")
-                };
-            }
-
-            if (operation == WriteFileOperation.ReplaceFile && !exists)
-            {
-                return new SentinelCallToolResult<object>()
-                {
-                    IsSuccess = false,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"WriteFile: '{filePathResolved}' does not exist. Use operation=CreateFile to create a new file.")
                 };
             }
 
@@ -89,7 +80,7 @@ public class WholeFileWriteTools
                 };
             }
 
-            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, operation == WriteFileOperation.CreateFile ? "create_file" : "replace_file", result, cancellationToken: cancellationToken);
+            await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, exists ? "replace_file" : "create_file", result, cancellationToken: cancellationToken);
             var strippedResult = result with { PreImages = null };
             return new SentinelCallToolResult<object>()
             {

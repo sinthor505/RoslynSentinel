@@ -92,7 +92,9 @@ public enum ChangesetFormat
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum WriteFileOperation
 {
-    CreateFile, ReplaceFile
+    CreateFile, ReplaceFile,
+    // Aliases of CreateFile / ReplaceFile: models that look for a plain "Create" or "Replace" on WriteFile get the same behavior.
+    Create, Replace
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

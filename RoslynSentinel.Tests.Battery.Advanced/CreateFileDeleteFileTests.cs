@@ -109,7 +109,52 @@ public class CreateFileDeleteFileTests
     }
 
     [Test]
-    public async Task ReplaceFile_DoesNotExist_FailsAsync()
+    public async Task Create_AliasOfCreateFile_NewPathCreatesExistingPathFailsAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "ViaCreateAlias.cs");
+
+        var created = await wholeFileWriteTools.WriteFile(reason: "test message", WriteFileOperation.Create, newFile, "public class ViaCreateAlias { }");
+        Assert.That(created.IsSuccess, Is.True, created.ErrorData?.Message);
+        Assert.That(File.ReadAllText(newFile), Is.EqualTo("public class ViaCreateAlias { }"));
+
+        var again = await wholeFileWriteTools.WriteFile(reason: "test message", WriteFileOperation.Create, newFile, "public class Other { }");
+        Assert.That(again.IsSuccess, Is.False);
+        Assert.That(again.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(File.ReadAllText(newFile), Is.EqualTo("public class ViaCreateAlias { }"));
+    }
+
+    [Test]
+    public async Task Replace_AliasOfReplaceFile_OverwritesExistingAndCreatesMissingAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+
+        var newFile = Path.Combine(fixture.SolutionDirectory, "ViaReplaceAlias.cs");
+
+        var created = await wholeFileWriteTools.WriteFile(reason: "test message", WriteFileOperation.Replace, newFile, "public class ViaReplaceAlias { }");
+        Assert.That(created.IsSuccess, Is.True, created.ErrorData?.Message);
+        Assert.That(File.ReadAllText(newFile), Is.EqualTo("public class ViaReplaceAlias { }"));
+
+        var replaced = await wholeFileWriteTools.WriteFile(reason: "test message", WriteFileOperation.Replace, newFile, "public class ViaReplaceAlias2 { }");
+        Assert.That(replaced.IsSuccess, Is.True, replaced.ErrorData?.Message);
+        Assert.That(File.ReadAllText(newFile), Is.EqualTo("public class ViaReplaceAlias2 { }"));
+    }
+
+    [Test]
+    public async Task ReplaceFile_DoesNotExist_CreatesFileAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
@@ -123,9 +168,9 @@ public class CreateFileDeleteFileTests
 
         var result = await wholeFileWriteTools.WriteFile(reason: "test message", WriteFileOperation.ReplaceFile, missingFile, "public class X { }");
 
-        Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-        Assert.That(File.Exists(missingFile), Is.False);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(File.Exists(missingFile), Is.True);
+        Assert.That(File.ReadAllText(missingFile), Is.EqualTo("public class X { }"));
     }
 
     [Test]
