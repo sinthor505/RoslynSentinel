@@ -14,6 +14,8 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Parallelizable(ParallelScope.All)]
+[FixtureLifeCycle(LifeCycle.InstancePerTestCase)]
 public class GitToolsSmokeTests
 {
     // Generous relative to GitProcessTimeout's 30s -> this isn't testing the timeout boundary
@@ -1261,7 +1263,10 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "commit", "-m", "local commit");
     }
 
+    // Sets the process-wide GIT_CONFIG_NOSYSTEM env var for its duration, so it must not overlap
+    // the other (parallel) tests in this fixture, whose git children would inherit it.
     [Test]
+    [NonParallelizable]
     public async Task Git_Pull_DivergentBranchesWithNoPullConfig_MergesInsteadOfFailingAsync()
     {
         var previousNoSystem = Environment.GetEnvironmentVariable("GIT_CONFIG_NOSYSTEM");

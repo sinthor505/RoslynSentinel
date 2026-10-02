@@ -11,6 +11,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Parallelizable(ParallelScope.All)]
 public class RunTestTests
 {
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
@@ -260,7 +261,10 @@ public class RunTestTests
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("TestRunFailed"));
     }
 
+    // Diffs the shared temp dir before/after, so a sibling test's in-flight .trx would read as a
+    // leftover: must not overlap the other (parallel) RunTest tests in this fixture.
     [Test]
+    [NonParallelizable]
     public async Task RunTest_TrxTempFile_DeletedAfterCallAsync()
     {
         using var fixture = new TestSolutionFixture();

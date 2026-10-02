@@ -13,6 +13,8 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Parallelizable(ParallelScope.All)]
+[FixtureLifeCycle(LifeCycle.InstancePerTestCase)]
 public class PreviewInstanceMoveCallSitesTests
 {
     private TestSolutionFixture _fixture;

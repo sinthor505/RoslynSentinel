@@ -14,6 +14,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Advanced;
 
 [TestFixture]
+[Parallelizable(ParallelScope.All)]
 public class CreateFileDeleteFileTests
 {
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)

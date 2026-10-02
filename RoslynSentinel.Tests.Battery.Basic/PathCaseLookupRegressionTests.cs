@@ -17,6 +17,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Parallelizable(ParallelScope.All)]
 public class PathCaseLookupRegressionTests
 {
     public enum PathSpelling
