@@ -213,6 +213,47 @@ public enum ToolScope
     }
 
     [Test]
+    public async Task GetContainerMembers_AttributedMembers_SignatureExcludesAttributeLine()
+    {
+        var source = """
+            public class Holder
+            {
+                [Obsolete]
+                public string? Name { get; set; }
+
+                [Obsolete]
+                public void Run(int x) { }
+
+                public int Plain;
+            }
+            """;
+        SetSource(source, "Attributed.cs");
+
+        var (outcome, message, members) = await _symbolNavigationEngine.GetContainerMembersAsync("Attributed.cs", "Holder");
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.Modified));
+        
+        // Verify signatures exclude attribute text
+        var nameProperty = members.FirstOrDefault(m => m.Name == "Name");
+        Assert.That(nameProperty, Is.Not.Null);
+        Assert.That(nameProperty!.Signature, Is.EqualTo("public string? Name"));
+        Assert.That(nameProperty.Signature, Does.Not.StartWith("["));
+
+        var runMethod = members.FirstOrDefault(m => m.Name == "Run");
+        Assert.That(runMethod, Is.Not.Null);
+        Assert.That(runMethod!.Signature, Is.EqualTo("public void Run(int x)"));
+        Assert.That(runMethod.Signature, Does.Not.StartWith("["));
+
+        var plainField = members.FirstOrDefault(m => m.Name == "Plain");
+        Assert.That(plainField, Is.Not.Null);
+        Assert.That(plainField!.Signature, Is.EqualTo("public int Plain"));
+        Assert.That(plainField.Signature, Does.Not.StartWith("["));
+
+        // Verify no member has attribute in signature
+        Assert.That(members, Has.All.Matches<SymbolNavigationEngine.ContainerMemberInfo>(m => !m.Signature.StartsWith("[")));
+    }
+
+    [Test]
     public async Task AddEnumMember_Appends_WhenNoPositionGiven()
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");

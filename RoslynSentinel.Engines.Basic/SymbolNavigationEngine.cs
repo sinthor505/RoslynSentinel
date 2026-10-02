@@ -2543,7 +2543,8 @@ public class SymbolNavigationEngine
                 IndexerDeclarationSyntax => "indexer",
                 _ => m.Kind().ToString()
             };
-            var signature = m.WithLeadingTrivia().WithTrailingTrivia().ToFullString().Trim();
+            var declStart = m.AttributeLists.Count > 0 ? m.AttributeLists.Last().Span.End : m.SpanStart;
+            var signature = sourceText.ToString(TextSpan.FromBounds(declStart, m.Span.End)).Trim();
             var firstLineEnd = signature.IndexOfAny(['\n', '{', ';']);
             if (firstLineEnd > 0)
             {
