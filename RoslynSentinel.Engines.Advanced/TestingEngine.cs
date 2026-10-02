@@ -28,12 +28,12 @@ public class TestingEngine
     public async Task<TestComplexityReport> CalculateComplexityAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException("Could not parse syntax root.");
 
         var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName) ?? throw new InvalidOperationException($"Method {methodName} not found.");
+            .FirstOrDefault(m => m.Identifier.Text == methodName) ?? throw new ToolNotFoundException($"Method {methodName} not found.");
         var conditionals = new List<string>();
         int complexity = 1;
 
@@ -60,12 +60,12 @@ public class TestingEngine
     public async Task<TestSkeletonReport> GenerateTestSkeletonAsync(FilePathWrapper filePath, string className, string framework = "NUnit", CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException($"Could not parse syntax root for file: {filePath}");
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className) ?? throw new InvalidOperationException($"Class {className} not found in file: {filePath}");
+            .FirstOrDefault(c => c.Identifier.Text == className) ?? throw new ToolNotFoundException($"Class {className} not found in file: {filePath}");
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? "Global";
         var publicMethods = classNode.Members.OfType<MethodDeclarationSyntax>()
             .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)));

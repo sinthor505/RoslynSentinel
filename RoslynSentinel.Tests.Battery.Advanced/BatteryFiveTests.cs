@@ -96,7 +96,7 @@ public class Converter
     {
         SetSource("public class C { }", "Test.cs");
 
-        Assert.ThrowsAsync<FileNotFoundException>(async () =>
+        Assert.ThrowsAsync<ToolNotFoundException>(async () =>
             await _engine.FindUnsafeTypeCastsAsync("NonExistent.cs"));
     }
 
@@ -364,7 +364,7 @@ public class MetricsService
     {
         SetSource(@"public class C { public void Existing() { } }");
 
-        Assert.ThrowsAsync<InvalidOperationException>(
+        Assert.ThrowsAsync<ToolNotFoundException>(
             async () => await _engine.AddTryCatchToMethodAsync("Test.cs", "NonExistentMethod"));
     }
 
