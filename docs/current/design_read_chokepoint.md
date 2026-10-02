@@ -320,8 +320,8 @@ can now be designed in detail** per the ordering this document specifies — the
 blocking precondition. That design is now written up at `docs/current/proposal_staged_writes.md`.
 
 **Step 5 (document-lookup accessors) proposed 2026-10-01; phase 5a implemented 2026-10-02
-(uncommitted at the time of writing).** Phase 5a is the fix plan
-for `blockers/blocking_error_path_lookup_case_sensitive_drive_letter_replacesnippet_file_not_found.md`:
+in commit `7357df5`.** Phase 5a is the fix plan
+for `blockers/resolved/blocking_error_path_lookup_case_sensitive_drive_letter_replacesnippet_file_not_found.md`:
 the static core (`DocumentLookup`), `IWorkspaceReader.GetDocumentAsync`/`GetDocumentsAsync` with
 `PersistentWorkspaceManager` and `FakeWorkspaceManager` implementations, the 7 High sites, the
 case-insensitive pending/internal/external change sets, the ambient solution root, and regression

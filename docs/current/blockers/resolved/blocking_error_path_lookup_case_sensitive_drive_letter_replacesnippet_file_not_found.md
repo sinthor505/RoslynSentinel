@@ -1,10 +1,36 @@
 # `ReplaceSnippet` (and 6 other path lookups) return "File not found" when the caller's path casing differs from the loaded solution's, e.g. `C:\` vs `c:\`
 
-**Status:** OPEN 2026-10-01. Root cause TRACED to source for every high-severity site listed
-below. Each one compares paths with ordinal, case-sensitive string equality. Drift-detector effects
-are partly hypothesis (see "What is and is not confirmed"). Nothing has been fixed. The fix plan
-(updated 2026-10-01) routes path-to-Document lookup through the read chokepoint; see "Fix plan"
-below and `docs/current/design_read_chokepoint.md` step 5.
+**Status:** FIXED 2026-10-02. Phase A of the fix plan landed in commit `7357df5`; see "Resolution" below.
+
+## Resolution
+
+Fixed in commit `7357df5` (2026-10-02), as phase 5a of `docs/current/design_read_chokepoint.md` step 5.
+- **The lookup.** `DocumentLookup` (Common) is the single case-insensitive path-to-Document lookup.
+  It is built on `GetDocumentIdsWithFilePath`, and `IWorkspaceReader` exposes it as
+  `GetDocumentAsync` and `GetDocumentsAsync`. All 7 High sites route through it.
+- **Error codes.** A lookup failure now returns `NotFound` or `Ambiguous` with the closest or
+  candidate paths, instead of `"File not found."` or `errorCode: Exception`.
+- **Fix plan items 3 and 4.** Medium items 8-9 use `PathComparison.Comparer`. The JSON converter
+  and the implicit string conversion now resolve relative paths against the solution root, through
+  an ambient root set per request. That also fixed the incidental `GetDiagnostics(scope: file)`
+  relative-path failure.
+- **Regression tests.** `RoslynSentinel.Tests.Battery.Basic/PathCaseLookupRegressionTests.cs`,
+  `RoslynSentinel.Tests/DocumentLookupTests.cs` and `RoslynSentinel.Tests/FilePathAmbientRootTests.cs`.
+  The full suite had 0 failures, which matches the baseline.
+- **Live verification (2026-10-02, fresh server build).** All four calls below now succeed:
+  - `Search(mode: symbol)` with a `C:\` path;
+  - `FindReferences` with a mixed-case directory;
+  - `GetDiagnostics(scope: file)` with a relative path;
+  - a bare `Program.cs`, which returns `Ambiguous` and lists all 3 candidates.
+
+  ReplaceSnippet and the diff tools were covered by the regression tests, not by live calls.
+- **Still open, tracked elsewhere:**
+  - the phase 5b sweep of the remaining LINQ lookups (design doc step 5);
+  - the analyzer guardrail and the `FilePathLock` comparer (`docs/current/TODO.md`);
+  - medium item 10 (mixed-casing new documents) and the Low items, which were not changed.
+
+Original status (2026-10-01): root cause traced to source for every High site. Each one compared
+paths with ordinal, case-sensitive string equality.
 
 ## What was being attempted
 
