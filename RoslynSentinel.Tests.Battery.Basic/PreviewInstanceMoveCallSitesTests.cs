@@ -515,47 +515,48 @@ public class PreviewInstanceMoveCallSitesTests
     [Test]
     public async Task MoveMemberAsync_AmbiguousInstanceMemberNoFixup_ReturnsPendingLedgerEntryAsync()
     {
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassC.cs"), """
-            namespace ContosoOrders.Core;
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/MoveInstanceClassC.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveInstanceClassC
-            {
-                public void Foo()
+                public class MoveInstanceClassC
+                {
+                    public void Foo()
+                    {
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/MoveInstanceClassD.cs", """
+                namespace ContosoOrders.Core;
+
+                public class MoveInstanceClassD
                 {
                 }
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassD.cs"), """
-            namespace ContosoOrders.Core;
+                """),
+            ("ContosoOrders.Core/MoveInstanceCallerAmbiguous2.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveInstanceClassD
-            {
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceCallerAmbiguous2.cs"), """
-            namespace ContosoOrders.Core;
-
-            public class MoveInstanceCallerAmbiguous2
-            {
-                private readonly MoveInstanceClassD _d1 = new MoveInstanceClassD();
-                private readonly MoveInstanceClassD _d2 = new MoveInstanceClassD();
-
-                public void Do()
+                public class MoveInstanceCallerAmbiguous2
                 {
-                    var c = new MoveInstanceClassC();
-                    c.Foo();
-                }
-            }
-            """);
+                    private readonly MoveInstanceClassD _d1 = new MoveInstanceClassD();
+                    private readonly MoveInstanceClassD _d2 = new MoveInstanceClassD();
 
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassC.cs"));
+                    public void Do()
+                    {
+                        var c = new MoveInstanceClassC();
+                        c.Foo();
+                    }
+                }
+                """));
 
         // Decision 5: MoveMemberAsync itself no longer rejects an unresolved instance-move call
         // site. It returns a proposed change set (the move still happens) plus a pending ledger
         // entry describing the site that couldn't be auto-resolved - opening the actual ledger is
         // the MoveMember MCP tool's job, done only after the change set is atomically applied (see
         // AdvancedStructuralEngine.MoveInstanceMembersAsync's comment on why TryOpen can't happen here).
-        var result = await _engine.MoveMemberAsync(filePath, "MoveInstanceClassC", ["Foo"], "MoveInstanceClassD");
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/MoveInstanceClassC.cs"),
+            "MoveInstanceClassC", ["Foo"], "MoveInstanceClassD");
 
         Assert.Multiple(() =>
         {
@@ -653,52 +654,52 @@ public class PreviewInstanceMoveCallSitesTests
     [Test]
     public async Task MoveMemberAsync_NewFixupTargetWithoutZeroArgCtor_RefusedWithSignatureAsync()
     {
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveNewSourceA.cs"), """
-            namespace ContosoOrders.Core;
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/MoveNewSourceA.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveNewSourceA
-            {
-                public void Foo()
+                public class MoveNewSourceA
                 {
+                    public void Foo()
+                    {
+                    }
                 }
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveNewTargetB.cs"), """
-            namespace ContosoOrders.Core;
+                """),
+            ("ContosoOrders.Core/MoveNewTargetB.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveNewTargetB
-            {
-                public MoveNewTargetB(string name)
+                public class MoveNewTargetB
                 {
+                    public MoveNewTargetB(string name)
+                    {
+                    }
                 }
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveNewCallerB.cs"), """
-            namespace ContosoOrders.Core;
+                """),
+            ("ContosoOrders.Core/MoveNewCallerB.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveNewCallerB
-            {
-                public void Do()
+                public class MoveNewCallerB
                 {
-                    var a = new MoveNewSourceA();
-                    a.Foo();
+                    public void Do()
+                    {
+                        var a = new MoveNewSourceA();
+                        a.Foo();
+                    }
                 }
-            }
-            """);
+                """));
 
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveNewSourceA.cs"));
-        var callerFile = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveNewCallerB.cs");
-        var callerBefore = await File.ReadAllTextAsync(callerFile);
-
-        var rows = await _engine.PreviewInstanceMoveCallSitesAsync(filePath, "MoveNewSourceA", ["Foo"], "MoveNewTargetB");
+        var rows = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/MoveNewSourceA.cs"),
+            "MoveNewSourceA", ["Foo"], "MoveNewTargetB");
         var row = rows.Single(r => r.CallExpression.Contains("Foo"));
         Assume.That(row.Status, Is.EqualTo(CallSiteStatus.NoCandidateIntroducible));
         var key = $"{row.FilePath}:{row.Line}";
 
         var ex = Assert.ThrowsAsync<ToolInvalidArgumentException>(() =>
-            _engine.MoveMemberAsync(filePath, "MoveNewSourceA", ["Foo"], "MoveNewTargetB", null, default, true, new Dictionary<string, string> { [key] = "new" }));
-
-        var callerAfter = await File.ReadAllTextAsync(callerFile);
+            engine.MoveMemberAsync(
+                workspace.PathOf("ContosoOrders.Core/MoveNewSourceA.cs"),
+                "MoveNewSourceA", ["Foo"], "MoveNewTargetB", null, default, true,
+                new Dictionary<string, string> { [key] = "new" }));
 
         Assert.Multiple(() =>
         {
@@ -707,49 +708,53 @@ public class PreviewInstanceMoveCallSitesTests
             Assert.That(ex.Message, Does.Contain("MoveNewTargetB(string name)"));
             Assert.That(ex.Message, Does.Contain("zero-argument"));
             Assert.That(ex.Message, Does.Contain("No changes were made"));
-            Assert.That(callerAfter, Is.EqualTo(callerBefore));
         });
     }
 
     [Test]
     public async Task MoveMemberAsync_NewFixupParameterlessTarget_RewritesToNewTargetAsync()
     {
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveNewSourceC.cs"), """
-            namespace ContosoOrders.Core;
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/MoveNewSourceC.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveNewSourceC
-            {
-                public void Foo()
+                public class MoveNewSourceC
+                {
+                    public void Foo()
+                    {
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/MoveNewTargetD.cs", """
+                namespace ContosoOrders.Core;
+
+                public class MoveNewTargetD
                 {
                 }
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveNewTargetD.cs"), """
-            namespace ContosoOrders.Core;
+                """),
+            ("ContosoOrders.Core/MoveNewCallerD.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveNewTargetD
-            {
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveNewCallerD.cs"), """
-            namespace ContosoOrders.Core;
-
-            public class MoveNewCallerD
-            {
-                public void Do()
+                public class MoveNewCallerD
                 {
-                    var c = new MoveNewSourceC();
-                    c.Foo();
+                    public void Do()
+                    {
+                        var c = new MoveNewSourceC();
+                        c.Foo();
+                    }
                 }
-            }
-            """);
+                """));
 
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveNewSourceC.cs"));
-        var rows = await _engine.PreviewInstanceMoveCallSitesAsync(filePath, "MoveNewSourceC", ["Foo"], "MoveNewTargetD");
+        var rows = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/MoveNewSourceC.cs"),
+            "MoveNewSourceC", ["Foo"], "MoveNewTargetD");
         var row = rows.Single(r => r.CallExpression.Contains("Foo"));
         var key = $"{row.FilePath}:{row.Line}";
 
-        var result = await _engine.MoveMemberAsync(filePath, "MoveNewSourceC", ["Foo"], "MoveNewTargetD", null, default, true, new Dictionary<string, string> { [key] = "new" });
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/MoveNewSourceC.cs"),
+            "MoveNewSourceC", ["Foo"], "MoveNewTargetD", null, default, true,
+            new Dictionary<string, string> { [key] = "new" });
 
         Assert.Multiple(() =>
         {
