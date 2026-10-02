@@ -29,7 +29,9 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     private readonly SemaphoreSlim _solutionLock = new(1, 1);
     private FileSystemWatcher? _watcher;
     private readonly List<FileSystemWatcher> _outOfTreeWatchers = new();
-    private readonly ConcurrentDictionary<string, DateTime> _pendingChanges = new();
+    // Keyed by file path: PathComparison.Comparer (OrdinalIgnoreCase), not the default comparer, so
+    // a watcher path and a caller path that differ only in casing (c:\ vs C:\) are one entry.
+    private readonly ConcurrentDictionary<string, DateTime> _pendingChanges = new(PathComparison.Comparer);
     private readonly List<string> _workspaceLoadErrors = new();
     private readonly ConcurrentBag<string> _externalChanges = new();
     private volatile bool _watcherOverflowed;
@@ -57,7 +59,10 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     // as an unintentional half-finished migration -> it is a deliberate staged rollout, and
     // _internalChanges/_externalChanges are an intentional future-removal candidate once the
     // hash-based gate has proven itself in production, not a bug to "clean up" reflexively.
-    private readonly ConcurrentDictionary<string, (DateTime Timestamp, string Content)> _internalChanges = new();
+    // Keyed by file path with PathComparison.Comparer: written with the caller's FilePathWrapper
+    // casing, read with the watcher's e.FullPath casing -> a default (ordinal) comparer made a
+    // c:\ vs C:\ difference miss the self-write suppression and read as external drift.
+    private readonly ConcurrentDictionary<string, (DateTime Timestamp, string Content)> _internalChanges = new(PathComparison.Comparer);
     // Disabled 2026-09-14: the AST-normalization no-op check below (see its own comment) was
     // blocking legitimate formatting-only edits -> a model asking to fix indentation/spacing got
     // silently no-op'd whenever its fix and the original both normalized to the same canonical
@@ -250,7 +255,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// </summary>
     public List<string> GetExternalFileChanges()
     {
-        return _externalChanges.Distinct().ToList();
+        return _externalChanges.Distinct(PathComparison.Comparer).ToList();
     }
 
     /// <summary>
@@ -1067,21 +1072,37 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// </summary>
     public async Task<string?> GetDocumentTextAsync(FilePathWrapper path, ReadSource source, CancellationToken cancellationToken)
     {
-        var solution = await GetSolutionAsync(source, cancellationToken);
-        var docId = solution.GetDocumentIdsWithFilePath(path).FirstOrDefault();
-        if (docId == null)
-        {
-            return null;
-        }
-
-        var document = solution.GetDocument(docId);
-        if (document == null)
+        // Same lookup as GetDocumentAsync, so a text read and a document lookup can never disagree.
+        // A not-found or ambiguous path reads as null here (the documented contract); callers that
+        // need to know which, or to name the candidates, use GetDocumentAsync.
+        var lookup = await GetDocumentAsync(path, source, cancellationToken);
+        if (!lookup.TryGetDocument(out var document))
         {
             return null;
         }
 
         var text = await document.GetTextAsync(cancellationToken);
         return text.ToString();
+    }
+
+    /// <summary>
+    /// <see cref="IWorkspaceReader"/> implementation: runs <see cref="DocumentLookup.TryGetDocument"/> on the
+    /// snapshot <paramref name="source"/> selects.
+    /// </summary>
+    public async Task<DocumentLookupResult> GetDocumentAsync(FilePathWrapper path, ReadSource source, CancellationToken cancellationToken)
+    {
+        var solution = await GetSolutionAsync(source, cancellationToken);
+        return DocumentLookup.TryGetDocument(solution, path);
+    }
+
+    /// <summary>
+    /// <see cref="IWorkspaceReader"/> implementation: runs <see cref="DocumentLookup.GetDocuments"/> on the
+    /// snapshot <paramref name="source"/> selects.
+    /// </summary>
+    public async Task<IReadOnlyList<Document>> GetDocumentsAsync(DocumentScope scope, ReadSource source, CancellationToken cancellationToken)
+    {
+        var solution = await GetSolutionAsync(source, cancellationToken);
+        return DocumentLookup.GetDocuments(solution, scope);
     }
 
     /// <summary>

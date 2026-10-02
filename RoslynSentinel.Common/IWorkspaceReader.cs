@@ -37,6 +37,25 @@ public interface IWorkspaceReader
     Task<string?> GetDocumentTextAsync(FilePathWrapper path, ReadSource source, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Resolves <paramref name="path"/> to a <see cref="Microsoft.CodeAnalysis.Document"/> on the snapshot
+    /// <paramref name="source"/> selects, using <see cref="DocumentLookup.TryGetDocument"/>: exact path ignoring
+    /// case first, then a bare file name only if exactly one file has it, else not-found (naming the closest real
+    /// paths) or ambiguous (naming the candidates). Never returns null and never throws for a failed lookup --
+    /// check <see cref="DocumentLookupResult.IsFound"/>, then use <c>document.FilePath</c> as the canonical path
+    /// and <c>document.Project.Solution</c> (not a second <see cref="GetSolutionAsync"/> call) for the same
+    /// snapshot. Throws <see cref="SolutionNotLoadedException"/> if no solution is loaded.
+    /// </summary>
+    Task<DocumentLookupResult> GetDocumentAsync(FilePathWrapper path, ReadSource source, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the documents selected by <paramref name="scope"/> (one file, one project or the whole solution) from
+    /// the snapshot <paramref name="source"/> selects. A file or project scope that does not resolve throws
+    /// <see cref="ToolNotFoundException"/> / <see cref="ToolAmbiguousMatchException"/>. Throws
+    /// <see cref="SolutionNotLoadedException"/> if no solution is loaded.
+    /// </summary>
+    Task<IReadOnlyList<Microsoft.CodeAnalysis.Document>> GetDocumentsAsync(DocumentScope scope, ReadSource source, CancellationToken cancellationToken);
+
+    /// <summary>
     /// Returns the requested <see cref="Microsoft.CodeAnalysis.Solution"/> snapshot. Escape hatch
     /// for callers that need the actual Solution object (e.g. SymbolFinder-based searches across the
     /// whole solution) rather than a single document's text. Throws

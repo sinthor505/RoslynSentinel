@@ -169,13 +169,8 @@ public class WorkspaceFileEditImpl
     private static ResultError BuildFileNotFoundError(Microsoft.CodeAnalysis.Solution solution, string normalizedPath)
     {
         var requestedFileName = Path.GetFileName(normalizedPath);
-        var candidates = solution.Projects
-            .SelectMany(p => p.Documents)
-            .Where(d => !string.IsNullOrEmpty(d.FilePath) && string.Equals(Path.GetFileName(d.FilePath), requestedFileName, StringComparison.OrdinalIgnoreCase))
-            .Select(d => d.FilePath!)
-            .Distinct()
-            .Take(5)
-            .ToList();
+        // The candidate search moved to Common (DocumentLookup.FindClosestPaths) so engines can use it too.
+        var candidates = DocumentLookup.FindClosestPaths(solution, normalizedPath);
 
         if (candidates.Count > 0)
         {
@@ -465,14 +460,15 @@ public class WorkspaceFileEditImpl
             {
                 try
                 {
-                    var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-                    var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePathResolved.Absolute || d.FilePath == filePathResolved.Absolute);
-                    if (document == null)
+                    // One lookup, owned by the read chokepoint: case-insensitive exact path, then a unique
+                    // bare name; a miss names the closest real paths (or the ambiguous candidates).
+                    var lookup = await _workspaceManager.GetDocumentAsync(filePathResolved, ReadSource.Committed, cancellationToken);
+                    if (!lookup.TryGetDocument(out var document))
                     {
                         return new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsSuccess = false,
-                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
+                            ErrorData = lookup.ToResultError()
                         };
                     }
 
@@ -613,7 +609,7 @@ public class WorkspaceFileEditImpl
             };
         }
 
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var lookupFailures = new List<DocumentLookupResult>();
         var editsByFile = edits
             .Select((edit, index) => (edit, index))
             .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));
@@ -628,10 +624,24 @@ public class WorkspaceFileEditImpl
                 continue;
             }
 
-            var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePathResolved.Absolute || d.FilePath == filePathResolved.Absolute);
-            if (document == null)
+            // One lookup, owned by the read chokepoint: case-insensitive exact path, then a unique
+            // bare name; a miss names the closest real paths (or the ambiguous candidates).
+            var lookup = await _workspaceManager.GetDocumentAsync(filePathResolved, ReadSource.Committed, cancellationToken);
+            if (!lookup.TryGetDocument(out var document))
             {
-                perEditErrors.Add($"'{filePathResolved}': file not found.");
+                perEditErrors.Add(lookup.Describe());
+                lookupFailures.Add(lookup);
+                continue;
+            }
+
+            // Key the result by the document's own path, not the caller's spelling. Two groups can
+            // reach the same file under different spellings (e.g. a bare name and a full path); each
+            // would otherwise be spliced against the original text and the later one would silently
+            // overwrite the earlier one's edits.
+            var canonicalPath = new FilePathWrapper(document.FilePath ?? filePathResolved.Absolute, _workspaceManager.GetSolutionRoot(), validated: true);
+            if (finalContents.ContainsKey(canonicalPath))
+            {
+                perEditErrors.Add($"'{fileGroup.Key}' resolves to '{canonicalPath}', which another edit entry in this batch already targets under a different spelling. Use the same path string for every edit to one file so they are anchored together.");
                 continue;
             }
 
@@ -694,15 +704,20 @@ public class WorkspaceFileEditImpl
                 spliced = spliced.Remove(match.Start, match.Length).Insert(match.Start, newContent);
             }
 
-            finalContents[filePathResolved] = spliced;
+            finalContents[canonicalPath] = spliced;
         }
 
         if (perEditErrors.Count > 0)
         {
+            // When every rejection is a failed path lookup, report the lookup's own code (NotFound or
+            // Ambiguous) so a caller can branch on it; any other mix stays InvalidArgument.
+            var errorCode = lookupFailures.Count == perEditErrors.Count
+                ? (lookupFailures.Any(f => f.Status == DocumentLookupStatus.Ambiguous) ? ToolErrorCode.Ambiguous : ToolErrorCode.NotFound)
+                : ToolErrorCode.InvalidArgument;
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsSuccess = false,
-                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
+                ErrorData = new ResultError(errorCode, "ReplaceSnippet batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
             };
         }
 

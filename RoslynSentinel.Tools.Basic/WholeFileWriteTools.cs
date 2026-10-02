@@ -467,14 +467,15 @@ public class WholeFileWriteTools
                 {
                     try
                     {
-                        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-                        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePathResolved.Absolute || d.FilePath == filePathResolved.Absolute);
-                        if (document == null)
+                        // One lookup, owned by the read chokepoint: case-insensitive exact path, then a unique
+                        // bare name; a miss names the closest real paths (or the ambiguous candidates).
+                        var lookup = await _workspaceManager.GetDocumentAsync(filePathResolved, ReadSource.Committed, cancellationToken);
+                        if (!lookup.TryGetDocument(out var document))
                         {
                             return new SentinelCallToolResult<object>()
                             {
                                 IsSuccess = false,
-                                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
+                                ErrorData = lookup.ToResultError()
                             };
                         }
 
@@ -600,14 +601,15 @@ public class WholeFileWriteTools
             {
                 try
                 {
-                    var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-                    var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePathResolved.Absolute || d.FilePath == filePathResolved.Absolute);
-                    if (document == null)
+                    // One lookup, owned by the read chokepoint: case-insensitive exact path, then a unique
+                    // bare name; a miss names the closest real paths (or the ambiguous candidates).
+                    var lookup = await _workspaceManager.GetDocumentAsync(filePathResolved, ReadSource.Committed, cancellationToken);
+                    if (!lookup.TryGetDocument(out var document))
                     {
                         return new SentinelCallToolResult<object>()
                         {
                             IsSuccess = false,
-                            ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "File not found.")
+                            ErrorData = lookup.ToResultError()
                         };
                     }
 

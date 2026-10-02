@@ -163,6 +163,66 @@ rather than folded into feature work:
    compiler-enforced routing, convention only). Closing that gap for reads before staging exists is
    the value this ordering buys: a known, bounded list of pre-existing exceptions instead of an
    unbounded one discovered piecemeal after staging ships.
+5. **Document-lookup accessors and a `GetSolutionAsync` reduction sweep.** Next step, added
+   2026-10-01. Step 3 turned every direct `CurrentSolution` read into
+   `GetSolutionAsync(ReadSource.X)`. That made the snapshot choice explicit, but it left the most
+   common read shape un-narrowed: fetch the whole solution, then hand-roll a path-to-Document
+   lookup on it. This is the first accessor shape "grown from real call sites", as the Open items
+   below asked for. It is also the root cause of
+   `blockers/blocking_error_path_lookup_case_sensitive_drive_letter_replacesnippet_file_not_found.md`.
+   That blocker counted 117 hand-written LINQ lookups; 7 of them compare plain strings, so they fail
+   when the caller's path casing differs from the loaded solution's.
+
+   New members:
+
+   ```csharp
+   Task<DocumentLookupResult> GetDocumentAsync(FilePathWrapper path, ReadSource source, CancellationToken cancellationToken);
+   Task<IReadOnlyList<Document>> GetDocumentsAsync(DocumentScope scope, ReadSource source, CancellationToken cancellationToken);
+   ```
+
+   - `DocumentScope` is one file, one project or the whole solution. That is the selection analysis
+     engines hand-roll today (e.g. `ThreadSafetyEngine.FindDoubleCheckedLockingAsync`).
+   - **One implementation.** A static `TryGetDocument(Solution, FilePathWrapper)` in Common, built on
+     `GetDocumentIdsWithFilePath`, so it inherits Roslyn's OrdinalIgnoreCase comparer.
+     - Both reader members and `GetDocumentTextAsync` route through it.
+     - It stays public for code that holds a forked or speculative `Solution`, which the reader
+       cannot hand out.
+     - `FakeWorkspaceManager` delegates to it too.
+   - **Snapshot rule.** A caller that needs the `Solution` after the lookup uses
+     `document.Project.Solution`, not a second `GetSolutionAsync` call. Same snapshot by
+     construction. Once staging exists, two separate reads could straddle a stage; one read cannot.
+   - **Ambiguity rule.** Match the exact path first, ignoring case. Fall back to a bare file name
+     only if exactly one document has it. Otherwise return an ambiguous result that lists the
+     candidates. This deliberately replaces today's first-wins `d.Name == x` matching.
+
+   Call-site shapes among the 392 production `GetSolutionAsync` calls:
+
+   | Use of the `Solution` after the call | Methods | Call sites | After step 5 |
+   | --- | --- | --- | --- |
+   | Path lookup or scope selection only | 263 | ~270 | `GetSolutionAsync` removed; `GetDocumentAsync`/`GetDocumentsAsync` |
+   | Path lookup, then other `Solution` use | 38 | ~40 | `GetSolutionAsync` removed; `document.Project.Solution` |
+   | No path lookup (solution-wide analysis) | 79 | ~82 | Unchanged; the escape hatch is the right tool |
+
+   The counts are a heuristic. They come from method-name and variable-name matching over production
+   code, not a symbol-precise trace, so re-count each batch before trusting a figure.
+
+   Phasing:
+   - **5a, the blocker fix.** The static core, the two reader members, `FakeWorkspaceManager`, and
+     the blocker's 7 High sites. It lands with the rest of that blocker's fix plan.
+   - **5b, the sweep.** The remaining ~310 sites, in sequential "Lookup batch N" commits that mirror
+     step 3. Never dispatch parallel subagents against the shared server for this.
+     - Each batch searches three forms together: the `Projects.SelectMany(p => p.Documents)` LINQ
+       scan, `GetDocumentIdsWithFilePath(`, and bare `d.Name ==` matches. Step 3's
+       sweep-tracking correction (Status below) shows why one form at a time misses sites.
+     - Step 3's `[Obsolete]` trick does not carry over. `GetSolutionAsync` stays legitimate for the
+       ~82 solution-wide sites, so there is no warning count to track progress. Track the remaining
+       work by the hit counts of those three search forms instead.
+     - A batch that changes a first-wins bare-name match to "ambiguous" is a behaviour change; note
+       it in that batch's commit message.
+
+   Step 5 does not depend on staged writes (step 4). It should land before staging is implemented,
+   because the snapshot rule is cheapest to adopt while `Committed` and `IncludeStaged` still return
+   the same thing.
 
 ## Relationship to other in-flight proposals
 
@@ -188,7 +248,35 @@ rather than folded into feature work:
 
 - Exact method set on `IWorkspaceReader` beyond `GetDocumentTextAsync`/`GetSolutionAsync` should
   grow from real call-site shapes found during the sweep (step 3), not be fully speculated here —
-  risk of over-designing accessors nothing ends up needing.
+  risk of over-designing accessors nothing ends up needing. **First shape found 2026-10-01:**
+  path-to-Document lookup (step 5). Further accessors still wait for a real call-site shape.
+- ~~Step 5 details still open~~ - **Resolved 2026-10-02 (phase 5a implementation):**
+  - **`DocumentLookupResult` is a result type** (a sealed record in `Common/DocumentLookup.cs`), not
+    a nullable `Document` plus a side channel. It carries `Status` (`Found`/`NotFound`/`Ambiguous`),
+    `RequestedPath`, `Document`, `CandidatePaths` (the closest real paths for not-found, the
+    colliding paths for ambiguous) and `SearchedProjectCount`. Tool code calls `ToResultError()`
+    (a `ResultError` coded `NotFound`/`Ambiguous`, naming the candidates); engine code calls
+    `GetDocumentOrThrow()` (a `ToolNotFoundException`/`ToolAmbiguousMatchException`, which
+    `ToolErrorMapper` maps to the same codes, so a missing file no longer surfaces as
+    `errorCode: Exception`).
+  - **The project variant of `DocumentScope` takes both** a `ProjectId` and a project name
+    (`DocumentScope.ForProject(ProjectId)` / `ForProject(string)`, the name matched ignoring case).
+    Engines that already hold a `ProjectId` should not have to round-trip through a name; tools only
+    ever have the name. Phase 5b may drop one if no call site needs it.
+  - **The closest-match search moved to `DocumentLookup.FindClosestPaths` in `Common`.**
+    `BuildFileNotFoundError` (`Tools.Basic`) now calls it, and so do the engines through the
+    result type. `BuildFileNotFoundError` keeps its own `FileNotFound` code and message so the read
+    tools' behavior is unchanged.
+  - **Known caveat:** once `FromWire` has run, a nonexistent file directly under the solution root
+    cannot be told apart from a bare file name, so it takes the bare-name rule (unique match found,
+    several ambiguous). Rooted paths with a directory part never degrade to a file-name guess.
+  - **Item 4 (ambient solution root).** The implicit `string -> FilePathWrapper` conversion and
+    `FilePathJsonConverter` now resolve a RELATIVE path against an `AsyncLocal` solution root
+    (`FilePathWrapper.UseSolutionRoot`), set around each tool call by a request filter
+    (`AddSolutionRootScopeFilter`, registered right after the echo filter). It is an AsyncLocal, not
+    a process static, so concurrent calls and parallel tests never share a root; rooted paths and
+    code outside a scope behave as before. `operator string(FilePathWrapper)` is untouched.
+  - **Follow-up:** `FilePathLock` still uses a platform-conditional comparer (see TODO.md).
 - Whether `IWorkspaceReader` should be a genuinely separate interface or additional members on
   `ISolutionProvider` itself. Separate is proposed here to keep `ISolutionProvider`'s existing
   narrow "give me solution metadata" contract intact and let call sites adopt the new read-question
@@ -230,6 +318,15 @@ nullable-return contract in `AsyncifyTools.cs`), `bf22560` (`ToolErrorMapper` st
 `ServiceRegistrationExtensionsBasic`'s DI setup, breaking server startup). **Step 4 (staged writes)
 can now be designed in detail** per the ordering this document specifies — the sweep is no longer a
 blocking precondition. That design is now written up at `docs/current/proposal_staged_writes.md`.
+
+**Step 5 (document-lookup accessors) proposed 2026-10-01; phase 5a implemented 2026-10-02
+(uncommitted at the time of writing).** Phase 5a is the fix plan
+for `blockers/blocking_error_path_lookup_case_sensitive_drive_letter_replacesnippet_file_not_found.md`:
+the static core (`DocumentLookup`), `IWorkspaceReader.GetDocumentAsync`/`GetDocumentsAsync` with
+`PersistentWorkspaceManager` and `FakeWorkspaceManager` implementations, the 7 High sites, the
+case-insensitive pending/internal/external change sets, the ambient solution root, and regression
+tests (`DocumentLookupTests`, `FilePathAmbientRootTests`, `PathCaseLookupRegressionTests`). Phase 5b
+is the follow-on sweep (not started).
 
 **Sweep-tracking correction (2026-09-25):** early batches searched only for the
 `GetCurrentSolutionAsync(...)` method-call text pattern and missed the sync `CurrentSolution`

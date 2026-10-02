@@ -195,7 +195,24 @@ public class SymbolNavigationEngine
         // implements IWorkspaceManager, so this cast is safe today. Cleanup target: widen the
         // constructor and drop this cast once SymbolNavigationEngine's caller list has been
         // consolidated. See docs/current/design_read_chokepoint.md.
-        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        // A supplied filePath pins the search to one declaring file. Resolve it through the shared
+        // document lookup (case-insensitive; a miss names the closest real paths) instead of comparing
+        // strings per location: the old per-location compare was case-sensitive, so a caller path whose
+        // casing differed from the loaded solution's filtered out every location and surfaced as a
+        // misleading "Symbol not found in the solution". The solution is taken from the resolved
+        // document, so both reads see one snapshot.
+        Solution solution;
+        string? scopedFilePath = null;
+        if (filePath.Validated)
+        {
+            var scopeDocument = (await ((IWorkspaceReader)_workspaceManager).GetDocumentAsync(filePath, ReadSource.Committed, cancellationToken)).GetDocumentOrThrow();
+            solution = scopeDocument.Project.Solution;
+            scopedFilePath = scopeDocument.FilePath ?? scopeDocument.Name;
+        }
+        else
+        {
+            solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        }
 
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
@@ -274,7 +291,7 @@ public class SymbolNavigationEngine
                         continue;
                     }
 
-                    if (filePath.Validated && !filePath.Absolute.Equals(filePath2))
+                    if (scopedFilePath != null && !PathComparison.Comparer.Equals(scopedFilePath, filePath2))
                     {
                         continue;
                     }
@@ -1448,8 +1465,9 @@ public class SymbolNavigationEngine
         CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see LocateSymbolAsync above for rationale (production-caller cascade avoided).
-        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-
+        // The solution is fetched per branch below: the filePath branch takes it from the resolved
+        // document (one snapshot for lookup and analysis), the by-name branch reads it directly.
+        Solution solution;
         ISymbol? symbol = null;
 
         // The MCP tool layer resolves an omitted `filepath` to FilePathWrapper's empty-string default
@@ -1459,12 +1477,12 @@ public class SymbolNavigationEngine
         if (!string.IsNullOrWhiteSpace(filePath))
         {
             // Original path: resolve from the declaring file.
-            var document = solution.Projects.SelectMany(p => p.Documents)
-                .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath) ?? throw new InvalidOperationException(
-                    $"FindCallers: filePath '{filePath}' was not found in the loaded solution. " +
-                    "Verify the path against ListSolutionItems/GetFileOutline, or omit filePath to " +
-                    "resolve by symbolName across the whole solution instead. This is NOT a confirmed " +
-                    "zero-references result - the lookup never ran.");
+            // Shared document lookup: case-insensitive exact path, then a unique bare name. A miss throws
+            // ToolNotFoundException / ToolAmbiguousMatchException naming the closest real paths or the
+            // candidates (it used to surface as a bare InvalidOperationException -> errorCode: Exception).
+            var document = (await ((IWorkspaceReader)_workspaceManager).GetDocumentAsync(_workspaceManager.SetFilePath(filePath), ReadSource.Committed, cancellationToken))
+                .GetDocumentOrThrow();
+            solution = document.Project.Solution;
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             var model = await document.GetSemanticModelAsync(cancellationToken);
             if (root == null || model == null)
@@ -1527,6 +1545,8 @@ public class SymbolNavigationEngine
         }
         else
         {
+            solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+
             // Defect-3 fix: no filePath supplied -> resolve by name across the solution.
             // When multiple overloads exist, contextSnippet is used to pick one if supplied;
             // otherwise the by-name resolution below throws unless narrowing leaves exactly one
@@ -1706,8 +1726,9 @@ public class SymbolNavigationEngine
         CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see LocateSymbolAsync above for rationale (production-caller cascade avoided).
-        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-
+        // The solution is fetched per branch below: the filePath branch takes it from the resolved
+        // document (one snapshot for lookup and analysis), the by-name branch reads it directly.
+        Solution solution;
         ISymbol? symbol = null;
         // Non-null only when the filePath/contextSnippet-scoped lookup ran but definitively failed
         // to resolve (as opposed to "no filePath was supplied, use the by-name paths below") -> used
@@ -1722,13 +1743,13 @@ public class SymbolNavigationEngine
         if (!string.IsNullOrWhiteSpace(filePath))
         {
             // Original path: resolve from the declaring file.
-            var document = solution.Projects.SelectMany(p => p.Documents)
-                .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-            if (document == null)
-            {
-                scopedResolutionFailure = $"filePath '{filePath}' was not found in the loaded solution.";
-            }
-            else
+            // Shared document lookup: case-insensitive exact path, then a unique bare name. A miss throws
+            // ToolNotFoundException / ToolAmbiguousMatchException naming the closest real paths or the
+            // candidates, like FindCallersAsync (this used to fall through to the by-type-name fallback
+            // below and could silently answer for a different symbol than the file named).
+            var document = (await ((IWorkspaceReader)_workspaceManager).GetDocumentAsync(_workspaceManager.SetFilePath(filePath), ReadSource.Committed, cancellationToken))
+                .GetDocumentOrThrow();
+            solution = document.Project.Solution;
             {
                 var root = await document.GetSyntaxRootAsync(cancellationToken);
                 var model = await document.GetSemanticModelAsync(cancellationToken);
@@ -1787,6 +1808,8 @@ public class SymbolNavigationEngine
         }
         else
         {
+            solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+
             // Defect-3 fix: no filePath -> resolve by name across the solution.
             // ResolveCandidatesWithSemanticAsync's semantic half already scans every project in the
             // solution regardless of which document's root/text is passed for the free syntax half,

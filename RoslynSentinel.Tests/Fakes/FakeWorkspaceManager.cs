@@ -25,7 +25,24 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     public Task<Solution> GetSolutionAsync(ReadSource source, CancellationToken cancellationToken)
         => GetCurrentSolutionAsync(cancellationToken);
 
-    public Task<string?> GetDocumentTextAsync(FilePathWrapper path, ReadSource source, CancellationToken cancellationToken) => throw new NotImplementedException();
+    // The three document members delegate to the same static core PersistentWorkspaceManager uses
+    // (DocumentLookup), so fake-backed tests exercise the production lookup rules, not a stand-in.
+    public async Task<string?> GetDocumentTextAsync(FilePathWrapper path, ReadSource source, CancellationToken cancellationToken)
+    {
+        var lookup = await GetDocumentAsync(path, source, cancellationToken);
+        if (!lookup.TryGetDocument(out var document))
+        {
+            return null;
+        }
+
+        return (await document.GetTextAsync(cancellationToken)).ToString();
+    }
+
+    public async Task<DocumentLookupResult> GetDocumentAsync(FilePathWrapper path, ReadSource source, CancellationToken cancellationToken)
+        => DocumentLookup.TryGetDocument(await GetSolutionAsync(source, cancellationToken), path);
+
+    public async Task<IReadOnlyList<Document>> GetDocumentsAsync(DocumentScope scope, ReadSource source, CancellationToken cancellationToken)
+        => DocumentLookup.GetDocuments(await GetSolutionAsync(source, cancellationToken), scope);
 
     // --- Everything below: not needed by DiagnosticEngine, so left unimplemented on purpose ---
 
