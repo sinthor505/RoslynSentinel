@@ -503,10 +503,10 @@ public partial class CodeGenerationEngine
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath) ?? throw new FileNotFoundException($"File not found: {filePath}");
+            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath) ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new InvalidOperationException($"Class '{className}' not found.");
+            .FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new ToolNotFoundException($"Class '{className}' not found.");
 
         // Determine namespace
         var ns = root?.DescendantNodes()
@@ -1082,7 +1082,7 @@ public partial class CodeGenerationEngine
         {
             "ToFullProperty" => BuildFullProperty(root, propNode),
             "ToAutoProperty" => BuildAutoProperty(root, propNode),
-            _ => throw new ArgumentException($"Unknown direction '{direction}'. Use 'ToFullProperty' or 'ToAutoProperty'.")
+            _ => throw new ToolInvalidArgumentException($"Unknown direction '{direction}'. Use 'ToFullProperty' or 'ToAutoProperty'.")
         };
 
         var updatedDoc = document.WithSyntaxRoot(newRoot);

@@ -703,9 +703,9 @@ public class SyntaxModernizationEngine
     public async Task<DocumentEditResult> ConvertToSourceGeneratedLoggingAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new InvalidOperationException("Class not found.");
+        var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new ToolNotFoundException("Class not found.");
         // Identify logging calls
         var invocations = classNode.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(inv => inv.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text.StartsWith("Log") && (ma.Name.Identifier.Text == "LogInformation" || ma.Name.Identifier.Text == "LogError" || ma.Name.Identifier.Text == "LogWarning")).ToList();
         if (invocations.Count == 0)
@@ -858,7 +858,7 @@ public class SyntaxModernizationEngine
     public async Task<DocumentEditResult> ReplaceStringConcatWithInterpolationAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {

@@ -443,7 +443,7 @@ public class SomeClass { }", "SomeClass.cs");
             public class Foo { public int X { get; set; } }
             """);
 
-        var ex = Assert.ThrowsAsync<ArgumentException>(
+        var ex = Assert.ThrowsAsync<ToolInvalidArgumentException>(
             () => _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "X", "BadDirection"));
         Assert.That(ex?.Message, Does.Contain("direction").IgnoreCase.Or.Contain("BadDirection"));
     }

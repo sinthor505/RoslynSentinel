@@ -76,7 +76,7 @@ public class AdvancedRefactoringEngineTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-        Assert.ThrowsAsync<FileNotFoundException>(async () => await new SyntaxModernizationEngine(_mgr, new SentinelConfiguration()).ReplaceStringConcatWithInterpolationAsync("NoSuchFile.cs"));
+        Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_mgr, new SentinelConfiguration()).ReplaceStringConcatWithInterpolationAsync("NoSuchFile.cs"));
     }
 
     [Test]
@@ -99,7 +99,7 @@ public class Greeter
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-        Assert.ThrowsAsync<FileNotFoundException>(async () => await _engine.OptimizeTaskWaitAsync("NoSuchFile.cs"));
+        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.OptimizeTaskWaitAsync("NoSuchFile.cs"));
     }
 }
 

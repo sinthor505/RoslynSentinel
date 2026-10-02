@@ -237,7 +237,7 @@ public class UserService
     public async Task ConvertToSourceGeneratedLogging_UnknownClass_ThrowsInvalidOperation()
     {
         SetSource(@"public class Foo { }", "Foo.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).ConvertToSourceGeneratedLoggingAsync("Foo.cs", "NonExistentClass"));
+        Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).ConvertToSourceGeneratedLoggingAsync("Foo.cs", "NonExistentClass"));
     }
 }
 

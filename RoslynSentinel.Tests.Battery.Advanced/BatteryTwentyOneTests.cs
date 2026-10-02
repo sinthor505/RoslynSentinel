@@ -380,7 +380,7 @@ public class Worker
     public async Task ConvertToSourceGeneratedLogging_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<FileNotFoundException>(async () => await _modernizationEngine.ConvertToSourceGeneratedLoggingAsync("NonExistent.cs", "OrderService"));
+        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _modernizationEngine.ConvertToSourceGeneratedLoggingAsync("NonExistent.cs", "OrderService"));
     }
 
     // --- SimplifyBooleanExpressions (via LogicSimplificationEngine) ---
