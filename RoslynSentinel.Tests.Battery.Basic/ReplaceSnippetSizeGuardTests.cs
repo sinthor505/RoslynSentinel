@@ -4,19 +4,37 @@
 // off for that run. These tests pin all three fixes -> the raised caps, the per-bound message naming
 // the actual value, and advice sourced from WriteToolAdviceHelper rather than a hardcoded name.
 //
-// A real on-disk solution (TestSolutionFixture + PersistentWorkspaceManager) is used rather than
-// the in-memory TestSolutionBuilder path because the apply cases assert on file contents.
+// About the tool's code-correctness, so it runs on an InMemoryWorkspace (no temp directory, MSBuild load or disk
+// write). See ModifyAttributeBatchTests for the pattern.
 
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Parallelizable(ParallelScope.All)]
 public class ReplaceSnippetSizeGuardTests
 {
+    private const string TargetRelativePath = "ContosoOrders.Core/OrderStatus.cs";
+
+    private const string TargetSource = """
+    namespace ContosoOrders.Core;
+
+    public enum OrderStatus
+    {
+        Pending,
+        Shipped,
+    }
+    """;
+
+    private static InMemoryWorkspace CreateWorkspace() => InMemoryWorkspace.Create((TargetRelativePath, TargetSource));
+
+    private static string FirstLine(string text) => text.Split('\n')[0].TrimEnd('\r');
+
     private static WorkspaceTools BuildTools(
         IWorkspaceManager workspaceManager,
         WriteToolAdviceHelper? writeAdvice = null)
@@ -48,14 +66,11 @@ public class ReplaceSnippetSizeGuardTests
         // ReplaceSnippetOptions; these tests run against its built-in defaults). The assertion is
         // specifically that it isn't *size*-rejected -> validation may still reject the content on
         // its own merits.
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
 
-        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
-        var originalContent = await File.ReadAllTextAsync(targetFile);
-        var anchor = originalContent.Split('\n')[0];
+        var targetFile = workspace.PathOf(TargetRelativePath);
+        var anchor = FirstLine(workspace.ReadText(TargetRelativePath));
 
         var newContent = anchor + "\n" + string.Join('\n',
             Enumerable.Range(0, 39).Select(i => $"// padding line {i}"));
@@ -73,13 +88,11 @@ public class ReplaceSnippetSizeGuardTests
     [Test]
     public async Task ReplaceSnippet_OverCapNewContent_NamesTheBoundAndActualValueAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
 
-        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
-        var anchor = (await File.ReadAllTextAsync(targetFile)).Split('\n')[0];
+        var targetFile = workspace.PathOf(TargetRelativePath);
+        var anchor = FirstLine(workspace.ReadText(TargetRelativePath));
         var oversized = new string('x', 2500);
 
         var result = await tools.ReplaceSnippet(
@@ -97,12 +110,10 @@ public class ReplaceSnippetSizeGuardTests
     [Test]
     public async Task ReplaceSnippet_MultipleBoundsExceeded_ReportsEachOneAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager);
 
-        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        var targetFile = workspace.PathOf(TargetRelativePath);
         var tooManyLines = string.Join('\n', Enumerable.Range(0, 120).Select(i => $"line {i}"));
 
         var result = await tools.ReplaceSnippet(
@@ -123,13 +134,11 @@ public class ReplaceSnippetSizeGuardTests
         // The run-398 regression, stated directly: with WholeFileWriteTools gated off (the
         // configuration that scores 26/26 -> see project_wholefilewrite_gating_overnight_result_2026_09_08),
         // the size error must not send the agent to a tool it cannot call.
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
-        var tools = BuildTools(workspaceManager, new WriteToolAdviceHelper(["RefactoringTools"]));
+        using var workspace = CreateWorkspace();
+        var tools = BuildTools(workspace.Manager, new WriteToolAdviceHelper(["RefactoringTools"]));
 
-        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
-        var anchor = (await File.ReadAllTextAsync(targetFile)).Split('\n')[0];
+        var targetFile = workspace.PathOf(TargetRelativePath);
+        var anchor = FirstLine(workspace.ReadText(TargetRelativePath));
 
         var result = await tools.ReplaceSnippet(
             reason: "test message", ProposedChangeAction.validate, targetFile,
