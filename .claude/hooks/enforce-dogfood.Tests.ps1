@@ -50,6 +50,14 @@ $cases = @(
     @{ n = 'Edit .CS (case-insensitive)'; want = 'DENY'
        p = @{ tool_name = 'Edit'; tool_input = @{ file_path = 'C:\repo\Qux.CS' } } }
 
+    # --- tool-experience journal writes quoting git in the note text ---
+    @{ n = 'journal Add-Content quoting git diff'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Add-Content -LiteralPath '.claude/journal/2026-10-01_aaaabbbb.md' -Value '- 18:41 - hook: blocked a git diff I tucked into a command'" } } }
+    @{ n = 'journal echo >> quoting git commit (Bash)'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "echo '- 18:41 ~ Git: git commit via tool worked' >> .claude/journal/2026-10-01_aaaabbbb.md" } } }
+    @{ n = 'journal path plus a real git call'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "cat .claude/journal/x.md; git diff" } } }
+
     # --- non-C# and harness clones: allow ---
     @{ n = 'Edit .md'; want = 'allow'
        p = @{ tool_name = 'Edit'; tool_input = @{ file_path = 'C:\repo\CLAUDE.md' } } }

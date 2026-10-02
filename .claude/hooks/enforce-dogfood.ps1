@@ -227,6 +227,12 @@ positive if the referenced name already exists elsewhere in the file. Proceeding
         $command = [string]$toolInput.command
         if (-not $command) { exit 0 }
 
+        # Tool-experience journal writes (CLAUDE.md "Tool-experience journal") often quote git
+        # commands in the note text itself ("blocked a git diff ..."). That is prose, not a
+        # git invocation, so a command aimed at .claude/journal/ is exempt - unless git also
+        # appears at a command position, which would be a real call riding along.
+        if ($command -match '\.claude[\\/]+journal[\\/]' -and $command -notmatch '(^|[;&|(]\s*)git\s') { exit 0 }
+
         # The MCP Git tool only ever operates on whichever solution is currently
         # loaded into the server - it has no parameter to target any other repo or
         # worktree. That makes it structurally unable to cover git status/log/diff
