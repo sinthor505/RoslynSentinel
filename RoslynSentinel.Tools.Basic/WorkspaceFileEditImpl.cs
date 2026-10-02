@@ -609,7 +609,7 @@ public class WorkspaceFileEditImpl
             };
         }
 
-        var lookupFailures = new List<DocumentLookupResult>();
+        var failureCodes = new List<string>();
         var editsByFile = edits
             .Select((edit, index) => (edit, index))
             .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));
@@ -630,7 +630,7 @@ public class WorkspaceFileEditImpl
             if (!lookup.TryGetDocument(out var document))
             {
                 perEditErrors.Add(lookup.Describe());
-                lookupFailures.Add(lookup);
+                failureCodes.Add(lookup.Status == DocumentLookupStatus.Ambiguous ? ToolErrorCode.Ambiguous : ToolErrorCode.NotFound);
                 continue;
             }
 
@@ -662,7 +662,7 @@ public class WorkspaceFileEditImpl
                 }
                 catch (ToolException toolEx)
                 {
-                    perEditErrors.Add($"edits[{index}] ({filePathResolved}): {toolEx.Message}");
+                    perEditErrors.Add($"edits[{index}] ({filePathResolved}): {toolEx.Message}"); failureCodes.Add(toolEx.ErrorCode);
                 }
             }
 
@@ -709,10 +709,10 @@ public class WorkspaceFileEditImpl
 
         if (perEditErrors.Count > 0)
         {
-            // When every rejection is a failed path lookup, report the lookup's own code (NotFound or
-            // Ambiguous) so a caller can branch on it; any other mix stays InvalidArgument.
-            var errorCode = lookupFailures.Count == perEditErrors.Count
-                ? (lookupFailures.Any(f => f.Status == DocumentLookupStatus.Ambiguous) ? ToolErrorCode.Ambiguous : ToolErrorCode.NotFound)
+            // When every rejection carries its own code (a failed path lookup, or a snippet match that was
+            // ambiguous/missing), report that code so a caller can branch on it. Mixed NotFound/Ambiguous reports Ambiguous; any other mix or unattributed rejection stays InvalidArgument.
+            var errorCode = failureCodes.Count > 0 && failureCodes.Count == perEditErrors.Count
+                ? (failureCodes.Distinct().Count() == 1 ? failureCodes[0] : failureCodes.All(c => c == ToolErrorCode.Ambiguous || c == ToolErrorCode.NotFound) ? ToolErrorCode.Ambiguous : ToolErrorCode.InvalidArgument)
                 : ToolErrorCode.InvalidArgument;
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {

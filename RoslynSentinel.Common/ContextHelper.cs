@@ -299,9 +299,10 @@ public static class ContextHelper
         SourceText sourceText, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null)
     {
+        const string label = "oldContent";
         if (string.IsNullOrWhiteSpace(contextSnippet))
         {
-            throw new ToolNotFoundException("contextSnippet must not be empty.");
+            throw new ToolNotFoundException($"{label} must not be empty.");
         }
 
         var matches = FindAllExactSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
@@ -310,7 +311,7 @@ public static class ContextHelper
         {
             throw ContextErrorBuilder.Build(
                 SnippetMatchOutcome.NoMatch, contextSnippet, sourceText,
-                diagnosis: DiagnoseNoMatch(sourceText, contextSnippet), verbatimRequired: true);
+                diagnosis: DiagnoseNoMatch(sourceText, contextSnippet), verbatimRequired: true, snippetLabel: label);
         }
 
         if (matches.Count == 1)
@@ -324,9 +325,9 @@ public static class ContextHelper
         return (lbTrimmed, laTrimmed) switch
         {
             (null, null) => throw ContextErrorBuilder.Build(
-                SnippetMatchOutcome.Ambiguous, contextSnippet, sourceText, matches),
+                SnippetMatchOutcome.Ambiguous, contextSnippet, sourceText, matches, snippetLabel: label),
             _ => throw ContextErrorBuilder.Build(
-                SnippetMatchOutcome.StillAmbiguous, contextSnippet, sourceText, matches)
+                SnippetMatchOutcome.StillAmbiguous, contextSnippet, sourceText, matches, snippetLabel: label)
         };
     }
 
@@ -651,7 +652,7 @@ public static class ContextHelper
     /// memory. Also flags true ties (identical before AND after) since those can't be
     /// disambiguated this way at all.
     /// </summary>
-    internal static string DescribeAmbiguousCandidates(SourceText sourceText, List<SnippetMatch> allMatches)
+    internal static string DescribeAmbiguousCandidates(SourceText sourceText, List<SnippetMatch> allMatches, string snippetLabel = "contextSnippet")
     {
         var descriptions = new List<(string Before, string After)>();
         var lines = new List<string>();
@@ -672,7 +673,7 @@ public static class ContextHelper
             var matchNumbers = string.Join(" and ", tie.Select(x => x.i + 1));
             lines.Add(
                 $"Matches {matchNumbers} have identical surrounding lines and cannot be " +
-                "disambiguated by lineBefore/lineAfter alone; use a different tool or a longer contextSnippet.");
+                $"disambiguated by lineBefore/lineAfter alone; use a different tool or a longer {snippetLabel}.");
         }
 
         return string.Join("\n", lines);

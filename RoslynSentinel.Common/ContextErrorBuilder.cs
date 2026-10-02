@@ -13,19 +13,19 @@ public class ContextErrorBuilder
         SnippetMatchOutcome outcome, string contextSnippet, SourceText sourceText,
         List<ContextHelper.SnippetMatch>? matches = null, string? diagnosis = null,
         string? parameterName = null, string? invalidValue = null, bool? isAfter = null,
-        bool verbatimRequired = false)
+        bool verbatimRequired = false, string snippetLabel = "contextSnippet")
     {
         switch (outcome)
         {
             case SnippetMatchOutcome.NoMatch:
-                return BuildNoMatch(contextSnippet, verbatimRequired, diagnosis);
+                return BuildNoMatch(contextSnippet, verbatimRequired, diagnosis, snippetLabel);
 
             case SnippetMatchOutcome.Ambiguous:
-                return BuildAmbiguous(contextSnippet, sourceText, matches, stillAmbiguous: false);
+                return BuildAmbiguous(contextSnippet, sourceText, matches, stillAmbiguous: false, snippetLabel: snippetLabel);
 
             case SnippetMatchOutcome.StillAmbiguous:
             case SnippetMatchOutcome.TrueTie:
-                return BuildAmbiguous(contextSnippet, sourceText, matches, stillAmbiguous: true);
+                return BuildAmbiguous(contextSnippet, sourceText, matches, stillAmbiguous: true, snippetLabel: snippetLabel);
 
             case SnippetMatchOutcome.InvalidDisambiguator:
                 return BuildInvalidDisambiguator(parameterName, invalidValue, isAfter);
@@ -35,14 +35,14 @@ public class ContextErrorBuilder
         }
     }
 
-    private static ToolNotFoundException BuildNoMatch(string contextSnippet, bool verbatimRequired, string? diagnosis)
+    private static ToolNotFoundException BuildNoMatch(string contextSnippet, bool verbatimRequired, string? diagnosis, string snippetLabel)
     {
         var trimmed = contextSnippet.Trim();
         var message = verbatimRequired
-            ? $"An exact match could not be located for the provided contextSnippet (verbatim required): \"{trimmed}\". " +
+            ? $"An exact match could not be located for the provided {snippetLabel} (verbatim required): \"{trimmed}\". " +
               "Re-read the file and copy oldContent exactly (including whitespace) from the current content - " +
               "approximate/retyped text is not accepted here."
-            : $"An exact match could not be located for the provided contextSnippet: \"{trimmed}\".";
+            : $"An exact match could not be located for the provided {snippetLabel}: \"{trimmed}\".";
 
         if (!string.IsNullOrEmpty(diagnosis))
         {
@@ -53,7 +53,7 @@ public class ContextErrorBuilder
     }
 
     private static ToolAmbiguousMatchException BuildAmbiguous(
-        string contextSnippet, SourceText sourceText, List<ContextHelper.SnippetMatch>? matches, bool stillAmbiguous)
+        string contextSnippet, SourceText sourceText, List<ContextHelper.SnippetMatch>? matches, bool stillAmbiguous, string snippetLabel)
     {
         var trimmed = contextSnippet.Trim();
         var count = matches?.Count ?? 0;
@@ -61,16 +61,16 @@ public class ContextErrorBuilder
         if (!stillAmbiguous)
         {
             var candidateText = matches != null
-                ? ContextHelper.DescribeAmbiguousCandidates(sourceText, matches)
+                ? ContextHelper.DescribeAmbiguousCandidates(sourceText, matches, snippetLabel)
                 : string.Empty;
             return new ToolAmbiguousMatchException(
-                $"contextSnippet is ambiguous ({count} matches): \"{trimmed}\". " +
+                $"{snippetLabel} is ambiguous ({count} matches): \"{trimmed}\". " +
                 "Provide lineBefore and/or lineAfter using one of the exact values below (copy " +
                 "verbatim, do not retype from memory) to select the intended match:\n" + candidateText);
         }
 
         return new ToolAmbiguousMatchException(
-            $"contextSnippet is still ambiguous ({count} matches remain): \"{trimmed}\". " +
+            $"{snippetLabel} is still ambiguous ({count} matches remain): \"{trimmed}\". " +
             "Provide more specific lineBefore and/or lineAfter content.");
     }
 
