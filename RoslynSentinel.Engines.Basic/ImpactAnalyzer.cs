@@ -3,6 +3,8 @@ using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Engines.Basic;
 
 public class ImpactAnalyzer
@@ -138,7 +140,7 @@ public class ImpactAnalyzer
     public async Task<List<string>> GetDataFlowAsync(FilePathWrapper filePath, int startLine, int startColumn, int endLine, int endColumn, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"Document not found: {filePath}");
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"Document not found: {filePath}");
         var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (syntaxRoot == null || semanticModel == null)
@@ -187,7 +189,7 @@ public class ImpactAnalyzer
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
             .Select(solution.GetDocument)
-            .FirstOrDefault() ?? throw new FileNotFoundException($"Document not found: {filePath}");
+            .FirstOrDefault() ?? throw new ToolNotFoundException($"Document not found: {filePath}");
         var syntaxRoot = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (syntaxRoot == null || semanticModel == null)

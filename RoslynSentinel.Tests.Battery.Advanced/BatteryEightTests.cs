@@ -70,7 +70,7 @@ namespace ExpressRecipe.Services
     public async Task GetCodeInventory_UnknownFile_ThrowsFileNotFound()
     {
         SetSource("public class Foo { }");
-        Assert.ThrowsAsync<FileNotFoundException>(async () => await _engine.GetCodeInventoryAsync("NonExistent.cs"));
+        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.GetCodeInventoryAsync("NonExistent.cs"));
     }
 }
 

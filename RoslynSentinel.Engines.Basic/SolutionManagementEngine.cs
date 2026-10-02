@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Basic;
 
@@ -18,7 +19,7 @@ public class SolutionManagementEngine
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath;
-        var slnDir = Path.GetDirectoryName(slnPath) ?? throw new InvalidOperationException("Solution path not found.");
+        var slnDir = Path.GetDirectoryName(slnPath) ?? throw new ToolNotFoundException("Solution path not found.");
         var projectDir = Path.Combine(slnDir, projectName);
         Directory.CreateDirectory(projectDir);
 
@@ -52,7 +53,7 @@ public class SolutionManagementEngine
 
         // 2. Identify files to move
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var sourceProject = solution.Projects.FirstOrDefault(p => p.Name == sourceProjectName) ?? throw new InvalidOperationException("Source project not found.");
+        var sourceProject = solution.Projects.FirstOrDefault(p => p.Name == sourceProjectName) ?? throw new ToolNotFoundException("Source project not found.");
         var filesToMove = sourceProject.Documents.Where(d => d.Folders.Contains(folderName)).ToList();
 
         // 3. Physically move files and update solution (simulated for expansion)

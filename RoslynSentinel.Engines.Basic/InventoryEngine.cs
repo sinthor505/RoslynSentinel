@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Basic;
 
@@ -39,7 +40,7 @@ public class InventoryEngine
         {
             var existsOnDisk = File.Exists(normalizedPath);
             var projectCount = solution.Projects.Count();
-            throw new FileNotFoundException(
+            throw new ToolNotFoundException(
                 $"File not found in solution: {normalizedPath} " +
                 $"(existsOnDisk={existsOnDisk}, projectsLoaded={projectCount}). " +
                 "The owning project may have failed to load - check workspace load errors.");
@@ -74,7 +75,7 @@ public class InventoryEngine
         {
             var existsOnDisk = File.Exists(normalizedPath);
             var projectCount = solution.Projects.Count();
-            throw new FileNotFoundException(
+            throw new ToolNotFoundException(
                 $"File not found in solution: {normalizedPath} " +
                 $"(existsOnDisk={existsOnDisk}, projectsLoaded={projectCount}). " +
                 "The owning project may have failed to load - check workspace load errors.");
