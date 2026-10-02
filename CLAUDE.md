@@ -144,6 +144,26 @@ write lands outside the drift detector's tracked chokepoint and trips the same s
 did nothing wrong, and there's no in-band reset short of killing the specific stdio server process by
 its full command line. Dispatch subagents for repo-wide mechanical edits **sequentially** instead.
 
+## Tool-experience journal: note it as it happens
+
+Every session keeps a short journal of what using the tools was like. A `SessionStart` hook prints
+this session's journal path (`.claude/journal/<date>_<sid8>.md`, local-only); it is re-printed after
+compaction. **Append one line right after anything notable - never save notes for the end**, because
+compaction erases them and the session has no reliable end. Format:
+`- HH:mm [+|-|~] ToolName: one sentence` (`+` good, `-` bad, `~` mixed). For example:
+
+- `- 14:02 + MoveMember: moved 10 members and fixed 80 call sites in one call`
+- `- 14:20 - ReplaceSnippet: "anchor not unique" didn't say which lines matched; took 3 retries`
+- `- 14:31 ~ Read: read a .cs directly because I needed raw bytes; no MCP tool returns those`
+
+Worth noting: one call replacing many; a confusing description or parameter; an error message that
+did or didn't get you unstuck; and **every time you reach for a shell or built-in tool on C# code**,
+with the reason. These are brief impressions, not blocker/finding docs - a real tool failure still
+gets the blocking-finding treatment above. A `Stop` hook asks for a line when enough unjournaled
+activity builds up (15 MCP calls, any failed call, or any C# fallback); "`~ nothing notable`" is a
+fine answer. `/journal-review` summarizes a session. A hook-written call log sits next to each
+journal, so there's no need to record call counts yourself.
+
 ## Failure doctrine: the environment is responsible
 
 This is the governing frame for interpreting **every** model-eval run, PlanStepRunner step, and
@@ -322,3 +342,10 @@ current session, prefer `dotnet test` against that worktree directly over live M
   workspace looks identical to a real gap.
 - Compare test results against the known pre-existing-failure baseline
   (`docs/current` / memory `reference_known_failing_tests`) and report only *new* failures.
+
+## Compact instructions
+
+When summarizing this conversation for compaction, keep: this session's tool-experience journal path
+(`.claude/journal/...md`), and any notable tool experiences (good or bad, including shell/built-in
+fallbacks on C# and why) that have not yet been written to that journal - list them so they can be
+appended right after compaction.
