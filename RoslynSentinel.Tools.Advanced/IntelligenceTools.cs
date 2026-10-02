@@ -163,7 +163,7 @@ public class IntelligenceTools
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " + "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " + "Use GetFileOutline to list available methods in the file.")
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " + "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " + "Use GetFileOutline to list available methods in the file.")
                     };
                 }
 
@@ -182,7 +182,7 @@ public class IntelligenceTools
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " + "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " + "Use GetFileOutline to list available methods in the file.")
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " + "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " + "Use GetFileOutline to list available methods in the file.")
                     };
                 }
 

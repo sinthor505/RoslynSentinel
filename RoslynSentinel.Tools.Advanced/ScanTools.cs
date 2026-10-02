@@ -1144,7 +1144,7 @@ public class ScanTools
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
-                ErrorData = new ResultError(ToolErrorCode.Exception, $"GetPublicApiSurface failed: Project '{projectName}' not found in solution.")
+                ErrorData = new ResultError(ToolErrorCode.NotFound, $"GetPublicApiSurface failed: Project '{projectName}' not found in solution.")
             };
         }
         catch (Exception ex)

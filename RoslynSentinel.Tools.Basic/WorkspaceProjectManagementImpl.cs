@@ -99,7 +99,7 @@ public class WorkspaceProjectManagementImpl
                         return new SentinelCallToolResult<object>()
                         {
                             IsSuccess = false,
-                            ErrorData = new ResultError(ToolErrorCode.Exception, $"Project '{projectName}' not found.")
+                            ErrorData = new ResultError(ToolErrorCode.NotFound, $"Project '{projectName}' not found.")
                         };
                     }
 

@@ -44,7 +44,7 @@ public class SymbolNavigationImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = false,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"Symbol '{symbolName}' not found in the solution" +
+                    ErrorData = new ResultError(ToolErrorCode.NotFound, $"Symbol '{symbolName}' not found in the solution" +
                         (projectName != null ? $" (project: {projectName})" : "") +
                         ". Try exactMatch=false for a broader search, verify the symbol name and symbolKind, or call ListAll for a cheap solution-wide orientation listing if you're not sure of the exact name.")
                 };
