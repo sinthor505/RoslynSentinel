@@ -387,12 +387,20 @@ public class RefactoringStructuralImpl
         {
             if (operation == MemberAction.view)
             {
+                if (!string.IsNullOrEmpty(memberName))
+                {
+                    var (sourceOutcome, sourceMessage, sourceErrorCode, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    if (sourceOutcome != EditOutcome.Modified || source is null)
+                        return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(sourceErrorCode ?? RefactoringToolHelpers.ErrorCodeFor(sourceOutcome), $"Member: {sourceMessage}") };
+                    return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = new MemberSourceViewResult(source) };
+                }
+
                 if (string.IsNullOrEmpty(containerName))
-                    return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Member: containerName is required for operation 'view'.") };
+                    return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Member: containerName is required for operation 'view' when memberName is not given.") };
 
                 var (outcome, message, members) = await _symbolNavigationEngine.GetContainerMembersAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit)
-                    return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"Member: {message}") };
+                    return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(RefactoringToolHelpers.ErrorCodeFor(outcome), $"Member: {message}") };
                 return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = new MemberViewResult(members) };
             }
 

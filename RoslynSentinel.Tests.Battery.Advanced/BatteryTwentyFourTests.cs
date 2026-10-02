@@ -317,6 +317,30 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    public async Task Member_View_WithMemberName_ReturnsThatMembersSource()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.view, memberName: "GetStatus");
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var view = result.SuccessData as MemberSourceViewResult;
+        Assert.That(view, Is.Not.Null);
+        Assert.That(view!.Member.Name, Is.EqualTo("GetStatus"));
+        Assert.That(view.Member.Kind, Is.EqualTo("method"));
+        Assert.That(view.Member.Source, Does.Contain("public string GetStatus()"));
+        Assert.That(view.Member.Source, Does.Contain("return \"Unknown\";"));
+        Assert.That(view.Member.IsComplete, Is.True);
+    }
+
+    [Test]
+    public async Task Member_View_WithMissingMemberName_ReturnsNotFound()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.view, memberName: "NoSuchMember");
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
     public async Task Member_View_OnEnumContainer_ReturnsEnumMembers()
     {
         SetSource(SimpleSource, "Order.cs");

@@ -213,6 +213,167 @@ public enum ToolScope
     }
 
     [Test]
+    public async Task GetMemberSource_PropertyWithDocCommentAttributeAndInitializer_ReturnsFullDeclaration()
+    {
+        var source = """
+            public class Holder
+            {
+                /// <summary>d</summary>
+                [Obsolete]
+                public string Name { get; set; } = "x";
+            }
+            """;
+        SetSource(source, "MemberSourceProp.cs");
+
+        var (outcome, message, errorCode, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceProp.cs", "Name");
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.Modified), message);
+        Assert.That(errorCode, Is.Null);
+        Assert.That(info, Is.Not.Null);
+        Assert.That(info!.Name, Is.EqualTo("Name"));
+        Assert.That(info.Kind, Is.EqualTo("property"));
+        Assert.That(info.Source, Does.StartWith("/// <summary>d</summary>"));
+        Assert.That(info.Source, Does.Contain("[Obsolete]"));
+        Assert.That(info.Source, Does.Contain("public string Name { get; set; } = \"x\";"));
+        Assert.That(info.StartLine, Is.EqualTo(3));
+        Assert.That(info.EndLine, Is.EqualTo(5));
+        Assert.That(info.IsComplete, Is.True);
+    }
+
+    [Test]
+    public async Task GetMemberSource_Method_ReturnsFullBody()
+    {
+        var source = """
+            public class Holder
+            {
+                public int Add(int a, int b)
+                {
+                    var sum = a + b;
+                    return sum;
+                }
+
+                public int Other;
+            }
+            """;
+        SetSource(source, "MemberSourceMethod.cs");
+
+        var (outcome, message, _, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceMethod.cs", "Add");
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.Modified), message);
+        Assert.That(info!.Kind, Is.EqualTo("method"));
+        Assert.That(info.Source, Does.Contain("var sum = a + b;"));
+        Assert.That(info.Source, Does.Contain("return sum;"));
+        Assert.That(info.Source.TrimEnd(), Does.EndWith("}"));
+        Assert.That(info.Source, Does.Not.Contain("Other"));
+        Assert.That(info.StartLine, Is.EqualTo(3));
+        Assert.That(info.EndLine, Is.EqualTo(7));
+        Assert.That(info.IsComplete, Is.True);
+    }
+
+    [Test]
+    public async Task GetMemberSource_MissingMember_ReturnsTargetNotFoundWithNotFoundCode()
+    {
+        SetSource("public class Holder { public int A; }", "MemberSourceMissing.cs");
+
+        var (outcome, message, errorCode, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceMissing.cs", "DoesNotExist");
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.TargetNotFound));
+        Assert.That(errorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(message, Does.Contain("Member 'DoesNotExist' not found"));
+        Assert.That(info, Is.Null);
+    }
+
+    [Test]
+    public async Task GetMemberSource_OverloadsWithoutSnippet_ReturnsCannotEditAmbiguous()
+    {
+        var source = """
+            public class Holder
+            {
+                public void Run(int x) { }
+                public void Run(string s) { }
+            }
+            """;
+        SetSource(source, "MemberSourceOverload.cs");
+
+        var (outcome, message, errorCode, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceOverload.cs", "Run");
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(errorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(message, Does.Contain("2 candidates"));
+        Assert.That(info, Is.Null);
+    }
+
+    [Test]
+    public async Task GetMemberSource_OverloadsWithSnippet_ReturnsMatchingOverload()
+    {
+        var source = """
+            public class Holder
+            {
+                public void Run(int x) { }
+                public void Run(string s) { }
+            }
+            """;
+        SetSource(source, "MemberSourceOverloadSnippet.cs");
+
+        var (outcome, message, _, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceOverloadSnippet.cs", "Run", contextSnippet: "Run(string s)");
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.Modified), message);
+        Assert.That(info!.Source, Does.Contain("string s"));
+        Assert.That(info.Source, Does.Not.Contain("int x"));
+        Assert.That(info.StartLine, Is.EqualTo(4));
+    }
+
+    [Test]
+    public async Task GetMemberSource_TypeNameOnly_ReturnsTargetIneligible()
+    {
+        SetSource("public class Holder { public int A; }", "MemberSourceType.cs");
+
+        var (outcome, message, errorCode, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceType.cs", "Holder");
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(errorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(message, Does.Contain("ReadFile or GetFileOutline"));
+        Assert.That(info, Is.Null);
+    }
+
+    [Test]
+    public async Task GetMemberSource_EnumMember_ReturnsMemberDeclaration()
+    {
+        var source = """
+            public enum Color
+            {
+                Red = 1,
+                Green = 2
+            }
+            """;
+        SetSource(source, "MemberSourceEnum.cs");
+
+        var (outcome, message, _, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceEnum.cs", "Green");
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.Modified), message);
+        Assert.That(info!.Kind, Is.EqualTo("enumMember"));
+        Assert.That(info.Source, Is.EqualTo("Green = 2"));
+        Assert.That(info.StartLine, Is.EqualTo(4));
+    }
+
+    [Test]
+    public async Task GetMemberSource_MethodLongerThanCap_TruncatesToTwoHundredLines()
+    {
+        // 250-line method: signature, "{", 247 body lines, "}".
+        var body = string.Join("\n", Enumerable.Repeat("        counter++;", 247));
+        var source = "public class Holder\n{\n    private int counter;\n\n    public void Big()\n    {\n" + body + "\n    }\n}\n";
+        SetSource(source, "MemberSourceLong.cs");
+
+        var (outcome, message, _, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceLong.cs", "Big");
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.Modified), message);
+        Assert.That(info!.IsComplete, Is.False);
+        Assert.That(info.Source.Split('\n'), Has.Length.EqualTo(200));
+        Assert.That(info.StartLine, Is.EqualTo(5));
+        Assert.That(info.EndLine, Is.EqualTo(5 + 250 - 1));
+    }
+
+    [Test]
     public async Task GetContainerMembers_AttributedMembers_SignatureExcludesAttributeLine()
     {
         var source = """

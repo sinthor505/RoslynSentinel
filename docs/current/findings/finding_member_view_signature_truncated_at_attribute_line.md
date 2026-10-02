@@ -1,6 +1,6 @@
 # Finding: Member view reports an attribute line as the member's signature and ignores memberName
 
-**Status:** OPEN 2026-10-01. Traced to source; fix not yet built. Design direction is in `proposals/proposal_inspectsymbol_source_aspect.md`.
+**Status:** PARTLY FIXED 2026-10-01. Items 1 (signature, 0e93f99), 2 (memberName honoured) and 3 (declaration text) are fixed; item 4 is fixed for the listing path's DocumentNotFound only (CannotEdit still reports Exception because `ResolveBySnippetOrThrow` throws a bare InvalidOperationException); item 5 (test gap) is closed by the new attributed-member and member-source tests. Design is in `proposals/proposal_inspectsymbol_source_aspect.md`.
 
 ## Context
 Found while checking whether any tool returns one property's declaration (the question was whether

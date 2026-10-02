@@ -77,7 +77,7 @@ sessions.
 
 | Instead of | Use |
 | --- | --- |
-| `Read` a `.cs` | `ReadFile`, `GetFileOutline`, `GetMethodSource` (methods only — use `ReadFile` for fields/properties/constants) |
+| `Read` a `.cs` | `ReadFile`, `GetFileOutline`, `GetMethodSource` (methods only — for one field/property/constant use `Member(operation: view, memberName: ...)`, or `ReadFile`) |
 | `Grep` / `Glob` for C# symbols | `Search(mode: text/symbol/references/all/namespace/class/interface/method/property/struct/record/enum/enum member/constructor/field)`, `FindReferences` |
 | `Edit` / `Write` a `.cs` | `Member`, `MethodSignature`, `ModifyModifier`, `ReplaceSnippet`, `ApplyDiff`, `RenameSymbol` |
 | `Bash(git status/log/diff/add/commit/revert)` | `Git(operation: ...)` |

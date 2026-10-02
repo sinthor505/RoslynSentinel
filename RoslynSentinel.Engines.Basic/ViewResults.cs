@@ -9,6 +9,14 @@ namespace RoslynSentinel.Engines.Basic;
 public record MemberViewResult(IReadOnlyList<SymbolNavigationEngine.ContainerMemberInfo> Members);
 
 /// <summary>
+/// Result shape for Member(operation: view, memberName: ...) - one member's declaration source
+/// (doc comment, attributes, body/initializer) plus its line range. Mirrors the record
+/// GetMemberSourceAsync returns (SymbolNavigationEngine.MemberSourceInfo), unchanged rather than
+/// reprojected. Source is capped at 200 lines; Member.IsComplete is false when it was truncated.
+/// </summary>
+public record MemberSourceViewResult(SymbolNavigationEngine.MemberSourceInfo Member);
+
+/// <summary>
 /// Result shape for UsingDirective(operation: view) - lists a file's using directives. Element
 /// type is UsingDirectiveInfo (Name/IsStatic/Alias, declared in BasicRefactoringEngine.cs), the actual return
 /// element of GetUsingDirectivesAsync - not a bare string as originally planned; confirmed by a

@@ -2475,6 +2475,13 @@ public class SymbolNavigationEngine
     }
 
     public record ContainerMemberInfo(string? Name, string Kind, string Signature, int StartLine, int EndLine);
+
+    /// <summary>
+    /// One member's declaration as written (leading doc comment, attributes, body/initializer),
+    /// as returned by GetMemberSourceAsync. StartLine/EndLine are 1-based; EndLine is the member's
+    /// real last line even when Source was truncated (IsComplete == false).
+    /// </summary>
+    public record MemberSourceInfo(string? Name, string Kind, string Source, int StartLine, int EndLine, bool IsComplete);
     /// <summary>
     /// Lists the direct members of one container (class/struct/interface/record) in one file,
     /// syntax-scoped rather than symbol-scoped -> unlike GetTypeInfo/GetTypeMembersDetailAsync
@@ -2554,6 +2561,130 @@ public class SymbolNavigationEngine
             return new ContainerMemberInfo(GetMemberName(m), kind, signature, lines.GetLineFromPosition(m.SpanStart).LineNumber + 1, lines.GetLineFromPosition(m.Span.End).LineNumber + 1);
         }).ToList();
         return (EditOutcome.Modified, null, result);
+    }
+
+    /// <summary>
+    /// Returns one member's declaration source as written: the leading documentation comment (if
+    /// any), attribute lists, signature, and body/initializer/accessors, taken verbatim from the
+    /// file (the first line starts at the first doc-comment or declaration token, so it carries no
+    /// leading indentation; later lines keep the file's own). Supports class-level members and enum
+    /// members; whole types are refused (TargetIneligible) because ReadFile / GetFileOutline serve
+    /// that. Resolution mirrors Member(remove)/Member(replace): by name, narrowed by containerName,
+    /// then contextSnippet/lineBefore/lineAfter. Unlike remove/replace, an overloaded name with no
+    /// contextSnippet is reported as Ambiguous rather than silently resolved to the first overload,
+    /// since a read that returns the wrong overload is worse than an error. Output is capped at
+    /// 200 lines; past the cap Source is the first 200 lines, IsComplete is false, and EndLine is
+    /// still the member's real last line so a follow-up ReadFile is one precise call.
+    /// </summary>
+    public async Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    {
+        const int MaxSourceLines = 200;
+
+        // READCHOKEPOINT-CAST: see LocateSymbolAsync above for rationale (production-caller cascade avoided).
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return (EditOutcome.DocumentNotFound, "// Document not found.", ToolErrorCode.NotFound, null);
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return (EditOutcome.CannotEdit, "// Cannot read: syntax root not found.", null, null);
+        }
+
+        var allNameCandidates = ResolveCandidates(root, sourceText, memberName, cancellationToken);
+        var memberCandidates = PreferNonInterfaceMember(allNameCandidates
+            .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum))
+            .ToList());
+        memberCandidates = FilterByContainingType(memberCandidates, containerName);
+
+        if (memberCandidates.Count == 0)
+        {
+            if (allNameCandidates.Count > 0)
+            {
+                var kindNames = string.Join(", ", allNameCandidates.Select(c => c.Kind).Distinct());
+                return (EditOutcome.CannotEdit,
+                    $"'{memberName}' is a type-level declaration ({kindNames}). Member source only supports class-level members " +
+                    "(methods, properties, fields, constructors, events, indexers) and enum members; use ReadFile or GetFileOutline for a whole type.",
+                    ToolErrorCode.TargetIneligible, null);
+            }
+
+            return (EditOutcome.TargetNotFound, $"Member '{memberName}' not found", ToolErrorCode.NotFound, null);
+        }
+
+        // ResolveBySnippetOrThrow returns the first candidate when no snippet is given. That is
+        // acceptable for a write that a later precheck guards, but a read would silently return
+        // the wrong overload, so an unresolved multi-candidate set is reported instead.
+        string? failureMode = null;
+        SyntaxNodeCandidate? resolved;
+        try
+        {
+            if (contextSnippet == null && memberCandidates.Count > 1)
+            {
+                failureMode = "ambiguous";
+                throw new InvalidOperationException(BuildMemberHintForCandidates(memberCandidates, [], failureMode));
+            }
+
+            resolved = ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, mode) =>
+                {
+                    failureMode = mode;
+                    return BuildMemberHintForCandidates(candidates, matches, mode);
+                });
+        }
+        catch (InvalidOperationException ex)
+        {
+            // failureMode is the mode ResolveBySnippetOrThrow handed the hint builder: "ambiguous"
+            // (2+ snippet matches, or the match fell outside every candidate) or "not found" (the
+            // snippet matched nothing). Anything else leaves the code unset.
+            var code = failureMode switch
+            {
+                "ambiguous" => ToolErrorCode.Ambiguous,
+                "not found" => ToolErrorCode.NotFound,
+                _ => null
+            };
+            return (EditOutcome.CannotEdit, ex.Message, code, null);
+        }
+
+        if (resolved == null)
+        {
+            return (EditOutcome.TargetNotFound, $"Member '{memberName}' not found", ToolErrorCode.NotFound, null);
+        }
+
+        var member = resolved.Node;
+        var docComment = member.GetLeadingTrivia()
+            .FirstOrDefault(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) || t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia));
+        // Use FullSpan: a documentation-comment trivia's Span starts after its leading "///" (or "/**") marker.
+        var start = docComment != default ? docComment.FullSpan.Start : member.SpanStart;
+        var end = member.Span.End;
+
+        var lines = sourceText.Lines;
+        var startLineIndex = lines.GetLineFromPosition(start).LineNumber;
+        var endLineIndex = lines.GetLineFromPosition(end).LineNumber;
+        var isComplete = true;
+        if (endLineIndex - startLineIndex + 1 > MaxSourceLines)
+        {
+            end = lines[startLineIndex + MaxSourceLines - 1].End;
+            isComplete = false;
+        }
+
+        var kind = resolved.Kind switch
+        {
+            CandidateKind.Method => "method",
+            CandidateKind.Property => "property",
+            CandidateKind.Field => "field",
+            CandidateKind.Constructor => "constructor",
+            CandidateKind.Event => "event",
+            CandidateKind.Indexer => "indexer",
+            CandidateKind.EnumMember => "enumMember",
+            _ => resolved.Kind.ToString()
+        };
+
+        var info = new MemberSourceInfo(resolved.Name, kind, sourceText.ToString(TextSpan.FromBounds(start, end)), startLineIndex + 1, endLineIndex + 1, isComplete);
+        return (EditOutcome.Modified, null, null, info);
     }
 
     /// <summary>

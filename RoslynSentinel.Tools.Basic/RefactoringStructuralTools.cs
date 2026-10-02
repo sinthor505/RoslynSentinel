@@ -102,7 +102,7 @@ public class RefactoringStructuralTools
 
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: required-param set depends entirely on 'operation' -> add
     // needs containerName (or, for a brand-new top-level type, newMemberSource alone with no
-    // typedKind); view needs containerName; remove needs memberName; replace needs memberName +
+    // typedKind); view needs containerName (list) or memberName (one member's source); remove needs memberName; replace needs memberName +
     // newMemberSource. Within add, exactly one of newMemberSource or typedKind+typedName+typedType
     // is required. No param besides filePath/operation is universally required, so a model can
     // supply the wrong subset for its chosen operation and only find out at runtime.
@@ -116,11 +116,11 @@ public class RefactoringStructuralTools
         //[Description("addMember: adds raw member source into an existing container (requires containerName + newMemberSource). addTopLevelType: adds a brand-new top-level type declaration - no container (requires newMemberSource as the full type source; optional namespaceName). addTypedMember: generates a property/field via typedKind/typedName/typedType into an existing container (requires containerName + typedKind + typedName + typedType). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use SafeDeleteUnusedSymbol instead. replace: replaces a member's full source, including for small in-member edits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
         //[Description("Add, remove, replace, or view a raw source member, a typed property/field, or a brand-new top-level type. Also views constructors.")]
         [Consumes(DataTag.Action, required: true)] MemberAction operation,
-        [Description("Required for addMember and addTypedMember, and for view. Not used for addTopLevelType, remove, or replace.")]
+        [Description("Required for addMember and addTypedMember. For view: required to list a container's members; optional when memberName is given. Not used for addTopLevelType, remove, or replace.")]
         [Consumes(DataTag.SymbolName, required: false)] string? containerName = null,
         [Description("addTopLevelType only. Disambiguates which namespace to add the new type to, when the file has more than one. Not used otherwise.")]
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? namespaceName = null,
-        [Description("Required for remove and replace - the member to target. For overloaded targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
+        [Description("Required for remove and replace - the member to target. For view: optional; when given, view returns that one member's full source (attributes, doc comment, initializer, accessors/body) instead of listing a container. For overloaded targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: false)] string? memberName = null,
         [Description("add or replace: exactly one member declaration (full trivia, signature and body) - a source with 2+ member declarations is rejected with the count, names, and how to split the call. addTopLevelType: the full new type declaration (enum/class/record/struct/interface) - containerName is not used. Required for add. Not used for addTypedMember, remove, or view.")]
         [Consumes(DataTag.SourceCode, required: false)] string? newMemberSource = null,

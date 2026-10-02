@@ -1,6 +1,7 @@
 # One shared "member source" engine method, exposed through Member(view) and optionally InspectSymbol
 
-**Status:** PROPOSED 2026-10-01. Awaiting a decision on the exposure point (see "Proposal"); nothing built. The file name predates the revision; rename to `proposal_member_source_lookup.md` once the exposure point is chosen.
+**Status:** PARTLY BUILT 2026-10-01. Option B (modal `Member(view, memberName)`) and the signature prerequisite are built: signature fix 0e93f99, member source in the commit that follows it (`SymbolNavigationEngine.GetMemberSourceAsync`). Not built: B2 (separate `list` operation) and Option A (`InspectSymbol(aspect: source)`); both remain open. The file name predates the revision.
+Implementation notes: an overloaded name with no `contextSnippet` returns `Ambiguous` rather than the first overload (unlike `replace`/`remove`, which take the first); ambiguity vs not-found for snippet failures is read from the `failureMode` that `ResolveBySnippetOrThrow` hands its hint builder, not parsed from prose; the bare `InvalidOperationException` in that method is still there (follow-up).
 
 ## Motivation
 No MCP tool returns the declaration of a single property, field, event or enum member, so an agent
