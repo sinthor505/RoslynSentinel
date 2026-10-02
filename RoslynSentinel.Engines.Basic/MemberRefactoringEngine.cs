@@ -2610,7 +2610,7 @@ public class MemberRefactoringEngine
 
     public async Task<DocumentEditResult> AddRemoveParamsAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("AddRemoveParams"))
+        if (!(_config ?? new SentinelConfiguration()).IsFeatureEnabled("AddRemoveParams"))
         {
             return new DocumentEditResult
             {
@@ -3933,7 +3933,7 @@ public class MemberRefactoringEngine
 
     public async Task<ExtractMethodResult> ExtractMethodAsync(FilePathWrapper filePath, int startLine, string startLineText, int endLine, string endLineText, string newMethodName, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("ExtractMethod"))
+        if (!(_config ?? new SentinelConfiguration()).IsFeatureEnabled("ExtractMethod"))
         {
             return new ExtractMethodResult(false, "ExtractMethod feature is disabled.", null, null, null, null);
         }
