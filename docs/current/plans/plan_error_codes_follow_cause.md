@@ -115,7 +115,7 @@ Updated 2026-10-01. Update this block after every committed slice; `git log` is 
   - S2-2: route hand-built switches (`RefactoringStructuralImpl` ~427-437, `RefactoringExtractionDocsImpl` ~264-270) through it. [x] S2-1 = a537ece; S2-2 = 19a4d71
   - S2-3: `MsAugmentResult.Fail(message, code)` and its consumers (`RefactoringExtractionDocsImpl` ~319, `AdvancedRefactoringTools` ~738). [x] Codes set only at the File/Field not-found, ToolException-catch and invalid-identifier sites; the other ~14 `Fail` sites stay code-less (Exception). Committed with this plan update.
   - S2-4: pilot - `ThreadSafetyEngine.ConvertLockToSemaphoreSlimAsync` catch copies `ToolException.ErrorCode` into the result; test. [x] Engine-level only. The consumer `CodemodTools.cs` ~615 (`convert_lock_to_semaphore_slim`) still treats any empty `UpdatedText`, including an `Error` outcome, as success, so the code does not reach the caller yet; classify that in Step 2b. Committed with this plan update.
-- Step 2b of the plan (NoChange classification, report only): not started. [ ]
+- Step 2b of the plan (NoChange classification, report only): [x] `docs/current/findings/finding_nochange_producer_classification.md`. 17 `NoChange` producers: 13 class 2 (already in state), 4 class 4 (cannot apply); 17 further empty-text producers (5/7/3/2 across classes 2/3/4/5) plus 11 LogicOptimizationEngine sites; ~50 consumer sites map empty `UpdatedText` to success and can mask an `Error` outcome. Decision still open: `AlreadyInState` vs narrowing `NoChange`. Nothing changed in code.
 
 ## Out of scope
 - Renaming or reorganising `ToolErrorCode` beyond `TargetIneligible`.
