@@ -34,12 +34,12 @@ public class WholeFileWriteTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("CreateFile (or its alias Create): file must not already exist (errors if it does). ReplaceFile (or its alias Replace): overwrites the file, and creates it if it does not exist.")]
         [ExternalInputRequired(DataTag.Action)] WriteFileOperation operation,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Full file content. Parent directories are created automatically.")] string content,
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             bool exists = File.Exists(filePathResolved);
@@ -104,9 +104,9 @@ public class WholeFileWriteTools
     [Description("Deletes a file from disk; fails if it doesn't exist. Undoable via UndoLastApply.")]
     public async Task<SentinelCallToolResult<object>> DeleteFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, CancellationToken cancellationToken = default)
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath, CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             if (!File.Exists(filePathResolved))
@@ -305,7 +305,7 @@ public class WholeFileWriteTools
     {
         try
         {
-            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filePath);
+            FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
             if (changesetFormat == ChangesetFormat.files)
             {
                 if (changes == null)
@@ -323,7 +323,7 @@ public class WholeFileWriteTools
                 // converter rejects outright ("Unrecognized schema: true"). Resolve keys to
                 // FilePathWrapper here instead, after the schema boundary.
                 Dictionary<FilePathWrapper, string> resolvedChanges = changes.ToDictionary(
-                    kvp => _workspaceManager.SetFilePath(kvp.Key),
+                    kvp => _workspaceManager.ResolveFromWire(kvp.Key),
                     kvp => kvp.Value);
 
                 if (action == ProposedChangeAction.apply)
@@ -558,7 +558,7 @@ public class WholeFileWriteTools
         [Description("apply: writes the change. validate: checks without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         [Description("The single file unifiedDiff applies to.")]
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("The unified diff to apply to filePath.")]
         [ToolOption(ToolOptionTag.UnifiedDiff, required: true)] string unifiedDiff,
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
@@ -567,7 +567,7 @@ public class WholeFileWriteTools
     {
         try
         {
-            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
             if (!filePathResolved.Validated)
             {
                 return new SentinelCallToolResult<object>()

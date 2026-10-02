@@ -30,11 +30,11 @@ public class SymbolNavigationImpl
         string? containingType = null,
         string? containingNamespace = null,
         string? projectName = null,
-        string? filepath = null,
+        string? filePath = null,
         bool exactMatch = true,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
 
         try
         {
@@ -71,7 +71,7 @@ public class SymbolNavigationImpl
 
     public async Task<SentinelCallToolResult<object>> InspectSymbol(
         ToolCallReason reason,
-        FilePathWrapper filepath,
+        string filePath,
         string contextSnippet,
         InspectSymbolAspect aspect,
         string? lineBefore = null,
@@ -79,7 +79,7 @@ public class SymbolNavigationImpl
         CancellationToken cancellationToken = default
         )
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
 
         try
         {

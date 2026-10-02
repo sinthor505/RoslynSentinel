@@ -100,33 +100,33 @@ public class GenerationTools
     [Description("Generates a typed HttpClient wrapper for a Web API controller.")]
     public async Task<string> GenerateHttpClient(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [ExternalInputRequired(DataTag.ClassName)] string controllerName,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
 
         System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DocumentId>? fileIds;
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            fileIds = solution.GetDocumentIdsWithFilePath(filePath);
+            fileIds = solution.GetDocumentIdsWithFilePath(resolvedFilePath);
         }
         catch (SolutionNotLoadedException)
         {
             fileIds = null;
         }
         if (fileIds == null || fileIds.Value.Length == 0)
-            return $"GenerateHttpClient: file '{Path.GetFileName(filePath)}' not found in the loaded solution. " +
+            return $"GenerateHttpClient: file '{Path.GetFileName(resolvedFilePath)}' not found in the loaded solution. " +
                    $"Verify the path is correct and the solution is loaded. Loaded projects: {_workspaceManager.ProjectCount}.";
 
         try
         {
-            var result = await _apiGenerationEngine.GenerateHttpClientForControllerAsync(filePath, controllerName, cancellationToken);
+            var result = await _apiGenerationEngine.GenerateHttpClientForControllerAsync(resolvedFilePath, controllerName, cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
-                return $"GenerateHttpClient: controller class '{controllerName}' not found in '{Path.GetFileName(filePath)}'. " +
+                return $"GenerateHttpClient: controller class '{controllerName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " +
                        "Verify the class name (case-sensitive). Use GetFileOutline to list available classes.";
             }
 
@@ -134,7 +134,7 @@ public class GenerationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GenerateHttpClient failed for '{ControllerName}' in '{FilePathWrapper}'", controllerName, filePath);
+            _logger.LogError(ex, "GenerateHttpClient failed for '{ControllerName}' in '{FilePathWrapper}'", controllerName, resolvedFilePath);
             return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "GenerateHttpClient");
         }
     }
@@ -193,7 +193,7 @@ public class GenerationTools
     [Description("Converts a string.Format(...) call to an interpolated string. Resolves const string format arguments via the semantic model (works even when the format string is a named const, not just a literal) and handles {0:format} specifiers correctly.")]
     public async Task<string> InterpolateStringSafe(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Verbatim substring identifying the string.Format call to convert.")]
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Description(ToolParams.LineBefore)]
@@ -203,28 +203,28 @@ public class GenerationTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
 
         System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DocumentId>? interpFileIds;
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            interpFileIds = solution.GetDocumentIdsWithFilePath(filePath);
+            interpFileIds = solution.GetDocumentIdsWithFilePath(resolvedFilePath);
         }
         catch (SolutionNotLoadedException)
         {
             interpFileIds = null;
         }
         if (interpFileIds == null || interpFileIds.Value.Length == 0)
-            return $"InterpolateStringSafe: file '{Path.GetFileName(filePath)}' not found in the loaded solution. " +
+            return $"InterpolateStringSafe: file '{Path.GetFileName(resolvedFilePath)}' not found in the loaded solution. " +
                    $"Verify the path is correct and the solution is loaded. Loaded projects: {_workspaceManager.ProjectCount}.";
 
         try
         {
-            var result = await _codeGenerationEngine.InterpolateStringAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
+            var result = await _codeGenerationEngine.InterpolateStringAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
-                return $"InterpolateStringSafe: context snippet did not match or target is not a string.Format() call in '{Path.GetFileName(filePath)}'. " +
+                return $"InterpolateStringSafe: context snippet did not match or target is not a string.Format() call in '{Path.GetFileName(resolvedFilePath)}'. " +
                        "Verify the snippet is verbatim text from the file and the call uses string.Format(...) (not interpolation or concatenation already).";
             }
 
@@ -232,13 +232,13 @@ public class GenerationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "InterpolateStringSafe failed in '{FilePathWrapper}'", filePath);
+            _logger.LogError(ex, "InterpolateStringSafe failed in '{FilePathWrapper}'", resolvedFilePath);
             return ToolErrorMapper.ToErrorMessage(ex, _workspaceManager, "InterpolateStringSafe");
         }
     }
 
     public async Task<SentinelCallToolResult<object>> GenerateMapping(
-        FilePathWrapper filepath,
+        string filePath,
         string fromType,
         string toType,
         bool dryRun = false,
@@ -246,7 +246,7 @@ public class GenerationTools
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();

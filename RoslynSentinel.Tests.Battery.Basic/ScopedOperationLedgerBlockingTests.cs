@@ -41,7 +41,7 @@ public class ScopedOperationLedgerBlockingTests
             .EnumerateFiles(_fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
             .First(f => !f.Contains("obj", StringComparison.OrdinalIgnoreCase));
         var original = await File.ReadAllTextAsync(targetFile);
-        var filePath = _workspaceManager.SetFilePath(targetFile);
+        var filePath = _workspaceManager.ResolveFromWire(targetFile);
 
         var opened = Ledger.TryOpen(
             "MoveMember_Test",
@@ -81,7 +81,7 @@ public class ScopedOperationLedgerBlockingTests
 
         var changes = new Dictionary<FilePathWrapper, string>
         {
-            [_workspaceManager.SetFilePath(targetFile)] = original + "\n// appended by test\n"
+            [_workspaceManager.ResolveFromWire(targetFile)] = original + "\n// appended by test\n"
         };
 
         var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: false);
@@ -102,8 +102,8 @@ public class ScopedOperationLedgerBlockingTests
         var trackedFile = files[0];
         var unrelatedFile = files[1];
         var unrelatedOriginal = await File.ReadAllTextAsync(unrelatedFile);
-        var trackedPath = _workspaceManager.SetFilePath(trackedFile);
-        var unrelatedPath = _workspaceManager.SetFilePath(unrelatedFile);
+        var trackedPath = _workspaceManager.ResolveFromWire(trackedFile);
+        var unrelatedPath = _workspaceManager.ResolveFromWire(unrelatedFile);
 
         Ledger.TryOpen(
             "MoveMember_Test",

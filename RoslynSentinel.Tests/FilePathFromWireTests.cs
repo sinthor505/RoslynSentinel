@@ -1,7 +1,7 @@
-// Regression coverage for FilePathWrapper.FromWire.
+// Regression coverage for _workspaceManager.ResolveFromWire.
 //
 // PersistentWorkspaceManager.GetSolutionRoot() returns null whenever no solution is loaded, or
-// the loaded solution is in-memory and has no file path. Tool methods call FromWire before their
+// the loaded solution is in-memory and has no file path. Tool methods call ResolveFromWire before their
 // own try/catch, so a null root used to reach Path.Combine and throw a raw ArgumentNullException
 // out of the MCP boundary instead of returning a structured error.
 
@@ -13,13 +13,13 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_NullSolutionRoot_RelativePath_DoesNotThrow()
     {
-        Assert.DoesNotThrow(() => FilePathWrapper.FromWire("Test.cs", null));
+        Assert.DoesNotThrow(() => FilePathWrapper.ResolveFromWire("Test.cs", null));
     }
 
     [Test]
     public void FromWire_NullSolutionRoot_RelativePath_PreservesCallerPath()
     {
-        var result = FilePathWrapper.FromWire("Test.cs", null);
+        var result = FilePathWrapper.ResolveFromWire("Test.cs", null);
 
         Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
             "With no solution root the caller's path must be preserved verbatim - resolving it "
@@ -29,7 +29,7 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_EmptySolutionRoot_RelativePath_PreservesCallerPath()
     {
-        var result = FilePathWrapper.FromWire("Sub/Test.cs", "   ");
+        var result = FilePathWrapper.ResolveFromWire("Sub/Test.cs", "   ");
 
         Assert.That(result.Absolute, Is.EqualTo(Path.Combine("Sub", "Test.cs")),
             "Path content is preserved but separators are canonicalized to the platform separator.");
@@ -40,7 +40,7 @@ public class FilePathFromWireTests
     {
         var rooted = Path.Combine(Path.GetTempPath(), "Test.cs");
 
-        var result = FilePathWrapper.FromWire(rooted, null);
+        var result = FilePathWrapper.ResolveFromWire(rooted, null);
 
         Assert.That(result.Absolute, Is.EqualTo(Path.GetFullPath(rooted)));
     }
@@ -50,7 +50,7 @@ public class FilePathFromWireTests
     {
         var root = Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar);
 
-        var result = FilePathWrapper.FromWire("Test.cs", root);
+        var result = FilePathWrapper.ResolveFromWire("Test.cs", root);
 
         Assert.That(result.Absolute, Is.EqualTo(Path.GetFullPath(Path.Combine(root, "Test.cs"))));
     }
@@ -58,17 +58,17 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_EmptyPath_NullSolutionRoot_ReturnsEmpty()
     {
-        var result = FilePathWrapper.FromWire("", null);
+        var result = FilePathWrapper.ResolveFromWire("", null);
 
         Assert.That(result.Absolute, Is.Empty);
     }
 
     // Regression coverage for the LoadSolution "stray quotes baked into the path" bug -> the same
-    // sanitization now lives in NormalizeWirePath so every FromWire caller gets it for free.
+    // sanitization now lives in NormalizeWirePath so every ResolveFromWire caller gets it for free.
     [Test]
     public void FromWire_PathWrappedInSingleQuotes_QuotesAreStripped()
     {
-        var result = FilePathWrapper.FromWire("'Test.cs'", null);
+        var result = FilePathWrapper.ResolveFromWire("'Test.cs'", null);
 
         Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
             "Stray wrapping single quotes must be stripped before the path is used.");
@@ -77,7 +77,7 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_PathWrappedInDoubleQuotes_QuotesAreStripped()
     {
-        var result = FilePathWrapper.FromWire("\"Test.cs\"", null);
+        var result = FilePathWrapper.ResolveFromWire("\"Test.cs\"", null);
 
         Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
             "Stray wrapping double quotes must be stripped before the path is used.");
@@ -86,7 +86,7 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_PathWithSurroundingWhitespace_IsTrimmed()
     {
-        var result = FilePathWrapper.FromWire("  Test.cs\n", null);
+        var result = FilePathWrapper.ResolveFromWire("  Test.cs\n", null);
 
         Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
             "Leading/trailing whitespace must be trimmed before the path is used.");
@@ -95,7 +95,7 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_PathWithSmartQuotes_QuotesAreStripped()
     {
-        var result = FilePathWrapper.FromWire("\u2018Test.cs\u2019", null);
+        var result = FilePathWrapper.ResolveFromWire("\u2018Test.cs\u2019", null);
 
         Assert.That(result.Absolute, Is.EqualTo("Test.cs"),
             "Smart/curly quotes must be stripped just like straight quotes.");
@@ -130,12 +130,12 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_UncPath_PreservesLeadingDoubleSlash()
     {
-        var result = FilePathWrapper.FromWire(@"\\server\share\Test.cs", null);
+        var result = FilePathWrapper.ResolveFromWire(@"\\server\share\Test.cs", null);
 
         Assert.That(result.Absolute, Does.StartWith(@"\\"),
             "Canonicalization must not collapse the UNC path's required leading double separator.");
     }
-       // Regression coverage for the CreateFile "'filepath' is required" misdiagnosis bug: Validated
+    // Regression coverage for the CreateFile "'filepath' is required" misdiagnosis bug: Validated
     // == false used to be reported identically whether the path argument was bad or no solution was
     // loaded at all. FailureReason lets a caller tell these apart instead of guessing.
     [Test]
@@ -174,4 +174,5 @@ public class FilePathFromWireTests
         Assert.That(result.Validated, Is.True);
         Assert.That(result.FailureReason, Is.EqualTo(FilePathFailureReason.None),
             "A validated path has no failure to report, regardless of what the caller passed in.");
-    }}
+    }
+}

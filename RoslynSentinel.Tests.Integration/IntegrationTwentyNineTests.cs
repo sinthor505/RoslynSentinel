@@ -5,9 +5,6 @@
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Engines.Advanced;
-using RoslynSentinel.Engines.Basic;
-
 namespace RoslynSentinel.Tests.Integration;
 // ─────────────────────────────────────────────────────────────────────────────
 // B29 -> Remaining engines exercised against the configured real solution
@@ -609,11 +606,11 @@ public class RealSolution_SmokeTests_Battery28
     }
 
     [Test]
-    public async Task ArchitecturalEngine_FindCircularDeps_DoesNotThrow()
+    public async Task SolutionStructureEngine_FindCircularDeps_DoesNotThrow()
     {
-        var engine = new ArchitecturalEngine(_workspaceManager);
+        var engine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
         List<CircularDependencyChain>? result = null;
-        Assert.DoesNotThrowAsync(async () => result = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularDependenciesAsync(), "ArchitecturalEngine.FindCircularDependenciesAsync must not throw on the real solution.");
+        Assert.DoesNotThrowAsync(async () => result = await engine.FindCircularDependenciesAsync(), "SolutionStructureEngine.FindCircularDependenciesAsync must not throw on the real solution.");
         Assert.That(result, Is.Not.Null);
     }
 

@@ -31,9 +31,9 @@ public class SymbolRelationshipImpl
         _logger = logger;
     }
 
-    private async Task<List<object>> RunRelationshipQueryAsync(FindUsagesSearchKind searchKind, string name, string? projectName, FilePathWrapper filepath, bool sortByFrequency, CancellationToken cancellationToken)
+    private async Task<List<object>> RunRelationshipQueryAsync(FindUsagesSearchKind searchKind, string name, string? projectName, string filePath, bool sortByFrequency, CancellationToken cancellationToken)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         object result = searchKind switch
         {
             FindUsagesSearchKind.implementorsOf => await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName, cancellationToken),
@@ -50,11 +50,11 @@ public class SymbolRelationshipImpl
         return ((System.Collections.IEnumerable)result).Cast<object>().ToList();
     }
 
-    public async Task<SentinelCallToolResult<object>> QuerySymbolRelationships(ToolCallReason reason, string name, FindUsagesSearchKind searchKind, string? projectName = null, string? filepath = null, bool sortByFrequency = false, CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<object>> QuerySymbolRelationships(ToolCallReason reason, string name, FindUsagesSearchKind searchKind, string? projectName = null, string? filePath = null, bool sortByFrequency = false, CancellationToken cancellationToken = default)
     {
         try
         {
-            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
             if (searchKind == FindUsagesSearchKind.objectCreations)
             {
                 var resolved = await _symbolNavigationEngine.LocateSymbolAsync(name, "any", projectName: projectName, cancellationToken: cancellationToken);
@@ -127,10 +127,10 @@ public class SymbolRelationshipImpl
         }
     }
 
-    public async Task<SentinelCallToolResult<BestInsertionResult, ResultError>> GetBestInsertionPoint(ToolCallReason reason, FilePathWrapper filepath, string containerName, InsertionMemberKind memberKind, CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<BestInsertionResult, ResultError>> GetBestInsertionPoint(ToolCallReason reason, string filePath, string containerName, InsertionMemberKind memberKind, CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             var result = await _discoveryEngine.FindBestInsertionPointAsync(filePathResolved, containerName, memberKind.ToString(), cancellationToken: cancellationToken);
@@ -151,9 +151,9 @@ public class SymbolRelationshipImpl
         }
     }
 
-    public async Task<SentinelCallToolResult<object>> PreviewRenameImpact(ToolCallReason reason, string? filepath = null, string? symbolName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? docCommentId = null, string? projectName = null, CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<object>> PreviewRenameImpact(ToolCallReason reason, string? filePath = null, string? symbolName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? docCommentId = null, string? projectName = null, CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath ?? string.Empty, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             var result = await _discoveryEngine.PreviewRenameImpactAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, cancellationToken);
@@ -174,11 +174,11 @@ public class SymbolRelationshipImpl
         }
     }
 
-    public async Task<SentinelCallToolResult<object>> FindReferences(ToolCallReason reason, string symbolName, FindReferencesKind kind, string? filepath = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<object>> FindReferences(ToolCallReason reason, string symbolName, FindReferencesKind kind, string? filePath = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         try
         {
-            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
             if (kind == FindReferencesKind.callers)
             {
                 var result = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken);

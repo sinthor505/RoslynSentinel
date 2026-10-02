@@ -92,7 +92,7 @@ public class UnrecoverableBreakerTests
 
         var changes = new Dictionary<FilePathWrapper, string>
         {
-            [_workspaceManager.SetFilePath(targetFile)] = original + "\n// appended by test\n"
+            [_workspaceManager.ResolveFromWire(targetFile)] = original + "\n// appended by test\n"
         };
 
         Assert.That(
@@ -115,7 +115,7 @@ public class UnrecoverableBreakerTests
 
         var changes = new Dictionary<FilePathWrapper, string>
         {
-            [_workspaceManager.SetFilePath(targetFile)] = original + "\n// appended by test\n"
+            [_workspaceManager.ResolveFromWire(targetFile)] = original + "\n// appended by test\n"
         };
 
         var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: false);

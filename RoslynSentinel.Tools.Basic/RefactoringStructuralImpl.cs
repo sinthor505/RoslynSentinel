@@ -116,7 +116,7 @@ public class RefactoringStructuralImpl
 
         var editsByFile = edits
             .Select((edit, index) => (edit, index))
-            .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));
+            .GroupBy(pair => _workspaceManager.ResolveFromWire(pair.edit.FilePath));
 
         var finalContents = new Dictionary<FilePathWrapper, string>();
         var touchedFiles = new List<FilePathWrapper>();
@@ -240,7 +240,7 @@ public class RefactoringStructuralImpl
 
         var editsByFile = edits
             .Select((edit, index) => (edit, index))
-            .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));
+            .GroupBy(pair => _workspaceManager.ResolveFromWire(pair.edit.FilePath));
 
         var finalContents = new Dictionary<FilePathWrapper, string>();
         var touchedFiles = new List<FilePathWrapper>();
@@ -365,7 +365,7 @@ public class RefactoringStructuralImpl
 
         var editsByFile = edits
             .Select((edit, index) => (edit, index))
-            .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));
+            .GroupBy(pair => _workspaceManager.ResolveFromWire(pair.edit.FilePath));
 
         var finalContents = new Dictionary<FilePathWrapper, string>();
         var touchedFiles = new List<FilePathWrapper>();
@@ -418,7 +418,7 @@ public class RefactoringStructuralImpl
 
     public async Task<SentinelCallToolResult<object>> Member(
         ToolCallReason reason,
-        FilePathWrapper filepath,
+        string filePath,
         MemberAction operation,
         string? containerName = null,
         string? namespaceName = null,
@@ -444,7 +444,7 @@ public class RefactoringStructuralImpl
         RequestContext<CallToolRequestParams>? requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             if (operation == MemberAction.view)
@@ -807,7 +807,7 @@ public class RefactoringStructuralImpl
 
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyEnum(
         ToolCallReason reason,
-        FilePathWrapper filepath,
+        string filePath,
         string enumName,
         string values,
         string? contextSnippet = null,
@@ -818,7 +818,7 @@ public class RefactoringStructuralImpl
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             var updated = await _memberRefactoringEngine.ModifyEnumAsync(filePathResolved, enumName, values, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
@@ -868,7 +868,7 @@ public class RefactoringStructuralImpl
 
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyAttribute(
         ToolCallReason reason,
-        FilePathWrapper? filepath = null,
+        string? filePath = null,
         string? targetName = null,
         string? existingAttribute = null,
         AttributeModifyAction? action = null,
@@ -883,7 +883,7 @@ public class RefactoringStructuralImpl
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
-        bool hasSingularEdit = filepath.HasValue || !string.IsNullOrEmpty(targetName) || !string.IsNullOrEmpty(existingAttribute) || !string.IsNullOrEmpty(attribute) || action.HasValue;
+        bool hasSingularEdit = filePath is not null || !string.IsNullOrEmpty(targetName) || !string.IsNullOrEmpty(existingAttribute) || !string.IsNullOrEmpty(attribute) || action.HasValue;
         bool hasBatchEdit = edits != null;
 
         if (hasSingularEdit && hasBatchEdit)
@@ -892,7 +892,7 @@ public class RefactoringStructuralImpl
             {
                 IsSuccess = false,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyAttribute: supply either filepath/targetName/existingAttribute/action or 'edits', not both.")
+                    "ModifyAttribute: supply either filePath/targetName/existingAttribute/action or 'edits', not both.")
             };
         }
 
@@ -922,17 +922,17 @@ public class RefactoringStructuralImpl
 
         existingAttribute = resolvedAttributeSource;
 
-        if (!filepath.HasValue || string.IsNullOrEmpty(targetName) || string.IsNullOrEmpty(existingAttribute) || !action.HasValue)
+        if (filePath is null || string.IsNullOrEmpty(targetName) || string.IsNullOrEmpty(existingAttribute) || !action.HasValue)
         {
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsSuccess = false,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyAttribute: 'filepath', 'targetName', 'existingAttribute' (or its alias 'attribute'), and 'action' are all required, unless 'edits' is supplied instead.")
+                    "ModifyAttribute: 'filePath', 'targetName', 'existingAttribute' (or its alias 'attribute'), and 'action' are all required, unless 'edits' is supplied instead.")
             };
         }
 
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath.Value, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             if (action == AttributeModifyAction.replace && string.IsNullOrEmpty(newAttribute))
@@ -1007,7 +1007,7 @@ public class RefactoringStructuralImpl
 
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyModifier(
         ToolCallReason reason,
-        FilePathWrapper? filepath = null,
+        string? filePath = null,
         string? targetName = null,
         NonAccessibilityModifier? modifier = null,
         AddRemoveAction? action = null,
@@ -1020,7 +1020,7 @@ public class RefactoringStructuralImpl
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
-        bool hasSingularEdit = filepath.HasValue || !string.IsNullOrEmpty(targetName) || modifier.HasValue || action.HasValue;
+        bool hasSingularEdit = filePath is not null || !string.IsNullOrEmpty(targetName) || modifier.HasValue || action.HasValue;
         bool hasBatchEdit = edits != null;
 
         if (hasSingularEdit && hasBatchEdit)
@@ -1029,7 +1029,7 @@ public class RefactoringStructuralImpl
             {
                 IsSuccess = false,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyModifier: supply either filepath/targetName/modifier/action or 'edits', not both.")
+                    "ModifyModifier: supply either filePath/targetName/modifier/action or 'edits', not both.")
             };
         }
 
@@ -1047,17 +1047,17 @@ public class RefactoringStructuralImpl
             return await ModifyModifierBatch(edits, dryRun, returnDiff, cancellationToken);
         }
 
-        if (!filepath.HasValue || string.IsNullOrEmpty(targetName) || !modifier.HasValue || !action.HasValue)
+        if (filePath is null || string.IsNullOrEmpty(targetName) || !modifier.HasValue || !action.HasValue)
         {
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsSuccess = false,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyModifier: 'filepath', 'targetName', 'modifier', and 'action' are all required, unless 'edits' is supplied instead.")
+                    "ModifyModifier: 'filePath', 'targetName', 'modifier', and 'action' are all required, unless 'edits' is supplied instead.")
             };
         }
 
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath.Value, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         var modifierText = modifier.Value.ToString();
         try
         {
@@ -1114,7 +1114,7 @@ public class RefactoringStructuralImpl
 
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyBaseType(
         ToolCallReason reason,
-        FilePathWrapper? filepath = null,
+        string? filePath = null,
         string? typeName = null,
         string? baseTypeName = null,
         AddRemoveAction? action = null,
@@ -1127,7 +1127,7 @@ public class RefactoringStructuralImpl
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
-        bool hasSingularEdit = filepath.HasValue || !string.IsNullOrEmpty(typeName) || !string.IsNullOrEmpty(baseTypeName) || action.HasValue;
+        bool hasSingularEdit = filePath is not null || !string.IsNullOrEmpty(typeName) || !string.IsNullOrEmpty(baseTypeName) || action.HasValue;
         bool hasBatchEdit = edits != null;
 
         if (hasSingularEdit && hasBatchEdit)
@@ -1136,7 +1136,7 @@ public class RefactoringStructuralImpl
             {
                 IsSuccess = false,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyBaseType: supply either filepath/typeName/baseTypeName/action or 'edits', not both.")
+                    "ModifyBaseType: supply either filePath/typeName/baseTypeName/action or 'edits', not both.")
             };
         }
 
@@ -1154,17 +1154,17 @@ public class RefactoringStructuralImpl
             return await ModifyBaseTypeBatch(edits, dryRun, returnDiff, cancellationToken);
         }
 
-        if (!filepath.HasValue || string.IsNullOrEmpty(typeName) || string.IsNullOrEmpty(baseTypeName) || !action.HasValue)
+        if (filePath is null || string.IsNullOrEmpty(typeName) || string.IsNullOrEmpty(baseTypeName) || !action.HasValue)
         {
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsSuccess = false,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyBaseType: 'filepath', 'typeName', 'baseTypeName', and 'action' are all required, unless 'edits' is supplied instead.")
+                    "ModifyBaseType: 'filePath', 'typeName', 'baseTypeName', and 'action' are all required, unless 'edits' is supplied instead.")
             };
         }
 
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath.Value, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             DocumentEditResult updated;
@@ -1220,13 +1220,13 @@ public class RefactoringStructuralImpl
 
     public async Task<SentinelCallToolResult<object>> SyncTypeAndFilename(
         ToolCallReason reason,
-        FilePathWrapper filepath,
+        string filePath,
         string? targetTypeName = null,
         bool dryRun = false,
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
 
         try
         {

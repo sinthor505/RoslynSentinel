@@ -144,7 +144,7 @@ public class RefactoringSignatureImpl
 
     public async Task<SentinelCallToolResult<object>> MethodSignature(
         ToolCallReason reason,
-        FilePathWrapper filepath,
+        string filePath,
         AddRemoveViewAction operation,
         string methodName,
         string? paramName = null,
@@ -159,7 +159,7 @@ public class RefactoringSignatureImpl
         CancellationToken cancellationToken = default,
         bool nullDefault = false)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             if (operation == AddRemoveViewAction.view)
@@ -252,7 +252,7 @@ public class RefactoringSignatureImpl
 
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> ChangeAccessibility(
         ToolCallReason reason,
-        FilePathWrapper filepath,
+        string filePath,
         string targetName,
         AccessibilityLevel accessibility,
         string? contextSnippet = null,
@@ -263,7 +263,7 @@ public class RefactoringSignatureImpl
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             var updated = await _memberRefactoringEngine.ChangeAccessibilityAsync(filePathResolved, targetName, accessibility, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
@@ -319,7 +319,7 @@ public class RefactoringSignatureImpl
 
     public async Task<SentinelCallToolResult<object>> ConstructorParameter(
         ToolCallReason reason,
-        FilePathWrapper filepath,
+        string filePath,
         AddRemoveViewAction operation,
         string className,
         string? paramName = null,
@@ -338,7 +338,7 @@ public class RefactoringSignatureImpl
             return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"ConstructorParameter: callSiteFixups is only valid for operation 'add', not '{operation}'.") };
         }
 
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             if (operation == AddRemoveViewAction.view)

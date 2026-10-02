@@ -438,12 +438,12 @@ public class WorkspaceProjectManagementImpl
         }
     }
 
-    public async Task<SentinelCallToolResult<object>> SafeDeleteUnusedSymbol(ToolCallReason reason, FilePathWrapper filepath,
+    public async Task<SentinelCallToolResult<object>> SafeDeleteUnusedSymbol(ToolCallReason reason, string filePath,
         string projectName = "", string docCommentId = "", string? symbolName = null,
         string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null,
         int line = 0, int column = 0, CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         async Task<SentinelCallToolResult<object>> ApplyAndRespondAsync(DocumentEditResult result)
         {
             if (string.IsNullOrEmpty(result.UpdatedText))

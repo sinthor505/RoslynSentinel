@@ -144,8 +144,9 @@ public class OrderService : IOrderService
         var navigationEngine = new SymbolNavigationEngine(_workspaceManager);
         var candidates = await navigationEngine.LocateSymbolAsync("OrderId", "All", "Order");
         var symbol = candidates.FirstOrDefault();
+        Assert.That(symbol?.DocCommentId, Is.Not.Null, "Symbol must have a DocCommentId for resolution");
         var resolved = await _workspaceManager.ResolveFromWireAsync("TestProj", symbol.DocCommentId, CancellationToken.None);
-
+        Assert.That(resolved.Symbol, Is.Not.Null, "Resolved symbol must not be null");
         var result = await _refactoringEngine.RenameSymbolAsync(resolved.Handle, resolved.Symbol, "OrderId2");
 
         var docText = result.PendingChanges.FirstOrDefault().Value;

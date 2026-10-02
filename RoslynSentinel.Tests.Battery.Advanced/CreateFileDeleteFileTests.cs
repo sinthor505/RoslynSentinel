@@ -494,7 +494,7 @@ public class CreateFileDeleteFileTests
         var populateResult = await refactoringTools.Member(
             reason: "test message",
             operation: MemberAction.addMember,
-            filepath: newFile,
+            filePath: newFile,
             containerName: "Foo",
             newMemberSource: "public int Value { get; set; }");
         Assert.That(populateResult.IsSuccess, Is.True, populateResult.ErrorData?.Message);
@@ -503,7 +503,7 @@ public class CreateFileDeleteFileTests
         var secondTypeResult = await refactoringTools.Member(
             reason: "test message",
             operation: MemberAction.addTopLevelType,
-            filepath: newFile,
+            filePath: newFile,
             newMemberSource: "public class Bar { }");
         Assert.That(secondTypeResult.IsSuccess, Is.True, secondTypeResult.ErrorData?.Message);
 

@@ -72,10 +72,10 @@ public static class ToolClassRegistry
 
     /// <summary>
     /// Tool classes registered whenever any of Refactor/Modernize/Quality/Generation is active
-    /// (Advanced only -> <c>CodemodTools</c> itself is Advanced-only, so this rule is a
+    /// (Advanced only -> <c>CodeTransformationTools</c> itself is Advanced-only, so this rule is a
     /// no-op for Basic). Kept separate from the per-mode maps above because it's an "any of"
     /// rule spanning four modes rather than a single mode's own class list.
     /// </summary>
-    public static readonly string[] CodemodTriggerModes = ["Refactor", "Modernize", "Quality", "Generation"];
-    public const string CodemodToolClass = "CodemodTools";
+    public static readonly string[] CodeTransformTriggerModes = ["Refactor", "Modernize", "Quality", "Generation"];
+    public const string CodeTransformToolClass = "CodeTransformationTools";
 }

@@ -5,8 +5,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Engines.Advanced;
 
 public record GenerationResult(FilePathWrapper filePath, string Content);
@@ -32,7 +30,7 @@ public record DecoratorResult(
     string SuggestedFileName
 );
 
-public partial class CodeGenerationEngine
+public class CodeGenerationEngine
 {
     private readonly IWorkspaceManager _workspaceManager;
 

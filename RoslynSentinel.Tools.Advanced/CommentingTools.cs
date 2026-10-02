@@ -70,7 +70,9 @@ public class CommentingTools
             };
         }
 
-        if (scope == ToolScope.file && string.IsNullOrEmpty(filePath))
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
+
+        if (scope == ToolScope.file && string.IsNullOrEmpty(resolvedFilePath))
         {
             return new SentinelCallToolResult<CommentingResult>
             {
@@ -92,7 +94,7 @@ public class CommentingTools
 
         try
         {
-            var result = await RunAsync(scope, projectName, filePath, dryRun, maxMembers, maxRuntimeSeconds, cancellationToken);
+            var result = await RunAsync(scope, projectName, resolvedFilePath, dryRun, maxMembers, maxRuntimeSeconds, cancellationToken);
             return new SentinelCallToolResult<CommentingResult> { IsSuccess = true, SuccessData = result };
         }
         catch (Exception ex)

@@ -213,13 +213,13 @@ public static class RoslynSentinelServiceExtensionsAdvanced
             services.AddSingleton<CommentingTools>();
             mcpBuilder.WithSentinelTools<CommentingTools>();
         }
-        var codemodActive = (ToolClassRegistry.CodemodTriggerModes.Any(activeModes.Contains) ||
-                              resolvedIncludeTools.Contains(ToolClassRegistry.CodemodToolClass)) &&
-                             !resolvedExcludeTools.Contains(ToolClassRegistry.CodemodToolClass);
-        if (codemodActive)
+        var codeTransformActive = (ToolClassRegistry.CodeTransformTriggerModes.Any(activeModes.Contains) ||
+                              resolvedIncludeTools.Contains(ToolClassRegistry.CodeTransformToolClass)) &&
+                             !resolvedExcludeTools.Contains(ToolClassRegistry.CodeTransformToolClass);
+        if (codeTransformActive)
         {
-            //services.AddSingleton<CodemodTools>();
-            //mcpBuilder.WithSentinelTools<CodemodTools>();
+            //services.AddSingleton<CodeTransformationTools>();
+            //mcpBuilder.WithSentinelTools<CodeTransformationTools>();
         }
         if (activeToolClasses.Contains("AsyncifyTools"))
         {

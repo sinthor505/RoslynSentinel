@@ -11,7 +11,7 @@ namespace RoslynSentinel.Tests.Advanced;
 public class ModernizationIntegrationTests
 {
     private IWorkspaceManager _workspaceManager;
-    private SolutionStructureEngine _projectStructureEngine;
+    private SolutionStructureEngine _solutionStructureEngine;
     private SyntaxUpgradeEngine _syntaxUpgradeEngine;
     private CodeStyleEngine _codeStyleEngine;
 
@@ -20,7 +20,7 @@ public class ModernizationIntegrationTests
     {
         _workspaceManager = new PersistentWorkspaceManager(new NullLogger<IWorkspaceManager>());
         var config = new SentinelConfiguration();
-        _projectStructureEngine = new SolutionStructureEngine(_workspaceManager, config);
+        _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, config);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, config);
     }
@@ -136,7 +136,7 @@ public class C {
 }");
 
         // Act
-        var smells = await _projectStructureEngine.FindStructuralSmellsAsync();
+        var smells = await _solutionStructureEngine.FindStructuralSmellsAsync();
 
         // Assert
         Assert.That(smells.Any(s => s.Contains("[LEGACY_GUARD]")), Is.True);

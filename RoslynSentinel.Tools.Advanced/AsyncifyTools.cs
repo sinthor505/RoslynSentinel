@@ -83,6 +83,8 @@ public class AsyncifyTools
         ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
         IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = msg.Progress, Total = msg.Total, Message = msg.Message }, null, cancellationToken));
 
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
+
         Microsoft.CodeAnalysis.Solution solution;
         try
         {
@@ -108,7 +110,7 @@ public class AsyncifyTools
 
         // ── auto-flag phase (skipped for file scope or when forceRescan=false) ──
         var scopedProjectName = scope == ToolScope.project ? projectName : null;
-        var scopedFilePath = scope == ToolScope.file ? filePath : null;
+        var scopedFilePath = scope == ToolScope.file ? resolvedFilePath : null;
         BatchResultSummary? flagPhaseResult = null;
         if (forceRescan && scope != ToolScope.file)
         {
@@ -484,14 +486,14 @@ public class AsyncifyTools
             FilePathWrapper? resolvedFilePath = null;
             if (scope == ToolScope.file)
             {
-                if (string.IsNullOrEmpty(filePath))
+                if (string.IsNullOrEmpty(resolvedFilePath))
                     return new SentinelCallToolResult<BatchResultSummary>
                     {
                         IsSuccess = false,
                         ErrorData = new ResultError(MigrationErrorCode.InvalidArgument,
                                       "scope=\"file\" requires a filePath.")
                     };
-                resolvedFilePath = FilePathWrapper.FromWire(filePath, _workspaceManager.GetSolutionRoot());
+                resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
             }
 
             var engineResult = await _asyncOptimizationEngine.RemoveMigrationCandidatesAsync(

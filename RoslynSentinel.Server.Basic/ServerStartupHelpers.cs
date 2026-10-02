@@ -99,7 +99,7 @@ public static class ServerStartupHelpers
             : value.Split(',').Select(n => n.Trim()).Where(n => n.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Every tool-class name the registry knows about (both servers' mode maps plus the codemod
+    /// Every tool-class name the registry knows about (both servers' mode maps plus the codetransform
     /// class), used to resolve a user-typed --include-tools/--exclude-tools name to the exact
     /// registered spelling.
     /// </summary>
@@ -108,14 +108,14 @@ public static class ServerStartupHelpers
             ToolClassRegistry.BasicModeToToolClasses.Values
                 .Concat(ToolClassRegistry.AdvancedModeToToolClasses.Values)
                 .SelectMany(classes => classes)
-                .Append(ToolClassRegistry.CodemodToolClass),
+                .Append(ToolClassRegistry.CodeTransformToolClass),
             StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Resolves each --include-tools/--exclude-tools name to the class name actually registered,
     /// accepting it with or without a legacy "Sentinel" prefix. Most classes are registered
     /// unprefixed (WorkspaceTools, GitTools) but a few keep the prefix (SymbolNavigationTools), and
-    /// older launch scripts type the shortened form ("SymbolTools"). This previously prepended
+    /// older launch scripts type the shortened form ("SymbolNavigationTools"). This previously prepended
     /// "Sentinel" to every name unconditionally, so "--exclude-tools=GitTools" became
     /// "SentinelGitTools" and silently matched nothing - which would have made the SubAgent
     /// recursion guard (--exclude-tools=SubAgentTools,SubAgentEvalTools) a no-op. A name matching

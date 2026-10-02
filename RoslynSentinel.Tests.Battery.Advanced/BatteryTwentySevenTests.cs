@@ -6,7 +6,7 @@
 //   B08 -> DeadCodeEngine: written-but-never-read variables were not detected as unused
 //   B02 -> ImmutabilityEngine: const fields received readonly modifier (-> CS0106)
 //   B01 -> InstrumentationEngine: throw was emitted as ExpressionStatement (invalid C#)
-//   B03 -> ArchitecturalEngine: IdentifierName contained a dot (invalid identifier)
+//   B03 -> SolutionStructureEngine: IdentifierName contained a dot (invalid identifier)
 //   B09 -> AdvancedRefactoringEngine: OptimizeTaskWaitAsync rewrote all .Wait()/.Result
 //         when semantic model was null (false positives)
 //   B18 -> ContextHelper: OrdinalIgnoreCase blocked valid PascalCase identifiers such as
@@ -176,19 +176,19 @@ public class B01_Instrumentation_ValidThrowStatement
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B03 -> ArchitecturalEngine: stoppingToken.IsCancellationRequested must be a
+// B03 -> SolutionStructureEngine: stoppingToken.IsCancellationRequested must be a
 //        member access, not a dotted identifier name
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
-public class B03_ArchitecturalEngine_ValidMemberAccess
+public class B03_SolutionStructureEngine_ValidMemberAccess
 {
     private IWorkspaceManager _workspaceManager = null!;
-    private ArchitecturalEngine _engine = null!;
+    private SolutionStructureEngine _engine = null!;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ArchitecturalEngine(_workspaceManager);
+        _engine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]

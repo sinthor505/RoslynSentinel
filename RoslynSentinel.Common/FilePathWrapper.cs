@@ -47,7 +47,7 @@ public readonly struct FilePathWrapper : IEquatable<FilePathWrapper>, IComparabl
     // uncanonicalized forward-slash FilePathWrapper used as a dictionary key (e.g. _internalChanges in
     // PersistentWorkspaceManager) can never match the watcher's own-write-suppression lookup ->
     // a deterministic miss, not a race. Canonicalize here so every construction path (bare
-    // constructor, FromWire, JSON converter) agrees on separators. UNC prefix (\\) is preserved.
+    // constructor, ResolveFromWire, JSON converter) agrees on separators. UNC prefix (\\) is preserved.
     private static string CanonicalizeSeparators(string path)
     {
         bool isUnc = path.StartsWith(@"\\", StringComparison.Ordinal) || path.StartsWith("//", StringComparison.Ordinal);
@@ -56,7 +56,7 @@ public readonly struct FilePathWrapper : IEquatable<FilePathWrapper>, IComparabl
     }
 
     // construct from whatever the wire sent, against the known root
-    public static FilePathWrapper FromWire(string? pathArg, string? solutionRoot)
+    public static FilePathWrapper ResolveFromWire(string? pathArg, string? solutionRoot)
     {
         var clean = NormalizeWirePath(pathArg ?? string.Empty);
 
@@ -71,7 +71,7 @@ public readonly struct FilePathWrapper : IEquatable<FilePathWrapper>, IComparabl
         }
 
         // PersistentWorkspaceManager.GetSolutionRoot() returns null whenever no solution is
-        // loaded, or the loaded solution is in-memory and has no file path. Tools call FromWire
+        // loaded, or the loaded solution is in-memory and has no file path. Tools call ResolveFromWire
         // before their own try/catch, so combining against a null root threw a raw
         // ArgumentNullException straight out of the MCP boundary. Keep the caller's relative
         // path instead -> resolving it against the process working directory would silently
@@ -115,10 +115,10 @@ public readonly struct FilePathWrapper : IEquatable<FilePathWrapper>, IComparabl
 
     /// <summary>
     /// Wire-boundary construction used by <see cref="FilePathJsonConverter"/>: normalizes the raw string
-    /// (<see cref="NormalizeWirePath"/>) and resolves a relative path against the ambient solution root
-    /// when one is in scope (<see cref="UseSolutionRoot"/>).
+    /// (<see cref="NormalizeWirePath"/>) and nothing more. Root-less: a relative path stays relative
+    /// (unrooted, <see cref="Validated"/> false); a tool resolves it with IWorkspaceManager.ResolveFromWire.
     /// </summary>
-    internal static FilePathWrapper FromWirePath(string? raw) => FromAmbientRoot(NormalizeWirePath(raw ?? string.Empty));
+    internal static FilePathWrapper FromWirePath(string? raw) => new FilePathWrapper(NormalizeWirePath(raw ?? string.Empty));
 
     public string RelativeTo(string solutionRoot)
     {
@@ -137,58 +137,10 @@ public readonly struct FilePathWrapper : IEquatable<FilePathWrapper>, IComparabl
         return string.Equals(Absolute, other, StringComparison.OrdinalIgnoreCase);
     }
 
-    // The solution root of the tool call currently being served, or null outside one. AsyncLocal (not
-    // a plain static) so concurrent calls and parallel tests never see each other's root: it is set
-    // only by the server's request filter around a tool call (see UseSolutionRoot) and flows down the
-    // call's async chain, including MCP argument binding (the JSON converter below). Code that runs
-    // outside a scope sees null and behaves exactly as before.
-    private static readonly AsyncLocal<string?> AmbientSolutionRoot = new();
-
-    /// <summary>
-    /// Makes <paramref name="solutionRoot"/> the root that the implicit <c>string -> FilePathWrapper</c>
-    /// conversion and <see cref="FilePathJsonConverter"/> resolve RELATIVE paths against, until the returned
-    /// scope is disposed. Without a root those two entry points build an unrooted wrapper whose
-    /// <see cref="Absolute"/> is the relative string, which a tool that skips <see cref="FromWire"/> then
-    /// feeds to a path lookup that can never match (e.g. <c>GetDiagnostics(scope: file)</c> with a
-    /// solution-relative path). Rooted paths are never rewritten. Pass null/blank for no root.
-    /// </summary>
-    public static IDisposable UseSolutionRoot(string? solutionRoot)
-    {
-        var previous = AmbientSolutionRoot.Value;
-        AmbientSolutionRoot.Value = string.IsNullOrWhiteSpace(solutionRoot) ? null : solutionRoot;
-        return new SolutionRootScope(previous);
-    }
-
-    private sealed class SolutionRootScope(string? previous) : IDisposable
-    {
-        public void Dispose() => AmbientSolutionRoot.Value = previous;
-    }
-
-    // Builds a wrapper for a string that did not come through FromWire: a relative path is resolved
-    // against the ambient solution root when one is set (marked validated, as FromWire does); every
-    // other input keeps the original unrooted construction.
-    private static FilePathWrapper FromAmbientRoot(string? path)
-    {
-        var root = AmbientSolutionRoot.Value;
-        if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(path) || Path.IsPathRooted(path))
-        {
-            return new FilePathWrapper(path ?? string.Empty);
-        }
-
-        try
-        {
-            return new FilePathWrapper(Path.GetFullPath(Path.Combine(root, CanonicalizeSeparators(path))), root, validated: true);
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            // A path the OS cannot normalize is not this method's to reject: keep the old behavior.
-            return new FilePathWrapper(path);
-        }
-    }
-
-    // implicit conversion from string to FilePathWrapper for convenience. Resolves a relative path
-    // against the ambient solution root when one is in scope (see UseSolutionRoot).
-    public static implicit operator FilePathWrapper(string path) => FromAmbientRoot(path);
+    // implicit conversion from string to FilePathWrapper for convenience. Root-less: a relative path
+    // stays relative (unrooted, Validated == false). A tool boundary must resolve wire paths with
+    // IWorkspaceManager.ResolveFromWire, which is the only place a solution root is applied.
+    public static implicit operator FilePathWrapper(string path) => new FilePathWrapper(path ?? string.Empty);
 
     //implicit conversion from filePath to string for convenience
     public static implicit operator string(FilePathWrapper filePath) => filePath.Absolute;
@@ -243,7 +195,6 @@ public sealed class FilePathJsonConverter : JsonConverter<FilePathWrapper>
                 $"A file path parameter must be a string, but got a {reader.TokenType} value.");
         }
 
-        // Relative paths resolve against the ambient solution root when a tool call has one in scope.
         return FilePathWrapper.FromWirePath(reader.GetString());
     }
 

@@ -608,9 +608,9 @@ public class PreviewInstanceMoveCallSitesTests
             }
             """);
         var unrelatedFile = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassE.cs");
-        var unrelatedPath = _workspaceManager.SetFilePath(unrelatedFile);
+        var unrelatedPath = _workspaceManager.ResolveFromWire(unrelatedFile);
 
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassE.cs"));
+        var filePath = _workspaceManager.ResolveFromWire(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassE.cs"));
 
         var result = await _engine.MoveMemberAsync(filePath, "MoveInstanceClassE", ["Foo"], "MoveInstanceClassF");
         Assume.That(result.PendingLedgerEntries, Is.Not.Null.And.Count.EqualTo(1));
@@ -625,7 +625,7 @@ public class PreviewInstanceMoveCallSitesTests
         // An unrelated file - not the ledger's own tracked call-site file - must be refused while
         // the ledger's entry is unresolved, per Decision 2's IsBlocked gate.
         var otherFile = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassF.cs");
-        var otherPath = _workspaceManager.SetFilePath(otherFile);
+        var otherPath = _workspaceManager.ResolveFromWire(otherFile);
         var unrelatedChange = new Dictionary<FilePathWrapper, string>
         {
             [otherPath] = await File.ReadAllTextAsync(otherFile) + "\n// unrelated edit\n"
@@ -641,7 +641,7 @@ public class PreviewInstanceMoveCallSitesTests
         // The ledger's own tracked file (the unresolved call site) must still be writable -> that's
         // where RecordFix's resolving edit needs to land.
         var entry = result.PendingLedgerEntries!.Single();
-        var fixupPath = _workspaceManager.SetFilePath(entry.FilePath);
+        var fixupPath = _workspaceManager.ResolveFromWire(entry.FilePath);
         var fixupChange = new Dictionary<FilePathWrapper, string>
         {
             [fixupPath] = (await File.ReadAllTextAsync(entry.FilePath)).Replace("_f1.Foo", "_f1.Foo")

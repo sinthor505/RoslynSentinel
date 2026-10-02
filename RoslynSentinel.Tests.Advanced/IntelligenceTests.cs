@@ -2,7 +2,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 
 #pragma warning disable CS8618
@@ -11,13 +10,12 @@ namespace RoslynSentinel.Tests.Advanced;
 public class IntelligenceTests
 {
     private IWorkspaceManager _workspaceManager;
-    private ArchitecturalEngine _architecturalEngine;
+
     [SetUp]
     public void Setup()
     {
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _architecturalEngine = new ArchitecturalEngine(_workspaceManager, config);
     }
 
     [TearDown]

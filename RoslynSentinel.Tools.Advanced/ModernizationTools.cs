@@ -39,13 +39,13 @@ public class ModernizationTools
     [McpServerTool(Name = "InvertBooleanLogic")]
     [Produces(DataTag.ResultOnly)]
     [Description("Inverts all usages of a boolean identifier solution-wide (wraps with !, collapses double negations).")]
-    public async Task<SentinelCallToolResult<object>> InvertBooleanLogic([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Consumes(DataTag.SymbolName, required: true)] string boolName, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> InvertBooleanLogic([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string boolName, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         try
         {
-            var result = await _logicOptimizationEngine.InvertBooleanLogicAsync(filePath, boolName, cancellationToken);
+            var result = await _logicOptimizationEngine.InvertBooleanLogicAsync(resolvedFilePath, boolName, cancellationToken);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
@@ -54,7 +54,7 @@ public class ModernizationTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "InvertBooleanLogic failed for '{BoolName}' in '{FilePathWrapper}'", boolName, filePath);
+            _logger.LogError(ex, "InvertBooleanLogic failed for '{BoolName}' in '{FilePathWrapper}'", boolName, resolvedFilePath);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,

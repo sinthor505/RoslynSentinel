@@ -21,7 +21,7 @@ public class ScanTools
     private readonly PerformanceEngine _performanceEngine;
     private readonly DeadCodeEngine _deadCodeEngine;
     private readonly DependencyEngine _dependencyEngine;
-    private readonly SolutionStructureEngine _projectStructureEngine;
+    private readonly SolutionStructureEngine _solutionStructureEngine;
     private readonly DependencyInjectionEngine _dependencyInjectionEngine;
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly MetricsEngine _metricsEngine;
@@ -35,7 +35,7 @@ public class ScanTools
     private readonly BreakingChangeEngine _breakingChangeEngine;
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger<ScanTools> _logger;
-    public ScanTools(SecurityEngine securityEngine, AntiPatternEngine antiPatternEngine, AsyncAnalysisEngine asyncSafetyEngine, ThreadSafetyEngine threadSafetyEngine, ControlFlowEngine controlFlowEngine, PerformanceEngine performanceEngine, DeadCodeEngine deadCodeEngine, DependencyEngine dependencyEngine, SolutionStructureEngine projectStructureEngine, DependencyInjectionEngine dependencyInjectionEngine, ProjectConsistencyEngine projectConsistencyEngine, MetricsEngine metricsEngine, CloneDetectionEngine cloneDetectionEngine, DiscoveryEngine discoveryEngine, StackOverflowEngine stackOverflowEngine, CodeStyleEngine codeStyleEngine, CodeStyleAnalysisEngine codeStyleAnalysisEngine, BasicRefactoringEngine refactoringEngine, SymbolNavigationEngine symbolNavigationEngine, BreakingChangeEngine breakingChangeEngine, IWorkspaceManager workspaceManager, ILogger<ScanTools> logger, ResourceSafetyEngine resourceSafetyEngine = null)
+    public ScanTools(SecurityEngine securityEngine, AntiPatternEngine antiPatternEngine, AsyncAnalysisEngine asyncSafetyEngine, ThreadSafetyEngine threadSafetyEngine, ControlFlowEngine controlFlowEngine, PerformanceEngine performanceEngine, DeadCodeEngine deadCodeEngine, DependencyEngine dependencyEngine, SolutionStructureEngine solutionStructureEngine, DependencyInjectionEngine dependencyInjectionEngine, ProjectConsistencyEngine projectConsistencyEngine, MetricsEngine metricsEngine, CloneDetectionEngine cloneDetectionEngine, DiscoveryEngine discoveryEngine, StackOverflowEngine stackOverflowEngine, CodeStyleEngine codeStyleEngine, CodeStyleAnalysisEngine codeStyleAnalysisEngine, BasicRefactoringEngine refactoringEngine, SymbolNavigationEngine symbolNavigationEngine, BreakingChangeEngine breakingChangeEngine, IWorkspaceManager workspaceManager, ILogger<ScanTools> logger, ResourceSafetyEngine resourceSafetyEngine = null)
     {
         _securityEngine = securityEngine;
         _antiPatternEngine = antiPatternEngine;
@@ -45,7 +45,7 @@ public class ScanTools
         _performanceEngine = performanceEngine;
         _deadCodeEngine = deadCodeEngine;
         _dependencyEngine = dependencyEngine;
-        _projectStructureEngine = projectStructureEngine;
+        _solutionStructureEngine = solutionStructureEngine;
         _dependencyInjectionEngine = dependencyInjectionEngine;
         _projectConsistencyEngine = projectConsistencyEngine;
         _metricsEngine = metricsEngine;
@@ -72,7 +72,7 @@ public class ScanTools
         string? projectName = scope == ToolScope.project ? scopeName : null;
         try
         {
-            FilePathWrapper resolvedFilePath = String.IsNullOrEmpty(filePath) && scope == ToolScope.file ? default : FilePathWrapper.FromWire(filePath!, _workspaceManager.GetSolutionRoot());
+            FilePathWrapper resolvedFilePath = String.IsNullOrEmpty(filePath) && scope == ToolScope.file ? default : _workspaceManager.ResolveFromWire(filePath!);
             switch (detector)
             {
                 // ── async ──────────────────────────────────────────────────────────
@@ -639,14 +639,14 @@ public class ScanTools
                     };
                 // ── structure ──────────────────────────────────────────────────────
                 case DetectorId.circular_dependencies:
-                    var result80 = await _projectStructureEngine.FindCircularDependenciesAsync(cancellationToken: cancellationToken);
+                    var result80 = await _solutionStructureEngine.FindCircularDependenciesAsync(cancellationToken: cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = true,
                         SuccessData = result80
                     };
                 case DetectorId.circular_type_references:
-                    var result81 = await _projectStructureEngine.FindCircularTypeReferencesAsync(projectName, cancellationToken: cancellationToken);
+                    var result81 = await _solutionStructureEngine.FindCircularTypeReferencesAsync(projectName, cancellationToken: cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = true,
@@ -714,7 +714,7 @@ public class ScanTools
                         SuccessData = result88
                     };
                 case DetectorId.layer_violations:
-                    var result89 = await _projectStructureEngine.DetectLayerViolationsAsync(projectName, resolvedFilePath, cancellationToken: cancellationToken);
+                    var result89 = await _solutionStructureEngine.DetectLayerViolationsAsync(projectName, resolvedFilePath, cancellationToken: cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = true,
@@ -730,7 +730,7 @@ public class ScanTools
                 case DetectorId.namespace_path_mismatches:
                     {
                         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-                        var result91 = await _projectStructureEngine.FindNamespacePathMismatchesAsync(solution, projectName, cancellationToken: cancellationToken);
+                        var result91 = await _solutionStructureEngine.FindNamespacePathMismatchesAsync(solution, projectName, cancellationToken: cancellationToken);
                         return new SentinelCallToolResult<object>()
                         {
                             IsSuccess = true,
@@ -746,7 +746,7 @@ public class ScanTools
                         SuccessData = result92
                     };
                 case DetectorId.structural_smells:
-                    var result93 = await _projectStructureEngine.FindStructuralSmellsAsync(SolutionStructureEngine.StructuralSmellType.All, projectName, resolvedFilePath, cancellationToken: cancellationToken);
+                    var result93 = await _solutionStructureEngine.FindStructuralSmellsAsync(SolutionStructureEngine.StructuralSmellType.All, projectName, resolvedFilePath, cancellationToken: cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = true,
@@ -824,37 +824,37 @@ public class ScanTools
     [McpServerTool(Name = "AnalyzeMethod")]
     [Produces(DataTag.Report)]
     [Description("Analyses a method from a chosen angle: control flow, data flow, path coverage, or unreachable code.")]
-    public async Task<SentinelCallToolResult<object>> AnalyzeMethod([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("controlFlow: return paths, throw sites, infinite loop detection. dataFlow: unassigned reads, written/read variables, closure captures. pathCoverage: execution paths for test coverage. unreachableCode: statements after an unconditional return/throw.")][ToolOption(ToolOptionTag.Aspect)] string aspect, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> AnalyzeMethod([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("controlFlow: return paths, throw sites, infinite loop detection. dataFlow: unassigned reads, written/read variables, closure captures. pathCoverage: execution paths for test coverage. unreachableCode: statements after an unconditional return/throw.")][ToolOption(ToolOptionTag.Aspect)] string aspect, // RequestContext<CallToolRequestParams> requestParams = null,
  CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             switch (aspect)
             {
                 case "controlFlow":
-                    var resultControlFlow = await _refactoringEngine.AnalyzeControlFlowAsync(filePath, methodName, null, null, null, cancellationToken: cancellationToken);
+                    var resultControlFlow = await _refactoringEngine.AnalyzeControlFlowAsync(resolvedFilePath, methodName, null, null, null, cancellationToken: cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = true,
                         SuccessData = resultControlFlow
                     };
                 case "dataFlow":
-                    var resultDataFlow = await _refactoringEngine.AnalyzeDataFlowAsync(filePath, methodName, null, null, null, cancellationToken: cancellationToken);
+                    var resultDataFlow = await _refactoringEngine.AnalyzeDataFlowAsync(resolvedFilePath, methodName, null, null, null, cancellationToken: cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = true,
                         SuccessData = resultDataFlow
                     };
                 case "pathCoverage":
-                    var resultPathCoverage = await _controlFlowEngine.AnalyzePathCoverageAsync(filePath, methodName, cancellationToken: cancellationToken);
+                    var resultPathCoverage = await _controlFlowEngine.AnalyzePathCoverageAsync(resolvedFilePath, methodName, cancellationToken: cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = true,
                         SuccessData = resultPathCoverage
                     };
                 case "unreachableCode":
-                    var resultUnreachableCode = await _antiPatternEngine.DetectUnreachableCodeAsync(filePath, methodName, cancellationToken: cancellationToken);
+                    var resultUnreachableCode = await _antiPatternEngine.DetectUnreachableCodeAsync(resolvedFilePath, methodName, cancellationToken: cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = true,
@@ -870,7 +870,7 @@ public class ScanTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "AnalyzeMethod ({Aspect}) failed for '{MethodName}' in '{FilePathWrapper}'", aspect, methodName, filePath);
+            _logger.LogError(ex, "AnalyzeMethod ({Aspect}) failed for '{MethodName}' in '{FilePathWrapper}'", aspect, methodName, resolvedFilePath);
             return new SentinelCallToolResult<object>()
             {
                 IsSuccess = false,
@@ -1017,13 +1017,13 @@ public class ScanTools
     [McpServerTool(Name = "ScanBreakingChanges")]
     [Produces(DataTag.ApiBaseline)]
     [Description("Compares a captured API baseline against current code and reports breaking changes.")]
-    public async Task<SentinelCallToolResult<object>> ScanBreakingChanges([Description(ToolParams.Reason)] ToolCallReason reason, [Description("From GetPublicApiSurface(persistBaseline: true).")][ExternalInputRequired(DataTag.ApiBaseline)] List<PublicApiMember> baseline, [Description("Scope to the project the baseline was captured from.")][Consumes(DataTag.ProjectName)] string? projectName = null, [Description("Scope to the file the baseline was captured from.")][Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> ScanBreakingChanges([Description(ToolParams.Reason)] ToolCallReason reason, [Description("From GetPublicApiSurface(persistBaseline: true).")][ExternalInputRequired(DataTag.ApiBaseline)] List<PublicApiMember> baseline, [Description("Scope to the project the baseline was captured from.")][Consumes(DataTag.ProjectName)] string? projectName = null, [Description("Scope to the file the baseline was captured from.")][Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null, // RequestContext<CallToolRequestParams> requestParams = null,
  CancellationToken cancellationToken = default)
     {
         try
         {
-            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
-            var result = await _projectStructureEngine.DetectBreakingChangesAsync(baseline, projectName, filePath, cancellationToken: cancellationToken);
+            FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
+            var result = await _solutionStructureEngine.DetectBreakingChangesAsync(baseline, projectName, resolvedFilePath, cancellationToken: cancellationToken);
             return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(result, _workspaceManager.GetSolutionRoot(), typeof(BreakingChange).Name, ResultWrapperType.BreakingChangeList, totalRecords: result.Count, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
@@ -1040,13 +1040,13 @@ public class ScanTools
     [McpServerTool(Name = "ScanDuplicateBlocksInClass")]
     [Produces(DataTag.Report)]
     [Description("Finds duplicate statement sequences within a single class's methods via structural hashing.")]
-    public async Task<SentinelCallToolResult<object>> ScanDuplicateBlocksInClass([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Consumes(DataTag.ClassName)] string className, [Description("Minimum statement-sequence length to report. Lower finds more/smaller clones.")][ToolOption(ToolOptionTag.Filter)] int minStatements = 4, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> ScanDuplicateBlocksInClass([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.ClassName)] string className, [Description("Minimum statement-sequence length to report. Lower finds more/smaller clones.")][ToolOption(ToolOptionTag.Filter)] int minStatements = 4, // RequestContext<CallToolRequestParams> requestParams = null,
  CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         try
         {
-            var result = await _cloneDetectionEngine.FindDuplicateBlocksInClassAsync(filePath, className, minStatements, cancellationToken: cancellationToken);
+            var result = await _cloneDetectionEngine.FindDuplicateBlocksInClassAsync(resolvedFilePath, className, minStatements, cancellationToken: cancellationToken);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
@@ -1055,7 +1055,7 @@ public class ScanTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ScanDuplicateBlocksInClass failed for '{ClassName}' in '{FilePathWrapper}'", className, filePath);
+            _logger.LogError(ex, "ScanDuplicateBlocksInClass failed for '{ClassName}' in '{FilePathWrapper}'", className, resolvedFilePath);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
@@ -1068,19 +1068,19 @@ public class ScanTools
     [Produces(DataTag.Report)]
     [Description("Returns a project's public API surface (signatures, virtuality, XML docs), or a compact baseline for ScanBreakingChanges.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: projectName is required when persistBaseline=false (the default), but optional when persistBaseline=true (omit to scan the whole solution). Enforced at runtime, not by the schema.
-    public async Task<SentinelCallToolResult<object>> GetPublicApiSurface([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Required when persistBaseline=false; optional (whole solution) when true.")][Consumes(DataTag.ProjectName, required: true)] string? projectName = null, [Description("false (default): full API surface. true: compact baseline for ScanBreakingChanges.")][ToolOption(ToolOptionTag.PersistBaseline)] bool persistBaseline = false, [Description("Narrows to one file. Only used when persistBaseline=true.")][Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [Description("Only used when persistBaseline=false.")][ToolOption(ToolOptionTag.IncludeMethods)] bool includeMethods = true, [Description("Only used when persistBaseline=false.")][ToolOption(ToolOptionTag.IncludeProperties)] bool includeProperties = true, [Description("Only used when persistBaseline=false.")][ToolOption(ToolOptionTag.IncludeTypes)] bool includeTypes = true, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> GetPublicApiSurface([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Required when persistBaseline=false; optional (whole solution) when true.")][Consumes(DataTag.ProjectName, required: true)] string? projectName = null, [Description("false (default): full API surface. true: compact baseline for ScanBreakingChanges.")][ToolOption(ToolOptionTag.PersistBaseline)] bool persistBaseline = false, [Description("Narrows to one file. Only used when persistBaseline=true.")][Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null, [Description("Only used when persistBaseline=false.")][ToolOption(ToolOptionTag.IncludeMethods)] bool includeMethods = true, [Description("Only used when persistBaseline=false.")][ToolOption(ToolOptionTag.IncludeProperties)] bool includeProperties = true, [Description("Only used when persistBaseline=false.")][ToolOption(ToolOptionTag.IncludeTypes)] bool includeTypes = true, // RequestContext<CallToolRequestParams> requestParams = null,
  CancellationToken cancellationToken = default)
     {
         try
         {
-            FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
+            FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
             SentinelCallToolResult<object> toolResult = new SentinelCallToolResult<object>()
             {
                 IsSuccess = false
             };
             if (persistBaseline)
             {
-                var apiResult = await _projectStructureEngine.GetPublicApiSurfaceAsync(projectName, filePath, cancellationToken: cancellationToken);
+                var apiResult = await _solutionStructureEngine.GetPublicApiSurfaceAsync(projectName, resolvedFilePath, cancellationToken: cancellationToken);
                 var summaryResults = await LargeResultHelper.StoreLargeResultAsync(apiResult, _workspaceManager.GetSolutionRoot(), ResultWrapperType.ApiSurfaceEntryList, cancellationToken: cancellationToken);
                 if (summaryResults.offloaded)
                 {

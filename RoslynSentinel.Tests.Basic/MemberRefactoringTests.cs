@@ -393,7 +393,7 @@ public enum ToolScope
         var (outcome, message, members) = await _symbolNavigationEngine.GetContainerMembersAsync("Attributed.cs", "Holder");
 
         Assert.That(outcome, Is.EqualTo(EditOutcome.Modified));
-        
+
         // Verify signatures exclude attribute text
         var nameProperty = members.FirstOrDefault(m => m.Name == "Name");
         Assert.That(nameProperty, Is.Not.Null);
@@ -2008,7 +2008,7 @@ public class C
         // handles Foo<T> but a comma-splitting one does not, and the whitespace variant is the
         // spelling a caller copying from a declaration line actually produces.
         var result = await _memberRefactoringEngine.AddMemberAsync(
-            FilePathWrapper.FromWire("Wrappers.cs", _workspaceManager.GetSolutionRoot()),
+            _workspaceManager.ResolveFromWire("Wrappers.cs"),
             containerName,
             "public int Added { get; set; }");
 
@@ -2022,7 +2022,7 @@ public class C
         // Normalization must not disturb the ordinary case, which is the overwhelming majority of
         // calls through this chokepoint.
         var result = await _memberRefactoringEngine.AddMemberAsync(
-            FilePathWrapper.FromWire("Wrappers.cs", _workspaceManager.GetSolutionRoot()),
+            _workspaceManager.ResolveFromWire("Wrappers.cs"),
             "PlainType",
             "public int Added { get; set; }");
 
@@ -2036,7 +2036,7 @@ public class C
         // it were a line of code. Listing what's available is what lets the caller correct itself
         // in one turn instead of guessing, and immediately reveals a wrong-file mistake.
         var result = await _memberRefactoringEngine.AddMemberAsync(
-            FilePathWrapper.FromWire("Wrappers.cs", _workspaceManager.GetSolutionRoot()),
+            _workspaceManager.ResolveFromWire("Wrappers.cs"),
             "NoSuchType",
             "public int Added { get; set; }");
 
@@ -2111,7 +2111,7 @@ public class Helper
     public async Task AddMember_ResolvesEverySpellingOfAGenericContainerAsync(string containerName)
     {
         var result = await _memberRefactoringEngine.AddMemberAsync(
-            FilePathWrapper.FromWire("Wrappers.cs", _workspaceManager.GetSolutionRoot()),
+            _workspaceManager.ResolveFromWire("Wrappers.cs"),
             containerName,
             "public int Added { get; set; }");
 

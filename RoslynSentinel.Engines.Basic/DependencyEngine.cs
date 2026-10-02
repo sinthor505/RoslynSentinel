@@ -1,9 +1,8 @@
 using Microsoft.CodeAnalysis;
-using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Basic;
 
-public partial class DependencyEngine
+public class DependencyEngine
 {
     private readonly IWorkspaceManager _workspaceManager;
 

@@ -1471,7 +1471,7 @@ public class SymbolNavigationEngine
         ISymbol? symbol = null;
 
         // The MCP tool layer resolves an omitted `filepath` to FilePathWrapper's empty-string default
-        // (via SetFilePath), not a C# null -> so checking `filePath != null` alone always took this
+        // (via ResolveFromWire), not a C# null -> so checking `filePath != null` alone always took this
         // branch, even when no filepath was actually supplied, silently bypassing the by-name
         // fallback below. Treat blank the same as null.
         if (!string.IsNullOrWhiteSpace(filePath))
@@ -1480,7 +1480,7 @@ public class SymbolNavigationEngine
             // Shared document lookup: case-insensitive exact path, then a unique bare name. A miss throws
             // ToolNotFoundException / ToolAmbiguousMatchException naming the closest real paths or the
             // candidates (it used to surface as a bare InvalidOperationException -> errorCode: Exception).
-            var document = (await ((IWorkspaceReader)_workspaceManager).GetDocumentAsync(_workspaceManager.SetFilePath(filePath), ReadSource.Committed, cancellationToken))
+            var document = (await ((IWorkspaceReader)_workspaceManager).GetDocumentAsync(_workspaceManager.ResolveFromWire(filePath), ReadSource.Committed, cancellationToken))
                 .GetDocumentOrThrow();
             solution = document.Project.Solution;
             var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -1737,7 +1737,7 @@ public class SymbolNavigationEngine
         string? scopedResolutionFailure = null;
 
         // The MCP tool layer resolves an omitted `filepath` to FilePathWrapper's empty-string default
-        // (via SetFilePath), not a C# null -> so checking `filePath != null` alone always took this
+        // (via ResolveFromWire), not a C# null -> so checking `filePath != null` alone always took this
         // branch, even when no filepath was actually supplied, silently bypassing the by-name
         // fallback below. Treat blank the same as null.
         if (!string.IsNullOrWhiteSpace(filePath))
@@ -1747,7 +1747,7 @@ public class SymbolNavigationEngine
             // ToolNotFoundException / ToolAmbiguousMatchException naming the closest real paths or the
             // candidates, like FindCallersAsync (this used to fall through to the by-type-name fallback
             // below and could silently answer for a different symbol than the file named).
-            var document = (await ((IWorkspaceReader)_workspaceManager).GetDocumentAsync(_workspaceManager.SetFilePath(filePath), ReadSource.Committed, cancellationToken))
+            var document = (await ((IWorkspaceReader)_workspaceManager).GetDocumentAsync(_workspaceManager.ResolveFromWire(filePath), ReadSource.Committed, cancellationToken))
                 .GetDocumentOrThrow();
             solution = document.Project.Solution;
             {

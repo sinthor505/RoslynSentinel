@@ -6,7 +6,7 @@ using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
 
-// These tests are about ModifyAttribute's code-correctness (which edits apply, what text results, how the batch is
+// These tests are about ModifyAttribute's code-correctness (which batchEdits apply, what text results, how the batch is
 // validated and reported), so they run on an InMemoryWorkspace: no temp directory, MSBuild load or disk write. Disk
 // fidelity (BOM, line endings, write-through) is covered by the dedicated disk tests, not here.
 [TestFixture]
@@ -61,8 +61,8 @@ public class ModifyAttributeBatchTests
         var path = workspace.PathOf(FixtureRelativePath);
 
         var result = await tools.ModifyAttribute(
-            reason: "batch test same file two edits",
-            edits:
+            reason: "batch test same file two batchEdits",
+            batchEdits:
             [
                 new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetA", ExistingAttribute = "Obsolete", Action = AttributeModifyAction.remove },
                 new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetB", ExistingAttribute = "Obsolete", Action = AttributeModifyAction.replace, NewAttribute = "Obsolete(\"v2\")" },
@@ -87,7 +87,7 @@ public class ModifyAttributeBatchTests
 
         var result = await tools.ModifyAttribute(
             reason: "batch test across two files",
-            edits:
+            batchEdits:
             [
                 new AttributeEdit { FilePath = workspace.PathOf(FixtureRelativePath), TargetName = "AttributeBatchTargetA", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" },
                 new AttributeEdit { FilePath = workspace.PathOf(SecondFixtureRelativePath), TargetName = "AttributeBatchTargetC", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" },
@@ -114,7 +114,7 @@ public class ModifyAttributeBatchTests
 
         var result = await tools.ModifyAttribute(
             reason: "batch test same node collision",
-            edits:
+            batchEdits:
             [
                 new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetA", Action = AttributeModifyAction.remove, ExistingAttribute = "Obsolete" },
                 new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetA", Action = AttributeModifyAction.add, NewAttribute = "Serializable" },
@@ -136,7 +136,7 @@ public class ModifyAttributeBatchTests
 
         var result = await tools.ModifyAttribute(
             reason: "batch test target not found",
-            edits:
+            batchEdits:
             [
                 new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetA", Action = AttributeModifyAction.add, NewAttribute = "Serializable" },
                 new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetDoesNotExist", Action = AttributeModifyAction.add, NewAttribute = "Serializable" },
@@ -160,7 +160,7 @@ public class ModifyAttributeBatchTests
             targetName: "AttributeBatchTargetA",
             existingAttribute: "Obsolete",
             action: AttributeModifyAction.remove,
-            edits: [new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetB", Action = AttributeModifyAction.add, NewAttribute = "Serializable" }],
+            batchEdits: [new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetB", Action = AttributeModifyAction.add, NewAttribute = "Serializable" }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
@@ -178,7 +178,7 @@ public class ModifyAttributeBatchTests
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorData!.Message, Does.Contain("edits"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("batchEdits"));
     }
 
     [Test]
@@ -188,8 +188,8 @@ public class ModifyAttributeBatchTests
         var tools = BuildTools(workspace.Manager);
 
         var result = await tools.ModifyAttribute(
-            reason: "batch test empty edits array",
-            edits: [],
+            reason: "batch test empty batchEdits array",
+            batchEdits: [],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
@@ -207,7 +207,7 @@ public class ModifyAttributeBatchTests
             .Select(i => new AttributeEdit { FilePath = path, TargetName = $"NonexistentType{i}", Action = AttributeModifyAction.add, NewAttribute = "Serializable" })
             .ToList();
 
-        var result = await tools.ModifyAttribute(reason: "batch test over cap", edits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
+        var result = await tools.ModifyAttribute(reason: "batch test over cap", batchEdits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));
@@ -235,7 +235,7 @@ public class ModifyAttributeBatchTests
 
     private const string WeirdFormattingRelativePath = "ContosoOrders.Core/AttributeFormattingFixture.cs";
 
-    // Deliberately non-canonical whitespace in members the edits never target: a Roslyn Formatter pass
+    // Deliberately non-canonical whitespace in members the batchEdits never target: a Roslyn Formatter pass
     // over the enclosing type would rewrite it (spacing in signatures, expression operators, case-block indent).
     private const string WeirdFormattingSource = """
     namespace ContosoOrders.Core;
@@ -276,7 +276,7 @@ public class ModifyAttributeBatchTests
 
         var result = await tools.ModifyAttribute(
             reason: "regression: ancestor/descendant targets in one batch",
-            edits: typeEditFirst ? [typeEdit, methodEdit] : [methodEdit, typeEdit],
+            batchEdits: typeEditFirst ? [typeEdit, methodEdit] : [methodEdit, typeEdit],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
@@ -301,7 +301,7 @@ public class ModifyAttributeBatchTests
 
         var result = await tools.ModifyAttribute(
             reason: "regression: remove on member plus add on its type",
-            edits:
+            batchEdits:
             [
                 new AttributeEdit { FilePath = path, TargetName = "Second", Action = AttributeModifyAction.remove, ExistingAttribute = "Obsolete" },
                 new AttributeEdit { FilePath = path, TargetName = "AttributeNestedTarget", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" },
@@ -326,7 +326,7 @@ public class ModifyAttributeBatchTests
 
         var result = await tools.ModifyAttribute(
             reason: "regression: type-level add must not reformat members",
-            edits: [new AttributeEdit { FilePath = workspace.PathOf(WeirdFormattingRelativePath), TargetName = "AttributeFormattingTarget", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" }],
+            batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(WeirdFormattingRelativePath), TargetName = "AttributeFormattingTarget", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
@@ -367,7 +367,7 @@ public class ModifyAttributeBatchTests
 
         var result = await tools.ModifyAttribute(
             reason: "regression: method-level add keeps indentation and leaves siblings alone",
-            edits: [new AttributeEdit { FilePath = workspace.PathOf(WeirdFormattingRelativePath), TargetName = "Other", Action = AttributeModifyAction.add, ExistingAttribute = "Obsolete" }],
+            batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(WeirdFormattingRelativePath), TargetName = "Other", Action = AttributeModifyAction.add, ExistingAttribute = "Obsolete" }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
@@ -384,8 +384,8 @@ public class ModifyAttributeBatchTests
         var path = workspace.PathOf(NestedFixtureRelativePath);
 
         var result = await tools.ModifyAttribute(
-            reason: "regression: reported applied count matches written edits",
-            edits:
+            reason: "regression: reported applied count matches written batchEdits",
+            batchEdits:
             [
                 new AttributeEdit { FilePath = path, TargetName = "AttributeNestedTarget", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" },
                 new AttributeEdit { FilePath = path, TargetName = "First", Action = AttributeModifyAction.add, ExistingAttribute = "Obsolete(\"first\")" },
@@ -408,7 +408,7 @@ public class ModifyAttributeBatchTests
 
         var result = await tools.ModifyAttribute(
             reason: "regression: a no-effect edit must not be reported as applied",
-            edits:
+            batchEdits:
             [
                 new AttributeEdit { FilePath = path, TargetName = "AttributeNestedTarget", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" },
                 new AttributeEdit { FilePath = path, TargetName = "First", Action = AttributeModifyAction.remove, ExistingAttribute = "Conditional" },
@@ -420,7 +420,7 @@ public class ModifyAttributeBatchTests
         Assert.Multiple(() =>
         {
             Assert.That(description, Does.Contain("Applied 1 of 2 attribute edit(s)"));
-            Assert.That(description, Does.Contain("edits[1]"));
+            Assert.That(description, Does.Contain("batchEdits[1]"));
             Assert.That(description, Does.Not.Contain("Applied 2"));
         });
     }
@@ -433,12 +433,12 @@ public class ModifyAttributeBatchTests
         var before = workspace.ReadText(NestedFixtureRelativePath);
 
         var result = await tools.ModifyAttribute(
-            reason: "regression: zero effective edits is not a success",
-            edits: [new AttributeEdit { FilePath = workspace.PathOf(NestedFixtureRelativePath), TargetName = "First", Action = AttributeModifyAction.remove, ExistingAttribute = "Conditional" }],
+            reason: "regression: zero effective batchEdits is not a success",
+            batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(NestedFixtureRelativePath), TargetName = "First", Action = AttributeModifyAction.remove, ExistingAttribute = "Conditional" }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
-        Assert.That(result.ErrorData!.Message, Does.Contain("edits[0]"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("batchEdits[0]"));
         Assert.That(workspace.ReadText(NestedFixtureRelativePath), Is.EqualTo(before));
     }
 
@@ -531,9 +531,9 @@ public class ModifyAttributeBatchTests
         var path = workspace.PathOf(SecondFixtureRelativePath);
 
         var result = await tools.ModifyAttribute(
-            reason: "alias: a singular 'attribute' alongside edits is still the mixed form",
+            reason: "alias: a singular 'attribute' alongside batchEdits is still the mixed form",
             attribute: "Serializable",
-            edits: [new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetC", Action = AttributeModifyAction.add, Attribute = "Obsolete" }],
+            batchEdits: [new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetC", Action = AttributeModifyAction.add, Attribute = "Obsolete" }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
@@ -549,7 +549,7 @@ public class ModifyAttributeBatchTests
 
         var result = await tools.ModifyAttribute(
             reason: "alias: batch items using 'attribute' (add and remove) alongside an existingAttribute item",
-            edits:
+            batchEdits:
             [
                 new AttributeEdit { FilePath = path, TargetName = "AttributeNestedTarget", Action = AttributeModifyAction.add, Attribute = "Serializable" },
                 new AttributeEdit { FilePath = path, TargetName = "Second", Action = AttributeModifyAction.remove, Attribute = "Obsolete" },
@@ -578,7 +578,7 @@ public class ModifyAttributeBatchTests
 
         var result = await tools.ModifyAttribute(
             reason: "alias: conflicting values in a batch item must be rejected before anything is written",
-            edits:
+            batchEdits:
             [
                 new AttributeEdit { FilePath = path, TargetName = "AttributeNestedTarget", Action = AttributeModifyAction.add, Attribute = "Serializable" },
                 new AttributeEdit { FilePath = path, TargetName = "First", Action = AttributeModifyAction.add, ExistingAttribute = "Obsolete", Attribute = "Conditional(\"X\")" },
@@ -588,7 +588,7 @@ public class ModifyAttributeBatchTests
         Assert.That(result.IsSuccess, Is.False);
         Assert.Multiple(() =>
         {
-            Assert.That(result.ErrorData!.Message, Does.Contain("edits[1]"));
+            Assert.That(result.ErrorData!.Message, Does.Contain("batchEdits[1]"));
             Assert.That(result.ErrorData!.Message, Does.Contain("'attribute'"));
             Assert.That(result.ErrorData!.Message, Does.Contain("'existingAttribute'"));
             Assert.That(workspace.ReadText(NestedFixtureRelativePath), Is.EqualTo(before));
@@ -603,7 +603,7 @@ public class ModifyAttributeBatchTests
 
         var result = await tools.ModifyAttribute(
             reason: "alias: a batch item that supplies neither name gets an error that names both",
-            edits: [new AttributeEdit { FilePath = workspace.PathOf(NestedFixtureRelativePath), TargetName = "First", Action = AttributeModifyAction.add }],
+            batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(NestedFixtureRelativePath), TargetName = "First", Action = AttributeModifyAction.add }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);

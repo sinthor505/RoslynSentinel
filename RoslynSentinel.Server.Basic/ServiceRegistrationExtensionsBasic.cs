@@ -262,7 +262,6 @@ public static class RoslynSentinelServiceExtensionsBasic
         mcpBuilder.WithRequestFilters(filters =>
         {
             AddToolCallEchoFilter(filters);
-            AddSolutionRootScopeFilter(filters);
             AddArgumentValidationFilter(filters);
 
             filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
@@ -761,45 +760,6 @@ public static class RoslynSentinelServiceExtensionsBasic
                 }
 
                 return result;
-            }));
-    }
-
-    /// <summary>
-    /// Registers the solution-root scope filter: for the duration of a tool call, the implicit
-    /// <c>string -> FilePathWrapper</c> conversion and <c>FilePathJsonConverter</c> resolve a RELATIVE
-    /// path against the loaded solution's root instead of building an unrooted wrapper whose
-    /// <c>Absolute</c> is still relative (see <see cref="FilePathWrapper.UseSolutionRoot"/>). The scope
-    /// is an AsyncLocal, so it flows into SDK argument binding and the tool body but never leaks
-    /// across concurrent calls. Registered right after the echo filter; it does no work on a call
-    /// that argument validation then rejects beyond setting and clearing the scope.
-    /// </summary>
-    private static void AddSolutionRootScopeFilter(IMcpRequestFilterBuilder filters)
-    {
-        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
-            ModelContextProtocol.Protocol.CallToolRequestParams,
-            ModelContextProtocol.Protocol.CallToolResult>(
-            async (context, cancellationToken) =>
-            {
-                IDisposable? scope = null;
-                try
-                {
-                    var root = context.Server.Services?.GetService<PersistentWorkspaceManager>()?.GetSolutionRoot();
-                    scope = RoslynSentinel.Common.FilePathWrapper.UseSolutionRoot(root);
-                }
-                catch (Exception ex)
-                {
-                    // A convenience scope must never break a call: without it, behavior is unchanged.
-                    Debug.WriteLine($"Solution root scope filter failed: {ex}");
-                }
-
-                try
-                {
-                    return await next(context, cancellationToken);
-                }
-                finally
-                {
-                    scope?.Dispose();
-                }
             }));
     }
 

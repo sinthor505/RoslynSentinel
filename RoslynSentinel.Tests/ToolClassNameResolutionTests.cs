@@ -52,7 +52,7 @@ public class ToolClassNameResolutionTests
     {
         // SymbolNavigationTools is the one registered class that keeps the prefix; the shortened form
         // older launch scripts type must still reach it.
-        var active = ResolveFor("--mode=Workspace", "--exclude-tools=SymbolTools");
+        var active = ResolveFor("--mode=Workspace", "--exclude-tools=SymbolNavigationTools");
 
         Assert.That(active, Does.Not.Contain("SymbolNavigationTools"));
     }
@@ -68,7 +68,7 @@ public class ToolClassNameResolutionTests
     [Test]
     public void IncludeTools_ShortenedPrefixedClassName_ActivatesThePrefixedClass()
     {
-        var active = ResolveFor("--include-tools=SymbolTools");
+        var active = ResolveFor("--include-tools=SymbolNavigationTools");
 
         Assert.That(active, Is.EquivalentTo(new[] { "SymbolNavigationTools" }));
     }

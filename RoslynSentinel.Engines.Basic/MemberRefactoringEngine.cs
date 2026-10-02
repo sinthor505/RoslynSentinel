@@ -135,7 +135,7 @@ public class MemberRefactoringEngine
         {
             try
             {
-                var wrapped = FilePathWrapper.FromWire(path, solutionRoot);
+                var wrapped = FilePathWrapper.ResolveFromWire(path, solutionRoot);
                 return string.IsNullOrEmpty(wrapped.Absolute) ? null : Path.GetFullPath(wrapped.Absolute);
             }
             catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)

@@ -185,10 +185,10 @@ public class WorkspaceFileEditImpl
             "You MUST call ListSolutionItems(kind: all) next to see every file actually in the solution before trying another path.");
     }
 
-    public async Task<SentinelCallToolResult<object>> ReadFile(ToolCallReason reason, FilePathWrapper filepath, int? startLine = null,
+    public async Task<SentinelCallToolResult<object>> ReadFile(ToolCallReason reason, string filePath, int? startLine = null,
         int? endLine = null, CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -359,7 +359,7 @@ public class WorkspaceFileEditImpl
     public async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippet(
         ToolCallReason reason,
         ProposedChangeAction action,
-        FilePathWrapper? filepath = null,
+        string? filePath = null,
         string? oldContent = null,
         string? newContent = null,
         string? lineBefore = null,
@@ -371,7 +371,7 @@ public class WorkspaceFileEditImpl
     {
         try
         {
-            bool hasSingularEdit = filepath.HasValue || !string.IsNullOrEmpty(oldContent) || newContent != null;
+            bool hasSingularEdit = filePath is not null || !string.IsNullOrEmpty(oldContent) || newContent != null;
             bool hasBatchEdit = edits != null;
 
             if (hasSingularEdit && hasBatchEdit)
@@ -380,7 +380,7 @@ public class WorkspaceFileEditImpl
                 {
                     IsSuccess = false,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                        "ReplaceSnippet: supply either filepath/oldContent/newContent or 'edits', not both.")
+                        "ReplaceSnippet: supply either filePath/oldContent/newContent or 'edits', not both.")
                 };
             }
 
@@ -398,25 +398,25 @@ public class WorkspaceFileEditImpl
                 return await ReplaceSnippetBatch(edits, action, validateOnApply, returnDiff, cancellationToken);
             }
 
-            if (!filepath.HasValue)
+            if (filePath is null)
             {
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsSuccess = false,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                        "ReplaceSnippet: 'filepath' is required (it names the single file oldContent/newContent applies to), unless 'edits' is supplied instead.")
+                        "ReplaceSnippet: 'filePath' is required (it names the single file oldContent/newContent applies to), unless 'edits' is supplied instead.")
                 };
             }
 
-            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath.Value);
+            FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
             if (!filePathResolved.Validated)
             {
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsSuccess = false,
                     ErrorData = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
-                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, "ReplaceSnippet: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
-                        : new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'filepath' could not be resolved.")
+                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, "ReplaceSnippet: no solution is loaded, so 'filePath' could not be resolved. Call LoadSolution first, then retry with the same filePath.")
+                        : new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'filePath' could not be resolved.")
                 };
             }
 
@@ -612,7 +612,7 @@ public class WorkspaceFileEditImpl
         var failureCodes = new List<string>();
         var editsByFile = edits
             .Select((edit, index) => (edit, index))
-            .GroupBy(pair => _workspaceManager.SetFilePath(pair.edit.FilePath));
+            .GroupBy(pair => _workspaceManager.ResolveFromWire(pair.edit.FilePath));
 
         var finalContents = new Dictionary<FilePathWrapper, string>();
         foreach (var fileGroup in editsByFile)
@@ -770,13 +770,13 @@ public class WorkspaceFileEditImpl
 
     public async Task<SentinelCallToolResult<object>> CreateFile(
         ToolCallReason reason,
-        FilePathWrapper filepath,
+        string filePath,
         string? namespaceName = null,
         NewTypeKind? typeKind = null,
         string? typeName = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             if (!filePathResolved.Validated)
@@ -785,8 +785,8 @@ public class WorkspaceFileEditImpl
                 {
                     IsSuccess = false,
                     ErrorData = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
-                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, "CreateFile: no solution is loaded, so 'filepath' could not be resolved. Call LoadSolution first, then retry with the same filepath.")
-                        : new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'filepath' is required.")
+                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, "CreateFile: no solution is loaded, so 'filePath' could not be resolved. Call LoadSolution first, then retry with the same filePath.")
+                        : new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'filePath' is required.")
                 };
             }
 

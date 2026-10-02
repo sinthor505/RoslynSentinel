@@ -22,7 +22,7 @@ namespace RoslynSentinel.Common;
 /// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which stands up a disposable on-disk copy of
 /// the Samples/ContosoOrders scenario and loads it through this class.
 /// </summary>
-public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader
+public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader
 {
     private readonly ILogger<IWorkspaceManager> _logger;
     private MSBuildWorkspace? _workspace;
@@ -178,7 +178,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     }
 
     // Delegates to FilePathWrapper.NormalizeWirePath -> the same sanitization every other tool's path
-    // argument gets via FilePathWrapper.FromWire -> so LoadSolution doesn't drift from that behavior.
+    // argument gets via _workspaceManager.ResolveFromWire -> so LoadSolution doesn't drift from that behavior.
     private static string? SanitizePathArgument(string? path)
     {
         return string.IsNullOrEmpty(path) ? path : FilePathWrapper.NormalizeWirePath(path);
@@ -579,7 +579,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     }
 
     // FileSystemWatcher has a fixed-size internal buffer; a burst of changes arriving faster
-    // than we can drain them (bulk git checkout, a codemod touching hundreds of files, etc.)
+    // than we can drain them (bulk git checkout, a codetransform touching hundreds of files, etc.)
     // overflows it and the OS silently drops the events -> Changed/Created/Deleted/Renamed
     // simply never fire for them. Without this handler that loss was invisible: CurrentSolution
     // would keep serving whatever it last had, forever, with no drift recorded and nothing to
@@ -1926,7 +1926,7 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
     /// <summary>Clears the orientation breaker and its zero-match streak. Called automatically by the request filter -> no manual reset tool.</summary>
     void IAutomaticCircuitBreaker.Reset() => _orientationBreaker.Reset();
 
-    public FilePathWrapper SetFilePath(string? filepath)
+    public FilePathWrapper ResolveFromWire(string? filepath)
     {
         string? solutionRoot = this.GetSolutionRoot();
 
@@ -1940,15 +1940,15 @@ public partial class PersistentWorkspaceManager : IDisposable, IWorkspaceManager
         // "no solution loaded."
         if (CurrentSolution is null)
         {
-            return new FilePathWrapper(string.Empty, solutionRoot, failureReason: FilePathFailureReason.NoSolutionLoaded);
+            return new FilePathWrapper(string.Empty, failureReason: FilePathFailureReason.NoSolutionLoaded);
         }
 
         if (string.IsNullOrWhiteSpace(filepath))
         {
-            return new FilePathWrapper(string.Empty, solutionRoot, failureReason: FilePathFailureReason.PathInvalid);
+            return new FilePathWrapper(string.Empty, failureReason: FilePathFailureReason.PathInvalid);
         }
 
-        return FilePathWrapper.FromWire(filepath, solutionRoot);
+        return FilePathWrapper.ResolveFromWire(filepath, solutionRoot);
     }
 
     // In PersistentWorkspaceManager

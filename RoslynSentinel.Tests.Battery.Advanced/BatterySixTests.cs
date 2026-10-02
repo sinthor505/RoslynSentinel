@@ -8,7 +8,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 /// <summary>
 /// Battery #6 -> Functional tests for three engines with 4–5 test-mentions but no real coverage:
 ///   A. DocumentationEngine   (4 tests) -> GenerateXmlDocStubs, DocumentPocoFields
-///   B. ArchitecturalEngine   (5 tests) -> ConvertToBackgroundService, FindCircularDependencies
+///   B. SolutionStructureEngine   (5 tests) -> ConvertToBackgroundService, FindCircularDependencies
 ///   C. ApiGenerationEngine   (4 tests) -> GenerateHttpClientForController, return-type mapping
 ///
 /// SolutionManagementEngine is excluded (spawns real powershell.exe processes -> integration only).
@@ -94,18 +94,18 @@ public class UserDto
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
-// B. ArchitecturalEngine
+// B. SolutionStructureEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
-public class ArchitecturalEngineTests
+public class SolutionStructureEngineTests
 {
     private IWorkspaceManager _workspaceManager;
-    private ArchitecturalEngine _engine;
+    private SolutionStructureEngine _engine;
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        _engine = new ArchitecturalEngine(_workspaceManager);
+        _engine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]

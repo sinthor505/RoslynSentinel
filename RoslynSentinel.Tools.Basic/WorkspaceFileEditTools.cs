@@ -43,11 +43,11 @@ public class WorkspaceFileEditTools
     [Description("Returns the raw text of a file in the loaded solution, verbatim (no reformatting). Pass startLine/endLine (1-based, inclusive) to read a slice instead of the whole file - useful once GetFileOutline or a search result gives you a line range. Whole-file reads past the size threshold are written to .roslynsentinel/largeresults and returned as a resultId (see GetMethodSource) instead of inline text.")]
     public Task<SentinelCallToolResult<object>> ReadFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("1-based, inclusive. Omit to start from the first line.")] int? startLine = null,
         [Description("1-based, inclusive. Omit to read through the last line.")] int? endLine = null,
         CancellationToken cancellationToken = default)
-        => _impl.ReadFile(reason, filepath, startLine, endLine, cancellationToken);
+        => _impl.ReadFile(reason, filePath, startLine, endLine, cancellationToken);
 
     [McpServerTool(Name = "ReplaceSnippet")]
     [Produces(DataTag.ChangeId)]
@@ -62,7 +62,7 @@ public class WorkspaceFileEditTools
         [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
-        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filePath = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
         [ToolOption(ToolOptionTag.OldContent, required: false)][Description(ToolParams.OldContent)] string? oldContent = null,
         [ToolOption(ToolOptionTag.NewContent, required: false)][Description(ToolParams.NewContent)] string? newContent = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -78,10 +78,10 @@ public class WorkspaceFileEditTools
     [Description("Creates a new file. Fails if the file already exists - this tool never overwrites or writes free-form whole-file content. Parent directories are created automatically if missing.")]
     public Task<SentinelCallToolResult<object>> CreateFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Required for .cs files, ignored otherwise. Namespace to seed the file with (e.g. 'RoslynSentinel.Tests.Battery.Basic').")] string? namespaceName = null,
         [Description("Required for .cs files, ignored otherwise. Kind of top-level type to seed the file with - this seeds a valid compilation unit plus one empty top-level type declaration (e.g. 'public class Foo\\n{\\n}'), so Member(add) can immediately populate members inside it. Use staticClass for a static utility/helper class (e.g. static test helpers, extension-method containers) - static is only valid on classes, not the other kinds. For a second top-level type in the same file, add it afterward with Member(add, containerName: null, newMemberSource: \"...\").")] NewTypeKind? typeKind = null,
         [Description("Required for .cs files, ignored otherwise. Name of the top-level type to seed the file with (e.g. 'Foo').")] string? typeName = null,
         CancellationToken cancellationToken = default)
-        => _impl.CreateFile(reason, filepath, namespaceName, typeKind, typeName, cancellationToken);
+        => _impl.CreateFile(reason, filePath, namespaceName, typeKind, typeName, cancellationToken);
 }

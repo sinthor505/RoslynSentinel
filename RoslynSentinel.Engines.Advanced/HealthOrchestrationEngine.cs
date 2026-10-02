@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Engines.Advanced;
+
 public enum HealthEngineType
 {
     Structure,
@@ -20,12 +21,12 @@ public class HealthOrchestrationEngine
     private readonly AntiPatternEngine _antiPatternEngine;
     private readonly PerformanceEngine _performanceEngine;
     private readonly IWorkspaceReader _workspaceManager;
-    private readonly SolutionStructureEngine _projectStructureEngine;
+    private readonly SolutionStructureEngine _solutionStructureEngine;
     private readonly SentinelConfiguration _config;
-    public HealthOrchestrationEngine(IWorkspaceReader workspaceManager, SolutionStructureEngine projectStructureEngine, SentinelConfiguration config, PerformanceEngine performanceEngine, AntiPatternEngine antiPatternEngine)
+    public HealthOrchestrationEngine(IWorkspaceReader workspaceManager, SolutionStructureEngine solutionStructureEngine, SentinelConfiguration config, PerformanceEngine performanceEngine, AntiPatternEngine antiPatternEngine)
     {
         _workspaceManager = workspaceManager;
-        _projectStructureEngine = projectStructureEngine;
+        _solutionStructureEngine = solutionStructureEngine;
         _config = config;
         _performanceEngine = performanceEngine;
         _antiPatternEngine = antiPatternEngine;
@@ -64,7 +65,7 @@ public class HealthOrchestrationEngine
                 {
                     engineTasks.Add(Task.Run(async () =>
                     {
-                        var smells = await _projectStructureEngine.FindStructuralSmellsAsync(projectName: project.Name, filePath: filePath, cancellationToken: cts.Token);
+                        var smells = await _solutionStructureEngine.FindStructuralSmellsAsync(projectName: project.Name, filePath: filePath, cancellationToken: cts.Token);
                         foreach (var smell in smells)
                         {
                             IncrementCount(projectCategoryCounts, ExtractCategory(smell));
@@ -116,8 +117,8 @@ public class HealthOrchestrationEngine
                     {
                         engineTasks.Add(Task.Run(async () =>
                         {
-                        // var items = await _asyncSafetyEngine.DetectAsyncVoidMethodsAsync(filePath: filePath ?? "", cancellationToken: cts.Token);
-                        //IncrementCount(projectCategoryCounts, "AsyncVoidUsage", items.Count);
+                            // var items = await _asyncSafetyEngine.DetectAsyncVoidMethodsAsync(filePath: filePath ?? "", cancellationToken: cts.Token);
+                            //IncrementCount(projectCategoryCounts, "AsyncVoidUsage", items.Count);
                         }, cts.Token));
                     }
 

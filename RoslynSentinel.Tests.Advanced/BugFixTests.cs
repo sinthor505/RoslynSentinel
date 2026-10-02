@@ -1793,7 +1793,7 @@ public class OtherClass
         {
             private IWorkspaceManager _workspaceManager;
             private SentinelConfiguration _config;
-            private SolutionStructureEngine _projectStructureEngine;
+            private SolutionStructureEngine _solutionStructureEngine;
             private BasicRefactoringEngine _refactoringEngine;
             private StructuralRefactoringEngine _advancedStructuralEngine;
             private CodeGenerationEngine _codeGenerationEngine;
@@ -1803,7 +1803,7 @@ public class OtherClass
             {
                 _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
                 _config = new SentinelConfiguration();
-                _projectStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
+                _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
                 _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
                 _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
                 _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
@@ -1849,7 +1849,7 @@ public class ProductsController
                 // MoveFileToNamespaceFolderAsync became PreviewMoveFileToNamespaceFolderAsync, which
                 // returns a DocumentEditResult whose Message carries the "MOVE_REQUIRED: from -> to"
                 // path suggestion the old string-returning API produced.
-                var result = (await _projectStructureEngine.PreviewMoveFileToNamespaceFolderAsync("ProductsController.cs")).Message;
+                var result = (await _solutionStructureEngine.PreviewMoveFileToNamespaceFolderAsync("ProductsController.cs")).Message;
                 System.Diagnostics.Debug.WriteLine($"Result: '{result}'");
                 // Expected: should contain "Controllers" (project-relative path)
                 // Since file is in root and namespace is TestProj.Controllers, it should suggest moving to Controllers folder

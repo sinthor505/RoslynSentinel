@@ -160,13 +160,13 @@ public class WorkspaceTools
     // over-cap error can (see WriteToolAdviceHelper) -> and a hardcoded name here would be shown to
     // the model on every single call even when that tool is gated off, which is the run-398 failure
     // in its most persistent form. The error path is where the redirect is actually needed.
-    [Description("Replaces one exact text block with another in a file, for small localized batchEdits. Prefer a structural Roslyn tool for structural changes. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error. Supply either filepath/oldContent/newContent or batchEdits, not both.")]
+    [Description("Replaces one exact text block with another in a file, for small localized batchEdits. Prefer a structural Roslyn tool for structural changes. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error. Supply either filePath/oldContent/newContent or batchEdits, not both.")]
     public Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippet(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
-        [Consumes(DataTag.SourceFilepath, required: false)] FilePathWrapper? filePath = null,
+        [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
         [ToolOption(ToolOptionTag.OldContent, required: false)][Description(ToolParams.OldContent)] string? oldContent = null,
         [ToolOption(ToolOptionTag.NewContent, required: false)][Description(ToolParams.NewContent)] string? newContent = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -182,12 +182,12 @@ public class WorkspaceTools
     [Description("Creates a new file; fails if it already exists.")]
     public Task<SentinelCallToolResult<object>> CreateFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Required for .cs files: namespace to seed the file with.")] string? namespaceName = null,
         [Description("Required for .cs files: kind of top-level type to seed (class/interface/etc). Use staticClass for a static utility class.")] NewTypeKind? typeKind = null,
         [Description("Required for .cs files: name of the seeded top-level type.")] string? typeName = null,
         CancellationToken cancellationToken = default)
-        => _fileEdit.CreateFile(reason, filepath, namespaceName, typeKind, typeName, cancellationToken);
+        => _fileEdit.CreateFile(reason, filePath, namespaceName, typeKind, typeName, cancellationToken);
 
     // The confirmationCode paramater was causing hallucinations and invalid tool calls. Reverted back to the original ApplyDiff tool but keeping this here (block-commented, since it depends
     // on ProposedChangeAction.confirmationCode, which is also commented out in ToolEnums.cs) in case we want to reintroduce ApplyDiff with a confirmationCode in the future.
@@ -244,7 +244,7 @@ public class WorkspaceTools
                 };
             }
 
-            FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filePath);
+            FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
             if (changesetFormat == ChangesetFormat.files)
             {
                 if (changes == null)
@@ -529,7 +529,7 @@ public class WorkspaceTools
     [Description("Deletes a symbol only if it has zero usages anywhere in the codebase.")]
     public Task<SentinelCallToolResult<object>> SafeDeleteUnusedSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Preferred, with docCommentId - the most reliable resolution path.")] string projectName = "",
         [Description("Preferred, with projectName - from LocateSymbol/FindReferences.")] string docCommentId = "",
         [Description("Fallback if projectName/docCommentId aren't available; combine with contextSnippet to disambiguate.")]
@@ -542,7 +542,7 @@ public class WorkspaceTools
         [Description("Legacy fallback: 1-based column of the declaration site. Requires line too.")]
         [Consumes(DataTag.Offset, required: false)] int column = 0,
         CancellationToken cancellationToken = default)
-        => _projectManagement.SafeDeleteUnusedSymbol(reason, filepath, projectName, docCommentId, symbolName, contextSnippet, lineBefore, lineAfter, line, column, cancellationToken);
+        => _projectManagement.SafeDeleteUnusedSymbol(reason, filePath, projectName, docCommentId, symbolName, contextSnippet, lineBefore, lineAfter, line, column, cancellationToken);
 
     [McpServerTool(Name = "CreateProject")]
     [Produces(DataTag.ResultOnly)]
@@ -571,10 +571,10 @@ public class WorkspaceTools
     [Description("Returns a method's or constructor's full source text and attributes. For a constructor, pass the class name.")]
     public Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSource(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Consumes(DataTag.MethodName, required: true)] string methodName, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.MethodName, required: true)] string methodName, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         return _readNav.GetMethodSource(reason, filePathResolved, methodName, cancellationToken);
     }
 
@@ -583,21 +583,21 @@ public class WorkspaceTools
     [Description("Returns a file's raw text verbatim, or a 1-based line-range slice via startLine/endLine.")]
     public Task<SentinelCallToolResult<object>> ReadFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Omit to start from the first line.")] int? startLine = null,
         [Description("Omit to read through the last line.")] int? endLine = null,
         CancellationToken cancellationToken = default)
-        => _fileEdit.ReadFile(reason, filepath, startLine, endLine, cancellationToken);
+        => _fileEdit.ReadFile(reason, filePath, startLine, endLine, cancellationToken);
 
     [McpServerTool(Name = "GetFileOutline")]
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file's types and members with 1-based line ranges (no bodies).")]
     public Task<SentinelCallToolResult<FileOutlineResult, ResultError>> GetFileOutline(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath, // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         return _readNav.GetFileOutline(reason, filePathResolved, cancellationToken);
     }
 
@@ -766,7 +766,7 @@ public class WorkspaceTools
         [ToolOption(ToolOptionTag.CharLimit)] int? charLimit = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filePath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         return _readNav.GetLargeResult(reason, resultId, filePathResolved, limit, offset, charLimit: charLimit, cancellationToken: cancellationToken);
     }
 

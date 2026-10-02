@@ -50,7 +50,7 @@ public class QualityTools
     [McpServerTool(Name = "DescribeAdvancedToolOptions")]
     [Produces(DataTag.Report)]
     [Description("""
-        Returns reference documentation for a named tool's valid input values - transform/kind/detector catalogues and parameter defaults. Only covers tools whose valid values cannot be inferred from the schema alone. Covered tools: scan, apply_file_codemod, apply_method_codemod, apply_class_codemod, generate, convert_switch_to_pattern_safe, analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion. Returns ErrorCode="NoFurtherDocumentation" if the tool is not in the covered set - this does not mean the tool is invalid, only that its schema is self-describing.
+        Returns reference documentation for a named tool's valid input values - transform/kind/detector catalogues and parameter defaults. Only covers tools whose valid values cannot be inferred from the schema alone. Covered tools: scan, apply_file_codetransform, apply_method_codetransform, apply_class_codetransform, generate, convert_switch_to_pattern_safe, analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion. Returns ErrorCode="NoFurtherDocumentation" if the tool is not in the covered set - this does not mean the tool is invalid, only that its schema is self-describing.
         """)]
     public ToolOptionsResult DescribeAdvancedToolOptions(
         [Description(ToolParams.Reason)] ToolCallReason reason,
@@ -62,9 +62,9 @@ public class QualityTools
         return toolName switch
         {
             "scan" => ScanTools.ScanOptions(),
-            //"apply_file_codemod" => CodemodTools.ApplyFileCodemodOptions(),
-            //"apply_method_codemod" => CodemodTools.ApplyMethodCodemodOptions(),
-            //"apply_class_codemod" => CodemodTools.ApplyClassCodemodOptions(),
+            //"apply_file_codetransform" => CodeTransformationTools.ApplyFileCodeTransformOptions(),
+            //"apply_method_codetransform" => CodeTransformationTools.ApplyMethodCodeTransformOptions(),
+            //"apply_class_codetransform" => CodeTransformationTools.ApplyClassCodeTransformOptions(),
             "generate" => GenerationTools.GenerateOptions(),
             "convert_switch_to_pattern_safe" => ConvertSwitchOptions(),
             "analyze_switch_for_pattern_conversion" => AnalyzeSwitchOptions(),
@@ -73,8 +73,8 @@ public class QualityTools
             {
                 Description = $"'{toolName}' is not in the describe_advanced_tool_options covered set. " +
                                "This does not mean the tool is invalid - its parameter schema fully " +
-                               "describes its inputs. Covered tools: scan, apply_file_codemod, " +
-                               "apply_method_codemod, apply_class_codemod, generate, " +
+                               "describes its inputs. Covered tools: scan, apply_file_codetransform, " +
+                               "apply_method_codetransform, apply_class_codetransform, generate, " +
                                "convert_switch_to_pattern_safe, analyze_switch_for_pattern_conversion, " +
                                "analyze_foreach_for_linq_conversion.",
                 Error = new ResultError(
@@ -89,15 +89,15 @@ public class QualityTools
     [Description("Returns execution paths to cover and test methods that exercise a production method. Finds covering tests by name convention (test method name contains production method name) and by direct call-site presence. Returns BranchesToTest, CoveringTests (test file, method, line), and HasAnyCoverage flag.")]
     public async Task<SentinelCallToolResult<object>> GetTestCoverageMap(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         try
         {
-            var result = await _controlFlowEngine.GetTestCoverageMapAsync(filePath, methodName, cancellationToken);
+            var result = await _controlFlowEngine.GetTestCoverageMapAsync(resolvedFilePath, methodName, cancellationToken);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
@@ -106,7 +106,7 @@ public class QualityTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetTestCoverageMap failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
+            _logger.LogError(ex, "GetTestCoverageMap failed for '{MethodName}' in '{FilePathWrapper}'", methodName, resolvedFilePath);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
@@ -120,16 +120,16 @@ public class QualityTools
     [Description("Calculates cyclomatic complexity of a method: 1 + one per if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns complexity score and contributing conditionals. Guide: 1–4 = Low, 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High.")]
     public async Task<SentinelCallToolResult<object>> GetMethodComplexity(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
 
         try
         {
-            var result = await _testingEngine.CalculateComplexityAsync(filePath, methodName, cancellationToken);
+            var result = await _testingEngine.CalculateComplexityAsync(resolvedFilePath, methodName, cancellationToken);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
@@ -138,7 +138,7 @@ public class QualityTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetMethodComplexity failed for '{MethodName}' in '{FilePathWrapper}'", methodName, filePath);
+            _logger.LogError(ex, "GetMethodComplexity failed for '{MethodName}' in '{FilePathWrapper}'", methodName, resolvedFilePath);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
@@ -154,7 +154,7 @@ public class QualityTools
     [Description("Pre-flight safety check before converting a foreach loop to LINQ: detects mutation of the collection being iterated within the loop body (a common pattern the standard conversion tool produces incorrect code for) using Roslyn's ControlFlowAnalysis and DataFlowAnalysis. Returns IsSafeToConvert and rejection reasons.")]
     public async Task<SentinelCallToolResult<object>> AnalyzeForeachForLinqConversion(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Short snippet identifying the foreach statement, e.g. \"foreach (var item in\".")]
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Description(ToolParams.LineBefore)]
@@ -164,14 +164,14 @@ public class QualityTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("AnalyzeForeachForLinqConversion: {File}", filePath);
+            _logger.LogInformation("AnalyzeForeachForLinqConversion: {File}", resolvedFilePath);
         }
         try
         {
-            var result = await _msToolAugmentEngine.AnalyzeForeachForLinqConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
+            var result = await _msToolAugmentEngine.AnalyzeForeachForLinqConversionAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
@@ -180,7 +180,7 @@ public class QualityTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "AnalyzeForeachForLinqConversion failed in '{File}'", filePath);
+            _logger.LogError(ex, "AnalyzeForeachForLinqConversion failed in '{File}'", resolvedFilePath);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
@@ -196,7 +196,7 @@ public class QualityTools
     [Description("Pre-flight safety check before converting a switch statement to a switch expression: detects variables assigned in more than one case arm, or read later in the method (indicating a dependency on the variable retaining its value across cases) - a pattern the standard conversion tool silently drops, using Roslyn's ControlFlowAnalysis and DataFlowAnalysis. Returns IsSafeToConvert and rejection reasons.")]
     public async Task<SentinelCallToolResult<object>> AnalyzeSwitchForPatternConversion(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath,
+        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Verbatim substring from the switch keyword line, e.g. \"switch (unit)\".")]
         [Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
         [Description(ToolParams.LineBefore)]
@@ -206,15 +206,15 @@ public class QualityTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
 
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("AnalyzeSwitchForPatternConversion in {File}", filePath);
+            _logger.LogInformation("AnalyzeSwitchForPatternConversion in {File}", resolvedFilePath);
         }
         try
         {
-            var result = await _msToolAugmentEngine.AnalyzeSwitchForPatternConversionAsync(filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
+            var result = await _msToolAugmentEngine.AnalyzeSwitchForPatternConversionAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
@@ -223,7 +223,7 @@ public class QualityTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "AnalyzeSwitchForPatternConversion failed in '{File}'", filePath);
+            _logger.LogError(ex, "AnalyzeSwitchForPatternConversion failed in '{File}'", resolvedFilePath);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,

@@ -288,7 +288,7 @@ public enum InlineKind
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]
-public enum CodemodKind
+public enum CodeTransformKind
 {
     add_benchmark_stub, generate_constructor, generate_decorator_class, generate_equality_overrides,
     generate_fluent_builder, generate_path_driven_tests, generate_repository_interface,

@@ -22,10 +22,9 @@ public class BatteryTwentyTwoTests
     private DeadCodeEngine _deadCodeEngine;
     private DocumentationEngine _documentationEngine;
     private DependencyEngine _dependencyEngine;
-    private SolutionStructureEngine _projectStructureEngine;
+    private SolutionStructureEngine _solutionStructureEngine;
     private AsyncAnalysisEngine _asyncSafetyEngine;
     private HealthOrchestrationEngine _healthOrchestrationEngine;
-    private ArchitecturalEngine _architecturalEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
     private DependencyInjectionEngine _dependencyInjectionEngine;
     private DiscoveryEngine _discoveryEngine;
@@ -136,20 +135,19 @@ public class OrderService : IOrderService
         _deadCodeEngine = new DeadCodeEngine(_workspaceManager, _config);
         _documentationEngine = new DocumentationEngine(_workspaceManager);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
-        _projectStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
+        _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
         _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
-        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _projectStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
-        _architecturalEngine = new ArchitecturalEngine(_workspaceManager);
+        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _solutionStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
-        _tools = new IntelligenceTools(_impactAnalyzer, _metricsEngine, _inventoryEngine, _deadCodeEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, new AntiPatternEngine(_workspaceManager), config: _config, logger: NullLogger<IntelligenceTools>.Instance);
+        _tools = new IntelligenceTools(_impactAnalyzer, _metricsEngine, _inventoryEngine, _deadCodeEngine, _documentationEngine, _dependencyEngine, _solutionStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, new AntiPatternEngine(_workspaceManager), config: _config, logger: NullLogger<IntelligenceTools>.Instance);
         // Symbol-level tools moved to SymbolNavigationTools (Basic) in the server split.
         _symbolRelationshipTools = new SymbolRelationshipTools(new SymbolRelationshipImpl(_discoveryEngine, _symbolNavigationEngine, _workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance));
         _symbolNavigationTools = new SymbolNavigationTools(new SymbolNavigationImpl(_symbolNavigationEngine, _impactAnalyzer, _workspaceManager, NullLogger<SymbolNavigationImpl>.Instance));
         // GetPublicApiSurface moved to ScanTools (Advanced).
-        _scanTools = new ScanTools(new SecurityEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), _asyncSafetyEngine, new ThreadSafetyEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new PerformanceEngine(_workspaceManager), _deadCodeEngine, _dependencyEngine, _projectStructureEngine, _dependencyInjectionEngine, new ProjectConsistencyEngine(_workspaceManager), _metricsEngine, new CloneDetectionEngine(_workspaceManager), _discoveryEngine, new StackOverflowEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeStyleAnalysisEngine(_workspaceManager), new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config), _symbolNavigationEngine, new BreakingChangeEngine(_workspaceManager), _workspaceManager, NullLogger<ScanTools>.Instance);
+        _scanTools = new ScanTools(new SecurityEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), _asyncSafetyEngine, new ThreadSafetyEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new PerformanceEngine(_workspaceManager), _deadCodeEngine, _dependencyEngine, _solutionStructureEngine, _dependencyInjectionEngine, new ProjectConsistencyEngine(_workspaceManager), _metricsEngine, new CloneDetectionEngine(_workspaceManager), _discoveryEngine, new StackOverflowEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeStyleAnalysisEngine(_workspaceManager), new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config), _symbolNavigationEngine, new BreakingChangeEngine(_workspaceManager), _workspaceManager, NullLogger<ScanTools>.Instance);
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Wrappers.cs", RichSource)]);
         _workspaceManager.SetTestSolution(solution);
@@ -287,7 +285,7 @@ public class OrderService : IOrderService
     public async Task FindCircularDependencies_NoParams_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _projectStructureEngine.FindCircularDependenciesAsync();
+        var result = await _solutionStructureEngine.FindCircularDependenciesAsync();
         Assert.That(result, Is.Not.Null);
         //Assert.That(result.Count > 0);
     }
@@ -379,12 +377,12 @@ public class OrderService : IOrderService
         //Assert.That(result.Count > 0);
     }
 
-    // --- FindStructuralSmells (via ProjectStructureEngine) ---
+    // --- FindStructuralSmells (via SolutionStructureEngine) ---
     [Test]
     public async Task FindStructuralSmells_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _projectStructureEngine.FindStructuralSmellsAsync();
+        var result = await _solutionStructureEngine.FindStructuralSmellsAsync();
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Count > 0);
     }
@@ -477,12 +475,12 @@ public class OrderService : IOrderService
         Assert.That(result.Count > 0);
     }
 
-    // --- FindCircularDependencies (with projectName, via ArchitecturalEngine) ---
+    // --- FindCircularDependencies (with projectName, via SolutionStructureEngine) ---
     [Test]
     public async Task FindCircularDependencies_WithProjectName_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _projectStructureEngine.FindCircularDependenciesAsync("TestProj");
+        var result = await _solutionStructureEngine.FindCircularDependenciesAsync("TestProj");
         Assert.That(result, Is.Not.Null);
         //Assert.That(result.Count > 0);
     }

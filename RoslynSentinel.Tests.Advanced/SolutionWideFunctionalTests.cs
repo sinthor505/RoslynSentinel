@@ -12,18 +12,18 @@ public class SolutionWideFunctionalTests
 {
     private IWorkspaceManager _workspaceManager;
     private HealthOrchestrationEngine _healthEngine;
-    private SolutionStructureEngine _projectStructureEngine;
+    private SolutionStructureEngine _solutionStructureEngine;
 
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new FakeWorkspaceManager();
         var config = new SentinelConfiguration();
-        _projectStructureEngine = new SolutionStructureEngine(_workspaceManager, config);
+        _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, config);
 
         _healthEngine = new HealthOrchestrationEngine(
             _workspaceManager,
-            _projectStructureEngine,
+            _solutionStructureEngine,
             config,
             new PerformanceEngine(_workspaceManager),
             new AntiPatternEngine(_workspaceManager, config));

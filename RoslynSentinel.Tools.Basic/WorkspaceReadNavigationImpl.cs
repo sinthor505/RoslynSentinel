@@ -93,10 +93,10 @@ public class WorkspaceReadNavigationImpl
 
     public async Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSource(
         ToolCallReason reason,
-        string filepath, string methodName,
+        string filePath, string methodName,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -190,10 +190,10 @@ public class WorkspaceReadNavigationImpl
 
     public async Task<SentinelCallToolResult<FileOutlineResult, ResultError>> GetFileOutline(
         ToolCallReason reason,
-        string filepath,
+        string filePath,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -367,7 +367,7 @@ public class WorkspaceReadNavigationImpl
                         continue;
                     }
 
-                    var filePath = new FilePathWrapper(document.FilePath, solutionRoot);
+                    var filePath = new FilePathWrapper(document.FilePath);
                     foreach (var item in ExtractOutlineItems(root))
                     {
                         if (kindFilter != null && item.Kind != kindFilter)
@@ -437,7 +437,7 @@ public class WorkspaceReadNavigationImpl
                         return;
                     }
 
-                    var docPath = new FilePathWrapper(document.FilePath ?? "", _workspaceManager.GetSolutionRoot());
+                    var docPath = new FilePathWrapper(document.FilePath ?? "");
                     if (!string.IsNullOrEmpty(fileGlob) && !GlobMatchesFileName(docPath, fileGlob))
                     {
                         return;
@@ -522,7 +522,7 @@ public class WorkspaceReadNavigationImpl
                         .SelectMany(p => p.Documents)
                         .Select(d =>
                         {
-                            var wrapper = new FilePathWrapper(d.FilePath ?? "", _workspaceManager.GetSolutionRoot());
+                            var wrapper = new FilePathWrapper(d.FilePath ?? "");
                             // Relative is empty when no solution root is available to resolve against
                             // (e.g. an in-memory solution with no backing .sln/.slnx) - fall back to
                             // Absolute rather than silently dropping a real document from the samples.
@@ -926,12 +926,12 @@ public class WorkspaceReadNavigationImpl
     public async Task<SentinelCallToolResult<object>> GetLargeResult(
         ToolCallReason reason,
         string? resultId = null,
-        string? filepath = null,
+        string? filePath = null,
         int limit = 50,
         int offset = 0,
         CancellationToken cancellationToken = default, int? charLimit = null)
     {
-        FilePathWrapper filePathResolved = _workspaceManager.SetFilePath(filepath);
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         string? resolvedPath = null;
 

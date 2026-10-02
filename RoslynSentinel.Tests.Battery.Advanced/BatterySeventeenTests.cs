@@ -7,7 +7,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 
 // ────────────────────────────────────────────────────────────────────────────
 // Battery #17 -> LogicSimplificationEngine,
-//               MsToolAugmentEngine and ProjectStructureEngine.
+//               MsToolAugmentEngine and SolutionStructureEngine.
 // ────────────────────────────────────────────────────────────────────────────
 
 [TestFixture]
@@ -125,7 +125,7 @@ public class MsToolAugmentEngineTests
 }
 
 [TestFixture]
-public class ProjectStructureEngineTests
+public class SolutionStructureEngineTests2
 {
     private PersistentWorkspaceManager _mgr = null!;
     private SolutionStructureEngine _engine = null!;

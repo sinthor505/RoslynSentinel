@@ -197,7 +197,7 @@ public static class DocumentLookup
     /// two or more is <see cref="DocumentLookupStatus.Ambiguous"/>, never first-wins;
     /// 3) otherwise <see cref="DocumentLookupStatus.NotFound"/> with the closest real paths (same file name).
     /// A path directly under the solution root whose file does not exist is indistinguishable from a bare name
-    /// once <see cref="FilePathWrapper.FromWire"/> has resolved it, so it takes rule 2 as well.
+    /// once <see cref="_workspaceManager.ResolveFromWire"/> has resolved it, so it takes rule 2 as well.
     /// </summary>
     public static DocumentLookupResult TryGetDocument(Solution solution, FilePathWrapper path)
     {
@@ -293,7 +293,7 @@ public static class DocumentLookup
     }
 
     // A bare file name is either a rootless wrapper with no directory part (the implicit string
-    // conversion, or FromWire with no solution root), or a path FromWire resolved to a single
+    // conversion, or ResolveFromWire with no solution root), or a path ResolveFromWire resolved to a single
     // segment under the solution root (Relative has no separator).
     private static string? GetBareFileName(FilePathWrapper path)
     {

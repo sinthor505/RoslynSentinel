@@ -15,23 +15,22 @@ public class IntelligenceTools
     private readonly MetricsEngine _metricsEngine;
     private readonly InventoryEngine _inventoryEngine;
     private readonly DependencyEngine _dependencyEngine;
-    private readonly SolutionStructureEngine _projectStructureEngine;
+    private readonly SolutionStructureEngine _solutionStructureEngine;
     private readonly AsyncAnalysisEngine _asyncSafetyEngine;
     private readonly HealthOrchestrationEngine _healthOrchestrationEngine;
-    // private readonly ArchitecturalEngine _architecturalEngine;
     private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly DependencyInjectionEngine _dependencyInjectionEngine;
     private readonly DiscoveryEngine _discoveryEngine;
     private readonly ProjectConsistencyEngine _projectConsistencyEngine;
     private readonly ISolutionProvider _workspaceManager;
     private readonly ILogger<IntelligenceTools> _logger;
-    public IntelligenceTools(ImpactAnalyzer impactAnalyzer, MetricsEngine metricsEngine, InventoryEngine inventoryEngine, DeadCodeEngine deadCodeEngine, DocumentationEngine documentationEngine, DependencyEngine dependencyEngine, SolutionStructureEngine projectStructureEngine, AsyncAnalysisEngine asyncSafetyEngine, HealthOrchestrationEngine healthOrchestrationEngine, ArchitecturalEngine architecturalEngine, SymbolNavigationEngine symbolNavigationEngine, DependencyInjectionEngine dependencyInjectionEngine, DiscoveryEngine discoveryEngine, ProjectConsistencyEngine projectConsistencyEngine, ISolutionProvider workspaceManager, AntiPatternEngine antiPatternEngine, SentinelConfiguration config, ILogger<IntelligenceTools> logger)
+    public IntelligenceTools(ImpactAnalyzer impactAnalyzer, MetricsEngine metricsEngine, InventoryEngine inventoryEngine, DeadCodeEngine deadCodeEngine, DocumentationEngine documentationEngine, DependencyEngine dependencyEngine, SolutionStructureEngine solutionStructureEngine, AsyncAnalysisEngine asyncSafetyEngine, HealthOrchestrationEngine healthOrchestrationEngine, SymbolNavigationEngine symbolNavigationEngine, DependencyInjectionEngine dependencyInjectionEngine, DiscoveryEngine discoveryEngine, ProjectConsistencyEngine projectConsistencyEngine, ISolutionProvider workspaceManager, AntiPatternEngine antiPatternEngine, SentinelConfiguration config, ILogger<IntelligenceTools> logger)
     {
         _impactAnalyzer = impactAnalyzer;
         _metricsEngine = metricsEngine;
         _inventoryEngine = inventoryEngine;
         _dependencyEngine = dependencyEngine;
-        _projectStructureEngine = projectStructureEngine;
+        _solutionStructureEngine = solutionStructureEngine;
         _asyncSafetyEngine = asyncSafetyEngine;
         _healthOrchestrationEngine = healthOrchestrationEngine;
         _symbolNavigationEngine = symbolNavigationEngine;
@@ -46,10 +45,10 @@ public class IntelligenceTools
     [McpServerTool(Name = "GetComprehensiveHealthReport")]
     [Produces(DataTag.Report)]
     [Description("Generates a paged health report across one or more engines (Structure, Modernization, Performance, Safety, Architecture).")]
-    public async Task<SentinelCallToolResult<object>> GetComprehensiveHealthReport([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Engines to include. Omit for all.")] List<HealthEngineType>? engines = null, [Description("Restricts to one project. Omit for the whole solution.")][Consumes(DataTag.ProjectName)] string? projectName = null, [Description("Restricts to one file. Omit for the whole solution.")][Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [Description("Number of project results to skip before taking limit.")][ToolOption(ToolOptionTag.Offset)] int offset = 0, [Description("Maximum number of project results to return.")][ToolOption(ToolOptionTag.ResultLimit)] int limit = 10, [Description("Maximum seconds to spend before returning partial results.")][ToolOption(ToolOptionTag.Timeout)] int timeoutSeconds = 25, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> GetComprehensiveHealthReport([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Engines to include. Omit for all.")] List<HealthEngineType>? engines = null, [Description("Restricts to one project. Omit for the whole solution.")][Consumes(DataTag.ProjectName)] string? projectName = null, [Description("Restricts to one file. Omit for the whole solution.")][Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null, [Description("Number of project results to skip before taking limit.")][ToolOption(ToolOptionTag.Offset)] int offset = 0, [Description("Maximum number of project results to return.")][ToolOption(ToolOptionTag.ResultLimit)] int limit = 10, [Description("Maximum seconds to spend before returning partial results.")][ToolOption(ToolOptionTag.Timeout)] int timeoutSeconds = 25, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             var result = await _healthOrchestrationEngine.GenerateComprehensiveHealthReportAsync(engines, projectName, filePath, offset, limit, timeoutSeconds, cancellationToken);
@@ -99,18 +98,18 @@ public class IntelligenceTools
     [McpServerTool(Name = "GetCodeInventory")]
     [Produces(DataTag.Report)]
     [Description("Returns a structured inventory of namespaces, classes, methods, and properties in a file.")]
-    public async Task<SentinelCallToolResult<object>> GetCodeInventory([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> GetCodeInventory([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         try
         {
-            var results = await _inventoryEngine.GetCodeInventoryAsync(filePath, cancellationToken);
+            var results = await _inventoryEngine.GetCodeInventoryAsync(resolvedFilePath, cancellationToken);
             return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(results, _workspaceManager.GetSolutionRoot(), typeof(CodeInventoryReport).Name, ResultWrapperType.CodeInventoryReport, totalRecords: results.Methods.Count, cancellationToken: cancellationToken);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "GetCodeInventory failed for '{FilePathWrapper}'", filePath);
+            _logger.LogError(ex, "GetCodeInventory failed for '{FilePathWrapper}'", resolvedFilePath);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,
@@ -122,13 +121,13 @@ public class IntelligenceTools
     [McpServerTool(Name = "GetDiRegistrations")]
     [Produces(DataTag.Report)]
     [Description("Scans for DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or a scoped project/file.")]
-    public async Task<SentinelCallToolResult<object>> GetDiRegistrations([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Restricts to one project. Omit for the whole solution.")][Consumes(DataTag.ProjectName)] string? projectName = null, [Description("Restricts to one file. Omit for the whole solution.")][Consumes(DataTag.SourceFilepath, required: false)] string? filepath = null, [Description("Filters by lifetime (Singleton/Scoped/Transient). Omit for all.")][ToolOption(ToolOptionTag.Filter)] string? lifetimeFilter = null, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> GetDiRegistrations([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Restricts to one project. Omit for the whole solution.")][Consumes(DataTag.ProjectName)] string? projectName = null, [Description("Restricts to one file. Omit for the whole solution.")][Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null, [Description("Filters by lifetime (Singleton/Scoped/Transient). Omit for all.")][ToolOption(ToolOptionTag.Filter)] string? lifetimeFilter = null, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = _workspaceManager.SetFilePath(filepath);
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         try
         {
-            var result = await _dependencyInjectionEngine.FindDiRegistrationsAsync(projectName, filePath, lifetimeFilter, cancellationToken);
+            var result = await _dependencyInjectionEngine.FindDiRegistrationsAsync(projectName, resolvedFilePath, lifetimeFilter, cancellationToken);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
@@ -149,21 +148,21 @@ public class IntelligenceTools
     [McpServerTool(Name = "GetCallGraph")]
     [Produces(DataTag.ResultOnly)]
     [Description("Builds a multi-level call graph for a method.")]
-    public async Task<SentinelCallToolResult<object>> GetCallGraph([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("forward: what it calls. reverse: who calls it. tree: markdown call-tree string.")][ToolOption(ToolOptionTag.Direction)] string direction = "forward", [Description("Maximum levels of depth to traverse.")][ToolOption(ToolOptionTag.MaxDepth)] int maxDepth = 3, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> GetCallGraph([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("forward: what it calls. reverse: who calls it. tree: markdown call-tree string.")][ToolOption(ToolOptionTag.Direction)] string direction = "forward", [Description("Maximum levels of depth to traverse.")][ToolOption(ToolOptionTag.MaxDepth)] int maxDepth = 3, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             if (direction == "forward")
             {
-                var fwd = await _symbolNavigationEngine.GetCallGraphAsync(filePath, methodName, maxDepth, cancellationToken);
+                var fwd = await _symbolNavigationEngine.GetCallGraphAsync(resolvedFilePath, methodName, maxDepth, cancellationToken);
                 if (fwd == null)
                 {
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " + "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " + "Use GetFileOutline to list available methods in the file.")
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"Method '{methodName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " + "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " + "Use GetFileOutline to list available methods in the file.")
                     };
                 }
 
@@ -182,7 +181,7 @@ public class IntelligenceTools
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"Method '{methodName}' not found in '{Path.GetFileName(filePath)}'. " + "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " + "Use GetFileOutline to list available methods in the file.")
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"Method '{methodName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " + "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " + "Use GetFileOutline to list available methods in the file.")
                     };
                 }
 
@@ -195,7 +194,7 @@ public class IntelligenceTools
 
             if (direction == "tree")
             {
-                var result = await _antiPatternEngine.GenerateCallTreeAsync(filePath, methodName, maxDepth, cancellationToken);
+                var result = await _antiPatternEngine.GenerateCallTreeAsync(resolvedFilePath, methodName, maxDepth, cancellationToken);
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,
@@ -223,13 +222,13 @@ public class IntelligenceTools
     [McpServerTool(Name = "PreviewMoveFileToNamespaceFolder")]
     [Produces(DataTag.Report)]
     [Description("Returns the folder path a file should reside in based on its declared namespace.")]
-    public async Task<SentinelCallToolResult<string>> PreviewMoveFileToNamespaceFolder([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<string>> PreviewMoveFileToNamespaceFolder([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         try
         {
-            var result = await _projectStructureEngine.PreviewMoveFileToNamespaceFolderAsync(filePath, cancellationToken);
+            var result = await _solutionStructureEngine.PreviewMoveFileToNamespaceFolderAsync(resolvedFilePath, cancellationToken);
             return new SentinelCallToolResult<string>
             {
                 IsSuccess = true,
@@ -238,7 +237,7 @@ public class IntelligenceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "PreviewMoveFileToNamespaceFolder failed for '{FilePathWrapper}'", filePath);
+            _logger.LogError(ex, "PreviewMoveFileToNamespaceFolder failed for '{FilePathWrapper}'", resolvedFilePath);
             return new SentinelCallToolResult<string>
             {
                 IsSuccess = false,
@@ -250,13 +249,13 @@ public class IntelligenceTools
     [McpServerTool(Name = "TraceVariableLifetime")]
     [Produces(DataTag.Report)]
     [Description("Traces a local variable/parameter's full lifetime: every read, write, ref/out pass, return, and capture across all code paths. Use FindReferences for methods/properties/fields instead.")]
-    public async Task<SentinelCallToolResult<object>> TraceVariableLifetime([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] FilePathWrapper filepath, [Description("Name of the local variable or parameter to trace.")][Consumes(DataTag.SymbolName)] string variableName, [Description("1-based declaration line; disambiguates duplicate names in the file.")][Consumes(DataTag.StartLine)] int lineNumber, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> TraceVariableLifetime([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Description("Name of the local variable or parameter to trace.")][Consumes(DataTag.SymbolName)] string variableName, [Description("1-based declaration line; disambiguates duplicate names in the file.")][Consumes(DataTag.StartLine)] int lineNumber, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePath = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         try
         {
-            var result = await _symbolNavigationEngine.TraceVariableLifetimeAsync(filePath, variableName, lineNumber, cancellationToken);
+            var result = await _symbolNavigationEngine.TraceVariableLifetimeAsync(resolvedFilePath, variableName, lineNumber, cancellationToken);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = true,
@@ -265,7 +264,7 @@ public class IntelligenceTools
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "TraceVariableLifetime failed for '{VariableName}' in '{FilePathWrapper}'", variableName, filePath);
+            _logger.LogError(ex, "TraceVariableLifetime failed for '{VariableName}' in '{FilePathWrapper}'", variableName, resolvedFilePath);
             return new SentinelCallToolResult<object>
             {
                 IsSuccess = false,

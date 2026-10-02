@@ -42,7 +42,7 @@ public static class LargeResultHelper
         var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
         var filePathString = Path.Combine(dir, $"largeresult_{timestamp}_{resultId}.json");
         await File.WriteAllTextAsync(filePathString, JsonSerializer.Serialize(wrapper, JsonOptions), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken);
-        return (true, new FilePathWrapper(filePathString, solutionRoot, validated: true), resultId, jsonBytes);
+        return (true, new FilePathWrapper(filePathString, validated: true), resultId, jsonBytes);
     }
 
     /// <summary>
@@ -75,7 +75,7 @@ public static class LargeResultHelper
         var timestamp = DateTime.UtcNow.ToString("yyyyMMdd'T'HHmmss'Z'");
         var filePathString = Path.Combine(dir, $"largeresult_{timestamp}_{resultId}.json");
         await File.WriteAllTextAsync(filePathString, JsonSerializer.Serialize(wrapper, JsonOptions), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken);
-        return (true, new FilePathWrapper(filePathString, solutionRoot, validated: true), resultId);
+        return (true, new FilePathWrapper(filePathString, validated: true), resultId);
     }
 }
 

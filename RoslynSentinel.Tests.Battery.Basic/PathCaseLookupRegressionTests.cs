@@ -85,25 +85,25 @@ public class PathCaseLookupRegressionTests
         switch (spelling)
         {
             case PathSpelling.MixedCaseDirectory:
-            {
-                var directory = Path.GetDirectoryName(realPath)!;
-                var flipped = directory.Length > 1
-                    ? char.ToLowerInvariant(directory[0]) + directory[1..].ToUpperInvariant()
-                    : directory;
-                return Path.Combine(flipped, Path.GetFileName(realPath));
-            }
-
-            case PathSpelling.UpperDriveLetter:
-            {
-                if (!OperatingSystem.IsWindows())
                 {
-                    Assert.Ignore("Drive letters exist only on Windows.");
+                    var directory = Path.GetDirectoryName(realPath)!;
+                    var flipped = directory.Length > 1
+                        ? char.ToLowerInvariant(directory[0]) + directory[1..].ToUpperInvariant()
+                        : directory;
+                    return Path.Combine(flipped, Path.GetFileName(realPath));
                 }
 
-                // Everything lowercased (== the loaded solution's spelling) except the drive letter.
-                var lowered = realPath.ToLowerInvariant();
-                return char.ToUpperInvariant(lowered[0]) + lowered[1..];
-            }
+            case PathSpelling.UpperDriveLetter:
+                {
+                    if (!OperatingSystem.IsWindows())
+                    {
+                        Assert.Ignore("Drive letters exist only on Windows.");
+                    }
+
+                    // Everything lowercased (== the loaded solution's spelling) except the drive letter.
+                    var lowered = realPath.ToLowerInvariant();
+                    return char.ToUpperInvariant(lowered[0]) + lowered[1..];
+                }
 
             default:
                 throw new ArgumentOutOfRangeException(nameof(spelling));
@@ -230,7 +230,7 @@ public class PathCaseLookupRegressionTests
         var result = await h.WriteTools.ApplyUnifiedDiff(
             reason: "path case regression ApplyUnifiedDiff",
             ProposedChangeAction.apply,
-            filepath: Spell(spelling, real),
+            filePath: Spell(spelling, real),
             unifiedDiff: ThreeLineDiff("unified-touched"));
 
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
@@ -289,7 +289,7 @@ public class PathCaseLookupRegressionTests
             reason: "path case regression FindReferences",
             symbolName: "OrderStatus",
             kind: FindReferencesKind.callers,
-            filepath: Spell(spelling, real),
+            filePath: Spell(spelling, real),
             contextSnippet: "public enum OrderStatus");
 
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
@@ -308,7 +308,7 @@ public class PathCaseLookupRegressionTests
             reason: "path case regression missing file",
             symbolName: "OrderStatus",
             kind: FindReferencesKind.callers,
-            filepath: missing,
+            filePath: missing,
             contextSnippet: "public enum OrderStatus");
 
         Assert.That(result.IsSuccess, Is.False);
@@ -316,22 +316,20 @@ public class PathCaseLookupRegressionTests
             "a file missing from the solution is a NotFound, not a raw 'Exception'");
     }
 
-    // Evidence for the GetDiagnostics(scope: file) + relative path question: DiagnosticEngine feeds the
-    // implicit string -> FilePathWrapper conversion straight into GetDocumentIdsWithFilePath.
+    // GetDiagnostics(scope: file) + a solution-relative path: the implicit string -> FilePathWrapper
+    // conversion is root-less, so a tool must resolve the wire path with ResolveFromWire first.
     [Test]
-    public async Task GetFileDiagnostics_RelativePath_ResolvesOnlyWithinSolutionRootScopeAsync()
+    public async Task GetFileDiagnostics_RelativePath_ResolvesOnlyViaResolveFromWireAsync()
     {
         using var h = await CreateHarnessAsync();
         var engine = new DiagnosticEngine(h.Workspace);
         var relative = Path.Combine("ContosoOrders.Core", "OrderStatus.cs");
 
         Assert.ThrowsAsync<ToolNotFoundException>(async () => await engine.GetFileDiagnosticsAsync(relative),
-            "without a solution-root scope a relative string stays unrooted and can never match a document path");
+            "a relative string converted implicitly stays unrooted and can never match a document path");
 
-        using (FilePathWrapper.UseSolutionRoot(h.Workspace.GetSolutionRoot()))
-        {
-            var scoped = await engine.GetFileDiagnosticsAsync(relative);
-            Assert.That(scoped.Outcome, Is.EqualTo(EngineOutcome.Success));
-        }
+        FilePathWrapper resolved = h.Workspace.ResolveFromWire(relative);
+        var result = await engine.GetFileDiagnosticsAsync(resolved);
+        Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.Success));
     }
 }

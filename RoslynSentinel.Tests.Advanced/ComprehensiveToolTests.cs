@@ -16,7 +16,6 @@ public class ComprehensiveToolTests
     private AdvancedRefactoringEngine _advancedRefactoringEngine;
     private StructuralRefactoringEngine _advancedStructuralEngine;
     private ApiGenerationEngine _apiGenerationEngine;
-    private ArchitecturalEngine _architecturalEngine;
     private AsyncBatchEngine _asyncBatchEngine;
     private AsyncOptimizationEngine _asyncOptimizationEngine;
     private AsyncAnalysisEngine _asyncSafetyEngine;
@@ -45,7 +44,7 @@ public class ComprehensiveToolTests
     private SyntaxModernizationEngine _modernizationEngine;
     private ModernizationTools _modernizationTools;
     private PerformanceEngine _performanceEngine;
-    private SolutionStructureEngine _projectStructureEngine;
+    private SolutionStructureEngine _solutionStructureEngine;
     private QualityTools _qualityTools;
     private BasicRefactoringEngine _refactoringEngine;
     private AdvancedRefactoringTools _advancedRefactoringTools;
@@ -69,7 +68,6 @@ public class ComprehensiveToolTests
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
         _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
         _apiGenerationEngine = new ApiGenerationEngine(_workspaceManager);
-        _architecturalEngine = new ArchitecturalEngine(_workspaceManager);
         _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
         _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
@@ -86,7 +84,7 @@ public class ComprehensiveToolTests
         _diffEngine = new DiffEngine();
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
         _documentationEngine = new DocumentationEngine(_workspaceManager);
-        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _projectStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
+        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _solutionStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
         _impactAnalyzer = new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
         _inventoryEngine = new InventoryEngine(_workspaceManager);
@@ -95,7 +93,7 @@ public class ComprehensiveToolTests
         _metricsEngine = new MetricsEngine(_workspaceManager);
         _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
         _performanceEngine = new PerformanceEngine(_workspaceManager);
-        _projectStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
+        _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
         _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         _securityEngine = new SecurityEngine(_workspaceManager);
         _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
@@ -131,10 +129,9 @@ public class ComprehensiveToolTests
             _deadCodeEngine,
             _documentationEngine,
             _dependencyEngine,
-            _projectStructureEngine,
+            _solutionStructureEngine,
             _asyncSafetyEngine,
             _healthOrchestrationEngine,
-            _architecturalEngine,
             _symbolNavigationEngine,
             _dependencyInjectionEngine,
             _discoveryEngine,

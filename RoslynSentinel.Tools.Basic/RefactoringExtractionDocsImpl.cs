@@ -56,7 +56,7 @@ public class RefactoringExtractionDocsImpl
 
     public async Task<SentinelCallToolResult<object>> UsingDirective(
         ToolCallReason reason,
-        FilePathWrapper filepath,
+        string filePath,
         AddRemoveViewAction operation,
         string? namespaceName = null,
         bool simplifyExisting = false,
@@ -65,7 +65,7 @@ public class RefactoringExtractionDocsImpl
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             if (operation == AddRemoveViewAction.view)
@@ -157,7 +157,7 @@ public class RefactoringExtractionDocsImpl
 
     public async Task<SentinelCallToolResult<object>> SummaryComment(
         ToolCallReason reason,
-        FilePathWrapper filepath,
+        string filePath,
         AddRemoveViewAction operation,
         string targetName,
         string? summaryText = null,
@@ -170,7 +170,7 @@ public class RefactoringExtractionDocsImpl
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             if (operation == AddRemoveViewAction.view)
@@ -246,7 +246,7 @@ public class RefactoringExtractionDocsImpl
 
     public async Task<SentinelCallToolResult<object>> ExtractLocalVariable(
         ToolCallReason reason,
-        FilePathWrapper filepath,
+        string filePath,
         string exactExpressionText,
         string variableName,
         string? lineBefore = null,
@@ -255,7 +255,7 @@ public class RefactoringExtractionDocsImpl
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         try
         {
             var result = await _refactoringEngine.ExtractLocalVariableAsync(filePathResolved, exactExpressionText, variableName, lineBefore, lineAfter, cancellationToken: cancellationToken);
@@ -291,7 +291,7 @@ public class RefactoringExtractionDocsImpl
 
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> ExtractMethodSafe(
         ToolCallReason reason,
-        FilePathWrapper filepath,
+        string filePath,
         string newMethodName,
         string exactSourceBlock,
         string? lineBefore = null,
@@ -301,7 +301,7 @@ public class RefactoringExtractionDocsImpl
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
-        FilePathWrapper filePathResolved = FilePathWrapper.FromWire(filepath, _workspaceManager.GetSolutionRoot());
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation("ExtractMethodSafe: {File} method={Name}", filePathResolved, newMethodName);

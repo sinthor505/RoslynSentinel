@@ -12,7 +12,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 ///  2. FindHardcodedPaths -> project/solution scope added.
 ///  3. CheckForSqlInjection -> project/solution scope added.
 ///  4. FindSequentialIndependentAwaits -> consecutive block grouped into one finding.
-///  5. ProjectStructureEngine NAME_MISMATCH -> AppHost projects suppressed.
+///  5. SolutionStructureEngine NAME_MISMATCH -> AppHost projects suppressed.
 /// </summary>
 [TestFixture]
 public class BatteryThirtySixTests
@@ -20,7 +20,7 @@ public class BatteryThirtySixTests
     private IWorkspaceManager _workspaceManager;
     private AsyncAnalysisEngine _asyncSafetyEngine;
     private SecurityEngine _securityEngine;
-    private SolutionStructureEngine _structureEngine;
+    private SolutionStructureEngine _solutionStructureEngine;
 
     [SetUp]
     public void Setup()
@@ -28,7 +28,7 @@ public class BatteryThirtySixTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
-        _structureEngine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
+        _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
     }
 
     [TearDown]
@@ -317,7 +317,7 @@ class C {
             [("Resources.cs", "public static class ServiceNames { public const string Api = \"api\"; }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        var results = await _structureEngine.FindStructuralSmellsAsync(
+        var results = await _solutionStructureEngine.FindStructuralSmellsAsync(
             typeFilter: SolutionStructureEngine.StructuralSmellType.NameMismatch);
 
         Assert.That(results, Is.Empty,
@@ -333,7 +333,7 @@ class C {
             [("Foo.cs", "public class Bar { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        var results = await _structureEngine.FindStructuralSmellsAsync(
+        var results = await _solutionStructureEngine.FindStructuralSmellsAsync(
             typeFilter: SolutionStructureEngine.StructuralSmellType.NameMismatch);
 
         Assert.That(results.Any(r => r.Contains("NAME_MISMATCH")), Is.True,
@@ -349,7 +349,7 @@ class C {
             [("Constants.cs", "public static class ResourceNames { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        var results = await _structureEngine.FindStructuralSmellsAsync(
+        var results = await _solutionStructureEngine.FindStructuralSmellsAsync(
             typeFilter: SolutionStructureEngine.StructuralSmellType.NameMismatch);
 
         Assert.That(results, Is.Empty,
