@@ -35,6 +35,9 @@ function Test-CsFallback($toolName, $in) {
         { $_ -in 'Bash', 'PowerShell' } {
             $c = [string]$in.command
             if ($c -match '[\\/]Worktree[\\/]') { return $null }
+            # Writing or reading the journal itself is never a fallback, even when the note
+            # mentions a .cs file - counting it made the Stop hook re-nudge for journaling.
+            if ($c -match '\.claude[\\/]+journal[\\/]') { return $null }
             if ($c -match '\.cs\b' -or $c -match '\bdotnet\s+(build|test)\b') {
                 $c = ($c -replace '\s+', ' ').Trim()
                 if ($c.Length -gt 100) { $c = $c.Substring(0, 100) + '...' }

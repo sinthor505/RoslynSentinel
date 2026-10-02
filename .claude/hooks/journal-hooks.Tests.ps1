@@ -89,6 +89,9 @@ try {
     $null = Invoke-JournalHook 'journal-log-call.ps1' @{ session_id = $sid; hook_event_name = 'PostToolUse'; tool_name = 'mcp__other_server__Thing'; tool_input = @{}; tool_response = @{ type = 'text'; text = 'x' }; mcp_server = @{ name = 'other_server' } }
     Check 'log: non-C# / Worktree / other-MCP calls not logged' ((Get-CallLines).Count -eq $before) "count=$((Get-CallLines).Count) before=$before"
 
+    $null = Builtin 'PowerShell' @{ command = "Add-Content -LiteralPath 'C:\repo\.claude\journal\2026-10-01_aaaabbbb.md' -Value '- 17:59 - Git: edits in Foo.cs interleaved'" }
+    Check 'log: journal write mentioning .cs is not a fallback' ((Get-CallLines).Count -eq $before)
+
     $null = Builtin 'Bash' @{ command = 'cat Foo.csproj' }
     Check 'log: .csproj is not a .cs fallback' ((Get-CallLines).Count -eq $before)
 
