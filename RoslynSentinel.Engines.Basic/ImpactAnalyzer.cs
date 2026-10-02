@@ -214,7 +214,7 @@ public class ImpactAnalyzer
 
         if (symbol == null)
         {
-            throw new InvalidOperationException("No symbol found at the specified position.");
+            throw new ToolNotFoundException("No symbol found at the specified position.");
         }
 
         var relatedSymbols = await relationFinder(symbol, solution, cancellationToken);

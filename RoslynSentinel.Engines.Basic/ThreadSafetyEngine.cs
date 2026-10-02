@@ -143,17 +143,17 @@ public class ThreadSafetyEngine
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new FileNotFoundException($"File not found: {filePath}");
+            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
 
             var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException($"Failed to get syntax root for file: {filePath}");
             var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
             if (method == null || method.Body == null)
             {
-                throw new InvalidOperationException($"Method or body not found: {methodName} in file: {filePath}");
+                throw new ToolNotFoundException($"Method or body not found: {methodName} in file: {filePath}");
             }
 
-            var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() ?? throw new InvalidOperationException($"Type not found for method: {methodName} in file: {filePath}");
+            var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() ?? throw new ToolNotFoundException($"Type not found for method: {methodName} in file: {filePath}");
 
             // Find the lock object being used in this method
             var lockStatements = method.Body.DescendantNodes().OfType<LockStatementSyntax>().ToList();
