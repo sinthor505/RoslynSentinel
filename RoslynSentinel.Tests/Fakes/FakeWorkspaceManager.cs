@@ -61,6 +61,23 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
     {
         var solution = CurrentSolution ?? throw new SolutionNotLoadedException("Solution not loaded.");
+
+        // Mirrors PersistentWorkspaceManager's pre-apply validation: a change that introduces a new compile error is
+        // rejected and nothing is applied, so tests of that rejection path can run on an in-memory workspace.
+        if (validateChanges)
+        {
+            var validationReport = await ValidationEngine.ValidateChangesAsync(solution, changes, cancellationToken: cancellationToken);
+            if (!validationReport.Success)
+            {
+                return new ApplyChangesResult(
+                    Success: false,
+                    SucceededFiles: [],
+                    FailedFiles: [],
+                    Summary: $"Validation failed with {validationReport.Diagnostics.Count} new error(s); no files written.",
+                    ValidationResult: validationReport);
+            }
+        }
+
         var preImages = new Dictionary<string, string?>();
         var succeeded = new List<string>();
 
