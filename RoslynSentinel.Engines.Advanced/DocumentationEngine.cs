@@ -22,7 +22,7 @@ public class DocumentationEngine
         var document = (solution.GetDocumentIdsWithFilePath(normalizedPath).Select(solution.GetDocument).FirstOrDefault()
             ?? solution.Projects.SelectMany(p => p.Documents)
                 .FirstOrDefault(d => !string.IsNullOrEmpty(d.FilePath) &&
-                                     string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase))) ?? throw new FileNotFoundException($"File not found in solution: {normalizedPath}");
+                                     string.Equals(Path.GetFullPath(d.FilePath), normalizedPath, StringComparison.OrdinalIgnoreCase))) ?? throw new ToolNotFoundException($"File not found in solution: {normalizedPath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {

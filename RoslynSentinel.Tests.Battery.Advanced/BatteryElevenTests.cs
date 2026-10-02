@@ -218,6 +218,6 @@ public class Service
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Service { }")]);
         _workspaceManager.SetTestSolution(solution);
-        Assert.ThrowsAsync<FileNotFoundException>(() => _engine.FindUnusedPrivateMembersAsync("DoesNotExist.cs", "Service"));
+        Assert.ThrowsAsync<ToolNotFoundException>(() => _engine.FindUnusedPrivateMembersAsync("DoesNotExist.cs", "Service"));
     }
 }

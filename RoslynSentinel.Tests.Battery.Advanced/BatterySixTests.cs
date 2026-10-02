@@ -73,7 +73,7 @@ public class Auditor
     public async Task GenerateXmlDocStubs_FileNotFound_ThrowsFileNotFound()
     {
         SetSource("public class C { }", "Test.cs");
-        Assert.ThrowsAsync<FileNotFoundException>(async () => await _engine.GenerateXmlDocumentationStubsAsync("Missing.cs"));
+        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.GenerateXmlDocumentationStubsAsync("Missing.cs"));
     }
 
     [Test]
