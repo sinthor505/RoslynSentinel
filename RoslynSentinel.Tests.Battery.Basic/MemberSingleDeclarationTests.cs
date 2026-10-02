@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
@@ -12,8 +13,11 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 /// overwrote the engine message with a hardcoded generic string) - which sent agents off rewriting a
 /// perfectly valid member instead of splitting the call. These tests pin the specific message: how
 /// many members were found, their names, that the operation takes exactly one, and the recovery path.
+/// About the tool's code-correctness, so it runs on an InMemoryWorkspace (no temp directory, MSBuild
+/// load or disk write). See ModifyAttributeBatchTests for the pattern.
 /// </summary>
 [TestFixture]
+[Parallelizable(ParallelScope.All)]
 public class MemberSingleDeclarationTests
 {
     private const string FixtureRelativePath = "ContosoOrders.Core/MemberSingleDeclarationFixture.cs";
@@ -46,17 +50,14 @@ public class MemberSingleDeclarationTests
     [Test]
     public async Task Replace_WithThreeMembers_ReportsCountNamesAndRecoveryInsteadOfInvalidDeclarationAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
-        var fullPath = Path.Combine(fixture.SolutionDirectory, FixtureRelativePath);
-        var before = await File.ReadAllTextAsync(fullPath);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var before = workspace.ReadText(FixtureRelativePath);
 
         var result = await tools.Member(
             reason: "test multi member replace",
             operation: MemberAction.replace,
-            filepath: FixtureRelativePath,
+            filepath: workspace.PathOf(FixtureRelativePath),
             memberName: "Alpha",
             newMemberSource: "public int Alpha() => 10;\n\npublic int Gamma() => 3;\n\nprivate string _delta = \"d\";");
 
@@ -75,21 +76,19 @@ public class MemberSingleDeclarationTests
             Assert.That(message, Does.Not.Contain("not a valid member declaration"),
                 "The multi-member case must not be misreported as a malformed declaration.");
         });
-        Assert.That(await File.ReadAllTextAsync(fullPath), Is.EqualTo(before), "A rejected replace must not write anything.");
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "A rejected replace must not write anything.");
     }
 
     [Test]
     public async Task Replace_WithSingleMalformedMember_StillReportsInvalidDeclarationAsync()
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
 
         var result = await tools.Member(
             reason: "test malformed single replace",
             operation: MemberAction.replace,
-            filepath: FixtureRelativePath,
+            filepath: workspace.PathOf(FixtureRelativePath),
             memberName: "Alpha",
             newMemberSource: "public int Alpha() { return ; + }");
 
@@ -107,15 +106,13 @@ public class MemberSingleDeclarationTests
     [TestCase("before:Beta")]
     public async Task AddMember_WithTwoMembers_ReportsCountNamesAndOneCallPerMemberAsync(string? position)
     {
-        using var fixture = new TestSolutionFixture();
-        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await fixture.AddFileToSolution(workspaceManager, FixtureRelativePath, FixtureSource);
-        var tools = BuildTools(workspaceManager);
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
 
         var result = await tools.Member(
             reason: "test multi member add",
             operation: MemberAction.addMember,
-            filepath: FixtureRelativePath,
+            filepath: workspace.PathOf(FixtureRelativePath),
             containerName: "SingleDeclTarget",
             position: position,
             newMemberSource: "public int Gamma() => 3;\n\npublic string Name { get; set; } = \"\";");
