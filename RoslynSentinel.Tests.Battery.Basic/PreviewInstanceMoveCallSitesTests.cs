@@ -264,26 +264,44 @@ public class PreviewInstanceMoveCallSitesTests
     [Test]
     public async Task NoInScopeCandidate_ClassifiesAsNoCandidateIntroducibleAsync()
     {
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassA.cs"), ClassAWithFooSource, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassB.cs"), ClassBSource, reloadSolution: false);
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/PreviewMoveClassA.cs", """
+                namespace ContosoOrders.Core;
 
-        const string callerSource = """
-            namespace ContosoOrders.Core;
-
-            public class PreviewMoveCallerNoCandidate
-            {
-                public void Do()
+                public class PreviewMoveClassA
                 {
-                    var a = new PreviewMoveClassA();
-                    a.Foo();
+                    public void Foo()
+                    {
+                    }
+
+                    public void Bar()
+                    {
+                    }
                 }
-            }
-            """;
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveCallerNoCandidate.cs"), callerSource);
+                """),
+            ("ContosoOrders.Core/PreviewMoveClassB.cs", """
+                namespace ContosoOrders.Core;
 
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "PreviewMoveClassA.cs"));
+                public class PreviewMoveClassB
+                {
+                }
+                """),
+            ("ContosoOrders.Core/PreviewMoveCallerNoCandidate.cs", """
+                namespace ContosoOrders.Core;
 
-        var results = await _engine.PreviewInstanceMoveCallSitesAsync(filePath, "PreviewMoveClassA", ["Foo"], "PreviewMoveClassB");
+                public class PreviewMoveCallerNoCandidate
+                {
+                    public void Do()
+                    {
+                        var a = new PreviewMoveClassA();
+                        a.Foo();
+                    }
+                }
+                """));
+
+        var results = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/PreviewMoveClassA.cs"),
+            "PreviewMoveClassA", ["Foo"], "PreviewMoveClassB");
 
         var fooSite = results.Single(r => r.CallExpression.Contains("Foo"));
         Assert.Multiple(() =>
@@ -308,33 +326,51 @@ public class PreviewInstanceMoveCallSitesTests
         // rewrite. The nested class's OWN field of the source type is the only legitimate receiver,
         // and that call site is not broken by the move at all (it never used the destination type),
         // so it must be left alone / reported honestly, not silently pointed at the unreachable field.
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassA.cs"), ClassAWithFooSource, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassB.cs"), ClassBSource, reloadSolution: false);
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/PreviewMoveClassA.cs", """
+                namespace ContosoOrders.Core;
 
-        const string callerSource = """
-        namespace ContosoOrders.Core;
-
-        public class PreviewMoveOuterFixture
-        {
-            private PreviewMoveClassB _outerFieldOfDestinationType;
-
-            public class PreviewMoveNestedFixture
-            {
-                private PreviewMoveClassA _innerFieldOfSourceType;
-
-                public void Do()
+                public class PreviewMoveClassA
                 {
-                    _innerFieldOfSourceType = new PreviewMoveClassA();
-                    _innerFieldOfSourceType.Foo();
+                    public void Foo()
+                    {
+                    }
+
+                    public void Bar()
+                    {
+                    }
                 }
-            }
-        }
-        """;
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveOuterFixture.cs"), callerSource);
+                """),
+            ("ContosoOrders.Core/PreviewMoveClassB.cs", """
+                namespace ContosoOrders.Core;
 
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "PreviewMoveClassA.cs"));
+                public class PreviewMoveClassB
+                {
+                }
+                """),
+            ("ContosoOrders.Core/PreviewMoveOuterFixture.cs", """
+                namespace ContosoOrders.Core;
 
-        var results = await _engine.PreviewInstanceMoveCallSitesAsync(filePath, "PreviewMoveClassA", ["Foo"], "PreviewMoveClassB");
+                public class PreviewMoveOuterFixture
+                {
+                    private PreviewMoveClassB _outerFieldOfDestinationType;
+
+                    public class PreviewMoveNestedFixture
+                    {
+                        private PreviewMoveClassA _innerFieldOfSourceType;
+
+                        public void Do()
+                        {
+                            _innerFieldOfSourceType = new PreviewMoveClassA();
+                            _innerFieldOfSourceType.Foo();
+                        }
+                    }
+                }
+                """));
+
+        var results = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/PreviewMoveClassA.cs"),
+            "PreviewMoveClassA", ["Foo"], "PreviewMoveClassB");
 
         var fooSite = results.Single(r => r.CallExpression.Contains("Foo"));
         Assert.Multiple(() =>
