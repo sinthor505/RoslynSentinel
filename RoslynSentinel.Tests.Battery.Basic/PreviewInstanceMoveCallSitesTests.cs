@@ -772,51 +772,53 @@ public class PreviewInstanceMoveCallSitesTests
     [Test]
     public async Task MoveMemberAsync_GlobalWildcardFixup_ResolvesEveryUnresolvedSiteAsync()
     {
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveWildSourceA.cs"), """
-            namespace ContosoOrders.Core;
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/MoveWildSourceA.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveWildSourceA
-            {
-                public void Foo()
+                public class MoveWildSourceA
+                {
+                    public void Foo()
+                    {
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/MoveWildTargetB.cs", """
+                namespace ContosoOrders.Core;
+
+                public class MoveWildTargetB
                 {
                 }
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveWildTargetB.cs"), """
-            namespace ContosoOrders.Core;
+                """),
+            ("ContosoOrders.Core/MoveWildCaller1.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveWildTargetB
-            {
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveWildCaller1.cs"), """
-            namespace ContosoOrders.Core;
-
-            public class MoveWildCaller1
-            {
-                public void Do()
+                public class MoveWildCaller1
                 {
-                    var a = new MoveWildSourceA();
-                    a.Foo();
+                    public void Do()
+                    {
+                        var a = new MoveWildSourceA();
+                        a.Foo();
+                    }
                 }
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveWildCaller2.cs"), """
-            namespace ContosoOrders.Core;
+                """),
+            ("ContosoOrders.Core/MoveWildCaller2.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveWildCaller2
-            {
-                public void Do()
+                public class MoveWildCaller2
                 {
-                    var a = new MoveWildSourceA();
-                    a.Foo();
+                    public void Do()
+                    {
+                        var a = new MoveWildSourceA();
+                        a.Foo();
+                    }
                 }
-            }
-            """);
+                """));
 
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveWildSourceA.cs"));
-
-        var result = await _engine.MoveMemberAsync(filePath, "MoveWildSourceA", ["Foo"], "MoveWildTargetB", null, default, true, new Dictionary<string, string> { ["*"] = "new" });
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/MoveWildSourceA.cs"),
+            "MoveWildSourceA", ["Foo"], "MoveWildTargetB", null, default, true,
+            new Dictionary<string, string> { ["*"] = "new" });
 
         Assert.Multiple(() =>
         {
@@ -835,67 +837,73 @@ public class PreviewInstanceMoveCallSitesTests
     [Test]
     public async Task MoveMemberAsync_FixupKeyPrecedence_ExactBeatsFileWildcardBeatsGlobalAsync()
     {
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MovePrecSourceA.cs"), """
-            namespace ContosoOrders.Core;
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/MovePrecSourceA.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MovePrecSourceA
-            {
-                public void Foo()
+                public class MovePrecSourceA
+                {
+                    public void Foo()
+                    {
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/MovePrecTargetB.cs", """
+                namespace ContosoOrders.Core;
+
+                public class MovePrecTargetB
                 {
                 }
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MovePrecTargetB.cs"), """
-            namespace ContosoOrders.Core;
+                """),
+            ("ContosoOrders.Core/MovePrecCaller1.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MovePrecTargetB
-            {
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MovePrecCaller1.cs"), """
-            namespace ContosoOrders.Core;
-
-            public class MovePrecCaller1
-            {
-                public void First()
+                public class MovePrecCaller1
                 {
-                    var a = new MovePrecSourceA();
-                    a.Foo();
-                }
+                    public void First()
+                    {
+                        var a = new MovePrecSourceA();
+                        a.Foo();
+                    }
 
-                public void Second()
+                    public void Second()
+                    {
+                        var a = new MovePrecSourceA();
+                        a.Foo();
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/MovePrecCaller2.cs", """
+                namespace ContosoOrders.Core;
+
+                public class MovePrecCaller2
                 {
-                    var a = new MovePrecSourceA();
-                    a.Foo();
+                    public void Do()
+                    {
+                        var a = new MovePrecSourceA();
+                        a.Foo();
+                    }
                 }
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MovePrecCaller2.cs"), """
-            namespace ContosoOrders.Core;
+                """));
 
-            public class MovePrecCaller2
-            {
-                public void Do()
-                {
-                    var a = new MovePrecSourceA();
-                    a.Foo();
-                }
-            }
-            """);
-
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MovePrecSourceA.cs"));
-        var rows = await _engine.PreviewInstanceMoveCallSitesAsync(filePath, "MovePrecSourceA", ["Foo"], "MovePrecTargetB");
+        var rows = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/MovePrecSourceA.cs"),
+            "MovePrecSourceA", ["Foo"], "MovePrecTargetB");
         var caller1Rows = rows.Where(r => r.FilePath.ToString().Contains("MovePrecCaller1")).OrderBy(r => r.Line).ToList();
         Assume.That(caller1Rows, Has.Count.EqualTo(2));
         var exactKey = $"{caller1Rows[0].FilePath}:{caller1Rows[0].Line}";
-        var fileKey = Path.GetRelativePath(_workspaceManager.GetSolutionRoot()!, caller1Rows[0].FilePath).ToUpperInvariant() + ":*";
+        var solutionRoot = workspace.Manager.GetSolutionRoot();
+        var fileKey = (solutionRoot != null ? Path.GetRelativePath(solutionRoot, caller1Rows[0].FilePath).ToUpperInvariant() : caller1Rows[0].FilePath.ToString()) + ":*";
 
-        var result = await _engine.MoveMemberAsync(filePath, "MovePrecSourceA", ["Foo"], "MovePrecTargetB", null, default, true, new Dictionary<string, string>
-        {
-            [exactKey] = "_exactValue",
-            [fileKey] = "_fileValue",
-            ["*"] = "_globalValue",
-        });
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/MovePrecSourceA.cs"),
+            "MovePrecSourceA", ["Foo"], "MovePrecTargetB", null, default, true,
+            new Dictionary<string, string>
+            {
+                [exactKey] = "_exactValue",
+                [fileKey] = "_fileValue",
+                ["*"] = "_globalValue",
+            });
 
         Assert.Multiple(() =>
         {
