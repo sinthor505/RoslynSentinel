@@ -539,7 +539,9 @@ public class DiscoveryEngine
             var resolution = await _workspaceManager.ResolveFromWireAsync(projectName, docCommentId, cancellationToken);
             if (!resolution.Resolved)
             {
-                throw new InvalidOperationException(resolution.Error!.Message);
+                throw resolution.Error!.Code == EngineErrorCode.SymbolNotResolved
+                    ? new ToolNotFoundException(resolution.Error.Message)
+                    : new InvalidOperationException(resolution.Error.Message);
             }
 
             symbol = resolution.Symbol!;

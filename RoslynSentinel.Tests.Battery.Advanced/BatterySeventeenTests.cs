@@ -137,7 +137,7 @@ public class ProjectStructureEngineTests
     [Test]
     public async Task FixMismatchedNamespaces_UnknownFile_ThrowsFileNotFound()
     {
-        Assert.ThrowsAsync<FileNotFoundException>(
+        Assert.ThrowsAsync<ToolNotFoundException>(
             async () => await _engine.FixMismatchedNamespacesAsync("NoSuchFile.cs"));
     }
 
