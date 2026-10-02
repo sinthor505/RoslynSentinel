@@ -735,7 +735,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, constResult.Error ?? "ExtractConstantSafe failed.")
+                        ErrorData = new ResultError(constResult.ErrorCode ?? ToolErrorCode.Exception, constResult.Error ?? "ExtractConstantSafe failed.")
                     };
                 var constChanges = new Dictionary<FilePathWrapper, string>
                 {

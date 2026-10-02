@@ -114,6 +114,14 @@ public class MsToolAugmentEngineTests
             async () => await _engine.SortAndDeduplicateUsingsAsync("NoSuchFile.cs"),
             "unknown file should throw InvalidOperationException");
     }
+
+    [Test]
+    public async Task EncapsulateFieldSafeAsync_NonExistentFile_ReturnsNotFoundErrorCode()
+    {
+        var result = await _engine.EncapsulateFieldSafeAsync("NonExistent.cs", "MyField");
+        Assert.That(result.Success, Is.False, "non-existent file should return failure");
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "error should be NotFound code");
+    }
 }
 
 [TestFixture]

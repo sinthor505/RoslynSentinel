@@ -316,7 +316,7 @@ public class RefactoringExtractionDocsImpl
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
                     IsSuccess = false,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"ExtractMethodSafe: {result.Error}")
+                    ErrorData = new ResultError(result.ErrorCode ?? ToolErrorCode.Exception, $"ExtractMethodSafe: {result.Error}")
                 };
             }
 

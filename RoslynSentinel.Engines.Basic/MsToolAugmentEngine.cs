@@ -10,9 +10,9 @@ namespace RoslynSentinel.Engines.Basic;
 
 // ── Result Types ──────────────────────────────────────────────────────────────
 
-public record MsAugmentResult(bool Success, string? Error, string? UpdatedContent)
+public record MsAugmentResult(bool Success, string? Error, string? UpdatedContent, string? ErrorCode = null)
 {
-    public static MsAugmentResult Fail(string error) => new(false, error, null);
+    public static MsAugmentResult Fail(string error, string? errorCode = null) => new(false, error, null, errorCode);
     public static MsAugmentResult Ok(string content) => new(true, null, content);
 }
 
@@ -90,7 +90,7 @@ public class MsToolAugmentEngine
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (doc == null)
         {
-            return MsAugmentResult.Fail($"File not found: {filePath}");
+            return MsAugmentResult.Fail($"File not found: {filePath}", ToolErrorCode.NotFound);
         }
 
         var root = await doc.GetSyntaxRootAsync(cancellationToken);
@@ -103,7 +103,7 @@ public class MsToolAugmentEngine
             .FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == fieldName));
         if (field == null)
         {
-            return MsAugmentResult.Fail($"Field '{fieldName}' not found in {filePath}.");
+            return MsAugmentResult.Fail($"Field '{fieldName}' not found in {filePath}.", ToolErrorCode.NotFound);
         }
 
         // ── Compute names ──
@@ -434,7 +434,7 @@ public class MsToolAugmentEngine
         var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (doc == null)
         {
-            return MsAugmentResult.Fail($"File not found: {filePath}");
+            return MsAugmentResult.Fail($"File not found: {filePath}", ToolErrorCode.NotFound);
         }
 
         var root = await doc.GetSyntaxRootAsync(cancellationToken);
@@ -448,7 +448,7 @@ public class MsToolAugmentEngine
         // Find the string.Format invocation
         int pos;
         try { pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter); }
-        catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message); }
+        catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message, ex.ErrorCode); }
 
         var invocation = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length))
             .AncestorsAndSelf()
@@ -1047,7 +1047,7 @@ public class MsToolAugmentEngine
     {
         if (!SyntaxFacts.IsValidIdentifier(constantName))
         {
-            return MsAugmentResult.Fail($"'{constantName}' is not a valid C# identifier.");
+            return MsAugmentResult.Fail($"'{constantName}' is not a valid C# identifier.", ToolErrorCode.InvalidArgument);
         }
 
         string source;
