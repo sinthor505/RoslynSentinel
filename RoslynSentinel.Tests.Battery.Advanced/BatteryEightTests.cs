@@ -162,7 +162,7 @@ public class DependencyEngineTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", "public class Foo { }")]);
         _workspaceManager.SetTestSolution(solution);
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await _engine.GetProjectDependenciesAsync("NonExistent", CancellationToken.None));
+        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.GetProjectDependenciesAsync("NonExistent", CancellationToken.None));
     }
 
     [Test]

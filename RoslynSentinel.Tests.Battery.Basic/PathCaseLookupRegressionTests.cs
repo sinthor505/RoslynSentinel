@@ -324,7 +324,7 @@ public class PathCaseLookupRegressionTests
         var engine = new DiagnosticEngine(h.Workspace);
         var relative = Path.Combine("ContosoOrders.Core", "OrderStatus.cs");
 
-        Assert.ThrowsAsync<FileNotFoundException>(async () => await engine.GetFileDiagnosticsAsync(relative),
+        Assert.ThrowsAsync<ToolNotFoundException>(async () => await engine.GetFileDiagnosticsAsync(relative),
             "without a solution-root scope a relative string stays unrooted and can never match a document path");
 
         using (FilePathWrapper.UseSolutionRoot(h.Workspace.GetSolutionRoot()))

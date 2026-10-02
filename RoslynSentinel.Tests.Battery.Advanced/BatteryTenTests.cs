@@ -208,7 +208,7 @@ public class DiagnosticEngineTests
     [Test]
     public async Task GetFileDiagnostics_UnknownFile_ThrowsFileNotFound()
     {
-        Assert.ThrowsAsync<FileNotFoundException>(
+        Assert.ThrowsAsync<ToolNotFoundException>(
             () => _engine.GetFileDiagnosticsAsync("DoesNotExist.cs"));
     }
 

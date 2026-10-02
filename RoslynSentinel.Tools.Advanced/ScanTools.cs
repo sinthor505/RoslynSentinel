@@ -1139,7 +1139,7 @@ public class ScanTools
 
             return toolResult;
         }
-        catch (Exception ex) when (ex is ArgumentException && ex.Message.Contains("not found in solution"))
+        catch (Exception ex) when ((ex is ArgumentException or ToolNotFoundException) && ex.Message.Contains("not found in solution"))
         {
             return new SentinelCallToolResult<object>
             {

@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Basic;
 public class SolutionStructureEngine
@@ -392,7 +393,7 @@ public class SolutionStructureEngine
         }
         else if (!string.IsNullOrEmpty(projectName))
         {
-            var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)) ?? throw new ArgumentException($"Project '{projectName}' not found in the solution.");
+            var project = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase)) ?? throw new ToolNotFoundException($"Project '{projectName}' not found in the solution.");
             documents = project?.Documents.Cast<Document?>() ?? Enumerable.Empty<Document?>();
         }
         else

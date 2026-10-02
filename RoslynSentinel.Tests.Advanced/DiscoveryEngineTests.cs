@@ -291,7 +291,7 @@ public class Model
     {
         SetSource(@"public class A { }");
 
-        Assert.ThrowsAsync<ArgumentException>(
+        Assert.ThrowsAsync<ToolNotFoundException>(
             async () => await _discoveryEngine.GetPublicApiSurfaceAsync("NonExistentProject"));
     }
 
@@ -512,7 +512,7 @@ public class MyService
 
         Assert.That(
             () => _discoveryEngine.PreviewRenameImpactAsync(docCommentId: "M:Service.Run"),
-            Throws.InstanceOf<ArgumentException>()
+            Throws.InstanceOf<ToolInvalidArgumentException>()
                 .With.Message.Contains("projectName"));
     }
 }
