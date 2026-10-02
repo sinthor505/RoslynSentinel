@@ -185,7 +185,7 @@ public class QualityClass
     public async Task AddConfigureAwaitFalse_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("NonExistent.cs"));
+        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("NonExistent.cs"));
     }
 
     // --- RemoveConfigureAwaitFalse ---

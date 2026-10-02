@@ -21,9 +21,9 @@ public class AsyncOptimizationEngine
     public async Task<DocumentEditResult> OptimizeToValueTaskAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException("File not found.");
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var methodNode = (root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName)) ?? throw new InvalidOperationException("Method not found.");
+        var methodNode = (root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName)) ?? throw new ToolNotFoundException($"Method '{methodName}' not found in document.");
 
         // Safety checks
         var awaitCount = methodNode.DescendantNodes().OfType<AwaitExpressionSyntax>().Count();
@@ -295,14 +295,14 @@ public class AsyncOptimizationEngine
     public async Task<DocumentEditResult> GenerateAsyncOverloadAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException("File not found.");
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
         var methodNode = classNode?.Members.OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
 
         if (classNode == null || methodNode == null)
         {
-            throw new InvalidOperationException("Class or method not found.");
+            throw new ToolNotFoundException("Class or method not found.");
         }
 
         var asyncMethodName = methodName + "Async";
@@ -940,7 +940,7 @@ public class AsyncOptimizationEngine
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException("File not found.");
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException("Could not get syntax root.");
         var awaitExprs = root.DescendantNodes().OfType<AwaitExpressionSyntax>()
             .Where(a => !(a.Expression is InvocationExpressionSyntax inv &&

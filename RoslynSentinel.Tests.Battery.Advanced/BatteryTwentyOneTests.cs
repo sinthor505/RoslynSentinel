@@ -472,7 +472,7 @@ public class Worker
     public async Task OptimizeToValueTask_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(async () => await _asyncOptimizationEngine.OptimizeToValueTaskAsync("NonExistent.cs", "M"));
+        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _asyncOptimizationEngine.OptimizeToValueTaskAsync("NonExistent.cs", "M"));
     }
 
     // --- OptimizeIndependentAwaits (via AsyncOptimizationEngine) ---
