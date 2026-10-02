@@ -114,7 +114,7 @@ Updated 2026-10-01. Update this block after every committed slice; `git log` is 
   - S2-1: `DocumentEditResult.ErrorCode` + `RefactoringToolHelpers.ErrorCodeFor(DocumentEditResult)` + `RequireUpdatedText` uses it + unit test. [x] (next commit after 57a5cb1: "S2-1")
   - S2-2: route hand-built switches (`RefactoringStructuralImpl` ~427-437, `RefactoringExtractionDocsImpl` ~264-270) through it. [x] S2-1 = a537ece; S2-2 = 19a4d71
   - S2-3: `MsAugmentResult.Fail(message, code)` and its consumers (`RefactoringExtractionDocsImpl` ~319, `AdvancedRefactoringTools` ~738). [x] Codes set only at the File/Field not-found, ToolException-catch and invalid-identifier sites; the other ~14 `Fail` sites stay code-less (Exception). Committed with this plan update.
-  - S2-4: pilot - `ThreadSafetyEngine.ConvertLockToSemaphoreSlimAsync` catch copies `ToolException.ErrorCode` into the result; test. [ ]
+  - S2-4: pilot - `ThreadSafetyEngine.ConvertLockToSemaphoreSlimAsync` catch copies `ToolException.ErrorCode` into the result; test. [x] Engine-level only. The consumer `CodemodTools.cs` ~615 (`convert_lock_to_semaphore_slim`) still treats any empty `UpdatedText`, including an `Error` outcome, as success, so the code does not reach the caller yet; classify that in Step 2b. Committed with this plan update.
 - Step 2b of the plan (NoChange classification, report only): not started. [ ]
 
 ## Out of scope

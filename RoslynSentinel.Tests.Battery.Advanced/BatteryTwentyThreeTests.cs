@@ -222,6 +222,16 @@ public class QualityClass
         Assert.That(result, Is.Not.Null);
     }
 
+    [Test]
+    public async Task ConvertLockToSemaphoreSlim_NonExistentFile_ReportsNotFoundCode()
+    {
+        SetSource("public class C {}", "Test.cs");
+        var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("NonExistent.cs", "MethodWithLock");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Error), "non-existent file should return Error outcome");
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "error code should be NotFound");
+        Assert.That(RefactoringToolHelpers.ErrorCodeFor(result), Is.EqualTo(ToolErrorCode.NotFound), "ErrorCodeFor helper should also return NotFound");
+    }
+
     // --- ConvertToAsyncEnumerable---
     [Test]
     public async Task ConvertToAsyncEnumerable_ValidMethod_ReturnsUpdatedSource()

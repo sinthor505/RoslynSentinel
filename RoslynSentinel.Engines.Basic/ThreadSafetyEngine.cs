@@ -294,7 +294,8 @@ public class ThreadSafetyEngine
             {
                 Outcome = EditOutcome.Error,
                 FilePath = filePath,
-                Message = $"// ErrorDetail converting lock to SemaphoreSlim: {ex.Message}"
+                Message = $"// ErrorDetail converting lock to SemaphoreSlim: {ex.Message}",
+                ErrorCode = (ex as ToolException)?.ErrorCode
             };
         }
     }
