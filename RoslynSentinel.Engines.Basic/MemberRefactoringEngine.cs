@@ -1581,12 +1581,14 @@ public class MemberRefactoringEngine
             return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
         }
 
+        // Same-node collision: two edits on the identical declaration. A type and a member inside it are NOT a collision
+        // any more - text-span edits compose across ancestor/descendant targets.
         var seen = new Dictionary<SyntaxNode, int>();
         foreach (var kvp in resolvedTargets)
         {
             if (seen.TryGetValue(kvp.Value, out var firstIndex))
             {
-                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] both _symbolNavigationEngine. Resolve to the same target in '{filePath}'. Split these into separate calls.");
+                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] resolve to the same target in '{filePath}'. Split these into separate calls.");
             }
             else
             {
@@ -1599,27 +1601,24 @@ public class MemberRefactoringEngine
             return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
         }
 
-        var replacements = new Dictionary<SyntaxNode, SyntaxNode>();
+        var eol = EolUtilities.DetectDominantEol(sourceText);
+        var textEdits = new List<AttributeTextEditBuilder.TextEdit>();
+        var appliedIndexes = new List<int>();
         foreach (var edit in edits)
         {
             var targetNode = resolvedTargets[edit.Index];
-            var attrLists = targetNode is MemberDeclarationSyntax memberForRead ? memberForRead.AttributeLists : ((BaseTypeDeclarationSyntax)targetNode).AttributeLists;
+            var attrLists = targetNode is MemberDeclarationSyntax memberForRead ? memberForRead.AttributeLists : default;
 
             if (edit.Action == AttributeModifyAction.add)
             {
-                var normalizedSource = edit.ExistingAttribute.Trim();
-                if (!normalizedSource.StartsWith("["))
-                {
-                    normalizedSource = $"[{normalizedSource}]";
-                }
-                var snippet = SyntaxFactory.ParseCompilationUnit($"{normalizedSource}\npublic class __Dummy__ {{}}");
-                var attrList = snippet.DescendantNodes().OfType<AttributeListSyntax>().FirstOrDefault();
+                var attrList = AttributeTextEditBuilder.ParseAttributeList(edit.ExistingAttribute);
                 if (attrList == null)
                 {
                     errors.Add($"edits[{edit.Index}] ({edit.TargetName}): invalid attribute source.");
                     continue;
                 }
-                replacements[targetNode] = targetNode is MemberDeclarationSyntax memberTarget ? memberTarget.AddAttributeLists(attrList) : ((BaseTypeDeclarationSyntax)targetNode).AddAttributeLists(attrList);
+                textEdits.Add(AttributeTextEditBuilder.BuildAddEdit(edit.Index, targetNode, attrList, sourceText, eol));
+                appliedIndexes.Add(edit.Index);
             }
             else if (edit.Action == AttributeModifyAction.replace)
             {
@@ -1628,26 +1627,20 @@ public class MemberRefactoringEngine
                     errors.Add($"edits[{edit.Index}] ({edit.TargetName}): newAttribute is required for action 'replace'.");
                     continue;
                 }
-                var normalizedNew = edit.NewAttribute.Trim();
-                if (!normalizedNew.StartsWith("["))
-                {
-                    normalizedNew = $"[{normalizedNew}]";
-                }
-                var snippet = SyntaxFactory.ParseCompilationUnit($"{normalizedNew}\npublic class __Dummy__ {{}}");
-                var newAttrList = snippet.DescendantNodes().OfType<AttributeListSyntax>().FirstOrDefault();
+                var newAttrList = AttributeTextEditBuilder.ParseAttributeList(edit.NewAttribute);
                 if (newAttrList == null)
                 {
                     errors.Add($"edits[{edit.Index}] ({edit.TargetName}): invalid new attribute source.");
                     continue;
                 }
-                var newAttr = newAttrList.Attributes.First();
                 var oldAttr = attrLists.SelectMany(al => al.Attributes).FirstOrDefault(a => GetAttributeName(a) == edit.ExistingAttribute);
                 if (oldAttr == null)
                 {
                     errors.Add($"edits[{edit.Index}] ({edit.TargetName}): attribute '{edit.ExistingAttribute}' not found on target.");
                     continue;
                 }
-                replacements[oldAttr] = newAttr;
+                textEdits.Add(AttributeTextEditBuilder.BuildReplaceEdit(edit.Index, oldAttr, newAttrList.Attributes.First()));
+                appliedIndexes.Add(edit.Index);
             }
             else
             {
@@ -1659,11 +1652,15 @@ public class MemberRefactoringEngine
                 }
                 if (targetNode is not MemberDeclarationSyntax memberTarget2)
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): action 'remove' requires a member target, not a type.");
+                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): action 'remove' requires a declaration target.");
                     continue;
                 }
-                var newAttrLists = memberTarget2.AttributeLists.Select(al => al.WithAttributes(SyntaxFactory.SeparatedList(al.Attributes.Where(a => !AttrMatches(a))))).Where(al => al.Attributes.Count > 0).ToList();
-                replacements[targetNode] = memberTarget2.WithAttributeLists(SyntaxFactory.List(newAttrLists));
+                var removeEdits = AttributeTextEditBuilder.BuildRemoveEdits(edit.Index, memberTarget2, AttrMatches, sourceText);
+                if (removeEdits.Count > 0)
+                {
+                    textEdits.AddRange(removeEdits);
+                    appliedIndexes.Add(edit.Index);
+                }
             }
         }
 
@@ -1672,11 +1669,18 @@ public class MemberRefactoringEngine
             return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
         }
 
+        var updatedText = AttributeTextEditBuilder.TryApply(sourceText, textEdits, out var applyError);
+        if (updatedText == null)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = applyError ?? "Attribute edits could not be applied." };
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken)
+            UpdatedText = updatedText,
+            AppliedEditIndexes = appliedIndexes
         };
     }
 
@@ -2031,12 +2035,20 @@ public class MemberRefactoringEngine
             };
         }
 
-        var newNode = targetNode is MemberDeclarationSyntax memberTarget ? (SyntaxNode)memberTarget.AddAttributeLists(attrList) : ((BaseTypeDeclarationSyntax)targetNode).AddAttributeLists(attrList);
+        // Insert only the attribute list as a text edit: replacing the target node and formatting it would re-format
+        // every member of a type that merely needed one attribute line (see AttributeTextEditBuilder).
+        var addEdit = AttributeTextEditBuilder.BuildAddEdit(0, targetNode, attrList, sourceText, EolUtilities.DetectDominantEol(sourceText));
+        var updatedText = AttributeTextEditBuilder.TryApply(sourceText, [addEdit], out var applyError);
+        if (updatedText == null)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = applyError ?? "Attribute edit could not be applied." };
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, targetNode, newNode, cancellationToken)
+            UpdatedText = updatedText
         };
     }
 

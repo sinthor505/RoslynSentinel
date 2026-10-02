@@ -226,4 +226,251 @@ public class ModifyAttributeBatchTests
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));
     }
+
+    // ---- Regression: docs/current/blockers/blocking_error_modifyattribute_batch_drops_nested_edit_and_reformats_type_body.md ----
+
+    private const string NestedFixtureRelativePath = "ContosoOrders.Core/AttributeNestedFixture.cs";
+
+    private const string NestedFixtureSource = """
+    namespace ContosoOrders.Core;
+
+    public class AttributeNestedTarget
+    {
+        public void First()
+        {
+        }
+
+        [Obsolete]
+        public void Second()
+        {
+        }
+    }
+    """;
+
+    private const string WeirdFormattingRelativePath = "ContosoOrders.Core/AttributeFormattingFixture.cs";
+
+    // Deliberately non-canonical whitespace in members the edits never target: a Roslyn Formatter pass
+    // over the enclosing type would rewrite it (spacing in signatures, expression operators, case-block indent).
+    private const string WeirdFormattingSource = """
+    namespace ContosoOrders.Core;
+
+    public class AttributeFormattingTarget
+    {
+        public int   Weird( int a,int b )
+        {
+            switch (a)
+            {
+                case 1:
+                    {
+                        return   b;
+                    }
+                default:
+                    return   a+b;
+            }
+        }
+
+        public void   Other(  )
+        {
+        }
+    }
+    """;
+
+    private static string EolOf(string text) => text.Contains("\r\n") ? "\r\n" : "\n";
+
+    [TestCase(true)]
+    [TestCase(false)]
+    public async Task ModifyAttribute_BatchTypeAddAndMethodAddSameFile_BothAttributesPresentAsync(bool typeEditFirst)
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, NestedFixtureRelativePath, NestedFixtureSource);
+        var tools = BuildTools(workspaceManager);
+
+        var typeEdit = new AttributeEdit { FilePath = NestedFixtureRelativePath, TargetName = "AttributeNestedTarget", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" };
+        var methodEdit = new AttributeEdit { FilePath = NestedFixtureRelativePath, TargetName = "First", Action = AttributeModifyAction.add, ExistingAttribute = "Obsolete(\"first\")" };
+
+        var result = await tools.ModifyAttribute(
+            reason: "regression: ancestor/descendant targets in one batch",
+            edits: typeEditFirst ? [typeEdit, methodEdit] : [methodEdit, typeEdit],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+
+        var newContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, NestedFixtureRelativePath));
+        Assert.Multiple(() =>
+        {
+            Assert.That(newContent, Does.Match(@"\[Serializable\]\s*public class AttributeNestedTarget"), "type-level attribute missing");
+            Assert.That(newContent, Does.Match(@"\[Obsolete\(""first""\)\]\s*public void First"), "method-level attribute dropped");
+            Assert.That(newContent, Does.Match(@"\[Obsolete\]\s*public void Second"), "pre-existing attribute on an untargeted method must survive");
+        });
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchRemoveOnMethodAndAddOnType_ComposeAndLeaveRestByteIdenticalAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, NestedFixtureRelativePath, NestedFixtureSource);
+        var tools = BuildTools(workspaceManager);
+        var path = Path.Combine(fixture.SolutionDirectory, NestedFixtureRelativePath);
+        var before = await File.ReadAllTextAsync(path);
+        var eol = EolOf(before);
+
+        var result = await tools.ModifyAttribute(
+            reason: "regression: remove on member plus add on its type",
+            edits:
+            [
+                new AttributeEdit { FilePath = NestedFixtureRelativePath, TargetName = "Second", Action = AttributeModifyAction.remove, ExistingAttribute = "Obsolete" },
+                new AttributeEdit { FilePath = NestedFixtureRelativePath, TargetName = "AttributeNestedTarget", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+
+        var expected = before
+            .Replace("public class AttributeNestedTarget", "[Serializable]" + eol + "public class AttributeNestedTarget")
+            .Replace("    [Obsolete]" + eol, string.Empty);
+        var after = await File.ReadAllTextAsync(path);
+        Assert.That(after, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchTypeLevelAddOnly_LeavesUnrelatedMembersByteIdenticalAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, WeirdFormattingRelativePath, WeirdFormattingSource);
+        var tools = BuildTools(workspaceManager);
+        var path = Path.Combine(fixture.SolutionDirectory, WeirdFormattingRelativePath);
+        var before = await File.ReadAllTextAsync(path);
+        var eol = EolOf(before);
+
+        var result = await tools.ModifyAttribute(
+            reason: "regression: type-level add must not reformat members",
+            edits: [new AttributeEdit { FilePath = WeirdFormattingRelativePath, TargetName = "AttributeFormattingTarget", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" }],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+
+        var expected = before.Replace("public class AttributeFormattingTarget", "[Serializable]" + eol + "public class AttributeFormattingTarget");
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_SingleTypeLevelAdd_LeavesUnrelatedMembersByteIdenticalAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, WeirdFormattingRelativePath, WeirdFormattingSource);
+        var tools = BuildTools(workspaceManager);
+        var path = Path.Combine(fixture.SolutionDirectory, WeirdFormattingRelativePath);
+        var before = await File.ReadAllTextAsync(path);
+        var eol = EolOf(before);
+
+        var result = await tools.ModifyAttribute(
+            reason: "regression: single-edit type-level add must not reformat members",
+            filePath: WeirdFormattingRelativePath,
+            targetName: "AttributeFormattingTarget",
+            existingAttribute: "Serializable",
+            action: AttributeModifyAction.add,
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+
+        var expected = before.Replace("public class AttributeFormattingTarget", "[Serializable]" + eol + "public class AttributeFormattingTarget");
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchMethodLevelAddOnly_LeavesEverythingElseByteIdenticalAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, WeirdFormattingRelativePath, WeirdFormattingSource);
+        var tools = BuildTools(workspaceManager);
+        var path = Path.Combine(fixture.SolutionDirectory, WeirdFormattingRelativePath);
+        var before = await File.ReadAllTextAsync(path);
+        var eol = EolOf(before);
+
+        var result = await tools.ModifyAttribute(
+            reason: "regression: method-level add keeps indentation and leaves siblings alone",
+            edits: [new AttributeEdit { FilePath = WeirdFormattingRelativePath, TargetName = "Other", Action = AttributeModifyAction.add, ExistingAttribute = "Obsolete" }],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+
+        var expected = before.Replace("    public void   Other(  )", "    [Obsolete]" + eol + "    public void   Other(  )");
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchAllEditsApply_DescriptionReportsExactAppliedCountAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, NestedFixtureRelativePath, NestedFixtureSource);
+        var tools = BuildTools(workspaceManager);
+
+        var result = await tools.ModifyAttribute(
+            reason: "regression: reported applied count matches written edits",
+            edits:
+            [
+                new AttributeEdit { FilePath = NestedFixtureRelativePath, TargetName = "AttributeNestedTarget", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" },
+                new AttributeEdit { FilePath = NestedFixtureRelativePath, TargetName = "First", Action = AttributeModifyAction.add, ExistingAttribute = "Obsolete(\"first\")" },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var newContent = await File.ReadAllTextAsync(Path.Combine(fixture.SolutionDirectory, NestedFixtureRelativePath));
+        var writtenAttributes = new[] { "[Serializable]", "[Obsolete(\"first\")]" }.Count(a => newContent.Contains(a));
+        Assert.That(writtenAttributes, Is.EqualTo(2));
+        Assert.That(result.SuccessData!.Description, Is.EqualTo("Applied 2 attribute edit(s) across 1 file(s)."));
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchOneEditHasNoEffect_DescriptionDoesNotCountItAsAppliedAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, NestedFixtureRelativePath, NestedFixtureSource);
+        var tools = BuildTools(workspaceManager);
+
+        var result = await tools.ModifyAttribute(
+            reason: "regression: a no-effect edit must not be reported as applied",
+            edits:
+            [
+                new AttributeEdit { FilePath = NestedFixtureRelativePath, TargetName = "AttributeNestedTarget", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" },
+                new AttributeEdit { FilePath = NestedFixtureRelativePath, TargetName = "First", Action = AttributeModifyAction.remove, ExistingAttribute = "Conditional" },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var description = result.SuccessData!.Description;
+        Assert.Multiple(() =>
+        {
+            Assert.That(description, Does.Contain("Applied 1 of 2 attribute edit(s)"));
+            Assert.That(description, Does.Contain("edits[1]"));
+            Assert.That(description, Does.Not.Contain("Applied 2"));
+        });
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchNoEditHasAnyEffect_FailsInsteadOfReportingSuccessAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await fixture.AddFileToSolution(workspaceManager, NestedFixtureRelativePath, NestedFixtureSource);
+        var tools = BuildTools(workspaceManager);
+        var path = Path.Combine(fixture.SolutionDirectory, NestedFixtureRelativePath);
+        var before = await File.ReadAllTextAsync(path);
+
+        var result = await tools.ModifyAttribute(
+            reason: "regression: zero effective edits is not a success",
+            edits: [new AttributeEdit { FilePath = NestedFixtureRelativePath, TargetName = "First", Action = AttributeModifyAction.remove, ExistingAttribute = "Conditional" }],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.Message, Does.Contain("edits[0]"));
+        Assert.That(await File.ReadAllTextAsync(path), Is.EqualTo(before));
+    }
 }

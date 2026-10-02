@@ -215,6 +215,7 @@ public class RefactoringStructuralImpl
 
         var finalContents = new Dictionary<FilePathWrapper, string>();
         var touchedFiles = new List<FilePathWrapper>();
+        var appliedIndexes = new HashSet<int>();
         foreach (var fileGroup in editsByFile)
         {
             var filePathResolved = fileGroup.Key;
@@ -241,6 +242,23 @@ public class RefactoringStructuralImpl
                 continue;
             }
 
+            // Never trust the number of edits submitted: only the engine knows which ones changed text.
+            if (updated.AppliedEditIndexes is null)
+            {
+                perEditErrors.Add($"'{filePathResolved}': the engine did not report which edits were applied, so success cannot be confirmed.");
+                continue;
+            }
+
+            foreach (var appliedIndex in updated.AppliedEditIndexes)
+            {
+                appliedIndexes.Add(appliedIndex);
+            }
+
+            if (updated.AppliedEditIndexes.Count == 0)
+            {
+                continue;
+            }
+
             finalContents[filePathResolved] = updated.UpdatedText;
             touchedFiles.Add(filePathResolved);
         }
@@ -254,11 +272,26 @@ public class RefactoringStructuralImpl
             };
         }
 
-        var apply = await ValidateAndApplyAsync(finalContents, $"Batch-modified {edits.Count} attribute edit(s) across {touchedFiles.Count} file(s).", "ModifyAttribute", dryRun, returnDiff, cancellationToken: cancellationToken);
+        var noEffect = Enumerable.Range(0, edits.Count)
+            .Where(index => !appliedIndexes.Contains(index))
+            .Select(index => $"edits[{index}] ({edits[index].TargetName}: {edits[index].Action} '{edits[index].ExistingAttribute}')")
+            .ToList();
+        if (appliedIndexes.Count == 0)
+        {
+            return new SentinelCallToolResult<AppliedChangeSummary>()
+            {
+                IsSuccess = false,
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute batch changed nothing - no changes were written. No effect: " + string.Join(", ", noEffect) + ". For action 'remove' this means the attribute is not present on the target.")
+            };
+        }
+
+        var apply = await ValidateAndApplyAsync(finalContents, $"Batch-modified {appliedIndexes.Count} attribute edit(s) across {touchedFiles.Count} file(s).", "ModifyAttribute", dryRun, returnDiff, cancellationToken: cancellationToken);
         if (apply.Error is not null)
             return new SentinelCallToolResult<AppliedChangeSummary> { IsSuccess = false, ErrorData = apply.Error };
 
-        var description = $"Applied {edits.Count} attribute edit(s) across {touchedFiles.Count} file(s).";
+        var description = noEffect.Count == 0
+            ? $"Applied {appliedIndexes.Count} attribute edit(s) across {touchedFiles.Count} file(s)."
+            : $"Applied {appliedIndexes.Count} of {edits.Count} attribute edit(s) across {touchedFiles.Count} file(s); no effect: {string.Join(", ", noEffect)}.";
         var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, description, apply.DryRun, apply.Diff);
         return new SentinelCallToolResult<AppliedChangeSummary>() { IsSuccess = true, StatusMessage = description, SuccessData = summary };
     }

@@ -25,6 +25,17 @@ namespace RoslynSentinel.Common
         /// <summary>Optional ToolErrorCode value copied from the ToolException that caused the failure; when set it takes precedence over the code derived from Outcome.</summary>
         public string? ErrorCode { get; init; }
 
+        /// <summary>
+        /// Batch engines only: the caller-supplied edit indexes that actually changed this file's text. An index that
+        /// was requested but is absent here had no effect (e.g. removing an attribute that was not present), so a
+        /// caller must derive "applied" counts from this list and never from the number of edits it submitted.
+        /// Null for single-edit operations.
+        /// </summary>
+        public IReadOnlyList<int>? AppliedEditIndexes
+        {
+            get; init;
+        }
+
         public DocumentEditResult()
         {
         }
