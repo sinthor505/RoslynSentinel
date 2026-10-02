@@ -58,6 +58,32 @@ $cases = @(
     @{ n = 'journal path plus a real git call'; want = 'DENY'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = "cat .claude/journal/x.md; git diff" } } }
 
+    # --- shell text search/read of C#: deny ---
+    @{ n = 'Bash grep --include=*.cs (seen live)'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'grep -rn "public DiscoveryEngine(" --include=*.cs .' } } }
+    @{ n = 'Bash rg on a .cs path'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'rg -n Foo RoslynSentinel.Common/Foo.cs' } } }
+    @{ n = 'Bash cat .cs'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'cat RoslynSentinel.Common/Foo.cs' } } }
+    @{ n = 'Bash find | xargs grep .cs'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'find . -name "*.cs" | xargs grep -l Foo' } } }
+    @{ n = 'PowerShell Get-Content .cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-Content RoslynSentinel.Common\Foo.cs -TotalCount 40' } } }
+    @{ n = 'PowerShell gci *.cs | Select-String'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-ChildItem -Recurse -Filter *.cs | Select-String -Pattern Foo' } } }
+    @{ n = 'Bash sed -i on .cs'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "sed -i 's/Foo/Bar/' RoslynSentinel.Common/Foo.cs" } } }
+
+    # --- shell commands that mention C# but read no C# content: allow ---
+    @{ n = 'dotnet build .csproj'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'dotnet build RoslynSentinel.Common/RoslynSentinel.Common.csproj' } } }
+    @{ n = 'grep .md'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'grep -n Foo docs/current/TODO.md' } } }
+    @{ n = 'gci *.cs for mtimes (no content)'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-ChildItem -Recurse -Filter *.cs | Sort-Object LastWriteTime | Select-Object -Last 5' } } }
+    @{ n = 'grep .cs inside Worktree/'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'grep -n Foo C:/runs/x/Worktree/Foo.cs' } } }
+
     # --- non-C# and harness clones: allow ---
     @{ n = 'Edit .md'; want = 'allow'
        p = @{ tool_name = 'Edit'; tool_input = @{ file_path = 'C:\repo\CLAUDE.md' } } }

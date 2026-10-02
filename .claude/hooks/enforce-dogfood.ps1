@@ -26,6 +26,9 @@
 #
 # Also covers, per the same policy:
 #   - Grep on a .cs path/glob or an obviously C#-symbol-shaped pattern -> Search/FindReferences.
+#   - Bash/PowerShell text search, read or stream edit (grep/rg/Select-String/cat/Get-Content/
+#     sed...) naming a .cs file or glob -> Search/ReadFile/GetMethodSource. Same whole-command
+#     regex limitation as git detection above.
 #   - ReplaceSnippet called with filePath and batchEdits together (rejected server-side anyway,
 #     but the server's InvalidArgument error doesn't name a corrected example call the way this
 #     hook's message does), and a soft warning (not a block - this is a heuristic, not a real
@@ -232,6 +235,35 @@ positive if the referenced name already exists elsewhere in the file. Proceeding
         # git invocation, so a command aimed at .claude/journal/ is exempt - unless git also
         # appears at a command position, which would be a real call riding along.
         if ($command -match '\.claude[\\/]+journal[\\/]' -and $command -notmatch '(^|[;&|(]\s*)git\s') { exit 0 }
+
+        # --- shell text search/read of C# ---------------------------------------------
+        # The Grep-tool rule above is trivially sidestepped by running grep/rg/Select-String/
+        # cat through the shell (seen 2026-10-01: a subagent ran `grep -rn "public X(" --include=*.cs`).
+        # Deny a search/read/stream-edit command at a command position (start, after ; & | (,
+        # or after xargs) when the command names a .cs file or glob. \.cs\b does not match
+        # .csproj/.cshtml. Listing alone (Get-ChildItem *.cs for mtimes) is left alone: there is
+        # no MCP equivalent and it reads no content. Harness worktrees stay exempt.
+        $csReaders = 'grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls|cat|type|Get-Content|gc|head|tail|less|more|sed|awk'
+        if ($command -match '\.cs\b' -and $command -notmatch '[\\/]Worktree[\\/]' -and
+            $command -match "(^|[;&|(]\s*|\bxargs\s+)($csReaders)(\s|$)") {
+            $which = $Matches[2]
+            Deny @"
+BLOCKED by dog-fooding policy: '$which' via shell on C# source.
+
+  $command
+
+Shell text tools only see raw text. Use the RoslynSentinel tools instead:
+
+  Search(mode: "text",       query: "...", fileGlob: "**/*.cs")   # grep/rg/Select-String
+  Search(mode: "symbol",     query: "Name")                       # find a declaration
+  Search(mode: "references", query: "Name", ...)                  # find callers
+  ReadFile / GetMethodSource / GetFileOutline                     # cat/Get-Content/head
+
+If no MCP tool covers what you need, or the right one is broken, that is a
+BLOCKING finding: stop, write docs/current/blockers/blocking_error_<slug>.md,
+and end the turn. Do not reword the command to get past this hook.
+"@
+        }
 
         # The MCP Git tool only ever operates on whichever solution is currently
         # loaded into the server - it has no parameter to target any other repo or
