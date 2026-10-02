@@ -386,41 +386,42 @@ public class PreviewInstanceMoveCallSitesTests
     [Test]
     public async Task MoveMemberAsync_UnambiguousInstanceMember_AppliesAutomaticallyAsync()
     {
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassA.cs"), """
-            namespace ContosoOrders.Core;
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/MoveInstanceClassA.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveInstanceClassA
-            {
-                public void Foo()
+                public class MoveInstanceClassA
+                {
+                    public void Foo()
+                    {
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/MoveInstanceClassB.cs", """
+                namespace ContosoOrders.Core;
+
+                public class MoveInstanceClassB
                 {
                 }
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassB.cs"), """
-            namespace ContosoOrders.Core;
+                """),
+            ("ContosoOrders.Core/MoveInstanceCallerUnambiguous.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveInstanceClassB
-            {
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceCallerUnambiguous.cs"), """
-            namespace ContosoOrders.Core;
-
-            public class MoveInstanceCallerUnambiguous
-            {
-                private readonly MoveInstanceClassB _classB = new MoveInstanceClassB();
-
-                public void Do()
+                public class MoveInstanceCallerUnambiguous
                 {
-                    var a = new MoveInstanceClassA();
-                    a.Foo();
+                    private readonly MoveInstanceClassB _classB = new MoveInstanceClassB();
+
+                    public void Do()
+                    {
+                        var a = new MoveInstanceClassA();
+                        a.Foo();
+                    }
                 }
-            }
-            """);
+                """));
 
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassA.cs"));
-
-        var result = await _engine.MoveMemberAsync(filePath, "MoveInstanceClassA", ["Foo"], "MoveInstanceClassB");
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/MoveInstanceClassA.cs"),
+            "MoveInstanceClassA", ["Foo"], "MoveInstanceClassB");
 
         Assert.Multiple(() =>
         {
@@ -435,31 +436,32 @@ public class PreviewInstanceMoveCallSitesTests
     [Test]
     public async Task MoveMemberAsync_FieldDependencyAlreadySatisfiedOnTarget_MovesWithoutDuplicatingFieldAsync()
     {
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "SatisfiedFieldSourceClass.cs"), """
-            namespace ContosoOrders.Core;
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/SatisfiedFieldSourceClass.cs", """
+                namespace ContosoOrders.Core;
 
-            public class SatisfiedFieldSourceClass
-            {
-                private readonly string _shared = "source";
-
-                public string ReadShared()
+                public class SatisfiedFieldSourceClass
                 {
-                    return _shared;
+                    private readonly string _shared = "source";
+
+                    public string ReadShared()
+                    {
+                        return _shared;
+                    }
                 }
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "SatisfiedFieldTargetClass.cs"), """
-            namespace ContosoOrders.Core;
+                """),
+            ("ContosoOrders.Core/SatisfiedFieldTargetClass.cs", """
+                namespace ContosoOrders.Core;
 
-            public class SatisfiedFieldTargetClass
-            {
-                private readonly string _shared = "target";
-            }
-            """);
+                public class SatisfiedFieldTargetClass
+                {
+                    private readonly string _shared = "target";
+                }
+                """));
 
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "SatisfiedFieldSourceClass.cs"));
-
-        var result = await _engine.MoveMemberAsync(filePath, "SatisfiedFieldSourceClass", ["ReadShared"], "SatisfiedFieldTargetClass");
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/SatisfiedFieldSourceClass.cs"),
+            "SatisfiedFieldSourceClass", ["ReadShared"], "SatisfiedFieldTargetClass");
 
         Assert.Multiple(() =>
         {
@@ -475,32 +477,33 @@ public class PreviewInstanceMoveCallSitesTests
     [Test]
     public async Task MoveMemberAsync_FieldDependencyIncompatibleTypeOnTarget_FailsWithCollisionMessageAsync()
     {
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "IncompatibleFieldSourceClass.cs"), """
-            namespace ContosoOrders.Core;
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/IncompatibleFieldSourceClass.cs", """
+                namespace ContosoOrders.Core;
 
-            public class IncompatibleFieldSourceClass
-            {
-                private readonly string _shared = "source";
-
-                public string ReadShared()
+                public class IncompatibleFieldSourceClass
                 {
-                    return _shared;
+                    private readonly string _shared = "source";
+
+                    public string ReadShared()
+                    {
+                        return _shared;
+                    }
                 }
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "IncompatibleFieldTargetClass.cs"), """
-            namespace ContosoOrders.Core;
+                """),
+            ("ContosoOrders.Core/IncompatibleFieldTargetClass.cs", """
+                namespace ContosoOrders.Core;
 
-            public class IncompatibleFieldTargetClass
-            {
-                private readonly int _shared = 42;
-            }
-            """);
-
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "IncompatibleFieldSourceClass.cs"));
+                public class IncompatibleFieldTargetClass
+                {
+                    private readonly int _shared = 42;
+                }
+                """));
 
         var ex = Assert.ThrowsAsync<ToolInvalidArgumentException>(async () =>
-            await _engine.MoveMemberAsync(filePath, "IncompatibleFieldSourceClass", ["ReadShared"], "IncompatibleFieldTargetClass"));
+            await engine.MoveMemberAsync(
+                workspace.PathOf("ContosoOrders.Core/IncompatibleFieldSourceClass.cs"),
+                "IncompatibleFieldSourceClass", ["ReadShared"], "IncompatibleFieldTargetClass"));
 
         Assert.Multiple(() =>
         {
