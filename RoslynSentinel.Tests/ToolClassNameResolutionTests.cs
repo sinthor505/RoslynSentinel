@@ -1,7 +1,7 @@
 // --include-tools / --exclude-tools name resolution.
 //
 // NormalizeToolClassNames used to prepend "Sentinel" to every name unconditionally, but tool classes
-// are now registered unprefixed (WorkspaceTools, GitTools; only SentinelSymbolTools keeps the
+// are now registered unprefixed (WorkspaceTools, GitTools; only SymbolNavigationTools keeps the
 // prefix). So "--exclude-tools=GitTools" became "SentinelGitTools" and silently removed nothing,
 // and "--include-tools=WorkspaceTools" silently added nothing. Found while implementing the
 // SubAgent recursion guard, which depends on --exclude-tools actually excluding.
@@ -50,11 +50,11 @@ public class ToolClassNameResolutionTests
     [Test]
     public void ExcludeTools_ClassThatKeepsItsPrefix_IsRemovedByShortenedName()
     {
-        // SentinelSymbolTools is the one registered class that keeps the prefix; the shortened form
+        // SymbolNavigationTools is the one registered class that keeps the prefix; the shortened form
         // older launch scripts type must still reach it.
         var active = ResolveFor("--mode=Workspace", "--exclude-tools=SymbolTools");
 
-        Assert.That(active, Does.Not.Contain("SentinelSymbolTools"));
+        Assert.That(active, Does.Not.Contain("SymbolNavigationTools"));
     }
 
     [Test]
@@ -70,7 +70,7 @@ public class ToolClassNameResolutionTests
     {
         var active = ResolveFor("--include-tools=SymbolTools");
 
-        Assert.That(active, Is.EquivalentTo(new[] { "SentinelSymbolTools" }));
+        Assert.That(active, Is.EquivalentTo(new[] { "SymbolNavigationTools" }));
     }
 
     [Test]

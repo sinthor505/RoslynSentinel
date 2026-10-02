@@ -114,7 +114,7 @@ public static class ServerStartupHelpers
     /// <summary>
     /// Resolves each --include-tools/--exclude-tools name to the class name actually registered,
     /// accepting it with or without a legacy "Sentinel" prefix. Most classes are registered
-    /// unprefixed (WorkspaceTools, GitTools) but a few keep the prefix (SentinelSymbolTools), and
+    /// unprefixed (WorkspaceTools, GitTools) but a few keep the prefix (SymbolNavigationTools), and
     /// older launch scripts type the shortened form ("SymbolTools"). This previously prepended
     /// "Sentinel" to every name unconditionally, so "--exclude-tools=GitTools" became
     /// "SentinelGitTools" and silently matched nothing - which would have made the SubAgent

@@ -145,7 +145,7 @@ public class OrderService : IOrderService
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
         _tools = new IntelligenceTools(_impactAnalyzer, _metricsEngine, _inventoryEngine, _deadCodeEngine, _documentationEngine, _dependencyEngine, _projectStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _architecturalEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, new AntiPatternEngine(_workspaceManager), config: _config, logger: NullLogger<IntelligenceTools>.Instance);
-        // Symbol-level tools moved to SentinelSymbolTools (Basic) in the server split.
+        // Symbol-level tools moved to SymbolNavigationTools (Basic) in the server split.
         _symbolRelationshipTools = new SymbolRelationshipTools(new SymbolRelationshipImpl(_discoveryEngine, _symbolNavigationEngine, _workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance));
         _symbolNavigationTools = new SymbolNavigationTools(new SymbolNavigationImpl(_symbolNavigationEngine, _impactAnalyzer, _workspaceManager, NullLogger<SymbolNavigationImpl>.Instance));
         // GetPublicApiSurface moved to ScanTools (Advanced).

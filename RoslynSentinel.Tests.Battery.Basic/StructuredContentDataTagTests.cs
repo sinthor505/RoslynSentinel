@@ -1,5 +1,5 @@
 // Structured-content + DataTag-chaining POC coverage for proposal_structuredcontent_rollout.md
-// and proposal_datatag_chaining_contract.md. Exercises LocateSymbol (SentinelSymbolTools) and
+// and proposal_datatag_chaining_contract.md. Exercises LocateSymbol (SymbolNavigationTools) and
 // ModifyModifier (RefactoringTools) end to end through the real MCP dispatch pipeline
 // (McpClient over an in-process pipe transport), following the pattern established by
 // McpServerStatusStructuredContentTests.cs and LargeResultOffloadFilterTests.cs. Both tools need
@@ -26,7 +26,7 @@ public class StructuredContentDataTagTests
     private McpClient _client = null!;
     private TestSolutionFixture _fixture = null!;
 
-    // LocateSymbol lives in SentinelSymbolTools (Workspace mode); ModifyModifier lives in
+    // LocateSymbol lives in SymbolNavigationTools (Workspace mode); ModifyModifier lives in
     // RefactoringTools (Refactor mode) - see ToolClassRegistry.cs. Both modes are needed.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace", "Refactor" };
 

@@ -8,15 +8,15 @@ namespace RoslynSentinel.Server.Basic;
 /// </summary>
 public static class ToolClassRegistry
 {
-    /// <summary>Modes registered by Basic's <c>AddRoslynSentinelToolsBasic</c>.</summary>
+    /// <summary>Modes registered by Basic's <c>AddRoslynSentinelToolsBasic</c>.</summary> "SymbolNavigationTools"
     public static readonly IReadOnlyDictionary<string, string[]> BasicModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Workspace"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "SymbolRelationshipTools", "GitTools"],
+            ["Workspace"] = ["WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools"],
             ["Admin"] = ["AdminTools"],
             ["WholeFileWrite"] = ["WholeFileWriteTools"],
             ["Refactor"] = ["RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools"],
-            ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
+            ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
 
             // Modernize/Quality/Generation/Asyncify register no classes in Basic today (commented
             // out pending Advanced-only tool classes) -> omitted here since an empty array would
@@ -52,7 +52,7 @@ public static class ToolClassRegistry
     public static readonly IReadOnlyDictionary<string, string[]> AdvancedModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Workspace"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "GitTools"],
+            ["Workspace"] = ["WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "GitTools"],
             ["Admin"] = ["AdminTools"],
             ["WholeFileWrite"] = ["WholeFileWriteTools"],
             ["Refactor"] = ["RefactoringTools", "AdvancedRefactoringTools"],
@@ -67,7 +67,7 @@ public static class ToolClassRegistry
             // SubAgentChildServerLauncher.ExcludedToolClasses).
             ["SubAgentEval"] = ["SubAgentEvalTools"],
             ["SubAgent"] = ["SubAgentTools"],
-            ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SentinelSymbolTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
+            ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
         };
 
     /// <summary>
