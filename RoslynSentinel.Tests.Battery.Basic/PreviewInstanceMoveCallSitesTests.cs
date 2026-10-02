@@ -8,6 +8,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Fakes;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Battery.Basic;
@@ -41,6 +42,17 @@ public class PreviewInstanceMoveCallSitesTests
         _fixture?.Dispose();
     }
 
+    private static (InMemoryWorkspace workspace, MemberRefactoringEngine engine) CreateInMemoryTestFixture(
+        params (string relativePath, string content)[] files)
+    {
+        var workspace = InMemoryWorkspace.Create(files);
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(workspace.Manager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var symbolNav = new SymbolNavigationEngine(workspace.Manager, NullLogger<SymbolNavigationEngine>.Instance);
+        var engine = new MemberRefactoringEngine(workspace.Manager, symbolNav, validationEngine);
+        return (workspace, engine);
+    }
+
     private const string ClassAWithFooSource = """
         namespace ContosoOrders.Core;
 
@@ -67,28 +79,46 @@ public class PreviewInstanceMoveCallSitesTests
     [Test]
     public async Task UnambiguousSingleCandidate_ClassifiesAsValidWithSuggestedFixAsync()
     {
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassA.cs"), ClassAWithFooSource, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassB.cs"), ClassBSource, reloadSolution: false);
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/PreviewMoveClassA.cs", """
+                namespace ContosoOrders.Core;
 
-        const string callerSource = """
-            namespace ContosoOrders.Core;
-
-            public class PreviewMoveCallerUnambiguous
-            {
-                private readonly PreviewMoveClassB _classB = new PreviewMoveClassB();
-
-                public void Do()
+                public class PreviewMoveClassA
                 {
-                    var a = new PreviewMoveClassA();
-                    a.Foo();
+                    public void Foo()
+                    {
+                    }
+
+                    public void Bar()
+                    {
+                    }
                 }
-            }
-            """;
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveCallerUnambiguous.cs"), callerSource);
+                """),
+            ("ContosoOrders.Core/PreviewMoveClassB.cs", """
+                namespace ContosoOrders.Core;
 
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "PreviewMoveClassA.cs"));
+                public class PreviewMoveClassB
+                {
+                }
+                """),
+            ("ContosoOrders.Core/PreviewMoveCallerUnambiguous.cs", """
+                namespace ContosoOrders.Core;
 
-        var results = await _engine.PreviewInstanceMoveCallSitesAsync(filePath, "PreviewMoveClassA", ["Foo"], "PreviewMoveClassB");
+                public class PreviewMoveCallerUnambiguous
+                {
+                    private readonly PreviewMoveClassB _classB = new PreviewMoveClassB();
+
+                    public void Do()
+                    {
+                        var a = new PreviewMoveClassA();
+                        a.Foo();
+                    }
+                }
+                """));
+
+        var results = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/PreviewMoveClassA.cs"),
+            "PreviewMoveClassA", ["Foo"], "PreviewMoveClassB");
 
         var fooSite = results.Single(r => r.CallExpression.Contains("Foo"));
         Assert.Multiple(() =>
@@ -106,29 +136,47 @@ public class PreviewInstanceMoveCallSitesTests
     [Test]
     public async Task MultipleCandidates_ClassifiesAsAmbiguousAsync()
     {
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassA.cs"), ClassAWithFooSource, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassB.cs"), ClassBSource, reloadSolution: false);
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/PreviewMoveClassA.cs", """
+                namespace ContosoOrders.Core;
 
-        const string callerSource = """
-            namespace ContosoOrders.Core;
-
-            public class PreviewMoveCallerAmbiguous
-            {
-                private readonly PreviewMoveClassB _classB1 = new PreviewMoveClassB();
-                private readonly PreviewMoveClassB _classB2 = new PreviewMoveClassB();
-
-                public void Do()
+                public class PreviewMoveClassA
                 {
-                    var a = new PreviewMoveClassA();
-                    a.Foo();
+                    public void Foo()
+                    {
+                    }
+
+                    public void Bar()
+                    {
+                    }
                 }
-            }
-            """;
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveCallerAmbiguous.cs"), callerSource);
+                """),
+            ("ContosoOrders.Core/PreviewMoveClassB.cs", """
+                namespace ContosoOrders.Core;
 
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "PreviewMoveClassA.cs"));
+                public class PreviewMoveClassB
+                {
+                }
+                """),
+            ("ContosoOrders.Core/PreviewMoveCallerAmbiguous.cs", """
+                namespace ContosoOrders.Core;
 
-        var results = await _engine.PreviewInstanceMoveCallSitesAsync(filePath, "PreviewMoveClassA", ["Foo"], "PreviewMoveClassB");
+                public class PreviewMoveCallerAmbiguous
+                {
+                    private readonly PreviewMoveClassB _classB1 = new PreviewMoveClassB();
+                    private readonly PreviewMoveClassB _classB2 = new PreviewMoveClassB();
+
+                    public void Do()
+                    {
+                        var a = new PreviewMoveClassA();
+                        a.Foo();
+                    }
+                }
+                """));
+
+        var results = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/PreviewMoveClassA.cs"),
+            "PreviewMoveClassA", ["Foo"], "PreviewMoveClassB");
 
         var fooSite = results.Single(r => r.CallExpression.Contains("Foo"));
         Assert.Multiple(() =>
@@ -149,56 +197,55 @@ public class PreviewInstanceMoveCallSitesTests
         // EXISTING destination class with real pre-existing members (not a fresh near-empty class),
         // that incomplete changeset let every genuinely-unambiguous call site get misclassified as
         // already-Valid with no SuggestedFix, so autoResolveCallSites silently skipped rewriting it.
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassExistingA.cs"), """
-            namespace ContosoOrders.Core;
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/PreviewMoveClassExistingA.cs", """
+                namespace ContosoOrders.Core;
 
-            public class PreviewMoveClassExistingA
-            {
-                public void Foo()
+                public class PreviewMoveClassExistingA
                 {
-                }
+                    public void Foo()
+                    {
+                    }
 
-                public void Bar()
+                    public void Bar()
+                    {
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/PreviewMoveClassExistingB.cs", """
+                namespace ContosoOrders.Core;
+
+                public class PreviewMoveClassExistingB
                 {
-                }
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveClassExistingB.cs"), """
-            namespace ContosoOrders.Core;
+                    public void Baz()
+                    {
+                    }
 
-            public class PreviewMoveClassExistingB
-            {
-                public void Baz()
+                    public void Qux()
+                    {
+                    }
+
+                    private int _counter;
+                }
+                """),
+            ("ContosoOrders.Core/PreviewMoveCallerExistingDestination.cs", """
+                namespace ContosoOrders.Core;
+
+                public class PreviewMoveCallerExistingDestination
                 {
+                    private readonly PreviewMoveClassExistingB _classB = new PreviewMoveClassExistingB();
+
+                    public void Do()
+                    {
+                        var a = new PreviewMoveClassExistingA();
+                        a.Foo();
+                    }
                 }
+                """));
 
-                public void Qux()
-                {
-                }
-
-                private int _counter;
-            }
-            """, reloadSolution: false);
-
-        const string callerSource = """
-            namespace ContosoOrders.Core;
-
-            public class PreviewMoveCallerExistingDestination
-            {
-                private readonly PreviewMoveClassExistingB _classB = new PreviewMoveClassExistingB();
-
-                public void Do()
-                {
-                    var a = new PreviewMoveClassExistingA();
-                    a.Foo();
-                }
-            }
-            """;
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "PreviewMoveCallerExistingDestination.cs"), callerSource);
-
-        var filePath = _workspaceManager.SetFilePath(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "PreviewMoveClassExistingA.cs"));
-
-        var results = await _engine.PreviewInstanceMoveCallSitesAsync(filePath, "PreviewMoveClassExistingA", ["Foo"], "PreviewMoveClassExistingB");
+        var results = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/PreviewMoveClassExistingA.cs"),
+            "PreviewMoveClassExistingA", ["Foo"], "PreviewMoveClassExistingB");
 
         var fooSite = results.Single(r => r.CallExpression.Contains("Foo"));
         Assert.Multiple(() =>
