@@ -40,19 +40,22 @@ public class ServerStatusTools
             .ToArray();
         // ServerStatusTools is registered outside ActiveToolClasses (always on), so it must be
         // special-cased or McpServerStatus would report itself as inactive.
-        bool IsActive(string className) =>
-            className == nameof(ServerStatusTools) || _activeToolSurface.ActiveToolClasses.Contains(className);
+        // A tool is active when its class is active and, under a per-tool allow-list (claude-lean),
+        // its name is on it too.
+        bool IsActive(string className, string toolName) =>
+            (className == nameof(ServerStatusTools) || _activeToolSurface.ActiveToolClasses.Contains(className))
+            && _activeToolSurface.IsToolAllowed(toolName);
 
         // The same tool name can be declared by more than one class (a facade and the split class
         // behind it); report one entry per name, preferring the class that is actually active.
         var declaredTools = McpToolSchemaPatcher.DiscoverAllDeclaredTools(declaredToolAssemblies)
             .GroupBy(t => t.ToolName, StringComparer.Ordinal)
-            .Select(g => g.OrderByDescending(t => IsActive(t.ClassName)).ThenBy(t => t.ClassName, StringComparer.Ordinal).First())
+            .Select(g => g.OrderByDescending(t => IsActive(t.ClassName, t.ToolName)).ThenBy(t => t.ClassName, StringComparer.Ordinal).First())
             .Select(t => new McpServerStatusDeclaredTool(
                 Name: t.ToolName,
                 ClassName: t.ClassName,
-                ActiveForThisMode: IsActive(t.ClassName),
-                EnabledBy: IsActive(t.ClassName) ? null : DescribeHowToEnable(t.ClassName)))
+                ActiveForThisMode: IsActive(t.ClassName, t.ToolName),
+                EnabledBy: IsActive(t.ClassName, t.ToolName) ? null : DescribeHowToEnable(t.ClassName, t.ToolName)))
             .OrderBy(t => t.Name, StringComparer.Ordinal)
             .ToArray();
         var allDeclaredTools = declaredTools
@@ -112,11 +115,24 @@ public class ServerStatusTools
         };
     }
 
-    private string DescribeHowToEnable(string className)
+    private string DescribeHowToEnable(string className, string toolName)
     {
         if (_activeToolSurface.ExcludeTools.Contains(className))
         {
             return $"excluded by --exclude-tools {className}; remove it from --exclude-tools";
+        }
+
+        // A per-tool allow-list (claude-lean) filters the tool out whether or not its class is active.
+        // Point at the wider modes that carry the class, never at --include-tools, which cannot widen
+        // an allow-list.
+        if (!_activeToolSurface.IsToolAllowed(toolName))
+        {
+            var widerModes = _activeToolSurface.ClassModes.TryGetValue(className, out var carrying)
+                ? carrying.Where(m => !_activeToolSurface.ActiveModes.Contains(m, StringComparer.OrdinalIgnoreCase)).ToArray()
+                : [];
+            return widerModes.Length > 0
+                ? $"not in the claude-lean core toolset; restart with --mode {string.Join(" or ", widerModes)} instead of claude-lean"
+                : "not in the claude-lean core toolset; restart without --mode claude-lean";
         }
 
         return _activeToolSurface.ClassModes.TryGetValue(className, out var modes) && modes.Count > 0

@@ -35,14 +35,26 @@ public record ActiveToolSurface
         get;
     }
 
+    /// <summary>Per-tool allow-list in effect (the exclusive claude-lean mode), or null when every
+    /// tool of every active class is registered. A tool is active only if its class is active AND,
+    /// when this is non-null, its name is listed here.</summary>
+    public IReadOnlySet<string>? AllowedToolNames
+    {
+        get;
+    }
+
+    public bool IsToolAllowed(string toolName) => AllowedToolNames is null || AllowedToolNames.Contains(toolName);
+
     public ActiveToolSurface(
         string modeArg,
         IReadOnlySet<string> activeModes,
         IReadOnlySet<string> includeTools,
         IReadOnlySet<string> excludeTools,
         IReadOnlySet<string> activeToolClasses,
-        IReadOnlyDictionary<string, IReadOnlyList<string>>? classModes = null)
+        IReadOnlyDictionary<string, IReadOnlyList<string>>? classModes = null,
+        IReadOnlySet<string>? allowedToolNames = null)
     {
+        AllowedToolNames = allowedToolNames;
         ModeArg = modeArg;
         ActiveModes = activeModes;
         IncludeTools = includeTools;

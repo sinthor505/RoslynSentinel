@@ -102,7 +102,18 @@ public static class RoslynSentinelServiceExtensionsBasic
         // every class declaring a tool WriteToolAdviceHelper may name is in
         // BasicModeToToolClasses, so this resolution already sees all of them -> Advanced adds no
         // whole-file-write tools. See WriteToolAdviceHelper's remarks.
-        services.AddSingleton(new WriteToolAdviceHelper(activeToolClasses));
+        // The exclusive claude-lean mode also restricts WHICH tools of its classes are registered.
+        // Registered here, before any WithSentinelTools call, because WithSentinelTools reads it from
+        // the service collection at registration time. Absent for every other mode.
+        var toolAllowList = activeModes.Contains(ToolClassRegistry.ClaudeLeanMode)
+            ? new ToolAllowList(ToolClassRegistry.ClaudeLeanToolNames)
+            : null;
+        if (toolAllowList is not null)
+        {
+            services.AddSingleton(toolAllowList);
+        }
+
+        services.AddSingleton(new WriteToolAdviceHelper(activeToolClasses, toolAllowList?.ToolNames));
 
         // Captured once here (the same values ResolveActiveToolClasses/DescribeNoActiveToolsFailure
         // use to build the startup guidance message) so McpServerStatus can report today's actual
@@ -114,7 +125,8 @@ public static class RoslynSentinelServiceExtensionsBasic
             includeTools: resolvedIncludeTools,
             excludeTools: resolvedExcludeTools,
             activeToolClasses: activeToolClasses,
-            classModes: ToolClassRegistry.BuildClassToModes());
+            classModes: ToolClassRegistry.BuildClassToModes(),
+            allowedToolNames: toolAllowList?.ToolNames);
         services.AddSingleton(activeToolSurface);
 
         // Always registered, independent of activeToolClasses/--mode/--include-tools/

@@ -1,6 +1,11 @@
 # Cut the MCP tool-schema token cost by about half
 
-**Status:** PROPOSED 2026-10-03. Steps 1, 3 and 4a agreed; step 2 agreed with the per-profile caveat below; the CLAUDE.md rule and the status-tool fixes are being built first.
+**Status:** PARTLY IMPLEMENTED 2026-10-03.
+- Done: gating rule + status-tool fixes (a41e72c7); step 1, no x-tags or `default:null` unless `--emit-datatags` (f90e5bcf); step 3, description diet, -15.2% emitted schema (25b7b8c8).
+- Step 2a (lean profile that hides `autoStage`/`returnDiff`/`validateOnApply`/`lineBefore`/`lineAfter`) is built but **opt-in only**: `--schema-profile=lean` or `ROSLYNSENTINEL_SCHEMA_PROFILE=lean`, needs a server restart, and nothing enables it by default. The risk of hiding params that some client or model still sends led to a decision not to hide anything by default.
+- Dropped: step 2b (alias hiding) and enabling the lean profile in any launch config.
+- Not started: step 4a (tool merges), step 4b (lean `claude` toolset, then dynamic `McpToolsetControl`; verify `list_changed` handling first).
+- Finding: a validator that rejects unknown params must know about stripped ones; `HiddenSchemaParams` covers this for the lean profile.
 
 ## Motivation
 

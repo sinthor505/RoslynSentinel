@@ -8,6 +8,43 @@ namespace RoslynSentinel.Server.Basic;
 /// </summary>
 public static class ToolClassRegistry
 {
+    /// <summary>
+    /// Name of the opt-in lean Claude toolset (proposal_reduce_tool_schema_token_cost.md, Step 4b,
+    /// "Core"). Unlike every other mode it also applies a per-tool allow-list
+    /// (<see cref="ClaudeLeanToolNames"/>), because the classes holding the Core tools also hold
+    /// tools outside it. It is an exclusive mode: "all" never expands to it (see
+    /// <see cref="ExclusiveModes"/>), and combining it with another mode narrows that mode's
+    /// classes to the same allow-list.
+    /// </summary>
+    public const string ClaudeLeanMode = "claude-lean";
+
+    /// <summary>Modes that "--mode=all" must not expand to, because they restrict rather than add tools.</summary>
+    public static readonly IReadOnlySet<string> ExclusiveModes =
+        new HashSet<string>([ClaudeLeanMode], StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The 25 MCP tool names the <see cref="ClaudeLeanMode"/> mode exposes (the proposal's Core set).
+    /// McpServerStatus is declared by ServerStatusTools, which is registered outside the class
+    /// registry, and passes through the same allow-list.
+    /// </summary>
+    public static readonly IReadOnlySet<string> ClaudeLeanToolNames = new HashSet<string>(
+        [
+            "LoadSolution", "ReadFile", "GetFileOutline", "GetMethodSource", "GetLargeResult",
+            "Search", "FindReferences", "InspectSymbol", "LocateSymbol", "GetDiagnostics",
+            "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
+            "UsingDirective", "RenameSymbol", "WriteFile", "CreateFile", "DeleteFile",
+            "UndoLastApply", "McpServerControl", "McpServerStatus", "AcknowledgeExternalFileChanges", "ListExternalDiskChanges",
+        ],
+        StringComparer.Ordinal);
+
+    /// <summary>Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool (the same in Basic and Advanced).</summary>
+    private static readonly string[] ClaudeLeanToolClasses =
+    [
+        "WorkspaceTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
+        "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
+        "AdminTools", "WholeFileWriteTools",
+    ];
+
     /// <summary>Modes registered by Basic's <c>AddRoslynSentinelToolsBasic</c>.</summary> "SymbolNavigationTools"
     public static readonly IReadOnlyDictionary<string, string[]> BasicModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
@@ -17,6 +54,7 @@ public static class ToolClassRegistry
             ["WholeFileWrite"] = ["WholeFileWriteTools"],
             ["Refactor"] = ["RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools"],
             ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
+            [ClaudeLeanMode] = ClaudeLeanToolClasses,
 
             // Modernize/Quality/Generation/Asyncify register no classes in Basic today (commented
             // out pending Advanced-only tool classes) -> omitted here since an empty array would
@@ -68,6 +106,7 @@ public static class ToolClassRegistry
             ["SubAgentEval"] = ["SubAgentEvalTools"],
             ["SubAgent"] = ["SubAgentTools"],
             ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
+            [ClaudeLeanMode] = ClaudeLeanToolClasses,
         };
 
     /// <summary>

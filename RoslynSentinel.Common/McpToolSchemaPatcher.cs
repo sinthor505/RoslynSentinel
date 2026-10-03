@@ -132,9 +132,21 @@ public static class McpToolSchemaPatcher
         this IMcpServerBuilder builder,
         JsonSerializerOptions? serializerOptions = null)
     {
+        // Present only for the exclusive "claude-lean" mode (registered by AddRoslynSentinelToolsBasic
+        // before any tool class); null everywhere else, which keeps every tool of the class.
+        var allowList = builder.Services
+            .LastOrDefault(d => d.ServiceType == typeof(ToolAllowList))
+            ?.ImplementationInstance as ToolAllowList;
+
         foreach (var toolMethod in typeof(TToolType).GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
         {
-            if (toolMethod.GetCustomAttribute<McpServerToolAttribute>() is null)
+            var toolAttribute = toolMethod.GetCustomAttribute<McpServerToolAttribute>();
+            if (toolAttribute is null)
+            {
+                continue;
+            }
+
+            if (allowList is not null && !allowList.Allows(toolAttribute.Name ?? toolMethod.Name))
             {
                 continue;
             }

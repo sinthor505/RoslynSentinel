@@ -93,15 +93,21 @@ public sealed class WriteToolAdviceHelper
         };
 
     private readonly HashSet<string> _activeToolClasses;
+    private readonly IReadOnlySet<string>? _allowedToolNames;
 
     /// <param name="activeToolClasses">
     /// The resolved tool-class set for this server -> the same value
     /// <see cref="ServerStartupHelpers.ResolveActiveToolClasses"/> returns, after
     /// <c>--mode</c>/<c>--include-tools</c>/<c>--exclude-tools</c> have all been applied.
     /// </param>
-    public WriteToolAdviceHelper(IEnumerable<string> activeToolClasses)
+    /// <param name="allowedToolNames">
+    /// Per-tool allow-list (exclusive claude-lean mode), or null when every tool of an active class
+    /// is exposed. A tool of an active class that is not listed is not callable, so it is not named.
+    /// </param>
+    public WriteToolAdviceHelper(IEnumerable<string> activeToolClasses, IReadOnlySet<string>? allowedToolNames = null)
     {
         _activeToolClasses = new HashSet<string>(activeToolClasses, StringComparer.OrdinalIgnoreCase);
+        _allowedToolNames = allowedToolNames;
     }
 
     /// <summary>
@@ -120,7 +126,8 @@ public sealed class WriteToolAdviceHelper
     /// </summary>
     public bool IsExposed(string toolName) =>
         ToolToDeclaringClass.TryGetValue(toolName, out var declaringClass) &&
-        _activeToolClasses.Contains(declaringClass);
+        _activeToolClasses.Contains(declaringClass) &&
+        (_allowedToolNames is null || _allowedToolNames.Contains(toolName));
 
     /// <summary>
     /// Picks the best available way to land an edit that was rejected for being too large, in
