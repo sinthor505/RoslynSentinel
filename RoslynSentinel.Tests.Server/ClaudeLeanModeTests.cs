@@ -1,5 +1,6 @@
 // Coverage for proposal_reduce_tool_schema_token_cost.md Step 4b, slice 4b-1: the opt-in, exclusive
-// "claude-lean" mode exposes exactly the proposal's 25 Core tools (a per-tool allow-list on top of the
+// "claude-lean" mode exposes exactly the proposal's 25 Core tools plus McpToolsetControl, slice 4b-2
+// (a per-tool allow-list on top of the
 // class registry), "claude" keeps its pre-existing 68-tool set, and "all" never expands to claude-lean.
 // Same in-process MCP host shape as SchemaLeanProfileTests.cs; no solution load is needed. Nothing here
 // mutates process-wide static state, so the fixture needs no [NonParallelizable].
@@ -21,7 +22,7 @@ namespace RoslynSentinel.Tests.Server;
 [TestFixture]
 public class ClaudeLeanModeTests
 {
-    /// <summary>The proposal's Core set, spelled out independently of ToolClassRegistry.ClaudeLeanToolNames.</summary>
+    /// <summary>The proposal's Core set plus McpToolsetControl (slice 4b-2), spelled out independently of ToolClassRegistry.ClaudeLeanToolNames.</summary>
     private static readonly string[] CoreTools =
     [
         "LoadSolution", "ReadFile", "GetFileOutline", "GetMethodSource", "GetLargeResult",
@@ -29,6 +30,7 @@ public class ClaudeLeanModeTests
         "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
         "UsingDirective", "RenameSymbol", "WriteFile", "CreateFile", "DeleteFile",
         "UndoLastApply", "McpServerControl", "McpServerStatus", "AcknowledgeExternalFileChanges", "ListExternalDiskChanges",
+        "McpToolsetControl",
     ];
 
     /// <summary>The Advanced server's tool set for --mode claude, captured before claude-lean existed.</summary>
@@ -102,11 +104,11 @@ public class ClaudeLeanModeTests
 
     [TestCase(true)]
     [TestCase(false)]
-    public async Task ClaudeLean_ExposesExactlyTheTwentyFiveCoreTools(bool advanced)
+    public async Task ClaudeLean_ExposesExactlyTheTwentySixCoreTools(bool advanced)
     {
         var names = await ListToolNamesAsync(advanced, "claude-lean");
 
-        Assert.That(names, Has.Length.EqualTo(25));
+        Assert.That(names, Has.Length.EqualTo(26));
         Assert.That(names, Is.EquivalentTo(CoreTools));
     }
 
@@ -126,7 +128,8 @@ public class ClaudeLeanModeTests
 
         Assert.That(names, Has.Length.EqualTo(ClaudeAdvancedBaseline.Length - 13));
         Assert.That(names, Is.SubsetOf(ClaudeAdvancedBaseline));
-        Assert.That(names, Is.SupersetOf(CoreTools));
+        Assert.That(names, Is.SupersetOf(CoreTools.Where(t => t != "McpToolsetControl")));
+        Assert.That(names, Does.Not.Contain("McpToolsetControl"));
     }
 
     // ---- registry and startup parsing ----
@@ -175,7 +178,7 @@ public class ClaudeLeanModeTests
     }
 
     [Test]
-    public void ResolveActiveToolClasses_ClaudeLeanAlone_YieldsNineToolClasses()
+    public void ResolveActiveToolClasses_ClaudeLeanAlone_YieldsTenToolClasses()
     {
         var classes = ServerStartupHelpers.ResolveActiveToolClasses(
             new HashSet<string>(["claude-lean"], StringComparer.OrdinalIgnoreCase),
@@ -183,7 +186,8 @@ public class ClaudeLeanModeTests
             new HashSet<string>(),
             new HashSet<string>());
 
-        Assert.That(classes, Has.Count.EqualTo(9));
+        Assert.That(classes, Has.Count.EqualTo(10));
+        Assert.That(classes, Does.Contain("ToolsetControlTools"));
         Assert.That(classes, Does.Not.Contain("AdvancedRefactoringTools"));
         Assert.That(classes, Does.Not.Contain("DocumentationTools"));
     }

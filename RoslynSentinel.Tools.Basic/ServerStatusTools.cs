@@ -7,15 +7,19 @@ public class ServerStatusTools
     private readonly IWorkspaceManager _workspaceManager;
     private readonly ActiveToolSurface _activeToolSurface;
     private readonly StoppedByScriptMarker _stoppedByScriptMarker;
+    private readonly ToolsetService? _toolsets;
 
+    /// <param name="toolsets">Present only in claude-lean, where McpToolsetControl can switch tools on at runtime.</param>
     public ServerStatusTools(
         IWorkspaceManager workspaceManager,
         ActiveToolSurface activeToolSurface,
-        StoppedByScriptMarker stoppedByScriptMarker)
+        StoppedByScriptMarker stoppedByScriptMarker,
+        ToolsetService? toolsets = null)
     {
         _workspaceManager = workspaceManager;
         _activeToolSurface = activeToolSurface;
         _stoppedByScriptMarker = stoppedByScriptMarker;
+        _toolsets = toolsets;
     }
 
     [McpServerTool(Name = "McpServerStatus")]
@@ -42,9 +46,12 @@ public class ServerStatusTools
         // special-cased or McpServerStatus would report itself as inactive.
         // A tool is active when its class is active and, under a per-tool allow-list (claude-lean),
         // its name is on it too.
+        // A tool McpToolsetControl switched on is active too, whatever its class or the allow-list say.
+        var dynamicToolNames = _toolsets?.DynamicToolNames.ToHashSet(StringComparer.Ordinal) ?? [];
         bool IsActive(string className, string toolName) =>
-            (className == nameof(ServerStatusTools) || _activeToolSurface.ActiveToolClasses.Contains(className))
-            && _activeToolSurface.IsToolAllowed(toolName);
+            dynamicToolNames.Contains(toolName)
+            || ((className == nameof(ServerStatusTools) || _activeToolSurface.ActiveToolClasses.Contains(className))
+                && _activeToolSurface.IsToolAllowed(toolName));
 
         // The same tool name can be declared by more than one class (a facade and the split class
         // behind it); report one entry per name, preferring the class that is actually active.
@@ -120,6 +127,12 @@ public class ServerStatusTools
         if (_activeToolSurface.ExcludeTools.Contains(className))
         {
             return $"excluded by --exclude-tools {className}; remove it from --exclude-tools";
+        }
+
+        // claude-lean with McpToolsetControl: a tool in an on-demand set is enabled at runtime, not by a restart.
+        if (_toolsets is not null && ToolsetCatalog.FindSet(toolName) is { } toolSet)
+        {
+            return $"McpToolsetControl(toolSet: {toolSet}, enabled: true)";
         }
 
         // A per-tool allow-list (claude-lean) filters the tool out whether or not its class is active.

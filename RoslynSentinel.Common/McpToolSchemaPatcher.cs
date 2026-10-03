@@ -151,39 +151,78 @@ public static class McpToolSchemaPatcher
                 continue;
             }
 
-            if (toolMethod.IsStatic)
-            {
-                builder.Services.AddSingleton<McpServerTool>(services =>
-                {
-                    McpServerTool tool = McpServerTool.Create(toolMethod, target: null, CreateOptions(services, serializerOptions));
-                    ApplyConsumesTags(tool, toolMethod);
-                    ApplyReplaceSnippetLimits(tool, toolMethod);
-                    ApplyLeanProfile(tool, toolMethod);
-                    return tool;
-                });
-            }
-            else
-            {
-                // Mirrors the SDK's own WithTools<T>() instance-method branch: construct a fresh
-                // target per invocation via ActivatorUtilities (DI-aware constructor injection,
-                // falling back to Activator.CreateInstance with no DI container), rather than
-                // resolving a pre-registered singleton -> matches the SDK's documented "an instance
-                // is constructed for each invocation" behavior for parity with WithTools<T>().
-                builder.Services.AddSingleton<McpServerTool>(services =>
-                {
-                    McpServerTool tool = McpServerTool.Create(
-                        toolMethod,
-                        createTargetFunc: (RequestContext<CallToolRequestParams> request) => CreateTarget(((MessageContext)request).Services, typeof(TToolType)),
-                        CreateOptions(services, serializerOptions));
-                    ApplyConsumesTags(tool, toolMethod);
-                    ApplyReplaceSnippetLimits(tool, toolMethod);
-                    ApplyLeanProfile(tool, toolMethod);
-                    return tool;
-                });
-            }
+            builder.Services.AddSingleton<McpServerTool>(services =>
+                CreateSentinelTool(toolMethod, typeof(TToolType), services, serializerOptions));
         }
 
         return builder;
+    }
+
+    /// <summary>
+    /// Builds one fully patched <see cref="McpServerTool"/> for <paramref name="toolMethod"/>: the SDK's
+    /// own creation plus every schema patch <see cref="WithSentinelTools{TToolType}"/> applies at startup
+    /// (x-tags, ReplaceSnippet limits, lean profile). Shared by the startup registration and by the
+    /// runtime toolset service so a tool added later (McpToolsetControl) is byte-for-byte the same tool
+    /// it would have been had it been registered at startup.
+    /// </summary>
+    public static McpServerTool CreateSentinelTool(
+        MethodInfo toolMethod,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type toolType,
+        IServiceProvider services,
+        JsonSerializerOptions? serializerOptions = null)
+    {
+        McpServerTool tool;
+        if (toolMethod.IsStatic)
+        {
+            tool = McpServerTool.Create(toolMethod, target: null, CreateOptions(services, serializerOptions));
+        }
+        else
+        {
+            // Mirrors the SDK's own WithTools<T>() instance-method branch: construct a fresh
+            // target per invocation via ActivatorUtilities (DI-aware constructor injection,
+            // falling back to Activator.CreateInstance with no DI container), rather than
+            // resolving a pre-registered singleton -> matches the SDK's documented "an instance
+            // is constructed for each invocation" behavior for parity with WithTools<T>().
+            tool = McpServerTool.Create(
+                toolMethod,
+                createTargetFunc: (RequestContext<CallToolRequestParams> request) => CreateTarget(((MessageContext)request).Services, toolType),
+                CreateOptions(services, serializerOptions));
+        }
+
+        ApplyConsumesTags(tool, toolMethod);
+        ApplyReplaceSnippetLimits(tool, toolMethod);
+        ApplyLeanProfile(tool, toolMethod);
+        return tool;
+    }
+
+    /// <summary>
+    /// Every <see cref="McpServerToolAttribute"/> method declared in <paramref name="assemblies"/>, with the
+    /// declaring type and method so a tool can be created at runtime (see <see cref="CreateSentinelTool"/>).
+    /// The same tool name can be declared by more than one class (a facade and the split class behind it),
+    /// so a name may appear more than once.
+    /// </summary>
+    public static IReadOnlyList<(string ToolName, Type ToolType, MethodInfo Method)> DiscoverToolMethods(IEnumerable<Assembly> assemblies)
+    {
+        var discovered = new List<(string ToolName, Type ToolType, MethodInfo Method)>();
+
+        foreach (var assembly in assemblies.Distinct())
+        {
+            foreach (var type in assembly.GetTypes())
+            {
+                foreach (var method in type.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+                {
+                    var toolAttribute = method.GetCustomAttribute<McpServerToolAttribute>();
+                    if (toolAttribute is null)
+                    {
+                        continue;
+                    }
+
+                    discovered.Add((toolAttribute.Name ?? method.Name, type, method));
+                }
+            }
+        }
+
+        return discovered;
     }
 
     /// <summary>

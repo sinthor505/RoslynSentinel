@@ -23,7 +23,8 @@ public static class ToolClassRegistry
         new HashSet<string>([ClaudeLeanMode], StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The 25 MCP tool names the <see cref="ClaudeLeanMode"/> mode exposes (the proposal's Core set).
+    /// The 26 MCP tool names the <see cref="ClaudeLeanMode"/> mode exposes: the proposal's 25-tool Core set
+    /// plus McpToolsetControl, which switches the on-demand toolsets (<see cref="ToolsetCatalog"/>) at runtime.
     /// McpServerStatus is declared by ServerStatusTools, which is registered outside the class
     /// registry, and passes through the same allow-list.
     /// </summary>
@@ -34,6 +35,7 @@ public static class ToolClassRegistry
             "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
             "UsingDirective", "RenameSymbol", "WriteFile", "CreateFile", "DeleteFile",
             "UndoLastApply", "McpServerControl", "McpServerStatus", "AcknowledgeExternalFileChanges", "ListExternalDiskChanges",
+            ToolsetCatalog.ControlToolName,
         ],
         StringComparer.Ordinal);
 
@@ -42,10 +44,24 @@ public static class ToolClassRegistry
     [
         "WorkspaceTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
         "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
-        "AdminTools", "WholeFileWriteTools",
+        "AdminTools", "WholeFileWriteTools", "ToolsetControlTools",
     ];
 
-    /// <summary>Modes registered by Basic's <c>AddRoslynSentinelToolsBasic</c>.</summary> "SymbolNavigationTools"
+    /// <summary>
+    /// Tool classes whose dependencies claude-lean registers WITHOUT registering their tools (the per-tool
+    /// allow-list filters every non-Core tool out at startup), so <c>McpToolsetControl</c> can build any on-demand
+    /// tool later and have its class constructed. These are the facade classes of the "Claude" mode; a tool name
+    /// also declared by a split class behind a facade resolves to the facade. Only claude-lean uses this.
+    /// </summary>
+    public static readonly IReadOnlySet<string> ClaudeLeanOnDemandToolClasses = new HashSet<string>(
+        [
+            "WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
+            "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
+            "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools",
+        ],
+        StringComparer.Ordinal);
+
+    /// <summary>Modes registered by Basic's <c>AddRoslynSentinelToolsBasic</c>.</summary>
     public static readonly IReadOnlyDictionary<string, string[]> BasicModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {

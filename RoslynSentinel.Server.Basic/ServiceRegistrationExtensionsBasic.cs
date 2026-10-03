@@ -148,6 +148,32 @@ public static class RoslynSentinelServiceExtensionsBasic
         // same category name pattern the rest of the server already uses implicitly.
         services.TryAddSingleton(sp => sp.GetRequiredService<ILoggerFactory>().CreateLogger("RoslynSentinel"));
 
+        // claude-lean only: McpToolsetControl can add any on-demand tool at runtime, and a tool's class is
+        // constructed by ActivatorUtilities from the container - so the DEPENDENCIES of those classes (the Impl
+        // singletons registered in the blocks below) must exist even though their tools are not exposed at
+        // startup. The per-tool allow-list already makes WithSentinelTools register none of the non-Core
+        // tools, so widening the set here registers dependencies only. Rebinding (not mutating) keeps the
+        // ActiveToolSurface/WriteToolAdviceHelper sets above - what McpServerStatus and advice report - exact.
+        if (toolAllowList is not null)
+        {
+            bool toolsetControlActive = activeToolClasses.Contains("ToolsetControlTools");
+            activeToolClasses = new HashSet<string>(activeToolClasses, StringComparer.OrdinalIgnoreCase);
+            foreach (var onDemandClass in ToolClassRegistry.ClaudeLeanOnDemandToolClasses.Where(c => !resolvedExcludeTools.Contains(c)))
+            {
+                activeToolClasses.Add(onDemandClass);
+            }
+
+            if (toolsetControlActive)
+            {
+                services.AddSingleton(sp => new ToolsetService(
+                    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ModelContextProtocol.Server.McpServerOptions>>(),
+                    sp,
+                    ToolClassRegistry.ClaudeLeanOnDemandToolClasses));
+                services.AddSingleton<ToolsetControlTools>();
+                mcpBuilder.WithSentinelTools<ToolsetControlTools>();
+            }
+        }
+
         if (activeToolClasses.Contains("WorkspaceTools"))
         {
             services.AddSingleton<WorkspaceReadNavigationImpl>();

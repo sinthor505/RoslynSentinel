@@ -4,7 +4,8 @@
 - Done: gating rule + status-tool fixes (a41e72c7); step 1, no x-tags or `default:null` unless `--emit-datatags` (f90e5bcf); step 3, description diet, -15.2% emitted schema (25b7b8c8).
 - Step 2a (lean profile that hides `autoStage`/`returnDiff`/`validateOnApply`/`lineBefore`/`lineAfter`) is built but **opt-in only**: `--schema-profile=lean` or `ROSLYNSENTINEL_SCHEMA_PROFILE=lean`, needs a server restart, and nothing enables it by default. The risk of hiding params that some client or model still sends led to a decision not to hide anything by default.
 - Dropped: step 2b (alias hiding) and enabling the lean profile in any launch config.
-- Not started: step 4a (tool merges), step 4b (lean `claude` toolset, then dynamic `McpToolsetControl`; verify `list_changed` handling first).
+- Step 4b implemented, opt-in only: stage 1 is the `claude-lean` mode (cdc32ba2); stage 2 is the dynamic `McpToolsetControl` tool, available only in `claude-lean`, which takes the Core set from 25 to 26 tools. See "How to use claude-lean and McpToolsetControl" at the end of this document. `list_changed` was verified against the SDK (see Open questions).
+- Not started: step 4a (tool merges).
 - Finding: a validator that rejects unknown params must know about stripped ones; `HiddenSchemaParams` covers this for the lean profile.
 
 ## Motivation
@@ -129,8 +130,16 @@ not measured.
 ## Open questions
 
 - Does the SDK's tool collection raise `tools/list_changed` by itself when tools are added or
-  removed at runtime? Not verified against the SDK clone; the server currently never mutates the
-  collection (only `ToolArgumentValidator.cs:35` reads it).
+  removed at runtime? **Verified (SDK 2.2.0, 2026-10-03): yes, with one protocol caveat.**
+  `McpServerImpl` subscribes `ToolCollection.Changed` to `SendListChangedNotificationAsync` for
+  stateful transports (stdio and stream transports; not stateless Streamable HTTP) and advertises
+  `tools.listChanged`. tools/list and tools/call read the live collection, so a tool enabled at
+  runtime is callable even if the client never re-lists. Caveat: a client that negotiated protocol
+  2026-07-28 or later is notified only over a `subscriptions/listen` stream it opened (including
+  `toolsListChanged`); clients on the initialize-handshake protocols get the broadcast. Whether
+  Claude Code subscribes is not verified; if it does not, enabling a set works (callable by name,
+  and a re-list shows the tools) but the list does not refresh by itself. Both paths are covered by
+  `McpToolsetControlTests`.
 - Do LM Studio and other local clients honour `list_changed`? If not, they stay on static modes.
 - Is the x-tag emission needed by any external consumer? In-repo search found none.
 - Dog-fooding: CLAUDE.md names Member, MethodSignature, ModifyModifier, ApplyDiff and RenameSymbol as
@@ -147,6 +156,24 @@ not measured.
 - Dynamic toolsets add a meta tool and a round trip, and a model must know when to enable a set;
   the toolset names go in the `McpToolsetControl` description.
 - Schema-diet changes are invisible to a running server: restart it after each change.
+
+## How to use claude-lean and McpToolsetControl
+
+- Start the server with `--mode claude-lean` (or the equivalent `ROSLYNSENTINEL_*` environment
+  variable). It exposes the 26 core tools only; no other mode includes `McpToolsetControl`, and
+  `--include-tools` cannot add it elsewhere.
+- Call `McpToolsetControl(reason, toolSet: declarations | moveExtract | projectAdmin, enabled: true | false)`.
+  The result lists the tools added or removed, any that are unavailable on this server flavor (the
+  Basic flavor has no `AdvancedRefactoringTools`), and the now-active tool list. Repeating a call is
+  a no-op. Sets: `declarations` (9 tools), `moveExtract` (19), `projectAdmin` (14).
+- Enabled tools are patched exactly like startup tools and the server sends `tools/list_changed`
+  (subject to the protocol caveat above). They are callable by name even if the client has not
+  refreshed its list. An existing tool is never replaced; a name already present is reported as unavailable.
+- `McpServerStatus(toolListing: inactive)` shows `enabledBy: McpToolsetControl(toolSet: X, enabled: true)`
+  for every tool in a set, and reports enabled ones as active.
+- Dog-fooding sessions on this repo should enable `declarations` and `moveExtract`.
+- State lives in one `ToolsetService` singleton per server process. On a stateful HTTP server the
+  collection is shared across sessions, so a toggle affects all of them.
 
 ## Related
 
