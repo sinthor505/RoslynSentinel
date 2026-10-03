@@ -4,6 +4,34 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## Move syntax-side target resolution out of `SymbolNavigationEngine`, then unify hint formatters - not started
+
+**Found:** 2026-10-02, reviewing the refactoring-engine reorg (commit `72a327e`).
+`proposal_universal_symbol_resolver.md` unified the five drifted lookup helpers into the
+`ResolveCandidates` family but left it inside `SymbolNavigationEngine`. As a result
+`BasicRefactoringEngine`/`MemberRefactoringEngine` make 118 calls into that engine, 91 of them to
+stateless, workspace-free syntax helpers (`ResolveCandidates`, `ResolveBySnippetOrThrow`, the
+`Prefer*`/`FilterByContainingType` helpers, `NormalizeTypeName`, `GetMemberName`, the `Build*Hint*`
+formatters, `BuildContainerNotFoundMessage`). They depend on a workspace-holding navigation engine
+for functions that need neither the workspace nor any state.
+
+**Two steps, in order:**
+1. Move the syntax-only resolution layer into its own stateless class in `Engines.Basic`, unchanged
+   (keeps the proposal's hard rules: never throw on zero matches; disambiguation stays caller-chosen
+   helpers). Semantic-side resolution (`ResolveCandidatesWithSemanticAsync`, `PreferClassMember`,
+   `PreferImplementableMember`, `DescribeNearMissCandidatesAsync`) stays in `SymbolNavigationEngine`
+   for now. Verify each moved member has no `_workspaceManager` use first.
+2. Finish the proposal's unimplemented section 5: one shared hint formatter over
+   `List<SyntaxNodeCandidate>`, replacing `BuildMemberHint`, `BuildTypeHint`, the two
+   `*ForCandidates` adapters, `DescribeNameOnlyCandidates` and `DescribeCandidateLocations`. The
+   engine's own callers (`TryGetEnumMemberContainerNameAsync`, `IsEnumContainerAsync`,
+   `GetContainerMembersAsync`) currently strip candidates back to bare nodes to call the old
+   formatters, discarding `StartLine`/`Preview`.
+
+Also: mark `proposal_universal_symbol_resolver.md` resolved for its resolver scope and refresh its
+pre-reorg paths (`RoslynSentinel.Basic/...`, `RefactoringEngine.cs:NNNN`). Design writeup:
+[proposals/proposal_syntax_target_resolver_extraction.md](./proposals/proposal_syntax_target_resolver_extraction.md).
+
 ## Analyzer / source-scan guardrail for case-sensitive path comparison - not started
 
 **Found:** 2026-10-02, while fixing `blockers/blocking_error_path_lookup_case_sensitive_drive_letter_replacesnippet_file_not_found.md`
