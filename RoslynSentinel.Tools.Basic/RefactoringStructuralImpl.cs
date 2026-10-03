@@ -80,6 +80,45 @@ public class RefactoringStructuralImpl
         return trimmed.Length > 0 ? trimmed : fallbackLabel;
     }
 
+    /// <summary>
+    /// ModifyModifier add static on methods/properties: makes them static AND rewrites their instance-qualified callers as one
+    /// change set (see MemberRefactoringEngine.ConvertMembersToStaticAsync). Returns null when the conversion took over none of the
+    /// requests (a field, an already-static member, an unresolved target), so the caller falls back to the plain modifier path,
+    /// which reports those cases. A refusal (instance state still used, unsupported member, unrewritable call site) is a
+    /// TargetIneligible error naming the offending uses.
+    /// </summary>
+    private async Task<SentinelCallToolResult<AppliedChangeSummary>?> TryApplyStaticConversionAsync(IReadOnlyList<StaticConversionRequest> requests, bool autoStage, bool dryRun, bool returnDiff, string description, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var conversion = await _memberRefactoringEngine.ConvertMembersToStaticAsync(requests, cancellationToken);
+            if (conversion.HandledIndexes.Count == 0)
+            {
+                return null;
+            }
+
+            var findings = conversion.Notes.Select(n => new Finding("ModifyModifier", n, FindingSeverity.Caution)).ToList();
+            if (!autoStage)
+            {
+                return new SentinelCallToolResult<AppliedChangeSummary>() { IsSuccess = true, Findings = findings, SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: conversion.Changes.Keys.ToList(), Description: description, DryRun: false, Diff: null, ChangedContent: conversion.Changes.Count == 0 ? null : conversion.Changes, Validated: false) };
+            }
+
+            var apply = await ValidateAndApplyAsync(conversion.Changes, description, "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
+            if (apply.Error is not null)
+            {
+                return new SentinelCallToolResult<AppliedChangeSummary> { IsSuccess = false, ErrorData = apply.Error };
+            }
+
+            var summary = new AppliedChangeSummary(apply.ChangeId, conversion.Changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: conversion.Changes, Validated: true, LineChanges: apply.LineChanges);
+            return new SentinelCallToolResult<AppliedChangeSummary>() { IsSuccess = true, StatusMessage = description, Findings = findings, SuccessData = summary };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ModifyModifier add static failed for {Count} target(s)", requests.Count);
+            return new SentinelCallToolResult<AppliedChangeSummary>() { IsSuccess = false, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyModifier") };
+        }
+    }
+
     private async Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyModifierBatch(List<ModifierEdit> edits, bool dryRun, bool returnDiff, CancellationToken cancellationToken)
     {
         if (edits.Count > MaxModifierFamilyEditsPerBatch)
@@ -114,18 +153,65 @@ public class RefactoringStructuralImpl
             };
         }
 
-        var editsByFile = edits
-            .Select((edit, index) => (edit, index))
-            .GroupBy(pair => _workspaceManager.ResolveFromWire(pair.edit.FilePath));
-
         var finalContents = new Dictionary<FilePathWrapper, string>();
         var touchedFiles = new List<FilePathWrapper>();
+        var handledByStaticConversion = new HashSet<int>();
+        var staticNotes = new List<string>();
+
+        // add static on a method/property converts the member AND rewrites its callers, so every such edit is resolved together
+        // (a member that only calls another member converted in this same batch is fine). Anything the conversion does not
+        // apply to (fields, already-static members, unresolved targets) stays with the plain modifier path below.
+        var staticRequests = new List<StaticConversionRequest>();
+        for (int i = 0; i < edits.Count; i++)
+        {
+            if (edits[i].Action == AddRemoveAction.add && edits[i].Modifier == NonAccessibilityModifier.@static)
+            {
+                var resolvedPath = _workspaceManager.ResolveFromWire(edits[i].FilePath);
+                if (resolvedPath.Validated)
+                {
+                    staticRequests.Add(new StaticConversionRequest(i, resolvedPath, edits[i].TargetName, edits[i].ContextSnippet, edits[i].LineBefore, edits[i].LineAfter));
+                }
+            }
+        }
+
+        if (staticRequests.Count > 0)
+        {
+            try
+            {
+                var conversion = await _memberRefactoringEngine.ConvertMembersToStaticAsync(staticRequests, cancellationToken);
+                handledByStaticConversion = conversion.HandledIndexes;
+                staticNotes = conversion.Notes;
+                foreach (var change in conversion.Changes)
+                {
+                    finalContents[change.Key] = change.Value;
+                    touchedFiles.Add(change.Key);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ModifyModifier batch add static failed for {Count} target(s)", staticRequests.Count);
+                return new SentinelCallToolResult<AppliedChangeSummary>() { IsSuccess = false, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ModifyModifier") };
+            }
+        }
+
+        var editsByFile = edits
+            .Select((edit, index) => (edit, index))
+            .Where(pair => !handledByStaticConversion.Contains(pair.index))
+            .GroupBy(pair => _workspaceManager.ResolveFromWire(pair.edit.FilePath));
+
         foreach (var fileGroup in editsByFile)
         {
             var filePathResolved = fileGroup.Key;
             if (!filePathResolved.Validated)
             {
                 perEditErrors.Add($"'{fileGroup.Key}': {(filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded ? "no solution is loaded." : "path could not be resolved.")}");
+                continue;
+            }
+
+            if (finalContents.ContainsKey(filePathResolved))
+            {
+                // Both halves were computed against the file's original text, so they cannot be merged: refuse rather than drop one.
+                perEditErrors.Add($"'{filePathResolved}': this file is changed both by an 'add static' conversion (which also rewrites callers) and by other modifier edits ({string.Join(", ", fileGroup.Select(p => $"edits[{p.index}]"))}). Split them into separate calls.");
                 continue;
             }
 
@@ -162,9 +248,9 @@ public class RefactoringStructuralImpl
         if (apply.Error is not null)
             return new SentinelCallToolResult<AppliedChangeSummary> { IsSuccess = false, ErrorData = apply.Error };
 
-        var description = $"Applied {edits.Count} modifier edit(s) across {touchedFiles.Count} file(s).";
-        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, description, apply.DryRun, apply.Diff);
-        return new SentinelCallToolResult<AppliedChangeSummary>() { IsSuccess = true, StatusMessage = description, SuccessData = summary };
+        var description = $"Applied {edits.Count} modifier edit(s) across {touchedFiles.Count} file(s)." + (handledByStaticConversion.Count > 0 ? $" {handledByStaticConversion.Count} add-static edit(s) also rewrote instance-qualified callers." : string.Empty);
+        var summary = new AppliedChangeSummary(apply.ChangeId, touchedFiles, description, apply.DryRun, apply.Diff, LineChanges: apply.LineChanges);
+        return new SentinelCallToolResult<AppliedChangeSummary>() { IsSuccess = true, StatusMessage = description, SuccessData = summary, Findings = staticNotes.Select(n => new Finding("ModifyModifier", n, FindingSeverity.Caution)).ToList() };
     }
 
     /// <summary>
@@ -1058,6 +1144,17 @@ public class RefactoringStructuralImpl
         }
 
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
+        if (action == AddRemoveAction.add && modifier == NonAccessibilityModifier.@static)
+        {
+            // add static on a method/property is a conversion, not a keyword insert: the callers' receivers change too.
+            // A target the conversion does not apply to (field, already static, unresolved) falls through to the plain path below.
+            var singular = await TryApplyStaticConversionAsync([new StaticConversionRequest(0, filePathResolved, targetName, contextSnippet, lineBefore, lineAfter)], autoStage, dryRun, returnDiff, $"Made '{targetName}' static in {Path.GetFileName(filePathResolved)} and rewrote its instance-qualified callers.", cancellationToken);
+            if (singular != null)
+            {
+                return singular;
+            }
+        }
+
         var modifierText = modifier.Value.ToString();
         try
         {

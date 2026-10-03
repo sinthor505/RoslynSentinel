@@ -10,7 +10,7 @@ namespace RoslynSentinel.Engines.Basic;
 public record PreviewCallSite(FilePathWrapper FilePath, int Line, string CallExpression, CallSiteStatus Status, string? BlockReason, string? SuggestedFix, IReadOnlyList<string> Candidates);
 public record SkippedCallSite(FilePathWrapper FilePath, int LineNumber, string Reason);
 
-public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, List<CallSiteLedgerEntry>? PendingLedgerEntries = null, string? PendingLedgerOperationName = null, List<AppliedCallSiteFixup>? AppliedFixups = null);
+public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, List<CallSiteLedgerEntry>? PendingLedgerEntries = null, string? PendingLedgerOperationName = null, List<AppliedCallSiteFixup>? AppliedFixups = null, IReadOnlyList<string>? Notes = null);
 /// <summary>
 /// One call site rewritten from a caller-supplied callSiteFixups entry (not an auto-resolved one).
 /// <paramref name = "Line"/> is the 1-based line in the PROPOSED (post-rewrite, post-normalization)
@@ -1169,6 +1169,119 @@ public class MemberRefactoringEngine
             FilePath = filePath,
             UpdatedText = replaced.Text
         };
+    }
+
+    /// <summary>
+    /// ModifyModifier add static for methods and properties: makes each requested member static and rewrites every
+    /// instance-qualified caller (<c>receiver.M(...)</c> becomes <c>Type.M(...)</c>) in ONE change set made of minimal
+    /// TextChanges against each document's original text. Refuses, naming each offending use, when a member still uses
+    /// instance state (this/base, instance fields, properties, methods or events of its type, including through an
+    /// implicit this); a member that only uses other members converted in the same call is fine. Requests the
+    /// conversion does not apply to (targets that are not methods or properties, or are already static, or do not
+    /// resolve) are left out of <see cref="StaticConversionResult.HandledIndexes"/> for the plain modifier path to report.
+    /// </summary>
+    public async Task<StaticConversionResult> ConvertMembersToStaticAsync(IReadOnlyList<StaticConversionRequest> requests, CancellationToken cancellationToken = default)
+    {
+        // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var targets = new List<(StaticConversionRequest Request, Document Document, SemanticModel Model, MemberDeclarationSyntax Declaration, ISymbol Symbol)>();
+        foreach (var request in requests)
+        {
+            var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == request.FilePath || d.FilePath == request.FilePath);
+            var root = document == null ? null : await document.GetSyntaxRootAsync(cancellationToken);
+            var sourceText = document == null ? null : await document.GetTextAsync(cancellationToken);
+            var model = document == null ? null : await document.GetSemanticModelAsync(cancellationToken);
+            if (document == null || root == null || sourceText == null || model == null)
+            {
+                continue;
+            }
+
+            MemberDeclarationSyntax? declaration;
+            try
+            {
+                var memberCandidates = _symbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.ResolveCandidates(root, sourceText, request.TargetName, cancellationToken).Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+                declaration = _symbolNavigationEngine.ResolveBySnippetOrThrow(memberCandidates, sourceText, request.ContextSnippet, request.LineBefore, request.LineAfter, (candidates, matches, failureMode) => _symbolNavigationEngine.BuildMemberHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
+            }
+            catch (InvalidOperationException)
+            {
+                // Not resolvable here: the plain modifier path reports the real resolution error for this request.
+                continue;
+            }
+
+            if (declaration is not (MethodDeclarationSyntax or PropertyDeclarationSyntax) || declaration.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
+            {
+                continue;
+            }
+
+            var symbol = model.GetDeclaredSymbol(declaration, cancellationToken);
+            if (symbol != null)
+            {
+                targets.Add((request, document, model, declaration, symbol));
+            }
+        }
+
+        var handled = new HashSet<int>(targets.Select(t => t.Request.Index));
+        if (targets.Count == 0)
+        {
+            return new StaticConversionResult(handled, new Dictionary<FilePathWrapper, string>(), new List<string>());
+        }
+
+        var duplicate = targets.GroupBy(t => t.Symbol, SymbolEqualityComparer.Default).FirstOrDefault(g => g.Count() > 1);
+        if (duplicate != null)
+        {
+            throw new ToolInvalidArgumentException($"edits [{string.Join(", ", duplicate.Select(t => t.Request.Index))}] all resolve to '{duplicate.Key!.ContainingType?.Name}.{duplicate.Key.Name}'. List each member once.");
+        }
+
+        var refusals = new List<string>();
+        foreach (var target in targets)
+        {
+            var reason = StaticConversionEdits.GetIneligibilityReason(target.Declaration, target.Symbol);
+            if (reason != null)
+            {
+                refusals.Add($"'{target.Symbol.ContainingType?.Name}.{target.Symbol.Name}': {reason}");
+            }
+        }
+
+        if (refusals.Count > 0)
+        {
+            throw new ToolTargetIneligibleException($"Cannot make the member(s) static - {string.Join("; ", refusals)}.");
+        }
+
+        var converted = new HashSet<ISymbol>(targets.Select(t => t.Symbol.OriginalDefinition), SymbolEqualityComparer.Default);
+        var stateRefusals = new List<string>();
+        foreach (var target in targets)
+        {
+            var uses = StaticConversionEdits.FindInstanceStateUses(target.Declaration, target.Model, target.Symbol.ContainingType!, converted, cancellationToken);
+            if (uses.Count > 0)
+            {
+                stateRefusals.Add($"'{target.Symbol.ContainingType!.Name}.{target.Symbol.Name}' uses instance state: {string.Join(", ", uses.Select(u => u.ToString()))}");
+            }
+        }
+
+        if (stateRefusals.Count > 0)
+        {
+            throw new ToolTargetIneligibleException($"Cannot make the member(s) static - {string.Join("; ", stateRefusals)}. A static member cannot read instance state: pass what it needs in as parameters, or add the members it uses to the same ModifyModifier call if they are themselves stateless.");
+        }
+
+        var collector = new StaticConversionReferenceCollector(solution);
+        foreach (var target in targets)
+        {
+            await collector.AddReferencesAsync(target.Symbol, target.Symbol.ContainingType!, skipAllBareReferences: true, isInsideMovedMember: null, cancellationToken);
+        }
+
+        if (collector.Problems.Count > 0)
+        {
+            throw new ToolTargetIneligibleException($"Cannot rewrite every caller of the member(s) being made static - {string.Join("; ", collector.Problems)}.");
+        }
+
+        await collector.FinalizeAsync(cancellationToken);
+        foreach (var target in targets)
+        {
+            collector.AddEdit(target.Document.Id, StaticConversionEdits.BuildStaticModifierEdit(target.Declaration));
+        }
+
+        var changes = await MaterializeDocumentEditsAsync(solution, collector.EditsByDocument, new Dictionary<DocumentId, SourceText>(), cancellationToken);
+        return new StaticConversionResult(handled, changes, collector.Notes);
     }
 
     /// <summary>
@@ -3218,6 +3331,14 @@ public class MemberRefactoringEngine
             }
         }
 
+        List<MemberDeclarationSyntax> instanceMembersToConvert = new();
+        if (!targetIsBaseType && targetClassSymbol is { IsStatic: true } && semanticModel != null)
+        {
+            // A static class can only hold static members. Refuse here, naming the instance state, unless every moved
+            // instance method/property can be made static (that conversion happens in the existing-class path below).
+            instanceMembersToConvert = RequireInstanceMembersConvertibleToStatic(semanticModel, membersToMove, targetClassName, cancellationToken);
+        }
+
         HashSet<string> alreadySatisfiedFields = new(StringComparer.Ordinal);
         if (classSymbol != null && semanticModel != null)
         {
@@ -3282,6 +3403,16 @@ public class MemberRefactoringEngine
             }
         }
 
+        if (nonStaticMembers.Count > 0 && targetClassSymbol is { IsStatic: true } && targetDoc?.FilePath != null && targetClassNode != null)
+        {
+            // Static target class: the instance methods/properties were verified stateless above, so they move as STATIC
+            // members (a static modifier is added to each) and every instance-qualified caller is rewritten to the target type.
+            var staticTargetMemberSymbols = membersToMove.Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
+            var conversionNotes = new List<string>();
+            var moved = await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, staticTargetMemberSymbols, instanceMembersToConvert, conversionNotes, cancellationToken);
+            return moved with { Notes = conversionNotes };
+        }
+
         if (nonStaticMembers.Count > 0)
         {
             if (!autoResolveCallSites)
@@ -3302,11 +3433,59 @@ public class MemberRefactoringEngine
         if (targetDoc?.FilePath != null && targetClassNode != null)
         {
             var existingClassMemberSymbols = membersToMove.Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
-            return await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, existingClassMemberSymbols, cancellationToken);
+            return await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, existingClassMemberSymbols, null, null, cancellationToken);
         }
 
         var newClassMemberSymbols = membersToMove.Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
         return await MoveMembersToNewClassAsync(solution, filePath, root, classNode, membersToMove, targetClassName, newClassMemberSymbols, cancellationToken);
+    }
+
+    /// <summary>
+    /// MoveMember into a STATIC target class: every moved instance method/property must be convertible to static
+    /// (see <see cref="StaticConversionEdits"/>) and must use no instance state. Runs before
+    /// <see cref="RequireNoUnmovedDependencies"/> so the refusal names the real cause (the instance state) instead of
+    /// the CS0708 the unconverted copy would produce in the static class, or a dependency hint that points at a field
+    /// a static class cannot hold anyway. Returns the instance members that will be made static.
+    /// </summary>
+    private static List<MemberDeclarationSyntax> RequireInstanceMembersConvertibleToStatic(SemanticModel semanticModel, List<MemberDeclarationSyntax> membersToMove, string targetClassName, CancellationToken cancellationToken)
+    {
+        var instanceMembers = membersToMove.Where(m => (m is MethodDeclarationSyntax || m is PropertyDeclarationSyntax || m is FieldDeclarationSyntax) && !m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword) || mod.IsKind(SyntaxKind.ConstKeyword))).ToList();
+        var fieldNames = instanceMembers.OfType<FieldDeclarationSyntax>().SelectMany(f => f.Declaration.Variables.Select(v => v.Identifier.Text)).ToList();
+        if (fieldNames.Count > 0)
+        {
+            throw new ToolTargetIneligibleException($"Cannot move instance field(s) [{string.Join(", ", fieldNames)}] into static class '{targetClassName}': a static class cannot hold instance state. Make the field(s) static first, or choose a non-static target class.");
+        }
+
+        var candidates = instanceMembers.Select(m => (Declaration: m, Symbol: semanticModel.GetDeclaredSymbol(m, cancellationToken))).Where(t => t.Symbol != null).ToList();
+        var refusals = new List<string>();
+        foreach (var (declaration, symbol) in candidates)
+        {
+            var reason = StaticConversionEdits.GetIneligibilityReason(declaration, symbol!);
+            if (reason != null)
+            {
+                refusals.Add($"'{symbol!.ContainingType?.Name}.{symbol.Name}': {reason}");
+            }
+        }
+
+        if (refusals.Count == 0)
+        {
+            var converted = new HashSet<ISymbol>(candidates.Select(t => t.Symbol!.OriginalDefinition), SymbolEqualityComparer.Default);
+            foreach (var (declaration, symbol) in candidates)
+            {
+                var uses = StaticConversionEdits.FindInstanceStateUses(declaration, semanticModel, symbol!.ContainingType, converted, cancellationToken);
+                if (uses.Count > 0)
+                {
+                    refusals.Add($"'{symbol.ContainingType.Name}.{symbol.Name}' uses instance state: {string.Join(", ", uses.Select(u => u.ToString()))}");
+                }
+            }
+        }
+
+        if (refusals.Count > 0)
+        {
+            throw new ToolTargetIneligibleException($"Cannot move instance member(s) into static class '{targetClassName}', which can only hold static members - {string.Join("; ", refusals)}. Members that use no instance state are made static and their callers rewritten automatically; for the others, pass the state in as parameters or move the members they use along with them.");
+        }
+
+        return instanceMembers;
     }
 
     /// <summary>
@@ -3490,11 +3669,48 @@ public class MemberRefactoringEngine
     }
 
     /// <summary>
+    /// The edits for moving methods/properties into a STATIC target class when some of them are instance members:
+    /// every reference to a moved member gets its receiver replaced by the target type (a bare reference outside the
+    /// moved members gets the type name inserted, one inside them is left alone because the members travel together),
+    /// and each instance member gets a <c>static</c> modifier inside the text that moves. Spans are in each document's
+    /// ORIGINAL text. Throws when a call site cannot be rewritten safely (for example a null-conditional chain).
+    /// </summary>
+    private static async Task<(Dictionary<DocumentId, List<TextChange>> Edits, List<string> Notes)> CollectConversionMoveEditsAsync(Solution solution, Document sourceDocument, Document targetDocument, ClassDeclarationSyntax targetClassNode, IReadOnlyList<MemberDeclarationSyntax> membersToMove, IReadOnlyList<MemberDeclarationSyntax> convertToStatic, IEnumerable<ISymbol> memberSymbols, CancellationToken cancellationToken)
+    {
+        var targetModel = await targetDocument.GetSemanticModelAsync(cancellationToken);
+        var targetSymbol = targetModel?.GetDeclaredSymbol(targetClassNode, cancellationToken);
+        if (targetSymbol == null)
+        {
+            throw new ToolNotFoundException($"Could not resolve target class '{targetClassNode.Identifier.Text}' to rewrite call sites against it.");
+        }
+
+        var movedSpans = membersToMove.Select(m => m.FullSpan).ToList();
+        var collector = new StaticConversionReferenceCollector(solution);
+        foreach (var symbol in memberSymbols)
+        {
+            await collector.AddReferencesAsync(symbol, targetSymbol, skipAllBareReferences: false, isInsideMovedMember: (documentId, span) => documentId == sourceDocument.Id && movedSpans.Any(s => s.Contains(span)), cancellationToken);
+        }
+
+        if (collector.Problems.Count > 0)
+        {
+            throw new ToolTargetIneligibleException($"Cannot rewrite every caller of the member(s) being moved into static class '{targetSymbol.Name}' - {string.Join("; ", collector.Problems)}.");
+        }
+
+        await collector.FinalizeAsync(cancellationToken);
+        foreach (var member in convertToStatic)
+        {
+            collector.AddEdit(sourceDocument.Id, StaticConversionEdits.BuildStaticModifierEdit(member));
+        }
+
+        return (collector.EditsByDocument, collector.Notes);
+    }
+
+    /// <summary>
     /// Moves STATIC members into an existing, unrelated class. Static-only because the call-site
     /// rewrite is then unambiguous everywhere (ClassA.Foo() -> TargetClassName.Foo(), no receiver
     /// instance involved) -> MoveMemberAsync's caller already guarantees every member here is static.
     /// </summary>
-    private static async Task<MoveMemberResult> MoveMembersToExistingClassAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, FilePathWrapper targetFilePath, ClassDeclarationSyntax targetClassNode, string targetClassName, List<ISymbol> memberSymbols, CancellationToken cancellationToken)
+    private static async Task<MoveMemberResult> MoveMembersToExistingClassAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, FilePathWrapper targetFilePath, ClassDeclarationSyntax targetClassNode, string targetClassName, List<ISymbol> memberSymbols, List<MemberDeclarationSyntax>? convertToStatic, List<string>? notesSink, CancellationToken cancellationToken)
     {
         var sourceDocument = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).First()!;
         var targetDocument = solution.GetDocumentIdsWithFilePath(targetFilePath).Select(solution.GetDocument).First()!;
@@ -3502,7 +3718,18 @@ public class MemberRefactoringEngine
         var sourceText = await sourceDocument.GetTextAsync(cancellationToken);
         var targetText = sameFile ? sourceText : await targetDocument.GetTextAsync(cancellationToken);
 
-        var editsByDocument = await CollectStaticMoveReferenceEditsAsync(solution, sourceDocument.Id, membersToMove, memberSymbols, targetClassName, cancellationToken);
+        Dictionary<DocumentId, List<TextChange>> editsByDocument;
+        if (convertToStatic is { Count: > 0 })
+        {
+            // Instance members moving into a static class: they become static and their callers are rewritten too.
+            var conversion = await CollectConversionMoveEditsAsync(solution, sourceDocument, targetDocument, targetClassNode, membersToMove, convertToStatic, memberSymbols, cancellationToken);
+            editsByDocument = conversion.Edits;
+            notesSink?.AddRange(conversion.Notes);
+        }
+        else
+        {
+            editsByDocument = await CollectStaticMoveReferenceEditsAsync(solution, sourceDocument.Id, membersToMove, memberSymbols, targetClassName, cancellationToken);
+        }
 
         // Source document: cut the moved members out; reference edits that fall inside them travel with them.
         var sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, editsByDocument.TryGetValue(sourceDocument.Id, out var existingSourceEdits) ? existingSourceEdits : new List<TextChange>(), out var insideMovedMemberEdits);

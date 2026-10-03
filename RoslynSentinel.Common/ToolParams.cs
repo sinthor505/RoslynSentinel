@@ -106,7 +106,9 @@ public static class ToolParams
  "or this array, never both. Every edit's target is resolved against each file's ORIGINAL syntax " +
  "tree (not against the result of an earlier edit in this same array), then all edits for a file " +
  "are applied together and written as one atomic change. Two edits in the same file that resolve " +
- "to the same target are rejected before anything is written.";
+ "to the same target are rejected before anything is written. An 'add static' edit on a method or property also rewrites " +
+ "that member's instance-qualified callers (in any file) in the same atomic change, so a file holding such a conversion " +
+ "must not also be targeted by other edits in the same batch; two members that only use each other can be listed together.";
 
     // Added by ModifyAttribute batch support
     public const string AttributeEdits =
