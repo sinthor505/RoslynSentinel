@@ -195,7 +195,7 @@ public class RefactoringStructuralImpl
             {
                 IsSuccess = false,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    $"ModifyAttribute: edits has {edits.Count} entries (limit {MaxModifierFamilyEditsPerBatch}). Split into multiple calls.")
+                    $"ModifyAttribute: batchEdits has {edits.Count} entries (limit {MaxModifierFamilyEditsPerBatch}). Split into multiple calls.")
             };
         }
 
@@ -204,13 +204,13 @@ public class RefactoringStructuralImpl
         {
             if (string.IsNullOrEmpty(edits[i].FilePath))
             {
-                perEditErrors.Add($"edits[{i}]: filePath is required.");
+                perEditErrors.Add($"batchEdits[{i}]: filePath is required.");
             }
             if (string.IsNullOrEmpty(edits[i].TargetName))
             {
-                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): targetName is required.");
+                perEditErrors.Add($"batchEdits[{i}] ({edits[i].FilePath}): targetName is required.");
             }
-            var resolvedAttributeSource = ResolveAttributeAlias(edits[i].ExistingAttribute, edits[i].Attribute, $"edits[{i}] ({edits[i].FilePath})", out var aliasError);
+            var resolvedAttributeSource = ResolveAttributeAlias(edits[i].ExistingAttribute, edits[i].Attribute, $"batchEdits[{i}] ({edits[i].FilePath})", out var aliasError);
             if (aliasError != null)
             {
                 perEditErrors.Add(aliasError);
@@ -220,12 +220,12 @@ public class RefactoringStructuralImpl
                 edits[i].ExistingAttribute = resolvedAttributeSource ?? "";
                 if (string.IsNullOrEmpty(edits[i].ExistingAttribute))
                 {
-                    perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): existingAttribute (or its alias 'attribute') is required.");
+                    perEditErrors.Add($"batchEdits[{i}] ({edits[i].FilePath}): existingAttribute (or its alias 'attribute') is required.");
                 }
             }
             if (edits[i].Action == AttributeModifyAction.replace && string.IsNullOrEmpty(edits[i].NewAttribute))
             {
-                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): newAttribute is required for action 'replace'.");
+                perEditErrors.Add($"batchEdits[{i}] ({edits[i].FilePath}): newAttribute is required for action 'replace'.");
             }
         }
 
@@ -303,7 +303,7 @@ public class RefactoringStructuralImpl
 
         var noEffect = Enumerable.Range(0, edits.Count)
             .Where(index => !appliedIndexes.Contains(index))
-            .Select(index => $"edits[{index}] ({edits[index].TargetName}: {edits[index].Action} '{edits[index].ExistingAttribute}')")
+            .Select(index => $"batchEdits[{index}] ({edits[index].TargetName}: {edits[index].Action} '{edits[index].ExistingAttribute}')")
             .ToList();
         if (appliedIndexes.Count == 0)
         {
@@ -892,7 +892,7 @@ public class RefactoringStructuralImpl
             {
                 IsSuccess = false,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyAttribute: supply either filePath/targetName/existingAttribute/action or 'edits', not both.")
+                    "ModifyAttribute: supply either filePath/targetName/existingAttribute/action or 'batchEdits', not both.")
             };
         }
 
@@ -903,7 +903,7 @@ public class RefactoringStructuralImpl
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsSuccess = false,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute: 'edits' was supplied but is empty.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute: 'batchEdits' was supplied but is empty.")
                 };
             }
 
@@ -928,7 +928,7 @@ public class RefactoringStructuralImpl
             {
                 IsSuccess = false,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyAttribute: 'filePath', 'targetName', 'existingAttribute' (or its alias 'attribute'), and 'action' are all required, unless 'edits' is supplied instead.")
+                    "ModifyAttribute: 'filePath', 'targetName', 'existingAttribute' (or its alias 'attribute'), and 'action' are all required, unless 'batchEdits' is supplied instead.")
             };
         }
 
