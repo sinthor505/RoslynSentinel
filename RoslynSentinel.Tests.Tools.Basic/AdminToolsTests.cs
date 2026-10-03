@@ -35,4 +35,68 @@ public class AdminToolsTests
     {
         Assert.DoesNotThrow(() => _tools.AcknowledgeExternalFileChanges(reason: "test message"));
     }
+
+    // McpServerControl: the stop path is exercised through AdminTools.ControlServer with an injected
+    // exit action, so these tests never call Environment.Exit on the test host.
+
+    [Test]
+    public void McpServerControl_GetServerStatus_ReportsRunning()
+    {
+        var result = _tools.McpServerControl(reason: "test message", operation: AdminTools.McpServerControlOperation.GetServerStatus);
+        Assert.That(result, Does.StartWith("Running."));
+    }
+
+    [Test]
+    public void ControlServer_StopWithoutConfirmation_RefusesAndNamesParameterAndValue()
+    {
+        var exitScheduled = false;
+
+        var result = AdminTools.ControlServer(
+            AdminTools.McpServerControlOperation.StopServer, confirmServerStop: null, () => exitScheduled = true);
+
+        Assert.That(exitScheduled, Is.False, "an unconfirmed stop must not schedule a process exit");
+        Assert.That(result, Does.StartWith("Refused"));
+        Assert.That(result, Does.Contain("confirmServerStop"));
+        Assert.That(result, Does.Contain("ConfirmServerStop"));
+    }
+
+    [Test]
+    public void ControlServer_StopWithConfirmation_SchedulesExit()
+    {
+        var exitScheduled = false;
+
+        var result = AdminTools.ControlServer(
+            AdminTools.McpServerControlOperation.StopServer,
+            AdminTools.McpServerStopConfirmation.ConfirmServerStop,
+            () => exitScheduled = true);
+
+        Assert.That(exitScheduled, Is.True);
+        Assert.That(result, Does.StartWith("Stopping."));
+    }
+
+    [Test]
+    public void ControlServer_StatusWithConfirmation_DoesNotScheduleExit()
+    {
+        var exitScheduled = false;
+
+        AdminTools.ControlServer(
+            AdminTools.McpServerControlOperation.GetServerStatus,
+            AdminTools.McpServerStopConfirmation.ConfirmServerStop,
+            () => exitScheduled = true);
+
+        Assert.That(exitScheduled, Is.False);
+    }
+
+    [Test]
+    public void McpServerControl_ConfirmParameter_IsOptionalSingleValueEnum()
+    {
+        // The guard must be visible in the emitted schema as a one-value enum, not a magic string.
+        var parameter = typeof(AdminTools).GetMethod(nameof(AdminTools.McpServerControl))!
+            .GetParameters()
+            .Single(p => p.Name == "confirmServerStop");
+
+        Assert.That(Nullable.GetUnderlyingType(parameter.ParameterType), Is.EqualTo(typeof(AdminTools.McpServerStopConfirmation)));
+        Assert.That(parameter.HasDefaultValue, Is.True);
+        Assert.That(Enum.GetNames<AdminTools.McpServerStopConfirmation>(), Is.EqualTo(new[] { "ConfirmServerStop" }));
+    }
 }

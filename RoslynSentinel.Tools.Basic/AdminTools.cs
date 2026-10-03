@@ -66,13 +66,38 @@ public class AdminTools
         StopServer
     }
 
+    /// <summary>
+    /// Single-member enum used as a schema-visible confirmation token: the emitted JSON schema lists
+    /// <c>ConfirmServerStop</c> as the only accepted value, so a caller can see the guard in the
+    /// tool listing instead of discovering a magic string from a refusal.
+    /// </summary>
+    public enum McpServerStopConfirmation
+    {
+        ConfirmServerStop
+    }
+
     [McpServerTool(Name = "McpServerControl")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Operator-only control of this server process: status or stop (stop requires confirmServerStop).")]
+    [Description("Operator-only control of this server process. operation=GetServerStatus reports the running process. operation=StopServer exits the process and is refused unless confirmServerStop=ConfirmServerStop is also passed.")]
     public string McpServerControl(
      [Description(ToolParams.Reason)] ToolCallReason reason,
      McpServerControlOperation operation,
+     [Description("Required only with operation=StopServer; the single accepted value is ConfirmServerStop. Guards against an accidental stop.")]
+     McpServerStopConfirmation? confirmServerStop = null,
      CancellationToken cancellationToken = default)
+    {
+        return ControlServer(operation, confirmServerStop, ScheduleProcessExit, cancellationToken);
+    }
+
+    /// <summary>
+    /// Core of <see cref="McpServerControl"/>, with the process-exit side effect injected so tests can
+    /// verify the confirmation guard without terminating the test host.
+    /// </summary>
+    public static string ControlServer(
+        McpServerControlOperation operation,
+        McpServerStopConfirmation? confirmServerStop,
+        Action scheduleExit,
+        CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
 
@@ -83,21 +108,31 @@ public class AdminTools
 
         if (operation == McpServerControlOperation.StopServer)
         {
-            // The MCP SDK's request-handling path awaits the tool handler and then awaits flushing
-            // the response to the stdio transport before this call completes - so by the time this
-            // method returns, the caller is guaranteed to already have the response in flight. Exiting
-            // synchronously here would still be safe by that reasoning, but scheduling it on a
-            // detached continuation with a short delay is cheap defense-in-depth against being wrong
-            // about that ordering, for what is otherwise an irreversible action.
-            _ = Task.Run(async () =>
+            if (confirmServerStop != McpServerStopConfirmation.ConfirmServerStop)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(250));
-                Environment.Exit(0);
-            }, cancellationToken: cancellationToken);
+                return "Refused: operation=StopServer requires confirmServerStop=ConfirmServerStop. "
+                    + "Re-issue the call with that parameter to stop the server; nothing was stopped.";
+            }
 
+            scheduleExit();
             return "Stopping. VS Code will rebuild the server binary and spawn a fresh instance on its next tool call.";
         }
 
-        return $"Unknown op '{operation}'. Valid operations: status, stop.";
+        return $"Unknown operation '{operation}'. Valid operations: GetServerStatus, StopServer.";
+    }
+
+    private static void ScheduleProcessExit()
+    {
+        // The MCP SDK's request-handling path awaits the tool handler and then awaits flushing
+        // the response to the stdio transport before this call completes - so by the time this
+        // method returns, the caller is guaranteed to already have the response in flight. Exiting
+        // synchronously here would still be safe by that reasoning, but scheduling it on a
+        // detached continuation with a short delay is cheap defense-in-depth against being wrong
+        // about that ordering, for what is otherwise an irreversible action.
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(250));
+            Environment.Exit(0);
+        });
     }
 }

@@ -318,7 +318,9 @@ that flags this for you (`McpServerStatus.buildTimeUtc` reads the on-disk DLL's 
 loaded assembly's build identity, so it can look fresh while the running process still executes
 pre-fix logic). If you edited RoslynSentinel's own source this session, assume the live server is
 running the *old* binary. Do this immediately, don't troubleshoot around it:
-1. Call `McpServerControl(operation: stop)`. Give it a few real seconds to return before assuming
+1. Call `McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)` (the confirm
+   param is a one-value enum guarding against an accidental stop; omitting it returns a refusal and
+   stops nothing). Give it a few real seconds to return before assuming
    it's hung — a clean `Connection closed` is normal, not an error.
 2. VS Code relaunches it on a fresh build automatically. Reconnect and re-run `LoadSolution`.
 Today this is safe to do any time in your own session: writes go straight to disk, so nothing is
