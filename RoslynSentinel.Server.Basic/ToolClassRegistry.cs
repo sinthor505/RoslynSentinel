@@ -78,4 +78,35 @@ public static class ToolClassRegistry
     /// </summary>
     public static readonly string[] CodeTransformTriggerModes = ["Refactor", "Modernize", "Quality", "Generation"];
     public const string CodeTransformToolClass = "CodeTransformationTools";
+
+    /// <summary>
+    /// Inverts both mode maps into tool class name -> the mode names that enable it (Basic modes
+    /// first, then Advanced-only ones, no duplicates). Feeds McpServerStatus's per-tool
+    /// <c>enabledBy</c> hint; "Claude"/"all"-style umbrella modes are listed like any other.
+    /// </summary>
+    public static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildClassToModes()
+    {
+        var result = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        foreach (var map in new[] { BasicModeToToolClasses, AdvancedModeToToolClasses })
+        {
+            foreach (var (mode, classes) in map)
+            {
+                foreach (var className in classes)
+                {
+                    if (!result.TryGetValue(className, out var modes))
+                    {
+                        modes = [];
+                        result[className] = modes;
+                    }
+
+                    if (!modes.Contains(mode, StringComparer.OrdinalIgnoreCase))
+                    {
+                        modes.Add(mode);
+                    }
+                }
+            }
+        }
+
+        return result.ToDictionary(kv => kv.Key, kv => (IReadOnlyList<string>)kv.Value, StringComparer.Ordinal);
+    }
 }

@@ -20,8 +20,14 @@ public class ServerStatusTools
 
     [McpServerTool(Name = "McpServerStatus")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Diagnostic snapshot: session-halt state, circuit breaker, loaded workspace, active tool-mode resolution.")]
-    public object McpServerStatus(CancellationToken cancellationToken = default)
+    [Description("Diagnostic snapshot: session-halt state, circuit breaker, loaded workspace, active tool-mode resolution. " +
+        "Tools are gated per mode: before concluding a tool does not exist, call with toolListing=inactive to list declared-but-disabled tools and how to enable each.")]
+    public object McpServerStatus(
+        [Description("none (default): omit the tool list. inactive: list tools declared in this server but not active in this mode, each with an enabledBy hint. all: list every declared tool.")]
+        McpServerStatusToolListing toolListing = McpServerStatusToolListing.none,
+        [Description("Case-insensitive substring matched against tool and class names; narrows the toolListing result.")]
+        string? toolNameFilter = null,
+        CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
 
@@ -32,12 +38,29 @@ public class ServerStatusTools
         var declaredToolAssemblies = AppDomain.CurrentDomain.GetAssemblies()
             .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel", StringComparison.Ordinal) == true)
             .ToArray();
-        var allDeclaredTools = McpToolSchemaPatcher.DiscoverAllDeclaredTools(declaredToolAssemblies)
+        // ServerStatusTools is registered outside ActiveToolClasses (always on), so it must be
+        // special-cased or McpServerStatus would report itself as inactive.
+        bool IsActive(string className) =>
+            className == nameof(ServerStatusTools) || _activeToolSurface.ActiveToolClasses.Contains(className);
+
+        // The same tool name can be declared by more than one class (a facade and the split class
+        // behind it); report one entry per name, preferring the class that is actually active.
+        var declaredTools = McpToolSchemaPatcher.DiscoverAllDeclaredTools(declaredToolAssemblies)
+            .GroupBy(t => t.ToolName, StringComparer.Ordinal)
+            .Select(g => g.OrderByDescending(t => IsActive(t.ClassName)).ThenBy(t => t.ClassName, StringComparer.Ordinal).First())
             .Select(t => new McpServerStatusDeclaredTool(
                 Name: t.ToolName,
                 ClassName: t.ClassName,
-                ActiveForThisMode: _activeToolSurface.ActiveToolClasses.Contains(t.ClassName)))
+                ActiveForThisMode: IsActive(t.ClassName),
+                EnabledBy: IsActive(t.ClassName) ? null : DescribeHowToEnable(t.ClassName)))
             .OrderBy(t => t.Name, StringComparer.Ordinal)
+            .ToArray();
+        var allDeclaredTools = declaredTools
+            .Where(t => toolListing == McpServerStatusToolListing.all
+                || (toolListing == McpServerStatusToolListing.inactive && !t.ActiveForThisMode))
+            .Where(t => string.IsNullOrWhiteSpace(toolNameFilter)
+                || t.Name.Contains(toolNameFilter, StringComparison.OrdinalIgnoreCase)
+                || t.ClassName.Contains(toolNameFilter, StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
         return new SentinelCallToolResult<McpServerStatusResult>
@@ -80,10 +103,31 @@ public class ServerStatusTools
                 WasFound: _stoppedByScriptMarker.WasFound,
                 Details: _stoppedByScriptMarker.Details
             ),
+            DeclaredToolCount: declaredTools.Length,
+            InactiveToolCount: declaredTools.Count(t => !t.ActiveForThisMode),
             AllDeclaredTools: allDeclaredTools
         )
         };
     }
+
+    private string DescribeHowToEnable(string className)
+    {
+        if (_activeToolSurface.ExcludeTools.Contains(className))
+        {
+            return $"excluded by --exclude-tools {className}; remove it from --exclude-tools";
+        }
+
+        return _activeToolSurface.ClassModes.TryGetValue(className, out var modes) && modes.Count > 0
+            ? $"--mode {string.Join(" or ", modes)}, or --include-tools {className}"
+            : $"--include-tools {className}";
+    }
+}
+/// <summary>Which declared tools McpServerStatus lists in <c>AllDeclaredTools</c>.</summary>
+public enum McpServerStatusToolListing
+{
+    none,
+    inactive,
+    all
 }
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>A single circuit breaker's tripped state and message, as reported by McpServerStatus.</summary>
@@ -125,10 +169,12 @@ public sealed record McpServerStatusResult(
     McpServerStatusBreakers Breakers,
     McpServerStatusToolSurface ToolSurface,
     McpServerStatusStoppedByScript StoppedByScript,
+    int DeclaredToolCount,
+    int InactiveToolCount,
     IReadOnlyCollection<McpServerStatusDeclaredTool> AllDeclaredTools);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatus's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this
 /// process" independent of whether its class is currently active for this session's mode.
 /// </summary>
-public sealed record McpServerStatusDeclaredTool(string Name, string ClassName, bool ActiveForThisMode);
+public sealed record McpServerStatusDeclaredTool(string Name, string ClassName, bool ActiveForThisMode, string? EnabledBy = null);

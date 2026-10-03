@@ -50,13 +50,24 @@ off, re-run it via the PowerShell tool before trusting it.
 
 ## Diagnosing a "missing" or gated tool
 
+**The tool surface is intentionally gated.** Every active tool's schema costs prompt tokens on every
+session (about 39k tokens for the full `claude` mode), so rarely-needed tools are switched off by
+mode on purpose. A tool you expect but don't see is usually gated, not missing.
+
 Before concluding a tool doesn't exist, theorizing about a stale binary, or building a duplicate:
-call `McpServerStatus` and check its `allDeclaredTools` field — a reflection-based, ground-truth list
-of every declared tool with `className` and `activeForThisMode`. Mode-gating (the tool's class isn't
-in the current session's active list) is far more common than a missing tool, and this answers both
-"does it exist" and "is it gated" in one call. Only fall back to a text search (`Search(mode: "text",
-query: "Name = \"ToolName\"")`, for a tool declared in an assembly this server flavor doesn't load)
-or stale-binary theories once this has come back empty.
+call `McpServerStatus(toolListing: inactive)` (optionally with `toolNameFilter`) - a
+reflection-based, ground-truth list of declared tools with `className`, `activeForThisMode` and an
+`enabledBy` hint saying which mode or flag turns it on. The listing is off by default to keep
+the status call small. This answers both "does it exist" and "is it gated" in one call. Only fall
+back to a text search (`Search(mode: "text", query: "Name = \"ToolName\"")`, for a tool declared in
+an assembly this server flavor doesn't load) or stale-binary theories once this has come back empty.
+
+**If the tool exists but is gated and would make the task materially easier, stop and report it** -
+the tool name and its `enabledBy` hint - instead of working around it with many more steps (shell
+commands, repeated `ReplaceSnippet` edits, manual text edits). A gated tool is a configuration
+decision for the user to make, not a tool failure: do not write a `docs/current/blockers/` doc for
+it. (Once `McpToolsetControl` exists, enabling the toolset replaces the stop-and-report.) See
+`docs/current/proposals/proposal_reduce_tool_schema_token_cost.md`.
 
 ## Subagent choice: verification is never a supervisor job
 

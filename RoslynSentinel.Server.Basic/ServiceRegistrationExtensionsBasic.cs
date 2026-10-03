@@ -113,7 +113,8 @@ public static class RoslynSentinelServiceExtensionsBasic
             activeModes: activeModes,
             includeTools: resolvedIncludeTools,
             excludeTools: resolvedExcludeTools,
-            activeToolClasses: activeToolClasses);
+            activeToolClasses: activeToolClasses,
+            classModes: ToolClassRegistry.BuildClassToModes());
         services.AddSingleton(activeToolSurface);
 
         // Always registered, independent of activeToolClasses/--mode/--include-tools/
