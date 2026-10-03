@@ -24,6 +24,7 @@ public static class ServerHttp
         ReplaceSnippetOptions.Configure(args);
         OrientationBreakerOptions.Configure(args);
         ToolCallEchoOptions.Configure(args);
+        SchemaOptions.Configure(args);
 
         if (ServerStartupHelpers.HandleListTools(
                 args,

@@ -37,6 +37,7 @@ public class ServerStdio
         ReplaceSnippetOptions.Configure(args);
         OrientationBreakerOptions.Configure(args);
         ToolCallEchoOptions.Configure(args);
+        SchemaOptions.Configure(args);
 
         if (ServerStartupHelpers.HandleListTools(
                 args,

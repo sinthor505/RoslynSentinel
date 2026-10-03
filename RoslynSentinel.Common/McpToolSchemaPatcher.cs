@@ -70,7 +70,15 @@ public static class McpToolSchemaPatcher
         // extension key (JSON Schema permits free-form keys; the SDK reserves none of its own).
         // A schema node could need both the type-fix above AND a tag injection here -> this is
         // deliberately additive to the existing fixups, not a replacement branch.
-        if (node is JsonObject tagObj)
+        if (!SchemaOptions.EmitDataTags && node is JsonObject defaultObj &&
+            defaultObj.TryGetPropertyValue("default", out JsonNode? defaultValue) && defaultValue is null)
+        {
+            // proposal_reduce_tool_schema_token_cost.md Step 1: a null default is pure token cost
+            // (the property's optionality is already expressed by its absence from "required").
+            defaultObj.Remove("default");
+        }
+
+        if (SchemaOptions.EmitDataTags && node is JsonObject tagObj)
         {
             ICustomAttributeProvider? propertyProvider = ctx.PropertyAttributeProvider;
             if (propertyProvider is not null)
@@ -226,6 +234,11 @@ public static class McpToolSchemaPatcher
     /// </remarks>
     private static void ApplyConsumesTags(McpServerTool tool, MethodInfo toolMethod)
     {
+        if (!SchemaOptions.EmitDataTags)
+        {
+            return;
+        }
+
         ParameterInfo[] parameters = toolMethod.GetParameters();
 
         JsonNode? schemaNode = JsonNode.Parse(tool.ProtocolTool.InputSchema.GetRawText());
