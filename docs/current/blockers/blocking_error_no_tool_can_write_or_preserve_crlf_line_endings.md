@@ -61,6 +61,13 @@ file toward mixed endings, and the tool result says nothing. The failure is invi
 or `DetectDominantEol` consumer misbehaves. The environment gave the agent no way to do the right
 thing and no signal that it did the wrong thing.
 
+## Related work
+
+`docs/current/plans/plan_file_normalization_tool.md` (2026-10-01, not built) plans a `ConvertToCrlf` /
+`ConvertToLf` / BOM / format normalization tool. It would give the repair path (item 2 below) and the
+`.gitattributes` change, but it does not make individual edits inherit a file's line endings (item 1
+below), so the drift would recur after a normalization pass without item 1.
+
 ## Suggested direction (not implemented)
 
 1. `ReplaceSnippet`, `ApplyDiff` and `WriteFile`: call `EolUtilities.NormalizeEol(newText,
