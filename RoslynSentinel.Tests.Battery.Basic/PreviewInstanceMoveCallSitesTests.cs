@@ -38,10 +38,9 @@ public class PreviewInstanceMoveCallSitesTests
     [TearDown]
     public void TearDown()
     {
-        // Keep SetUp/TearDown for disk-tier tests: MoveMemberAsync_UnresolvedCallSite_OpensLedgerThatBlocksUnrelatedFileAsync
-        // (line 485) and CrossProjectSiblingField_ClassifiesAsValidNotNoCandidateIntroducibleAsync (line 835) require
-        // PersistentWorkspaceManager (for IScopedOperationLedger.TryOpen) and TestSolutionBuilder.CreateTwoProjectSolution
-        // (for cross-project compilation checks), respectively. Both cannot be simulated in InMemoryWorkspace.
+        // Keep SetUp/TearDown for disk-tier test: CrossProjectSiblingField_ClassifiesAsValidNotNoCandidateIntroducibleAsync
+        // requires TestSolutionBuilder.CreateTwoProjectSolution for cross-project compilation checks, which cannot be
+        // simulated in InMemoryWorkspace.
         _workspaceManager?.Dispose();
         _fixture?.Dispose();
     }
@@ -575,62 +574,61 @@ public class PreviewInstanceMoveCallSitesTests
     [Test]
     public async Task MoveMemberAsync_UnresolvedCallSite_OpensLedgerThatBlocksUnrelatedFileAsync()
     {
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassE.cs"), """
-            namespace ContosoOrders.Core;
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/MoveInstanceClassE.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveInstanceClassE
-            {
-                public void Foo()
+                public class MoveInstanceClassE
+                {
+                    public void Foo()
+                    {
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/MoveInstanceClassF.cs", """
+                namespace ContosoOrders.Core;
+
+                public class MoveInstanceClassF
                 {
                 }
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceClassF.cs"), """
-            namespace ContosoOrders.Core;
+                """),
+            ("ContosoOrders.Core/MoveInstanceCallerAmbiguous3.cs", """
+                namespace ContosoOrders.Core;
 
-            public class MoveInstanceClassF
-            {
-            }
-            """, reloadSolution: false);
-        await _fixture.AddFileToSolution(_workspaceManager, Path.Combine("ContosoOrders.Core", "MoveInstanceCallerAmbiguous3.cs"), """
-            namespace ContosoOrders.Core;
-
-            public class MoveInstanceCallerAmbiguous3
-            {
-                private readonly MoveInstanceClassF _f1 = new MoveInstanceClassF();
-                private readonly MoveInstanceClassF _f2 = new MoveInstanceClassF();
-
-                public void Do()
+                public class MoveInstanceCallerAmbiguous3
                 {
-                    var e = new MoveInstanceClassE();
-                    e.Foo();
+                    private readonly MoveInstanceClassF _f1 = new MoveInstanceClassF();
+                    private readonly MoveInstanceClassF _f2 = new MoveInstanceClassF();
+
+                    public void Do()
+                    {
+                        var e = new MoveInstanceClassE();
+                        e.Foo();
+                    }
                 }
-            }
-            """);
-        var unrelatedFile = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassE.cs");
-        var unrelatedPath = _workspaceManager.ResolveFromWire(unrelatedFile);
+                """));
 
-        var filePath = _workspaceManager.ResolveFromWire(Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassE.cs"));
+        var filePath = workspace.PathOf("ContosoOrders.Core/MoveInstanceClassE.cs");
 
-        var result = await _engine.MoveMemberAsync(filePath, "MoveInstanceClassE", ["Foo"], "MoveInstanceClassF");
+        var result = await engine.MoveMemberAsync(filePath, "MoveInstanceClassE", ["Foo"], "MoveInstanceClassF");
         Assume.That(result.PendingLedgerEntries, Is.Not.Null.And.Count.EqualTo(1));
 
-        var applyResult = await _workspaceManager.ApplyProposedChangesAsync(result.Changes, validateChanges: false);
+        var applyResult = await workspace.Manager.ApplyProposedChangesAsync(result.Changes, validateChanges: false);
         Assert.That(applyResult.Success, Is.True, applyResult.Summary);
 
-        var opened = ((IScopedOperationLedger)_workspaceManager).TryOpen(
+        var opened = ((IScopedOperationLedger)workspace.Manager).TryOpen(
             "MoveMember_Test_Decision5", result.PendingLedgerEntries!, out var rejectionReason);
         Assert.That(opened, Is.True, rejectionReason);
 
         // An unrelated file - not the ledger's own tracked call-site file - must be refused while
         // the ledger's entry is unresolved, per Decision 2's IsBlocked gate.
-        var otherFile = Path.Combine(_fixture.SolutionDirectory, "ContosoOrders.Core", "MoveInstanceClassF.cs");
-        var otherPath = _workspaceManager.ResolveFromWire(otherFile);
+        var otherPath = workspace.PathOf("ContosoOrders.Core/MoveInstanceClassF.cs");
+        var otherText = workspace.ReadText("ContosoOrders.Core/MoveInstanceClassF.cs");
         var unrelatedChange = new Dictionary<FilePathWrapper, string>
         {
-            [otherPath] = await File.ReadAllTextAsync(otherFile) + "\n// unrelated edit\n"
+            [otherPath] = otherText + "\n// unrelated edit\n"
         };
-        var blockedResult = await _workspaceManager.ApplyProposedChangesAsync(unrelatedChange, validateChanges: false);
+        var blockedResult = await workspace.Manager.ApplyProposedChangesAsync(unrelatedChange, validateChanges: false);
 
         Assert.Multiple(() =>
         {
@@ -641,12 +639,13 @@ public class PreviewInstanceMoveCallSitesTests
         // The ledger's own tracked file (the unresolved call site) must still be writable -> that's
         // where RecordFix's resolving edit needs to land.
         var entry = result.PendingLedgerEntries!.Single();
-        var fixupPath = _workspaceManager.ResolveFromWire(entry.FilePath);
+        var fixupPath = workspace.PathOf(entry.FilePath);
+        var fixupText = workspace.ReadText(entry.FilePath);
         var fixupChange = new Dictionary<FilePathWrapper, string>
         {
-            [fixupPath] = (await File.ReadAllTextAsync(entry.FilePath)).Replace("_f1.Foo", "_f1.Foo")
+            [fixupPath] = fixupText.Replace("_f1.Foo", "_f1.Foo")
         };
-        var fixupApply = await _workspaceManager.ApplyProposedChangesAsync(fixupChange, validateChanges: false);
+        var fixupApply = await workspace.Manager.ApplyProposedChangesAsync(fixupChange, validateChanges: false);
         Assert.That(fixupApply.Success, Is.True, fixupApply.Summary);
     }
 
