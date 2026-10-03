@@ -3479,76 +3479,97 @@ public class MemberRefactoringEngine
     /// </summary>
     private static async Task<MoveMemberResult> MoveMembersToExistingClassAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, FilePathWrapper targetFilePath, ClassDeclarationSyntax targetClassNode, string targetClassName, List<ISymbol> memberSymbols, CancellationToken cancellationToken)
     {
-        bool sameFile = string.Equals(Path.GetFullPath(filePath), Path.GetFullPath(targetFilePath), StringComparison.OrdinalIgnoreCase);
-        var movedNames = new HashSet<string>(membersToMove.SelectMany(m => m switch
-        {
-            MethodDeclarationSyntax meth => new[] { meth.Identifier.Text },
-            PropertyDeclarationSyntax prop => new[] { prop.Identifier.Text },
-            FieldDeclarationSyntax field => field.Declaration.Variables.Select(v => v.Identifier.Text).ToArray(),
-            _ => Array.Empty<string>()
-        }), StringComparer.Ordinal);
-        var newTargetClassNode = targetClassNode.AddMembers(membersToMove.ToArray());
-        var updatedSourceClass = classNode.RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!;
-        // Rewrite bare Member()/ClassName.Member() within the remaining source class to TargetClassName.Member().
-        // (No `this.Member()` case: static members can't be accessed via `this`.)
-        var bareIdentifiers = updatedSourceClass.DescendantNodes().OfType<IdentifierNameSyntax>().Where(id => movedNames.Contains(id.Identifier.Text) && id.Parent is not MemberAccessExpressionSyntax && id.Parent is not QualifiedNameSyntax).ToList();
-        if (bareIdentifiers.Count > 0)
-        {
-            updatedSourceClass = updatedSourceClass.ReplaceNodes(bareIdentifiers, (original, _) => SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(targetClassName), (SimpleNameSyntax)original));
-        }
+        var sourceDocument = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).First()!;
+        var targetDocument = solution.GetDocumentIdsWithFilePath(targetFilePath).Select(solution.GetDocument).First()!;
+        bool sameFile = sourceDocument.Id == targetDocument.Id;
+        var sourceText = await sourceDocument.GetTextAsync(cancellationToken);
+        var targetText = sameFile ? sourceText : await targetDocument.GetTextAsync(cancellationToken);
+        var movedSpans = membersToMove.Select(m => m.FullSpan).ToList();
 
-        var result = new Dictionary<FilePathWrapper, string>();
-        if (sameFile)
-        {
-            var afterSourceEdit = root.ReplaceNode(classNode, updatedSourceClass);
-            var targetAfterSourceEdit = afterSourceEdit.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == targetClassName);
-            var finalRoot = targetAfterSourceEdit != null ? afterSourceEdit.ReplaceNode(targetAfterSourceEdit, targetAfterSourceEdit.AddMembers(membersToMove.ToArray())) : afterSourceEdit;
-            result[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(finalRoot).ToFullString();
-        }
-        else
-        {
-            var targetDocument = solution.GetDocumentIdsWithFilePath(targetFilePath).Select(solution.GetDocument).First()!;
-            var targetRoot = await targetDocument.GetSyntaxRootAsync(cancellationToken);
-            var newTargetRoot = targetRoot!.ReplaceNode(targetClassNode, newTargetClassNode);
-            result[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root.ReplaceNode(classNode, updatedSourceClass)).ToFullString();
-            result[targetFilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newTargetRoot).ToFullString();
-        }
-
-        // Cross-file call sites: ClassA.Foo() -> TargetClassName.Foo() -> unambiguous since Foo is static.
-        var skipPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            filePath,
-            targetFilePath
-        };
+        // 1. Collect one reference edit per reference location, per document. Bare-name insertions inside the
+        // moved members themselves are skipped: the members move together, so their bare names still resolve.
+        var editsByDocument = new Dictionary<DocumentId, List<TextChange>>();
         foreach (var symbol in memberSymbols)
         {
             var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
-            var byDocument = references.SelectMany(r => r.Locations).Where(l => l.Document.FilePath != null && !skipPaths.Contains(l.Document.FilePath)).GroupBy(l => l.Document.Id).ToDictionary(g => g.Key, g => g.ToList());
-            foreach (var (docId, locs) in byDocument)
+            foreach (var location in references.SelectMany(r => r.Locations).Where(l => !l.IsCandidateLocation && l.Document.FilePath != null))
             {
-                var doc = solution.GetDocument(docId);
-                if (doc?.FilePath == null)
+                var document = location.Document;
+                var documentRoot = await document.GetSyntaxRootAsync(cancellationToken);
+                if (documentRoot == null)
                 {
                     continue;
                 }
 
-                SyntaxNode? docRoot = result.TryGetValue(doc.FilePath, out var already) ? CSharpSyntaxTree.ParseText(already, cancellationToken: cancellationToken).GetRoot(cancellationToken) : await doc.GetSyntaxRootAsync(cancellationToken);
-                if (docRoot == null)
+                var span = location.Location.SourceSpan;
+                var edit = MoveMemberTextEdits.BuildReferenceEdit(documentRoot, span, targetClassName);
+                if (edit == null)
                 {
                     continue;
                 }
 
-                var spans = locs.Select(l => l.Location.SourceSpan).ToHashSet();
-                var identifiers = docRoot.DescendantNodes().OfType<SimpleNameSyntax>().Where(n => spans.Contains(n.Span)).ToList();
-                var memberAccesses = identifiers.Select(id => id.Parent as MemberAccessExpressionSyntax).Where(ma => ma != null).Cast<MemberAccessExpressionSyntax>().Distinct().ToList();
-                if (memberAccesses.Count == 0)
+                var insideMovedMember = document.Id == sourceDocument.Id && movedSpans.Any(s => s.Contains(span));
+                if (insideMovedMember && edit.Value.Span.Length == 0)
                 {
                     continue;
                 }
 
-                var updatedDocRoot = docRoot.ReplaceNodes(memberAccesses, (original, _) => original.WithExpression(SyntaxFactory.IdentifierName(targetClassName)));
-                result[doc.FilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedDocRoot).ToFullString();
+                if (!editsByDocument.TryGetValue(document.Id, out var documentEdits))
+                {
+                    documentEdits = new List<TextChange>();
+                    editsByDocument[document.Id] = documentEdits;
+                }
+
+                if (!documentEdits.Any(e => e.Span == edit.Value.Span))
+                {
+                    documentEdits.Add(edit.Value);
+                }
             }
+        }
+
+        // 2. Source document: cut the moved members out; reference edits that fall inside them travel with them.
+        var sourceEdits = editsByDocument.TryGetValue(sourceDocument.Id, out var existingSourceEdits) ? existingSourceEdits : new List<TextChange>();
+        var insideEdits = sourceEdits.Where(e => movedSpans.Any(s => s.Contains(e.Span))).ToList();
+        sourceEdits = sourceEdits.Except(insideEdits).ToList();
+        foreach (var removal in MoveMemberTextEdits.MergeSpans(membersToMove.Select(m => MoveMemberTextEdits.GetRemovalSpan(sourceText, m))))
+        {
+            sourceEdits.Add(new TextChange(removal, string.Empty));
+        }
+
+        // 3. Target document: append the moved members, re-indented to the target class and in its EOL.
+        var targetEol = EolUtilities.DetectDominantEol(targetText);
+        var targetIndent = MoveMemberTextEdits.GetTargetMemberIndentation(targetText, targetClassNode);
+        var blocks = membersToMove.Select(m => MoveMemberTextEdits.BuildMovedMemberText(sourceText, m, insideEdits.Where(e => m.FullSpan.Contains(e.Span)).ToList(), MoveMemberTextEdits.GetMemberIndentation(sourceText, m), targetIndent, targetEol)).ToList();
+        var insertion = MoveMemberTextEdits.BuildInsertion(targetText, targetClassNode, MoveMemberTextEdits.JoinMovedMembers(membersToMove, blocks, targetEol), targetEol);
+        if (sameFile)
+        {
+            sourceEdits.Add(insertion);
+        }
+        else
+        {
+            if (!editsByDocument.TryGetValue(targetDocument.Id, out var targetEdits))
+            {
+                targetEdits = new List<TextChange>();
+                editsByDocument[targetDocument.Id] = targetEdits;
+            }
+
+            targetEdits.Add(insertion);
+        }
+
+        editsByDocument[sourceDocument.Id] = sourceEdits;
+
+        // 4. Materialize each touched document's new text from its original text.
+        var result = new Dictionary<FilePathWrapper, string>();
+        foreach (var (documentId, edits) in editsByDocument)
+        {
+            var document = solution.GetDocument(documentId);
+            if (document?.FilePath == null || edits.Count == 0)
+            {
+                continue;
+            }
+
+            var originalText = document.Id == sourceDocument.Id ? sourceText : document.Id == targetDocument.Id ? targetText : await document.GetTextAsync(cancellationToken);
+            result[document.FilePath] = MoveMemberTextEdits.ApplyChanges(originalText, edits);
         }
 
         return new MoveMemberResult(result, new List<SkippedCallSite>());
