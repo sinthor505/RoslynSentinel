@@ -2401,7 +2401,7 @@ public class SymbolNavigationEngine
         try
         {
             var target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, m, mode) => SyntaxTargetResolver.BuildMemberHint(c.Select(x => x.Node).ToList(), m, mode));
+                (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode));
             return target?.Kind == CandidateKind.EnumMember && target.Node.Parent is EnumDeclarationSyntax enumDecl ? enumDecl.Identifier.Text : null;
         }
         catch (InvalidOperationException)
@@ -2441,7 +2441,7 @@ public class SymbolNavigationEngine
         try
         {
             var resolved = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, m, mode) => SyntaxTargetResolver.BuildTypeHint(c.Select(x => x.Node).Cast<BaseTypeDeclarationSyntax>().ToList(), m, mode));
+                (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode));
             return resolved?.Kind == CandidateKind.Enum;
         }
         catch (InvalidOperationException)
@@ -2490,7 +2490,7 @@ public class SymbolNavigationEngine
         try
         {
             containerNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, m, mode) => SyntaxTargetResolver.BuildTypeHint(c.Select(x => x.Node).Cast<BaseTypeDeclarationSyntax>().ToList(), m, mode))?.Node as BaseTypeDeclarationSyntax;
+                (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode))?.Node as BaseTypeDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
@@ -2601,14 +2601,14 @@ public class SymbolNavigationEngine
             if (contextSnippet == null && memberCandidates.Count > 1)
             {
                 failureMode = "ambiguous";
-                throw new InvalidOperationException(SyntaxTargetResolver.BuildMemberHintForCandidates(memberCandidates, [], failureMode));
+                throw new InvalidOperationException(SyntaxTargetResolver.BuildHintForCandidates(memberCandidates, [], failureMode));
             }
 
             resolved = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, mode) =>
                 {
                     failureMode = mode;
-                    return SyntaxTargetResolver.BuildMemberHintForCandidates(candidates, matches, mode);
+                    return SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, mode);
                 });
         }
         catch (InvalidOperationException ex)

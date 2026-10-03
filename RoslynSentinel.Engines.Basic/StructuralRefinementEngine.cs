@@ -221,7 +221,7 @@ public class StructuralRefinementEngine
         if (contextSnippet == null || candidates.Count <= 1)
         {
             // symbolName alone already resolves unambiguously -> see the identical guard and
-            // rationale in BasicRefactoringEngine.ResolveMemberByNameOrSnippet.
+            // rationale in SyntaxTargetResolver.ResolveBySnippetOrThrow.
             target = candidates.FirstOrDefault();
         }
         else

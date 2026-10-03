@@ -92,38 +92,6 @@ public static class SyntaxTargetResolver
         return narrowed.Count > 0 ? narrowed : candidates;
     }
 
-    public static string BuildMemberHint(List<SyntaxNode> candidates, List<int> matches, string failureMode)
-    {
-        if (candidates.Count == 0)
-        {
-            return $"contextSnippet {failureMode}: no candidates found.";
-        }
-
-        var previews = candidates.Take(3).Select(c =>
-        {
-            var line = (c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1) ?? -1;
-            var text = c.ToString().Split('\n').First().Trim();
-            if (text.Length > 50)
-            {
-                text = text.Substring(0, 47) + "...";
-            }
-
-            return $"line {line} `{text}`";
-        });
-        var count = candidates.Count;
-        var suffix = count > 3 ? $" (+{count - 3} more)" : "";
-        return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
-    }
-
-    // Adapters wiring ResolveBySnippetOrThrow's hintBuilder callback to the hint-text formatters
-    // in this class: BuildMemberHint takes syntax nodes, so it's reused directly here;
-    // BuildTypeHintForCandidates (below) mirrors BuildTypeHint's formatting but reads the
-    // candidate's precomputed StartLine/Preview instead of re-deriving them from the node.
-    public static string BuildMemberHintForCandidates(List<SyntaxNodeCandidate> candidates, List<int> matches, string failureMode)
-    {
-        return BuildMemberHint(candidates.Select(c => c.Node).ToList(), matches, failureMode);
-    }
-
     /// <summary>
     /// Builds the message for a container that could not be found, listing the type names the file
     /// actually declares.
@@ -157,7 +125,19 @@ public static class SyntaxTargetResolver
                "argument list is optional, so both 'Foo' and 'Foo<T>' resolve.";
     }
 
-    public static string BuildTypeHint(List<BaseTypeDeclarationSyntax> candidates, List<int> matches, string failureMode)
+    /// <summary>
+    /// The one formatter for hint messages over a list of <see cref="SyntaxNodeCandidate"/> records,
+    /// for every member, type and enum-member lookup. Reads the precomputed
+    /// <see cref="SyntaxNodeCandidate.StartLine"/> and <see cref="SyntaxNodeCandidate.Preview"/> rather
+    /// than re-deriving them from the syntax node. This is the formatter for all hintBuilder callbacks
+    /// passed to <see cref="ResolveBySnippetOrThrow"/>.
+    /// </summary>
+    /// <remarks>
+    /// Wording is deliberately identical to the two node-based formatters this replaced: each preview is
+    /// cut to 50 characters here even though <see cref="SyntaxNodeCandidate.Preview"/> allows 80, because
+    /// 50 is what agents have always been shown. Do not widen it without checking the hint-wording tests.
+    /// </remarks>
+    public static string BuildHintForCandidates(List<SyntaxNodeCandidate> candidates, List<int> matches, string failureMode)
     {
         if (candidates.Count == 0)
         {
@@ -166,28 +146,9 @@ public static class SyntaxTargetResolver
 
         var previews = candidates.Take(3).Select(c =>
         {
-            var line = (c.SyntaxTree?.GetLineSpan(c.Span).StartLinePosition.Line + 1) ?? -1;
-            var text = c.ToString().Split('\n').First().Trim();
-            if (text.Length > 50)
-            {
-                text = text.Substring(0, 47) + "...";
-            }
-
-            return $"line {line} `{text}`";
+            var text = c.Preview.Length > 50 ? c.Preview.Substring(0, 47) + "..." : c.Preview;
+            return $"line {c.StartLine} `{text}`";
         });
-        var count = candidates.Count;
-        var suffix = count > 3 ? $" (+{count - 3} more)" : "";
-        return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
-    }
-
-    public static string BuildTypeHintForCandidates(List<SyntaxNodeCandidate> candidates, List<int> matches, string failureMode)
-    {
-        if (candidates.Count == 0)
-        {
-            return $"contextSnippet {failureMode}: no candidates found.";
-        }
-
-        var previews = candidates.Take(3).Select(c => $"line {c.StartLine} `{c.Preview}`");
         var count = candidates.Count;
         var suffix = count > 3 ? $" (+{count - 3} more)" : "";
         return $"contextSnippet {failureMode} ({count} candidates): {string.Join(", ", previews)}{suffix}. " + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";

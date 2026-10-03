@@ -1057,10 +1057,10 @@ public class BasicRefactoringEngine
         {
             // ContextHelper's message ("contextSnippet not found"/"ambiguous (N matches)") is
             // necessarily generic -> ContextHelper only sees raw text offsets, it has no symbolName
-            // or declaration list to enumerate the way _symbolNavigationEngine. ResolveMemberByNameOrSnippet's NearMissList
+            // or declaration list to enumerate the way SyntaxTargetResolver's candidate
             // hint does, and this tool has no name argument at all (it targets an expression by its
             // literal text, not a named declaration) -> so there is no candidate set to report here
-            // the way there is for the member/type _symbolNavigationEngine. Resolvers. Point the caller at the tools that
+            // the way there is for the member/type lookups in SyntaxTargetResolver. Point the caller at the tools that
             // would show it real file content instead of leaving a bare message with nothing to act on.
             return new DocumentEditResult
             {
@@ -1080,12 +1080,12 @@ public class BasicRefactoringEngine
         var exactMatch = root.DescendantNodes().OfType<ExpressionSyntax>().Where(e => e.SpanStart == pos && System.Text.RegularExpressions.Regex.Replace(e.ToString().Trim(), @"\s+", " ") == normalizedSnippet).FirstOrDefault();
         // Fallback: contextSnippet didn't match a whole expression's text at this position -> walk from
         // the token at the position up to the nearest enclosing expression instead. This is inherently
-        // ambiguous (a partial/short contextSnippet can _symbolNavigationEngine. Resolve to a larger expression than the caller
+        // ambiguous (a partial/short contextSnippet can resolve to a larger expression than the caller
         // intended), so it only ever kicks in when the exact match above fails, and never overrides it.
         var expression = exactMatch ?? root.FindToken(pos).Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            // The snippet DID _symbolNavigationEngine. Resolve to a text position (pos, above) -> the failure is that no
+            // The snippet DID resolve to a text position (pos, above) -> the failure is that no
             // ExpressionSyntax boundary aligns with it (e.g. the snippet spans a statement, a
             // keyword, or crosses an expression boundary). Report where it landed instead of a
             // bare "not found", since that position is real, already-available information -> a
@@ -1577,7 +1577,7 @@ public class BasicRefactoringEngine
             var candidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.PreferConstructorOverType(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
             candidates = SyntaxTargetResolver.FilterByContainingType(candidates, containingTypeName);
             target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, matches, failureMode) => SyntaxTargetResolver.BuildMemberHintForCandidates(c, matches, failureMode))?.Node;
+                (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node;
         }
         catch (InvalidOperationException ex)
         {
@@ -1754,7 +1754,7 @@ public class BasicRefactoringEngine
             var candidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.PreferConstructorOverType(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
             candidates = SyntaxTargetResolver.FilterByContainingType(candidates, containingTypeName);
             target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, matches, failureMode) => SyntaxTargetResolver.BuildMemberHintForCandidates(c, matches, failureMode))?.Node;
+                (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node;
         }
         catch (InvalidOperationException ex)
         {
@@ -1819,7 +1819,7 @@ public class BasicRefactoringEngine
             var candidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.PreferConstructorOverType(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
             candidates = SyntaxTargetResolver.FilterByContainingType(candidates, containingTypeName);
             target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, matches, failureMode) => SyntaxTargetResolver.BuildMemberHintForCandidates(c, matches, failureMode))?.Node;
+                (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node;
         }
         catch (InvalidOperationException ex)
         {

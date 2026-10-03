@@ -473,8 +473,9 @@ public class CommentingEngine
 
     // ── Syntax helpers ───────────────────────────────────────────────────────
 
-    // ResolveMemberOrEnumMemberByNameOrSnippet (BasicRefactoringEngine.cs) deliberately excludes
-    // interface-declared members from its name-based lookup -> an interface method/property is a
+    // The member lookup behind AddSummaryComment (then
+    // BasicRefactoringEngine.ResolveMemberOrEnumMemberByNameOrSnippet) excluded interface-declared
+    // members from its name-based lookup -> an interface method/property is a
     // signature only, and callers targeting "Method X" almost always mean an implementation, not the
     // interface's own declaration. Seeding/staleness-scanning still followed plain syntax-kind
     // matching with no such exclusion, so every interface member got tagged [ContentHash] and then

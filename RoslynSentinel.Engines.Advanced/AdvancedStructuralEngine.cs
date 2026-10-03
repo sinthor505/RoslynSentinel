@@ -17,7 +17,6 @@ public class StructuralRefactoringEngine
     {
         _workspaceManager = workspaceManager;
         _validationEngine = validationEngine;
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager);
     }
 
     public async Task<DocumentEditResult> ConvertAbstractClassToInterfaceAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
@@ -1332,7 +1331,6 @@ public class StructuralRefactoringEngine
     }
 
     private readonly SentinelConfiguration _config = new SentinelConfiguration();
-    private readonly SymbolNavigationEngine _symbolNavigationEngine;
     public async Task<DocumentEditResult> ConvertExpressionBodyAsync(FilePathWrapper filePath, string memberName, string direction, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ConvertExpressionBody"))
@@ -1363,7 +1361,7 @@ public class StructuralRefactoringEngine
         MemberDeclarationSyntax? target;
         try
         {
-            target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, text, contextSnippet, lineBefore, lineAfter, (c, m, mode) => SyntaxTargetResolver.BuildMemberHint(c.Select(x => x.Node).ToList(), m, mode))?.Node as MemberDeclarationSyntax;
+            target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, text, contextSnippet, lineBefore, lineAfter, (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode))?.Node as MemberDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
