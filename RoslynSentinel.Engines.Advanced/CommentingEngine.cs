@@ -553,8 +553,18 @@ public class CommentingEngine
         var indentTrivia = member.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
         var newAttrList = SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(newAttribute))
             .WithLeadingTrivia(indentTrivia)
-            .WithTrailingTrivia(SyntaxFactory.EndOfLine("\n"));
+            .WithTrailingTrivia(SyntaxFactory.EndOfLine(DetectMemberEol(member)));
         return member.AddAttributeLists(newAttrList);
+    }
+
+    // The line ending the member's own text already uses, so the spliced-in attribute line matches
+    // its surroundings. A hard-coded "\n" here mixed LF into CRLF files, which the write path's EOL
+    // guard (EolChangeGuard) now refuses outright. Falls back to the platform default only when the
+    // member carries no line break at all.
+    private static string DetectMemberEol(MemberDeclarationSyntax member)
+    {
+        var eolTrivia = member.DescendantTrivia().FirstOrDefault(t => t.IsKind(SyntaxKind.EndOfLineTrivia));
+        return eolTrivia.IsKind(SyntaxKind.EndOfLineTrivia) ? eolTrivia.ToString() : Environment.NewLine;
     }
 
     private static MemberDeclarationSyntax RemoveContentHashAttribute(MemberDeclarationSyntax member)

@@ -1420,14 +1420,18 @@ public class BasicRefactoringEngine
             };
         }
 
+        // The document's own line ending, not a hard-coded CRLF: a fixed CRLF mixed endings into LF
+        // files, which the write path's EolChangeGuard now refuses.
+        var originalText = await document.GetTextAsync(cancellationToken);
+        var eol = EolUtilities.DetectDominantEol(originalText);
         UsingDirectiveSyntax newUsing;
         if (namespaceName.StartsWith("static "))
         {
-            newUsing = SyntaxFactory.UsingDirective(SyntaxFactory.Token(SyntaxKind.StaticKeyword).WithTrailingTrivia(SyntaxFactory.Space), null, SyntaxFactory.ParseName(namespaceName[7..])).WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed);
+            newUsing = SyntaxFactory.UsingDirective(SyntaxFactory.Token(SyntaxKind.StaticKeyword).WithTrailingTrivia(SyntaxFactory.Space), null, SyntaxFactory.ParseName(namespaceName[7..])).WithTrailingTrivia(SyntaxFactory.EndOfLine(eol));
         }
         else
         {
-            newUsing = SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(namespaceName)).WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed);
+            newUsing = SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(namespaceName)).WithTrailingTrivia(SyntaxFactory.EndOfLine(eol));
         }
 
         var annotation = new SyntaxAnnotation();
@@ -1444,11 +1448,21 @@ public class BasicRefactoringEngine
             formattedDoc = await Formatter.FormatAsync(formattedDoc.WithSyntaxRoot(simplifiedRoot!.WithAdditionalAnnotations(Simplifier.Annotation)), cancellationToken: cancellationToken);
         }
 
+        // Roslyn's Formatter emits the platform newline for any line break it creates or re-flows, so
+        // a file that used one consistent style (e.g. LF on Windows) would come back mixed. When the
+        // original was single-style, hold the result to that style; an already-mixed file is left as
+        // the formatter produced it rather than rewriting its minority lines.
+        var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+        if (EolChangeGuard.Count(originalText.ToString()).IsSingleStyle)
+        {
+            formattedText = EolUtilities.NormalizeEol(formattedText, eol);
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
+            UpdatedText = formattedText
         };
     }
 
@@ -1591,7 +1605,7 @@ public class BasicRefactoringEngine
         var baseIndent = target.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
         var indentText = baseIndent != default ? baseIndent.ToFullString() : "";
         var normalizedSummary = NormalizeSummaryText(summaryText);
-        var docText = BuildDocCommentText(target, indentText, normalizedSummary);
+        var docText = BuildDocCommentText(target, indentText, normalizedSummary, EolUtilities.DetectDominantEol(sourceText));
         var parsedMember = SyntaxFactory.ParseMemberDeclaration(docText);
         var docTrivia = parsedMember!.GetLeadingTrivia().Where(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)).ToList();
 
@@ -1634,7 +1648,7 @@ public class BasicRefactoringEngine
     // not base VS, is what fills tag bodies with real prose -> base VS only emits the empty shape).
     // Only MethodDeclarationSyntax/ConstructorDeclarationSyntax carry a ParameterList; other taggable
     // member kinds (property, enum, enum member) fall through to a bare <summary>, same as before.
-    private static string BuildDocCommentText(SyntaxNode target, string indentText, string normalizedSummary)
+    private static string BuildDocCommentText(SyntaxNode target, string indentText, string normalizedSummary, string eol)
     {
         SeparatedSyntaxList<ParameterSyntax>? parameters = target switch
         {
@@ -1672,7 +1686,9 @@ public class BasicRefactoringEngine
         }
 
         lines.Add($"{indentText}void __Dummy__() {{}}");
-        return string.Join("\n", lines);
+        // eol is the document's own dominant line ending: a hard-coded "\n" here put LF doc-comment
+        // lines into CRLF files (mixed endings), which the write path's EolChangeGuard now refuses.
+        return string.Join(eol, lines);
     }
 
     // Callers sometimes pass summaryText already shaped as a doc comment (e.g. "/// <summary>...</summary>"

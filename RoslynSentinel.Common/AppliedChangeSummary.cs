@@ -13,7 +13,8 @@ public record AppliedChangeSummary(
     string? Diff = null,
     int? WorkspaceVersion = null,
     Dictionary<FilePathWrapper, string>? ChangedContent = null,
-    bool Validated = false
+    bool Validated = false,
+    List<FileLineChange>? LineChanges = null
 )
 {
     /// <summary>

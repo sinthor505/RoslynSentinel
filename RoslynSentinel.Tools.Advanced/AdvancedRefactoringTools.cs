@@ -527,7 +527,7 @@ public class AdvancedRefactoringTools
                 // Raw compile-gate rejection. If caller-supplied fixups were applied and the errors sit
                 // on the very lines those fixups rewrote, say so up front - otherwise the dump reads as
                 // a compiler problem, not as "your fixup value is wrong".
-                var rawError = callSiteFixups is { Count: > 0 } ? AttributeValidationErrorsToCallSiteFixups(apply.Error, apply.Validation, result.AppliedFixups, _workspaceManager.GetSolutionRoot()) : apply.Error;
+                var rawError = callSiteFixups is { Count: > 0 } && apply.Error.ErrorCode != ToolErrorCode.EolChangeRefused ? AttributeValidationErrorsToCallSiteFixups(apply.Error, apply.Validation, result.AppliedFixups, _workspaceManager.GetSolutionRoot()) : apply.Error;
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
                     IsSuccess = false,
@@ -554,7 +554,7 @@ public class AdvancedRefactoringTools
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsSuccess = true,
-                SuccessData = new AppliedChangeSummary(apply.ChangeId, result.Changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff, ChangedContent: result.Changes, Validated: true)
+                SuccessData = new AppliedChangeSummary(apply.ChangeId, result.Changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff, ChangedContent: result.Changes, Validated: true, LineChanges: apply.LineChanges)
             };
         }
         catch (Exception ex)

@@ -1,3 +1,4 @@
+using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
 namespace RoslynSentinel.Common;
@@ -27,6 +28,32 @@ public static class ValidateAndApplyHelper
         IReadOnlyCollection<FilePathWrapper>? deletePaths = null,
         Func<DiagnosticReport, CancellationToken, Task<string>>? describeValidationFailure = null)
     {
+        // Write-path guardrail, run before the compile gate so a dry run reports it too: refuse a
+        // change that alters an existing file's line-ending style. No tool converts EOLs on purpose,
+        // so a changed style means the producer re-serialized the whole file (see EolChangeGuard).
+        // The same pre-images feed the per-file changed-line counts reported on the outcome.
+        Dictionary<string, string?> beforeTexts;
+        try
+        {
+            beforeTexts = await ReadBeforeTextsAsync(
+                workspaceManager, changes.Keys.Select(k => (string)k).Concat((deletePaths ?? []).Select(k => (string)k)), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "ValidateAndApply pre-image read failed for {OperationName}", operationName);
+            return new ApplyOutcome(null, ToolErrorMapper.ToResultError(ex, workspaceManager, $"{operationName} pre-image read"), dryRun);
+        }
+
+        var eolViolations = EolChangeGuard.CheckAll(changes, p => beforeTexts.GetValueOrDefault(p));
+        if (eolViolations.Count > 0)
+        {
+            logger.LogWarning("{OperationName} refused: would change line endings of {Count} file(s)", operationName, eolViolations.Count);
+            return new ApplyOutcome(null, new ResultError(
+                ToolErrorCode.EolChangeRefused,
+                EolChangeGuard.BuildMessage(operationName, eolViolations),
+                StructuredDetail: eolViolations.Cast<object>().ToList()), dryRun);
+        }
+
         DiagnosticReport validation;
         try
         {
@@ -64,7 +91,8 @@ public static class ValidateAndApplyHelper
         if (dryRun)
         {
             var previewDiff = returnDiff ? await BuildDiffAsync(workspaceManager, changes, cancellationToken) : null;
-            return new ApplyOutcome(null, null, true, previewDiff);
+            return new ApplyOutcome(null, null, true, previewDiff,
+                LineChanges: ComputeLineChanges(changes, deletePaths, p => beforeTexts.GetValueOrDefault(p)));
         }
 
         var applyResult = await workspaceManager.ApplyProposedChangesAsync(
@@ -73,8 +101,11 @@ public static class ValidateAndApplyHelper
 
         if (!applyResult.Success)
         {
-            return new ApplyOutcome(null, new ResultError(ToolErrorCode.Exception,
-                $"{operationName} apply failed", Detail: applyResult.Summary), false);
+            // The chokepoint's own EOL backstop reports RefusalCode; surface it as its distinct code.
+            var applyError = applyResult.RefusalCode != null
+                ? new ResultError(applyResult.RefusalCode, applyResult.Summary)
+                : new ResultError(ToolErrorCode.Exception, $"{operationName} apply failed", Detail: applyResult.Summary);
+            return new ApplyOutcome(null, applyError, false);
         }
 
         var changeId = Guid.NewGuid().ToString("n")[..8];
@@ -82,6 +113,8 @@ public static class ValidateAndApplyHelper
             operationName, changeId, applyResult, workspaceManager.GetSolutionRoot(), logger);
 
         var appliedDiff = returnDiff ? BuildDiffFromPreImages(changes, applyResult.PreImages) : null;
+        var lineChanges = ComputeLineChanges(changes, deletePaths, p =>
+            applyResult.PreImages != null && applyResult.PreImages.TryGetValue(p, out var pre) ? pre : beforeTexts.GetValueOrDefault(p));
 
         // The blob-integrity invariant, enforced where both facts are known at once: an apply that
         // wrote files and issues a changeId must have a resolvable blob. This return value used to
@@ -98,7 +131,7 @@ public static class ValidateAndApplyHelper
             ((IUnrecoverableBreaker)workspaceManager).Trip(operationName, changeId, reason);
 
             // No changeId: one UndoLastApply cannot resolve is worse than none.
-            return new ApplyOutcome(null, null, false, appliedDiff, reason);
+            return new ApplyOutcome(null, null, false, appliedDiff, reason, LineChanges: lineChanges);
         }
 
         // Nothing was written, so no changeId should be issued either. Previously one was minted
@@ -116,10 +149,78 @@ public static class ValidateAndApplyHelper
             return new ApplyOutcome(null, null, false, appliedDiff,
                 $"{operationName} produced no file changes, so nothing was written and there is " +
                 "nothing to undo. If you expected a change, the operation matched no target - or " +
-                "its refactoring feature is disabled on this server (see the Features tool).");
+                "its refactoring feature is disabled on this server (see the Features tool).",
+                LineChanges: lineChanges);
         }
 
-        return new ApplyOutcome(changeId, null, false, appliedDiff);
+        return new ApplyOutcome(changeId, null, false, appliedDiff, LineChanges: lineChanges);
+    }
+
+    /// <summary>
+    /// Reads each path's current text: the committed workspace document when there is one (what the
+    /// tool computed its edit against), otherwise the file on disk, otherwise null (a brand-new file).
+    /// </summary>
+    private static async Task<Dictionary<string, string?>> ReadBeforeTextsAsync(
+        IWorkspaceManager workspaceManager,
+        IEnumerable<string> paths,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<string, string?>();
+        Solution? solution = null;
+        foreach (var path in paths)
+        {
+            if (result.ContainsKey(path))
+            {
+                continue;
+            }
+
+            // The workspace document first: it is the text the tool actually computed its edit
+            // against, and it also covers in-memory solutions whose paths are not real disk files.
+            // Disk is the fallback for files that are not workspace documents.
+            solution ??= await workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            var docId = solution.GetDocumentIdsWithFilePath(path).FirstOrDefault();
+            if (docId != null)
+            {
+                result[path] = (await solution.GetDocument(docId)!.GetTextAsync(cancellationToken)).ToString();
+            }
+            else if (File.Exists(path))
+            {
+                result[path] = await File.ReadAllTextAsync(path, cancellationToken);
+            }
+            else
+            {
+                result[path] = null;
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Per-file added/removed line counts for every written file, then every deleted file (whose
+    /// every line counts as removed).
+    /// </summary>
+    private static List<FileLineChange> ComputeLineChanges(
+        Dictionary<FilePathWrapper, string> changes,
+        IReadOnlyCollection<FilePathWrapper>? deletePaths,
+        Func<string, string?> beforeLookup)
+    {
+        var stats = new List<FileLineChange>();
+        foreach (var (path, after) in changes)
+        {
+            stats.Add(FileLineChange.Compute(path, beforeLookup(path), after));
+        }
+
+        foreach (var path in deletePaths ?? [])
+        {
+            var before = beforeLookup(path);
+            if (before != null)
+            {
+                stats.Add(FileLineChange.Compute(path, before, string.Empty));
+            }
+        }
+
+        return stats;
     }
 
     public static async Task<string> BuildDiffAsync(

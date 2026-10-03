@@ -139,6 +139,15 @@ public static class ToolErrorCode
     /// idempotent no-op, not this error.
     /// </summary>
     public const string TargetIneligible = "TargetIneligible";
+
+    /// <summary>
+    /// The write-path guardrail refused a change to an existing C# file because it would alter that
+    /// file's line-ending style (CRLF to LF, or a single style to mixed). Nothing was written. This is
+    /// the fingerprint of a whole-file re-serialize/normalize rather than a minimal edit; the message
+    /// names each file and its before/after style. Distinct from <see cref="ValidationFailed"/>
+    /// (compiler errors) and <see cref="Exception"/> (unexpected failure).
+    /// </summary>
+    public const string EolChangeRefused = "EolChangeRefused";
 }
 
 // ── Envelope ──────────────────────────────────────────────────────────────────

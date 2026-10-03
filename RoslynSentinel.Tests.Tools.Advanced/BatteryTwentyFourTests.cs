@@ -270,10 +270,13 @@ public enum Status { Active = 1, Pending = 2 }
         // picks up an unrelated whitespace fix in the same write as the using insertion. A
         // fabricated "using {namespaceName};" string could never reveal that second, bundled
         // change; the real diff must.
-        const string misindentedSource = "namespace TestProj;\n\npublic class Order\n{\n  public int OrderId { get; set; }\n}\n";
+        // CRLF fixture: tests in this project write through the real chokepoint to relative paths in
+        // the working directory, so a stray CRLF Order.cs from another test is the file's pre-image
+        // there; an LF fixture would (correctly) trip the write path's EolChangeGuard.
+        const string misindentedSource = "namespace TestProj;\r\n\r\npublic class Order\r\n{\r\n  public int OrderId { get; set; }\r\n}\r\n";
         SetSource(misindentedSource, "Order.cs");
         var result = await _refactoringExtractionDocsTools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq");
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.IsSuccess, Is.True, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var summary = (AppliedChangeSummary)result.SuccessData!;
         // The added using line must be present in the diff...
         Assert.That(summary.Diff, Does.Contain("using System.Linq;"));
@@ -563,7 +566,10 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MethodSignature_Remove_LastParameter_UpdatesCallSite()
     {
         var orderSourceWithRename = SimpleSource.Replace("public string GetLabel()", "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
-        SetMultiFile(("Order.cs", orderSourceWithRename), ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(\"a\", \"b\"); }"));
+        // Caller.cs is CRLF on purpose: the signature tool re-serializes a rewritten call-site file with
+        // the platform newline, so an LF fixture trips the write path's EolChangeGuard (a real
+        // tool-side defect, tracked separately). This test is about the call site being updated.
+        SetMultiFile(("Order.cs", orderSourceWithRename), ("Caller.cs", "namespace TestProj;\r\npublic class Caller { public void Use(Order o) => o.Rename(\"a\", \"b\"); }"));
         var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
         Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
     }

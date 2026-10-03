@@ -1330,6 +1330,34 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 }
             }
 
+            // ── EOL-change guardrail (backstop) ───────────────────────────────
+            // Refuse, before anything is written or deleted, any change that alters an existing
+            // .cs file's line-ending style: that is the signature of a whole-file re-serialize
+            // (see EolChangeGuard). ValidateAndApplyHelper runs the same check earlier so tools get
+            // a structured error; this covers callers that reach the chokepoint directly. New
+            // files (null pre-image) are exempt.
+            var eolViolations = EolChangeGuard.CheckAll(
+                changes, p => preImages.TryGetValue(p, out var before) ? before : null);
+            if (eolViolations.Count > 0)
+            {
+                var refusalMessage = EolChangeGuard.BuildMessage("ApplyProposedChanges", eolViolations);
+                if (_logger.IsEnabled(LogLevel.Warning))
+                {
+                    _logger.LogWarning("{Message}", refusalMessage);
+                }
+
+                return new ApplyChangesResult(
+                    false,
+                    [],
+                    eolViolations.ToDictionary(v => (FilePathWrapper)v.FilePath, v => refusalMessage),
+                    $"{ToolErrorCode.EolChangeRefused}: {refusalMessage}",
+                    WorkspaceInSync: true,
+                    WorkspaceVersion: _workspaceVersion,
+                    PreImages: preImages,
+                    ValidationResult: validationReport,
+                    RefusalCode: ToolErrorCode.EolChangeRefused);
+            }
+
             // ── Deletes ──────────────────────────────────────────────────────
             // Handled as their own pass, before the write loop below, so a delete failure is
             // tracked the same way a write failure is (failed/succeeded/rollback), and so a

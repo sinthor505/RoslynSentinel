@@ -1,4 +1,4 @@
-﻿namespace RoslynSentinel.Common;
+namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Result of an attempt to apply multiple file changes to disk.
@@ -26,5 +26,6 @@ public record ApplyChangesResult(
     IReadOnlyDictionary<string, string?>? PreImages = null,
     DiagnosticReport? ValidationResult = null,
     List<string>? RolledBackFiles = null,
-    List<string>? NoOpFiles = null
+    List<string>? NoOpFiles = null,
+    string? RefusalCode = null
 );

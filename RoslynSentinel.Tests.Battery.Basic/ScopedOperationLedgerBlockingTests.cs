@@ -61,7 +61,7 @@ public class ScopedOperationLedgerBlockingTests
 
         var changes = new Dictionary<FilePathWrapper, string>
         {
-            [filePath] = original + "\n// appended by test\n"
+            [filePath] = original + Environment.NewLine + "// appended by test" + Environment.NewLine
         };
 
         var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: false);
@@ -81,7 +81,7 @@ public class ScopedOperationLedgerBlockingTests
 
         var changes = new Dictionary<FilePathWrapper, string>
         {
-            [_workspaceManager.ResolveFromWire(targetFile)] = original + "\n// appended by test\n"
+            [_workspaceManager.ResolveFromWire(targetFile)] = original + Environment.NewLine + "// appended by test" + Environment.NewLine
         };
 
         var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: false);
@@ -122,7 +122,7 @@ public class ScopedOperationLedgerBlockingTests
 
         var changes = new Dictionary<FilePathWrapper, string>
         {
-            [unrelatedPath] = unrelatedOriginal + "\n// appended by test\n"
+            [unrelatedPath] = unrelatedOriginal + Environment.NewLine + "// appended by test" + Environment.NewLine
         };
 
         var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: false);

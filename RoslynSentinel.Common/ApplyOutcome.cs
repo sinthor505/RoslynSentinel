@@ -24,11 +24,17 @@ namespace RoslynSentinel.Common;
 /// diagnostics with its own inputs (e.g. MoveMember matching diagnostic lines against the call-site
 /// lines it rewrote from callSiteFixups) instead of re-parsing the error message text.
 /// </param>
+/// <param name="LineChanges">
+/// Per-file lines added/removed (from the text diff of pre-image vs written content), populated for
+/// dry runs and successful applies. Null on error. A tiny edit reporting hundreds of changed lines
+/// is the visible signature of a whole-file reformat.
+/// </param>
 public record ApplyOutcome(
     string? ChangeId,
     ResultError? Error,
     bool DryRun,
     string? Diff = null,
     string? NotReversibleReason = null,
-    DiagnosticReport? Validation = null
+    DiagnosticReport? Validation = null,
+    List<FileLineChange>? LineChanges = null
 );
