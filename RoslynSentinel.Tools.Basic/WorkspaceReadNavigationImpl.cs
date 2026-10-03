@@ -410,6 +410,9 @@ public class WorkspaceReadNavigationImpl
             var results = new ConcurrentBag<TextSearchMatch>();
             var warnings = new List<string>();
             var globMatchedPaths = new ConcurrentBag<string>();
+            // FilePathWrapper.Relative is empty unless a root is supplied; a '/'-containing fileGlob
+            // is matched against Relative, so omitting the root made every such glob match 0 files.
+            var solutionRoot = _workspaceManager.GetSolutionRoot();
             int resultCount = 0;
             Regex? regex = null;
             bool regexPatternValid = true;
@@ -437,7 +440,7 @@ public class WorkspaceReadNavigationImpl
                         return;
                     }
 
-                    var docPath = new FilePathWrapper(document.FilePath ?? "");
+                    var docPath = new FilePathWrapper(document.FilePath ?? "", solutionRoot);
                     if (!string.IsNullOrEmpty(fileGlob) && !GlobMatchesFileName(docPath, fileGlob))
                     {
                         return;
@@ -522,7 +525,7 @@ public class WorkspaceReadNavigationImpl
                         .SelectMany(p => p.Documents)
                         .Select(d =>
                         {
-                            var wrapper = new FilePathWrapper(d.FilePath ?? "");
+                            var wrapper = new FilePathWrapper(d.FilePath ?? "", solutionRoot);
                             // Relative is empty when no solution root is available to resolve against
                             // (e.g. an in-memory solution with no backing .sln/.slnx) - fall back to
                             // Absolute rather than silently dropping a real document from the samples.

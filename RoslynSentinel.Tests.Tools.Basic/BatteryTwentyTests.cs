@@ -415,6 +415,58 @@ public class BatteryTwentyTests
     }
 
 
+    // A '/'-containing fileGlob is matched against the solution-relative path, which only exists when
+    // the workspace has a solution root. SetSource/SetSources build a root-less in-memory solution, so
+    // these tests need real absolute document paths under a solution file path.
+    private void SetRootedSources(params (string relativePath, string source)[] files)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "GlobRootTest");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
+            Path.Combine(root, "TestProj", "TestProj.csproj"),
+            files.Select(f => (f.relativePath, f.source, Path.Combine(root, f.relativePath))).ToArray());
+        _workspaceManager.SetTestSolution(solution);
+        ((PersistentWorkspaceManager)_workspaceManager).SolutionPath = Path.Combine(root, "Test.slnx");
+    }
+
+
+    [TestCase("**/*.cs", 2)]
+    [TestCase("ProjA/*.cs", 1)]
+    [TestCase("**/ProjB/*.cs", 1)]
+    [TestCase("*.cs", 2)]
+    [Description("blocking_error_search_fileglob_matches_zero_files_absolute_paths.md: a '/'-containing " +
+             "fileGlob must match against the solution-relative path. SearchSolutionText built its " +
+             "FilePathWrapper without the solution root, so Relative was empty and every such glob matched 0 files.")]
+    public async Task SearchSolutionText_SlashGlobAgainstRootedSolution_MatchesRelativePath(string glob, int expectedFiles)
+    {
+        SetRootedSources((Path.Combine("ProjA", "Order.cs"), "namespace TestProj; public class Order { public int Marker() => 1; }"),
+            (Path.Combine("ProjB", "Payment.cs"), "namespace TestProj; public class Payment { public int Marker() => 2; }"));
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Marker",
+            fileGlob: glob);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var payload = (TextSearchResult)result.SuccessData!;
+        Assert.That(payload.LiteralResults.Select(m => m.filePath.Absolute).Distinct().Count(), Is.EqualTo(expectedFiles));
+    }
+
+
+    [Test]
+    [Description("blocking_error_search_fileglob_matches_zero_files_absolute_paths.md: when a '/'-containing " +
+             "glob really matches nothing, the example paths in the error must be solution-relative " +
+             "(the form the glob is tested against), never absolute.")]
+    public async Task SearchSolutionText_SlashGlobMatchesNothing_ErrorExamplesAreRelative()
+    {
+        SetRootedSources((Path.Combine("ProjA", "Order.cs"), "namespace TestProj; public class Order { public int Marker() => 1; }"));
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Marker",
+            fileGlob: "NoSuchProj/*.cs");
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData?.Message, Does.Contain("ProjA/Order.cs"));
+        Assert.That(result.ErrorData?.Message, Does.Not.Contain("GlobRootTest"),
+            "example paths must be solution-relative, not absolute");
+    }
+
+
     [Test]
     [Description("blocking_error_search_fileglob_brace_pattern_silently_matches_nothing.md fix 5: " +
              "results must come back in a deterministic order across repeated identical searches, " +
