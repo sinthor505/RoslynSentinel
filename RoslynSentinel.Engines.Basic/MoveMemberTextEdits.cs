@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
@@ -200,6 +201,115 @@ public static class MoveMemberTextEdits
     {
         var ordered = changes.OrderBy(c => c.Span.Start).ThenBy(c => c.Span.Length).ToList();
         return ordered.Count == 0 ? text.ToString() : text.WithChanges(ordered).ToString();
+    }
+
+    /// <summary>
+    /// Builds the source document's edit list for a move: reference edits that fall outside the moved members stay
+    /// as they are, reference edits inside them are returned in <paramref name = "insideMovedMemberEdits"/> (they travel
+    /// with the member text), and each moved member's removal span is added as a deletion.
+    /// </summary>
+    public static List<TextChange> BuildSourceEdits(SourceText sourceText, IReadOnlyList<MemberDeclarationSyntax> membersToMove, IEnumerable<TextChange> sourceReferenceEdits, out List<TextChange> insideMovedMemberEdits)
+    {
+        var all = sourceReferenceEdits.ToList();
+        insideMovedMemberEdits = all.Where(e => membersToMove.Any(m => m.FullSpan.Contains(e.Span))).ToList();
+        var edits = all.Except(insideMovedMemberEdits).ToList();
+        foreach (var removal in MergeSpans(membersToMove.Select(m => GetRemovalSpan(sourceText, m))))
+        {
+            edits.Add(new TextChange(removal, string.Empty));
+        }
+
+        return edits;
+    }
+
+    /// <summary>
+    /// Text edits (spans in the original document) that adjust a member's modifiers for a pull-up into a base
+    /// type: <c>override</c> becomes <c>virtual</c> (or is dropped when the member is already virtual/abstract),
+    /// and a member with neither gets <c>virtual</c>. Static members and member kinds other than methods and
+    /// properties are left alone, because <c>static virtual</c> is not valid.
+    /// </summary>
+    public static List<TextChange> BuildPullUpModifierEdits(MemberDeclarationSyntax member)
+    {
+        var edits = new List<TextChange>();
+        SyntaxTokenList modifiers;
+        SyntaxNode typeNode;
+        switch (member)
+        {
+            case MethodDeclarationSyntax method:
+                modifiers = method.Modifiers;
+                typeNode = method.ReturnType;
+                break;
+            case PropertyDeclarationSyntax property:
+                modifiers = property.Modifiers;
+                typeNode = property.Type;
+                break;
+            default:
+                return edits;
+        }
+
+        if (modifiers.Any(t => t.IsKind(SyntaxKind.StaticKeyword)))
+        {
+            return edits;
+        }
+
+        var overrideToken = modifiers.FirstOrDefault(t => t.IsKind(SyntaxKind.OverrideKeyword));
+        var hasOverride = overrideToken.RawKind != 0;
+        var hasVirtualOrAbstract = modifiers.Any(t => t.IsKind(SyntaxKind.VirtualKeyword) || t.IsKind(SyntaxKind.AbstractKeyword));
+        if (hasOverride)
+        {
+            edits.Add(hasVirtualOrAbstract ? new TextChange(TextSpan.FromBounds(overrideToken.SpanStart, overrideToken.FullSpan.End), string.Empty) : new TextChange(overrideToken.Span, "virtual"));
+        }
+        else if (!hasVirtualOrAbstract)
+        {
+            edits.Add(modifiers.Count > 0 ? new TextChange(new TextSpan(modifiers[^1].Span.End, 0), " virtual") : new TextChange(new TextSpan(typeNode.SpanStart, 0), "virtual "));
+        }
+
+        return edits;
+    }
+
+    /// <summary>
+    /// The full text of a brand-new file holding one public class made of the moved members. There is no original
+    /// text to preserve, so the file is written directly: the source file's usings, the source namespace (file-scoped
+    /// or block-scoped as in the source), four-space indentation, <paramref name = "eol"/> line endings and a final line break.
+    /// </summary>
+    public static string BuildNewClassFileText(IReadOnlyList<string> usingLines, string? namespaceName, bool fileScopedNamespace, string className, SourceText sourceText, IReadOnlyList<MemberDeclarationSyntax> members, IReadOnlyList<TextChange> insideMovedMemberEdits, string eol)
+    {
+        var blockNamespace = namespaceName != null && !fileScopedNamespace;
+        var classIndent = blockNamespace ? "    " : string.Empty;
+        var memberIndent = classIndent + "    ";
+        var sb = new StringBuilder();
+        foreach (var usingLine in usingLines)
+        {
+            sb.Append(usingLine).Append(eol);
+        }
+
+        if (usingLines.Count > 0)
+        {
+            sb.Append(eol);
+        }
+
+        if (namespaceName != null)
+        {
+            if (fileScopedNamespace)
+            {
+                sb.Append("namespace ").Append(namespaceName).Append(';').Append(eol).Append(eol);
+            }
+            else
+            {
+                sb.Append("namespace ").Append(namespaceName).Append(eol).Append('{').Append(eol);
+            }
+        }
+
+        var blocks = members.Select(m => BuildMovedMemberText(sourceText, m, insideMovedMemberEdits.Where(e => m.FullSpan.Contains(e.Span)).ToList(), GetMemberIndentation(sourceText, m), memberIndent, eol)).ToList();
+        sb.Append(classIndent).Append("public class ").Append(className).Append(eol);
+        sb.Append(classIndent).Append('{').Append(eol);
+        sb.Append(JoinMovedMembers(members, blocks, eol)).Append(eol);
+        sb.Append(classIndent).Append('}').Append(eol);
+        if (blockNamespace)
+        {
+            sb.Append('}').Append(eol);
+        }
+
+        return sb.ToString();
     }
 
     private static TextChange? ReplaceQualifier(SyntaxNode qualifier, string targetClassName)

@@ -320,6 +320,311 @@ public class MoveMemberPreservesUntouchedTextTests
             "the whole-tree normalizer adds one, which is the bug we are catching");
     }
 
+    [Test]
+    public async Task MethodToBaseType_WithCRLF_PreservesUntouchedContent()
+    {
+        const string eol = "\r\n";
+        var source = Lines(eol,
+            "using System;",
+            "",
+            "namespace Example;",
+            "",
+            "public record CallerInfo(",
+            "    int Line,",
+            "    string Name);",
+            "",
+            "public class Derived : Base",
+            "{",
+            "    /// <summary>",
+            "    /// Normalizes a type name.",
+            "    /// </summary>",
+            "    public string Normalize(",
+            "        string input,",
+            "        bool strict = false)",
+            "    {",
+            "        var normalized = strict ? input.ToLower() : input.Trim();",
+            "        return normalized ?? \"default\";",
+            "    }",
+            "",
+            "    /// <summary>Other method, see <see cref=\"Derived.Normalize\"/>.</summary>",
+            "    public int Process(string x) => x.Length;",
+            "}");
+        var baseFile = Lines(eol,
+            "namespace Example;",
+            "",
+            "public record BaseInfo(",
+            "    string Result,",
+            "    int Value);",
+            "",
+            "public class Base",
+            "{",
+            "    /// <summary>Existing member on base.</summary>",
+            "    public int Count() => 0;",
+            "",
+            "    /// <summary>Another existing member.</summary>",
+            "    public string Describe() => \"base\";",
+            "}");
+        var caller = Lines(eol,
+            "using Example;",
+            "",
+            "public class Caller",
+            "{",
+            "    /// <summary>Wrapped call.</summary>",
+            "    /// <remarks>See <see cref=\"Derived.Normalize\"/>.</remarks>",
+            "    public void Run()",
+            "    {",
+            "        var d = new Derived();",
+            "        var result = d.Normalize(",
+            "            \"test\",",
+            "            strict: true);",
+            "    }",
+            "}");
+        var movedMember = Lines(eol,
+            "    /// <summary>",
+            "    /// Normalizes a type name.",
+            "    /// </summary>",
+            "    public string Normalize(",
+            "        string input,",
+            "        bool strict = false)",
+            "    {",
+            "        var normalized = strict ? input.ToLower() : input.Trim();",
+            "        return normalized ?? \"default\";",
+            "    }");
+        var pulledUpMember = movedMember.Replace("public string Normalize(", "public virtual string Normalize(");
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Base.cs", baseFile),
+            ("Caller.cs", caller));
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("Source.cs"),
+            "Derived",
+            new[] { "Normalize" },
+            "Base",
+            workspace.PathOf("Base.cs"),
+            CancellationToken.None);
+
+        var sourceNewText = result.Changes[result.Changes.Keys.Single(k => k.ToString().EndsWith("Source.cs", StringComparison.OrdinalIgnoreCase))];
+        var baseNewText = result.Changes[result.Changes.Keys.Single(k => k.ToString().EndsWith("Base.cs", StringComparison.OrdinalIgnoreCase))];
+
+        // Call sites keep working through inheritance, so the caller must not be rewritten at all.
+        Assert.That(result.Changes.Keys.Any(k => k.ToString().EndsWith("Caller.cs", StringComparison.OrdinalIgnoreCase)), Is.False,
+            "Pulling a member up to a base type must not touch caller files");
+
+        Assert.That(sourceNewText, Does.Contain(eol));
+        Assert.That(baseNewText, Does.Contain(eol));
+        Assert.That(sourceNewText.Replace(eol, string.Empty), Does.Not.Contain("\n"), "Source must not mix in bare LF");
+        Assert.That(baseNewText.Replace(eol, string.Empty), Does.Not.Contain("\n"), "Base must not mix in bare LF");
+        Assert.That(sourceNewText.EndsWith("\n"), "Source should keep final newline");
+        Assert.That(baseNewText.EndsWith("\n"), "Base should keep final newline");
+
+        // Source: only the member (with its doc comment and one blank line) is removed; the cref outside it is untouched.
+        AssertOnlySpansChanged(source, sourceNewText, new[]
+        {
+            new ContentSpan(movedMember + eol, string.Empty)
+        });
+        Assert.That(sourceNewText, Does.Contain("<see cref=\"Derived.Normalize\"/>"));
+        Assert.That(sourceNewText, Does.Not.Contain("cref = "), "cref attributes must not gain spaces around equals");
+
+        // Base: only the pulled-up member (now virtual) is inserted after the last existing member.
+        AssertOnlySpansChanged(baseFile, baseNewText, new[]
+        {
+            new ContentSpan(
+                "    public string Describe() => \"base\";" + eol,
+                "    public string Describe() => \"base\";" + eol + eol + pulledUpMember)
+        });
+    }
+
+    [Test]
+    public async Task StaticMethodToNewClass_WithCRLF_PreservesUntouchedContentAndWritesCleanNewFile()
+    {
+        const string eol = "\r\n";
+        var source = Lines(eol,
+            "using System;",
+            "",
+            "namespace Example;",
+            "",
+            "public record CallerInfo(",
+            "    int Line,",
+            "    string Name);",
+            "",
+            "public static class A",
+            "{",
+            "    /// <summary>",
+            "    /// Normalizes a type name.",
+            "    /// </summary>",
+            "    public static string Norm(",
+            "        string input,",
+            "        bool strict = false)",
+            "    {",
+            "        var normalized = strict ? input.ToLower() : input.Trim();",
+            "        return normalized ?? \"default\";",
+            "    }",
+            "",
+            "    /// <summary>Other method.</summary>",
+            "    /// <remarks>See <see cref=\"A.Norm\"/> for the moved member.</remarks>",
+            "    public static int Process(string x) => x.Length;",
+            "}");
+        var caller = Lines(eol,
+            "using Example;",
+            "",
+            "public class Caller",
+            "{",
+            "    /// <summary>First method with wrapped call.</summary>",
+            "    public void Run()",
+            "    {",
+            "        var result = A.Norm(",
+            "            \"test\",",
+            "            strict: true);",
+            "    }",
+            "",
+            "    /// <summary>Second method.</summary>",
+            "    /// <remarks>See also <see cref=\"A.Norm\"/> when available.</remarks>",
+            "    public void Process()",
+            "    {",
+            "        var x = A.Norm(\"data\", false);",
+            "    }",
+            "}");
+        var movedMember = Lines(eol,
+            "    /// <summary>",
+            "    /// Normalizes a type name.",
+            "    /// </summary>",
+            "    public static string Norm(",
+            "        string input,",
+            "        bool strict = false)",
+            "    {",
+            "        var normalized = strict ? input.ToLower() : input.Trim();",
+            "        return normalized ?? \"default\";",
+            "    }");
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Caller.cs", caller));
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("Source.cs"),
+            "A",
+            new[] { "Norm" },
+            "NewHelper",
+            null,
+            CancellationToken.None);
+
+        Assert.That(result.Changes.Count, Is.EqualTo(3), "Expected the source, the caller and the new file");
+        var sourceNewText = result.Changes[result.Changes.Keys.Single(k => Path.GetFileName(k.ToString()) == "Source.cs")];
+        var callerNewText = result.Changes[result.Changes.Keys.Single(k => Path.GetFileName(k.ToString()) == "Caller.cs")];
+        var newFileText = result.Changes[result.Changes.Keys.Single(k => Path.GetFileName(k.ToString()) == "NewHelper.cs")];
+
+        foreach (var text in new[] { sourceNewText, callerNewText, newFileText })
+        {
+            Assert.That(text, Does.Contain(eol));
+            Assert.That(text.Replace(eol, string.Empty), Does.Not.Contain("\n"), "No bare LF may be mixed into a CRLF file");
+            Assert.That(text.EndsWith(eol), "Every file should end with a final newline");
+        }
+
+        // New file: written cleanly, matching the source file's usings, namespace style and line endings.
+        var expectedNewFile = Lines(eol, "using System;", "", "namespace Example;", "", "public class NewHelper", "{") + movedMember + Lines(eol, "}");
+        Assert.That(newFileText, Is.EqualTo(expectedNewFile));
+
+        // Source: only the member (with its doc comment and one blank line) is removed and the cref outside it retargeted.
+        AssertOnlySpansChanged(source, sourceNewText, new[]
+        {
+            new ContentSpan(movedMember + eol, string.Empty),
+            new ContentSpan("<see cref=\"A.Norm\"/>", "<see cref=\"NewHelper.Norm\"/>")
+        });
+
+        // Caller: only the qualifiers change.
+        AssertOnlySpansChanged(caller, callerNewText, new[]
+        {
+            new ContentSpan("A.Norm(", "NewHelper.Norm("),
+            new ContentSpan("A.Norm(", "NewHelper.Norm("),
+            new ContentSpan("<see cref=\"A.Norm\"/>", "<see cref=\"NewHelper.Norm\"/>")
+        });
+        Assert.That(sourceNewText, Does.Not.Contain("cref = "), "cref attributes must not gain spaces around equals");
+        Assert.That(callerNewText, Does.Not.Contain("cref = "), "cref attributes must not gain spaces around equals");
+    }
+
+    [Test]
+    public async Task StaticMethodToNewClass_WithLFAndBlockNamespace_PreservesUntouchedContentAndWritesCleanNewFile()
+    {
+        const string eol = "\n";
+        var source = Lines(eol,
+            "using System;",
+            "",
+            "namespace Example",
+            "{",
+            "    public record CallerInfo(",
+            "        int Line,",
+            "        string Name);",
+            "",
+            "    public static class A",
+            "    {",
+            "        public static string Norm(string input) => input.ToLower();",
+            "",
+            "        /// <summary>Other method with cref.</summary>",
+            "        /// <remarks>See <see cref=\"A.Norm\"/> elsewhere.</remarks>",
+            "        public static int Process(string x) => x.Length;",
+            "    }",
+            "}");
+        var caller = Lines(eol,
+            "using Example;",
+            "",
+            "public class Caller",
+            "{",
+            "    /// <summary>Method with wrapped call.</summary>",
+            "    /// <remarks>Uses <see cref=\"A.Norm\"/> for normalization.</remarks>",
+            "    public void Run()",
+            "    {",
+            "        var result = A.Norm(",
+            "            \"test\");",
+            "    }",
+            "}");
+        var movedMember = Lines(eol, "        public static string Norm(string input) => input.ToLower();");
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Caller.cs", caller));
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("Source.cs"),
+            "A",
+            new[] { "Norm" },
+            "NewHelper",
+            null,
+            CancellationToken.None);
+
+        Assert.That(result.Changes.Count, Is.EqualTo(3), "Expected the source, the caller and the new file");
+        var sourceNewText = result.Changes[result.Changes.Keys.Single(k => Path.GetFileName(k.ToString()) == "Source.cs")];
+        var callerNewText = result.Changes[result.Changes.Keys.Single(k => Path.GetFileName(k.ToString()) == "Caller.cs")];
+        var newFileText = result.Changes[result.Changes.Keys.Single(k => Path.GetFileName(k.ToString()) == "NewHelper.cs")];
+
+        foreach (var text in new[] { sourceNewText, callerNewText, newFileText })
+        {
+            Assert.That(text, Does.Not.Contain("\r"), "LF files must stay LF");
+            Assert.That(text.EndsWith(eol), "Every file should end with a final newline");
+        }
+
+        var expectedNewFile = Lines(eol, "using System;", "", "namespace Example", "{", "    public class NewHelper", "    {") + movedMember + Lines(eol, "    }", "}");
+        Assert.That(newFileText, Is.EqualTo(expectedNewFile));
+
+        AssertOnlySpansChanged(source, sourceNewText, new[]
+        {
+            new ContentSpan(movedMember + eol, string.Empty),
+            new ContentSpan("<see cref=\"A.Norm\"/>", "<see cref=\"NewHelper.Norm\"/>")
+        });
+
+        AssertOnlySpansChanged(caller, callerNewText, new[]
+        {
+            new ContentSpan("A.Norm(", "NewHelper.Norm("),
+            new ContentSpan("<see cref=\"A.Norm\"/>", "<see cref=\"NewHelper.Norm\"/>")
+        });
+        Assert.That(sourceNewText, Does.Not.Contain("cref = "), "cref attributes must not gain spaces around equals");
+        Assert.That(callerNewText, Does.Not.Contain("cref = "), "cref attributes must not gain spaces around equals");
+    }
+
+    /// <summary>Joins lines with <paramref name="eol"/> and terminates the last line with it too.</summary>
+    private static string Lines(string eol, params string[] lines) => string.Join(eol, lines) + eol;
+
     /// <summary>
     /// Assertion helper: compares original and new text, strips allowed edits,
     /// and asserts the remainder is byte-identical. Reports the first changed line on failure.
