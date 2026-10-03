@@ -1574,10 +1574,10 @@ public class BasicRefactoringEngine
         SyntaxNode? target = null;
         try
         {
-            var candidates = _symbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.PreferConstructorOverType(_symbolNavigationEngine.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
-            candidates = _symbolNavigationEngine.FilterByContainingType(candidates, containingTypeName);
-            target = _symbolNavigationEngine.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, matches, failureMode) => _symbolNavigationEngine.BuildMemberHintForCandidates(c, matches, failureMode))?.Node;
+            var candidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.PreferConstructorOverType(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
+            candidates = SyntaxTargetResolver.FilterByContainingType(candidates, containingTypeName);
+            target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (c, matches, failureMode) => SyntaxTargetResolver.BuildMemberHintForCandidates(c, matches, failureMode))?.Node;
         }
         catch (InvalidOperationException ex)
         {
@@ -1751,10 +1751,10 @@ public class BasicRefactoringEngine
         SyntaxNode? target;
         try
         {
-            var candidates = _symbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.PreferConstructorOverType(_symbolNavigationEngine.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
-            candidates = _symbolNavigationEngine.FilterByContainingType(candidates, containingTypeName);
-            target = _symbolNavigationEngine.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, matches, failureMode) => _symbolNavigationEngine.BuildMemberHintForCandidates(c, matches, failureMode))?.Node;
+            var candidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.PreferConstructorOverType(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
+            candidates = SyntaxTargetResolver.FilterByContainingType(candidates, containingTypeName);
+            target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (c, matches, failureMode) => SyntaxTargetResolver.BuildMemberHintForCandidates(c, matches, failureMode))?.Node;
         }
         catch (InvalidOperationException ex)
         {
@@ -1816,10 +1816,10 @@ public class BasicRefactoringEngine
         SyntaxNode? target;
         try
         {
-            var candidates = _symbolNavigationEngine.PreferNonInterfaceMember(_symbolNavigationEngine.PreferConstructorOverType(_symbolNavigationEngine.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
-            candidates = _symbolNavigationEngine.FilterByContainingType(candidates, containingTypeName);
-            target = _symbolNavigationEngine.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, matches, failureMode) => _symbolNavigationEngine.BuildMemberHintForCandidates(c, matches, failureMode))?.Node;
+            var candidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.PreferConstructorOverType(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)));
+            candidates = SyntaxTargetResolver.FilterByContainingType(candidates, containingTypeName);
+            target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (c, matches, failureMode) => SyntaxTargetResolver.BuildMemberHintForCandidates(c, matches, failureMode))?.Node;
         }
         catch (InvalidOperationException ex)
         {

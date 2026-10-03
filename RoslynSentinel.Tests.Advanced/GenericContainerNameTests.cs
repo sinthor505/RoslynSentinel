@@ -63,14 +63,93 @@ public class GenericContainerNameTests
         // silently resolve to a type they didn't name, which is worse than reporting the miss.
         Assert.Multiple(() =>
         {
-            Assert.That(SymbolNavigationEngine.NormalizeTypeName("Foo<T>"), Is.EqualTo("Foo"));
-            Assert.That(SymbolNavigationEngine.NormalizeTypeName("Foo<TKey, TValue>"), Is.EqualTo("Foo"));
-            Assert.That(SymbolNavigationEngine.NormalizeTypeName("Foo`1"), Is.EqualTo("Foo"));
-            Assert.That(SymbolNavigationEngine.NormalizeTypeName("  Foo<T>  "), Is.EqualTo("Foo"));
-            Assert.That(SymbolNavigationEngine.NormalizeTypeName("Foo"), Is.EqualTo("Foo"));
-            Assert.That(SymbolNavigationEngine.NormalizeTypeName("public class Foo<T> : IBar"),
+            Assert.That(SyntaxTargetResolver.NormalizeTypeName("Foo<T>"), Is.EqualTo("Foo"));
+            Assert.That(SyntaxTargetResolver.NormalizeTypeName("Foo<TKey, TValue>"), Is.EqualTo("Foo"));
+            Assert.That(SyntaxTargetResolver.NormalizeTypeName("Foo`1"), Is.EqualTo("Foo"));
+            Assert.That(SyntaxTargetResolver.NormalizeTypeName("  Foo<T>  "), Is.EqualTo("Foo"));
+            Assert.That(SyntaxTargetResolver.NormalizeTypeName("Foo"), Is.EqualTo("Foo"));
+            Assert.That(SyntaxTargetResolver.NormalizeTypeName("public class Foo<T> : IBar"),
                 Is.EqualTo("public class Foo<T> : IBar"),
                 "no trailing '>', so nothing is stripped");
         });
+    }
+}
+
+[TestFixture]
+public class SyntaxTargetResolverTests
+{
+    private const string TestSource = """
+        namespace TestProj;
+
+        public interface IService { }
+
+        public class ServiceImpl : IService { }
+
+        public enum Status { Active, Inactive }
+
+        public class Container
+        {
+            public Container() { }
+            public void Method() { }
+            public int Property { get; set; }
+        }
+
+        public struct ValueType { }
+        """;
+
+    [Test]
+    public void ResolveCandidates_ZeroMatches_ReturnsEmptyList()
+    {
+        var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", TestSource)]);
+        var document = compilation.Projects.First().Documents.First();
+        var root = document.GetSyntaxRootAsync().Result!;
+        var sourceText = document.GetTextAsync().Result!;
+
+        var result = SyntaxTargetResolver.ResolveCandidates(root, sourceText, "NonExistent");
+
+        Assert.That(result, Is.Empty);
+    }
+
+    [Test]
+    public void PreferConstructorOverType_PicksConstructor()
+    {
+        var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", TestSource)]);
+        var document = compilation.Projects.First().Documents.First();
+        var root = document.GetSyntaxRootAsync().Result!;
+        var sourceText = document.GetTextAsync().Result!;
+
+        var candidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, "Container");
+        var preferred = SyntaxTargetResolver.PreferConstructorOverType(candidates);
+
+        Assert.That(preferred, Has.Count.EqualTo(1));
+        Assert.That(preferred[0].Kind, Is.EqualTo(CandidateKind.Constructor));
+    }
+
+    [Test]
+    public void ResolveCandidates_EnumMemberFound()
+    {
+        var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", TestSource)]);
+        var document = compilation.Projects.First().Documents.First();
+        var root = document.GetSyntaxRootAsync().Result!;
+        var sourceText = document.GetTextAsync().Result!;
+
+        var candidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, "Active");
+
+        Assert.That(candidates, Has.Count.EqualTo(1));
+        Assert.That(candidates[0].Kind, Is.EqualTo(CandidateKind.EnumMember));
+    }
+
+    [Test]
+    public void ResolveCandidates_ClassFound()
+    {
+        var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", TestSource)]);
+        var document = compilation.Projects.First().Documents.First();
+        var root = document.GetSyntaxRootAsync().Result!;
+        var sourceText = document.GetTextAsync().Result!;
+
+        var candidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, "Container");
+
+        Assert.That(candidates, Has.Count.GreaterThanOrEqualTo(1));
+        Assert.That(candidates.Any(c => c.Kind == CandidateKind.Class), Is.True);
     }
 }

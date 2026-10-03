@@ -1359,11 +1359,11 @@ public class StructuralRefactoringEngine
 
         var root = (await document.GetSyntaxRootAsync(cancellationToken))!;
         var text = await document.GetTextAsync(cancellationToken);
-        var candidates = _symbolNavigationEngine.ResolveCandidates(root, text, memberName, cancellationToken).Where(c => c.Kind is CandidateKind.Method or CandidateKind.Property or CandidateKind.Constructor).ToList();
+        var candidates = SyntaxTargetResolver.ResolveCandidates(root, text, memberName, cancellationToken).Where(c => c.Kind is CandidateKind.Method or CandidateKind.Property or CandidateKind.Constructor).ToList();
         MemberDeclarationSyntax? target;
         try
         {
-            target = _symbolNavigationEngine.ResolveBySnippetOrThrow(candidates, text, contextSnippet, lineBefore, lineAfter, (c, m, mode) => _symbolNavigationEngine.BuildMemberHint(c.Select(x => x.Node).ToList(), m, mode))?.Node as MemberDeclarationSyntax;
+            target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, text, contextSnippet, lineBefore, lineAfter, (c, m, mode) => SyntaxTargetResolver.BuildMemberHint(c.Select(x => x.Node).ToList(), m, mode))?.Node as MemberDeclarationSyntax;
         }
         catch (InvalidOperationException ex)
         {
