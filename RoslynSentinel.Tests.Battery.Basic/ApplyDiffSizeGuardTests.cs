@@ -218,14 +218,17 @@ public class ApplyDiffSizeGuardTests
 
         var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
         var originalContent = await File.ReadAllTextAsync(targetFile);
-        var lightlyModified = originalContent + "\n// small trailing comment\n";
+        // Use LF content - it will be normalized to CRLF (the file's dominant EOL)
+        var lfContent = originalContent + "\n// small trailing comment\n";
 
         var result = await wholeFileWriteTools.ApplyDiff(
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
-            changes: new Dictionary<string, string> { [targetFile] = lightlyModified });
+            changes: new Dictionary<string, string> { [targetFile] = lfContent });
 
         Assert.That(result.IsSuccess, Is.True);
-        Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(lightlyModified));
+        // After normalization, LF content should be normalized to CRLF (the file's dominant EOL)
+        var expectedNormalized = originalContent + "\r\n// small trailing comment\r\n";
+        Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(expectedNormalized));
     }
 
     [Test]
