@@ -1,6 +1,6 @@
 # `Git` (MCP) unreachable: root_roslyn_sentinel_advanced_stdio reports CONNECTION_CLOSED, session commit blocked
 
-**Status:** OPEN 2026-10-01. Not traced to source; the server dropped mid-session (it was healthy earlier: `Git(operation: "log")` succeeded) and the cause is unknown.
+**Status:** CLOSED 2026-10-03 as unreproduced and ignored (user decision). Found 2026-10-01: the server dropped mid-session (it was healthy earlier: `Git(operation: "log")` succeeded) and the cause was never established. Triage on 2026-10-03 found no crash path in the Git tool code and the failure did not recur; see "Triage 2026-10-03" below. Reopen if it happens again.
 
 ## What was being attempted
 
