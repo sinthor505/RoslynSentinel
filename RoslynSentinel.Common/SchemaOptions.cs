@@ -14,12 +14,32 @@ public static class SchemaOptions
 {
     public static bool EmitDataTags { get; private set; }
 
+    /// <summary>
+    /// Which input-schema profile <c>tools/list</c> emits. <see cref="SchemaProfile.Full"/> (default) keeps
+    /// every parameter; <see cref="SchemaProfile.Lean"/> hides boilerplate parameters (see
+    /// McpToolSchemaPatcher.ApplyLeanProfile). Set via <c>--schema-profile=lean|full</c> or
+    /// <c>ROSLYNSENTINEL_SCHEMA_PROFILE</c>; an unrecognised value keeps Full.
+    /// </summary>
+    public static SchemaProfile Profile { get; private set; } = SchemaProfile.Full;
+
     /// <summary>Parses --emit-datatags (falling back to ROSLYNSENTINEL_EMIT_DATATAGS) into <see cref="EmitDataTags"/>. Call once at process startup, before DI is built.</summary>
     public static void Configure(string[] args)
     {
         var raw = GetArgValue(args, "--emit-datatags")
             ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_EMIT_DATATAGS");
         EmitDataTags = ParseEnabled(raw);
+
+        Profile = ParseProfile(GetArgValue(args, "--schema-profile")
+            ?? Environment.GetEnvironmentVariable("ROSLYNSENTINEL_SCHEMA_PROFILE"));
+    }
+
+    /// <summary>"lean" or "full" (case-insensitive, whitespace-trimmed) maps to the matching profile; null, empty or anything else keeps <see cref="SchemaProfile.Full"/> and never throws.</summary>
+    public static SchemaProfile ParseProfile(string? raw)
+    {
+        var trimmed = raw?.Trim();
+        return string.Equals(trimmed, "lean", StringComparison.OrdinalIgnoreCase)
+            ? SchemaProfile.Lean
+            : SchemaProfile.Full;
     }
 
     /// <summary>True when <paramref name="raw"/> is non-null and not "false" or "0" (case-insensitive, whitespace-trimmed); a bare flag with no value counts as on.</summary>
@@ -57,4 +77,14 @@ public static class SchemaOptions
             ? args[index + 1]
             : "true";
     }
+}
+
+/// <summary>Input-schema profile emitted by tools/list; see <see cref="SchemaOptions.Profile"/>.</summary>
+public enum SchemaProfile
+{
+    /// <summary>Every parameter is emitted (default).</summary>
+    Full,
+
+    /// <summary>Boilerplate parameters (autoStage, returnDiff, validateOnApply, lineBefore, lineAfter) are hidden from the schema.</summary>
+    Lean,
 }

@@ -124,6 +124,15 @@ public static class ToolArgumentValidator
             return null;
         }
     }
+
+    /// <summary>
+    /// Empties the per-tool schema cache. Production never needs this (the emitted schema is fixed
+    /// for the process lifetime); tests that rebuild tool schemas under a different
+    /// <see cref="RoslynSentinel.Common.SchemaOptions"/> profile in the same process must call it, or a
+    /// stale cached schema would be validated against the new one.
+    /// </summary>
+    public static void ClearSchemaCacheForTests() => SchemaCache.Clear();
+
     /// <summary>
     /// Nearest declared parameter to <paramref name="unknown"/>, or null when nothing is close
     /// enough to suggest. Turns "that parameter doesn't exist" into "you meant this one", which is
@@ -354,7 +363,10 @@ public static class ToolArgumentValidator
             var unknown = new System.Collections.Generic.List<string>();
             foreach (var argument in arguments)
             {
-                if (!declared.Contains(argument.Key))
+                // A parameter the Lean schema profile stripped from the emitted schema is still bound
+                // by the C# method, so it is accepted (but never advertised in the lists below).
+                if (!declared.Contains(argument.Key) &&
+                    !RoslynSentinel.Common.HiddenSchemaParams.IsHidden(toolName, argument.Key))
                     unknown.Add(argument.Key);
             }
 

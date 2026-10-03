@@ -146,6 +146,7 @@ public static class McpToolSchemaPatcher
                     McpServerTool tool = McpServerTool.Create(toolMethod, target: null, CreateOptions(services, serializerOptions));
                     ApplyConsumesTags(tool, toolMethod);
                     ApplyReplaceSnippetLimits(tool, toolMethod);
+                    ApplyLeanProfile(tool, toolMethod);
                     return tool;
                 });
             }
@@ -164,6 +165,7 @@ public static class McpToolSchemaPatcher
                         CreateOptions(services, serializerOptions));
                     ApplyConsumesTags(tool, toolMethod);
                     ApplyReplaceSnippetLimits(tool, toolMethod);
+                    ApplyLeanProfile(tool, toolMethod);
                     return tool;
                 });
             }
@@ -341,5 +343,68 @@ public static class McpToolSchemaPatcher
             propObj["description"] = description;
             return true;
         }
+    }
+
+    /// <summary>
+    /// When <see cref="SchemaOptions.Profile"/> is <see cref="SchemaProfile.Lean"/>, removes the
+    /// boilerplate parameters <c>autoStage</c>, <c>returnDiff</c>, <c>validateOnApply</c>,
+    /// <c>lineBefore</c> and <c>lineAfter</c> from <paramref name="tool"/>'s already-built
+    /// top-level <see cref="Tool.InputSchema"/> (and from its <c>required</c> array).
+    /// </summary>
+    /// <remarks>
+    /// Only the top-level <c>properties</c> object is touched: nested item schemas (e.g.
+    /// <c>batchEdits</c> items, which carry their own <c>lineBefore</c>/<c>lineAfter</c>) are left
+    /// alone. The C# method keeps every parameter, so runtime binding is unchanged; the names that were
+    /// actually stripped are registered in <see cref="HiddenSchemaParams"/> so the argument validator,
+    /// which treats the emitted schema as its allow-list, still accepts them at call time.
+    /// </remarks>
+    private static void ApplyLeanProfile(McpServerTool tool, MethodInfo toolMethod)
+    {
+        if (SchemaOptions.Profile != SchemaProfile.Lean)
+        {
+            return;
+        }
+
+        string[] leanHiddenParameters = ["autoStage", "returnDiff", "validateOnApply", "lineBefore", "lineAfter"];
+
+        JsonNode? schemaNode = JsonNode.Parse(tool.ProtocolTool.InputSchema.GetRawText());
+        if (schemaNode is not JsonObject schemaObj ||
+            !schemaObj.TryGetPropertyValue("properties", out JsonNode? propertiesNode) ||
+            propertiesNode is not JsonObject propertiesObj)
+        {
+            return;
+        }
+
+        var removed = new List<string>();
+        foreach (string name in leanHiddenParameters)
+        {
+            if (propertiesObj.Remove(name))
+            {
+                removed.Add(name);
+            }
+        }
+
+        if (removed.Count == 0)
+        {
+            return;
+        }
+
+        if (schemaObj.TryGetPropertyValue("required", out JsonNode? requiredNode) &&
+            requiredNode is JsonArray requiredArray)
+        {
+            for (int i = requiredArray.Count - 1; i >= 0; i--)
+            {
+                if (requiredArray[i] is JsonValue value &&
+                    value.TryGetValue(out string? requiredName) &&
+                    requiredName is not null &&
+                    removed.Contains(requiredName))
+                {
+                    requiredArray.RemoveAt(i);
+                }
+            }
+        }
+
+        tool.ProtocolTool.InputSchema = JsonSerializer.SerializeToElement(schemaNode);
+        HiddenSchemaParams.Register(tool.ProtocolTool.Name, removed);
     }
 }
