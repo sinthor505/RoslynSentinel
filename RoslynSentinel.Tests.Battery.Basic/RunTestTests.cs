@@ -70,6 +70,29 @@ public class RunTestTests
         Assert.That(data.FailedCount, Is.EqualTo(1));
         var failure = data.Results.Single(r => r.Outcome == TestOutcome.Failed);
         Assert.That(failure.ErrorMessage, Is.Not.Null.And.Not.Empty);
+        // Tails are diagnostic material for a run that went wrong -> kept when the run is not clean.
+        Assert.That(data.StdoutTail, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.StatusMessage, Does.Contain("Tests FAILED").And.Contain("1 failed"));
+    }
+
+    // A clean run drops the raw stdout/stderr tails at the tool boundary (the engine still returns
+    // them) and carries the totals in StatusMessage, so the response stays small enough to inline.
+    [Test]
+    public async Task RunTest_CleanRun_DropsTailsAndSetsStatusMessageAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
+
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var data = (TestRunResult)result.SuccessData!;
+        Assert.That(data.RunSucceeded, Is.True);
+        Assert.That(data.StdoutTail, Is.Null);
+        Assert.That(data.StderrTail, Is.Null);
+        Assert.That(result.StatusMessage, Does.Contain("Tests passed").And.Contain($"{data.TotalCount} tests"));
     }
 
     [Test]

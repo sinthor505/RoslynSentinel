@@ -454,8 +454,9 @@ public static class RoslynSentinelServiceExtensionsBasic
                             // every tool, typed and untyped alike) -> parsed straight from the raw JSON
                             // rather than any tool-specific DTO. itemCount looks for the envelope's own
                             // totalRecords first (set by ForPossiblyLargeDataAsync callers), then falls
-                            // back to counting elements of the first array found under successData
-                            // (covers untyped tools like FindReferences that set SuccessData directly).
+                            // back to LargeResultHelper.CountResultItems, which sums every array found
+                            // under successData (recursing through nested objects) - covers untyped
+                            // tools like FindReferences that set SuccessData directly.
                             // statusMessage is relayed whenever the tool already populated one (e.g.
                             // FindReferences/SearchSolutionText's SummarizeListResult-based summary) so
                             // that hint survives the offload instead of being silently dropped.
@@ -493,18 +494,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                                     }
                                     else if (root.TryGetPropertyValue("successData", out var successDataNode) && successDataNode != null)
                                     {
-                                        if (successDataNode is System.Text.Json.Nodes.JsonArray topArray)
-                                        {
-                                            itemCount = topArray.Count;
-                                        }
-                                        else if (successDataNode is System.Text.Json.Nodes.JsonObject successObject)
-                                        {
-                                            var arrays = successObject.Where(kv => kv.Value is System.Text.Json.Nodes.JsonArray).ToList();
-                                            if (arrays.Count > 0)
-                                            {
-                                                itemCount = arrays.Sum(kv => ((System.Text.Json.Nodes.JsonArray)kv.Value!).Count);
-                                            }
-                                        }
+                                        itemCount = LargeResultHelper.CountResultItems(successDataNode);
                                     }
 
                                     if (root.TryGetPropertyValue("statusMessage", out var statusMessageNode) &&

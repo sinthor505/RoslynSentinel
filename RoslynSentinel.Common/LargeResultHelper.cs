@@ -14,6 +14,28 @@ public static class LargeResultHelper
     public const int OffloadThresholdBytes = 15 * 1024; // 15 KB
 
     /// <summary>
+    /// Counts the items in a tool result's <c>successData</c> for the offload envelope's
+    /// <c>itemCount</c> hint: a top-level array counts its elements; an object sums every array found
+    /// under it, recursing through nested objects (so an array nested inside a sub-object is counted,
+    /// not just direct children). Array elements are never descended into, so an array of records
+    /// that each carry their own inner list still counts one per record. Returns null when no array
+    /// is found at all, so the hint is omitted rather than reported as a misleading 0.
+    /// </summary>
+    public static int? CountResultItems(JsonNode? node)
+    {
+        switch (node)
+        {
+            case JsonArray array:
+                return array.Count;
+            case JsonObject obj:
+                var counts = obj.Select(kv => CountResultItems(kv.Value)).OfType<int>().ToList();
+                return counts.Count > 0 ? counts.Sum() : null;
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
     /// Serializes <paramref name="data"/> and, if it exceeds <see cref="OffloadThresholdBytes"/>, writes it
     /// to <c>.roslynsentinel/largeresults/largeresult_<timestamp>_<resultId>.json</c> wrapped in a
     /// <see cref="ResultWrapper"/> tagged with <paramref name="wrapperType"/> so <c>GetLargeResult</c> can

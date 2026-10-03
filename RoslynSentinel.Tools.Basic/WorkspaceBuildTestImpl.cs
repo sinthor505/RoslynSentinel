@@ -115,6 +115,43 @@ public class WorkspaceBuildTestImpl
         }
     }
 
+    // Raw stdout/stderr tails are diagnostic material for a run that went wrong. The engines return
+    // them for every run on purpose - other consumers of the engine result may want them, and the
+    // engine should not need to change for that - so the decision to drop them is made here, at the
+    // tool boundary, where response size is what matters. On a clean run they only restate the
+    // summary: for a solution-wide RunTest they were ~17 KB of dotnet output (40 lines x 10 projects)
+    // and alone pushed the response over LargeResultHelper.OffloadThresholdBytes, forcing the
+    // caller to page a saved file just to read the totals.
+    private static TestRunResult WithoutTailsWhenClean(TestRunResult run)
+    {
+        var clean = run.RunSucceeded
+            && run.Detail is null
+            && (run.ProjectSummaries?.All(p => p.RunSucceeded && p.Detail is null) ?? true);
+        return clean ? run with { StdoutTail = null, StderrTail = null } : run;
+    }
+
+    // Same rationale as the TestRunResult overload above: a successful build with no detail has
+    // nothing in its tails that the error/warning counts do not already say.
+    private static BuildResult WithoutTailsWhenClean(BuildResult build)
+    {
+        var clean = build.Outcome == BuildOutcome.Succeeded && build.Detail is null;
+        return clean ? build with { StdoutTail = null, StderrTail = null } : build;
+    }
+
+    private static string FormatDuration(TimeSpan duration) =>
+        $"{(int)duration.TotalMinutes}m{duration.Seconds:00}s";
+
+    // Short inline headline. The generic offload filter relays StatusMessage into its pointer
+    // envelope, so even a response too large to inline (hundreds of failures) still carries the
+    // totals without a GetLargeResult round trip.
+    private static string SummarizeTestRun(TestRunResult run) =>
+        $"{(run.RunSucceeded ? "Tests passed" : "Tests FAILED")}: {run.TotalCount} tests, {run.PassedCount} passed, " +
+        $"{run.FailedCount} failed, {run.SkippedCount} skipped in {FormatDuration(run.Duration)} " +
+        $"across {run.ProjectSummaries?.Count ?? 1} project(s).";
+
+    private static string SummarizeBuild(BuildResult build) =>
+        $"Build {build.Outcome}: {build.ErrorCount} error(s), {build.WarningCount} warning(s) in {FormatDuration(build.Duration)}.";
+
     public async Task<SentinelCallToolResult<object>> Build(ToolCallReason reason, BuildVerifyLevel level = BuildVerifyLevel.fullBuild,
         ToolScope scope = ToolScope.solution, string? scopeName = null, int maxDetails = 50,
         CancellationToken cancellationToken = default)
@@ -137,9 +174,9 @@ public class WorkspaceBuildTestImpl
             }
 
             var buildToolResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                buildResult, _workspaceManager.GetSolutionRoot(), "BuildResult", ResultWrapperType.Raw,
+                WithoutTailsWhenClean(buildResult), _workspaceManager.GetSolutionRoot(), "BuildResult", ResultWrapperType.Raw,
                 workspaceVersion: _workspaceManager.WorkspaceVersion, cancellationToken: cancellationToken);
-            return buildToolResult with { Findings = result.Findings };
+            return buildToolResult with { Findings = result.Findings, StatusMessage = SummarizeBuild(buildResult) };
         }
         catch (Exception ex)
         {
@@ -172,7 +209,7 @@ public class WorkspaceBuildTestImpl
                 return new SentinelCallToolResult<object>() { IsSuccess = false, SuccessData = testRunResult, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, testRunResult.Detail ?? "Test run did not complete."), WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
             }
 
-            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = testRunResult, WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
+            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = WithoutTailsWhenClean(testRunResult), StatusMessage = SummarizeTestRun(testRunResult), WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
         }
         catch (Exception ex)
         {

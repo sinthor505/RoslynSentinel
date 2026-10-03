@@ -820,6 +820,29 @@ public class Order
     }
 
     [Test]
+    public async Task Build_QuickBuild_CleanSolution_SetsStatusMessageAndHasNoTails()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
+
+        Assert.That(result.IsSuccess, Is.True);
+        var data = (BuildResult)result.SuccessData!;
+        Assert.That(data.StdoutTail, Is.Null);
+        Assert.That(data.StderrTail, Is.Null);
+        Assert.That(result.StatusMessage, Does.Contain("Build Succeeded").And.Contain("0 error(s)"));
+    }
+
+    [Test]
+    public async Task Build_QuickBuild_CompileError_StatusMessageReportsFailure()
+    {
+        SetSource("namespace TestProj; public class Order { this is not valid C# }", "Test.cs");
+        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
+
+        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(result.StatusMessage, Does.Contain("Build Failed"));
+    }
+
+    [Test]
     public async Task Build_QuickBuild_GenuineCompileError_ProjectsCompiledStillNonEmpty()
     {
         SetSource("namespace TestProj; public class Order { this is not valid C# }", "Test.cs");
