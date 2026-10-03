@@ -4,6 +4,16 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## `MoveMember` follow-ups left open by the whole-file reformat fix (2026-10-03) - not started
+
+These came out of the fix in 4dedc78, a23c581, 4aa2dc2 and 389ae1b. The details are in the "Resolution" section of `blockers/resolved/blocking_error_movemember_reformats_entire_source_and_caller_files.md`.
+
+- **Instance moves leave crefs behind.** After an instance move, a cref to the moved member still names the old class, while static moves retarget it. `MoveMemberTextEdits.BuildReferenceEdit` already handles crefs.
+- **Wrapped call sites can be misclassified.** `PreviewInstanceMoveCallSitesAsync` matches a diagnostic to a reference by start line. On a wrapped call whose error lands on a later line, such as a named argument, the site is classified `Valid` and left unrewritten, and only the compile gate stops the result. It also compares original reference lines against post-edit diagnostic lines in the source and target, which shift after the removal. Match by span overlap against the edited text instead.
+- **Full text still returned on success.** On a written success `MoveMember` still returns every touched file's full text in `ChangedContent`, which was 162 KB for a one-method move. Drop it when `LineChanges` is present and nothing is a dry run, and correct the comment at `AdvancedRefactoringTools.cs:551`.
+- **Line counts not wired up.** `AppliedChangeSummary.LineChanges` is only populated by `MoveMember`. Adopt it at the other construction sites, about 79 of them.
+- **Collateral-change check not built.** Consider one beyond the EOL refusal: flag a file whose changed lines far exceed the lines the edit declared.
+
 ## Move syntax-side target resolution out of `SymbolNavigationEngine`, then unify hint formatters - not started
 
 **Found:** 2026-10-02, reviewing the refactoring-engine reorg (commit `72a327e`).
@@ -358,6 +368,8 @@ the file/method afterward to confirm... actually look correct") implicitly assum
 re-reading after every write, which is exactly the extra round-trip this behavior forces.
 
 ## `RoslynSentinel.Advanced`'s NormalizeWhitespace occurrences never got a follow-up sweep — Basic side now fully closed 2026-08-27; Advanced still open
+
+**Correction 2026-10-03:** the "Basic side fully closed" claim was wrong. `MemberRefactoringEngine.cs` (the former `RefactoringEngine`) still had about 20 whole-root `NormalizeWholeSubtreeWhitespace` sites in every `MoveMember` path. Those were fixed in 4dedc78, a23c581 and 4aa2dc2; see `blockers/resolved/blocking_error_movemember_reformats_entire_source_and_caller_files.md`. Two calls remain in `ExtractMethodAsync` and have not been classified. `MethodSignature`'s call-site rewrite still re-serializes whole caller files. `finding_normalizewhitespace_container_reformat_risk_inventory.md` lists neither file and still names the deleted `AdvancedStructuralEngine`. Re-grep for whole-root calls in both Engines projects before scoping this sweep.
 
 **Found:** 2026-08-24, while auditing `docs/plan-normalize-whitespace-full-sweep-v1.md` (now filed
 `docs/obsolete/`) for the docs reorganization pass. That plan completed a sweep of `RoslynSentinel.Basic`
