@@ -14,33 +14,14 @@ These came out of the fix in 4dedc78, a23c581, 4aa2dc2 and 389ae1b. The details 
 - **Line counts not wired up.** `AppliedChangeSummary.LineChanges` is only populated by `MoveMember`. Adopt it at the other construction sites, about 79 of them.
 - **Collateral-change check not built.** Consider one beyond the EOL refusal: flag a file whose changed lines far exceed the lines the edit declared.
 
-## Move syntax-side target resolution out of `SymbolNavigationEngine`, then unify hint formatters - not started
+## `SyntaxTargetResolver` extraction follow-ups (2026-10-03) - not started
 
-**Found:** 2026-10-02, reviewing the refactoring-engine reorg (commit `72a327e`).
-`proposal_universal_symbol_resolver.md` unified the five drifted lookup helpers into the
-`ResolveCandidates` family but left it inside `SymbolNavigationEngine`. As a result
-`BasicRefactoringEngine`/`MemberRefactoringEngine` make 118 calls into that engine, 91 of them to
-stateless, workspace-free syntax helpers (`ResolveCandidates`, `ResolveBySnippetOrThrow`, the
-`Prefer*`/`FilterByContainingType` helpers, `NormalizeTypeName`, `GetMemberName`, the `Build*Hint*`
-formatters, `BuildContainerNotFoundMessage`). They depend on a workspace-holding navigation engine
-for functions that need neither the workspace nor any state.
+These were left open by the extraction in 50378ea and b95e857. See [proposals/proposal_syntax_target_resolver_extraction.md](./proposals/proposal_syntax_target_resolver_extraction.md).
 
-**Two steps, in order:**
-1. Move the syntax-only resolution layer into its own stateless class in `Engines.Basic`, unchanged
-   (keeps the proposal's hard rules: never throw on zero matches; disambiguation stays caller-chosen
-   helpers). Semantic-side resolution (`ResolveCandidatesWithSemanticAsync`, `PreferClassMember`,
-   `PreferImplementableMember`, `DescribeNearMissCandidatesAsync`) stays in `SymbolNavigationEngine`
-   for now. Verify each moved member has no `_workspaceManager` use first.
-2. Finish the proposal's unimplemented section 5: one shared hint formatter over
-   `List<SyntaxNodeCandidate>`, replacing `BuildMemberHint`, `BuildTypeHint`, the two
-   `*ForCandidates` adapters, `DescribeNameOnlyCandidates` and `DescribeCandidateLocations`. The
-   engine's own callers (`TryGetEnumMemberContainerNameAsync`, `IsEnumContainerAsync`,
-   `GetContainerMembersAsync`) currently strip candidates back to bare nodes to call the old
-   formatters, discarding `StartLine`/`Preview`.
-
-Also: mark `proposal_universal_symbol_resolver.md` resolved for its resolver scope and refresh its
-pre-reorg paths (`RoslynSentinel.Basic/...`, `RefactoringEngine.cs:NNNN`). Design writeup:
-[proposals/proposal_syntax_target_resolver_extraction.md](./proposals/proposal_syntax_target_resolver_extraction.md).
+- **The `Describe*` formatters were not unified.** `DescribeNameOnlyCandidates`, `DescribeCandidateLocations` and `DescribeNearMissCandidatesAsync` still format candidate lists separately from `SyntaxTargetResolver.BuildHintForCandidates`. Where they belong is an open question in the proposal. Decide it before folding them in.
+- **`BasicRefactoringEngine._symbolNavigationEngine` is write-only.** The field is now never read. Removing the constructor parameter would collide with the existing 3-arg constructor and change which constructor DI selects. This needs a decision on the constructor and DI shape, not a mechanical delete. (`AdvancedStructuralEngine`'s equivalent field was removed in b95e857.)
+- **`RenameSymbol` cannot merge into an existing signature.** Renaming a method onto a name and signature that already exists fails with CS0111/CS0121. Step 2 had to work around it with a temporary disambiguating overload. A merge mode that retargets callers to the existing member would remove the workaround.
+- **`Member(remove)` resolved a context snippet to a keyword.** With `contextSnippet: "bool tempOverloadDisambiguator = false"`, it resolved the `bool` keyword's type symbol rather than the parameter's method. It then returned a 425 KB error listing "1006 caller(s)". Two fixes are needed: resolve to the enclosing declaration, and cap or offload the caller list in the error.
 
 ## Analyzer / source-scan guardrail for case-sensitive path comparison - not started
 

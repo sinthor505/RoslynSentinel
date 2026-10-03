@@ -5,6 +5,23 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Move syntax-side target resolution out of `SymbolNavigationEngine`, then unify hint formatters - implemented 2026-10-03
+
+This was found on 2026-10-02 while reviewing the refactoring-engine reorg (72a327e).
+
+- **Step 1 (50378ea).** The stateless syntax-only resolution layer moved out of `SymbolNavigationEngine` into the new static `RoslynSentinel.Engines.Basic/SyntaxTargetResolver.cs`.
+  - Moved: `ResolveCandidates`, `ResolveBySnippetOrThrow`, the `Prefer*` and `FilterByContainingType` helpers, `NormalizeTypeName`, `GetMemberName`, the hint builders, `CandidateKind` and `SyntaxNodeCandidate`.
+  - There are no forwarders. Call sites were rewritten by `MoveMember`'s make-static conversion (b773820).
+- **Step 2 (b95e857).** A single `BuildHintForCandidates` replaces `BuildMemberHint`, `BuildTypeHint` and both `*ForCandidates` adapters.
+  - Type-hint previews are now cut at 50 characters, where the old adapter allowed 80.
+  - `AdvancedStructuralEngine`'s write-only `_symbolNavigationEngine` field was removed.
+- **Results.** Full suite: 2981 tests, 0 failed, 109 skipped.
+- **Docs.** `proposal_universal_symbol_resolver.md` is marked resolved for its resolver scope, with a note on its pre-reorg paths.
+
+Left open (tracked in TODO.md under "`SyntaxTargetResolver` extraction follow-ups"):
+- `Describe*` formatter placement;
+- `BasicRefactoringEngine`'s write-only field.
+
 ## `SubAgentEval`/`SubAgent` MCP tools - implemented and live-smoke-verified 2026-10-01
 
 Design `design_subagent_tool.md`, plan `plans/plan_subagent_tool_implementation.md`. Commits: Step 1

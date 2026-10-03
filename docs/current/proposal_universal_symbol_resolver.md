@@ -287,6 +287,15 @@ sweep (see that doc's "Migration path" section for the pattern being mirrored):
 
 ## Status
 
+**RESOLVED 2026-10-03 for its resolver scope.** Section 5, the unified hint formatter, was finished by the follow-on `proposals/proposal_syntax_target_resolver_extraction.md` (commits 50378ea and b95e857). That work also moved the syntax-side layer into the static `SyntaxTargetResolver` (`RoslynSentinel.Engines.Basic/SyntaxTargetResolver.cs`).
+
+Paths and line numbers in this doc predate the engine reorg:
+- `RoslynSentinel.Basic/...` is now `RoslynSentinel.Engines.Basic/...`.
+- `RefactoringEngine.cs` was split into `MemberRefactoringEngine.cs` and `BasicRefactoringEngine.cs`.
+- `AdvancedRefactoringEngine.cs` now lives in `RoslynSentinel.Engines.Advanced`.
+
+Re-locate any of these with `Search` before relying on them.
+
 Complete for the five original resolvers, with `LocateSymbolAsync` deliberately kept as a permanent,
 separate-purpose sixth method (see below) rather than migrated.
 

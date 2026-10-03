@@ -1,6 +1,17 @@
 # Extract the syntax-side target resolver out of SymbolNavigationEngine, then unify hint formatting
 
-**Status:** APPROVED 2026-10-03, in progress. Follow-on to `proposal_universal_symbol_resolver.md`, which finished the resolver migration but left the resolution layer inside the navigation engine and never did its hint-formatter unification.
+**Status:** IMPLEMENTED 2026-10-03. Both steps shipped (50378ea, b95e857); two follow-ups remain open in `TODO.md`.
+
+**Outcome:**
+- Step 1 is commit 50378ea. It created the static `SyntaxTargetResolver`, holding 13 members plus `CandidateKind` and `SyntaxNodeCandidate`. There are no forwarders, and every call site was rewritten by `MoveMember`'s make-static conversion, added in b773820.
+- Step 2 is commit b95e857. A single `BuildHintForCandidates` replaces `BuildMemberHint`, `BuildTypeHint` and both `*ForCandidates` adapters.
+  - Member-hint wording is byte-identical.
+  - Type-hint previews are now cut at 50 characters, where the old adapter allowed 80. A test pins this.
+- Still open, tracked in `TODO.md`:
+  - where `DescribeNameOnlyCandidates` and the semantic formatters belong (open question below);
+  - `BasicRefactoringEngine`'s write-only `_symbolNavigationEngine` field, whose removal would collide with the existing 3-arg constructor and change which one DI selects.
+
+Follow-on to `proposal_universal_symbol_resolver.md`, which finished the resolver migration but left the resolution layer inside the navigation engine and never did its hint-formatter unification.
 
 **Decisions taken at approval (2026-10-03):** class name `SyntaxTargetResolver`; static class if every moved member passes the no-instance-state check; move outright with no forwarding methods (fall back to `[Obsolete]` forwarders only if the `NormalizeTypeName` trial shows `MoveMember` cannot rewrite call sites); step 1 and step 2 ship as separate commits.
 
