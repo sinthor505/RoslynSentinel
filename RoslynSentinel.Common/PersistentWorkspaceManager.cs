@@ -172,8 +172,6 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         _symbolResolver = new SymbolResolver(this);
         _debounceTimer = new Timer(OnDebounceTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
 
-        // Lets every response envelope emit serverInfo.binaryPath relative to the loaded solution root.
-        ServerBuildInfo.SolutionRootProvider = GetSolutionRoot;
 
         lock (MsBuildRegistrationLock)
         {

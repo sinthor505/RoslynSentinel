@@ -44,6 +44,25 @@ public class McpServerStatusToolListingTests
     }
 
     [Test]
+    public void Status_ReportsServerBuildIdentity_WithAbsoluteBinaryPath()
+    {
+        var status = Call([], McpServerStatusToolListing.none);
+
+        Assert.That(status.ServerVersion, Is.EqualTo(ServerBuildInfo.Version));
+        Assert.That(status.ServerBuildTimeUtc, Is.EqualTo(ServerBuildInfo.BuildTimeUtc));
+        Assert.That(status.ServerBinaryPath, Is.EqualTo(ServerBuildInfo.BinaryPath));
+        Assert.That(status.ServerPid, Is.EqualTo(Environment.ProcessId));
+    }
+
+    [Test]
+    public void ResponseEnvelope_DoesNotCarryPerResponseServerInfo()
+    {
+        // Build identity lives in McpServerStatus only, to keep every other response small.
+        var envelope = typeof(SentinelCallToolResult<,>);
+        Assert.That(envelope.GetProperty("ServerInfo"), Is.Null);
+    }
+
+    [Test]
     public void AllListing_HasOneEntryPerToolName_PreferringTheActiveClass()
     {
         var status = Call(["WorkspaceTools"], McpServerStatusToolListing.all);

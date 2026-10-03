@@ -75,6 +75,30 @@ public class AdminToolsTests
     }
 
     [Test]
+    public void ControlServer_StopWithLoadedSolution_TellsCallerToRespawnAndReloadThatPath()
+    {
+        var result = AdminTools.ControlServer(
+            AdminTools.McpServerControlOperation.StopServer,
+            AdminTools.McpServerStopConfirmation.ConfirmServerStop,
+            () => { },
+            loadedSolutionPath: @"C:\repo\My.slnx");
+
+        Assert.That(result, Does.Contain("next tool call"));
+        Assert.That(result, Does.Contain(@"LoadSolution(solutionPath: ""C:\repo\My.slnx"")"));
+    }
+
+    [Test]
+    public void ControlServer_StopWithNoSolutionLoaded_StillTellsCallerToLoadSolution()
+    {
+        var result = AdminTools.ControlServer(
+            AdminTools.McpServerControlOperation.StopServer,
+            AdminTools.McpServerStopConfirmation.ConfirmServerStop,
+            () => { });
+
+        Assert.That(result, Does.Contain("call LoadSolution with your solution path"));
+    }
+
+    [Test]
     public void ControlServer_StatusWithConfirmation_DoesNotScheduleExit()
     {
         var exitScheduled = false;

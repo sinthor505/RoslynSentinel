@@ -324,11 +324,17 @@ source before constructing an explanation for it.
 
 **Changed server source and a tool's live behavior contradicts current source? Stop the server.
 That's the whole fix.** VS Code only builds and spawns a fresh server when a session starts — it
-never rebuilds a server that's already running, and there is no version banner in tool responses
-that flags this for you (`McpServerStatus.buildTimeUtc` reads the on-disk DLL's mtime, not the
-loaded assembly's build identity, so it can look fresh while the running process still executes
-pre-fix logic). If you edited RoslynSentinel's own source this session, assume the live server is
-running the *old* binary. Do this immediately, don't troubleshoot around it:
+never rebuilds a server that's already running. The server detects this itself: it compares the
+MVID of every loaded `RoslynSentinel.*.dll` against the newest build of the same assembly under each
+project's `bin/<Config>/`, and any response carries `"isServerBinaryStale": true` while a newer,
+different build exists (the field is omitted when the server is current; it can lag a few seconds
+behind a build). A `Build(level: fullBuild)` writes those DLLs, so the flag shows on the Build
+response itself; `Build(quickBuild)` is in-memory and does not trigger it. Call `McpServerStatus` for
+`binaryStaleness.staleAssemblies` (which assemblies differ), plus `serverVersion`,
+`serverBuildTimeUtc` (the on-disk DLL's mtime, not a loaded-assembly identity), `serverBinaryPath`
+and `serverPid`. The flag only knows about builds written to disk, so if you edited RoslynSentinel's
+own source this session but haven't run a `fullBuild`, assume the live server is running the *old*
+binary. When the flag is set, do this immediately, don't troubleshoot around it:
 1. Call `McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)` (the confirm
    param is a one-value enum guarding against an accidental stop; omitting it returns a refusal and
    stops nothing). Give it a few real seconds to return before assuming
@@ -345,8 +351,8 @@ loads that worktree's *files*, but every tool call still runs the *already-runni
 compiled code — whatever branch it was originally built and launched from. This fails silently: file
 paths resolve, every call succeeds, the output just reflects the wrong branch's logic with no error
 anywhere. Before trusting a live tool result as evidence about a specific worktree's code, confirm
-the connected server was actually built from that worktree (`serverBuildTimeUtc`/DLL mtime vs. `git
-log` on the relevant file). If it wasn't and can't be rebuilt/rebound for that worktree from the
+the connected server was actually built from that worktree (`McpServerStatus`'s `serverBinaryPath`
+and `serverBuildTimeUtc` vs. `git log` on the relevant file). If it wasn't and can't be rebuilt/rebound for that worktree from the
 current session, prefer `dotnet test` against that worktree directly over live MCP calls.
 
 - If `Build` reports a suspicious warning/error count, force a full rebuild; incremental builds can

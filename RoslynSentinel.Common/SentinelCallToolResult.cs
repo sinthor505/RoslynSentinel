@@ -5,9 +5,9 @@ namespace RoslynSentinel.Common;
 // ── Server build info ────────────────────────────────────────────────────────
 
 /// <summary>
-/// Identifies the running server build. Computed once from the entry assembly so tool
-/// responses carry a version signal -> without this, a stale-server bug (running binaries
-/// older than the latest committed source) is invisible until behavior is investigated by hand.
+/// Identifies the running server build. Computed once from the entry assembly and reported by the
+/// McpServerStatus tool (not stamped on every response, to save tokens) so a stale-server bug
+/// (running binaries older than the latest source) can be checked for on demand.
 /// </summary>
 public static class ServerBuildInfo
 {
@@ -37,49 +37,6 @@ public static class ServerBuildInfo
         Pid = Environment.ProcessId;
     }
 
-    /// <summary>
-    /// Supplies the loaded solution's root directory (null when none is loaded) so the per-response
-    /// <c>serverInfo.binaryPath</c> can be emitted relative to it. Set by the workspace manager's
-    /// constructor: a server process has exactly one, so last-constructed-wins only matters to tests.
-    /// Lives here (a delegate) rather than a reference to the manager because this class is also read
-    /// by code that has no manager.
-    /// </summary>
-    public static Func<string?>? SolutionRootProvider { get; set; }
-
-    /// <summary>
-    /// The binary path as stamped on every response envelope: relative to the loaded solution root
-    /// when the binary sits under it (the usual dev setup, <c>bin-vscode/...</c>), absolute otherwise.
-    /// The absolute path stays available from <see cref="BinaryPath"/> and McpServerStatus.serverBinaryPath.
-    /// </summary>
-    public static string EnvelopeBinaryPath => ToEnvelopeBinaryPath(BinaryPath, SolutionRootProvider?.Invoke());
-
-    /// <summary>
-    /// Pure form of <see cref="EnvelopeBinaryPath"/>. Returns <paramref name="binaryPath"/> unchanged when
-    /// there is no solution root or the binary is outside it (a fixture or worktree solution is loaded);
-    /// never produces a <c>..</c> chain. The prefix match is case-insensitive because the loaded root
-    /// (as the caller typed it, e.g. <c>c:\...</c>) and <c>Assembly.Location</c> (<c>C:\...</c>) can differ in case.
-    /// </summary>
-    public static string ToEnvelopeBinaryPath(string binaryPath, string? solutionRoot)
-    {
-        if (string.IsNullOrEmpty(binaryPath) || string.IsNullOrWhiteSpace(solutionRoot))
-        {
-            return binaryPath;
-        }
-
-        try
-        {
-            var root = Path.GetFullPath(solutionRoot).TrimEnd('\\', '/') + Path.DirectorySeparatorChar;
-            var full = Path.GetFullPath(binaryPath);
-            return full.StartsWith(root, StringComparison.OrdinalIgnoreCase)
-                ? full[root.Length..].Replace('\\', '/')
-                : binaryPath;
-        }
-        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
-        {
-            // A diagnostic field must never fail a response: fall back to the absolute path.
-            return binaryPath;
-        }
-    }
 }
 
 // ── ErrorData codes ───────────────────────────────────────────────────────────────
@@ -166,12 +123,11 @@ public static class ToolErrorCode
 public record SentinelCallToolResult<TSuccess, TError>
 {
     /// <summary>
-    /// Server build identity (assembly version + binary write time). Not settable -> every
-    /// <see cref="SentinelCallToolResult{T}"/> carries the same value, computed once in <see cref="ServerBuildInfo"/>.
-    /// Lets a caller notice a running server predates a source change without checking DLL
-    /// timestamps by hand (see docs/current/feedback_stale_server_before_rebuild.md).
+    /// <c>true</c> when a newer build of the server's own binaries exists in the repo than the ones this process
+    /// loaded, i.e. the running server is stale (see <see cref="ServerBinaryStaleness"/>). Null - and so omitted
+    /// from the JSON - when the server is current. Call McpServerStatus for which assemblies differ.
     /// </summary>
-    public ServerInfo ServerInfo { get; init; } = new();
+    public bool? IsServerBinaryStale { get; init; } = ServerBinaryStaleness.EnvelopeFlag;
 
     /// <summary>True when the operation completed without error.</summary>
     public bool IsSuccess
@@ -435,22 +391,5 @@ public sealed class ToolOptionsResult
     {
         get; set;
     }
-}
-
-/// <summary>
-/// Groups the running server's build identity (version, build time, binary path, PID) under a
-/// single nested field instead of 4 flat top-level properties. See <see cref="ServerBuildInfo"/>
-/// for how each value is computed.
-/// </summary>
-public record ServerInfo
-{
-    public string Version { get; init; } = ServerBuildInfo.Version;
-    public DateTime BuildTimeUtc { get; init; } = ServerBuildInfo.BuildTimeUtc;
-    /// <summary>
-    /// Relative to the loaded solution root (with / separators) when the binary is under it, else absolute;
-    /// see <see cref="ServerBuildInfo.EnvelopeBinaryPath"/>. McpServerStatus.serverBinaryPath is always absolute.
-    /// </summary>
-    public string BinaryPath { get; init; } = ServerBuildInfo.EnvelopeBinaryPath;
-    public int Pid { get; init; } = ServerBuildInfo.Pid;
 }
 

@@ -86,7 +86,7 @@ public class AdminTools
      McpServerStopConfirmation? confirmServerStop = null,
      CancellationToken cancellationToken = default)
     {
-        return ControlServer(operation, confirmServerStop, ScheduleProcessExit, cancellationToken);
+        return ControlServer(operation, confirmServerStop, ScheduleProcessExit, _workspaceManager.SolutionPath, cancellationToken);
     }
 
     /// <summary>
@@ -97,6 +97,7 @@ public class AdminTools
         McpServerControlOperation operation,
         McpServerStopConfirmation? confirmServerStop,
         Action scheduleExit,
+        string? loadedSolutionPath = null,
         CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
@@ -115,7 +116,11 @@ public class AdminTools
             }
 
             scheduleExit();
-            return "Stopping. VS Code will rebuild the server binary and spawn a fresh instance on its next tool call.";
+            var loadHint = string.IsNullOrWhiteSpace(loadedSolutionPath)
+                ? "call LoadSolution with your solution path"
+                : $"call LoadSolution(solutionPath: \"{loadedSolutionPath}\")";
+            return "Stopping. VS Code will rebuild the server binary and spawn a fresh instance on your next tool call. "
+                + $"The fresh instance starts with no solution loaded: {loadHint} before any other tool.";
         }
 
         return $"Unknown operation '{operation}'. Valid operations: GetServerStatus, StopServer.";
@@ -127,11 +132,15 @@ public class AdminTools
         // the response to the stdio transport before this call completes - so by the time this
         // method returns, the caller is guaranteed to already have the response in flight. Exiting
         // synchronously here would still be safe by that reasoning, but scheduling it on a
-        // detached continuation with a short delay is cheap defense-in-depth against being wrong
-        // about that ordering, for what is otherwise an irreversible action.
+        // detached continuation with a delay is cheap defense-in-depth against being wrong
+        // about that ordering, for what is otherwise an irreversible action. The delay is 1000 ms
+        // (was 250 ms) because callers intermittently saw only "Connection closed" instead of the
+        // acknowledgement - consistent with the exit occasionally winning the race against the
+        // response flush on a busy server. Not reproducible on demand; if it still recurs, the
+        // fix is to exit from an outgoing-message filter after the response is actually written.
         _ = Task.Run(async () =>
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(250));
+            await Task.Delay(TimeSpan.FromMilliseconds(1000));
             Environment.Exit(0);
         });
     }

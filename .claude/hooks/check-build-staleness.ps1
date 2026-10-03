@@ -1,18 +1,15 @@
-# PostToolUse hook: after a Build call, warn if the live MCP server process is likely still
-# running pre-build logic (CLAUDE.md "Changed server source and a tool's live behavior
-# contradicts current source? Stop the server.").
+# PostToolUse hook: after a Build call, warn if the live MCP server process is still running
+# older binaries than the build that just finished (CLAUDE.md "Changed server source and a
+# tool's live behavior contradicts current source? Stop the server.").
 #
-# WHAT THIS CHECKS: every MCP tool response - confirmed live via the Git tool, not just
-# McpServerStatus - is wrapped in a serverInfo envelope carrying buildTimeUtc and binaryPath
-# (buildTimeUtc is that binaryPath DLL's on-disk LastWriteTimeUtc, confirmed to the second).
-# PostToolUse receives the Build call's own tool_response, which carries this same envelope,
-# so this hook reads serverInfo.buildTimeUtc/binaryPath directly rather than re-deriving
-# anything from the filesystem - McpServerStatusResult itself (see
-# RoslynSentinel.Tools.Basic/ServerStatusTools.cs) has no such field, only the shared
-# envelope does. Comparing that timestamp to the newest .cs file under the repo tells us
-# whether the connected server is running a binary older than the latest source edit - VS
-# Code does not rebuild/relaunch an already-running server on its own, so a stale
-# buildTimeUtc after a successful Build means the *live* server still hasn't picked it up.
+# WHAT THIS CHECKS: the server itself decides staleness (RoslynSentinel.Common/ServerBinaryStaleness.cs):
+# it compares the MVID of every loaded RoslynSentinel.*.dll against the newest build of the same
+# assembly under the repo's <project>/bin/<Config>/ folders, and stamps isServerBinaryStale:true on
+# every tool response while they differ (the field is omitted when the server is current). A
+# fullBuild writes those DLLs, so the Build call's own response carries the flag when the server
+# it ran in is stale. This hook just reads that flag from the Build tool_response; it no longer
+# compares timestamps or scans source files. McpServerStatus.binaryStaleness lists which assemblies
+# differ.
 #
 # This is DETECT-ONLY by design (not auto-restart): restarting is a visible, attributable
 # McpServerControl(stop) tool call the model makes itself, not something a hook does silently
@@ -26,7 +23,7 @@
 #
 # FAIL-OPEN BY DESIGN: any error in this hook must never surface as a build failure.
 #
-# Tests: pwsh -NoProfile -File .claude/hooks/check-build-staleness.Tests.ps1
+# Tests: pwsh -NoProfile -File .claude/hooks/friction-cases.Tests.ps1 (case FC7)
 
 $ErrorActionPreference = 'Stop'
 
@@ -40,51 +37,31 @@ try {
     $toolName = [string]$payload.tool_name
     if ($toolName -ne 'Build' -and $toolName -notmatch '__Build$') { exit 0 }
 
-    $serverInfo = $payload.tool_response.serverInfo
-    if (-not $serverInfo) { $serverInfo = $payload.tool_response.SuccessData.serverInfo }
-    if (-not $serverInfo -or -not $serverInfo.buildTimeUtc) { exit 0 }
-
-    $buildTimeUtc = [datetime]$serverInfo.buildTimeUtc
-    $binaryPath   = [string]$serverInfo.binaryPath
-
-    $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\', '/')
-
-    # serverInfo.binaryPath is emitted relative to the loaded solution root (with / separators)
-    # when the binary is under it, absolute otherwise. It is only displayed below, never parsed,
-    # so resolve a relative one against this repo for a readable message.
-    if ($binaryPath -and -not [System.IO.Path]::IsPathRooted($binaryPath)) {
-        $binaryPath = Join-Path $repoRoot $binaryPath
+    $response = $payload.tool_response
+    # Some hosts hand the MCP result over as a JSON string rather than an object.
+    if ($response -is [string]) {
+        try { $response = $response | ConvertFrom-Json } catch { exit 0 }
     }
 
-    $newestSource = Get-ChildItem -LiteralPath $repoRoot -Recurse -Filter '*.cs' -ErrorAction SilentlyContinue |
-        Where-Object { $_.FullName -notmatch '[\\/](bin|obj|Worktree|worktrees)[\\/]' } |
-        Sort-Object LastWriteTimeUtc -Descending |
-        Select-Object -First 1
+    if ($response.isServerBinaryStale -ne $true) { exit 0 }
 
-    if (-not $newestSource) { exit 0 }
+    [Console]::Error.WriteLine(@"
+NOTE (not blocking): the connected MCP server is running binaries older than the
+build that was just written to disk (isServerBinaryStale:true) - this Build
+call's own success does not mean the LIVE server picked it up.
 
-    if ($buildTimeUtc -lt $newestSource.LastWriteTimeUtc) {
-        [Console]::Error.WriteLine(@"
-NOTE (not blocking): the connected MCP server is running a binary older than
-the newest edited source file - this Build call's own success does not mean
-the LIVE server picked it up.
-
-  connected server binary: $binaryPath
-  server buildTimeUtc:     $($buildTimeUtc.ToString('u'))
-  newest edited source:    $($newestSource.FullName)
-  source last write:       $($newestSource.LastWriteTimeUtc.ToString('u'))
+Call McpServerStatus and read binaryStaleness.staleAssemblies for which assemblies
+differ (loaded copy vs. the newer repo build).
 
 VS Code only spawns a fresh server at session start - it never rebuilds a
 server that's already running. If you edited RoslynSentinel's own source this
-session, the connected server is almost certainly still executing the old
-binary.
+session, the connected server is still executing the old binary.
 
 Per CLAUDE.md: call McpServerControl(operation: stop), wait for the clean
 "Connection closed", then reconnect and re-run LoadSolution. Skip this only if
 other subagents are actively mid-operation against the same server (stopping
 would lose their unwritten work).
 "@)
-    }
 
     exit 0
 }

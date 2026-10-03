@@ -20,7 +20,7 @@ public class ServerStatusTools
 
     [McpServerTool(Name = "McpServerStatus")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Diagnostic snapshot: session-halt state, circuit breaker, loaded workspace, active tool-mode resolution. " +
+    [Description("Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, absolute serverBinaryPath, serverPid, binaryStaleness - lists loaded assemblies for which a newer build exists in the repo; responses also carry isServerBinaryStale:true when any do), session-halt state, circuit breaker, loaded workspace, active tool-mode resolution. " +
         "Tools are gated per mode: before concluding a tool does not exist, call with toolListing=inactive to list declared-but-disabled tools and how to enable each.")]
     public object McpServerStatus(
         [Description("none (default): omit the tool list. inactive: list tools declared in this server but not active in this mode, each with an enabledBy hint. all: list every declared tool.")]
@@ -69,9 +69,11 @@ public class ServerStatusTools
             StatusMessage = "McpServerStatus executed successfully.",
             SuccessData = new McpServerStatusResult(
                 ServerPid: Environment.ProcessId,
-                // Always the absolute path: the per-response serverInfo.binaryPath is root-relative
-                // when possible, and this is the ground truth for stale-binary checks.
+                ServerVersion: ServerBuildInfo.Version,
+                // On-disk DLL mtime, not the loaded assembly's identity: compare against the last source edit.
+                ServerBuildTimeUtc: ServerBuildInfo.BuildTimeUtc,
                 ServerBinaryPath: ServerBuildInfo.BinaryPath,
+                BinaryStaleness: ServerBinaryStaleness.CheckNow(),
                 SessionHalted: _workspaceManager.IsSessionHalted(),
                 SolutionPath: _workspaceManager.SolutionPath,
                 ProjectCount: _workspaceManager.ProjectCount,
@@ -161,7 +163,10 @@ public sealed record McpServerStatusStoppedByScript(bool WasFound, string? Detai
 /// </summary>
 public sealed record McpServerStatusResult(
     int ServerPid,
+    string ServerVersion,
+    DateTime ServerBuildTimeUtc,
     string ServerBinaryPath,
+    ServerBinaryStalenessReport BinaryStaleness,
     bool SessionHalted,
     string? SolutionPath,
     int ProjectCount,

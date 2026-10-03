@@ -119,24 +119,21 @@ $cases += [pscustomobject]@{
 # --- Category 4: Build green but server ran stale binary ---------------------------------
 # Real case: transcript 5f8e6021... lines 3219-3238 - McpServerStatus's PID/build timestamp
 # was unchanged across two commits; the model had to notice and diagnose this manually.
-# Simulated here via the same serverInfo envelope every live tool response actually carries
-# (confirmed against a real Git call: buildTimeUtc matches the DLL's on-disk
-# LastWriteTimeUtc to the second) - a buildTimeUtc older than the newest source file.
-$tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("rs-staleness-fc-" + [guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $tmpRoot -Force | Out-Null
-$freshSource = Join-Path $tmpRoot 'RoslynSentinel.Tools.Basic\ServerStatusTools.cs'
-New-Item -ItemType Directory -Path (Split-Path $freshSource) -Force | Out-Null
-Set-Content -LiteralPath $freshSource -Value '// edited just now'
-(Get-Item $freshSource).LastWriteTimeUtc = (Get-Date).ToUniversalTime()
-$staleBuildTimeUtc = (Get-Date).ToUniversalTime().AddHours(-2).ToString('o')
-
+# Simulated here via the isServerBinaryStale flag the server stamps on a response when a newer build
+# of its own binaries exists in the repo (omitted when current).
 $cases += [pscustomobject]@{
-    N = 'FC7: Build succeeds but serverInfo.buildTimeUtc predates newest source edit (transcript 5f8e6021 lines 3219-3238)'
+    N = 'FC7: Build response carries isServerBinaryStale:true (transcript 5f8e6021 lines 3219-3238)'
     Kind = 'buildstale'
-    RepoRootOverride = $tmpRoot
-    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Build'; tool_input = @{}; tool_response = @{ serverInfo = @{ buildTimeUtc = $staleBuildTimeUtc; binaryPath = 'C:\fake\bin-vscode\deadbeef\Advanced\RoslynSentinel.Server.Advanced.dll'; pid = 12345 }; isSuccess = $true } }
+    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Build'; tool_input = @{}; tool_response = @{ isServerBinaryStale = $true; isSuccess = $true } }
     Want = 'allow'   # detect-only, never blocks
-    MustContainInStderr = @('running a binary older than', 'McpServerControl(operation: stop)')
+    MustContainInStderr = @('older than the', 'McpServerControl(operation: stop)')
+}
+$cases += [pscustomobject]@{
+    N = 'FC7b: Build response without the flag stays silent'
+    Kind = 'buildstale'
+    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Build'; tool_input = @{}; tool_response = @{ isSuccess = $true } }
+    Want = 'allow'
+    MustNotContainInStderr = @('older than the')
 }
 
 # --- Category 5: commit missing Co-Authored-By / scope creep -----------------------------
@@ -194,13 +191,8 @@ $pass = 0; $fail = 0
 foreach ($c in $cases) {
     $json = $c.Payload | ConvertTo-Json -Depth 8 -Compress
     $result = if ($c.Kind -eq 'buildstale') {
-        # check-build-staleness.ps1 resolves repo root from $PSScriptRoot (..\.. from the
-        # hook's own folder) purely to find the newest .cs source file - point a temp copy of
-        # the hook at the fixture root instead of touching the real repo tree.
-        $hookDir = Join-Path $c.RepoRootOverride '.claude\hooks'
-        New-Item -ItemType Directory -Path $hookDir -Force | Out-Null
-        Copy-Item $buildHook (Join-Path $hookDir 'check-build-staleness.ps1') -Force
-        $output = $json | & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $hookDir 'check-build-staleness.ps1') 2>&1
+        # check-build-staleness.ps1 only reads isServerBinaryStale from the payload: run it directly.
+        $output = $json | & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $buildHook 2>&1
         [pscustomobject]@{ Verdict = if ($LASTEXITCODE -eq 2) { 'DENY' } else { 'allow' }; Output = ($output | Out-String) }
     } else {
         if ($c.PSObject.Properties.Match('RepoFixture').Count -gt 0 -and $c.RepoFixture) {
@@ -218,6 +210,9 @@ foreach ($c in $cases) {
     foreach ($needle in @($c.MustContainInStderr)) {
         if ($needle -and $result.Output -notmatch [regex]::Escape($needle)) { $contentOk = $false }
     }
+    foreach ($needle in @($c.MustNotContainInStderr)) {
+        if ($needle -and $result.Output -match [regex]::Escape($needle)) { $contentOk = $false }
+    }
 
     if ($verdictOk -and $contentOk) { $pass++; $mark = 'ok  ' }
     else { $fail++; $mark = 'FAIL' }
@@ -227,7 +222,6 @@ foreach ($c in $cases) {
     }
 }
 
-Remove-Item -LiteralPath $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
 foreach ($r in $fixtureRoots.Values) { Remove-Item -LiteralPath $r -Recurse -Force -ErrorAction SilentlyContinue }
 
 Write-Host ''
