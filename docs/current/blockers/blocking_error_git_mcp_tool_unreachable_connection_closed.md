@@ -42,3 +42,19 @@ A server drop between the last edit and the commit leaves finished work uncommit
 
 1. Reconnect the MCP server (VS Code MCP restart, or `roslynsentinel-vscode-control.ps1 status/restart`), then re-run the commit.
 2. Decide whether `.claude/agents/**` and `.claude/skills/**` should be tracked. If yes, add `!.claude/agents/`, `!.claude/agents/**`, `!.claude/skills/`, `!.claude/skills/**` to `.gitignore`; otherwise commit only `scripts/Get-JournalDigest.ps1`.
+
+## Triage 2026-10-03
+
+**Server status:** Git tool now works (PID 38660, build time 2026-10-03T20:22:10.168543Z, `Git(operation: status)` succeeded). No current issue to debug.
+
+**Checked:** The blocker occurred on 2026-10-01, one day after commit `1ac34688` (2026-10-01T00:08:47) which added `--untracked-files=all` to `StatusAsync`. Examined:
+
+- `RunGitAsync` (GitImpl.cs:408-493): process spawning, UTF-8 encoding setup, stdin/stdout/stderr handling, event handlers for data-received callbacks. No unhandled exceptions in the method body; exception from `process.WaitForExitAsync()` is caught.
+- `OutputDataReceived` / `ErrorDataReceived` handlers (GitImpl.cs:455-456): simple lambdas calling `StringBuilder.AppendLine()`. These run on background threads managed by Process; `AppendLine()` is unlikely to throw.
+- `StatusAsync` exception handling (GitImpl.cs:713-823): wrapped in try-catch; exceptions are logged and returned as error results, not propagated.
+- Process data-received handlers: no mechanism by which `stdout`/`stderr` could be disposed while handlers are still running (handlers complete before `WaitForExitAsync()` returns).
+- Git tool wrapper exception handling (GitTools.cs:155-175): each operation returns a structured `GitResult` or `SentinelCallToolResult<object>` with error data; no exceptions escape to the caller.
+
+**Logs from 2026-10-01:** Not found in bin-vscode/*/logs/. Pre-existing logs were likely cleaned up.
+
+**Conclusion:** The CONNECTION_CLOSED was a transient server failure, likely recoverable by restart (per the blocker's own suggestion). The current code has no obvious crash vector in the git tool path. Cannot establish a concrete cause without either reproducing the failure or examining server logs from the time of the incident. Marking as non-reproducible; leaving open pending further evidence.

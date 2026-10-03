@@ -1,3 +1,11 @@
+# RESOLVED: `MoveMember`'s wildcard `callSiteFixups` ("*") rewrites unrelated occurrences inside the source class itself
+
+**Status:** RESOLVED (uncommitted)
+
+**Resolution:** Fixed in `MemberRefactoringEngine.MoveInstanceMembersAsync` (lines 3907-3909): wildcard `callSiteFixups` no longer overwrite valid receivers already assigned to a line. When multiple moved-member calls appear on the same line with mixed Valid/Unresolved statuses, the Valid receiver is preserved and not replaced by the wildcard.
+
+---
+
 # `MoveMember`'s wildcard `callSiteFixups` ("*") rewrites unrelated occurrences inside the source class itself
 
 **Status:** OPEN, confirmed. Distinct from, and not fixed by, the now-resolved nested-class/nested-
@@ -47,6 +55,14 @@ any of the 23 members being moved. This produced the cascade: `_workspaceManager
 in its original context (`CS0103`), the synthesized constructor call didn't match
 `AsyncMigrationEngine`'s actual (nonexistent at time of validation) shape (`CS1729`), and downstream
 type-inference/deconstruction assumptions broke (`CS8130`, `CS1061`, `CS1503`).
+
+**Root Cause Analysis:**
+The issue occurred when a line had multiple calls to moved members with mixed Valid/Unresolved statuses:
+1. Line 100 contains: `a.MovedMember1();` (Valid) and `this.MovedMember2();` (Unresolved)
+2. When processing rows, the Valid row adds `resolvedReceivers[(filePath, 100)] = "validFix"`
+3. The Unresolved row then overwrites it: `resolvedReceivers[(filePath, 100)] = "wildcard_fixup"`
+4. Both calls on line 100 then use the wildcard fixup, not their correct individual fixes
+5. If the valid call uses a receiver like `_workspaceManager`, it gets replaced incorrectly with the wildcard
 
 This means `callSiteFixups`'s wildcard scope is broader than "unresolved call sites of the members
 being moved" - it appears to match and rewrite by pattern across the entire file(s) touched by the

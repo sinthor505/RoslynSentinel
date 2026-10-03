@@ -987,6 +987,78 @@ public class PreviewInstanceMoveCallSitesTests
         });
     }
 
+    // Regression test for the wildcard callSiteFixup guard: line 3906 in MemberRefactoringEngine.cs.
+    // When a single line has two call sites - one Valid (resolved to a specific receiver) and one
+    // Unresolved (matched by wildcard) - the wildcard fixup must NOT overwrite the Valid receiver.
+    [Test]
+    public async Task MoveMemberAsync_WildcardFixup_DoesNotOverwriteValidReceiverOnSameLineAsync()
+    {
+        const string callerSource = """
+            namespace ContosoOrders.Core;
+
+            public class MixedLineCaller
+            {
+                private readonly MixedLineTarget _target = new MixedLineTarget();
+
+                public void Run(MixedLineSource source)
+                {
+                    source.Foo(); Invoke((MixedLineTarget t) => source.Bar());
+                }
+
+                private static void Invoke(System.Action<MixedLineTarget> action)
+                {
+                }
+            }
+            """;
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/MixedLineSource.cs", """
+                namespace ContosoOrders.Core;
+
+                public class MixedLineSource
+                {
+                    public void Foo() { }
+
+                    public void Bar() { }
+                }
+                """),
+            ("ContosoOrders.Core/MixedLineTarget.cs", """
+                namespace ContosoOrders.Core;
+
+                public class MixedLineTarget
+                {
+                }
+                """),
+            ("ContosoOrders.Core/MixedLineCaller.cs", callerSource));
+
+        // Pin the fixture's preconditions: same line, Valid(Foo) then Ambiguous(Bar). If this drifts the
+        // guard is no longer exercised and the test must say so rather than pass vacuously.
+        var rows = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/MixedLineSource.cs"),
+            "MixedLineSource", ["Foo", "Bar"], "MixedLineTarget");
+        var callerRows = rows.Where(r => r.FilePath.ToString().Contains("MixedLineCaller")).ToList();
+        Assert.That(callerRows, Has.Count.EqualTo(2));
+        Assert.That(callerRows.Select(r => r.Line).Distinct().Count(), Is.EqualTo(1), "Both call sites must be on one line.");
+        Assert.That(callerRows[0].Status, Is.EqualTo(CallSiteStatus.Valid));
+        Assert.That(callerRows[0].SuggestedFix, Is.EqualTo("_target"));
+        Assert.That(callerRows[1].Status, Is.EqualTo(CallSiteStatus.Ambiguous));
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/MixedLineSource.cs"),
+            "MixedLineSource", ["Foo", "Bar"], "MixedLineTarget", null, default, true,
+            new Dictionary<string, string> { ["*"] = "new" });
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.SkippedCallSites, Is.Empty);
+            Assert.That(result.PendingLedgerEntries, Is.Null.Or.Empty);
+            Assert.That(result.AppliedFixups, Is.Null.Or.Empty, "The wildcard must not be applied to a line whose receiver the Valid row already resolved.");
+            var callerContent = result.Changes.Single(kv => kv.Key.ToString().Contains("MixedLineCaller")).Value;
+            var expected = callerSource.Replace("source.Foo()", "_target.Foo()").Replace("source.Bar()", "_target.Bar()");
+            Assert.That(callerContent, Is.EqualTo(expected));
+        });
+    }
+
     // NOTE: no test here for MoveOrderDependent (a call site inside a member that's itself being
     // moved in the same batch). Tried the obvious fixture -- Foo() called unqualified from Baz(),
     // both in memberNames -- and it classifies as Valid, not MoveOrderDependent: when both members

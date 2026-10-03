@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace RoslynSentinel.Common;
 
 /// <summary>
@@ -31,6 +33,12 @@ public static class FileIoHelper
     /// <summary>Writes text to a file, creating the parent directory if needed. Holds the per-path lock for the duration of the write.</summary>
     public static async Task WriteAllTextAsync(FilePathWrapper filePath, string content, CancellationToken cancellationToken = default)
     {
+        await WriteAllTextAsync(filePath, content, encoding: null, cancellationToken);
+    }
+
+    /// <summary>Writes text to a file with optional encoding specification, creating the parent directory if needed. Holds the per-path lock for the duration of the write. If encoding is null, uses UTF-8 without BOM.</summary>
+    public static async Task WriteAllTextAsync(FilePathWrapper filePath, string content, Encoding? encoding, CancellationToken cancellationToken = default)
+    {
         using (await FilePathLock.AcquireAsync(filePath, cancellationToken))
         {
             var directory = Path.GetDirectoryName(filePath.Absolute);
@@ -39,7 +47,9 @@ public static class FileIoHelper
                 Directory.CreateDirectory(directory);
             }
 
-            await File.WriteAllTextAsync(filePath.Absolute, content, cancellationToken);
+            // Use the specified encoding, or default to UTF-8 without BOM.
+            encoding ??= new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+            await File.WriteAllTextAsync(filePath.Absolute, content, encoding, cancellationToken);
         }
     }
 

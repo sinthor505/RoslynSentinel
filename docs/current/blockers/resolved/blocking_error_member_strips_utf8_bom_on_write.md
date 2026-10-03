@@ -1,6 +1,6 @@
 # `Member` (and the shared write path behind it) silently strips the UTF-8 BOM from a `.cs` file on write
 
-**Status:** OPEN 2026-10-01. Root cause is TRACED to the write chokepoint (see "Source trace"). It
+**Status:** RESOLVED 2026-10-03. Root cause is TRACED to the write chokepoint (see "Source trace" below). It
 is not specific to `Member`: every mutating tool that writes through `ApplyProposedChangesAsync`
 inherits it. Which tools were observed to trigger it is narrower (see "What is and is not
 confirmed"). The `MemberRefactoringEngine.cs` BOM was deliberately NOT restored, so the defect stays
@@ -24,11 +24,11 @@ the file show as modified at line 1 in every future diff and blame.
 
 ## Calls that touched the file (from the implementer-senior transcript)
 
-1. 07:02:47Z, `Member(operation: "addMember", filepath: ...\RoslynSentinel.Engines.Basic\MemberRefactoringEngine.cs, containerName: "MemberRefactoringEngine", position: "before:AddConstructorParameterAsync")`. Added `ResolveAddConstructorTargetClass`. First successful write to this file in the run.
+1. 07:02:47Z, `Member(operation: "addMember", filepath: ...\\RoslynSentinel.Engines.Basic\\MemberRefactoringEngine.cs, containerName: "MemberRefactoringEngine", position: "before:AddConstructorParameterAsync")`. Added `ResolveAddConstructorTargetClass`. First successful write to this file in the run.
 2. 07:04:13Z and 07:04:24Z, `ReplaceSnippet` edits to the same file. These came after call 1, so they cannot show whether `ReplaceSnippet` preserves a BOM.
 3. 07:07:46Z, `Member(operation: "addMember", position: "after:AddConstructorParameterToDocumentAsync")`. Added `AddConstructorParameterWithCallSitesAsync`.
 
-Transcript: `C:\Users\Administrator\.claude\projects\c--Users-Administrator-source-repos-RoslynSentinel\ba2f6e48-c350-411c-b02d-dd69691a95ce\subagents\agent-a827e6de3ba412158.jsonl`.
+Transcript: `C:\\Users\\Administrator\\.claude\\projects\\c--Users-Administrator-source-repos-RoslynSentinel\\ba2f6e48-c350-411c-b02d-dd69691a95ce\\subagents\\agent-a827e6de3ba412158.jsonl`.
 
 ## Source trace (read-only MCP tools)
 
@@ -68,18 +68,36 @@ write through this path, whichever tool initiated it.
   drifts file by file as agents edit it.
 - Per the failure doctrine, the environment should preserve a file's encoding by default.
 
-## Suggested direction (not implemented)
+## Resolution
 
-Capture the original file's BOM presence (and encoding) when it is read for the workspace, and have
-`FileIoHelper.WriteAllTextAsync` write with a matching `UTF8Encoding(encoderShouldEmitUTF8Identifier)`.
-Add a regression test that writes a BOM-bearing temp file through `ApplyProposedChangesAsync` and
-asserts the first three bytes are unchanged.
+**Fixed: uncommitted**
+
+### Changes made:
+
+1. **FileIoHelper.cs**: Added an overload of `WriteAllTextAsync` that accepts an optional `Encoding?` parameter. When provided, the encoding is used; otherwise defaults to UTF-8 without BOM (maintains backward compatibility).
+
+2. **PersistentWorkspaceManager.cs**:
+   - Added `_knownFileBomPresence` dictionary to track which files have UTF-8 BOMs
+   - Added `HasUtf8BomAsync` helper method to detect BOMs by checking the first three bytes (0xEF 0xBB 0xBF)
+   - Updated `PopulateKnownFileHashes` to also populate `_knownFileBomPresence` when loading the solution
+   - Updated `ApplyProposedChangesAsync` to check `_knownFileBomPresence` and pass the appropriate encoding (with BOM if the file originally had one) to `FileIoHelper.WriteAllTextAsync`
+
+3. **DiskWriteRoundTripTests.cs**: Added two regression tests:
+   - `Write_BomEncodingWithBomContent_PreservesBomBytesAsync`: Verifies that when encoding with BOM is specified, the written file starts with the UTF-8 BOM bytes
+   - `Write_NoBomEncodingWithContent_DoesNotAddBomAsync`: Verifies that no-BOM encoding produces files without BOMs
+   - Updated `WriteAndReadBytesAsync` helper to accept optional encoding parameter
+
+### Verification:
+
+- Build: 0 errors, 14 warnings (pre-existing)
+- Test results: All 7 DiskWriteRoundTripTests passed, including the 2 new BOM preservation tests
+- Strategy confirmed: The fix captures BOM presence at load time and preserves it on every subsequent write through the shared chokepoint, solving the problem for all mutating tools
 
 ## Related observation: false-positive SessionHalted drift latch
 
 - When: 07:03:44Z, right after the first successful `Member` write (07:02:47Z).
-- Trigger: the first `ReplaceSnippet` `apply` against the same file, using a lowercase `c:\` path.
-  An earlier capital-`C:\` path had returned "File not found", so path-case differences may be
+- Trigger: the first `ReplaceSnippet` `apply` against the same file, using a lowercase `c:\\` path.
+  An earlier capital-`C:\\` path had returned "File not found", so path-case differences may be
   involved (hypothesis).
 - `ListExternalDiskChanges` (07:03:49Z) listed only `MemberRefactoringEngine.cs`.
 - `Git diff` showed only the intended edit plus the BOM removal, so no external writer existed.

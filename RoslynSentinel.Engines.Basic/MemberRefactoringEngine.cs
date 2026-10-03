@@ -3901,7 +3901,9 @@ public class MemberRefactoringEngine
                 continue;
             }
 
-            if (fixups.Match(row.FilePath, row.Line) is { } fixup)
+            // Only apply a fixup if this line doesn't already have a receiver (from a Valid row).
+            // This prevents wildcard fixups from overwriting valid receivers on lines with multiple moved-member calls.
+            if (!resolvedReceivers.ContainsKey((row.FilePath, row.Line)) && fixups.Match(row.FilePath, row.Line) is { } fixup)
             {
                 resolvedReceivers[(row.FilePath, row.Line)] = fixup.Value;
                 callerFixupSources[CallerFixupSiteKey(row.FilePath, row.Line)] = fixup;

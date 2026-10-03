@@ -78,6 +78,16 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // a no-op, regardless of path-key formatting or timing -> see the hard-blocker doc for why this
     // closes a whole class of false positive, not just today's two known bugs.
     private readonly ConcurrentDictionary<FilePathWrapper, string> _knownFileHashes = new();
+    // BOM tracking: path (normalized via FilePathWrapper) -> whether the original file on disk
+    // has a UTF-8 BOM. Populated wholesale on LoadSolutionAsync, updated per-file on a successful
+    // ApplyProposedChangesAsync write (checked by reading the file's first bytes after initial load).
+    // Used to preserve the original file's encoding when writing changes back.
+    private readonly ConcurrentDictionary<FilePathWrapper, bool> _knownFileBomPresence = new();
+    // EOL tracking: path (normalized via FilePathWrapper) -> the dominant line-ending style.
+    // Populated wholesale on LoadSolutionAsync, updated per-file on a successful ApplyProposedChangesAsync
+    // write. Used to normalize incoming newContent to match the file's existing line endings, so
+    // agents that type LF get their edits normalized to the file's native EOL (CRLF for Windows).
+    private readonly ConcurrentDictionary<FilePathWrapper, string> _knownFileEolPresence = new();
 
     /// <summary>
     /// Changesets rejected by <c>ApplyDiff</c>'s whole-file-rewrite size guard, keyed by a
@@ -304,6 +314,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     private void PopulateKnownFileHashes()
     {
         _knownFileHashes.Clear();
+        _knownFileBomPresence.Clear();
+        _knownFileEolPresence.Clear();
         if (CurrentSolution is null)
         {
             return;
@@ -319,13 +331,37 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             try
             {
                 var content = File.ReadAllText(document.FilePath);
-                _knownFileHashes[new FilePathWrapper(document.FilePath)] = ComputeContentHash(content);
+                var filePath = new FilePathWrapper(document.FilePath);
+                _knownFileHashes[filePath] = ComputeContentHash(content);
+                // Detect whether the file has a UTF-8 BOM by checking the first three bytes.
+                _knownFileBomPresence[filePath] = HasUtf8BomAsync(document.FilePath);
+                // Detect the file's dominant line-ending style so we can normalize edits to match.
+                _knownFileEolPresence[filePath] = EolUtilities.DetectDominantEol(content);
             }
             catch (IOException)
             {
                 // Locked/mid-write during load -> leave unhashed; the next write or watcher event
                 // that touches this path will populate it then.
             }
+        }
+    }
+
+    /// <summary>
+    /// Returns true if the file at the given path starts with a UTF-8 BOM (0xEF 0xBB 0xBF).
+    /// </summary>
+    private static bool HasUtf8BomAsync(string filePath)
+    {
+        try
+        {
+            using var file = System.IO.File.OpenRead(filePath);
+            Span<byte> buffer = stackalloc byte[3];
+            int bytesRead = file.Read(buffer);
+            return bytesRead == 3 && buffer[0] == 0xEF && buffer[1] == 0xBB && buffer[2] == 0xBF;
+        }
+        catch
+        {
+            // If we can't read the file, assume no BOM.
+            return false;
         }
     }
 
@@ -1455,11 +1491,20 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     }
                 }
 
+                // Normalize line endings: if this is an existing file, match its dominant EOL.
+                // If it's a new file (preImage is null), keep the content as-is (no normalization).
+                var contentToWrite = newContent;
+                if (preImage != null && _knownFileEolPresence.TryGetValue(filePath, out var targetEol))
+                {
+                    contentToWrite = EolUtilities.NormalizeEol(newContent, targetEol);
+                }
+
                 // Mark as internal change before writing to avoid FileSystemWatcher loop.
                 // Content is recorded alongside the timestamp so the watcher handler can verify
                 // an incoming event actually matches what we wrote, rather than suppressing by
-                // path+timing alone (see OnFileSystemChanged).
-                _internalChanges[filePath] = (DateTime.UtcNow, newContent);
+                // path+timing alone (see OnFileSystemChanged). Use the EOL-normalized content
+                // so the watcher sees what we actually wrote to disk.
+                _internalChanges[filePath] = (DateTime.UtcNow, contentToWrite);
 
                 for (int attempt = 0; attempt <= retryCount; attempt++)
                 {
@@ -1469,12 +1514,20 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         // OnFileSystemChanged can check FilePathLock.IsLocked and skip its
                         // verification read instead of racing the open handle (see the
                         // Changed-event branch above).
-                        await FileIoHelper.WriteAllTextAsync(filePath, newContent, cancellationToken);
+                        // Determine the encoding to use: if the file originally had a UTF-8 BOM, preserve it.
+                        System.Text.Encoding? encoding = null;
+                        if (_knownFileBomPresence.TryGetValue(filePath, out var hadBom) && hadBom)
+                        {
+                            encoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true);
+                        }
+                        await FileIoHelper.WriteAllTextAsync(filePath, contentToWrite, encoding, cancellationToken);
                         success = true;
                         succeeded.Add(filePath);
-                        // Update the hash baseline with what we just wrote -> no extra I/O, newContent
+                        // Update the hash baseline with what we just wrote -> no extra I/O, contentToWrite
                         // is already in memory. See _knownFileHashes's declaration-site comment.
-                        _knownFileHashes[filePath] = ComputeContentHash(newContent);
+                        // Also update the EOL tracking with the normalized content's EOL.
+                        _knownFileHashes[filePath] = ComputeContentHash(contentToWrite);
+                        _knownFileEolPresence[filePath] = EolUtilities.DetectDominantEol(contentToWrite);
                         if (_logger.IsEnabled(LogLevel.Information))
                         {
                             _logger.LogInformation("Wrote changes to {FilePathWrapper} (Attempt {Attempt})", filePath, attempt + 1);
