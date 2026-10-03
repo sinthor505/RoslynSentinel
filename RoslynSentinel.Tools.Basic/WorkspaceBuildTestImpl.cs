@@ -126,7 +126,7 @@ public class WorkspaceBuildTestImpl
     {
         var clean = run.RunSucceeded
             && run.Detail is null
-            && (run.ProjectSummaries?.All(p => p.RunSucceeded && p.Detail is null) ?? true);
+            && (run.ProjectSummaries?.All(p => p.RunSucceeded) ?? true);
         return clean ? run with { StdoutTail = null, StderrTail = null } : run;
     }
 
