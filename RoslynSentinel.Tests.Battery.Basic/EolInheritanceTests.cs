@@ -1,6 +1,7 @@
 // Tests that EOL normalization preserves the file's dominant line ending.
 // DISK tier - asserts on real file bytes, not text content.
-// Tests WriteFile and ApplyDiff which normalize LF content to match the file's existing CRLF EOL.
+// Comprehensive coverage: ReplaceSnippet (single and batch), WriteFile, ApplyDiff,
+// LF preservation, and edge cases (single-line files).
 
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
@@ -40,15 +41,16 @@ public class EolInheritanceTests
         return workspaceTools;
     }
 
-    private (int crlf, int cr, int lf) CountLineEndings(byte[] bytes)
+    private static (int crlf, int cr, int lf) CountLineEndings(byte[] bytes)
     {
         int crlfCount = 0;
         int crCount = 0;
         int lfCount = 0;
 
-        for (int i = 0; i < bytes.Length - 1; i++)
+        // Walk every byte, including the last: a bare LF as the final byte must be counted.
+        for (int i = 0; i < bytes.Length; i++)
         {
-            if (bytes[i] == 0x0D && bytes[i + 1] == 0x0A)
+            if (bytes[i] == 0x0D && i + 1 < bytes.Length && bytes[i + 1] == 0x0A)
             {
                 crlfCount++;
                 i++;
@@ -64,6 +66,145 @@ public class EolInheritanceTests
         }
 
         return (crlfCount, crCount, lfCount);
+    }
+
+    [Test]
+    [Description("ReplaceSnippet: CRLF file with multi-line LF newContent stays CRLF")]
+    public async Task ReplaceSnippet_CrlfFile_MultilineLf_PreservesEol()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        // Known CRLF seed with a unique anchor; 5 line breaks.
+        File.WriteAllText(targetFile, "namespace EolSeed;\r\n\r\npublic class EolMarker\r\n{\r\n}\r\n", new UTF8Encoding(false));
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var result = await workspaceTools.ReplaceSnippet(
+            reason: "test",
+            action: ProposedChangeAction.apply,
+            filePath: targetFile,
+            oldContent: "public class EolMarker",
+            newContent: "// first\n// second\npublic class EolMarker",
+            validateOnApply: false);
+
+        Assert.That(result.IsSuccess, Is.True, $"ReplaceSnippet should succeed: {result.ErrorData?.Message}");
+
+        var (crlf, cr, lf) = CountLineEndings(File.ReadAllBytes(targetFile));
+        Assert.That(lf, Is.EqualTo(0), "File should have no bare LF");
+        Assert.That(cr, Is.EqualTo(0), "File should have no lone CR");
+        Assert.That(crlf, Is.EqualTo(7), "5 original line breaks + 2 added, all CRLF");
+    }
+
+    [Test]
+    [Description("ReplaceSnippet batchEdits: CRLF file with multi-line LF newContent stays CRLF")]
+    public async Task ReplaceSnippetBatch_CrlfFile_MultilineLf_PreservesEol()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        File.WriteAllText(targetFile, "namespace EolSeed;\r\n\r\npublic class EolMarker\r\n{\r\n}\r\n", new UTF8Encoding(false));
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var result = await workspaceTools.ReplaceSnippet(
+            reason: "test batch",
+            action: ProposedChangeAction.apply,
+            batchEdits:
+            [
+                new SnippetEdit
+                {
+                    FilePath = targetFile,
+                    OldContent = "public class EolMarker",
+                    NewContent = "// first\n// second\npublic class EolMarker"
+                }
+            ],
+            validateOnApply: false);
+
+        Assert.That(result.IsSuccess, Is.True, $"ReplaceSnippet batch should succeed: {result.ErrorData?.Message}");
+
+        var (crlf, cr, lf) = CountLineEndings(File.ReadAllBytes(targetFile));
+        Assert.That(lf, Is.EqualTo(0), "File should have no bare LF");
+        Assert.That(cr, Is.EqualTo(0), "File should have no lone CR");
+        Assert.That(crlf, Is.EqualTo(7), "5 original line breaks + 2 added, all CRLF");
+    }
+
+    [Test]
+    [Description("WriteFile: LF file stays LF (no CR added)")]
+    public async Task WriteFile_LfFile_StaysLf()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        
+        // Force LF only
+        var currentContent = File.ReadAllText(targetFile);
+        var lfOnlyContent = currentContent.Replace("\r\n", "\n");
+        File.WriteAllText(targetFile, lfOnlyContent, Encoding.UTF8);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var workspaceTools = BuildTools(workspaceManager);
+        var wholeFileTools = new WholeFileWriteTools(
+            workspaceManager,
+            workspaceTools,
+            new ValidationEngine(workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
+            new DiffEngine(),
+            NullLogger<WholeFileWriteTools>.Instance,
+            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
+
+        // Replace with mixed content
+        var mixedContent = "// Mixed\nclass Test\r\n{\n}\n";
+        var result = await wholeFileTools.WriteFile(
+            reason: "test LF preservation",
+            operation: WriteFileOperation.ReplaceFile,
+            filePath: targetFile,
+            content: mixedContent,
+            validateOnApply: false);
+
+        Assert.That(result.IsSuccess, Is.True);
+
+        var bytes = File.ReadAllBytes(targetFile);
+        var (crlf, cr, lf) = CountLineEndings(bytes);
+
+        Assert.That(crlf, Is.EqualTo(0), "LF file should have no CRLF");
+        Assert.That(lf, Is.GreaterThan(0), "LF file should stay LF-only");
+    }
+
+    [Test]
+    [Description("ReplaceSnippet: Single-line file with no newline gains no line endings")]
+    public async Task ReplaceSnippet_SingleLineNoNewline_Untouched()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        File.WriteAllText(targetFile, "class SingleLine { }", new UTF8Encoding(false));
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var result = await workspaceTools.ReplaceSnippet(
+            reason: "test single line",
+            action: ProposedChangeAction.apply,
+            filePath: targetFile,
+            oldContent: "SingleLine",
+            newContent: "ModifiedLine",
+            validateOnApply: false);
+
+        Assert.That(result.IsSuccess, Is.True, $"ReplaceSnippet should succeed: {result.ErrorData?.Message}");
+        Assert.That(File.ReadAllText(targetFile), Is.EqualTo("class ModifiedLine { }"));
+
+        var (crlf, cr, lf) = CountLineEndings(File.ReadAllBytes(targetFile));
+        Assert.That(crlf + cr + lf, Is.EqualTo(0), "Single-line file should have no line endings");
     }
 
     [Test]
