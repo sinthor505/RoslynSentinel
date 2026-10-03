@@ -12,6 +12,8 @@ namespace RoslynSentinel.Tests.Fakes;
 public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader
 
 {
+    private readonly ScopedOperationLedgerEngine _ledger = new();
+
     public Solution? CurrentSolution
     {
         get; private set;
@@ -61,6 +63,21 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
     {
         var solution = CurrentSolution ?? throw new SolutionNotLoadedException("Solution not loaded.");
+
+        // Scoped operation ledger gate: mirrors PersistentWorkspaceManager's per-target check.
+        // While a ledger is open, a target is refused unless it is one of the ledger's own
+        // tracked files (IsBlocked deliberately allows those through).
+        foreach (var target in changes.Keys.Concat(deletePaths ?? []))
+        {
+            if (_ledger.IsBlocked(target, out var ledgerBlockReason))
+            {
+                return new ApplyChangesResult(
+                    Success: false,
+                    SucceededFiles: [],
+                    FailedFiles: new Dictionary<FilePathWrapper, string> { [target] = ledgerBlockReason ?? "Blocked by an open scoped operation ledger entry." },
+                    Summary: $"Refused - '{Path.GetFileName(target)}' has an open scoped operation ledger entry: {ledgerBlockReason}");
+            }
+        }
 
         // Mirrors PersistentWorkspaceManager's pre-apply validation: a change that introduces a new compile error is
         // rejected and nothing is applied, so tests of that rejection path can run on an in-memory workspace.
@@ -210,29 +227,27 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
 
     public void TrackSymbol(string agentHandle, SymbolHandle handle) => throw new NotImplementedException();
 
-    // IScopedOperationLedger: really implemented (not a throw-stub) for the same reason as
-    // IUnrecoverableBreaker.Trip above - UndoLastApply now calls RecordUndo unconditionally on
-    // every successful revert, so any fake-backed apply/undo test would otherwise crash with
-    // InvalidCastException the moment FakeWorkspaceManager didn't implement this interface at all.
-    // No ledger is ever opened through this fake, so every member here is a safe no-op / empty read.
+    // IScopedOperationLedger: delegates to a real ScopedOperationLedgerEngine so fake-backed tests
+    // can exercise the ledger-opening and blocking behavior of MoveMember and other refactoring tools.
+    // The engine enforces the invariant that only one ledger is open at a time, and tracks which files
+    // are blocked by unresolved ledger entries.
     bool IScopedOperationLedger.TryOpen(string operationName, IReadOnlyList<LedgerEntryBase> entries, out string? rejectionReason, string? openingChangeId)
-    {
-        rejectionReason = "FakeWorkspaceManager does not support the scoped operation ledger.";
-        return false;
-    }
+        => _ledger.TryOpen(operationName, entries, out rejectionReason, openingChangeId);
+
     bool IScopedOperationLedger.IsBlocked(FilePathWrapper filePath, out string? blockReason)
-    {
-        blockReason = null;
-        return false;
-    }
+        => _ledger.IsBlocked(filePath, out blockReason);
+
     void IScopedOperationLedger.RecordFix(IReadOnlyList<string> entryIds, string changeId)
-    {
-    }
+        => _ledger.RecordFix(entryIds, changeId);
+
     void IScopedOperationLedger.RecordUndo(string changeId)
-    {
-    }
-    bool IScopedOperationLedger.TryRelease() => false;
-    IReadOnlyList<LedgerEntryBase> IScopedOperationLedger.GetOpenEntries() => [];
+        => _ledger.RecordUndo(changeId);
+
+    bool IScopedOperationLedger.TryRelease()
+        => _ledger.TryRelease();
+
+    IReadOnlyList<LedgerEntryBase> IScopedOperationLedger.GetOpenEntries()
+        => _ledger.GetOpenEntries();
 
 
 
