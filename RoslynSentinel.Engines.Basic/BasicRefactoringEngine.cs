@@ -10,8 +10,6 @@ using Microsoft.CodeAnalysis.Simplification;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Engines.Basic;
 
 public record ExtractMethodResult(bool Success, string? ErrorMessage, string? BeforeSnippet, string? CallSiteReplacement, string? ExtractedMethodText, string? UpdatedSourceContent);
@@ -32,7 +30,6 @@ public record FormatHunk(int StartLine, int EndLine, List<string> ContextBefore,
 public record FormatPreviewResult(bool Changed, int TotalHunks, List<FormatHunk> Hunks);
 public class BasicRefactoringEngine
 {
-    private readonly SymbolNavigationEngine _symbolNavigationEngine;
     private readonly ILogger<BasicRefactoringEngine> _logger;
     private readonly IWorkspaceManager _workspaceManager;
     private readonly SentinelConfiguration _config;
@@ -48,7 +45,6 @@ public class BasicRefactoringEngine
         _workspaceManager = workspaceManager;
         _logger = new NullLogger<BasicRefactoringEngine>();
         _config = new SentinelConfiguration();
-        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
     }
 
     public BasicRefactoringEngine(IWorkspaceManager workspaceManager, ILogger<BasicRefactoringEngine> logger, SentinelConfiguration config)
@@ -56,15 +52,6 @@ public class BasicRefactoringEngine
         _logger = logger;
         _workspaceManager = workspaceManager;
         _config = config;
-        _symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager);
-    }
-
-    public BasicRefactoringEngine(IWorkspaceManager workspaceManager, SymbolNavigationEngine symbolNavigationEngine, ILogger<BasicRefactoringEngine> logger, SentinelConfiguration config)
-    {
-        _logger = logger;
-        _workspaceManager = workspaceManager;
-        _config = config;
-        _symbolNavigationEngine = symbolNavigationEngine;
     }
 
     public async Task<DocumentEditResult> FormatDocumentAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
