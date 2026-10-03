@@ -160,7 +160,7 @@ public class WorkspaceTools
     // over-cap error can (see WriteToolAdviceHelper) -> and a hardcoded name here would be shown to
     // the model on every single call even when that tool is gated off, which is the run-398 failure
     // in its most persistent form. The error path is where the redirect is actually needed.
-    [Description("Replaces one exact text block with another in a file, for small localized batchEdits. Prefer a structural Roslyn tool for structural changes. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error. Supply either filePath/oldContent/newContent or batchEdits, not both.")]
+    [Description("Replaces one exact text block with another in a file, for small localized edits. Prefer a structural Roslyn tool for structural changes. By default the edited project(s) and their dependents are delta-compiled BEFORE writing, and the change is rejected if it introduces a new compiler error.")]
     public Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippet(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
@@ -489,7 +489,7 @@ public class WorkspaceTools
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
         [Description("Caps groups returned. Only used when summarize=true.")]
         [ToolOptionAttribute(ToolOptionTag.TopN)] int topN = 20,
-        [Description("noBuild (default): diagnostics only. quickBuild/fullBuild: also runs a build check.")]
+        [Description("quickBuild/fullBuild also run a build check.")]
         BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)
         => _buildTest.GetDiagnostics(reason, scope, scopeName, summarize, maxDetails, topN, verify, cancellationToken);
@@ -530,16 +530,16 @@ public class WorkspaceTools
     public Task<SentinelCallToolResult<object>> SafeDeleteUnusedSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
-        [Description("Preferred, with docCommentId - the most reliable resolution path.")] string projectName = "",
-        [Description("Preferred, with projectName - from LocateSymbol/FindReferences.")] string docCommentId = "",
-        [Description("Fallback if projectName/docCommentId aren't available; combine with contextSnippet to disambiguate.")]
+        [Description("Preferred, with docCommentId.")] string projectName = "",
+        [Description("Preferred, with projectName (from LocateSymbol/FindReferences).")] string docCommentId = "",
+        [Description("Fallback; add contextSnippet to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: false)] string? symbolName = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description("Legacy fallback: 1-based line of the declaration site. Requires column too.")]
+        [Description("Fallback: 1-based declaration line; needs column.")]
         [Consumes(DataTag.StartLine, required: false)] int line = 0,
-        [Description("Legacy fallback: 1-based column of the declaration site. Requires line too.")]
+        [Description("Fallback: 1-based declaration column; needs line.")]
         [Consumes(DataTag.Offset, required: false)] int column = 0,
         CancellationToken cancellationToken = default)
         => _projectManagement.SafeDeleteUnusedSymbol(reason, filePath, projectName, docCommentId, symbolName, contextSnippet, lineBefore, lineAfter, line, column, cancellationToken);
@@ -617,32 +617,31 @@ public class WorkspaceTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.ProjectName)]
-    [Description("Unified search entry point. mode selects what's being searched: text (free-text/regex scan - old SearchSolutionText), symbol (declaration lookup by name), references (callers/implementations of a symbol), or a declaration-kind listing (all/namespace/class/interface/method/property/struct/record/\"enum\"/\"enum member\"/constructor/field). query is the search pattern for text or the symbol name for symbol/references; it is ignored for every declaration-kind mode.")]
+    [Description("Unified search. mode selects what's searched: text (free-text/regex scan), symbol (declaration lookup by name), references (callers/implementations of a symbol), or a declaration-kind listing (all, class, method, ...). query is the pattern for text or the symbol name for symbol/references; it is ignored for declaration-kind modes.")]
     public Task<SentinelCallToolResult<object>> SearchSolution(
     [Description(ToolParams.Reason)] ToolCallReason reason,
-    [Description(ToolParams.SearchModeValues)] SearchMode mode,
-    [Description("Search pattern for mode: text, or symbol name for mode: symbol/references. Ignored for mode: all and every declaration-kind mode.")]
+    SearchMode mode,
+    [Description("Pattern for mode: text, or symbol name for symbol/references.")]
         string? query = null,
-    [Description("mode: text only. Restricts to matching file paths (glob). Omit for all files. " +
-        "Supports '*' (within one path segment), '**'/'**/ ' (any depth), '?' (one char), " +
-        "'{a,b,...}' alternation, and '[abc]'/'[!abc]' character classes - any other special " +
-        "character is rejected with an error naming it, not silently treated as literal. A glob " +
+    [Description("mode: text only. Glob restricting file paths (omit for all files). " +
+        "Supports '*' (within one path segment), '**' (any depth), '?' (one char), " +
+        "'{a,b,...}' alternation, and '[abc]'/'[!abc]' character classes. A glob " +
         "containing '/' matches the solution-relative path (e.g. '**/Foo.cs', 'MyProj/*.cs'); a " +
         "glob with no '/' matches the bare filename only (e.g. '*.cs', 'Foo.cs').")]
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
     [Description("mode: text only. Caps total matches scanned.")]
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,
-    [Description("mode: symbol only. Restricts the search to one kind of symbol.")]
+    [Description("mode: symbol only. Restricts to one kind of symbol.")]
         [ExternalInputRequired(DataTag.SymbolKind)] SymbolKindFilter symbolKind = SymbolKindFilter.any,
-    [Description("mode: symbol only. Restricts results to symbols declared inside this type.")]
+    [Description("mode: symbol only. Restricts to symbols declared inside this type.")]
         [ExternalInputRequired(DataTag.ContainingType)] string? containingType = null,
-    [Description("mode: symbol only. Restricts results to symbols declared inside this namespace.")]
+    [Description("mode: symbol only. Restricts to symbols declared inside this namespace.")]
         [ExternalInputRequired(DataTag.ContainingNamespace)] string? containingNamespace = null,
-    [Description("mode: symbol/all/declaration-kind modes. Restricts to one project. Omit for the whole solution.")]
+    [Description("Restricts to one project (symbol/all/declaration-kind modes).")]
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
-    [Description("mode: symbol only. false enables a prefix/contains search instead of an exact name match.")]
+    [Description("mode: symbol only. false = prefix/contains search instead of exact name match.")]
         [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true,
-    [Description("mode: references only, required. callers: call sites only. implementations: overrides/interface implementations only. all: both, clearly labeled.")]
+    [Description("mode: references only (required). callers: call sites; implementations: overrides/interface implementations; all: both.")]
         [Consumes(DataTag.SymbolKind)] FindReferencesKind? referencesKind = null,
     [Description("mode: symbol/references only. Pins resolution when the name is ambiguous across files.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,

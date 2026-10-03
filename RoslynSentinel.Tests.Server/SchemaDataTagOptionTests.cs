@@ -19,6 +19,7 @@ using RoslynSentinel.Server.Basic;
 namespace RoslynSentinel.Tests.Server;
 
 [TestFixture]
+[NonParallelizable] // mutates the process-wide SchemaOptions
 public class SchemaDataTagOptionTests
 {
     // ReplaceSnippet/ModifyModifier live in Refactor mode, ReadFile/LocateSymbol in Workspace mode.

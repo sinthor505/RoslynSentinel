@@ -13,16 +13,20 @@ public static class ToolParams
 
     // Validate-and-apply workflow
     public const string AutoStage =
-        "true (default) = write immediately; false = return content without writing.";
+        "false = return content without writing.";
 
     public const string ValidateOnApply =
-        "true (default) = reject the write if it introduces a new compiler error.";
+        "true = reject the write if it introduces a new compiler error.";
 
     public const string DryRun =
         "true = validate only, don't write.";
 
     public const string ReturnDiff =
-        "true = include a diff preview in the response.";
+        "true = include a diff in the response.";
+
+    // The one batch-semantics sentence shared by every batch-edit param (SnippetEdits, ModifierEdits, ...).
+    public const string BatchSemantics =
+        "Edits resolve against the original file content and apply atomically; two overlapping edits are rejected.";
 
     // Context disambiguation
     /*
@@ -32,10 +36,10 @@ public static class ToolParams
     public const string ContextSnippet = "Short unique verbatim disambiguating fragment for identifying the target";
 
     public const string LineBefore =
-        "Line before contextSnippet, to disambiguate repeats.";
+        "Line before contextSnippet.";
 
     public const string LineAfter =
-        "Line after contextSnippet, to disambiguate repeats.";
+        "Line after contextSnippet.";
 
     /*
     public const string OldContent =
@@ -58,10 +62,8 @@ public static class ToolParams
     public const string NewContent = "Verbatim replacement text for oldContent.";
 
     public const string ContainingTypeName =
-        "Optional. Only needed when the target's name AND contextSnippet are still ambiguous - e.g. " +
-        "two sibling types in the same file declare a same-named member with identical text (identical " +
-        "auto-properties on two records). Name of the type (class/struct/record/enum) that directly " +
-        "declares the target; narrows candidates before contextSnippet matching runs.";
+        "Name of the type that directly declares the target. Only needed when the target's name AND " +
+        "contextSnippet are still ambiguous (e.g. identical members on two sibling types).";
 
     // Enum value sets
     public const string AccessibilityValues =
@@ -91,40 +93,19 @@ public static class ToolParams
     */
 
     public const string SnippetEdits =
- "Batch form of oldContent/newContent: apply several edits in one call instead of one call per " +
- "edit. Mutually exclusive with filepath/oldContent/newContent - supply either the singular " +
- "params or this array, never both. Every edit is matched against each file's ORIGINAL content " +
- "(not against the result of an earlier edit in this same array), then all matches are spliced " +
- "in together and written as one atomic change - so edits within this call never need to account " +
- "for each other's line-number shifts. Two edits in the same file with overlapping matches are " +
- "rejected before anything is written. Each edit is still bound by the same oldContent/newContent " +
- "size limits as a single-edit call.";
+ "Batch form of filePath/oldContent/newContent - use it instead of them, not with them. " + BatchSemantics +
+ " Each edit has the same size limits.";
 
     public const string ModifierEdits =
- "Batch form: apply several add/remove-modifier edits in one call instead of one call per edit. " +
- "Mutually exclusive with filepath/targetName/modifier/action - supply either the singular params " +
- "or this array, never both. Every edit's target is resolved against each file's ORIGINAL syntax " +
- "tree (not against the result of an earlier edit in this same array), then all edits for a file " +
- "are applied together and written as one atomic change. Two edits in the same file that resolve " +
- "to the same target are rejected before anything is written. An 'add static' edit on a method or property also rewrites " +
- "that member's instance-qualified callers (in any file) in the same atomic change, so a file holding such a conversion " +
- "must not also be targeted by other edits in the same batch; two members that only use each other can be listed together.";
+ "Batch form of filePath/targetName/modifier/action - use it instead of them, not with them. " + BatchSemantics +
+ " A file holding an 'add static' conversion must not be targeted by other edits in the same batch; " +
+ "two members that only use each other can be listed together.";
 
     // Added by ModifyAttribute batch support
     public const string AttributeEdits =
-    "Batch form: apply several add/replace/remove-attribute edits in one call instead of one call per " +
-    "edit. Each item takes existingAttribute or its alias attribute (not both with different values). Mutually exclusive with filepath/targetName/existingAttribute/attribute/action/newAttribute - supply " +
-    "either the singular params or this array, never both. Every edit's target is resolved against " +
-    "each file's ORIGINAL syntax tree (not against the result of an earlier edit in this same array), " +
-    "then all edits for a file are applied together and written as one atomic change. Two edits in the " +
-    "same file that resolve to the same target are rejected before anything is written.";
+    "Batch form of the singular filePath/targetName/existingAttribute/action/newAttribute params - use it instead of them, not with them. " + BatchSemantics;
 
     // Added by ModifyBaseType batch support
     public const string BaseTypeEdits =
-    "Batch form: apply several add/remove-base-type edits in one call instead of one call per edit. " +
-    "Mutually exclusive with filepath/typeName/baseTypeName/action - supply either the singular params " +
-    "or this array, never both. Every edit's target is resolved against each file's ORIGINAL syntax " +
-    "tree (not against the result of an earlier edit in this same array), then all edits for a file " +
-    "are applied together and written as one atomic change. Two edits in the same file that resolve " +
-    "to the same target are rejected before anything is written.";
+    "Batch form of filePath/typeName/baseTypeName/action - use it instead of them, not with them. " + BatchSemantics;
 }

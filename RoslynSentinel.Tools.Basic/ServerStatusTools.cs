@@ -20,12 +20,12 @@ public class ServerStatusTools
 
     [McpServerTool(Name = "McpServerStatus")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, absolute serverBinaryPath, serverPid, binaryStaleness - lists loaded assemblies for which a newer build exists in the repo; responses also carry isServerBinaryStale:true when any do), session-halt state, circuit breaker, loaded workspace, active tool-mode resolution. " +
-        "Tools are gated per mode: before concluding a tool does not exist, call with toolListing=inactive to list declared-but-disabled tools and how to enable each.")]
+    [Description("Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, serverBinaryPath, serverPid, binaryStaleness = loaded assemblies with a newer build on disk), session-halt state, circuit breaker, loaded workspace, active tool-mode resolution. " +
+        "Tools are gated per mode: before concluding a tool does not exist, call with toolListing=inactive.")]
     public object McpServerStatus(
-        [Description("none (default): omit the tool list. inactive: list tools declared in this server but not active in this mode, each with an enabledBy hint. all: list every declared tool.")]
+        [Description("inactive: declared tools not active in this mode, with an enabledBy hint. all: every declared tool.")]
         McpServerStatusToolListing toolListing = McpServerStatusToolListing.none,
-        [Description("Case-insensitive substring matched against tool and class names; narrows the toolListing result.")]
+        [Description("Case-insensitive substring of tool/class name; narrows toolListing.")]
         string? toolNameFilter = null,
         CancellationToken cancellationToken = default)
     {

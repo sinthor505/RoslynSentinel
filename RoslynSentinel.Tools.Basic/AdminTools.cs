@@ -82,7 +82,7 @@ public class AdminTools
     public string McpServerControl(
      [Description(ToolParams.Reason)] ToolCallReason reason,
      McpServerControlOperation operation,
-     [Description("Required only with operation=StopServer; the single accepted value is ConfirmServerStop. Guards against an accidental stop.")]
+     [Description("Required with operation=StopServer; only value: ConfirmServerStop.")]
      McpServerStopConfirmation? confirmServerStop = null,
      CancellationToken cancellationToken = default)
     {

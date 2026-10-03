@@ -20,6 +20,7 @@ using RoslynSentinel.Server.Basic;
 namespace RoslynSentinel.Tests.Server;
 
 [TestFixture]
+[NonParallelizable] // mutates the process-wide SchemaOptions, HiddenSchemaParams and the validator schema cache
 public class SchemaLeanProfileTests
 {
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace", "Refactor" };

@@ -14,7 +14,7 @@ public class RefactoringSignatureTools
 
     [McpServerTool(Name = "RenameSymbol", UseStructuredContent = false, OutputSchemaType = typeof(RenameSymbolResultEnvelope))]
     [Produces(DataTag.ChangeId)]
-    [Description("Renames a symbol and all its references across the solution, including mentions in XML doc comments, inline comments, and string literals. Returns changeId and updatedHandle for the renamed symbol, plus residualMentions for any leftover occurrences of the old name that rename couldn't reach (e.g. embedded in an unrelated identifier, or in a non-source file). Does NOT simplify call sites or add/remove using directives - if the rename target's new name needs a namespace not already in scope at a call site, or you want to shorten a fully-qualified reference, use the UsingDirective tool separately.")]
+    [Description("Renames a symbol and all its references across the solution, including XML doc comments, inline comments and string literals. Returns changeId, updatedHandle and residualMentions (old-name occurrences it couldn't reach). Does not touch using directives (use UsingDirective).")]
     public Task<SentinelCallToolResult<object>> RenameSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description(ToolParams.ProjectName)] string projectName,
@@ -31,20 +31,18 @@ public class RefactoringSignatureTools
     // See proposal_structuredcontent_rollout.md.
     [McpServerTool(Name = "MethodSignature", UseStructuredContent = false, OutputSchemaType = typeof(MethodSignatureViewResultEnvelope))]
     [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, or view a method's parameters (general-purpose - not limited to constructors; see ConstructorParameter for DI-style constructor parameters with a backing field). For overloaded methods, combine methodName with contextSnippet/lineBefore/lineAfter to disambiguate.")]
+    [Description("Add, remove, or view a method's parameters (any method; ConstructorParameter handles DI constructor parameters with a backing field). For overloaded methods, combine methodName with contextSnippet/lineBefore/lineAfter.")]
     public Task<SentinelCallToolResult<object>> MethodSignature(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
-        [Description("add: appends a new parameter to the end of the parameter list. remove: only the LAST parameter can be removed (paramName must match it) - a deliberate restriction, since removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely; call sites passing the removed argument positionally are updated automatically, but a call site using named arguments (or one that can't be safely re-parsed) causes the whole operation to be refused with no changes made. view: lists current parameters (name, type, default value); makes no changes.")]
+        [Description("add (needs paramName+paramType): appends a parameter to the end of the list. remove (needs paramName): removes only the LAST parameter, so paramName must match it; positional call sites are updated, but named-argument call sites make the operation refuse. view: lists parameters (name, type, default).")]
         [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
         [Consumes(DataTag.MethodName, required: true)] string methodName,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add/remove, unused for operation=view.
-        [Description("Required for add/remove. Not used for view.")]
         [Consumes(DataTag.SymbolName, required: false)] string? paramName = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add, unused for remove/view.
-        [Description("Required for add. Not used for remove/view.")]
         [Consumes(DataTag.DataType, required: false)] string? paramType = null,
-        [Description("add only. Optional literal or expression for the new parameter's default value (e.g. \"3\", \"\\\"foo\\\"\") - omit for a required parameter. Do NOT pass the literal string \"null\" here to get a null default - use nullDefault:true instead (some MCP clients corrupt the string \"null\" in transit, silently producing a required parameter instead of one defaulted to null). Mutually exclusive with nullDefault.")]
+        [Description("add only. Default value for the new parameter (e.g. \"3\", \"\\\"foo\\\"\"); omit for a required parameter. To default to null use nullDefault:true, not the string \"null\". Mutually exclusive with nullDefault.")]
         [ExternalInputRequired(DataTag.Initializer, required: false)] string? defaultValue = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -53,12 +51,12 @@ public class RefactoringSignatureTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default,
-        [Description("add only. Sets the new parameter's default to the null literal directly, bypassing defaultValue entirely - use this instead of defaultValue:\"null\". Mutually exclusive with defaultValue.")] bool nullDefault = false) =>
+        [Description("add only. Sets the new parameter's default to the null literal (use instead of defaultValue:\"null\"). Mutually exclusive with defaultValue.")] bool nullDefault = false) =>
         _impl.MethodSignature(reason, filePath, operation, methodName, paramName, paramType, defaultValue, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, nullDefault);
 
     [McpServerTool(Name = "ChangeAccessibility")]
     [Produces(DataTag.ChangeId)]
-    [Description("Changes the accessibility (private, public, internal, protected, protected internal, private protected) of a type or member to the given target level in one step - replaces whatever accessibility is currently present, so there's no separate remove/add pairing to get wrong. For overloaded members, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. This tool covers accessibility only - use ChangeAccessibility for accessibility, ModifyAttribute for [Attribute] syntax, and ModifyModifier for non-accessibility keywords (virtual/abstract/static/etc.). Returns changeId.")]
+    [Description("Sets the accessibility of a type or member to the given level, replacing whatever is present. For overloaded members, provide contextSnippet and optionally lineBefore/lineAfter. Accessibility only (others: ModifyModifier, ModifyAttribute). Returns changeId.")]
     public Task<SentinelCallToolResult<AppliedChangeSummary>> ChangeAccessibility(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
@@ -75,22 +73,20 @@ public class RefactoringSignatureTools
 
     [McpServerTool(Name = "ConstructorParameter")]
     [Produces(DataTag.ChangeId)]
-    [Description("Add, remove, or view DI constructor parameters on a class. For classes with the same name in the same file, combine className with contextSnippet/lineBefore/lineAfter to disambiguate. add supports an optional defaultValue/nullDefault so existing direct-construction call sites that don't pass the new argument keep compiling.")]
+    [Description("Add, remove, or view DI constructor parameters on a class. For same-named classes in one file, combine className with contextSnippet/lineBefore/lineAfter. add accepts defaultValue/nullDefault so existing call sites that omit the argument keep compiling.")]
     public Task<SentinelCallToolResult<object>> ConstructorParameter(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
-        [Description("add: creates a private readonly field, parameter, and body assignment in one step; creates a constructor if none exists. remove: deletes the parameter and its assignment statement - the backing field is only deleted if a solution-wide reference check confirms nothing else in the class still uses it, otherwise it's left in place. view: lists current constructor parameters and their inferred backing fields; makes no changes.")]
+        [Description("add (needs paramName+paramType): creates a private readonly field, parameter and body assignment; creates a constructor if none exists. remove (needs paramName): deletes the parameter and its assignment; the backing field is deleted only if nothing else in the class uses it. view: lists constructor parameters and their backing fields.")]
         [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
         [Consumes(DataTag.ClassName, required: true)] string className,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add/remove, unused for operation=view.
-        [Description("Required for add/remove. Not used for view.")]
         [Consumes(DataTag.SymbolName, required: false)] string? paramName = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add, unused for remove/view.
-        [Description("Required for add. Not used for remove/view.")]
         [Consumes(DataTag.DataType, required: false)] string? paramType = null,
-        [Description("add only. Overrides the default derived field name (_camelCase); passing fieldName equal to paramName or its underscore-prefixed form both resolve to '_paramName', never a bare name that would collide with the parameter.")]
+        [Description("add only. Overrides the derived field name (_camelCase); paramName and its underscore-prefixed form both resolve to '_paramName'.")]
         [Consumes(DataTag.SymbolName, required: false)] string? fieldName = null,
-        [Description("add only. Optional literal or expression for the new parameter's default value (e.g. \"null!\", \"new SentinelConfiguration()\") - omit for a required parameter. Setting this lets existing direct-construction call sites that omit this argument keep compiling. Do NOT pass the literal string \"null\" here to get a null default - use nullDefault:true instead (some MCP clients corrupt the string \"null\" in transit, silently producing a required parameter instead of one defaulted to null). Mutually exclusive with nullDefault.")]
+        [Description("add only. Default value for the new parameter (e.g. \"null!\", \"new SentinelConfiguration()\"); omit for a required parameter. To default to null use nullDefault:true, not the string \"null\". Mutually exclusive with nullDefault.")]
         [ExternalInputRequired(DataTag.Initializer, required: false)] string? defaultValue = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -99,7 +95,7 @@ public class RefactoringSignatureTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default,
-        [Description("add only. Sets the new parameter's default to the null literal directly, bypassing defaultValue entirely - use this instead of defaultValue:\"null\". Mutually exclusive with defaultValue.")] bool nullDefault = false,
-        [Description("add only. Supplies the new parameter's argument at existing call sites of the constructor (object creation, target-typed new, `: this(...)`, `: base(...)`) so the parameter can be required instead of defaulted: the class edit and every call-site edit land as one atomic, compile-gated change. Key: \"FilePath:Line\" (full path, 1-based line), \"FilePath:*\" (every call site in that file) or \"*\" (every call site); an exact line beats FilePath:*, which beats *. Value: the argument expression to pass for the new parameter at that site (e.g. \"config\", \"_config\" or \"new SentinelConfiguration()\"); it is appended as a named argument when the site uses named arguments or omits trailing optional parameters. A site with no matching key falls back to defaultValue/nullDefault if given; otherwise the call is rejected with UnresolvedCallSites listing every such site's exact key. Not valid with remove/view.")] Dictionary<string, string>? callSiteFixups = null) =>
+        [Description("add only. Sets the new parameter's default to the null literal (use instead of defaultValue:\"null\"). Mutually exclusive with defaultValue.")] bool nullDefault = false,
+        [Description("add only. Supplies the new parameter's argument at existing constructor call sites (new, target-typed new, `: this(...)`, `: base(...)`) so the parameter can be required instead of defaulted. Key: \"FilePath:Line\" (full path, 1-based line), \"FilePath:*\" (every call site in that file) or \"*\" (every call site); an exact line beats FilePath:*, which beats *. Value: the argument expression for that site (e.g. \"config\", \"_config\" or \"new SentinelConfiguration()\"); appended as a named argument when the site uses named arguments or omits trailing optional parameters. A site with no matching key falls back to defaultValue/nullDefault, else the call is rejected listing each unresolved site's exact key.")] Dictionary<string, string>? callSiteFixups = null) =>
         _impl.ConstructorParameter(reason, filePath, operation, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, defaultValue, nullDefault, callSiteFixups);
 }

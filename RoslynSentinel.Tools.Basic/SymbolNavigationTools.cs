@@ -49,11 +49,11 @@ public class SymbolNavigationTools
 
     [McpServerTool(Name = "GetTypeInfo")]
     [Produces(DataTag.Report)]
-    [Description("Returns type information for a type you already know the name of - hierarchy, members, or both. If you're not sure the type exists or need to disambiguate a common name, use LocateSymbol first. To change an enum's values, use ModifyEnum.")]
+    [Description("Returns type information for a type you already know the name of - hierarchy, members, or both. If unsure it exists or the name is ambiguous, use LocateSymbol first. To change an enum's values, use ModifyEnum.")]
     public Task<SentinelCallToolResult<object>> GetTypeInfo(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.DataType)] string typeName,
-        [Description("hierarchy: base class chain, interfaces, derived types. members: all public/protected members - for an enum, each value appears as a Field member with its explicit/ordinal value inline in Signature (e.g. \"Status.Active = 1\"), and inherited System.Enum/ValueType noise is excluded automatically. both: hierarchy and members together (default).")]
+        [Description("hierarchy: base class chain, interfaces, derived types. members: all public/protected members (an enum's values appear as Field members with their value in Signature, e.g. \"Status.Active = 1\"). both: hierarchy and members.")]
         [ToolOptionAttribute(ToolOptionTag.Filter)] TypeInfoInclude include = TypeInfoInclude.both,
         [Consumes(DataTag.ProjectName)] string? projectName = null,
         [Description("Excludes inherited members when false. Applies only to include=members or include=both.")]

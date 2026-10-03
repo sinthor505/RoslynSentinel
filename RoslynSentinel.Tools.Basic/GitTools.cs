@@ -21,40 +21,40 @@ public class GitTools
 
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("Unified git tool: status, log, diff, show, staging, commit, revert, reset, branch, checkout, push, fetch, pull, abort. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state.")]
+    [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state.")]
     public async Task<SentinelCallToolResult<object>> Git(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("Which git operation to run. abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters; refused when nothing is in progress).")]
+        [Description("abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters).")]
         GitOperation operation,
-        [Description("log: number of commits to return (max 100).")]
+        [Description("log: number of commits (max 100).")]
         int count = 20,
-        [Description("diff: \"working\", \"staged\", a commit hash, or a range. show: a single commit hash/ref. Prefer 'ref' for a commit/branch; 'target' stays accepted (an alias for ref on diff/show), and giving both with different values is refused.")]
+        [Description("diff: \"working\", \"staged\", a commit hash, or a range. show: a commit hash/ref. Prefer 'ref'.")]
         string target = "working",
         [Description("diff/show/log: paths to restrict to (CSV string or JSON array).")]
         string? paths = null,
-        [Description("diff/show: cap on the returned output, measured in UTF-8 bytes (min 1024, max 524288). Output past the cap is cut on a whole-character boundary and marked truncated.")]
+        [Description("diff/show: cap on returned output in UTF-8 bytes (min 1024, max 524288).")]
         int maxBytes = 65536,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit and amend=false; optional when amend=true (omit to keep HEAD's message); unused otherwise.
         [Description("Required for operation=commit unless amend=true (then omitting keeps HEAD's message).")]
         string? message = null,
-        [Description("stage: \"tracked\" (default) stages modified/deleted tracked files only. \"all\" also stages untracked files. \"listed\" stages exactly files/paths. commit: omit to commit exactly what's staged; pass scope only to also stage before committing. files implies scope=listed; pass scope only to override or for tracked/all.")]
+        [Description("stage: \"tracked\" (default) stages modified/deleted tracked files only; \"all\" also stages untracked files; \"listed\" stages exactly files/paths. commit: omit to commit exactly what's staged; pass scope only to also stage first. files implies scope=listed.")]
         GitStageScope? scope = null,
-        [Description("stage/commit: paths to stage (CSV string or JSON array). files implies scope=listed; pass scope only to override or for tracked/all. Alias of paths - pass one, not both.")]
+        [Description("stage/commit: paths to stage (CSV string or JSON array); implies scope=listed.")]
         string? files = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: commitHash is used when operation=revert (required) or
         // operation=show (optional alias for ref/target - different values across them are refused); unused otherwise.
-        [Description("Required for operation=revert: commit hash to revert. Also accepted by operation=show as an alias for ref/target (giving it together with a different ref or target is refused).")]
+        [Description("Required for revert: the commit hash to revert.")]
         string? commitHash = null,
         [Description("revert: true stages without committing; commit separately to finalize.")]
         bool noCommit = false,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: branchName is required for operation=checkout; optional for operation=branch (omit to list).
-        [Description("branch/checkout: branch to create/delete/switch to (branch: omit to list all; checkout: required). log/reset: accepted as an alias for ref (reset has no default ref, so one of the two is required).")]
+        [Description("branch/checkout: branch to create/delete/switch to (branch: omit to list all; checkout: required).")]
         string? branchName = null,
-        [Description("branch: base ref for a new branch (default HEAD). checkout: base ref for a new branch, only valid together with createBranch=true (refused otherwise; ignored if the branch already exists).")]
+        [Description("Base ref for a new branch (default HEAD). checkout: only with createBranch=true.")]
         string? startPoint = null,
-        [Description("branch: true deletes branchName instead of creating it (refuses if unmerged).")]
+        [Description("branch: true deletes branchName instead of creating it.")]
         bool deleteBranch = false,
-        [Description("checkout: true creates branchName from startPoint (default HEAD) if it does not exist; if it already exists this is a plain checkout and the result reports createdNewBranch=false.")]
+        [Description("checkout: true creates branchName from startPoint if it does not exist (otherwise a plain checkout).")]
         bool createBranch = false,
         [Description("push/fetch/pull: the remote to operate on.")]
         string remoteName = "origin",
@@ -62,21 +62,21 @@ public class GitTools
         bool setUpstream = false,
         [Description("pull: true rebases instead of merging.")]
         bool rebase = false,
-        [Description("commit: true amends HEAD instead of a new commit; message becomes optional (omit to keep HEAD's message). Refused when HEAD is already contained in the branch's upstream (force-push is not exposed); allowed when no upstream is configured.")]
+        [Description("commit: true amends HEAD instead of a new commit; message becomes optional (omit to keep HEAD's message).")]
         bool amend = false,
-        [Description("reset: \"soft\" moves HEAD only (changes reappear staged). \"mixed\" (default) also resets the index (changes reappear unstaged). No \"hard\" mode - working tree is never discarded.")]
+        [Description("reset: \"soft\" moves HEAD only (changes stay staged); \"mixed\" (default) also resets the index (changes become unstaged). No \"hard\" mode.")]
         GitResetMode? mode = null,
-        [Description("status/log/diff/show only: an absolute path to a different repo/worktree. Mutating operations always stay scoped to the loaded solution.")]
+        [Description("status/log/diff/show only: absolute path to a different repo/worktree.")]
         string? repoPath = null,
-        [Description("status: most entries to list before the result is truncated to a 10-per-list sample plus full counts (default 50, valid 1-5000; out of range is refused). Untracked files are listed individually (new directories are expanded, ignored files excluded), so any listed path can be passed as-is to stage/commit files. Raise maxEntries to see every changed path.")]
+        [Description("status: most entries to list before truncating to a 10-per-list sample plus full counts (valid 1-5000). Untracked files are listed individually, so any listed path can be passed as-is to stage/commit files.")]
         int maxEntries = 50,
-        [Description("diff/show: true returns a --name-status file list (status letter + path per file) instead of the patch. Mutually exclusive with stat.")]
+        [Description("diff/show: true returns a name-status file list instead of the patch. Mutually exclusive with stat.")]
         bool nameOnly = false,
-        [Description("diff/show: true returns --stat text (per-file change counts and a summary) instead of the patch. Mutually exclusive with nameOnly.")]
+        [Description("diff/show: true returns --stat text instead of the patch. Mutually exclusive with nameOnly.")]
         bool stat = false,
-        [Description("revert: which parent to keep when reverting a MERGE commit (git revert -m N): 1 is the branch that was merged into (almost always right), 2 the branch that was merged in. Required when commitHash is a merge commit (refused without it); refused for a non-merge commit. Only valid for operation=revert.")]
+        [Description("revert: parent to keep when reverting a MERGE commit (git revert -m N): 1 = the branch merged into (almost always right), 2 = the branch merged in. Required for a merge commit.")]
         int? mainline = null,
-        [Description("log/show/diff/reset: the git ref to operate on (a branch, tag, commit hash, HEAD~1, ...). log: start ref. show: the commit to show. diff: what to diff the working tree against (or a range). reset: REQUIRED, the ref to move HEAD to (e.g. \"HEAD~1\" to undo the last commit). Aliases target (diff/show), commitHash (show) and branchName (log/reset) stay accepted; supplying ref together with an alias that has a different value is refused. Not supported for other operations.")]
+        [Description("log/show/diff/reset: the git ref (a branch, tag, commit hash, HEAD~1, ...). log: start ref. show: the commit to show. diff: what to diff the working tree against (or a range). reset: REQUIRED, the ref to move HEAD to (e.g. \"HEAD~1\" to undo the last commit).")]
         string? @ref = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)

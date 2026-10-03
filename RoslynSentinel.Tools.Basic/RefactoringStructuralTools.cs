@@ -115,29 +115,30 @@ public class RefactoringStructuralTools
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         //[Description("addMember: adds raw member source into an existing container (requires containerName + newMemberSource). addTopLevelType: adds a brand-new top-level type declaration - no container (requires newMemberSource as the full type source; optional namespaceName). addTypedMember: generates a property/field via typedKind/typedName/typedType into an existing container (requires containerName + typedKind + typedName + typedType). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use SafeDeleteUnusedSymbol instead. replace: replaces a member's full source, including for small in-member batchEdits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
         //[Description("Add, remove, replace, or view a raw source member, a typed property/field, or a brand-new top-level type. Also views constructors.")]
+        [Description("Required params per operation. addMember: containerName+newMemberSource (optional position). addTypedMember: containerName+typedKind+typedName+typedType. addTopLevelType: newMemberSource (optional namespaceName). remove: memberName. replace: memberName+newMemberSource. view: containerName (lists its members) or memberName (returns that member's full source).")]
         [Consumes(DataTag.Action, required: true)] MemberAction operation,
-        [Description("Required for addMember and addTypedMember. For view: required to list a container's members; optional when memberName is given. Not used for addTopLevelType, remove, or replace.")]
+        [Description("The type that holds the member.")]
         [Consumes(DataTag.SymbolName, required: false)] string? containerName = null,
-        [Description("addTopLevelType only. Disambiguates which namespace to add the new type to, when the file has more than one. Not used otherwise.")]
+        [Description("Target namespace for addTopLevelType, when the file has more than one.")]
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? namespaceName = null,
-        [Description("Required for remove and replace - the member to target. For view: optional; when given, view returns that one member's full source (attributes, doc comment, initializer, accessors/body) instead of listing a container. For overloaded targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
+        [Description("The member to target. For overloads, combine with contextSnippet/lineBefore/lineAfter.")]
         [Consumes(DataTag.SymbolName, required: false)] string? memberName = null,
-        [Description("add or replace: exactly one member declaration (full trivia, signature and body) - a source with 2+ member declarations is rejected with the count, names, and how to split the call. addTopLevelType: the full new type declaration (enum/class/record/struct/interface) - containerName is not used. Required for add. Not used for addTypedMember, remove, or view.")]
+        [Description("Exactly one member declaration (full trivia, signature and body); for addTopLevelType, the full type declaration.")]
         [Consumes(DataTag.SourceCode, required: false)] string? newMemberSource = null,
-        [Description("addMember only: where to insert - null/\"end\" to append, \"after:MemberName\", or \"before:MemberName\". Not used for addTopLevelType, addTypedMember, remove, replace, or view.")]
+        [Description("addMember: where to insert - null/\"end\" to append, \"after:MemberName\", or \"before:MemberName\".")]
         [ExternalInputRequired(DataTag.Position)] string? position = null,
-        [Description("addTypedMember only (required): which kind to generate - \"property\" or \"field\". Requires typedName+typedType alongside it. To add a whole new method, class, record, struct, or interface, use addMember or addTopLevelType with newMemberSource instead.")]
+        [Description("Kind to generate. For a method, class, record, struct or interface use addMember/addTopLevelType instead.")]
         [ExternalInputRequired(DataTag.SymbolKind, required: false)] TypedMemberKind? typedKind = null,
-        [Description("Required for addTypedMember: the generated member's name.")]
+        [Description("The generated member's name.")]
         [ExternalInputRequired(DataTag.SymbolName, required: false)] string? typedName = null,
-        [Description("Required for addTypedMember: the generated member's type.")]
+        [Description("The generated member's type.")]
         [ExternalInputRequired(DataTag.DataType, required: false)] string? typedType = null,
-        [Description(ToolParams.AccessibilityValues + " addTypedMember only.")][ExternalInputRequired(DataTag.Accessibility)] string accessibility = "public",
-        [Description("addTypedMember, typedKind=property only.")][ExternalInputRequired(DataTag.HasSetter)] bool hasSetter = true,
-        [Description("addTypedMember, typedKind=property only.")][ExternalInputRequired(DataTag.IsInit)] bool isInit = false,
-        [Description("addTypedMember, typedKind=field only.")][ExternalInputRequired(DataTag.IsReadonly)] bool isReadonly = false,
-        [Description("addTypedMember, typedKind=field only.")][ExternalInputRequired(DataTag.IsStatic)] bool isStatic = false,
-        [Description("addTypedMember, typedKind=field only: optional initializer expression.")][ExternalInputRequired(DataTag.Initializer)] string? initializer = null,
+        [Description(ToolParams.AccessibilityValues)][ExternalInputRequired(DataTag.Accessibility)] string accessibility = "public",
+        [Description("property only.")][ExternalInputRequired(DataTag.HasSetter)] bool hasSetter = true,
+        [Description("property only.")][ExternalInputRequired(DataTag.IsInit)] bool isInit = false,
+        [Description("field only.")][ExternalInputRequired(DataTag.IsReadonly)] bool isReadonly = false,
+        [Description("field only.")][ExternalInputRequired(DataTag.IsStatic)] bool isStatic = false,
+        [Description("field only: initializer expression.")][ExternalInputRequired(DataTag.Initializer)] string? initializer = null,
         [Description("Forcefully removes the member, skipping any precheck for callers or implementations.")] bool skipPrecheck = false,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -158,7 +159,7 @@ public class RefactoringStructuralTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Consumes(DataTag.SymbolName, required: true)] string enumName,
-        [Description("List of member names in the desired order, either a comma-separated string (e.g. \"Pending,Shipped,Cancelled\") or a JSON array of strings (e.g. [\"Pending\",\"Shipped\",\"Cancelled\"]) - both are accepted; append \"=N\" for an explicit value (e.g. \"Archived=99\"). Omitted names are removed, new names are added, explicit values are preserved, and implicit members take the next ordinal from their predecessor - as if hand-typed. Pass the complete list every time, not a delta.")]
+        [Description("Member names in the desired order, as a comma-separated string (e.g. \"Pending,Shipped,Cancelled\") or a JSON array of strings; append \"=N\" for an explicit value (e.g. \"Archived=99\"). Pass the complete list every time, not a delta: omitted names are removed, new names are added, explicit values are preserved, implicit members take the next ordinal.")]
         [ExternalInputRequired(DataTag.SymbolName, required: true)] string values,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -171,20 +172,20 @@ public class RefactoringStructuralTools
 
     [McpServerTool(Name = "ModifyAttribute")]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds, replaces, or removes an [Attribute] on a type or member. The attribute source goes in existingAttribute (alias: attribute - either name works for add/replace/remove, in the singular params and in each batchEdits[] item). Use ChangeAccessibility for accessibility keywords and ModifyModifier for other modifier keywords, not this tool.")]
+    [Description("Adds, replaces, or removes an [Attribute] on a type or member. Use ChangeAccessibility for accessibility keywords and ModifyModifier for other modifier keywords.")]
     public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyAttribute(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
-        [Description("For overloaded/duplicate-named targets, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
+        [Description("For overloads, combine with contextSnippet/lineBefore/lineAfter.")]
         [Consumes(DataTag.SymbolName, required: false)] string? targetName = null,
-        [Description("The attribute to add/replace/remove. May include or omit the surrounding [ ] brackets. 'attribute' is an accepted alias - supply either one; supplying both with different values is rejected.")]
+        [Description("The attribute to add/replace/remove, with or without [ ] brackets.")]
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string? existingAttribute = null,
         [Consumes(DataTag.Action, required: false)] AttributeModifyAction? action = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for action=replace, unused for add/remove.
-        [Description("Required for action=replace - the attribute to replace existingAttribute with. Not used for add/remove.")]
+        [Description("action=replace: the attribute to replace existingAttribute with.")]
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string? newAttribute = null,
-        [Description("Alias for existingAttribute (handy for action=add: the attribute to add, e.g. \"Obsolete\" or \"[Obsolete]\"). Supply either attribute or existingAttribute; supplying both with different values is rejected.")]
+        [Description("Alias for existingAttribute (e.g. \"Obsolete\" or \"[Obsolete]\").")]
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string? attribute = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -198,7 +199,7 @@ public class RefactoringStructuralTools
 
     [McpServerTool(Name = "ModifyModifier", UseStructuredContent = false, OutputSchemaType = typeof(ModifyModifierResultEnvelope))]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a non-accessibility modifier keyword. Action: add or remove. For overloaded targets, provide contextSnippet (distinctive substring) and optionally lineBefore/lineAfter to disambiguate. Does NOT cover accessibility (private/public/etc.) - use ChangeAccessibility for those, or ModifyAttribute for [Attribute] syntax. ADD STATIC on a method or property is a conversion: the member must use no instance state (no this/base, instance fields, properties, methods or events of its type, even through an implicit this) or the call is refused naming each offending use; every instance-qualified caller (receiver.M(...), receiver.P, receiver?.M(...) on a simple field/local/parameter) is rewritten to Type.M(...) in the same atomic change, a receiver field left unread is reported in findings (never deleted), and members that only use each other may be converted together in one 'edits' batch. Auto-properties, init accessors, virtual/override/abstract members, interface implementations, members of generic types and non-method/property members are refused (a field just gets the keyword). Returns changeId.")]
+    [Description("Adds or removes a non-accessibility modifier keyword (use ChangeAccessibility for private/public/etc., ModifyAttribute for [Attribute]). For overloaded targets, provide contextSnippet and optionally lineBefore/lineAfter. ADD STATIC on a method or property is a conversion: the member must use no instance state (no this/base or instance members of its type), and instance-qualified callers (receiver.M(...), receiver.P) are rewritten to Type.M(...) in the same atomic change; members that only use each other may be converted together in one 'edits' batch. Not supported for add static: auto-properties, init accessors, virtual/override/abstract members, interface implementations, members of generic types. Returns changeId.")]
     public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyModifier(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
@@ -223,10 +224,10 @@ public class RefactoringStructuralTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
-        [Description("For types with the same name in the same file, combine with contextSnippet/lineBefore/lineAfter to disambiguate.")]
+        [Description("For same-named types in one file, combine with contextSnippet/lineBefore/lineAfter.")]
         [Consumes(DataTag.SymbolName, required: false)] string? typeName = null,
-        [Description("The base type or interface name to add or remove.")] string? baseTypeName = null,
-        [Description("add or remove.")] AddRemoveAction? action = null,
+        [Description("The base type or interface name.")] string? baseTypeName = null,
+        AddRemoveAction? action = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
@@ -243,7 +244,7 @@ public class RefactoringStructuralTools
     public Task<SentinelCallToolResult<object>> SyncTypeAndFilename(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
-        [Description("The top-level type in the file to sync the filename to. Omit to default to the first non-nested type declared in the file (fine for the common single-type-per-file case). Name it explicitly to get a specific result when the file declares more than one top-level type - without it, whichever type happens to be declared first wins, which is not necessarily the file's conceptual main type.")]
+        [Description("The top-level type to sync the filename to. Omit to use the first non-nested type in the file; name it explicitly when the file declares more than one top-level type.")]
         string? targetTypeName = null,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
