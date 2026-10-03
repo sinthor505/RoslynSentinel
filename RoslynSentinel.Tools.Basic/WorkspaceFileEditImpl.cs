@@ -480,10 +480,12 @@ public class WorkspaceFileEditImpl
                     // project_replacesnippet_silent_splice_corruption_adjacent_lines memory).
                     var match = ContextHelper.FindExactSnippetPosition(oldText, oldContent, lineBefore, lineAfter);
                     var newFileContent = oldText.ToString().Remove(match.Start, match.Length).Insert(match.Start, newContent);
+                    var dominantEol = EolUtilities.DetectDominantEol(oldText);
+                    var normalizedContent = EolUtilities.NormalizeEol(newFileContent, dominantEol);
                     var targetPath = document.FilePath ?? filePathResolved;
                     var snippetChanges = new Dictionary<FilePathWrapper, string>
                     {
-                        [targetPath] = newFileContent
+                        [targetPath] = normalizedContent
                     };
 
                     if (action == ProposedChangeAction.validate)
@@ -704,7 +706,9 @@ public class WorkspaceFileEditImpl
                 spliced = spliced.Remove(match.Start, match.Length).Insert(match.Start, newContent);
             }
 
-            finalContents[canonicalPath] = spliced;
+            var dominantEol = EolUtilities.DetectDominantEol(originalText);
+            var normalizedSpliced = EolUtilities.NormalizeEol(spliced, dominantEol);
+            finalContents[canonicalPath] = normalizedSpliced;
         }
 
         if (perEditErrors.Count > 0)

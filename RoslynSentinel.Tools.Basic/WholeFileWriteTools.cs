@@ -58,7 +58,21 @@ public class WholeFileWriteTools
                 Directory.CreateDirectory(directory);
             }
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = content };
+            // For ReplaceFile, normalize the new content to the existing file's dominant EOL.
+            // For CreateFile, leave the content as-is (new files use their provided EOL).
+            var normalizedContent = content;
+            if (exists)
+            {
+                var existingText = await FileIoHelper.ReadAllTextIfExistsAsync(filePathResolved, cancellationToken);
+                if (!string.IsNullOrEmpty(existingText))
+                {
+                    var existingSourceText = Microsoft.CodeAnalysis.Text.SourceText.From(existingText);
+                    var dominantEol = EolUtilities.DetectDominantEol(existingSourceText);
+                    normalizedContent = EolUtilities.NormalizeEol(content, dominantEol);
+                }
+            }
+
+            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = normalizedContent };
             var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: validateOnApply, cancellationToken: cancellationToken);
             if (!result.Success && result.ValidationResult != null)
             {
@@ -359,7 +373,22 @@ public class WholeFileWriteTools
                         };
                     }
 
-                    var result = await _workspaceManager.ApplyProposedChangesAsync(resolvedChanges, retryCount, validateChanges: validateOnApply);
+                    // Normalize each file's content to its existing dominant EOL.
+                    var normalizedChanges = new Dictionary<FilePathWrapper, string>();
+                    foreach (var (changeTargetPath, newContent) in resolvedChanges)
+                    {
+                        var existingText = await FileIoHelper.ReadAllTextIfExistsAsync(changeTargetPath, cancellationToken);
+                        var normalizedContent = newContent;
+                        if (!string.IsNullOrEmpty(existingText))
+                        {
+                            var existingSourceText = Microsoft.CodeAnalysis.Text.SourceText.From(existingText);
+                            var dominantEol = EolUtilities.DetectDominantEol(existingSourceText);
+                            normalizedContent = EolUtilities.NormalizeEol(newContent, dominantEol);
+                        }
+                        normalizedChanges[changeTargetPath] = normalizedContent;
+                    }
+
+                    var result = await _workspaceManager.ApplyProposedChangesAsync(normalizedChanges, retryCount, validateChanges: validateOnApply);
                     if (!result.Success && result.ValidationResult != null)
                         return new SentinelCallToolResult<object>()
                         {
@@ -392,7 +421,22 @@ public class WholeFileWriteTools
                 {
                     try
                     {
-                        var validationResult = await _validationEngine.ValidateChangesAsync(resolvedChanges, cancellationToken: cancellationToken);
+                        // Normalize each file's content to its existing dominant EOL before validation.
+                        var normalizedValidateChanges = new Dictionary<FilePathWrapper, string>();
+                        foreach (var (valPath, valContent) in resolvedChanges)
+                        {
+                            var existingText = await FileIoHelper.ReadAllTextIfExistsAsync(valPath, cancellationToken);
+                            var normalizedContent = valContent;
+                            if (!string.IsNullOrEmpty(existingText))
+                            {
+                                var existingSourceText = Microsoft.CodeAnalysis.Text.SourceText.From(existingText);
+                                var dominantEol = EolUtilities.DetectDominantEol(existingSourceText);
+                                normalizedContent = EolUtilities.NormalizeEol(valContent, dominantEol);
+                            }
+                            normalizedValidateChanges[valPath] = normalizedContent;
+                        }
+
+                        var validationResult = await _validationEngine.ValidateChangesAsync(normalizedValidateChanges, cancellationToken: cancellationToken);
                         return validationResult.Success ? new SentinelCallToolResult<object>()
                         {
                             IsSuccess = true,
