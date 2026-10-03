@@ -312,6 +312,25 @@ public static class MoveMemberTextEdits
         return sb.ToString();
     }
 
+    /// <summary>
+    /// Maps a position in a document's ORIGINAL text to the same position in the text produced by applying
+    /// <paramref name = "edits"/>: every edit that ends at or before the position shifts it by its length delta.
+    /// Used to report line numbers of rewritten sites against the final text. The position must not lie inside an edit's span.
+    /// </summary>
+    public static int MapPositionThroughEdits(IEnumerable<TextChange> edits, int position)
+    {
+        var shift = 0;
+        foreach (var edit in edits)
+        {
+            if (edit.Span.End <= position && edit.Span.Start < position)
+            {
+                shift += (edit.NewText?.Length ?? 0) - edit.Span.Length;
+            }
+        }
+
+        return position + shift;
+    }
+
     private static TextChange? ReplaceQualifier(SyntaxNode qualifier, string targetClassName)
     {
         return qualifier.ToString() == targetClassName ? null : new TextChange(qualifier.Span, targetClassName);

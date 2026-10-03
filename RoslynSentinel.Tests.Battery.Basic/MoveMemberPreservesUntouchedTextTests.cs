@@ -1,3 +1,6 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using RoslynSentinel.Common;
@@ -620,6 +623,276 @@ public class MoveMemberPreservesUntouchedTextTests
         });
         Assert.That(sourceNewText, Does.Not.Contain("cref = "), "cref attributes must not gain spaces around equals");
         Assert.That(callerNewText, Does.Not.Contain("cref = "), "cref attributes must not gain spaces around equals");
+    }
+
+    [Test]
+    public async Task InstanceMethodToExistingClass_WithCRLF_PreservesUntouchedContent()
+    {
+        const string eol = "\r\n";
+        var (source, target, caller, movedMember) = InstanceMoveCrlfSources();
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Target.cs", target),
+            ("Caller.cs", caller));
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("Source.cs"),
+            "A",
+            new[] { "Count" },
+            "B",
+            null,
+            CancellationToken.None);
+
+        Assert.That(result.SkippedCallSites, Is.Empty, "The single B field makes the call site resolvable automatically");
+        Assert.That(result.Changes.Count, Is.EqualTo(3), "Expected the source, the target and the caller");
+        var sourceNewText = result.Changes[result.Changes.Keys.Single(k => Path.GetFileName(k.ToString()) == "Source.cs")];
+        var targetNewText = result.Changes[result.Changes.Keys.Single(k => Path.GetFileName(k.ToString()) == "Target.cs")];
+        var callerNewText = result.Changes[result.Changes.Keys.Single(k => Path.GetFileName(k.ToString()) == "Caller.cs")];
+
+        foreach (var text in new[] { sourceNewText, targetNewText, callerNewText })
+        {
+            Assert.That(text, Does.Contain(eol));
+            Assert.That(text.Replace(eol, string.Empty), Does.Not.Contain("\n"), "No bare LF may be mixed into a CRLF file");
+            Assert.That(text.EndsWith(eol), "Every file should keep its final newline");
+            Assert.That(text, Does.Not.Contain("cref = "), "cref attributes must not gain spaces around equals");
+        }
+
+        // Source: only the member (with its doc comment and one blank line) is removed; the cref outside it is untouched.
+        AssertOnlySpansChanged(source, sourceNewText, new[]
+        {
+            new ContentSpan(movedMember + eol, string.Empty)
+        });
+
+        // Target: only the moved member is appended after the last existing member.
+        AssertOnlySpansChanged(target, targetNewText, new[]
+        {
+            new ContentSpan(
+                "    public string Describe() => \"target\";" + eol,
+                "    public string Describe() => \"target\";" + eol + eol + movedMember)
+        });
+
+        // Caller: only the receiver expression of the call site changes.
+        AssertOnlySpansChanged(caller, callerNewText, new[]
+        {
+            new ContentSpan("a.Count(", "_b.Count(")
+        });
+    }
+
+    [Test]
+    public async Task InstanceMethodToClassInSameFile_WithLFAndBlockNamespace_PreservesUntouchedContent()
+    {
+        const string eol = "\n";
+        var source = Lines(eol,
+            "using System;",
+            "",
+            "namespace Example",
+            "{",
+            "    public record CallerInfo(",
+            "        int Line,",
+            "        string Name);",
+            "",
+            "    public class A",
+            "    {",
+            "        public int Count(string input) => input.Length;",
+            "",
+            "        /// <summary>Other method, see <see cref=\"A.Count\"/>.</summary>",
+            "        public int Process(string x) => x.Length;",
+            "    }",
+            "",
+            "    public class B",
+            "    {",
+            "        public int Size() => 0;",
+            "    }",
+            "}");
+        var caller = Lines(eol,
+            "using Example;",
+            "",
+            "public class Caller",
+            "{",
+            "    private readonly B _b = new B();",
+            "",
+            "    /// <summary>Uses <see cref=\"A.Count\"/>.</summary>",
+            "    public int Run()",
+            "    {",
+            "        var a = new A();",
+            "        return a.Count(",
+            "            \"test\");",
+            "    }",
+            "}");
+        var movedMember = Lines(eol, "        public int Count(string input) => input.Length;");
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Caller.cs", caller));
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("Source.cs"),
+            "A",
+            new[] { "Count" },
+            "B",
+            null,
+            CancellationToken.None);
+
+        Assert.That(result.SkippedCallSites, Is.Empty, "The single B field makes the call site resolvable automatically");
+        Assert.That(result.Changes.Count, Is.EqualTo(2), "Expected the source file (holding both classes) and the caller");
+        var sourceNewText = result.Changes[result.Changes.Keys.Single(k => Path.GetFileName(k.ToString()) == "Source.cs")];
+        var callerNewText = result.Changes[result.Changes.Keys.Single(k => Path.GetFileName(k.ToString()) == "Caller.cs")];
+
+        foreach (var text in new[] { sourceNewText, callerNewText })
+        {
+            Assert.That(text, Does.Not.Contain("\r"), "LF files must stay LF");
+            Assert.That(text.EndsWith(eol), "Every file should keep its final newline");
+            Assert.That(text, Does.Not.Contain("cref = "), "cref attributes must not gain spaces around equals");
+        }
+
+        // Source file: the member is cut out of A and appended to B, nothing else moves.
+        AssertOnlySpansChanged(source, sourceNewText, new[]
+        {
+            new ContentSpan(movedMember + eol, string.Empty),
+            new ContentSpan(
+                "        public int Size() => 0;" + eol,
+                "        public int Size() => 0;" + eol + eol + movedMember)
+        });
+
+        AssertOnlySpansChanged(caller, callerNewText, new[]
+        {
+            new ContentSpan("a.Count(", "_b.Count(")
+        });
+    }
+
+    [Test]
+    public async Task InstanceMovePreview_TrialTextEqualsAppliedTextAndCallSiteStillResolves()
+    {
+        const string eol = "\r\n";
+        var (source, target, caller, movedMember) = InstanceMoveCrlfSources();
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Target.cs", target),
+            ("Caller.cs", caller));
+
+        // The call-site preview still classifies the wrapped call as automatically resolvable.
+        var rows = await engine.PreviewInstanceMoveCallSitesAsync(workspace.PathOf("Source.cs"), "A", new[] { "Count" }, "B", null, CancellationToken.None);
+        var callSite = rows.Single(r => r.CallExpression == "a.Count");
+        Assert.That(callSite.Status, Is.EqualTo(CallSiteStatus.Valid));
+        Assert.That(callSite.SuggestedFix, Is.EqualTo("_b"));
+
+        // The preview's trial compile text is built by the same helpers (and the same arguments) the apply path
+        // uses, so for the documents the preview touches it must equal what apply writes, byte for byte.
+        var solution = await workspace.Manager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var sourceDocument = solution.GetDocumentIdsWithFilePath(workspace.PathOf("Source.cs")).Select(solution.GetDocument).First()!;
+        var targetDocument = solution.GetDocumentIdsWithFilePath(workspace.PathOf("Target.cs")).Select(solution.GetDocument).First()!;
+        var root = (CompilationUnitSyntax)(await sourceDocument.GetSyntaxRootAsync())!;
+        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().First(c => c.Identifier.Text == "A");
+        var targetRoot = (await targetDocument.GetSyntaxRootAsync())!;
+        var targetClassNode = targetRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().First(c => c.Identifier.Text == "B");
+        var membersToMove = classNode.Members.Where(m => m is MethodDeclarationSyntax method && method.Identifier.Text == "Count").ToList();
+
+        var previewEdits = new Dictionary<DocumentId, List<TextChange>>();
+        var (previewTexts, previewNewFiles) = await MemberRefactoringEngine.AddInstanceMoveStructuralEditsAsync(previewEdits, sourceDocument, root, classNode, membersToMove, "B", targetDocument, targetClassNode, false, CancellationToken.None);
+        var preview = await MemberRefactoringEngine.MaterializeDocumentEditsAsync(solution, previewEdits, previewTexts, CancellationToken.None);
+
+        var applied = await engine.MoveMemberAsync(workspace.PathOf("Source.cs"), "A", new[] { "Count" }, "B", null, CancellationToken.None);
+
+        Assert.That(previewNewFiles, Is.Empty, "The preview never synthesizes a new class file");
+        Assert.That(preview.Count, Is.EqualTo(2), "The preview touches only the source and target documents - never callers");
+        foreach (var fileName in new[] { "Source.cs", "Target.cs" })
+        {
+            var previewText = preview[preview.Keys.Single(k => Path.GetFileName(k.ToString()) == fileName)];
+            var appliedText = applied.Changes[applied.Changes.Keys.Single(k => Path.GetFileName(k.ToString()) == fileName)];
+            Assert.That(previewText, Is.EqualTo(appliedText), $"Preview text for {fileName} must equal the applied text");
+        }
+
+        // And the preview text carries no collateral changes either.
+        AssertOnlySpansChanged(source, preview[preview.Keys.Single(k => Path.GetFileName(k.ToString()) == "Source.cs")], new[]
+        {
+            new ContentSpan(movedMember + eol, string.Empty)
+        });
+        AssertOnlySpansChanged(target, preview[preview.Keys.Single(k => Path.GetFileName(k.ToString()) == "Target.cs")], new[]
+        {
+            new ContentSpan(
+                "    public string Describe() => \"target\";" + eol,
+                "    public string Describe() => \"target\";" + eol + eol + movedMember)
+        });
+    }
+
+    /// <summary>
+    /// CRLF fixture for the instance-member move tests: an instance method with a wrapped signature on class A,
+    /// a target class B, and a caller that holds exactly one B field (so the call site resolves automatically).
+    /// </summary>
+    private static (string Source, string Target, string Caller, string MovedMember) InstanceMoveCrlfSources()
+    {
+        const string eol = "\r\n";
+        var source = Lines(eol,
+            "using System;",
+            "",
+            "namespace Example;",
+            "",
+            "public record CallerInfo(",
+            "    int Line,",
+            "    string Name);",
+            "",
+            "public class A",
+            "{",
+            "    /// <summary>",
+            "    /// Counts the characters.",
+            "    /// </summary>",
+            "    public int Count(",
+            "        string input,",
+            "        bool trim = false)",
+            "    {",
+            "        var text = trim ? input.Trim() : input;",
+            "        return text.Length;",
+            "    }",
+            "",
+            "    /// <summary>Other method, see <see cref=\"A.Count\"/>.</summary>",
+            "    public int Process(string x) => x.Length;",
+            "}");
+        var target = Lines(eol,
+            "namespace Example;",
+            "",
+            "public record TargetInfo(",
+            "    string Result,",
+            "    int Value);",
+            "",
+            "public class B",
+            "{",
+            "    /// <summary>Existing member on target.</summary>",
+            "    public int Size() => 0;",
+            "",
+            "    /// <summary>Another existing member.</summary>",
+            "    public string Describe() => \"target\";",
+            "}");
+        var caller = Lines(eol,
+            "using Example;",
+            "",
+            "public class Caller",
+            "{",
+            "    private readonly B _b = new B();",
+            "",
+            "    /// <summary>Wrapped call.</summary>",
+            "    /// <remarks>See <see cref=\"A.Count\"/>.</remarks>",
+            "    public int Run()",
+            "    {",
+            "        var a = new A();",
+            "        var total = a.Count(",
+            "            \"test\",",
+            "            true);",
+            "        return total;",
+            "    }",
+            "}");
+        var movedMember = Lines(eol,
+            "    /// <summary>",
+            "    /// Counts the characters.",
+            "    /// </summary>",
+            "    public int Count(",
+            "        string input,",
+            "        bool trim = false)",
+            "    {",
+            "        var text = trim ? input.Trim() : input;",
+            "        return text.Length;",
+            "    }");
+        return (source, target, caller, movedMember);
     }
 
     /// <summary>Joins lines with <paramref name="eol"/> and terminates the last line with it too.</summary>

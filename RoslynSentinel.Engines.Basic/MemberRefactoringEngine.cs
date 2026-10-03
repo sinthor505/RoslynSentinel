@@ -3581,6 +3581,77 @@ public class MemberRefactoringEngine
         return new MoveMemberResult(result, new List<SkippedCallSite>());
     }
 
+    /// <summary>
+    /// Adds the structural half of an instance move to <paramref name = "editsByDocument"/> (which may already hold
+    /// call-site receiver edits): the moved members are cut out of the source class and appended to the existing
+    /// target class (same file or not), or - only when <paramref name = "createNewClassFile"/> is set and there is no
+    /// existing target - written into a brand-new class file returned in NewFiles. Everything is a TextChange against
+    /// the original text, so apply and preview share one definition of "what a move edits".
+    /// Texts returns the original text of every document that has edits.
+    /// </summary>
+    public static async Task<(Dictionary<DocumentId, SourceText> Texts, Dictionary<FilePathWrapper, string> NewFiles)> AddInstanceMoveStructuralEditsAsync(Dictionary<DocumentId, List<TextChange>> editsByDocument, Document sourceDocument, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string targetClassName, Document? targetDocument, ClassDeclarationSyntax? targetClassNode, bool createNewClassFile, CancellationToken cancellationToken)
+    {
+        var sourceText = await sourceDocument.GetTextAsync(cancellationToken);
+        var texts = new Dictionary<DocumentId, SourceText> { [sourceDocument.Id] = sourceText };
+        var newFiles = new Dictionary<FilePathWrapper, string>();
+        var sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, editsByDocument.TryGetValue(sourceDocument.Id, out var existingSourceEdits) ? existingSourceEdits : new List<TextChange>(), out var insideMovedMemberEdits);
+        editsByDocument[sourceDocument.Id] = sourceEdits;
+        if (targetDocument?.FilePath != null && targetClassNode != null)
+        {
+            bool sameFile = targetDocument.Id == sourceDocument.Id;
+            var targetText = sameFile ? sourceText : await targetDocument.GetTextAsync(cancellationToken);
+            texts[targetDocument.Id] = targetText;
+            var targetEol = EolUtilities.DetectDominantEol(targetText);
+            var targetIndent = MoveMemberTextEdits.GetTargetMemberIndentation(targetText, targetClassNode);
+            var blocks = membersToMove.Select(m => MoveMemberTextEdits.BuildMovedMemberText(sourceText, m, insideMovedMemberEdits.Where(e => m.FullSpan.Contains(e.Span)).ToList(), MoveMemberTextEdits.GetMemberIndentation(sourceText, m), targetIndent, targetEol)).ToList();
+            var insertion = MoveMemberTextEdits.BuildInsertion(targetText, targetClassNode, MoveMemberTextEdits.JoinMovedMembers(membersToMove, blocks, targetEol), targetEol);
+            if (sameFile)
+            {
+                sourceEdits.Add(insertion);
+            }
+            else
+            {
+                if (!editsByDocument.TryGetValue(targetDocument.Id, out var targetEdits))
+                {
+                    targetEdits = new List<TextChange>();
+                    editsByDocument[targetDocument.Id] = targetEdits;
+                }
+
+                targetEdits.Add(insertion);
+            }
+        }
+        else if (createNewClassFile)
+        {
+            var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
+            var newFilePath = Path.Combine(Path.GetDirectoryName(sourceDocument.FilePath)!, $"{targetClassName}.cs");
+            newFiles[newFilePath] = MoveMemberTextEdits.BuildNewClassFileText(root.Usings.Select(u => u.ToString()).ToList(), ns?.Name.ToString(), ns is FileScopedNamespaceDeclarationSyntax, targetClassName, sourceText, membersToMove, insideMovedMemberEdits, EolUtilities.DetectDominantEol(sourceText));
+        }
+
+        return (texts, newFiles);
+    }
+
+    /// <summary>
+    /// Applies each document's edits to that document's ORIGINAL text (taken from <paramref name = "knownTexts"/> when
+    /// already loaded) and returns the new full text keyed by file path. Documents with no edits are omitted.
+    /// </summary>
+    public static async Task<Dictionary<FilePathWrapper, string>> MaterializeDocumentEditsAsync(Solution solution, Dictionary<DocumentId, List<TextChange>> editsByDocument, Dictionary<DocumentId, SourceText> knownTexts, CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<FilePathWrapper, string>();
+        foreach (var (documentId, edits) in editsByDocument)
+        {
+            var document = solution.GetDocument(documentId);
+            if (document?.FilePath == null || edits.Count == 0)
+            {
+                continue;
+            }
+
+            var originalText = knownTexts.TryGetValue(documentId, out var known) ? known : await document.GetTextAsync(cancellationToken);
+            result[document.FilePath] = MoveMemberTextEdits.ApplyChanges(originalText, edits);
+        }
+
+        return result;
+    }
+
     private async Task<MoveMemberResult> MoveInstanceMembersAsync(Solution solution, FilePathWrapper filePath, string className, List<MemberDeclarationSyntax> membersToMove, string targetClassName, string[] memberNames, FilePathWrapper? targetFilePath, Document? existingTargetDoc, ClassDeclarationSyntax? existingTargetClassNode, Dictionary<string, string>? callSiteFixups, CancellationToken cancellationToken)
     {
         var rows = await PreviewInstanceMoveCallSitesAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken);
@@ -3633,57 +3704,22 @@ public class MemberRefactoringEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).First()!;
         var root = (CompilationUnitSyntax)(await document.GetSyntaxRootAsync(cancellationToken))!;
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().First(c => c.Identifier.Text == className);
-        var updatedSourceClass = classNode.RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!;
-        var result = new Dictionary<FilePathWrapper, string>();
-        if (existingTargetDoc?.FilePath != null && existingTargetClassNode != null)
-        {
-            bool sameFile = string.Equals(Path.GetFullPath(filePath), Path.GetFullPath(existingTargetDoc.FilePath), StringComparison.OrdinalIgnoreCase);
-            if (sameFile)
-            {
-                var afterSourceEdit = root.ReplaceNode(classNode, updatedSourceClass);
-                var targetAfterSourceEdit = afterSourceEdit.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == targetClassName);
-                var finalRoot = targetAfterSourceEdit != null ? afterSourceEdit.ReplaceNode(targetAfterSourceEdit, targetAfterSourceEdit.AddMembers(membersToMove.ToArray())) : afterSourceEdit;
-                result[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(finalRoot).ToFullString();
-            }
-            else
-            {
-                var targetRoot = await existingTargetDoc.GetSyntaxRootAsync(cancellationToken);
-                var newTargetRoot = targetRoot!.ReplaceNode(existingTargetClassNode, existingTargetClassNode.AddMembers(membersToMove.ToArray()));
-                result[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root.ReplaceNode(classNode, updatedSourceClass)).ToFullString();
-                result[existingTargetDoc.FilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newTargetRoot).ToFullString();
-            }
-        }
-        else
-        {
-            var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
-            var newClassNode = SyntaxFactory.ClassDeclaration(targetClassName).WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword))).WithMembers(SyntaxFactory.List(membersToMove));
-            var cleanUsings = SyntaxFactory.List(root.Usings.Select(u => u.WithoutTrailingTrivia().WithTrailingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed)));
-            CompilationUnitSyntax newFileRoot;
-            if (ns != null)
-            {
-                BaseNamespaceDeclarationSyntax newNs = ns is FileScopedNamespaceDeclarationSyntax ? SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name).AddMembers(newClassNode) : (BaseNamespaceDeclarationSyntax)SyntaxFactory.NamespaceDeclaration(ns.Name).AddMembers(newClassNode);
-                newFileRoot = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(newNs);
-            }
-            else
-            {
-                newFileRoot = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(newClassNode);
-            }
 
-            var newFilePath = Path.Combine(Path.GetDirectoryName(filePath)!, $"{targetClassName}.cs");
-            result[newFilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newFileRoot).ToFullString();
-            result[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root.ReplaceNode(classNode, updatedSourceClass)).ToFullString();
-        }
-
+        // Receiver rewrites (`oldReceiver.Member` -> `resolvedReceiver.Member`) are minimal edits: only the receiver
+        // expression's own span is replaced, against each document's ORIGINAL text, so the rest of every caller file
+        // (and the source/target files) stays byte-identical.
+        var editsByDocument = new Dictionary<DocumentId, List<TextChange>>();
+        var fixupSites = new List<(DocumentId DocumentId, string DocumentPath, string ReportPath, int Position, string SiteKey)>();
         foreach (var group in resolvedReceivers.GroupBy(kv => kv.Key.FilePath, StringComparer.OrdinalIgnoreCase))
         {
             var docFilePath = group.Key;
             var doc = solution.GetDocumentIdsWithFilePath(docFilePath).Select(solution.GetDocument).FirstOrDefault();
-            if (doc == null)
+            if (doc?.FilePath == null)
             {
                 continue;
             }
 
-            SyntaxNode? docRoot = result.TryGetValue(docFilePath, out var already) ? CSharpSyntaxTree.ParseText(already, cancellationToken: cancellationToken).GetRoot(cancellationToken) : await doc.GetSyntaxRootAsync(cancellationToken);
+            var docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
             if (docRoot == null)
             {
                 continue;
@@ -3691,36 +3727,54 @@ public class MemberRefactoringEngine
 
             var linesToFix = group.ToDictionary(kv => kv.Key.Line, kv => kv.Value);
             var memberAccesses = docRoot.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Where(ma => memberNames.Contains(ma.Name.Identifier.Text) && linesToFix.ContainsKey(ma.GetLocation().GetLineSpan().StartLinePosition.Line + 1)).ToList();
-            SyntaxNode updatedDocRoot = docRoot;
-            if (memberAccesses.Count > 0)
+            foreach (var memberAccess in memberAccesses)
             {
-                updatedDocRoot = updatedDocRoot.ReplaceNodes(memberAccesses, (original, _) =>
+                var line = memberAccess.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                var receiverExpr = linesToFix[line];
+                var newReceiver = receiverExpr == CallSiteFixupMap.NewKeyword ? $"new {targetClassName}()" : receiverExpr;
+                var receiverSpan = memberAccess.Expression.Span;
+                if (!editsByDocument.TryGetValue(doc.Id, out var docEdits))
                 {
-                    var line = original.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                    var receiverExpr = linesToFix[line];
-                    var newReceiver = receiverExpr == CallSiteFixupMap.NewKeyword ? (ExpressionSyntax)SyntaxFactory.ObjectCreationExpression(SyntaxFactory.IdentifierName(targetClassName)).WithArgumentList(SyntaxFactory.ArgumentList()) : SyntaxFactory.ParseExpression(receiverExpr);
-                    var rewritten = original.WithExpression(newReceiver);
-                    var siteKey = CallerFixupSiteKey(docFilePath, line);
-                    return callerFixupSources.ContainsKey(siteKey) ? rewritten.WithAdditionalAnnotations(new SyntaxAnnotation(CallerFixupAnnotationKind, siteKey)) : rewritten;
-                });
-            }
+                    docEdits = new List<TextChange>();
+                    editsByDocument[doc.Id] = docEdits;
+                }
 
-            // Whole-subtree normalization can shift line numbers, so fixup-rewritten sites are located
-            // by annotation on the FINAL tree - the same text the compile gate reports against.
-            var normalizedDocRoot = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedDocRoot);
-            foreach (var annotated in normalizedDocRoot.GetAnnotatedNodes(CallerFixupAnnotationKind))
-            {
-                var finalLine = annotated.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
-                foreach (var annotation in annotated.GetAnnotations(CallerFixupAnnotationKind))
+                if (docEdits.Any(e => e.Span.OverlapsWith(receiverSpan)))
                 {
-                    if (annotation.Data != null && callerFixupSources.TryGetValue(annotation.Data, out var source))
-                    {
-                        appliedFixups.Add(new AppliedCallSiteFixup(docFilePath, finalLine, source.Key, source.Value));
-                    }
+                    continue;
+                }
+
+                docEdits.Add(new TextChange(receiverSpan, newReceiver));
+                var siteKey = CallerFixupSiteKey(docFilePath, line);
+                if (callerFixupSources.ContainsKey(siteKey))
+                {
+                    fixupSites.Add((doc.Id, doc.FilePath, docFilePath, receiverSpan.Start, siteKey));
                 }
             }
+        }
 
-            result[docFilePath] = normalizedDocRoot.ToFullString();
+        var (texts, newFiles) = await AddInstanceMoveStructuralEditsAsync(editsByDocument, document, root, classNode, membersToMove, targetClassName, existingTargetDoc, existingTargetClassNode, true, cancellationToken);
+        var result = await MaterializeDocumentEditsAsync(solution, editsByDocument, texts, cancellationToken);
+        foreach (var (newFilePath, newFileText) in newFiles)
+        {
+            result[newFilePath] = newFileText;
+        }
+
+        // AppliedCallSiteFixup.Line is the 1-based line in the FINAL text (what the compile gate reports against), so each
+        // fixed-up site's original position is mapped through that document's edits. A site inside a moved member lands in
+        // the target document instead, so it is not reported here.
+        foreach (var site in fixupSites)
+        {
+            if (site.DocumentId == document.Id && membersToMove.Any(m => m.FullSpan.Contains(site.Position)))
+            {
+                continue;
+            }
+
+            var finalText = SourceText.From(result[site.DocumentPath]);
+            var finalPosition = MoveMemberTextEdits.MapPositionThroughEdits(editsByDocument[site.DocumentId], site.Position);
+            var finalLine = finalText.Lines.GetLinePosition(finalPosition).Line + 1;
+            var source = callerFixupSources[site.SiteKey];
+            appliedFixups.Add(new AppliedCallSiteFixup(site.ReportPath, finalLine, source.Key, source.Value));
         }
 
         return new MoveMemberResult(result, skippedCallSites, pendingLedgerEntries, pendingLedgerOperationName, appliedFixups);
@@ -4190,31 +4244,11 @@ public class MemberRefactoringEngine
         // compile does not reproduce the same diagnostics the real two-file apply would produce, and
         // every call site gets misclassified as already-Valid. See
         // docs/current/blockers/blocking_error_movemember_instance_callsite_not_rewritten.md.
-        var updatedSourceClass = classNode.RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!;
-        var previewChanges = new Dictionary<FilePathWrapper, string>();
-        if (destinationDoc?.FilePath != null && destinationClassNode != null)
-        {
-            bool sameFile = string.Equals(Path.GetFullPath(filePath), Path.GetFullPath(destinationDoc.FilePath), StringComparison.OrdinalIgnoreCase);
-            if (sameFile)
-            {
-                var afterSourceEdit = root.ReplaceNode(classNode, updatedSourceClass);
-                var targetAfterSourceEdit = afterSourceEdit.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == targetClassName);
-                var finalRoot = targetAfterSourceEdit != null ? afterSourceEdit.ReplaceNode(targetAfterSourceEdit, targetAfterSourceEdit.AddMembers(membersToMove.ToArray())) : afterSourceEdit;
-                previewChanges[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(finalRoot).ToFullString();
-            }
-            else
-            {
-                var destinationRoot = await destinationDoc.GetSyntaxRootAsync(cancellationToken);
-                var updatedDestinationRoot = destinationRoot!.ReplaceNode(destinationClassNode, destinationClassNode.AddMembers(membersToMove.ToArray()));
-                previewChanges[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root.ReplaceNode(classNode, updatedSourceClass)).ToFullString();
-                previewChanges[destinationDoc.FilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedDestinationRoot).ToFullString();
-            }
-        }
-        else
-        {
-            previewChanges[filePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root.ReplaceNode(classNode, updatedSourceClass)).ToFullString();
-        }
-
+        // Built from the same text-edit definition the apply path uses (no new class file is previewed), so the
+        // trial compile sees exactly the structural edits a real move would write.
+        var previewEdits = new Dictionary<DocumentId, List<TextChange>>();
+        var (previewTexts, _) = await AddInstanceMoveStructuralEditsAsync(previewEdits, document, root, classNode, membersToMove, targetClassName, destinationDoc, destinationClassNode, false, cancellationToken);
+        var previewChanges = await MaterializeDocumentEditsAsync(solution, previewEdits, previewTexts, cancellationToken);
         var validation = await _validationEngine.ValidateChangesAsync(previewChanges, cancellationToken);
         var results = new List<PreviewCallSite>();
         var movingMemberDeclarationSpans = new HashSet<TextSpan>(membersToMove.Select(m => m.Span));
