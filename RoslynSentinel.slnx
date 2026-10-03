@@ -20,7 +20,16 @@
   <Project Path="RoslynSentinel.Tests.Integration/RoslynSentinel.Tests.Integration.csproj" />
   <Project Path="RoslynSentinel.Tests.ModelEval/RoslynSentinel.Tests.ModelEval.csproj" />
   <Project Path="RoslynSentinel.Tests.PlanStepRunner/RoslynSentinel.Tests.PlanStepRunner.csproj" />
+  <Project Path="RoslynSentinel.Tests.Server/RoslynSentinel.Tests.Server.csproj" Id="c72a8f98-61bc-493f-9bd9-7ab06fe1ff20">
+    <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
+  </Project>
   <Project Path="RoslynSentinel.Tests.SubAgent/RoslynSentinel.Tests.SubAgent.csproj" />
+  <Project Path="RoslynSentinel.Tests.Tools.Advanced/RoslynSentinel.Tests.Tools.Advanced.csproj" Id="ed3f9a42-a43e-4b99-ac8e-6f3bfedf95de">
+    <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
+  </Project>
+  <Project Path="RoslynSentinel.Tests.Tools.Basic/RoslynSentinel.Tests.Tools.Basic.csproj" Id="e7916837-b4e5-4649-9e47-9c9fd690e231">
+    <BuildType Solution="DebugVisualStudio|*" Project="Debug" />
+  </Project>
   <Project Path="RoslynSentinel.Tests/RoslynSentinel.Tests.csproj" />
   <Project Path="RoslynSentinel.Tools.Advanced/RoslynSentinel.Tools.Advanced.csproj" Id="41b58d4b-cc7b-48db-98ee-ee3b3f703b70" />
   <Project Path="RoslynSentinel.Tools.Basic/RoslynSentinel.Tools.Basic.csproj" Id="812627e6-7ea8-49dc-89e4-b7ea1f6b7570" />

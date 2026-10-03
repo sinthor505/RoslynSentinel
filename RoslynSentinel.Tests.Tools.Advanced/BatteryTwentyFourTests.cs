@@ -1,0 +1,1312 @@
+// Battery #24 -> RefactoringTools
+// Tests all ~65 public methods of RefactoringTools in-memory via TestSolutionBuilder.
+using Microsoft.Extensions.Logging.Abstractions;
+
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tools.Advanced;
+using RoslynSentinel.Tools.Basic;
+
+#pragma warning disable CS8618
+namespace RoslynSentinel.Tests.Tools.Advanced;
+
+[TestFixture]
+public class BatteryTwentyFourTests
+{
+    private IWorkspaceManager _workspaceManager;
+    private SentinelConfiguration _config;
+    private BasicRefactoringEngine _refactoringEngine;
+    private MemberRefactoringEngine _memberRefactoringEngine;
+    private StructuralRefactoringEngine _advancedStructuralEngine;
+    private MappingEngine _mappingEngine;
+    private SemanticRefactoringEngine _semanticRefactoringEngine;
+    private LogicSimplificationEngine _advancedLogicEngine;
+    private StructuralRefinementEngine _structuralRefinementEngine;
+    private CodeStyleEngine _codeStyleEngine;
+    private LogicSimplificationEngine _codeFlowEngine;
+    private AdvancedRefactoringEngine _advancedRefactoringEngine;
+    private LogicSimplificationEngine _logicOptimizationEngine;
+    private SyntaxModernizationEngine _modernizationEngine;
+    private DiffEngine _diffEngine;
+    private ValidationEngine _validationEngine;
+    private SymbolNavigationEngine _symbolNavigationEngine;
+    private RefactoringStructuralTools _refactoringStructuralTools;
+    private RefactoringSignatureTools _refactoringSignatureTools;
+    private RefactoringExtractionDocsTools _refactoringExtractionDocsTools;
+    private MsToolAugmentEngine _msToolAugmentEngine;
+    private AdvancedRefactoringTools _advTools;
+    private GenerationTools _generationTools;
+    private const string RefactorSource = @"
+using System;
+using System.Collections.Generic;
+
+namespace RefactorNs;
+
+public abstract class Animal
+{
+    public string Name;
+    public abstract string Sound();
+    public virtual void Move() { Console.WriteLine(""moving""); }
+}
+
+public class Dog : Animal
+{
+    public string Breed;
+    public Dog(string name, string breed) { Name = name; Breed = breed; }
+    public override string Sound() => ""woof"";
+    public override void Move() => base.Move();
+    public string GetInfo() { return string.Format(""{0} ({1})"", Name, Breed); }
+    public void Process(int a, int b, int c, int d, int e) { }
+    public int Calculate(int x)
+    {
+        if(x > 0) return 1;
+        if(x < 0) return -1;
+        return 0;
+    }
+}
+
+public class Target {}
+";
+    private const string SimpleSource = @"
+namespace TestProj;
+
+public class Order
+{
+    public int OrderId { get; set; }
+    public string CustomerName { get; set; }
+
+    public Order(int orderId, string customerName)
+    {
+        OrderId = orderId;
+        CustomerName = customerName;
+    }
+
+    public string GetLabel()
+    {
+        return string.Format(""{0}: {1}"", OrderId, CustomerName);
+    }
+
+    public string GetStatus()
+    {
+        if (OrderId == 1) return ""Active"";
+        if (OrderId == 2) return ""Pending"";
+        return ""Unknown"";
+    }
+}
+
+public interface IService
+{
+    string GetLabel();
+}
+
+public enum Status { Active = 1, Pending = 2 }
+";
+    [SetUp]
+    public void Setup()
+    {
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = new SentinelConfiguration();
+        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _validationEngine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
+        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
+        _memberRefactoringEngine = new MemberRefactoringEngine(_workspaceManager, _symbolNavigationEngine, _validationEngine);
+        _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
+        _mappingEngine = new MappingEngine(_workspaceManager);
+        _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
+        _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
+        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
+        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
+        _codeFlowEngine = new LogicSimplificationEngine(_workspaceManager);
+        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
+        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
+        _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
+        _diffEngine = new DiffEngine();
+        _msToolAugmentEngine = new MsToolAugmentEngine(_workspaceManager);
+        _generationTools = new GenerationTools(_workspaceManager, NullLogger<GenerationTools>.Instance);
+
+        var refactoringStructuralImpl = new RefactoringStructuralImpl(_refactoringEngine, _memberRefactoringEngine, _structuralRefinementEngine, _symbolNavigationEngine, _workspaceManager, _validationEngine, NullLogger<RefactoringStructuralImpl>.Instance);
+        var refactoringSignatureImpl = new RefactoringSignatureImpl(_refactoringEngine, _memberRefactoringEngine, _workspaceManager, _validationEngine, _symbolNavigationEngine, NullLogger<RefactoringSignatureImpl>.Instance);
+        _refactoringStructuralTools = new RefactoringStructuralTools(refactoringStructuralImpl);
+        _refactoringSignatureTools = new RefactoringSignatureTools(refactoringSignatureImpl);
+        _refactoringExtractionDocsTools = new RefactoringExtractionDocsTools(new RefactoringExtractionDocsImpl(_refactoringEngine, _msToolAugmentEngine, _symbolNavigationEngine, _workspaceManager, _validationEngine, NullLogger<RefactoringExtractionDocsImpl>.Instance));
+        _advTools = new AdvancedRefactoringTools(_workspaceManager);
+    }
+
+    [TearDown]
+    public void TearDown() => _workspaceManager?.Dispose();
+    private void SetSource(string source, string fileName = "Test.cs")
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+        _workspaceManager.SetTestSolution(solution);
+    }
+
+    private void SetMultiFile(params (string name, string content)[] files)
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", files);
+        _workspaceManager.SetTestSolution(solution);
+    }
+
+    // ===================== autoStage METHODS =====================
+    // --- ExtractSuperclass ---
+    [Test]
+    public async Task ExtractSuperclass_AutoStageTrue_ReturnsAppliedChangeSummary()
+    {
+        SetMultiFile(("Dog.cs", RefactorSource));
+        var result = await _advTools.ExtractMembers(reason: "test message", "Dog.cs", "Dog", ExtractAsType.superclass, "AnimalBase");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- SafeDeleteSymbol ---
+    [Test]
+    public async Task SafeDeleteSymbol_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ChangeSignature ---
+    [Test]
+    public async Task ChangeSignature_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.ChangeSignature(reason: "test message", "Order.cs", "Order", new[] { new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0) });
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ExtractInterface ---
+    [Test]
+    public async Task ExtractInterface_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.ExtractMembers(reason: "test message", "Order.cs", "Order", ExtractAsType.@interface, "IOrder");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- MoveTypeToFile ---
+    [Test]
+    public async Task MoveTypeToFile_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.MoveType(reason: "test message", "Order.cs", "Status", "ownFile");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- MoveAllTypesToFiles ---
+    [Test]
+    public async Task MoveAllTypesToFiles_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.MoveAllTypesToFiles(reason: "test message", ToolScope.file, "Order.cs");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- RenameSymbol ---
+    // RenameSymbol takes a SymbolHandle (projectName, docCommentId) instead of
+    // (filepath, methodName, contextSnippet) -> resolve the handle via SymbolNavigationEngine
+    // first, matching how an agent would call LocateSymbol before RenameSymbol.
+    [Test]
+    public async Task RenameSymbol_ValidSymbol_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        // "GetLabel" is declared on both Order and IService in SimpleSource -> disambiguate.
+        var located = await symbolNavEngine.LocateSymbolAsync("GetLabel", containingType: "Order");
+        var handle = located.Single();
+        var result = await _refactoringSignatureTools.RenameSymbol(reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!, newName: "GetDisplayLabel");
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.True);
+    }
+
+    [Test]
+    public async Task RenameSymbol_NonExistentSymbol_ReturnsErrorObject()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringSignatureTools.RenameSymbol(reason: "test message", projectName: "TestProj", docCommentId: "M:TestProj.Order.NoSuchSymbol", newName: "NewName");
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData, Is.Not.Null);
+    }
+
+    // --- MoveAllTypesToFilesInProject ---
+    [Test]
+    public async Task MoveAllTypesToFilesInProject_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.MoveAllTypesToFiles("test", ToolScope.project, "TestProj");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- MoveAllTypesToFilesInSolution ---
+    [Test]
+    public async Task MoveAllTypesToFilesInSolution_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.MoveAllTypesToFiles(reason: "test message", ToolScope.solution);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- UsingDirective ---
+    [Test]
+    public async Task UsingDirective_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringExtractionDocsTools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task UsingDirective_AutoStageFalse_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringExtractionDocsTools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq", autoStage: false);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task UsingDirective_Add_ChangedContentReflectsActualDiffNotFabricatedString()
+    {
+        // The engine's AddUsingDirectiveAsync reformats the whole document (Formatter.FormatAsync)
+        // after inserting the new using, so a file with a pre-existing formatting quirk elsewhere
+        // picks up an unrelated whitespace fix in the same write as the using insertion. A
+        // fabricated "using {namespaceName};" string could never reveal that second, bundled
+        // change; the real diff must.
+        const string misindentedSource = "namespace TestProj;\n\npublic class Order\n{\n  public int OrderId { get; set; }\n}\n";
+        SetSource(misindentedSource, "Order.cs");
+        var result = await _refactoringExtractionDocsTools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq");
+        Assert.That(result.IsSuccess, Is.True);
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        // The added using line must be present in the diff...
+        Assert.That(summary.Diff, Does.Contain("using System.Linq;"));
+        // ...and so must the unrelated formatting change the fabricated string could never show.
+        Assert.That(summary.Diff, Does.Contain("public int OrderId"));
+        Assert.That(summary.Diff, Is.Not.EqualTo("using System.Linq;"));
+    }
+
+    // --- ModifyEnum ---
+    [Test]
+    public async Task ModifyEnum_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.ModifyEnum(reason: "test message", "Order.cs", "Status", "Active,Pending,Cancelled");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- Member on enum containers (routes to AddEnumMemberAsync/RemoveEnumMemberAsync/ReplaceEnumMemberAsync) ---
+    [Test]
+    public async Task Member_Add_OnEnumContainer_Succeeds()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Status", newMemberSource: "Cancelled");
+        Assert.That(result.IsSuccess, Is.True);
+    }
+
+    [Test]
+    public async Task Member_Remove_OnEnumMember_Succeeds()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "Pending", skipPrecheck: true);
+        Assert.That(result.IsSuccess, Is.True);
+    }
+
+    [Test]
+    public async Task Member_Replace_OnEnumMember_Succeeds()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.replace, memberName: "Pending", newMemberSource: "InProgress=2");
+        Assert.That(result.IsSuccess, Is.True);
+    }
+
+    [Test]
+    public async Task Member_View_WithMemberName_ReturnsThatMembersSource()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.view, memberName: "GetStatus");
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var view = result.SuccessData as MemberSourceViewResult;
+        Assert.That(view, Is.Not.Null);
+        Assert.That(view!.Member.Name, Is.EqualTo("GetStatus"));
+        Assert.That(view.Member.Kind, Is.EqualTo("method"));
+        Assert.That(view.Member.Source, Does.Contain("public string GetStatus()"));
+        Assert.That(view.Member.Source, Does.Contain("return \"Unknown\";"));
+        Assert.That(view.Member.IsComplete, Is.True);
+    }
+
+    [Test]
+    public async Task Member_View_WithMissingMemberName_ReturnsNotFound()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.view, memberName: "NoSuchMember");
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task Member_View_OnEnumContainer_ReturnsEnumMembers()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.view, "Status");
+        Assert.That(result.IsSuccess, Is.True);
+    }
+
+    // --- InsertMemberAfter ---
+    [Test]
+    public async Task InsertMemberAfter_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Order", newMemberSource: "public string Description => \"\";", position: "after:GetLabel");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- InsertMemberBefore ---
+    [Test]
+    public async Task InsertMemberBefore_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Order", newMemberSource: "public string Tag => \"\";", position: "before:GetLabel");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- AddAttribute ---
+    [Test]
+    public async Task AddAttribute_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.ModifyAttribute(reason: "test message", "Order.cs", "Order", "[Serializable]", AttributeModifyAction.add);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- AddBaseType ---
+    [Test]
+    public async Task AddBaseType_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.ModifyBaseType(reason: "test message", "Order.cs", "Order", "IService", AddRemoveAction.add);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- RemoveAttribute ---
+    [Test]
+    public async Task RemoveAttribute_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.ModifyAttribute(reason: "test message", "Order.cs", "Order", "Serializable", AttributeModifyAction.remove);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- RemoveBaseType ---
+    [Test]
+    public async Task RemoveBaseType_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.ModifyBaseType(reason: "test message", "Order.cs", "Order", "IService", AddRemoveAction.remove);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- MoveMember (pull-up to existing base class) ---
+    [Test]
+    public async Task MoveMember_ToBaseClass_AutoStageTrue_ReturnsNotNull()
+    {
+        SetMultiFile(("Refactor.cs", RefactorSource));
+        var result = await _advTools.MoveMember(reason: "test message", "Refactor.cs", "Dog", ["Sound"], "Animal");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ChangeAccessibility ---
+    [Test]
+    public async Task ChangeAccessibility_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringSignatureTools.ChangeAccessibility(reason: "test message", "Order.cs", "OrderId", AccessibilityLevel.@internal);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task ChangeAccessibility_StampsIncreasingWorkspaceVersion()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var versionBeforeAnyMutation = _workspaceManager.WorkspaceVersion;
+        var first = await _refactoringSignatureTools.ChangeAccessibility(reason: "test message", "Order.cs", "OrderId", AccessibilityLevel.@internal);
+        var firstSummary = (AppliedChangeSummary)first.SuccessData!;
+        Assert.That(firstSummary.WorkspaceVersion, Is.Not.Null);
+        Assert.That(firstSummary.WorkspaceVersion, Is.GreaterThan(versionBeforeAnyMutation));
+        var second = await _refactoringSignatureTools.ChangeAccessibility(reason: "test message", "Order.cs", "CustomerName", AccessibilityLevel.@internal);
+        var secondSummary = (AppliedChangeSummary)second.SuccessData!;
+        Assert.That(secondSummary.WorkspaceVersion, Is.GreaterThan(firstSummary.WorkspaceVersion!), "A second mutation must stamp a strictly higher version than the first.");
+    }
+
+    // --- AddModifier ---
+    [Test]
+    public async Task AddModifier_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.ModifyModifier(reason: "test message", "Order.cs", "Order", NonAccessibilityModifier.@sealed, AddRemoveAction.add);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- RemoveModifier ---
+    [Test]
+    public async Task RemoveModifier_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.ModifyModifier(reason: "test message", "Order.cs", "Order", NonAccessibilityModifier.@sealed, AddRemoveAction.remove);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // modifier is now NonAccessibilityModifier (an enum that excludes public/private/internal/
+    // protected/etc.), so passing an accessibility keyword can no longer reach this method at all
+    // -> JSON schema/binding rejects it before ModifyModifier runs, which is what
+    // ModifyModifier_RejectsAccessibilityKeyword used to test at this layer.
+    // --- SummaryComment ---
+    [Test]
+    public async Task SummaryComment_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringExtractionDocsTools.SummaryComment(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "Represents an order.");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- AddProperty ---
+    [Test]
+    public async Task AddProperty_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.addTypedMember, "Order", typedKind: TypedMemberKind.property, typedName: "Description", typedType: "string");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- AddField ---
+    [Test]
+    public async Task AddField_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.addTypedMember, "Order", typedKind: TypedMemberKind.field, typedName: "_tag", typedType: "string");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- WrapInTryCatch ---
+    [Test]
+    public async Task WrapInTryCatch_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.WrapRange(reason: "test message", "Order.cs", 8, 10, "tryCatch");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ConstructorParameter ---
+    [Test]
+    public async Task ConstructorParameter_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringSignatureTools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task ConstructorParameter_Add_WithDefaultValue_BackwardCompatibleWithExistingCaller()
+    {
+        SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
+        var result = await _refactoringSignatureTools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string", defaultValue: "\"\"");
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task ConstructorParameter_Add_WithNullDefault_BackwardCompatibleWithExistingCaller()
+    {
+        SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
+        var result = await _refactoringSignatureTools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string", nullDefault: true);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task ConstructorParameter_Add_NullDefaultAndDefaultValueBothSet_Refused()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringSignatureTools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string", defaultValue: "\"\"", nullDefault: true);
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData?.Message, Does.Contain("mutually exclusive"));
+    }
+
+    [Test]
+    public async Task ConstructorParameter_Add_NoDefaultValue_ExistingCallerBreaksAndIsRefused()
+    {
+        SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
+        var result = await _refactoringSignatureTools.ConstructorParameter(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string");
+        Assert.That(result.IsSuccess, Is.False);
+    }
+
+    // --- MethodSignature ---
+    [Test]
+    public async Task MethodSignature_View_ListsExistingParameters()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.view, "GetLabel");
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task MethodSignature_Add_AppendsRequiredParameter_NoExistingCallers()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool");
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task MethodSignature_Add_WithDefaultValue_BackwardCompatibleWithExistingCaller()
+    {
+        SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public string Use(Order o) => o.GetStatus(); }"));
+        var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool", defaultValue: "false");
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task MethodSignature_Remove_LastParameter_UpdatesCallSite()
+    {
+        var orderSourceWithRename = SimpleSource.Replace("public string GetLabel()", "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
+        SetMultiFile(("Order.cs", orderSourceWithRename), ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(\"a\", \"b\"); }"));
+        var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task MethodSignature_Remove_NonLastParameter_Refused()
+    {
+        SetSource(RefactorSource, "Animal.cs");
+        var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Animal.cs", AddRemoveViewAction.remove, "Process", "a");
+        Assert.That(result.IsSuccess, Is.False, "Removing a non-trailing parameter must be refused, not silently applied.");
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.Message, Does.Contain("last parameter"));
+    }
+
+    [Test]
+    public async Task MethodSignature_Remove_NamedArgumentCallSite_Refused()
+    {
+        var orderSourceWithRename = SimpleSource.Replace("public string GetLabel()", "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
+        SetMultiFile(("Order.cs", orderSourceWithRename), ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(first: \"a\", last: \"b\"); }"));
+        var result = await _refactoringSignatureTools.MethodSignature(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
+        Assert.That(result.IsSuccess, Is.False, "A named-argument call site cannot be safely rewritten and must refuse the whole operation.");
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.Message, Does.Contain("named arguments"));
+    }
+
+    // --- WrapInRegion ---
+    [Test]
+    public async Task WrapInRegion_AutoStageTrue_ReturnsNotNull()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.WrapRange(reason: "test message", "Order.cs", 3, 6, "region", "Properties");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // ===================== SIMPLE DELEGATION METHODS =====================
+    // --- SyncTypeAndFilename ---
+    [Test]
+    public async Task SyncTypeAndFilename_ValidFile_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", "Order.cs");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // NOTE: ValidateChangesAsync adds the renamed file as a brand-new document into the candidate
+    // solution without removing the original document at the old path first, which used to make
+    // pre-validation see the same (unique) type declared in two documents at once and fail with a
+    // duplicate-declaration error on every real rename. Fixed by threading an explicit
+    // `removePaths` list through ValidateChangesAsync/ValidateAndApplyHelper so the tool layer can
+    // tell validation which old-path document to drop from the candidate before compiling (see
+    // SyncTypeAndFilename's `removePaths: [filePath]` call and
+    // SyncTypeAndFilename_RealRename_SucceedsAndRemovesOldDocument below). This dryRun test still
+    // asserts the one thing dryRun is responsible for regardless: no destructive action (old-file
+    // delete) has occurred, even if validation were to fail for some other reason.
+    [Test]
+    public async Task SyncTypeAndFilename_DryRun_NeverDeletesOriginalFileAsync()
+    {
+        const string mismatchedSource = "namespace TestProj;\n\npublic class Widget\n{\n    public int Id { get; set; }\n}\n";
+        var tempDir = Path.Combine(Path.GetTempPath(), "SyncTypeAndFilenameTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var oldPath = Path.Combine(tempDir, "Mismatched.cs");
+            var newPath = Path.Combine(tempDir, "Widget.cs");
+            File.WriteAllText(oldPath, mismatchedSource);
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", Path.Combine(tempDir, "TestProj.csproj"), [("Mismatched.cs", mismatchedSource, oldPath)]);
+            _workspaceManager.SetTestSolution(solution);
+            var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", oldPath, dryRun: true);
+            Assert.That(File.Exists(oldPath), Is.True, "dryRun must never delete the original file, even when validation fails.");
+            Assert.That(File.Exists(newPath), Is.False, "dryRun must never write the renamed file.");
+            if (result.IsSuccess)
+            {
+                var data = (AppliedChangeSummary)result.SuccessData!;
+                Assert.That(data.DryRun, Is.True);
+            }
+        }
+        finally
+        {
+            Directory.Delete(tempDir, recursive: true);
+        }
+    }
+
+    // Real success-path regression test for the removePaths fix above: a mismatched filename vs.
+    // unique type declaration, non-dryRun, through the actual ValidateAndApplyAsync path (unlike
+    // SyncTypeAndFilename_ValidFile_ReturnsString above, which short-circuits on
+    // EditOutcome.CannotEdit before ever reaching validation).
+    [Test]
+    public async Task SyncTypeAndFilename_RealRename_SucceedsAndRemovesOldDocument()
+    {
+        const string mismatchedSource = "namespace TestProj;\n\npublic class Widget\n{\n    public int Id { get; set; }\n}\n";
+        var tempDir = Path.Combine(Path.GetTempPath(), "SyncTypeAndFilenameTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var oldPath = Path.Combine(tempDir, "Mismatched.cs");
+            var newPath = Path.Combine(tempDir, "Widget.cs");
+            File.WriteAllText(oldPath, mismatchedSource);
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", Path.Combine(tempDir, "TestProj.csproj"), [("Mismatched.cs", mismatchedSource, oldPath)]);
+            _workspaceManager.SetTestSolution(solution);
+            var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", oldPath);
+            Assert.That(result.IsSuccess, Is.True, $"Expected rename to succeed; error: {result.ErrorData?.Message}");
+            Assert.That(File.Exists(oldPath), Is.False, "Old file should be deleted after a successful rename.");
+            Assert.That(File.Exists(newPath), Is.True, "New file should exist after a successful rename.");
+            var currentSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+            Assert.That(currentSolution.GetDocumentIdsWithFilePath(oldPath), Is.Empty, "Old path must not remain tracked as a Document after the rename, or the type would be seen as declared twice.");
+            Assert.That(currentSolution.GetDocumentIdsWithFilePath(newPath), Is.Not.Empty, "New path must be tracked as a Document after the rename.");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    // --- InlineMethod ---
+    [Test]
+    public async Task InlineMethod_ValidMethod_ReturnsDictionary()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.Inline(reason: "test message", "Order.cs", "GetLabel", InlineKind.method);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- IntroduceField ---
+    [Test]
+    public async Task IntroduceField_ValidContext_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.Introduce(reason: "test message", "Order.cs", "string.Format", "labelFormatter", IntroduceAsType.field);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- IntroduceParameter ---
+    [Test]
+    public async Task IntroduceParameter_ValidContext_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.Introduce(reason: "test message", "Order.cs", "GetLabel", "GetLabel", IntroduceAsType.parameter);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- InlineField ---
+    [Test]
+    public async Task InlineField_ValidField_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.Inline(reason: "test message", "Order.cs", "OrderId", InlineKind.field);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- InlineParameter ---
+    [Test]
+    public async Task InlineParameter_ValidParameter_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.Inline(reason: "test message", "Order.cs", "orderId", InlineKind.parameter, "Order");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- MakeMethodStatic ---
+    [Test]
+    public async Task MakeMethodStatic_ValidMethod_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.ModifyModifier(reason: "test message", "Order.cs", "GetLabel", NonAccessibilityModifier.@static, AddRemoveAction.add);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ExtensionToStatic ---
+    [Test]
+    public async Task ExtensionToStatic_ValidMethod_ReturnsString()
+    {
+        const string src = "namespace TestProj; public static class Helper { public static string Trim(this string s) => s.Trim(); }";
+        SetSource(src, "Helper.cs");
+        var result = await _logicOptimizationEngine.ExtensionToStaticAsync("Helper.cs", "Trim");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ConvertAbstractToInterface ---
+    [Test]
+    public async Task ConvertAbstractToInterface_AbstractClass_ReturnsString()
+    {
+        SetMultiFile(("Refactor.cs", RefactorSource));
+        var result = await _advancedStructuralEngine.ConvertAbstractClassToInterfaceAsync("Refactor.cs", "Animal");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- GenerateMapping ---
+    [Test]
+    public async Task GenerateMapping_ValidTypes_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _generationTools.GenerateMapping("Order.cs", "Order", "Status");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- WrapInUsing ---
+    [Test]
+    public async Task WrapInUsing_ValidLineRange_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.WrapRange(reason: "test message", "Order.cs", 8, 10, "using", "resource");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ConvertAnonymousToNamed ---
+    [Test]
+    public async Task ConvertAnonymousToNamed_ValidFile_ReturnsDictionary()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.ConvertAnonymousToNamed(reason: "test message", "Order.cs", "OrderData");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- InlineClass ---
+    [Test]
+    public async Task InlineClass_CrossFile_MovesMembers()
+    {
+        SetMultiFile(("Helper.cs", "namespace App; public class Helper { public int Value; public void Go() {} }"), ("Owner.cs", "namespace App; public class Owner {}"));
+        // dryRun avoids writing to disk under a bare relative filename (resolves against the test
+        // runner's CWD) -> without it, a stray file left by a prior run makes the diff spuriously
+        // empty since the on-disk "before" already matches the freshly-computed "after".
+        var result = await _advTools.InlineClass(reason: "test message", "Helper.cs", "Owner.cs", "Helper", dryRun: true, returnDiff: true);
+        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.AffectedFiles.Select(f => f.ToString()), Has.Some.Contains("Owner.cs"));
+        Assert.That(summary.Diff, Does.Contain("Value"));
+        Assert.That(summary.Diff, Does.Contain("Go"));
+    }
+
+    // --- IntroduceVariable ---
+    [Test]
+    public async Task IntroduceVariable_ValidContext_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.Introduce(reason: "test message", "Order.cs", "string.Format", "formatted", IntroduceAsType.localVariable);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- InlineVariable ---
+    [Test]
+    public async Task InlineVariable_ValidVariable_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.Inline(reason: "test message", "Order.cs", "OrderId", InlineKind.variable);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ConvertPropertyToMethods ---
+    [Test]
+    public async Task ConvertPropertyToMethods_ValidProperty_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _codeStyleEngine.ConvertPropertyToMethodsAsync("Order.cs", "OrderId");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ExtractMembersToPartial ---
+    [Test]
+    public async Task ExtractMembersToPartial_ValidMembers_ReturnsDictionary()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.ExtractMembers(reason: "test message", "Order.cs", "Order", ExtractAsType.partialClass, memberNames: ["GetLabel"]);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ConvertMethodToIndexer ---
+    [Test]
+    public async Task ConvertMethodToIndexer_ValidMethod_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("Order.cs", "GetStatus");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- MoveTypeToOuterScope ---
+    [Test]
+    public async Task MoveTypeToOuterScope_ValidType_ReturnsString()
+    {
+        const string src = "namespace TestProj; public class Outer { public class Inner {} }";
+        SetSource(src, "Outer.cs");
+        var result = await _advTools.MoveType(reason: "test message", "Outer.cs", "Inner", "outerScope");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ReplaceMember ---
+    [Test]
+    public async Task ReplaceMember_ValidMember_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.replace, memberName: "GetLabel", newMemberSource: "public string GetLabel() => $\"{OrderId}: {CustomerName}\";");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- AddMemberToClass ---
+    [Test]
+    public async Task AddMemberToClass_ValidClass_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.addMember, "Order", newMemberSource: "public string Tag { get; set; }");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- RemoveMember ---
+    [Test]
+    public async Task RemoveMember_ValidMember_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task RemoveMember_ZeroReferences_SucceedsAsBefore()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.remove, memberName: "GetLabel");
+        Assert.That(result.IsSuccess, Is.True, "GetLabel has no callers in SimpleSource - default precheck must let it through.");
+    }
+
+    [Test]
+    public async Task RemoveMember_HasCaller_RefusedByDefault_ListsCaller()
+    {
+        SetSource("""
+        namespace TestProj;
+
+        public class Helper
+        {
+            public string GetName() => "Test";
+
+            public void UseHelper()
+            {
+                var name = GetName();
+            }
+        }
+        """, "Helper.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Helper.cs", MemberAction.remove, memberName: "GetName");
+        Assert.That(result.IsSuccess, Is.False, "A member with a real caller must be refused by default.");
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.Message, Does.Contain("caller"));
+    }
+
+    [Test]
+    public async Task RemoveMember_HasCaller_SkipPrecheckTrue_StillRefusedByEngineCallerCheck()
+    {
+        // skipPrecheck: true bypasses only the new tool-level (callers+implementations) precheck ->
+        // BasicRefactoringEngine.RemoveMemberAsync's own pre-existing, unconditional caller check
+        // (SymbolFinder-based, no bypass) still applies underneath, so a member with a real caller
+        // is never truly force-removable. This matches the existing engine-level contract
+        // (BUG_60_RemoveMember_ErrorsWhenMemberIsUsed) rather than superseding it.
+        SetSource("""
+        namespace TestProj;
+
+        public class Helper
+        {
+            public string GetName() => "Test";
+
+            public void UseHelper()
+            {
+                var name = GetName();
+            }
+        }
+        """, "Helper.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Helper.cs", MemberAction.remove, memberName: "GetName", skipPrecheck: true);
+        Assert.That(result.IsSuccess, Is.False, "The engine's own caller check still applies even with skipPrecheck: true.");
+    }
+
+    [Test]
+    public async Task RemoveMember_HasImplementationOnly_SkipPrecheckTrue_BypassesToolLevelCheck()
+    {
+        // An interface member's implementation isn't caught by the engine's caller-only
+        // SymbolFinder check, so the default (skipPrecheck: false) refusal here can only be coming
+        // from the new tool-level precheck. With skipPrecheck: true that precheck is bypassed ->
+        // removal still fails, but for a different reason (the general compile-validation safety
+        // net catching the now-unimplemented interface member), demonstrating skipPrecheck actually
+        // skips the precheck rather than the refusal being a fluke of some other gate.
+        SetSource("""
+        namespace TestProj;
+
+        public interface IGreeter
+        {
+            string Greet();
+        }
+
+        public class Greeter : IGreeter
+        {
+            public string Greet() => "hello";
+        }
+        """, "Greeter.cs");
+        var refused = await _refactoringStructuralTools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet");
+        Assert.That(refused.IsSuccess, Is.False, "An interface member's implementation must be caught by the default precheck.");
+        Assert.That(refused.ErrorData!.Message, Does.Contain("implementation"), "Default refusal must come from the tool-level precheck, listing the implementation.");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Greet", skipPrecheck: true);
+        Assert.That(result.IsSuccess, Is.False, "Removing an interface's sole implementation still breaks compilation - the separate compile-validation safety net catches it.");
+        Assert.That(result.ErrorData!.Detail, Does.Contain("does not implement interface member"), "With skipPrecheck: true, the refusal reason must shift from the precheck to compile validation, proving the precheck itself was actually skipped. The diagnostic text now lives in .Detail, not .Message, since abfa5db moved compile-validation failures to a generic .Message wrapper plus a separate detail field.");
+    }
+
+    [Test]
+    public async Task RemoveMember_OnNamespaceLevelRecord_SkipPrecheckTrue_ReturnsActionableTypeKindMessage()
+    {
+        // Regression test for blocking_error_member_remove_skipprecheck_targetnotfound_ambiguous_symbol.md.
+        // Root cause: RemoveMemberAsync's candidate resolution deliberately excludes type-level
+        // declarations (Class/Interface/Struct/Record/Enum/EnumMember) from its member pool - this
+        // is by design (Member(remove) only ever operates on class-level members), not something
+        // skipPrecheck changes. Without skipPrecheck, a record with callers is caught first by the
+        // tool-level precheck (FindCallersAsync, which DOES resolve type declarations) and refused
+        // with a caller list - masking the fact that the removal itself could never have succeeded.
+        // With skipPrecheck: true, that precheck is bypassed and the removal falls through to the
+        // always-doomed type-kind exclusion, which previously reported a misleading generic
+        // "Member not found" (TargetNotFound) even though GetFileOutline shows the record present
+        // and unchanged. The fix makes that failure name the actual cause instead.
+        SetMultiFile(
+            ("Chain.cs", """
+            namespace TestProj;
+
+            public record CircularDependencyChain(string Name);
+            """),
+            ("Caller.cs", """
+            namespace TestProj;
+
+            public class Caller
+            {
+                public CircularDependencyChain Make() => new CircularDependencyChain("x");
+            }
+            """));
+
+        var withPrecheck = await _refactoringStructuralTools.Member(reason: "test message", "Chain.cs", MemberAction.remove, memberName: "CircularDependencyChain");
+        Assert.That(withPrecheck.IsSuccess, Is.False, "A record with a real caller must be refused by the default precheck.");
+        Assert.That(withPrecheck.ErrorData!.Message, Does.Contain("caller"), "Default refusal must come from the tool-level precheck, listing the caller.");
+
+        var skipPrecheck = await _refactoringStructuralTools.Member(reason: "test message", "Chain.cs", MemberAction.remove, memberName: "CircularDependencyChain", skipPrecheck: true);
+        Assert.That(skipPrecheck.IsSuccess, Is.False, "Member(remove) cannot remove a type-level declaration regardless of skipPrecheck.");
+        Assert.That(skipPrecheck.ErrorData!.Message, Does.Contain("type-level declaration"), "The failure must name the actual cause (a type-level declaration Member(remove) structurally excludes), not a generic 'Member not found'.");
+        Assert.That(skipPrecheck.ErrorData!.Message, Does.Contain("Record"), "The message must name the specific excluded kind found under this name.");
+    }
+
+    [Test]
+    public async Task RemoveMember_OverrideWithNoCallersOrImplementations_SucceedsByDefault()
+    {
+        // An override with no callers of its own and nothing further overriding it isn't flagged by
+        // either the tool-level precheck or the engine's caller check -> confirms the precheck isn't
+        // over-broad (it doesn't flag every virtual/override method, only ones with real relationships).
+        SetMultiFile(("AnimalBase.cs", """
+            namespace TestProj;
+
+            public class AnimalBase
+            {
+                public virtual string Speak() => "...";
+            }
+            """), ("Dog.cs", """
+            namespace TestProj;
+
+            public class Dog : AnimalBase
+            {
+                public override string Speak() => "woof";
+            }
+            """));
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Dog.cs", MemberAction.remove, memberName: "Speak");
+        Assert.That(result.IsSuccess, Is.True, "An override with no callers and nothing overriding it in turn must succeed under the default precheck.");
+    }
+
+    // Regression coverage for docs/current/blockers/blocking_error_member_replace_interface_notfound.md:
+    // ResolveMemberByNameOrSnippet used to unconditionally exclude every interface-body member from
+    // its candidate set, so replace/remove could never target an interface's own property or method
+    // declaration (only Member(view), via a different unfiltered lookup path, could see them). Fixed
+    // via excludeInterfaceMembers: false at these two call sites, plus an interface-vs-implementer
+    // disambiguation rule for when a same-named implementer is also in scope (see
+    // RemoveMember_HasImplementationOnly_SkipPrecheckTrue_BypassesToolLevelCheck above, which exercises
+    // that disambiguation from the other direction: same name, implementer must win over the interface).
+    [Test]
+    public async Task RemoveMember_InterfaceProperty_NoImplementerInFile_Succeeds()
+    {
+        SetSource("""
+            namespace TestProj;
+
+            public interface IGreeter
+            {
+                string Greeting { get; }
+            }
+            """, "IGreeter.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "IGreeter.cs", MemberAction.remove, memberName: "Greeting");
+        Assert.That(result.IsSuccess, Is.True, "Member(remove) must be able to target a property declared directly on an interface.");
+    }
+
+    [Test]
+    public async Task ReplaceMember_InterfaceMethod_NoImplementerInFile_Succeeds()
+    {
+        SetSource("""
+            namespace TestProj;
+
+            public interface IGreeter
+            {
+                string Greet();
+            }
+            """, "IGreeter.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "IGreeter.cs", MemberAction.replace, memberName: "Greet", newMemberSource: "string Greet(string name);");
+        Assert.That(result.IsSuccess, Is.True, "Member(replace) must be able to target a method declared directly on an interface.");
+    }
+
+    // --- ReplaceConstructorWithFactory ---
+    [Test]
+    public async Task ReplaceConstructorWithFactory_ValidClass_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advancedStructuralEngine.ReplaceConstructorWithFactoryAsync("Order.cs", "Order");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- InvertAssignments ---
+    [Test]
+    public async Task InvertAssignments_ValidLineRange_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advTools.InvertAssignments(reason: "test message", "Order.cs", 8, 12);
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ReduceBlockDepth ---
+    [Test]
+    public async Task ReduceBlockDepth_ValidMethod_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _logicOptimizationEngine.ReduceBlockDepthAsync("Order.cs", "GetStatus");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- OptimizeTaskWait ---
+    [Test]
+    public async Task OptimizeTaskWait_ValidFile_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _advancedRefactoringEngine.OptimizeTaskWaitAsync("Order.cs");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- SyncInterfaceToImplementation ---
+    [Test]
+    public async Task SyncInterfaceToImplementation_ClassWithInterface_ReturnsString()
+    {
+        const string src = @"namespace TestProj;
+public interface IWorker { void Work(); }
+public class Worker : IWorker { public void Work() {} public void Extra() {} }";
+        SetSource(src, "Worker.cs");
+        var result = await _advTools.SyncInterface(reason: "test message", "Worker.cs", "IWorker", SyncInterfaceAction.sync, "Worker");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- IntroduceParameterObject---
+    [Test]
+    public async Task IntroduceParameterObject_ValidMethod_ReturnsString()
+    {
+        SetMultiFile(("Refactor.cs", RefactorSource));
+        var result = await _advTools.IntroduceParameterObject(reason: "test message", "Refactor.cs", "Process");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task IntroduceParameterObject_NonExistentFile_ReturnsNull()
+    {
+        SetSource("public class C {}", "Test.cs");
+        var result = await _advTools.IntroduceParameterObject(reason: "test message", "NonExistent.cs", "Process");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- UpdateXmlDocsFromSignature---
+    [Test]
+    public async Task UpdateXmlDocsFromSignature_ValidMethod_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringEngine.UpdateXmlDocsFromSignatureAsync("Order.cs", "GetLabel");
+    }
+
+    // --- ConvertExpressionBody ---
+    [Test]
+    public async Task ConvertExpressionBody_ToBlockBody_ReturnsString()
+    {
+        SetMultiFile(("Refactor.cs", RefactorSource));
+        var result = await _advancedStructuralEngine.ConvertExpressionBodyAsync("Refactor.cs", "Sound", "ToBlockBody");
+    }
+
+    // --- ExtractConstant ---
+    [Test]
+    public async Task ExtractConstant_WithLiteralSnippet_ReturnsString()
+    {
+        const string src = @"namespace TestProj; public class C { public string GetLabel() { return ""hello""; } }";
+        SetSource(src, "C.cs");
+        var result = await _advTools.Introduce(reason: "test message", "C.cs", @"""hello""", "HelloLabel", IntroduceAsType.@constant);
+    }
+
+    // --- AnalyzeControlFlow ---
+    [Test]
+    public async Task AnalyzeControlFlow_ValidMethod_ReturnsSummary()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringEngine.AnalyzeControlFlowAsync("Order.cs", "GetStatus");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- AnalyzeDataFlow ---
+    [Test]
+    public async Task AnalyzeDataFlow_ValidMethod_ReturnsSummary()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringEngine.AnalyzeDataFlowAsync("Order.cs", "GetStatus");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- FormatDocumentPreview ---
+    [Test]
+    public async Task FormatDocumentPreview_ValidFile_ReturnsPreviewResult()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringEngine.FormatDocumentPreviewAsync("Order.cs");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ConvertToNullCoalescing ---
+    [Test]
+    public async Task ConvertToNullCoalescing_ValidFile_ReturnsString()
+    {
+        const string src = @"namespace TestProj; public class C { public string Get(string s) { if (s == null) s = ""default""; return s; } }";
+        SetSource(src, "C.cs");
+        var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("C.cs");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    public async Task ConvertToNullCoalescing_NonExistentFile_Throws()
+    {
+        SetSource("public class C {}", "Test.cs");
+        var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("NonExistent.cs");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ExtractLocalVariable ---
+    [Test]
+    public async Task ExtractLocalVariable_ValidContext_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringExtractionDocsTools.ExtractLocalVariable(reason: "test message", "Order.cs", "GetLabel", "label");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task ExtractLocalVariable_NonExistentFile_ReturnsStructuredError()
+    {
+        SetSource("public class C {}", "Test.cs");
+        var result = await _refactoringExtractionDocsTools.ExtractLocalVariable(reason: "test message", "NonExistent.cs", "GetLabel", "label");
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData, Is.Not.Null);
+    }
+
+    // --- ConvertToSwitch ---
+    [Test]
+    public async Task ConvertToSwitch_FileWithIfElseChain_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Order.cs");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    public async Task ConvertToSwitch_NonExistentFile_Throws()
+    {
+        SetSource("public class C {}", "Test.cs");
+        var result = await _logicOptimizationEngine.ConvertToSwitchAsync("NonExistent.cs");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // --- ConvertToPattern ---
+    [Test]
+    public async Task ConvertToPattern_ValidFile_ReturnsString()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _modernizationEngine.ConvertToPatternAsync("Order.cs");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    public async Task ConvertToPattern_NonExistentFile_Throws()
+    {
+        SetSource("public class C {}", "Test.cs");
+        var result = await _modernizationEngine.ConvertToPatternAsync("NonExistent.cs");
+        Assert.That(result, Is.Not.Null);
+    }
+
+    // Regression test for blocking_error_synctypeandfilename_wrong_type_undolastapply_no_reversible_items.md
+    // Symptom 1: without targetTypeName, SyncTypeAndFilename picked whichever type happened to be
+    // declared first, not necessarily the one the caller actually wanted. This reproduces that
+    // shape - targetTypeName must be able to select the LAST-declared type.
+    [Test]
+    public async Task SyncTypeAndFilename_TargetTypeName_SelectsNonFirstDeclaredTypeAsync()
+    {
+        const string mismatchedSource = "namespace TestProj;\n\npublic class HelperResult\n{\n    public bool Ok { get; set; }\n}\n\npublic class MainService\n{\n    public int Id { get; set; }\n}\n";
+        var tempDir = Path.Combine(Path.GetTempPath(), "SyncTypeAndFilenameTargetTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var oldPath = Path.Combine(tempDir, "Mismatched.cs");
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", Path.Combine(tempDir, "TestProj.csproj"), [("Mismatched.cs", mismatchedSource, oldPath)]);
+            _workspaceManager.SetTestSolution(solution);
+            var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", oldPath, targetTypeName: "MainService");
+            Assert.That(result.IsSuccess, Is.True, $"Expected rename to succeed; error: {result.ErrorData?.Message}");
+            var summary = (AppliedChangeSummary)result.SuccessData!;
+            Assert.That(summary.AffectedFiles, Has.Some.Matches<FilePathWrapper>(p => p.Absolute.Contains("MainService.cs")), "Should target MainService (explicitly named), not HelperResult (first-declared).");
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    // Companion negative case: an unknown targetTypeName must fail with an actionable error naming
+    // the types that actually exist in the file, not silently fall back to the first-declared type.
+    [Test]
+    public async Task SyncTypeAndFilename_UnknownTargetTypeName_ReturnsActionableErrorAsync()
+    {
+        const string mismatchedSource = "namespace TestProj;\n\npublic class HelperResult\n{\n    public bool Ok { get; set; }\n}\n\npublic class MainService\n{\n    public int Id { get; set; }\n}\n";
+        var tempDir = Path.Combine(Path.GetTempPath(), "SyncTypeAndFilenameTargetTests_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            var oldPath = Path.Combine(tempDir, "Mismatched.cs");
+            File.WriteAllText(oldPath, mismatchedSource);
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", Path.Combine(tempDir, "TestProj.csproj"), [("Mismatched.cs", mismatchedSource, oldPath)]);
+            _workspaceManager.SetTestSolution(solution);
+            var result = await _refactoringStructuralTools.SyncTypeAndFilename(reason: "test message", oldPath, targetTypeName: "DoesNotExist");
+            Assert.That(result.IsSuccess, Is.False);
+            Assert.That(result.ErrorData!.Message, Does.Contain("DoesNotExist"));
+            Assert.That(result.ErrorData!.Message, Does.Contain("HelperResult"));
+            Assert.That(result.ErrorData!.Message, Does.Contain("MainService"));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+}

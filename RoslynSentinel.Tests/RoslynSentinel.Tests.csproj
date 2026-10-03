@@ -34,11 +34,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RoslynSentinel.Server.Basic\RoslynSentinel.Server.Basic.csproj" />
-    <ProjectReference Include="..\RoslynSentinel.Tools.Basic\RoslynSentinel.Tools.Basic.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Folder Include="TestResults\" />
   </ItemGroup>
 
@@ -71,6 +66,11 @@
 
 	<ItemGroup>
 	  <None Include="C:\Users\Administrator\source\repos\RoslynSentinel\RoslynSentinel.Tests\.editorconfig" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\RoslynSentinel.Common\RoslynSentinel.Common.csproj" />
+	  <ProjectReference Include="..\RoslynSentinel.Engines.Basic\RoslynSentinel.Engines.Basic.csproj" />
 	</ItemGroup>
 
 </Project>

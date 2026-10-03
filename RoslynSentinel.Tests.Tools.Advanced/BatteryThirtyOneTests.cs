@@ -1,0 +1,329 @@
+// Battery #31 -> Regression tests for inline_class and convert_method_to_indexer
+// Covers the two bugs fixed in this battery:
+//   1. inline_class was an unimplemented stub (InvalidOperationException)
+//   2. convert_method_to_indexer had silent no-op on method-not-found / wrong param count
+using Microsoft.Extensions.Logging.Abstractions;
+
+using RoslynSentinel.Engines.Advanced;
+using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tools.Advanced;
+
+#pragma warning disable CS8618
+namespace RoslynSentinel.Tests.Tools.Advanced;
+
+[TestFixture]
+public class BatteryThirtyOneTests
+{
+    private IWorkspaceManager _workspaceManager;
+    private SentinelConfiguration _config;
+    private BasicRefactoringEngine _refactoringEngine;
+    private StructuralRefactoringEngine _advancedStructuralEngine;
+    private MappingEngine _mappingEngine;
+    private SemanticRefactoringEngine _semanticRefactoringEngine;
+    private LogicSimplificationEngine _advancedLogicEngine;
+    private StructuralRefinementEngine _structuralRefinementEngine;
+    private CodeStyleEngine _codeStyleEngine;
+    private LogicSimplificationEngine _codeFlowEngine;
+    private AdvancedRefactoringEngine _advancedRefactoringEngine;
+    private LogicSimplificationEngine _logicOptimizationEngine;
+    private SyntaxModernizationEngine _modernizationEngine;
+    private ValidationEngine _validationEngine;
+    private AdvancedRefactoringTools _tools;
+    [SetUp]
+    public void SetUp()
+    {
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _config = new SentinelConfiguration();
+        _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
+        _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
+        _mappingEngine = new MappingEngine(_workspaceManager);
+        _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
+        _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
+        _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
+        _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
+        _codeFlowEngine = new LogicSimplificationEngine(_workspaceManager);
+        _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
+        _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
+        _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
+        _validationEngine = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        _tools = new AdvancedRefactoringTools(_workspaceManager);
+    }
+
+    [TearDown]
+    public void TearDown() => _workspaceManager?.Dispose();
+    private void SetSource(string source, string fileName = "Test.cs")
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+        _workspaceManager.SetTestSolution(solution);
+    }
+
+    private void SetMultiFile(params (string name, string content)[] files)
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", files);
+        _workspaceManager.SetTestSolution(solution);
+    }
+
+    // ======================================================================
+    // inline_class -> Bug Fix: Was throwing InvalidOperationException (stub)
+    // ======================================================================
+    [Test]
+    public async Task InlineClass_SameFile_MovesPublicMembers()
+    {
+        const string src = @"
+public class Helper { public int Value = 42; public void Go() {} }
+public class Owner {}";
+        SetSource(src, "SameFile.cs");
+        var result = await _advancedStructuralEngine.InlineClassAsync("SameFile.cs", "SameFile.cs", "Helper");
+        Assert.That(result, Does.ContainKey(new FilePathWrapper("SameFile.cs")), "Should produce updated file");
+        var content = result["SameFile.cs"];
+        Assert.That(content, Does.Contain("Value"), "Owner should contain the inlined field");
+        Assert.That(content, Does.Contain("Go"), "Owner should contain the inlined method");
+        Assert.That(content, Does.Not.Contain("class Helper"), "Helper class should be removed");
+        Assert.That(content, Does.Contain("class Owner"), "Owner class should remain");
+    }
+
+    [Test]
+    public async Task InlineClass_SameFile_ReturnsDictionaryNotThrow()
+    {
+        // Regression: was throwing InvalidOperationException as a stub
+        const string src = @"
+public class HelperClass { public string Tag = ""hello""; }
+public class Consumer {}";
+        SetSource(src, "File.cs");
+        // Must not throw
+        Dictionary<FilePathWrapper, string>? result = null;
+        Assert.DoesNotThrowAsync(async () =>
+        {
+            var rawResult = await _advancedStructuralEngine.InlineClassAsync("File.cs", "File.cs", "HelperClass");
+            result = rawResult;
+        });
+        Assert.That(result, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task InlineClass_SameFile_MultipleMembers_AllMoved()
+    {
+        const string src = @"
+public class DataClass {
+    public int Alpha;
+    public string Beta = """";
+    public void Gamma() {}
+    public int Delta() => 1;
+}
+public class Target {}";
+        SetSource(src, "Multi.cs");
+        var result = await _advancedStructuralEngine.InlineClassAsync("Multi.cs", "Multi.cs", "DataClass");
+        var content = result["Multi.cs"];
+        Assert.That(content, Does.Contain("Alpha"));
+        Assert.That(content, Does.Contain("Beta"));
+        Assert.That(content, Does.Contain("Gamma"));
+        Assert.That(content, Does.Contain("Delta"));
+        Assert.That(content, Does.Not.Contain("class DataClass"));
+    }
+
+    [Test]
+    public async Task InlineClass_CrossFile_MovesMembers()
+    {
+        SetMultiFile(("Source.cs", "namespace App; public class Helper { public int Value; public void Act() {} }"), ("Target.cs", "namespace App; public class Owner {}"));
+        var result = await _advancedStructuralEngine.InlineClassAsync("Source.cs", "Target.cs", "Helper");
+        Assert.That(result, Does.ContainKey(new FilePathWrapper("Target.cs")), "Target file should be updated");
+        var targetContent = result["Target.cs"];
+        Assert.That(targetContent, Does.Contain("Value"), "Value field should be in target");
+        Assert.That(targetContent, Does.Contain("Act"), "Act method should be in target");
+    }
+
+    [Test]
+    public async Task InlineClass_CrossFile_SourceClassRemoved()
+    {
+        SetMultiFile(("Source.cs", "namespace App; public class Helper { public int X; }"), ("Target.cs", "namespace App; public class Owner {}"));
+        var result = await _advancedStructuralEngine.InlineClassAsync("Source.cs", "Target.cs", "Helper");
+        Assert.That(result, Does.ContainKey(new FilePathWrapper("Source.cs")), "Source file should also be returned");
+        var sourceContent = result["Source.cs"];
+        Assert.That(sourceContent, Does.Not.Contain("class Helper"), "Helper should be removed from source");
+    }
+
+    [Test]
+    public async Task InlineClass_ClassNotFound_ReturnsErrorKey()
+    {
+        const string src = "public class Existing {}";
+        SetSource(src, "File.cs");
+        var result = await _advancedStructuralEngine.InlineClassAsync("File.cs", "File.cs", "NonExistent");
+        Assert.That(result, Does.ContainKey(new FilePathWrapper("__error__")), "Should return __error__ key");
+        var errorContent = result["__error__"];
+        Assert.That(errorContent, Does.Contain("NonExistent"), "ErrorDetails should mention the missing class");
+    }
+
+    [Test]
+    public async Task InlineClass_SourceFileNotFound_ReturnsErrorKey()
+    {
+        SetSource("public class Existing {}", "File.cs");
+        var result = await _advancedStructuralEngine.InlineClassAsync("doesnotexist.cs", "File.cs", "Anything");
+        Assert.That(result, Does.ContainKey(new FilePathWrapper("__error__")), "Should return __error__ key");
+    }
+
+    [Test]
+    public async Task InlineClass_TargetFileNotFound_ReturnsErrorKey()
+    {
+        SetSource("public class Src {}", "Source.cs");
+        var result = await _advancedStructuralEngine.InlineClassAsync("Source.cs", "doesnotexist.cs", "Src");
+        Assert.That(result, Does.ContainKey(new FilePathWrapper("__error__")), "Should return __error__ key");
+    }
+
+    [Test]
+    public async Task InlineClass_SameFile_NoOtherClass_ReturnsErrorKey()
+    {
+        const string src = "public class LoneClass { public int X; }";
+        SetSource(src, "Lone.cs");
+        var result = await _advancedStructuralEngine.InlineClassAsync("Lone.cs", "Lone.cs", "LoneClass");
+        Assert.That(result, Does.ContainKey(new FilePathWrapper("__error__")), "Should return error - no target class to inline into");
+    }
+
+    [Test]
+    public async Task InlineClass_EmptyClass_ProducesValidResult()
+    {
+        const string src = @"
+public class Empty {}
+public class Recipient { public int Existing; }";
+        SetSource(src, "F.cs");
+        var result = await _advancedStructuralEngine.InlineClassAsync("F.cs", "F.cs", "Empty");
+        // Empty class inlined -> should succeed, Recipient should still exist, Empty removed
+        Assert.That(result, Does.ContainKey(new FilePathWrapper("F.cs")));
+        var updatedContent = result["F.cs"];
+        Assert.That(updatedContent, Does.Contain("class Recipient"));
+        Assert.That(updatedContent, Does.Not.Contain("class Empty"));
+    }
+
+    // ======================================================================
+    // inline_class -> Cross-file type reference updates (⭐⭐⭐⭐⭐)
+    // ======================================================================
+    [Test]
+    public async Task InlineClass_CrossFile_UpdatesTypeReferencesInThirdFile()
+    {
+        // A third file that holds a variable typed as 'Helper'. After inlining Helper into Owner,
+        // that reference should be renamed to 'Owner' in the returned dictionary.
+        SetMultiFile(("Helper.cs", "namespace App; public class Helper { public int Value; }"), ("Owner.cs", "namespace App; public class Owner {}"), ("Consumer.cs", "namespace App; public class Consumer { public Helper? Instance; }"));
+        var result = await _advancedStructuralEngine.InlineClassAsync("Helper.cs", "Owner.cs", "Helper");
+        // Primary files updated
+        Assert.That(result, Does.ContainKey(new FilePathWrapper("Owner.cs")), "Target file should be in result");
+        Assert.That(result["Owner.cs"], Does.Contain("Value"), "Owner should contain inlined member");
+        // Third file should also be updated: 'Helper' -> 'Owner'
+        Assert.That(result, Does.ContainKey(new FilePathWrapper("Consumer.cs")), "Third file with type reference should also be updated");
+        Assert.That(result["Consumer.cs"], Does.Not.Contain("Helper"), "Old class name should be gone");
+        Assert.That(result["Consumer.cs"], Does.Contain("Owner"), "New class name should appear");
+    }
+
+    // ======================================================================
+    // convert_method_to_indexer -> Bug Fix: Silent no-op on error conditions
+    // ======================================================================
+    [Test]
+    public async Task ConvertMethodToIndexer_MethodNotFound_ReturnsErrorComment()
+    {
+        const string src = "public class MyClass { public int Compute(int x) => x * 2; }";
+        SetSource(src, "C.cs");
+        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "NoSuchMethod");
+        // Regression: was silently returning original content with no indication of failure
+        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Should return error comment when method not found");
+        Assert.That(result.Message!, Does.Contain("NoSuchMethod"), "ErrorDetails should mention the method name");
+    }
+
+    [Test]
+    public async Task ConvertMethodToIndexer_ZeroParams_ReturnsErrorComment()
+    {
+        const string src = "public class MyClass { public int GetValue() => 42; }";
+        SetSource(src, "C.cs");
+        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "GetValue");
+        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Zero-param method cannot become indexer");
+        Assert.That(result.Message!, Does.Contain("GetValue"), "ErrorDetails should name the method");
+    }
+
+    [Test]
+    public async Task ConvertMethodToIndexer_TwoParams_ReturnsErrorComment()
+    {
+        const string src = "public class MyClass { public int Get(int row, int col) => row + col; }";
+        SetSource(src, "C.cs");
+        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
+        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Two-param method cannot become indexer");
+        Assert.That(result.Message!, Does.Contain("Get"), "ErrorDetails should name the method");
+    }
+
+    [Test]
+    public async Task ConvertMethodToIndexer_StaticMethod_ReturnsErrorComment()
+    {
+        const string src = "public class MyClass { public static int Get(int i) => i; }";
+        SetSource(src, "C.cs");
+        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
+        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Static method cannot become indexer");
+        Assert.That(result.Message!, Does.Contain("static"), "ErrorDetails should mention static");
+    }
+
+    [Test]
+    public async Task ConvertMethodToIndexer_AbstractNoBody_ReturnsErrorComment()
+    {
+        const string src = "public abstract class Base { public abstract int Get(int i); }";
+        SetSource(src, "C.cs");
+        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
+        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Abstract method with no body cannot become indexer");
+    }
+
+    [Test]
+    public async Task ConvertMethodToIndexer_BlockBody_CreatesIndexer()
+    {
+        const string src = @"
+public class MyList {
+    private int[] _data = new int[10];
+    public int Get(int i) { return _data[i]; }
+}";
+        SetSource(src, "C.cs");
+        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
+        Assert.That(result.UpdatedText!, Does.Not.StartWith("// ERROR:"), "Should succeed for valid block-body method");
+        Assert.That(result.UpdatedText!, Does.Contain("this[int i]"), "Should produce indexer syntax");
+        Assert.That(result.UpdatedText!, Does.Not.Contain("Get(int i)"), "Original method should be replaced");
+    }
+
+    [Test]
+    public async Task ConvertMethodToIndexer_ExpressionBody_CreatesIndexer()
+    {
+        const string src = @"
+public class MyList {
+    private int[] _data = new int[10];
+    public int Get(int index) => _data[index];
+}";
+        SetSource(src, "C.cs");
+        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
+        Assert.That(result.UpdatedText!, Does.Not.StartWith("// ERROR:"), "Should succeed for expression-body method");
+        Assert.That(result.UpdatedText!, Does.Contain("this[int index]"), "Should produce indexer");
+    }
+
+    [Test]
+    public async Task ConvertMethodToIndexer_UnknownFile_ReturnsEmpty()
+    {
+        SetSource("public class X {}", "Known.cs");
+        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("unknown_file.cs", "Get");
+        Assert.That(result.UpdatedText, Is.Null, "File not found should return null UpdatedText");
+    }
+
+    [Test]
+    public async Task ConvertMethodToIndexer_SuccessPreservesReturnType()
+    {
+        const string src = @"
+public class Lookup {
+    private string[] _items = new[] { ""a"", ""b"" };
+    public string Item(int n) => _items[n];
+}";
+        SetSource(src, "Lookup.cs");
+        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("Lookup.cs", "Item");
+        Assert.That(result.UpdatedText, Does.Contain("string"), "Indexer should preserve string return type");
+        Assert.That(result.UpdatedText, Does.Contain("this[int n]"), "Indexer should use original parameter name");
+    }
+
+    [Test]
+    public async Task ConvertMethodToIndexer_ErrorPreservesOriginalContent()
+    {
+        // When an error is returned, the original content should still be present after the comment
+        const string src = "public class C { public int Compute(int x) => x; }";
+        SetSource(src, "C.cs");
+        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "NotAMethod");
+        Assert.That(result.Message, Does.Contain("class C"), "Original source should be included after error comment");
+        Assert.That(result.Message, Does.Contain("Compute"), "Original method should still be present");
+    }
+}

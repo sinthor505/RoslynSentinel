@@ -60,29 +60,29 @@ public class AdminTools
             : $"Cleared {count} tracked external file change(s).";
     }
 
+    public enum McpServerControlOperation
+    {
+        GetServerStatus,
+        StopServer
+    }
+
     [McpServerTool(Name = "McpServerControl")]
     [Produces(DataTag.ResultOnly)]
     [Description("Operator-only control of this server process: status or stop (stop requires confirmServerStop).")]
     public string McpServerControl(
      [Description(ToolParams.Reason)] ToolCallReason reason,
-     string op,
-     string? confirmServerStop = null,
+     McpServerControlOperation operation,
      CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
 
-        if (op == "status")
+        if (operation == McpServerControlOperation.GetServerStatus)
         {
             return $"Running. PID={Environment.ProcessId}, path={System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName}";
         }
 
-        if (op == "stop")
+        if (operation == McpServerControlOperation.StopServer)
         {
-            if (!string.Equals(confirmServerStop, "confirmserverstop", StringComparison.OrdinalIgnoreCase))
-            {
-                return "Refused: stopping this server requires confirmServerStop='confirmServerStop' (case-insensitive). This terminates the current process; VS Code will respawn a fresh instance on its next tool call.";
-            }
-
             // The MCP SDK's request-handling path awaits the tool handler and then awaits flushing
             // the response to the stdio transport before this call completes - so by the time this
             // method returns, the caller is guaranteed to already have the response in flight. Exiting
@@ -98,6 +98,6 @@ public class AdminTools
             return "Stopping. VS Code will rebuild the server binary and spawn a fresh instance on its next tool call.";
         }
 
-        return $"Unknown op '{op}'. Valid ops: status, stop.";
+        return $"Unknown op '{operation}'. Valid operations: status, stop.";
     }
 }
