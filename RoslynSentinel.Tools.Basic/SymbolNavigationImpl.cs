@@ -86,18 +86,20 @@ public class SymbolNavigationImpl
             if (aspect == InspectSymbolAspect.info)
             {
                 var symbolInfo = await _symbolNavigationEngine.GetSymbolInfoAsync(filePathResolved, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (symbolInfo == null)
+                if (symbolInfo == null || symbolInfo.Kind == "Error")
                 {
                     var snippetPreview = contextSnippet.Length > 60 ? contextSnippet[..60] + "..." : contextSnippet;
+                    var errorMsg = string.IsNullOrEmpty(symbolInfo?.Error) ? 
+                        $"Could not resolve a symbol in '{filePathResolved}' for contextSnippet \"{snippetPreview}\". " +
+                        "This means one of: the snippet text does not appear verbatim in the file, it matched a " +
+                        "location with no bindable symbol (e.g. whitespace, a keyword, or a comment), or it matched " +
+                        "more than one location and lineBefore/lineAfter did not disambiguate. Re-check the snippet " +
+                        "against GetMethodSource/GetFileOutline output, or add lineBefore/lineAfter to pin the match."
+                        : symbolInfo!.Error;
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.Exception,
-                            $"Could not resolve a symbol in '{filePathResolved}' for contextSnippet \"{snippetPreview}\". " +
-                            "This means one of: the snippet text does not appear verbatim in the file, it matched a " +
-                            "location with no bindable symbol (e.g. whitespace, a keyword, or a comment), or it matched " +
-                            "more than one location and lineBefore/lineAfter did not disambiguate. Re-check the snippet " +
-                            "against GetMethodSource/GetFileOutline output, or add lineBefore/lineAfter to pin the match.")
+                        ErrorData = new ResultError(ToolErrorCode.Exception, errorMsg)
                     };
                 }
                 return new SentinelCallToolResult<object>
@@ -109,6 +111,16 @@ public class SymbolNavigationImpl
             if (aspect == InspectSymbolAspect.blastRadius)
             {
                 var result = await _impactAnalyzer.AnalyzeImpactAsync(filePathResolved, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+
+                if (!string.IsNullOrEmpty(result.Error))
+                {
+                    return new SentinelCallToolResult<object>
+                    {
+                        IsSuccess = false,
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, result.Error)
+                    };
+                }
+
                 return new SentinelCallToolResult<object>
                 {
                     IsSuccess = true,

@@ -192,6 +192,44 @@ public class OrderService : IOrderService
         Assert.That(result.IsSuccess, Is.True);
     }
 
+    [Test]
+    public async Task GetBlastRadius_ValidMethod_ReportHasNoErrorAndNamesSymbol()
+    {
+        SetSource(RichSource, "Test.cs");
+        var result = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ProcessAsync", InspectSymbolAspect.blastRadius);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.True);
+        var report = (ImpactReport)result.SuccessData!;
+        Assert.That(report.Error, Is.Null);
+        Assert.That(report.SymbolName, Does.Contain("ProcessAsync"));
+    }
+
+    [Test]
+    public async Task GetBlastRadius_UnresolvableSnippet_ReturnsNotFoundError()
+    {
+        SetSource(RichSource, "Test.cs");
+        var result = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.blastRadius);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound.ToString()));
+        Assert.That(result.ErrorData!.Message, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    public async Task InspectSymbol_UnresolvableSnippet_InfoAndBlastRadiusAgree()
+    {
+        SetSource(RichSource, "Test.cs");
+        var resultInfo = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.info);
+        var resultBlastRadius = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.blastRadius);
+        Assert.That(resultInfo.IsSuccess, Is.False);
+        Assert.That(resultBlastRadius.IsSuccess, Is.False);
+        Assert.That(resultInfo.ErrorData, Is.Not.Null);
+        Assert.That(resultBlastRadius.ErrorData, Is.Not.Null);
+        Assert.That(resultInfo.ErrorData!.Message, Is.Not.Null.And.Not.Empty);
+        Assert.That(resultBlastRadius.ErrorData!.Message, Is.Not.Null.And.Not.Empty);
+    }
+
     // --- FindMethodsByReturnType (via QuerySymbolRelationships) ---
     [Test]
     public async Task FindMethodsByReturnType_ValidType_ReturnsList()
