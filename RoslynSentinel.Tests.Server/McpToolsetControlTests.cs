@@ -127,15 +127,15 @@ public class McpToolsetControlTests
     public void Enable_NeverReplacesAnExistingTool_AndDisableLeavesItAlone()
     {
         var (service, collection) = CreateService();
-        var startupTool = McpServerTool.Create((string x) => x, new McpServerToolCreateOptions { Name = "ModifyModifier" });
+        var startupTool = McpServerTool.Create((string x) => x, new McpServerToolCreateOptions { Name = "MethodSignature" });
         collection.Add(startupTool);
 
         var change = service.SetEnabled(ToolSetName.declarations, true);
         service.SetEnabled(ToolSetName.declarations, false);
 
-        Assert.That(change.UnavailableTools, Does.Contain("ModifyModifier"));
-        Assert.That(change.AddedTools, Does.Not.Contain("ModifyModifier"));
-        Assert.That(collection.TryGetPrimitive("ModifyModifier", out var remaining), Is.True);
+        Assert.That(change.UnavailableTools, Does.Contain("MethodSignature"));
+        Assert.That(change.AddedTools, Does.Not.Contain("MethodSignature"));
+        Assert.That(collection.TryGetPrimitive("MethodSignature", out var remaining), Is.True);
         Assert.That(remaining, Is.SameAs(startupTool));
     }
 
@@ -207,7 +207,7 @@ public class McpToolsetControlTests
         Assert.That(all, Is.Unique);
         Assert.That(all.Intersect(ToolClassRegistry.ClaudeLeanToolNames), Is.Empty);
         Assert.That(ToolsetCatalog.AllToolNames, Has.Count.EqualTo(all.Length));
-        Assert.That(all, Has.Length.EqualTo(43));
+        Assert.That(all, Has.Length.EqualTo(39));
     }
 
     [Test]
@@ -421,7 +421,7 @@ public class McpToolsetControlTests
         await live.ToggleAsync("declarations", enabled: true);
         await Task.Delay(500);
         Assert.That(live.ListChangedCount, Is.Zero, "no subscription yet, so no notification");
-        Assert.That(await live.ToolNamesAsync(), Does.Contain("ModifyModifier"), "a re-list sees the new tools");
+        Assert.That(await live.ToolNamesAsync(), Does.Contain("Declaration"), "a re-list sees the new tools");
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.CurrentContext.CancellationToken);
         var listen = live.Client.SendRequestAsync(
@@ -482,12 +482,12 @@ public class McpToolsetControlTests
     {
         await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean");
 
-        var inactive = await live.CallAsync("McpServerStatus", new() { ["toolListing"] = "inactive", ["toolNameFilter"] = "ModifyModifier" });
+        var inactive = await live.CallAsync("McpServerStatus", new() { ["toolListing"] = "inactive", ["toolNameFilter"] = "Declaration" });
         Assert.That(LiveServer.Text(inactive), Does.Contain("McpToolsetControl(toolSet: declarations, enabled: true)"));
 
         await live.ToggleAsync("declarations", enabled: true);
 
-        var after = await live.CallAsync("McpServerStatus", new() { ["toolListing"] = "inactive", ["toolNameFilter"] = "ModifyModifier" });
+        var after = await live.CallAsync("McpServerStatus", new() { ["toolListing"] = "inactive", ["toolNameFilter"] = "Declaration" });
         Assert.That(LiveServer.Text(after), Does.Not.Contain("McpToolsetControl(toolSet: declarations"));
     }
 
@@ -560,12 +560,12 @@ public class McpToolsetControlTests
         Assert.That(live.ListChangedCount, Is.Zero);
     }
 
-    // ---- Declaration (step 4a-1a): merged ModifyModifier + ChangeAccessibility, on-demand in claude-lean only ----
+    // ---- Declaration (step 4a-1): merges ModifyModifier, ChangeAccessibility, ModifyAttribute and ModifyBaseType; on-demand in claude-lean only ----
 
     private static readonly string[] DeclarationOriginals = ["ModifyModifier", "ChangeAccessibility", "ModifyAttribute", "ModifyBaseType"];
 
     [Test]
-    public async Task Declaration_IsAbsentFromLeanUntilTheDeclarationsToolsetIsEnabled_AndLeavesTheOriginalsAlone()
+    public async Task Declaration_IsAbsentFromLeanUntilTheDeclarationsToolsetIsEnabled_AndReplacesTheFourOriginalsThere()
     {
         await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean");
 
@@ -576,7 +576,10 @@ public class McpToolsetControlTests
         await live.ToggleAsync("declarations", enabled: true);
         var on = await live.ToolNamesAsync();
         Assert.That(on, Does.Contain("Declaration"));
-        Assert.That(on, Is.SupersetOf(DeclarationOriginals), "slice A is additive: the four originals stay in the declarations set");
+        foreach (var original in DeclarationOriginals)
+        {
+            Assert.That(on, Does.Not.Contain(original), $"Declaration replaces {original} in claude-lean");
+        }
 
         await live.ToggleAsync("declarations", enabled: false);
         Assert.That(await live.ToolNamesAsync(), Does.Not.Contain("Declaration"));
@@ -622,7 +625,7 @@ public class McpToolsetControlTests
     }
 
     [Test]
-    public void Declaration_EmittedSchema_IsSmallerThanTheTwoToolsItMerges()
+    public void Declaration_EmittedSchema_IsSmallerThanTheFourToolsItMerges()
     {
         var services = new ServiceCollection().BuildServiceProvider();
         int Size(Type type, string method) =>
@@ -631,8 +634,11 @@ public class McpToolsetControlTests
         int declaration = Size(typeof(DeclarationTools), nameof(DeclarationTools.Declaration));
         int modifier = Size(typeof(RefactoringStructuralTools), nameof(RefactoringStructuralTools.ModifyModifier));
         int accessibility = Size(typeof(RefactoringSignatureTools), nameof(RefactoringSignatureTools.ChangeAccessibility));
-        TestContext.Out.WriteLine($"Emitted schema chars: Declaration={declaration}, ModifyModifier={modifier}, ChangeAccessibility={accessibility}, originals={modifier + accessibility}");
+        int attribute = Size(typeof(RefactoringStructuralTools), nameof(RefactoringStructuralTools.ModifyAttribute));
+        int baseType = Size(typeof(RefactoringStructuralTools), nameof(RefactoringStructuralTools.ModifyBaseType));
+        int originals = modifier + accessibility + attribute + baseType;
+        TestContext.Out.WriteLine($"Emitted schema chars: Declaration={declaration}, ModifyModifier={modifier}, ChangeAccessibility={accessibility}, ModifyAttribute={attribute}, ModifyBaseType={baseType}, originals={originals}");
 
-        Assert.That(declaration, Is.LessThan(modifier + accessibility));
+        Assert.That(declaration, Is.LessThan(originals));
     }
 }

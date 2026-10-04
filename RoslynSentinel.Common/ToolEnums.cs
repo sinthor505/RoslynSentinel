@@ -167,11 +167,20 @@ public enum AccessibilityLevel
     [JsonStringEnumMemberName("private protected")] privateProtected,
 }
 
-// Operations of the Declaration tool (claude-lean, declarations toolset). Later slices add attribute and baseType.
+// Operations of the Declaration tool (claude-lean, declarations toolset); each delegates to the Impl of the matching
+// original tool (modifier -> ModifyModifier, accessibility -> ChangeAccessibility, attribute -> ModifyAttribute,
+// baseType -> ModifyBaseType).
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum DeclarationOperation
 {
-    modifier, accessibility
+    modifier, accessibility, attribute, baseType
+}
+
+// The 'action' of the Declaration tool: add/remove for modifier, attribute and baseType; replace for attribute only.
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum DeclarationAction
+{
+    add, remove, replace
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

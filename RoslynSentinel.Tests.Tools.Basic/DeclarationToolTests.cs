@@ -26,6 +26,27 @@ public class DeclarationToolTests
     }
     """;
 
+    // Source for the attribute and baseType operations: MethodOne carries [Marker], DeclarationTarget implements IMarker.
+    private const string RichSource = """
+    namespace ContosoOrders.Core;
+
+    public class MarkerAttribute : System.Attribute { }
+
+    public class OtherAttribute : System.Attribute { }
+
+    public interface IMarker { }
+
+    public interface IOther { }
+
+    public class DeclarationTarget : IMarker
+    {
+        [Marker]
+        void MethodOne() { }
+
+        void MethodTwo() { }
+    }
+    """;
+
     private sealed record Tools(RefactoringStructuralTools Structural, RefactoringSignatureTools Signature, DeclarationTools Declaration);
 
     private static Tools BuildTools(IWorkspaceManager workspaceManager)
@@ -55,7 +76,7 @@ public class DeclarationToolTests
             dryRun: false, returnDiff: false, cancellationToken: default);
         var actual = await BuildTools(merged.Manager).Declaration.Declaration(
             reason: "parity merged", operation: DeclarationOperation.modifier, filePath: merged.PathOf(FixtureRelativePath), targetName: "MethodOne",
-            modifier: modifier, action: action, cancellationToken: default);
+            modifier: modifier, action: ToDeclarationAction(action), cancellationToken: default);
 
         AssertSameOutcome(expected, actual, original.ReadText(FixtureRelativePath), merged.ReadText(FixtureRelativePath));
         Assert.That(merged.ReadText(FixtureRelativePath), Does.Contain(expectedText));
@@ -140,7 +161,7 @@ public class DeclarationToolTests
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-        Assert.That(result.ErrorData.Message, Does.Contain("operation 'modifier'"));
+        Assert.That(result.ErrorData.Message, Does.Contain("does not take 'modifier'"));
     }
 
     [Test]
@@ -150,11 +171,11 @@ public class DeclarationToolTests
 
         var result = await BuildTools(workspace.Manager).Declaration.Declaration(
             reason: "mixed params", operation: DeclarationOperation.modifier, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne",
-            modifier: NonAccessibilityModifier.@static, action: AddRemoveAction.add, accessibility: AccessibilityLevel.@public, cancellationToken: default);
+            modifier: NonAccessibilityModifier.@static, action: DeclarationAction.add, accessibility: AccessibilityLevel.@public, cancellationToken: default);
 
         Assert.That(result.IsSuccess, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-        Assert.That(result.ErrorData.Message, Does.Contain("operation 'accessibility'"));
+        Assert.That(result.ErrorData.Message, Does.Contain("does not take 'accessibility'"));
         Assert.That(workspace.ReadText(FixtureRelativePath), Does.Not.Contain("static void MethodOne"));
     }
 
@@ -171,6 +192,220 @@ public class DeclarationToolTests
         Assert.That(actual.ErrorData!.ErrorCode, Is.EqualTo(expected.ErrorData!.ErrorCode));
         Assert.That(actual.ErrorData.Message, Is.EqualTo(expected.ErrorData.Message));
     }
+
+    [Test]
+    public async Task Declaration_AttributeAdd_MatchesModifyAttributeAsync()
+    {
+        var text = await AssertParityAsync(
+            (t, ws) => t.Structural.ModifyAttribute(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), targetName: "MethodTwo", existingAttribute: "Other", action: AttributeModifyAction.add, cancellationToken: default),
+            (t, ws) => t.Declaration.Declaration(reason: "parity merged", operation: DeclarationOperation.attribute, filePath: ws.PathOf(FixtureRelativePath), targetName: "MethodTwo", existingAttribute: "Other", action: DeclarationAction.add, cancellationToken: default));
+
+        Assert.That(text, Does.Contain("[Other]"));
+    }
+
+    [Test]
+    public async Task Declaration_AttributeReplace_MatchesModifyAttributeAsync()
+    {
+        var text = await AssertParityAsync(
+            (t, ws) => t.Structural.ModifyAttribute(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), targetName: "MethodOne", existingAttribute: "Marker", action: AttributeModifyAction.replace, newAttribute: "Other", cancellationToken: default),
+            (t, ws) => t.Declaration.Declaration(reason: "parity merged", operation: DeclarationOperation.attribute, filePath: ws.PathOf(FixtureRelativePath), targetName: "MethodOne", existingAttribute: "Marker", action: DeclarationAction.replace, newAttribute: "Other", cancellationToken: default));
+
+        Assert.That(text, Does.Contain("[Other]").And.Not.Contain("[Marker]"));
+    }
+
+    [Test]
+    public async Task Declaration_AttributeRemove_MatchesModifyAttributeAsync()
+    {
+        var text = await AssertParityAsync(
+            (t, ws) => t.Structural.ModifyAttribute(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), targetName: "MethodOne", existingAttribute: "Marker", action: AttributeModifyAction.remove, cancellationToken: default),
+            (t, ws) => t.Declaration.Declaration(reason: "parity merged", operation: DeclarationOperation.attribute, filePath: ws.PathOf(FixtureRelativePath), targetName: "MethodOne", existingAttribute: "Marker", action: DeclarationAction.remove, cancellationToken: default));
+
+        Assert.That(text, Does.Not.Contain("[Marker]"));
+    }
+
+    [Test]
+    public async Task Declaration_AttributeBatch_MatchesModifyAttributeBatchAsync()
+    {
+        List<AttributeEdit> EditsFor(InMemoryWorkspace ws) =>
+        [
+            new AttributeEdit { FilePath = ws.PathOf(FixtureRelativePath), TargetName = "MethodTwo", ExistingAttribute = "Other", Action = AttributeModifyAction.add },
+            new AttributeEdit { FilePath = ws.PathOf(FixtureRelativePath), TargetName = "MethodOne", ExistingAttribute = "Marker", Action = AttributeModifyAction.remove },
+        ];
+
+        var text = await AssertParityAsync(
+            (t, ws) => t.Structural.ModifyAttribute(reason: "parity original", batchEdits: EditsFor(ws), cancellationToken: default),
+            (t, ws) => t.Declaration.Declaration(reason: "parity merged", operation: DeclarationOperation.attribute, batchEdits: EditsFor(ws), cancellationToken: default));
+
+        Assert.That(text, Does.Contain("[Other]").And.Not.Contain("[Marker]"));
+    }
+
+    [Test]
+    public async Task Declaration_BaseTypeAdd_MatchesModifyBaseTypeAsync()
+    {
+        var text = await AssertParityAsync(
+            (t, ws) => t.Structural.ModifyBaseType(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), typeName: "DeclarationTarget", baseTypeName: "IOther", action: AddRemoveAction.add, cancellationToken: default),
+            (t, ws) => t.Declaration.Declaration(reason: "parity merged", operation: DeclarationOperation.baseType, filePath: ws.PathOf(FixtureRelativePath), typeName: "DeclarationTarget", baseTypeName: "IOther", action: DeclarationAction.add, cancellationToken: default));
+
+        Assert.That(text, Does.Contain("IMarker, IOther"));
+    }
+
+    [Test]
+    public async Task Declaration_BaseTypeRemove_MatchesModifyBaseTypeAsync()
+    {
+        var text = await AssertParityAsync(
+            (t, ws) => t.Structural.ModifyBaseType(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), typeName: "DeclarationTarget", baseTypeName: "IMarker", action: AddRemoveAction.remove, cancellationToken: default),
+            (t, ws) => t.Declaration.Declaration(reason: "parity merged", operation: DeclarationOperation.baseType, filePath: ws.PathOf(FixtureRelativePath), typeName: "DeclarationTarget", baseTypeName: "IMarker", action: DeclarationAction.remove, cancellationToken: default));
+
+        Assert.That(text, Does.Not.Contain("DeclarationTarget : IMarker"));
+    }
+
+    [Test]
+    public async Task Declaration_BaseTypeBatch_MatchesModifyBaseTypeBatchAsync()
+    {
+        List<BaseTypeEdit> EditsFor(InMemoryWorkspace ws) =>
+        [
+            new BaseTypeEdit { FilePath = ws.PathOf(FixtureRelativePath), TypeName = "DeclarationTarget", BaseTypeName = "IOther", Action = AddRemoveAction.add },
+        ];
+
+        var text = await AssertParityAsync(
+            (t, ws) => t.Structural.ModifyBaseType(reason: "parity original", edits: EditsFor(ws), cancellationToken: default),
+            (t, ws) => t.Declaration.Declaration(reason: "parity merged", operation: DeclarationOperation.baseType, baseTypeEdits: EditsFor(ws), cancellationToken: default));
+
+        Assert.That(text, Does.Contain("IMarker, IOther"));
+    }
+
+    [Test]
+    public async Task Declaration_AttributeReplaceWithoutNewAttribute_ReturnsTheSameErrorAsModifyAttributeAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, RichSource));
+        var tools = BuildTools(workspace.Manager);
+
+        var expected = await tools.Structural.ModifyAttribute(reason: "missing newAttribute", filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne", existingAttribute: "Marker", action: AttributeModifyAction.replace, cancellationToken: default);
+        var actual = await tools.Declaration.Declaration(reason: "missing newAttribute", operation: DeclarationOperation.attribute, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne", existingAttribute: "Marker", action: DeclarationAction.replace, cancellationToken: default);
+
+        Assert.That(actual.IsSuccess, Is.False);
+        Assert.That(actual.ErrorData!.ErrorCode, Is.EqualTo(expected.ErrorData!.ErrorCode));
+        Assert.That(actual.ErrorData.Message, Is.EqualTo(expected.ErrorData.Message));
+    }
+
+    [Test]
+    public async Task Declaration_Attribute_MissingParams_NamesThemAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, RichSource));
+
+        var result = await BuildTools(workspace.Manager).Declaration.Declaration(
+            reason: "missing params", operation: DeclarationOperation.attribute, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne", cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData.Message, Does.Contain("'existingAttribute'").And.Contain("'action'").And.Contain("'batchEdits'"));
+    }
+
+    [Test]
+    public async Task Declaration_Attribute_WithSingularAndBatch_RejectsAsInvalidArgumentAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, RichSource));
+
+        var result = await BuildTools(workspace.Manager).Declaration.Declaration(
+            reason: "both forms", operation: DeclarationOperation.attribute, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne",
+            existingAttribute: "Marker", action: DeclarationAction.remove, batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(FixtureRelativePath), TargetName = "MethodOne", ExistingAttribute = "Marker" }],
+            cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData.Message, Does.Contain("not both"));
+        Assert.That(workspace.ReadText(FixtureRelativePath), Does.Contain("[Marker]"));
+    }
+
+    [Test]
+    public async Task Declaration_Attribute_WithModifierParam_RejectsAsInvalidArgumentAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, RichSource));
+
+        var result = await BuildTools(workspace.Manager).Declaration.Declaration(
+            reason: "mixed params", operation: DeclarationOperation.attribute, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne",
+            existingAttribute: "Marker", action: DeclarationAction.remove, modifier: NonAccessibilityModifier.@static, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData.Message, Does.Contain("does not take 'modifier'"));
+        Assert.That(workspace.ReadText(FixtureRelativePath), Does.Contain("[Marker]"));
+    }
+
+    [Test]
+    public async Task Declaration_BaseType_MissingParams_NamesThemAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, RichSource));
+
+        var result = await BuildTools(workspace.Manager).Declaration.Declaration(
+            reason: "missing params", operation: DeclarationOperation.baseType, filePath: workspace.PathOf(FixtureRelativePath), cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData.Message, Does.Contain("'typeName'").And.Contain("'baseTypeName'").And.Contain("'baseTypeEdits'"));
+    }
+
+    [Test]
+    public async Task Declaration_BaseType_WithTargetName_RejectsAsInvalidArgumentAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, RichSource));
+
+        var result = await BuildTools(workspace.Manager).Declaration.Declaration(
+            reason: "wrong name param", operation: DeclarationOperation.baseType, filePath: workspace.PathOf(FixtureRelativePath), targetName: "DeclarationTarget",
+            baseTypeName: "IOther", action: DeclarationAction.add, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData.Message, Does.Contain("does not take 'targetName'"));
+        Assert.That(workspace.ReadText(FixtureRelativePath), Does.Not.Contain("IOther,"));
+    }
+
+    [Test]
+    public async Task Declaration_ReplaceAction_OnModifier_RejectsAsInvalidArgumentAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, RichSource));
+
+        var result = await BuildTools(workspace.Manager).Declaration.Declaration(
+            reason: "replace action", operation: DeclarationOperation.modifier, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne",
+            modifier: NonAccessibilityModifier.@static, action: DeclarationAction.replace, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData.Message, Does.Contain("only valid for operation 'attribute'"));
+    }
+
+    [Test]
+    public async Task Declaration_ReplaceAction_OnBaseType_RejectsAsInvalidArgumentAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, RichSource));
+
+        var result = await BuildTools(workspace.Manager).Declaration.Declaration(
+            reason: "replace action", operation: DeclarationOperation.baseType, filePath: workspace.PathOf(FixtureRelativePath), typeName: "DeclarationTarget",
+            baseTypeName: "IOther", action: DeclarationAction.replace, cancellationToken: default);
+
+        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData.Message, Does.Contain("only valid for operation 'attribute'"));
+    }
+
+    // Runs the original tool on one InMemoryWorkspace and Declaration on a second identical one, asserts the same outcome
+    // and file text, and returns the merged workspace's file text for operation-specific assertions.
+    private static async Task<string> AssertParityAsync(
+        Func<Tools, InMemoryWorkspace, Task<SentinelCallToolResult<AppliedChangeSummary>>> runOriginal,
+        Func<Tools, InMemoryWorkspace, Task<SentinelCallToolResult<AppliedChangeSummary>>> runMerged)
+    {
+        using var original = InMemoryWorkspace.Create((FixtureRelativePath, RichSource));
+        using var merged = InMemoryWorkspace.Create((FixtureRelativePath, RichSource));
+
+        var expected = await runOriginal(BuildTools(original.Manager), original);
+        var actual = await runMerged(BuildTools(merged.Manager), merged);
+
+        AssertSameOutcome(expected, actual, original.ReadText(FixtureRelativePath), merged.ReadText(FixtureRelativePath));
+        return merged.ReadText(FixtureRelativePath);
+    }
+
+    private static DeclarationAction ToDeclarationAction(AddRemoveAction action) =>
+        action == AddRemoveAction.add ? DeclarationAction.add : DeclarationAction.remove;
 
     private static string FileNameOf(FilePathWrapper path) => Path.GetFileName((string)path);
 

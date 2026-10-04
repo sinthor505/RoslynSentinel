@@ -26,8 +26,9 @@ public static class ToolsetCatalog
         {
             [ToolSetName.declarations] =
             [
-                "Declaration", "ModifyModifier", "ChangeAccessibility", "ModifyAttribute", "ModifyBaseType", "MethodSignature",
-                "ConstructorParameter", "ModifyEnum", "ChangeSignature", "SyncTypeAndFilename",
+                // Declaration replaces ModifyModifier, ChangeAccessibility, ModifyAttribute and ModifyBaseType in claude-lean;
+                // those four remain registered in claude and the other modes.
+                "Declaration", "MethodSignature", "ConstructorParameter", "ModifyEnum", "ChangeSignature", "SyncTypeAndFilename",
             ],
             [ToolSetName.moveExtract] =
             [
