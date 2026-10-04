@@ -254,6 +254,65 @@ docs/current/blockers/blocking_error_<slug>.md, and end the turn.
         exit 0
     }
 
+    # --- Dispatching `implementer`: slice contract --------------------------------------
+    # CLAUDE.md "Dispatching `implementer`: the slice contract". implementer is Haiku-tier and
+    # stalls on briefs that are large or underspecified, and only the orchestrator's own prompt
+    # used to carry that rule - a general-purpose dispatcher never saw it. This makes a
+    # non-conforming brief fail at dispatch time, naming the missing field. Not bypassable:
+    # it guards the dispatch contract, not a policy a human might deliberately waive.
+    # Resuming an existing agent (SendMessage) is a different tool and is not checked here.
+    if ($toolName -in @('Agent', 'Task') -and [string]$toolInput.subagent_type -eq 'implementer') {
+        $brief = [string]$toolInput.prompt
+        $model = [string]$toolInput.model
+        $problems = New-Object System.Collections.Generic.List[string]
+
+        if ($model -ne 'haiku') {
+            $problems.Add("  model: pass model: `"haiku`" explicitly (got '$model'). An unpinned dispatch can inherit the caller's tier.")
+        }
+
+        # Field labels at line start, tolerant of markdown bullets/bold ("- **Files:**").
+        $labels = [ordered]@{
+            'Files'        = '(?im)^\W*Files\b[^\r\n:]{0,20}:'
+            'Symbols'      = '(?im)^\W*Symbols\b[^\r\n:]{0,20}:'
+            'Call sites'   = '(?im)^\W*Call[ -]sites\b[^\r\n:]{0,20}:'
+            'Acceptance'   = '(?im)^\W*Acceptance(?: check)?\b[^\r\n:]{0,20}:'
+            'Out of scope' = '(?im)^\W*Out of scope\b[^\r\n:]{0,20}:'
+        }
+        $found = @{}
+        foreach ($k in $labels.Keys) {
+            $mm = [regex]::Match($brief, $labels[$k])
+            if ($mm.Success) { $found[$k] = $mm } else { $problems.Add("  missing field '${k}:' (use the brief template in CLAUDE.md).") }
+        }
+
+        # Files section = text from the Files label up to the next label; count distinct .cs paths.
+        if ($found.ContainsKey('Files')) {
+            $start = $found['Files'].Index + $found['Files'].Length
+            $end = $brief.Length
+            foreach ($k in $found.Keys) {
+                if ($k -ne 'Files' -and $found[$k].Index -gt $start -and $found[$k].Index -lt $end) { $end = $found[$k].Index }
+            }
+            $filesText = $brief.Substring($start, $end - $start)
+            $csFiles = @([regex]::Matches($filesText, '[\w.\\/\-]+\.cs\b') | ForEach-Object { $_.Value.ToLowerInvariant() } | Select-Object -Unique)
+            if ($csFiles.Count -gt 3) {
+                $problems.Add("  Files lists $($csFiles.Count) distinct .cs files; a slice is at most 3. Split it into compile-green slices (CLAUDE.md), or send it to implementer-senior if it cannot be split.")
+            }
+        }
+
+        if ($problems.Count -gt 0) {
+            Deny @"
+BLOCKED by dispatch policy: implementer brief does not meet the slice contract.
+
+$($problems -join "`n")
+
+implementer is Haiku-tier. A brief it can finish names, up front: Files (3 or fewer, full
+paths including the project), Symbols, Call sites (pre-measured with
+InspectSymbol(aspect: blastRadius) / FindReferences), one Acceptance check, and Out of scope.
+Fix the brief and dispatch again. Nothing was dispatched.
+"@
+        }
+        exit 0
+    }
+
     # --- ReplaceSnippet parameter/ordering guard --------------------------------------
     if ($toolName -eq 'ReplaceSnippet' -or $toolName -match '__ReplaceSnippet$') {
         $filePath   = $toolInput.filePath

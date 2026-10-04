@@ -79,6 +79,49 @@ stay off the main context. Never dispatch a runner agent for it: there is nothin
 it costs more than the direct call. (The agents were renamed from `test-runner` /
 `planstep-test-runner` because the generic name kept attracting this misuse.)
 
+## Dispatching `implementer`: the slice contract
+
+`implementer` is Haiku-tier with a 200k context. It finishes small, exactly-specified slices and
+stalls or overruns on anything with a wide blast radius. Cutting the work down is the **dispatcher's**
+job (orchestrator, general-purpose agent, or the main session), not the implementer's. A
+`PreToolUse` hook (`enforce-dogfood.ps1`) refuses a dispatch that breaks the formal parts below.
+
+**Brief template** - every field on its own line, label first:
+
+```
+Files: <=3 .cs files, full paths including the project
+Symbols: exact types/members to change
+Call sites: pre-measured list (file:line), or "none"
+Acceptance: ONE check - a clean Build, or one named test/diagnostic
+Out of scope: what not to touch (e.g. "do not commit", "items 5-7")
+```
+
+Dispatch with `model: "haiku"` pinned explicitly.
+
+**Measure first, then slice.** Get the call-site list from `InspectSymbol(aspect: blastRadius)`
+(or `FindReferences`) before writing the brief and paste the result in; don't ask the implementer to
+discover it. `blastRadius` takes one symbol per call (resolve it with `LocateSymbol` first, then pass
+`filePath` + a verbatim `contextSnippet`), returns `totalCallSites` / `affectedProjectsCount` and the
+reference list, but not a distinct-file count or project names - count files from the list yourself.
+A bad snippet now returns `isError:true` (fixed in 3b29b07). A server binary older than that
+(`isServerBinaryStale`) still returns `isError:false` with 0 call sites and the reason in a non-empty
+`error` field, which reads as "zero blast radius" - so also treat a non-empty `error` as a failed
+measurement (see `docs/current/findings/finding_blastradius_failure_reported_as_success.md`).
+
+**Slice limits** (guesses until journal data calibrates them - tighten, don't loosen, on doubt):
+- 3 files or fewer in `Files:`; about 10 distinct edits at most; one acceptance check.
+- Parts that depend on each other land in one edit: interface plus implementations, or signature plus
+  callers, via one `ReplaceSnippet` with `batchEdits` (definitions first) or a call-site-updating tool
+  (`RenameSymbol`, `ChangeSignature`, `MethodSignature`). Name the tool call in the brief.
+- Big migrations are staged so every step compiles: add the new type/overload beside the old, move
+  callers a few files at a time, remove the old one in a final slice.
+- Over the limits, or the call-site count is large (about 15+ call sites, or 3+ affected projects):
+  split again, or send straight to `implementer-senior`. Also to the senior: new algorithms, public API
+  shape changes, cross-project type relocation, or work where you cannot name the files up front.
+
+The implementer re-measures before editing and replies `RESCOPE:` (with its numbers) if the real
+blast radius exceeds the brief's; the dispatcher then re-slices rather than pushing it through.
+
 ## Dog-fooding is mandatory — this is an instruction, not background
 
 **All C# reads and writes, and all git operations, go through the RoslynSentinel MCP tools.** This

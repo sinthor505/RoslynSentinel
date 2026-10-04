@@ -232,6 +232,26 @@ $cases = @(
     @{ n = 'commit, git fails (not a repo): fail open'; want = 'allow'; fx = 'norepo'
        p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; message = $msg } } }
 
+    # --- implementer dispatch: slice contract ---
+    @{ n = 'implementer brief, all fields, 2 files, haiku'; want = 'allow'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: RoslynSentinel.Common/A.cs, RoslynSentinel.Common/B.cs`nSymbols: A.Foo`nCall sites: none`nAcceptance: clean Build`nOut of scope: do not commit" } } }
+    @{ n = 'implementer brief, markdown-bold labels'; want = 'allow'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "- **Files:** RoslynSentinel.Common/A.cs`n- **Symbols:** A.Foo`n- **Call sites:** none`n- **Acceptance check:** clean Build`n- **Out of scope:** do not commit" } } }
+    @{ n = 'implementer brief, model omitted'; want = 'DENY'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: none" } } }
+    @{ n = 'implementer brief, model sonnet'; want = 'DENY'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'sonnet'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: none" } } }
+    @{ n = 'implementer brief, missing Acceptance'; want = 'DENY'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nOut of scope: none" } } }
+    @{ n = 'implementer brief, free-form prose'; want = 'DENY'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = 'Please refactor the Git tool to use the new result type everywhere.' } } }
+    @{ n = 'implementer brief, 4 files in Files section'; want = 'DENY'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs, P/B.cs, P/C.cs, P/D.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: none" } } }
+    @{ n = 'implementer brief, call-site files do not count toward the 3'; want = 'allow'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: P/B.cs:1, P/C.cs:2, P/D.cs:3, P/E.cs:4`nAcceptance: Build`nOut of scope: none" } } }
+    @{ n = 'other subagent type: not checked'; want = 'allow'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'Explore'; prompt = 'where is X' } } }
+
     # --- unrelated commands: allow ---
     @{ n = 'dotnet build'; want = 'allow'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'dotnet build' } } }
