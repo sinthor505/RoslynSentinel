@@ -283,6 +283,13 @@ source before constructing an explanation for it.
 
 ## Architecture
 
+The architecture map below is imported so it is in context from turn one: it says which file owns
+what, how a tool call flows to disk, and where registration and the breakers live. Tables of every
+tool and project are generated into `docs/generated/` (read those instead of searching). If the map
+and the source disagree, trust the source and fix the map.
+
+@docs/current/references/reference_architecture_map.md
+
 - **Layering is one-way:** `Common` <- `Engines.*` <- `Tools.*` <- `Server.*`. Each layer has one job:
   - `RoslynSentinel.Engines.Basic` / `.Engines.Advanced` - Roslyn analysis and refactoring logic.
     Keep MCP protocol types (`RequestContext<>`, tool attributes) out of engine code.
