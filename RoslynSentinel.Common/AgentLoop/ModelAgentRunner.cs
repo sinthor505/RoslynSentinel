@@ -444,7 +444,7 @@ public sealed class ModelAgentRunner
             .FirstOrDefault() ?? "";
 
         // Check both envelope layers: the outer MCP-protocol IsError and the inner domain-level
-        // SentinelCallToolResult<T>.IsSuccess -> see [[project_searchmode_literal_override_bug]], now fixed
+        // SentinelCallToolResult<T>.IsError -> see [[project_searchmode_literal_override_bug]], now fixed
         // server-side via a CallToolFilter, but the harness still checks both defensively rather
         // than trusting either alone.
         var isError = result.IsError == true || BodyReportsFailure(text);
@@ -462,8 +462,8 @@ public sealed class ModelAgentRunner
         {
             using var doc = JsonDocument.Parse(resultText);
             return doc.RootElement.ValueKind == JsonValueKind.Object
-                && doc.RootElement.TryGetProperty("isSuccess", out var successProp)
-                && successProp.ValueKind == JsonValueKind.False;
+                && doc.RootElement.TryGetProperty("isError", out var errorProp)
+                && errorProp.ValueKind == JsonValueKind.True;
         }
         catch (JsonException)
         {

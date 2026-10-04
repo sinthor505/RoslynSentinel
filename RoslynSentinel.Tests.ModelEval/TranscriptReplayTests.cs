@@ -260,8 +260,8 @@ public class TranscriptReplayTests
         try
         {
             using var doc = JsonDocument.Parse(resultText);
-            return doc.RootElement.TryGetProperty("isSuccess", out var successProp)
-                && successProp.ValueKind == JsonValueKind.False;
+            return doc.RootElement.TryGetProperty("isError", out var errorProp)
+                && errorProp.ValueKind == JsonValueKind.True;
         }
         catch (JsonException)
         {

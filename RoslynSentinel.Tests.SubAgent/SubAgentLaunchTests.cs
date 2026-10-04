@@ -186,7 +186,7 @@ public class SubAgentLaunchTests
     [Test]
     public void ChildToolResult_SuccessEnvelope_IsSuccess()
     {
-        Assert.That(ChildToolResult.IsSuccess(Result("""{"isSuccess":true,"successData":"ok"}"""), out var failure), Is.True);
+        Assert.That(ChildToolResult.IsSuccess(Result("""{"isError":false,"successData":"ok"}"""), out var failure), Is.True);
         Assert.That(failure, Is.Null);
     }
 
@@ -194,7 +194,7 @@ public class SubAgentLaunchTests
     public void ChildToolResult_FailureEnvelope_IsFailure_EvenWithoutTheMcpErrorFlag()
     {
         // RoslynSentinel reports failure inside the JSON envelope; MCP-level IsError is not set.
-        var ok = ChildToolResult.IsSuccess(Result("""{"isSuccess":false,"errorData":{"errorCode":"NotFound","message":"nope"}}"""), out var failure);
+        var ok = ChildToolResult.IsSuccess(Result("""{"isError":true,"errorData":{"errorCode":"NotFound","message":"nope"}}"""), out var failure);
 
         Assert.Multiple(() =>
         {

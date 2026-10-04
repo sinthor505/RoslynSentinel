@@ -403,7 +403,7 @@ public static class ChildToolResult
 
     /// <summary>
     /// True when the call succeeded. RoslynSentinel reports failure inside the JSON envelope
-    /// (<c>isSuccess: false</c>), so the MCP-level <c>IsError</c> flag alone is not enough.
+    /// (<c>isError: true</c>), so the MCP-level <c>IsError</c> flag alone is not enough.
     /// <paramref name="failureText"/> is the offending text on failure, trimmed to a safe length.
     /// </summary>
     public static bool IsSuccess(ModelContextProtocol.Protocol.CallToolResult result, out string? failureText)
@@ -416,8 +416,8 @@ public static class ChildToolResult
         {
             using var document = JsonDocument.Parse(text);
             if (document.RootElement.ValueKind == JsonValueKind.Object
-                && document.RootElement.TryGetProperty("isSuccess", out var isSuccess)
-                && isSuccess.ValueKind == JsonValueKind.False)
+                && document.RootElement.TryGetProperty("isError", out var isError)
+                && isError.ValueKind == JsonValueKind.True)
             {
                 envelopeSaysFailure = true;
             }

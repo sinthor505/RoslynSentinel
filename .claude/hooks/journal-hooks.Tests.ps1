@@ -45,8 +45,8 @@ function Builtin([string]$tool, $toolInput, $extra = @{}) {
 function Stop([bool]$active = $false) { Invoke-JournalHook 'journal-stop-nudge.ps1' @{ session_id = $sid; hook_event_name = 'Stop'; stop_hook_active = $active } }
 function IsBlock($r) { $r.Out -match '"decision"\s*:\s*"block"' }
 
-$okText   = '{"toolCall":{"name":"ReadFile"},"isSuccess":true,"successData":{}}'
-$failText = '{"toolCall":{"name":"ReadFile"},"isSuccess":false,"errorData":{"errorCode":"SolutionNotLoaded","message":"x"}}'
+$okText   = '{"toolCall":{"name":"ReadFile"},"isError":false,"successData":{}}'
+$failText = '{"toolCall":{"name":"ReadFile"},"isError":true,"errorData":{"errorCode":"SolutionNotLoaded","message":"x"}}'
 
 try {
     # --- fail-open on bad input, before anything exists --------------------------------
@@ -79,7 +79,7 @@ try {
 
     $null = Mcp 'ReadFile' $failText
     $l = (Get-CallLines)[-1]
-    Check 'log: isSuccess:false on PostToolUse -> ok=false' ($l.ok -eq $false -and $l.errorCode -eq 'SolutionNotLoaded')
+    Check 'log: isError:true on PostToolUse -> ok=false' ($l.ok -eq $false -and $l.errorCode -eq 'SolutionNotLoaded')
 
     $before = (Get-CallLines).Count
     $null = Builtin 'Read' @{ file_path = 'C:\repo\docs\x.md' }

@@ -10,13 +10,13 @@ namespace RoslynSentinel.Tests.SubAgent;
 public class SubAgentEvalResultTests
 {
     private const string BuildSucceededJson =
-        """{"isSuccess":true,"successData":{"outcome":"Succeeded","errorCount":0,"warningCount":3}}""";
+        """{"isError":false,"successData":{"outcome":"Succeeded","errorCount":0,"warningCount":3}}""";
 
     private const string BuildFailedJson =
-        """{"isSuccess":true,"successData":{"outcome":"Failed","errorCount":4,"warningCount":0}}""";
+        """{"isError":false,"successData":{"outcome":"Failed","errorCount":4,"warningCount":0}}""";
 
     private const string TestsJson =
-        """{"isSuccess":true,"successData":{"runCompleted":true,"totalCount":12,"passedCount":10,"failedCount":2,"skippedCount":0}}""";
+        """{"isError":false,"successData":{"runCompleted":true,"totalCount":12,"passedCount":10,"failedCount":2,"skippedCount":0}}""";
 
     private static AgentRunResult Run(
         AgentStopReason stopReason = AgentStopReason.ModelFinished,
@@ -120,7 +120,7 @@ public class SubAgentEvalResultTests
     [Test]
     public void OffloadedBuildResult_IsUnreadable_AndSaysSo()
     {
-        const string offloaded = """{"isSuccess":true,"largeResult":{"resultId":"abc","writtenToFile":true}}""";
+        const string offloaded = """{"isError":false,"largeResult":{"resultId":"abc","writtenToFile":true}}""";
         var result = SubAgentEvalResult.Build(Run(), offloaded, testResultJson: null, []);
 
         Assert.Multiple(() =>
@@ -145,7 +145,7 @@ public class SubAgentEvalResultTests
     [Test]
     public void ErrorEnvelopeForTests_IsNotedAndCountsStayZero()
     {
-        const string errorEnvelope = """{"isSuccess":false,"errorData":{"errorCode":"TestRunFailed","message":"x"}}""";
+        const string errorEnvelope = """{"isError":true,"errorData":{"errorCode":"TestRunFailed","message":"x"}}""";
         var result = SubAgentEvalResult.Build(Run(), BuildSucceededJson, errorEnvelope, []);
 
         Assert.Multiple(() =>

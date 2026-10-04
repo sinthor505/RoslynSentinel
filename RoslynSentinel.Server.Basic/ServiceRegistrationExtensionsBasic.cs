@@ -313,9 +313,9 @@ public static class RoslynSentinelServiceExtensionsBasic
             mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
         }
 
-        // Centralized error-to-success filter:
-        // Converts a SolutionNotLoadedException into a successful
-        // CallToolResult so the agent displays the helpful message rather than a generic error.
+        // Centralized SolutionNotLoadedException filter: converts the exception into a CallToolResult
+        // carrying the helpful message rather than a generic "tool call failed" text. It is still an
+        // error (IsError = true), matching the typed SolutionNotLoaded result path.
         mcpBuilder.WithRequestFilters(filters =>
         {
             AddToolCallEchoFilter(filters);
@@ -335,7 +335,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                         return new ModelContextProtocol.Protocol.CallToolResult
                         {
                             Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = ex.Message }],
-                            IsError = false,
+                            IsError = true,
                         };
                     }
                     catch (Exception ex)
@@ -359,11 +359,11 @@ public static class RoslynSentinelServiceExtensionsBasic
 
             // Domain-failure -> protocol-error sync: every tool in this codebase (by design, see
             // docs/current/feedback_agent_friendly_error_messages.md) catches its own exceptions
-            // and returns a SentinelCallToolResult<T>/ApplyChangesResult/etc. with IsSuccess=false instead of
+            // and returns a SentinelCallToolResult<T>/ApplyChangesResult/etc. with IsError=true instead of
             // throwing, so the MCP SDK's own exception-based IsError detection never fires for a
-            // domain-level failure. Set IsError=true whenever the serialized response body's
-            // top-level "isSuccess" field is false, so a client relying on the protocol-level flag
-            // (rather than parsing the JSON body) sees an accurate signal.
+            // domain-level failure. Copy the serialized response body's top-level "isError" field onto
+            // CallToolResult.IsError (same name and polarity, so no inversion), so a client relying on the
+            // protocol-level flag (rather than parsing the JSON body) sees an accurate signal.
             filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
                 ModelContextProtocol.Protocol.CallToolRequestParams,
                 ModelContextProtocol.Protocol.CallToolResult>(
@@ -385,8 +385,8 @@ public static class RoslynSentinelServiceExtensionsBasic
 
                                 using var doc = System.Text.Json.JsonDocument.Parse(textBlock.Text);
                                 if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object &&
-                                    doc.RootElement.TryGetProperty("isSuccess", out var successProp) &&
-                                    successProp.ValueKind == System.Text.Json.JsonValueKind.False)
+                                    doc.RootElement.TryGetProperty("isError", out var errorProp) &&
+                                    errorProp.ValueKind == System.Text.Json.JsonValueKind.True)
                                 {
                                     result.IsError = true;
                                     break;
@@ -520,18 +520,18 @@ public static class RoslynSentinelServiceExtensionsBasic
                             int? itemCount = null;
                             string? statusMessage = null;
                             System.Text.Json.Nodes.JsonNode? listSummary = null;
-                            bool? isSuccess = null;
+                            bool? isError = null;
                             try
                             {
                                 var root = System.Text.Json.Nodes.JsonNode.Parse(text)?.AsObject();
                                 if (root != null)
                                 {
-                                    if (root.TryGetPropertyValue("isSuccess", out var isSuccessNode) &&
-                                        isSuccessNode != null &&
-                                        (isSuccessNode.GetValueKind() == System.Text.Json.JsonValueKind.True ||
-                                         isSuccessNode.GetValueKind() == System.Text.Json.JsonValueKind.False))
+                                    if (root.TryGetPropertyValue("isError", out var isErrorNode) &&
+                                        isErrorNode != null &&
+                                        (isErrorNode.GetValueKind() == System.Text.Json.JsonValueKind.True ||
+                                         isErrorNode.GetValueKind() == System.Text.Json.JsonValueKind.False))
                                     {
-                                        isSuccess = isSuccessNode.GetValue<bool>();
+                                        isError = isErrorNode.GetValue<bool>();
                                     }
 
                                     // listSummary (per-file counts, already capped by SummarizeListResult) is
@@ -571,13 +571,13 @@ public static class RoslynSentinelServiceExtensionsBasic
 
                             var hint = itemCount is int n ? $" Result contains {n} item(s)." : "";
 
-                            // Preserve the original body's isSuccess onto the protocol-level IsError
+                            // Preserve the original body's isError onto the protocol-level IsError
                             // flag: this filter overwrites result.Content below, so the IsError-sync
                             // filter (which wraps this one and runs after it returns) would otherwise
                             // inspect this offload envelope instead of the real body and find no
-                            // "isSuccess" key, silently leaving IsError at its prior (successful)
+                            // "isError" key, silently leaving IsError at its prior (successful)
                             // value even when the original tool call failed.
-                            if (isSuccess == false)
+                            if (isError == true)
                             {
                                 result.IsError = true;
                             }
@@ -590,7 +590,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                                     resultId = stored.resultId,
                                     sizeBytes = text.Length,
                                     itemCount,
-                                    isSuccess,
+                                    isError,
                                     statusMessage,
                                     listSummary,
                                     message = $"Result is {text.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}).{hint} Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."

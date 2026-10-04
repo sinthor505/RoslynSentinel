@@ -124,14 +124,14 @@ $cases += [pscustomobject]@{
 $cases += [pscustomobject]@{
     N = 'FC7: Build response carries isServerBinaryStale:true (transcript 5f8e6021 lines 3219-3238)'
     Kind = 'buildstale'
-    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Build'; tool_input = @{}; tool_response = @{ isServerBinaryStale = $true; isSuccess = $true } }
+    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Build'; tool_input = @{}; tool_response = @{ isServerBinaryStale = $true; isError = $false } }
     Want = 'allow'   # detect-only, never blocks
     MustContainInStderr = @('older than the', 'McpServerControl(operation: stop)')
 }
 $cases += [pscustomobject]@{
     N = 'FC7b: Build response without the flag stays silent'
     Kind = 'buildstale'
-    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Build'; tool_input = @{}; tool_response = @{ isSuccess = $true } }
+    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Build'; tool_input = @{}; tool_response = @{ isError = $false } }
     Want = 'allow'
     MustNotContainInStderr = @('older than the')
 }

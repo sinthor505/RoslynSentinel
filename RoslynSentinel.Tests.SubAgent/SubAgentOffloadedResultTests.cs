@@ -25,7 +25,7 @@ public class SubAgentOffloadedResultTests
     public void TearDown() => Directory.Delete(Path.GetDirectoryName(_worktree)!, recursive: true);
 
     private static string LargeResultPointer(string filePath) =>
-        """{"isSuccess":true,"largeResult":{"resultType":"BuildResult","writtenToFile":true,"filePath":"FILE"}}"""
+        """{"isError":false,"largeResult":{"resultType":"BuildResult","writtenToFile":true,"filePath":"FILE"}}"""
             .Replace("FILE", filePath.Replace("\\", "\\\\"));
 
     [Test]
@@ -49,8 +49,8 @@ public class SubAgentOffloadedResultTests
     {
         File.WriteAllText(
             Path.Combine(_largeResults, "largeresult_20261001T220405Z_4c74d82908f845e4a294755f2c044019.json"),
-            """{"Type":"Raw","Data":{"isSuccess":true,"successData":{"runCompleted":true,"passedCount":9,"failedCount":1}}}""");
-        var pointer = """{"offloaded":true,"resultId":"4c74d82908f845e4a294755f2c044019","sizeBytes":31231,"isSuccess":true}""";
+            """{"Type":"Raw","Data":{"isError":false,"successData":{"runCompleted":true,"passedCount":9,"failedCount":1}}}""");
+        var pointer = """{"offloaded":true,"resultId":"4c74d82908f845e4a294755f2c044019","sizeBytes":31231,"isError":false}""";
 
         var resolved = SubAgentEvalResult.ResolveOffloadedResult(pointer, _worktree);
         var result = SubAgentEvalResult.Build(AgentRun(), """{"successData":{"outcome":"Succeeded","errorCount":0}}""", resolved, []);

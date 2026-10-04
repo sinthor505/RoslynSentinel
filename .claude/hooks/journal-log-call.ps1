@@ -3,7 +3,7 @@
 # touching .cs, or dotnet build/test instead of Build/RunTest), to this session's call log.
 # Plan: docs/current/plans/plan_mcp_tool_experience_journal.md (Step 2)
 #
-# Both events are needed: Step 0 showed an MCP call returning isSuccess:false fires
+# Both events are needed: Step 0 showed an MCP call returning isError:true fires
 # PostToolUseFailure (payload field `error`), NOT PostToolUse.
 #
 # Never records tool content (code, diffs, file bodies): only names, outcome, error code,
@@ -76,7 +76,7 @@ try {
             else { $text = (@($resp) | ForEach-Object { [string]$_.text }) -join '' }
         }
 
-        $ok = -not $failed -and $text -notmatch '"isSuccess"\s*:\s*false'
+        $ok = -not $failed -and $text -notmatch '"isError"\s*:\s*true'
         $code = $null
         if (-not $ok -and $text -match '"errorCode"\s*:\s*"([^"]+)"') { $code = $Matches[1] }
 

@@ -120,7 +120,7 @@ public static class ToolErrorCode
 /// <see cref="ResultError"/> and is what nearly every tool method actually returns. A tool opts into
 /// a structured, non-ResultError error shape by returning this base type directly instead.
 /// </remarks>
-public record SentinelCallToolResult<TSuccess, TError>
+public record SentinelCallToolResult<TSuccess, TError> : IResultStatus
 {
     /// <summary>
     /// <c>true</c> when a newer build of the server's own binaries exists in the repo than the ones this process
@@ -129,11 +129,58 @@ public record SentinelCallToolResult<TSuccess, TError>
     /// </summary>
     public bool? IsServerBinaryStale { get; init; } = ServerBinaryStaleness.EnvelopeFlag;
 
-    /// <summary>True when the operation completed without error.</summary>
+    // Fails closed: an envelope nobody marked successful is an error. This is the default the old IsSuccess
+    // (default false) had, so a construction site that forgets to set a flag behaves as before.
+    private bool _isError = true;
+
+    /// <summary>
+    /// <see cref="IResultStatus.IsError"/>: true when the operation did not succeed. The one canonical success flag on
+    /// the wire, same polarity and name as the MCP <c>CallToolResult.isError</c> the server sets from it.
+    /// </summary>
+    public bool IsError
+    {
+        get => _isError;
+        init => _isError = value;
+    }
+
+    /// <summary>
+    /// Source-compat alias for <c>!</c><see cref="IsError"/> so the many existing <c>IsSuccess = true</c> construction and
+    /// read sites keep compiling while they migrate to <see cref="IsError"/>. Never serialized: the wire carries only
+    /// <c>isError</c>. Do not add new uses.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool IsSuccess
     {
-        get; init;
+        get => !_isError;
+        init => _isError = !value;
     }
+
+    /// <summary>
+    /// <see cref="IResultStatus.Status"/>: <see cref="ResultStatus.Success"/> on success, otherwise the status for
+    /// <see cref="Code"/> (<see cref="ResultStatus.Failed"/> when there is no code or it is unrecognized). Not serialized.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status
+    {
+        get
+        {
+            if (!IsError)
+            {
+                return ResultStatus.Success;
+            }
+
+            var status = ResultStatusExtensions.FromErrorCode(Code);
+            return status == ResultStatus.Success ? ResultStatus.Failed : status;
+        }
+    }
+
+    /// <summary><see cref="IResultStatus.Code"/>: the <see cref="ResultError.ErrorCode"/> when <see cref="ErrorData"/> is a <see cref="ResultError"/>, else null. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => (ErrorData as ResultError)?.ErrorCode;
+
+    /// <summary><see cref="IResultStatus.Message"/>: the <see cref="ResultError.Message"/> when <see cref="ErrorData"/> is a <see cref="ResultError"/>, else null. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => (ErrorData as ResultError)?.Message;
 
     /// <summary>
     /// Inline payload. A plain passthrough - this record does not decide on its own whether a
