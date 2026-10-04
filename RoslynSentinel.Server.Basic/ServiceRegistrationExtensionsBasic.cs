@@ -158,6 +158,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         {
             bool toolsetControlActive = activeToolClasses.Contains("ToolsetControlTools");
             bool declarationActive = activeToolClasses.Contains("DeclarationTools");
+            bool parameterEditActive = activeToolClasses.Contains("ParameterEditTools");
             activeToolClasses = new HashSet<string>(activeToolClasses, StringComparer.OrdinalIgnoreCase);
             foreach (var onDemandClass in ToolClassRegistry.ClaudeLeanOnDemandToolClasses.Where(c => !resolvedExcludeTools.Contains(c)))
             {
@@ -180,6 +181,14 @@ public static class RoslynSentinelServiceExtensionsBasic
             {
                 services.AddSingleton<DeclarationTools>();
                 mcpBuilder.WithSentinelTools<DeclarationTools>();
+            }
+
+            // The merged ParameterEdit tool: same on-demand arrangement as Declaration; its Impl dependency
+            // (RefactoringSignatureImpl) is registered by the Signature block below.
+            if (parameterEditActive)
+            {
+                services.AddSingleton<ParameterEditTools>();
+                mcpBuilder.WithSentinelTools<ParameterEditTools>();
             }
         }
 

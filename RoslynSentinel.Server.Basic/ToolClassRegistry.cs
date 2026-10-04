@@ -41,14 +41,14 @@ public static class ToolClassRegistry
 
     /// <summary>
     /// Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool (the same in Basic and Advanced), plus
-    /// DeclarationTools, whose single tool (Declaration) is on-demand only: the allow-list keeps it out of the startup surface
-    /// and the <c>declarations</c> toolset adds it. Listed here so the class exists in claude-lean and McpServerStatus can name its mode.
+    /// DeclarationTools and ParameterEditTools, whose single tools (Declaration, ParameterEdit) are on-demand only: the allow-list keeps
+    /// them out of the startup surface and the <c>declarations</c> toolset adds them. Listed here so the class exists in claude-lean and McpServerStatus can name its mode.
     /// </summary>
     private static readonly string[] ClaudeLeanToolClasses =
     [
         "WorkspaceTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
         "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
-        "AdminTools", "WholeFileWriteTools", "ToolsetControlTools", "DeclarationTools",
+        "AdminTools", "WholeFileWriteTools", "ToolsetControlTools", "DeclarationTools", "ParameterEditTools",
     ];
 
     /// <summary>
@@ -56,14 +56,14 @@ public static class ToolClassRegistry
     /// allow-list filters every non-Core tool out at startup), so <c>McpToolsetControl</c> can build any on-demand
     /// tool later and have its class constructed. These are the facade classes of the "Claude" mode; a tool name
     /// also declared by a split class behind a facade resolves to the facade. Only claude-lean uses this.
-    /// DeclarationTools (the merged Declaration tool) is the one entry that is not a facade of the "Claude" mode: it exists
-    /// only in claude-lean, so its Impl dependencies are covered by the Structural/Signature entries above.
+    /// DeclarationTools and ParameterEditTools (the merged Declaration and ParameterEdit tools) are the entries that are not facades
+    /// of the "Claude" mode: they exist only in claude-lean, so their Impl dependencies are covered by the Structural/Signature entries above.
     /// </summary>
     public static readonly IReadOnlySet<string> ClaudeLeanOnDemandToolClasses = new HashSet<string>(
         [
             "WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
             "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
-            "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools", "DeclarationTools",
+            "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools", "DeclarationTools", "ParameterEditTools",
         ],
         StringComparer.Ordinal);
 

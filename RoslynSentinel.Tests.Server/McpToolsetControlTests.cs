@@ -127,15 +127,15 @@ public class McpToolsetControlTests
     public void Enable_NeverReplacesAnExistingTool_AndDisableLeavesItAlone()
     {
         var (service, collection) = CreateService();
-        var startupTool = McpServerTool.Create((string x) => x, new McpServerToolCreateOptions { Name = "MethodSignature" });
+        var startupTool = McpServerTool.Create((string x) => x, new McpServerToolCreateOptions { Name = "ModifyEnum" });
         collection.Add(startupTool);
 
         var change = service.SetEnabled(ToolSetName.declarations, true);
         service.SetEnabled(ToolSetName.declarations, false);
 
-        Assert.That(change.UnavailableTools, Does.Contain("MethodSignature"));
-        Assert.That(change.AddedTools, Does.Not.Contain("MethodSignature"));
-        Assert.That(collection.TryGetPrimitive("MethodSignature", out var remaining), Is.True);
+        Assert.That(change.UnavailableTools, Does.Contain("ModifyEnum"));
+        Assert.That(change.AddedTools, Does.Not.Contain("ModifyEnum"));
+        Assert.That(collection.TryGetPrimitive("ModifyEnum", out var remaining), Is.True);
         Assert.That(remaining, Is.SameAs(startupTool));
     }
 
@@ -207,7 +207,7 @@ public class McpToolsetControlTests
         Assert.That(all, Is.Unique);
         Assert.That(all.Intersect(ToolClassRegistry.ClaudeLeanToolNames), Is.Empty);
         Assert.That(ToolsetCatalog.AllToolNames, Has.Count.EqualTo(all.Length));
-        Assert.That(all, Has.Length.EqualTo(39));
+        Assert.That(all, Has.Length.EqualTo(38));
     }
 
     [Test]
@@ -246,9 +246,9 @@ public class McpToolsetControlTests
             service.SetEnabled(set, true);
         }
 
-        // Declaration is the one catalog tool no startup mode registers (it exists only as an on-demand claude-lean tool,
-        // see DeclarationToolTests), so there is no startup instance to compare it with.
-        foreach (var name in ToolsetCatalog.AllToolNames.Where(n => n != "Declaration"))
+        // Declaration and ParameterEdit are the catalog tools no startup mode registers (they exist only as on-demand claude-lean tools,
+        // see DeclarationToolTests and ParameterEditToolTests), so there is no startup instance to compare them with.
+        foreach (var name in ToolsetCatalog.AllToolNames.Where(n => n is not ("Declaration" or "ParameterEdit")))
         {
             Assert.That(startup.TryGetPrimitive(name, out var expected), Is.True, $"{name} should be a startup tool in --mode claude");
             Assert.That(collection.TryGetPrimitive(name, out var actual), Is.True);
@@ -640,5 +640,85 @@ public class McpToolsetControlTests
         TestContext.Out.WriteLine($"Emitted schema chars: Declaration={declaration}, ModifyModifier={modifier}, ChangeAccessibility={accessibility}, ModifyAttribute={attribute}, ModifyBaseType={baseType}, originals={originals}");
 
         Assert.That(declaration, Is.LessThan(originals));
+    }
+
+    // ---- ParameterEdit (step 4a-2): merges MethodSignature and ConstructorParameter; on-demand in claude-lean only ----
+
+    private static readonly string[] ParameterEditOriginals = ["MethodSignature", "ConstructorParameter"];
+
+    [Test]
+    public async Task ParameterEdit_IsAbsentFromLeanUntilTheDeclarationsToolsetIsEnabled_AndReplacesTheTwoOriginalsThere()
+    {
+        await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean");
+
+        var before = await live.ToolNamesAsync();
+        Assert.That(before, Does.Not.Contain("ParameterEdit"));
+        Assert.That(before, Does.Not.Contain("MethodSignature"));
+
+        await live.ToggleAsync("declarations", enabled: true);
+        var on = await live.ToolNamesAsync();
+        Assert.That(on, Does.Contain("ParameterEdit"));
+        foreach (var original in ParameterEditOriginals)
+        {
+            Assert.That(on, Does.Not.Contain(original), $"ParameterEdit replaces {original} in claude-lean");
+        }
+
+        await live.ToggleAsync("declarations", enabled: false);
+        Assert.That(await live.ToolNamesAsync(), Does.Not.Contain("ParameterEdit"));
+    }
+
+    [Test]
+    public async Task ParameterEdit_EnabledOnLean_IsCallable_AndRejectsAWrongParamSubsetByName()
+    {
+        await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean");
+        await live.ToggleAsync("declarations", enabled: true);
+
+        var call = await live.CallAsync("ParameterEdit", new() { ["reason"] = Reason, ["operation"] = "method", ["filePath"] = "X.cs", ["action"] = "add", ["methodName"] = "M" });
+
+        string text = LiveServer.Text(call);
+        Assert.That(text, Does.Contain("operation 'method', action 'add' requires 'paramName' and 'paramType'"), "the class must be constructible from the lean container and the tool callable");
+        Assert.That(text, Does.Not.Contain("Unable to resolve"));
+        Assert.That(text, Does.Not.Contain("No service for type"));
+    }
+
+    [TestCase(true, "Claude")]
+    [TestCase(true, "Workspace")]
+    [TestCase(true, "Refactor")]
+    [TestCase(false, "Claude")]
+    [TestCase(false, "Refactor")]
+    public async Task OtherModes_DoNotExposeParameterEdit_AndKeepTheOriginalTools(bool advanced, string mode)
+    {
+        await using var live = await LiveServer.StartAsync(advanced, mode);
+
+        var names = await live.ToolNamesAsync();
+        Assert.That(names, Does.Not.Contain("ParameterEdit"));
+        if (mode is "Claude" or "Refactor")
+        {
+            Assert.That(names, Is.SupersetOf(ParameterEditOriginals));
+        }
+    }
+
+    [Test]
+    public async Task IncludeTools_CannotSmuggleParameterEditIntoAnotherMode()
+    {
+        await using var live = await LiveServer.StartAsync(advanced: true, "Claude", includeTools: "ParameterEditTools");
+
+        Assert.That(await live.ToolNamesAsync(), Does.Not.Contain("ParameterEdit"));
+    }
+
+    [Test]
+    public void ParameterEdit_EmittedSchema_IsSmallerThanTheTwoToolsItMerges()
+    {
+        var services = new ServiceCollection().BuildServiceProvider();
+        int Size(Type type, string method) =>
+            Json(McpToolSchemaPatcher.CreateSentinelTool(type.GetMethod(method)!, type, services)).Length;
+
+        int parameterEdit = Size(typeof(ParameterEditTools), nameof(ParameterEditTools.ParameterEdit));
+        int methodSignature = Size(typeof(RefactoringSignatureTools), nameof(RefactoringSignatureTools.MethodSignature));
+        int constructorParameter = Size(typeof(RefactoringSignatureTools), nameof(RefactoringSignatureTools.ConstructorParameter));
+        int originals = methodSignature + constructorParameter;
+        TestContext.Out.WriteLine($"Emitted schema chars: ParameterEdit={parameterEdit}, MethodSignature={methodSignature}, ConstructorParameter={constructorParameter}, originals={originals}");
+
+        Assert.That(parameterEdit, Is.LessThan(originals));
     }
 }

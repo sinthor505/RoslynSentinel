@@ -176,6 +176,13 @@ public enum DeclarationOperation
     modifier, accessibility, attribute, baseType
 }
 
+// Operations of the ParameterEdit tool (claude-lean, declarations toolset): method -> MethodSignature, constructor -> ConstructorParameter.
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum ParameterEditOperation
+{
+    method, constructor
+}
+
 // The 'action' of the Declaration tool: add/remove for modifier, attribute and baseType; replace for attribute only.
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum DeclarationAction
