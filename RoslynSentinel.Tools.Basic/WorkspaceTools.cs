@@ -2,6 +2,7 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
@@ -87,6 +88,7 @@ public class WorkspaceTools
         int delaySeconds = 0,
         CancellationToken cancellationToken = default)
         => _healthMisc.Features(reason, action, names, enabled, delaySeconds, cancellationToken);
+    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "ListSolutionItems")]
     [Produces(DataTag.FileList)]
     [Produces(DataTag.ProjectList)]
@@ -578,6 +580,7 @@ public class WorkspaceTools
         return _readNav.GetMethodSource(reason, filePathResolved, methodName, cancellationToken);
     }
 
+    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "ReadFile")]
     [Produces(DataTag.SourceCode)]
     [Description("Returns a file's raw text verbatim, or a 1-based line-range slice via startLine/endLine.")]
@@ -589,6 +592,7 @@ public class WorkspaceTools
         CancellationToken cancellationToken = default)
         => _fileEdit.ReadFile(reason, filePath, startLine, endLine, cancellationToken);
 
+    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "GetFileOutline")]
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file's types and members with 1-based line ranges (no bodies).")]
@@ -601,6 +605,7 @@ public class WorkspaceTools
         return _readNav.GetFileOutline(reason, filePathResolved, cancellationToken);
     }
 
+    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "ListAll")]
     [Produces(DataTag.Report)]
     [Description("Lists every declared symbol in the loaded solution with file, kind, name, container, and line range. Call this first if you don't know an exact symbol name.")]
@@ -703,6 +708,7 @@ public class WorkspaceTools
                 return _readNav.ListAll(reason, SearchModeToListAllKind(mode), projectName, cancellationToken);
         }
     }
+    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "GetOperationDetail")]
     [Produces(DataTag.ResultOnly)]
     [Description("Returns a filtered, paged slice of an operation result blob by changeId.")]
@@ -727,6 +733,7 @@ public class WorkspaceTools
         => _fileEdit.UndoLastApply(reason, changeId, cancellationToken);
 
     // ── 8. GetWorkspaceHealth ─────────────────────────────────────────────────
+    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "GetWorkspaceHealth")]
     [Produces(DataTag.ResultOnly)]
     [Description("Reports live workspace/solution health: loaded state, project/document counts, and staleness.")]

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 
+using RoslynSentinel;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
@@ -14,6 +15,7 @@ public class WorkspaceProjectManagementTools
         _impl = impl;
     }
 
+    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "ListSolutionItems")]
     [Produces(DataTag.FileList)]
     [Produces(DataTag.ProjectList)]

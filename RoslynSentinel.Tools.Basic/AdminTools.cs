@@ -1,5 +1,7 @@
 using System.ComponentModel;
 
+using RoslynSentinel;
+
 namespace RoslynSentinel.Tools.Basic;
 
 // Restricted/operator-only tools, gated behind the "Admin" mode (deliberately excluded from
@@ -32,6 +34,7 @@ public class AdminTools
         return _workspaceManager.GetExternalFileChanges();
     }
 
+    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "IsSessionHalted")]
     [Produces(DataTag.ResultOnly)]
     [Description("Returns whether the session-wide fatal drift latch is set.")]

@@ -3,6 +3,8 @@ using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel;
+
 namespace RoslynSentinel.Tools.Basic;
 
 [McpServerToolType]
@@ -19,6 +21,7 @@ public class GitTools
 
     }
 
+    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
     [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state.")]

@@ -688,8 +688,9 @@ public static class RoslynSentinelServiceExtensionsBasic
             //
             // Allowlist rather than a list of mutating tools: a deny-list would silently omit any
             // tool added later, which is the same forgotten-call-site mode that produced this
-            // defect. Anything not named here is refused, so the safe default is "refused". These
-            // are the tools an operator or agent needs to read the state and stop cleanly.
+            // defect. Anything not in the allow-list is refused, so the safe default is "refused".
+            // The allow-list is defined by [UnrecoverableBreaker(Allowed)] attributes on tool methods.
+            // These are the tools an operator or agent needs to read the state and stop cleanly.
             filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
                 ModelContextProtocol.Protocol.CallToolRequestParams,
                 ModelContextProtocol.Protocol.CallToolResult>(
@@ -701,8 +702,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                         var toolName = context.Params?.Name;
 
                         if (breaker is not null && breaker.IsTripped() &&
-                            toolName is not ("ReadFile" or "ListAll" or "ListSolutionItems" or "GetFileOutline"
-                                or "GetOperationDetail" or "GetWorkspaceHealth" or "IsSessionHalted" or "Git"))
+                            !UnrecoverableBreakerPolicy.IsAllowed(toolName))
                         {
                             return new ModelContextProtocol.Protocol.CallToolResult
                             {

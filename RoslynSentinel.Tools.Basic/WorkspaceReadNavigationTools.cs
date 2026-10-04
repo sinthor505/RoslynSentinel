@@ -1,5 +1,7 @@
 using System.ComponentModel;
 
+using RoslynSentinel;
+
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
@@ -43,6 +45,7 @@ public class WorkspaceReadNavigationTools
         CancellationToken cancellationToken = default)
         => _impl.GetMethodSource(reason, filePath, methodName, cancellationToken);
 
+    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "GetFileOutline")]
     [Produces(DataTag.Report)]
     [Description("Returns a structural outline of a file - namespaces, classes, structs, records, interfaces, enums (and their members), methods, properties, constructors, and fields, with 1-based line ranges. Member bodies are not included.")]
@@ -52,6 +55,7 @@ public class WorkspaceReadNavigationTools
         CancellationToken cancellationToken = default)
         => _impl.GetFileOutline(reason, filePath, cancellationToken);
 
+    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "ListAll")]
     [Produces(DataTag.Report)]
     [Description("Lists every namespace/class/interface/struct/record/enum/enum member/constructor/field/method/property declared in the loaded solution, one row per symbol with its file, kind, name, container, and line range. Call this first when you don't already know the exact name of a type/method/field.")]
@@ -80,6 +84,7 @@ public class WorkspaceReadNavigationTools
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,
         CancellationToken cancellationToken = default)
         => _impl.SearchSolutionText(reason, pattern, fileGlob, maxResults, cancellationToken);
+    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "GetOperationDetail")]
     [Produces(DataTag.ResultOnly)]
     [Description("Returns a filtered, paged slice of an operation result blob by changeId.")]

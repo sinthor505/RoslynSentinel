@@ -1,104 +1,103 @@
 # Reference: Code File Write Paths
 
-**Status:** Living reference — update when a new write-to-disk call site is added anywhere in
-the solution.
-**Scope:** Only call sites that write modified `.cs` (or other project source) file content that
-belongs to the loaded workspace/solution. Explicitly excludes: scan results, diagnostic reports,
-log files, JSON tool-result payloads, forensic operation blobs, `docs/` project documentation
-output, and debug dumps — none of those go through or need to go through the path described here.
+**Status:** CURRENT 2026-10-04. Re-verified against source on this date (chokepoint body read end to end, callers via `FindReferences`). Update when a write-to-disk call site is added anywhere in the solution.
 
-## The chokepoint
+## Purpose
 
-**`PersistentWorkspaceManager.ApplyProposedChangesAsync`**
-(`RoslynSentinel.Common/PersistentWorkspaceManager.cs`) is the shared, safe path for writing
-source file changes to disk. It is the only write path that provides:
+Where workspace `.cs` (and other project source) content is written to disk, and the one shared path
+that every such write must use. Scope is only content that belongs to the loaded workspace/solution.
+Explicitly excluded: scan results, diagnostic reports, logs, JSON tool-result payloads, forensic
+operation blobs, project-documentation output and debug dumps (see "Not source-code writes" below).
 
-- **External drift refusal** — refuses to write if the target file changed on disk since the
-  last sync and the drift hasn't been acknowledged via `ClearExternalDrift`.
-- **Pre-image capture** — reads every file's content immediately before writing, so callers can
-  populate `OperationItemRecord.BeforeSource` for `UndoLastApply`.
-- **No-op skip** — skips the write entirely if proposed content is byte-identical to current
-  content.
-- **Whitespace-only-diff skip** (`.cs` files only) — parses both old and new content, compares
-  `NormalizeWhitespace()`'d forms, and skips the write if they're semantically identical. Catches
-  engines that accidentally reformat without changing meaning.
-- **`FileSystemWatcher` loop suppression** — marks the path in `_internalChanges` before writing
-  so the manager's own watcher doesn't mistake its own write for an external edit.
-- **IOException retry** — retries transient file-lock failures with backoff.
-- **Rollback on partial failure** (opt-in via `rollbackOnPartialFailure`) — if a multi-file change
-  partially fails, restores already-written files to their pre-images so the change doesn't land
-  half-applied.
-- **Workspace resync** — updates `CurrentSolution` in-memory after a successful write, so
-  subsequent semantic queries see the new content without a full reload.
+## How it works
 
-**Any new tool or engine method that needs to persist a modified source file to disk must call
-this method (directly or via a caller that does), rather than calling `File.WriteAllText*`
-itself.** There is no `IWorkspaceManager` interface — `PersistentWorkspaceManager` is injected
-as a concrete class — so nothing structurally enforces this; it is a convention documented here
-and in the code comment on the method itself.
+### The chokepoint
 
-## Callers that funnel through the chokepoint (confirmed 2026-08-22)
+`PersistentWorkspaceManager.ApplyProposedChangesAsync` (`RoslynSentinel.Common/PersistentWorkspaceManager.cs`;
+interface `Common/IWorkspaceMutator.cs`; the in-memory test double is `Tests/Fakes/FakeWorkspaceManager`).
+`IWorkspaceManager`, `ISolutionProvider` and `IWorkspaceReader` all resolve to the same
+`PersistentWorkspaceManager` singleton, so nothing structurally stops a caller from writing a file itself:
+the rule is a convention, repeated in the method's remarks.
 
-| Caller | Location | Notes |
-|---|---|---|
-| `ValidateAndApplyHelper.ValidateAndApplyAsync` | `RoslynSentinel.Common/ValidateAndApplyHelper.cs` | **Deduplicated 2026-08-22** (commit `cb70952`) — both `SentinelRefactoringTools` (Basic) and `SentinelAdvancedRefactoringTools` (Advanced) now delegate their private `ValidateAndApplyAsync`/`BuildDiffAsync`/`BuildDiffFromPreImages` wrappers to this shared implementation instead of each carrying a verbatim copy. |
-| `SafeDeleteUnusedSymbol` | `RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs:760` | Inline call after computing `DocumentEditResult.UpdatedText` |
-| `ApplyDiff` (files format) | `RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs:380` | Direct inline call |
-| `ApplyDiff` (unified diff format) | `RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs:482` | Direct inline call, after `_diffEngine.ApplyDiff(oldText, unifiedDiff)` |
-| `UndoLastApply` | `RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs` | **Fixed 2026-08-22** — previously bypassed the chokepoint entirely (see below); now routes through it. |
-| Asyncify batch tools | `RoslynSentinel.Server.Advanced/SentinelAsyncifyTools.cs` (13 call sites) | Each after computing changes from an `AsyncOptimizationEngine` call |
-| `AsyncBatchEngine` | `RoslynSentinel.Advanced/AsyncBatchEngine.cs` (12 call sites) | Holds its own `PersistentWorkspaceManager` reference; batch operations like `RunUpliftBatchAsync`, `PropagateCancellationTokenBatchAsync` |
+In order, the method:
 
-The bulk of `RoslynSentinel.Advanced`'s ~30 other engine classes (`AdvancedRefactoringEngine`,
-`AdvancedTypeEngine`, `DocumentationEngine`, `SecurityEngine`, `PerformanceEngine`, etc.) never
-write to disk directly — they compute an in-memory `Dictionary<FilePath,string>` or a preview
-`UpdatedText` and hand it back up to a `Server.*` tool method, which then calls the chokepoint.
+1. Refuses everything if the session-halt latch is set (`SessionHaltedException`).
+2. Refuses everything if the unrecoverable breaker has tripped (`IUnrecoverableBreaker.StateMessage`).
+3. Refuses any target covered by an open scoped operation ledger entry (`_ledger.IsBlocked`), returning a failed `ApplyChangesResult`.
+4. Refuses a path given as both a write and a delete target.
+5. Checks external drift: if a target is in `GetExternalFileChanges()`, sets `_sessionHalted` and throws `SessionHaltedException`.
+   Recovery is `ListExternalDiskChanges` then `AcknowledgeExternalFileChanges` (`ClearSessionHalt`).
+6. Optionally compile-validates the whole batch (`validateChanges`, via `ValidationEngine`) before taking the lock.
+7. Takes `_solutionLock`, then captures a **pre-image** of every target (null = file did not exist), used for
+   `OperationItemRecord.BeforeSource` and `UndoLastApply`.
+8. Refuses a change that alters an existing file's line-ending style (`EolChangeGuard`, `ToolErrorCode.EolChangeRefused`).
+   `ValidateAndApplyHelper` runs the same check earlier so tools get a structured error; this is the backstop.
+9. Processes deletes as their own pass, then writes each file: skips byte-identical content, skips whitespace-only
+   changes to `.cs` files (`EnableAstNormalizationNoOpCheck`, compares `NormalizeWhitespace()` forms), optionally logs
+   formatter divergence at Debug (observation only), normalizes EOL to the file's dominant style, preserves a UTF-8 BOM,
+   marks `_internalChanges` (watcher-loop suppression), then writes through `FileIoHelper.WriteAllTextAsync`
+   (per-path lock) with retry on `IOException` (`retryCount`, 500 ms apart). Failed content is cached in `_failedChangesCache`
+   for `RetryFailedChanges`.
+10. If `rollbackOnPartialFailure` and some files failed after others succeeded, restores the succeeded files to their pre-images.
+11. Resyncs the in-memory workspace (`ApplyInMemoryDocumentUpdatesAsync`, bumps `_workspaceVersion`), invalidates the affected
+    projects' compilation-cache entries (or all of them on a full reload), and returns `ApplyChangesResult`.
 
-## Divergent paths found and fixed (2026-08-22)
+`FileIoHelper.WriteAllTextAsync` is the low-level primitive; in production code only the chokepoint calls it.
 
-Three call sites bypassed the chokepoint via raw `File.WriteAllTextAsync`, meaning none of the
-guards above applied to them. All three were fixed to route through
-`ApplyProposedChangesAsync` — see commit history for the fix.
+### Callers (2026-10-04, non-test)
 
-1. **`MsToolAugmentEngine.SortAndDeduplicateUsingsAsync`**
-   (`RoslynSentinel.Basic/MsToolAugmentEngine.cs`) — wrote `updatedContent` straight to disk when
-   `writeToFile=true`. No drift check, no pre-image capture, no rollback, no watcher-loop
-   suppression, no workspace resync.
-2. **`MsToolAugmentEngine.FormatDocumentSafeAsync`**
-   (`RoslynSentinel.Basic/MsToolAugmentEngine.cs`) — wrote `formatted` directly when
-   `preview=false`, then redundantly called `ApplyProposedChangesAsync` afterward purely for
-   workspace resync. Since the file was already overwritten by the time the "official" call ran,
-   the drift check happened too late to matter and the no-op skip made the second call a pure
-   resync no-write.
-3. **`UndoLastApply`** (`RoslynSentinel.Server.Basic/SentinelWorkspaceTools.cs`) — the entire
-   undo/revert mechanism was a hand-rolled `File.WriteAllTextAsync` loop over
-   `OperationItemRecord.BeforeSource` values, completely independent of the chokepoint. Reverts
-   didn't get rollback-on-partial-failure protection, and — because `_internalChanges` was never
-   marked — a revert would be picked up by the `FileSystemWatcher` as an *external* change,
-   potentially triggering spurious drift warnings on the next apply.
+Most tools do not call the chokepoint raw: they call `Common/ValidateAndApplyHelper.ValidateAndApplyAsync`, which adds
+compile validation, the EOL refusal, dry-run and a diff, then calls it.
 
-## Format-and-log diagnostic
+| Caller | Project | Notes |
+| --- | --- | --- |
+| `ValidateAndApplyHelper` | Common | Shared validate-then-apply wrapper. Reached by `GenerationTools` (via its private `ValidateAndApplyAsync`) and, by name and call-count, by the refactoring `*Impl` classes (`RefactoringStructuralImpl`, `RefactoringSignatureImpl`, `RefactoringExtractionDocsImpl`) and `AdvancedRefactoringTools` (not individually traced) |
+| `WholeFileWriteTools` | Tools.Basic | `WriteFile`, `DeleteFile`, `ApplyDiff`, `ApplyUnifiedDiff` |
+| `WorkspaceFileEditImpl` | Tools.Basic | Direct calls from `UndoLastApply`, `ReplaceSnippet`, `ReplaceSnippetBatch`, `CreateFile` |
+| `WorkspaceProjectManagementImpl` | Tools.Basic | Direct call from `SafeDeleteUnusedSymbol` |
+| `CommentingTools` | Tools.Advanced | Two direct calls in `RunAsync` |
+| `MsToolAugmentEngine` | Engines.Basic | Format/using-sort helpers; see the sanctioned fallback below |
+| `AsyncBatchEngine`, `AsyncifyTools` | Engines.Advanced, Tools.Advanced | Batch async-migration operations |
 
-As of 2026-08-22, `ApplyProposedChangesAsync` runs every `.cs` write's new content through
-`Formatter.Format` (via a per-call `AdhocWorkspace`, the same lightweight pattern
-`MsToolAugmentEngine.FormatDocumentSafeAsync` already used) immediately before the write, and —
-only when `LogLevel.Debug` is enabled and the formatted output differs from what's about to be
-written — logs the line-count delta between the two (`CountLines(formatted) - CountLines(written)`)
-at `LogLevel.Debug`. If content matches, nothing is logged. A parse/format failure is swallowed
-silently; the diagnostic must never block or alter the real write. This is purely observational —
-it runs before the write and never touches `newContent` — and exists to build a picture of which
-tools/callers produce output that diverges from Roslyn's own formatting rules, ahead of any
-decision to wire real auto-formatting into the write path.
+The current set changes as tools are added: `FindReferences(symbolName: ApplyProposedChangesAsync, kind: callers)` is the source of truth.
+Engines that only compute an in-memory `Dictionary<FilePathWrapper,string>` and hand it up to a tool never write themselves.
 
-## Explicitly out of scope / not source-code writes
+### Sanctioned direct write
 
-- `RoslynSentinel.Server.Basic/DocumentationTools.cs` (`ProjectDoc`/`WriteFile`) — writes to
-  `docs/plans`, `docs/handoffs`, `docs/migration-state.yaml`.
-- `RoslynSentinel.Common/OperationBlobWriter.cs` — forensic JSON audit blobs under
-  `.roslynsentinel/operations/`, used by `UndoLastApply` for pre-image lookup.
-- `RoslynSentinel.Common/MigrationLedger.cs`, `RoslynSentinel.Common/ScanResultHelper.cs` —
-  ledger/scan-result JSON persistence.
-- `RoslynSentinel.Server.Advanced/SentinelAsyncifyTools.cs` debug-dump JSON payloads.
-- String-literal lookup tables of anti-pattern suggestion text (e.g. in `AntiPatternEngine.cs`)
-  that happen to contain the substring `File.WriteAllText` as example/suggestion text — not
-  actual write calls.
+`MsToolAugmentEngine.FormatDocumentSafeAsync(preview: false)` routes through the chokepoint when a solution is loaded and the
+file is a tracked document. When no solution is loaded the chokepoint cannot run (it needs `CurrentSolution`), so it falls back to
+`File.WriteAllTextAsync` directly. This is the only known workspace-source write outside the chokepoint.
+
+### History
+
+Three bypasses were found and fixed on 2026-08-22 (a raw write in `SortAndDeduplicateUsingsAsync`, a write-then-resync in
+`FormatDocumentSafeAsync`, and a hand-rolled `UndoLastApply` revert loop). Each lacked drift refusal, pre-image capture, rollback
+and watcher-loop suppression; the undo path in particular produced spurious external-drift warnings because `_internalChanges`
+was never marked. The shared `ValidateAndApplyHelper` was extracted in commit `cb70952`.
+
+## Usage
+
+Adding a tool or engine that persists a source edit: build the `Dictionary<FilePathWrapper,string>` of new contents and call
+`ValidateAndApplyHelper.ValidateAndApplyAsync` (preferred) or `ApplyProposedChangesAsync` directly. Never call `File.WriteAllText*`
+on workspace source. `Tests.Basic/WriteChokepointGuardrailTests.cs` covers the EOL refusal and line-count reporting of the shared path;
+no test or analyzer asserts "no bypass", so review new `File.Write*` calls by hand.
+
+## Gotchas
+
+- Drift on a target halts the whole session, not just that call. Check `git status` before treating it as real
+  (the false-positive cross-check is in the project memory index).
+- A "successful" apply can be a no-op: identical or whitespace-only content is skipped and reported in `NoOpFiles`/the summary.
+- The file's existing EOL and BOM are preserved on write, so the on-disk bytes can differ from the string a tool passed in.
+
+## Not source-code writes
+
+These write files but are outside the chokepoint by design:
+
+- `Tools.Basic/DocumentationTools.cs` (`ProjectDoc` and its helpers): project documentation and state files under `docs/`.
+- `Common/OperationBlobWriter.cs`: forensic operation JSON used by `UndoLastApply` for pre-image lookup.
+- `Common/MigrationLedger.cs` (`SaveAsync`): ledger JSON persistence.
+- `Common/LargeResultHelper.cs`: offloaded oversized tool results under `.roslynsentinel/largeresults/`.
+- `Server.Basic/ConsoleMode.cs`: `tool_list_*.json` and method-inventory dumps in the server bin folder.
+- `Tools.Advanced/AsyncifyTools.cs` (`AsyncifyLoop`): debug-dump JSON.
+- `Common/AgentLoop/ModelAgentRunner.cs`: agent transcripts and log sidecars.
+- `Engines.Advanced/AntiPatternEngine.cs`: string literals containing `File.WriteAllText` as suggestion text, not calls.
