@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Common;
+using RoslynSentinel.Engines.Basic;
 
 #pragma warning disable CS8618
 
@@ -42,10 +42,10 @@ public class RefactoringToolHelpersTests
     }
 
     [Test]
-    public void RequireUpdatedText_OutcomeNoChange_ReturnsException()
+    public void RequireUpdatedText_OutcomeAlreadyInTargetState_ReturnsException()
     {
         var result = RefactoringToolHelpers.RequireUpdatedText(
-            new DocumentEditResult(EditOutcome.NoChange, "X.cs") { Message = "m" },
+            new DocumentEditResult(EditOutcome.AlreadyInTargetState, "X.cs") { Message = "m" },
             "test",
             "X.cs");
 

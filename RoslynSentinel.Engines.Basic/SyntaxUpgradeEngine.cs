@@ -3,8 +3,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Engines.Basic;
 
 public class SyntaxUpgradeEngine
@@ -538,7 +536,7 @@ public class SyntaxUpgradeEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.NoChange,
+                Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
                 UpdatedText = root.ToFullString()
             };

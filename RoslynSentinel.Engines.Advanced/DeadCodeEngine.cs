@@ -3,17 +3,16 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Engines.Advanced;
+
 public class DeadCodeEngine
 {
     private readonly SentinelConfiguration _config;
     private readonly IWorkspaceManager _workspaceManager;
-    public DeadCodeEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config = null)
+    public DeadCodeEngine(IWorkspaceManager workspaceManager, SentinelConfiguration? config = null)
     {
         _workspaceManager = workspaceManager;
-        _config = config;
+        _config = config ?? new SentinelConfiguration();
     }
 
     public async Task<List<DeadCodeReport>> FindUnusedPrivateMembersAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
@@ -259,7 +258,7 @@ public class DeadCodeEngine
             projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase) || p.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase));
         }
 
-        var documentList = new List<(Document, SyntaxNode, SemanticModel? )>();
+        var documentList = new List<(Document, SyntaxNode, SemanticModel?)>();
         foreach (var project in projects)
         {
             var docs = project.Documents.AsEnumerable();

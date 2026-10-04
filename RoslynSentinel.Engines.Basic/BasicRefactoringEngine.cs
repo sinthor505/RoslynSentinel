@@ -1128,7 +1128,7 @@ public class BasicRefactoringEngine
             var existingName = existingDecl.Declaration.Variables[0].Identifier.Text;
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.NoChange,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
                 Message = $"// '{existingName}' is already a local variable - nothing to extract."
             };
@@ -1400,7 +1400,7 @@ public class BasicRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.NoChange,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
                 Message = "// Using directive already exists.",
                 UpdatedText = root.ToFullString()
@@ -1767,7 +1767,7 @@ public class BasicRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.NoChange,
+                Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
                 Message = "// No summary comment present.",
                 UpdatedText = root.ToFullString()
@@ -1815,13 +1815,13 @@ public class BasicRefactoringEngine
 
         if (target == null)
         {
-            return (EditOutcome.CannotEdit, "// Cannot edit: target not found.", null);
+            return (EditOutcome.TargetNotFound, "// Cannot edit: target not found.", null);
         }
 
         var docTrivia = target.GetLeadingTrivia().FirstOrDefault(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
         if (docTrivia == default)
         {
-            return (EditOutcome.NoChange, "// No summary comment present.", null);
+            return (EditOutcome.NoCandidatesFound, "// No summary comment present.", null);
         }
 
         var lines = docTrivia.ToFullString().Split('\n').Select(l => l.Trim().TrimStart('/').Trim()).Where(l => l.Length > 0 && !l.StartsWith("<summary>") && !l.StartsWith("</summary>")).ToList();

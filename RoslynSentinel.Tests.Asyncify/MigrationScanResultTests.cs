@@ -112,6 +112,7 @@ public class MigrationScanResultTests
             symbolNavEngine,
             new BreakingChangeEngine(_workspaceManager),
             _workspaceManager,
+            new ResourceSafetyEngine(_workspaceManager),
             NullLogger<ScanTools>.Instance);
 
         _workspaceTools = new WorkspaceTools(_workspaceManager, new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new DiffEngine(), new DiagnosticEngine(_workspaceManager), new SolutionManagementEngine(_workspaceManager), new StructuralRefinementEngine(_workspaceManager, config), new DependencyEngine(_workspaceManager), new ProjectConsistencyEngine(_workspaceManager), config, NullLogger<WorkspaceTools>.Instance, new BuildEngine(_workspaceManager, new DiagnosticEngine(_workspaceManager)), symbolNavEngine, new TestRunEngine(_workspaceManager), new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),

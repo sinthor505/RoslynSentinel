@@ -7,14 +7,16 @@ namespace RoslynSentinel.Common
         TargetNotFound,    // method/line/container not located
         DocumentNotFound,
         SourceInvalid,     // parsed fragment failed (the 3 fragment methods)
-        NoChange,     // already in target form
-        CannotOptimize,        // e.g. already optimized or optimization not applicable
+        [Obsolete] NoChange,     // already in target form
+        CannotOptimize,        // e.g. optimization not applicable
         CannotEdit,          // e.g. unsupported scenario or API
         CannotMove,          // e.g. code can't be moved to target location (for move refactoring)
         CannotRemove,         // e.g. code can't be removed (for remove refactoring)
         CannotConvert,       // e.g. code can't be converted to target form (for convert refactoring)
         FeatureDisabled,        // e.g. optimization disabled by user or policy
-        Error                 // for unexpected exceptions or failures
+        Error,                 // for unexpected exceptions or failures
+        AlreadyInTargetState, // already in target state
+        NoCandidatesFound   // e.g. no matching methods for a signature change
     }
 
     public sealed record DocumentEditResult : EngineResultBase
@@ -23,7 +25,10 @@ namespace RoslynSentinel.Common
         public Dictionary<FilePathWrapper, string> Changes { get; init; } = new Dictionary<FilePathWrapper, string>();
 
         /// <summary>Optional ToolErrorCode value copied from the ToolException that caused the failure; when set it takes precedence over the code derived from Outcome.</summary>
-        public string? ErrorCode { get; init; }
+        public string? ErrorCode
+        {
+            get; init;
+        }
 
         /// <summary>
         /// Batch engines only: the caller-supplied edit indexes that actually changed this file's text. An index that

@@ -172,7 +172,6 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         _symbolResolver = new SymbolResolver(this);
         _debounceTimer = new Timer(OnDebounceTimerElapsed, null, Timeout.Infinite, Timeout.Infinite);
 
-
         lock (MsBuildRegistrationLock)
         {
             if (!MSBuildLocator.IsRegistered)

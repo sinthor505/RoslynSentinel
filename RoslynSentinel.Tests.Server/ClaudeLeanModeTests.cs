@@ -86,7 +86,7 @@ public class ClaudeLeanModeTests
         }
 
         using var host = hostBuilder.Build();
-        _ = host.RunAsync();
+        var hostRun = host.RunAsync();
 
         var clientTransport = new StreamClientTransport(
             serverInput: clientToServer.Writer.AsStream(),
@@ -97,6 +97,7 @@ public class ClaudeLeanModeTests
         var tools = await client.ListToolsAsync(cancellationToken: TestContext.CurrentContext.CancellationToken);
         var names = tools.Select(t => t.Name).OrderBy(n => n, StringComparer.Ordinal).ToArray();
         await host.StopAsync();
+        await hostRun;
         return names;
     }
 

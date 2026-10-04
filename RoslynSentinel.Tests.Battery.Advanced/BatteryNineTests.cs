@@ -240,7 +240,7 @@ public class StructuralRefinementEngineTests
     public void TearDown() => _workspaceManager?.Dispose();
 
     [Test]
-    public async Task SyncTypeAndFilename_WhenFilenameMatchesType_ReturnsNoChangeMessage()
+    public async Task SyncTypeAndFilename_WhenFilenameMatchesType_ReturnsAlreadyInTargetState()
     {
         // File "MyService.cs" contains class MyService -> names already match
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("MyService.cs", "public class MyService {}")]);
@@ -248,7 +248,7 @@ public class StructuralRefinementEngineTests
 
         var result = await _engine.SyncTypeAndFilenameAsync("MyService.cs");
 
-        Assert.That(result.Message!, Is.EqualTo("// Filename matches primary type."));
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
     }
 
     [Test]

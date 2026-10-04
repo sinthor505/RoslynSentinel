@@ -488,7 +488,7 @@ public class AsyncBatchEngine
                             fallbackHandled = true;
                         }
                     }
-                    else if (ctResult.Outcome == EditOutcome.NoChange)
+                    else if (ctResult.Outcome == EditOutcome.AlreadyInTargetState)
                     {
                         // Async overload already has CT. Before giving up, check whether its body
                         // still calls [Obsolete("Asyncify-bridge: ...")] sync wrappers that need

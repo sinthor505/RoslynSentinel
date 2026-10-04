@@ -14,7 +14,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
-using RoslynSentinel.Common;
 using RoslynSentinel.Server.Basic;
 
 namespace RoslynSentinel.Tests.Server;
@@ -63,7 +62,7 @@ public class SchemaLeanProfileTests
         }
 
         using var host = hostBuilder.Build();
-        _ = host.RunAsync();
+        var hostRun = host.RunAsync();
 
         var clientTransport = new StreamClientTransport(
             serverInput: clientToServer.Writer.AsStream(),
@@ -73,6 +72,7 @@ public class SchemaLeanProfileTests
         await using var client = await McpClient.CreateAsync(clientTransport, cancellationToken: TestContext.CurrentContext.CancellationToken);
         var result = await action(client);
         await host.StopAsync();
+        await hostRun;
         return result;
     }
 

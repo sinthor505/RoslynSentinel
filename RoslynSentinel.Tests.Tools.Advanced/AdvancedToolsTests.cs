@@ -166,7 +166,7 @@ public class C {
 }", "C.cs");
         var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("C.cs", "GetData");
         // Should return unchanged (not add a second CancellationToken)
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.NoChange));
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
         Assert.That(result.UpdatedText, Is.Null);
     }
 

@@ -65,7 +65,7 @@ public class AsyncOptimizationEngine
             // Already a ValueTask -> nothing to optimize, and this is not an error.
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.NoChange,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 UpdatedText = root!.ToFullString(),
                 FilePath = filePath
             };
@@ -754,7 +754,7 @@ public class AsyncOptimizationEngine
     /// </param>
     /// <returns>
     /// <see cref="EditOutcome.Modified"/> with updated text when bridge calls were rewritten;
-    /// <see cref="EditOutcome.NoChange"/> when no Asyncify-bridge sync calls were found in the body;
+    /// <see cref="EditOutcome.NoCandidatesFound"/> when no Asyncify-bridge sync calls were found in the body;
     /// <see cref="EditOutcome.TargetNotFound"/> when the method could not be located.
     /// </returns>
     public async Task<DocumentEditResult> RewriteObsoleteCallsInAsyncMethodAsync(
@@ -802,7 +802,7 @@ public class AsyncOptimizationEngine
         var body = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody;
         if (body == null)
         {
-            return new DocumentEditResult(EditOutcome.NoChange, filePath);
+            return new DocumentEditResult(EditOutcome.NoCandidatesFound, filePath);
         }
 
         // Find the CancellationToken parameter to forward.
@@ -833,7 +833,7 @@ public class AsyncOptimizationEngine
 
         if (bridgeTargets.Count == 0)
         {
-            return new DocumentEditResult(EditOutcome.NoChange, filePath);
+            return new DocumentEditResult(EditOutcome.NoCandidatesFound, filePath);
         }
 
         const string BridgeCallAnnotation = "AsyncifyBridgeCallWithCT";
@@ -1066,7 +1066,7 @@ public class AsyncOptimizationEngine
             {
                 return new DocumentEditResult
                 {
-                    Outcome = EditOutcome.NoChange,
+                    Outcome = EditOutcome.AlreadyInTargetState,
                     UpdatedText = root.ToFullString(),
                     FilePath = filePath,
                     Message = "// Method already returns IAsyncEnumerable."
@@ -1257,7 +1257,7 @@ public class AsyncOptimizationEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.NoChange,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
                 Message = "// Info: Method already has a CancellationToken parameter."
             };

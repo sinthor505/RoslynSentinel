@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynSentinel.Tests;
 
+[Parallelizable(ParallelScope.All)]
 public class ContextHelperTests
 {
     [Test]

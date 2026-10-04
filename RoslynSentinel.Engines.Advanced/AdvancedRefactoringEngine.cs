@@ -5,10 +5,10 @@ using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Engines.Advanced;
+
 public class AdvancedRefactoringEngine
 {
     private readonly IWorkspaceManager _workspaceManager;
@@ -371,7 +371,7 @@ public class AdvancedRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.NoChange,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = interfaceDocument.FilePath ?? interfaceDocument.Name,
                 UpdatedText = interfaceRoot.ToFullString() // Already up to date
             };

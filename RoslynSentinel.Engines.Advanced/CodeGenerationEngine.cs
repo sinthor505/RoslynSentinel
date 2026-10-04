@@ -206,7 +206,7 @@ public class CodeGenerationEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.NoChange,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
                 UpdatedText = root!.ToFullString(),
                 Message = "// Info: Constructor already exists."
@@ -226,7 +226,7 @@ public class CodeGenerationEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.NoChange,
+                Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
                 UpdatedText = root!.ToFullString(),
                 Message = "// Info: No fields to initialize in constructor."
@@ -930,7 +930,7 @@ public class CodeGenerationEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.NoChange,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
                 Message = $"// Info: All members of '{interfaceName}' are already implemented."
             };

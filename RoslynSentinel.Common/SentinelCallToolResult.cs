@@ -36,7 +36,6 @@ public static class ServerBuildInfo
         BinaryPath = assembly.Location;
         Pid = Environment.ProcessId;
     }
-
 }
 
 // ── ErrorData codes ───────────────────────────────────────────────────────────────

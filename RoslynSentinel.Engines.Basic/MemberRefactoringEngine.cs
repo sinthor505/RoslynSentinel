@@ -822,7 +822,7 @@ public class MemberRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.NoChange,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
                 Message = "// No change: requested values already match the current member list and order."
             };
@@ -2368,7 +2368,6 @@ public class MemberRefactoringEngine
         };
     }
 
-
     public async Task<DocumentEditResult> InsertMemberAfterAsync(FilePathWrapper filePath, string containerName, string afterMemberName, string newMemberSource, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -2637,7 +2636,6 @@ public class MemberRefactoringEngine
             $"Recovery: call Member(operation: {operation}) once per member, passing one full declaration each time; to keep them in order, give each call after the first position: \"after:<previous member's name>\".";
     }
 
-
     public async Task<DocumentEditResult> AddFieldAsync(FilePathWrapper filePath, string containerName, string fieldName, string fieldType, string accessibility = "private", bool isReadonly = false, bool isStatic = false, string? initializer = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var parts = new System.Text.StringBuilder();
@@ -2712,7 +2710,6 @@ public class MemberRefactoringEngine
             UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
-
 
     public async Task<DocumentEditResult> AddPropertyAsync(FilePathWrapper filePath, string containerName, string propertyName, string propertyType, string accessibility = "public", bool hasSetter = true, bool isInit = false, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
@@ -4025,7 +4022,6 @@ public class MemberRefactoringEngine
         return normalized.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
     }
 
-
     /// <summary>
     /// Converts a method with no parameters to a property.
     /// </summary>
@@ -4154,7 +4150,6 @@ public class MemberRefactoringEngine
             Message = "// Method accesses instance members and cannot be made static."
         };
     }
-
 
     public async Task<ExtractMethodResult> ExtractMethodAsync(FilePathWrapper filePath, int startLine, string startLineText, int endLine, string endLineText, string newMethodName, CancellationToken cancellationToken = default)
     {

@@ -10,10 +10,10 @@ public class PerformanceEngine
 {
     private readonly SentinelConfiguration _config; private readonly IWorkspaceManager _workspaceManager;
 
-    public PerformanceEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config = null)
+    public PerformanceEngine(IWorkspaceManager workspaceManager, SentinelConfiguration? config = null)
     {
         _workspaceManager = workspaceManager;
-        _config = config;
+        _config = config ?? new SentinelConfiguration();
     }
 
     public async Task<List<PerformanceIssueReport>> AnalyzePerformanceAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)

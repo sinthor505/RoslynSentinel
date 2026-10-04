@@ -116,7 +116,7 @@ public class LogicSimplificationEngine
 
         return new DocumentEditResult
         {
-            Outcome = EditOutcome.NoChange,
+            Outcome = EditOutcome.NoCandidatesFound,
             FilePath = filePath,
             Message = "// No reference type parameters found.",
             UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root!).ToFullString()
@@ -1446,7 +1446,7 @@ public class LogicSimplificationEngine
 
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.NoChange,
+                Outcome = EditOutcome.CannotOptimize,
                 FilePath = filePath,
                 Message = "// Info: No optimization could be safely applied.",
                 UpdatedText = root.ToFullString()

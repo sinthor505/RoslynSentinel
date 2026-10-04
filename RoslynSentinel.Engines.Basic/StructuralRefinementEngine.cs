@@ -5,8 +5,6 @@ using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Engines.Basic;
 
 public class StructuralRefinementEngine
@@ -110,7 +108,7 @@ public class StructuralRefinementEngine
 
         return new DocumentEditResult
         {
-            Outcome = EditOutcome.CannotEdit,
+            Outcome = EditOutcome.AlreadyInTargetState,
             FilePath = filePath,
             Message = "// Filename matches primary type."
         };

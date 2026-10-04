@@ -110,7 +110,15 @@ public class AsyncifyTools
 
         // ── auto-flag phase (skipped for file scope or when forceRescan=false) ──
         var scopedProjectName = scope == ToolScope.project ? projectName : null;
-        var scopedFilePath = scope == ToolScope.file ? resolvedFilePath : null;
+        if (scope == ToolScope.file && string.IsNullOrEmpty(filePath))
+        {
+            return new SentinelCallToolResult<object>
+            {
+                IsSuccess = false,
+                ErrorData = new ResultError(MigrationErrorCode.InvalidArgument, "scope=\"file\" requires a filePath.")
+            };
+        }
+        FilePathWrapper scopedFilePath = resolvedFilePath;
         BatchResultSummary? flagPhaseResult = null;
         if (forceRescan && scope != ToolScope.file)
         {
@@ -1552,7 +1560,7 @@ public class AsyncifyTools
                                     compilerDiagnostics = ctApplyResult.ValidationResult.Diagnostics;
                                 }
                             }
-                            else if (ctResult.Outcome == EditOutcome.NoChange)
+                            else if (ctResult.Outcome == EditOutcome.AlreadyInTargetState)
                             {
                                 items.Add(new OperationItemRecord
                                 {

@@ -5,7 +5,6 @@ using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
 
 using RoslynSentinel.Engines.Basic;
-using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Advanced;
 
@@ -126,7 +125,6 @@ public class StructuralRefactoringEngine
         changes[Path.Combine(Path.GetDirectoryName(firstFile)!, $"{newBaseClassName}.cs")] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(baseUnit).ToFullString();
         return changes;
     }
-
 
     /// <summary>
     /// Inlines a class by moving all its members into the first class of the target file,

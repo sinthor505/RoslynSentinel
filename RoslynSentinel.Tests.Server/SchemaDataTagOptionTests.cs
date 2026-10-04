@@ -13,7 +13,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
-using RoslynSentinel.Common;
 using RoslynSentinel.Server.Basic;
 
 namespace RoslynSentinel.Tests.Server;
@@ -53,7 +52,7 @@ public class SchemaDataTagOptionTests
         }
 
         using var host = hostBuilder.Build();
-        _ = host.RunAsync();
+        var hostRun = host.RunAsync();
 
         var clientTransport = new StreamClientTransport(
             serverInput: clientToServer.Writer.AsStream(),
@@ -66,6 +65,7 @@ public class SchemaDataTagOptionTests
         // Clone so the elements outlive the client/host disposal.
         var result = tools.Select(t => (t.Name, t.ProtocolTool.InputSchema.Clone())).ToList();
         await host.StopAsync();
+        await hostRun;
         return result;
     }
 

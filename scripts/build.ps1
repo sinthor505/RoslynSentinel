@@ -315,13 +315,13 @@ function Invoke-VSCodeServerRestart {
     $vscodeProject = Join-Path $repoRoot $flavorToProject['Advanced']
     $vscodeExe = Join-Path $vscodeOutDir 'RoslynSentinel.Server.Advanced.exe'
 
-    Write-Host ""
-    Write-Host "=== Rebuilding VS Code Advanced.Http copy (bin-vscode, port $VSCodePort) ===" -ForegroundColor Cyan
+    #Write-Host ""
+    #Write-Host "=== Rebuilding VS Code Advanced.Http copy (bin-vscode, port $VSCodePort) ===" -ForegroundColor Cyan
 
     $existing = Get-Process | Where-Object { $_.ProcessName -eq 'RoslynSentinel.Server.Advanced' -and $_.Path -eq $vscodeExe }
     if ($existing) {
-        Write-Host "Stopping existing VS Code copy (PID $($existing.Id))..." -ForegroundColor Yellow
-        $existing | Stop-Process -Force
+        #Write-Host "Stopping existing VS Code copy (PID $($existing.Id))..." -ForegroundColor Yellow
+        #$existing | Stop-Process -Force
         # Stop-Process -Force returns as soon as termination is requested, not once the process
         # (and its listening socket) is actually gone - WaitForExit blocks until it really is, so
         # the new instance started below doesn't race the old one for the port.
@@ -356,7 +356,7 @@ function Invoke-VSCodeServerRestart {
     $launchStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $launchStdout = Join-Path $launchLogDir "launch-stdout-$launchStamp.log"
     $launchStderr = Join-Path $launchLogDir "launch-stderr-$launchStamp.log"
-    Start-Process -FilePath $vscodeExe -ArgumentList "--transport=http", "--port=$VSCodePort", "--mode=all" -WindowStyle Hidden -RedirectStandardOutput $launchStdout -RedirectStandardError $launchStderr
+    #Start-Process -FilePath $vscodeExe -ArgumentList "--transport=http", "--port=$VSCodePort", "--mode=all" -WindowStyle Hidden -RedirectStandardOutput $launchStdout -RedirectStandardError $launchStderr
 
     $started = $null
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -374,7 +374,7 @@ function Invoke-VSCodeServerRestart {
             Write-Warning "VS Code Advanced.Http copy did not stay running - it exited immediately. Its stderr:`n$exitStderr"
         }
         else {
-            Write-Warning "VS Code Advanced.Http copy did not stay running - no matching process was found after starting it. (stderr log was empty: $launchStderr)"
+            #Write-Warning "VS Code Advanced.Http copy did not stay running - no matching process was found after starting it. (stderr log was empty: $launchStderr)"
         }
     }
 }
@@ -401,14 +401,14 @@ if ($SkipVSCodeRestart) {
     # Gated on its own dotnet build of the Advanced project specifically, not on whatever
     # flavor/mode this run targeted - a Basic build succeeding (or a Test-only run with no build
     # at all) says nothing about whether Advanced itself currently compiles.
-    Invoke-VSCodeServerRestart
+    # Invoke-VSCodeServerRestart
 
     # Invoke-VSCodeServerRestart only confirms the process launched (PID exists after a fixed
     # 1s sleep) - not that it's actually answering requests. Delegate to the control script's
     # `status` verb for a real JSON-RPC round-trip (see its Test-HttpCopyReachable), so a restart
     # that started a process which then failed during startup is caught here instead of only
     # surfacing later as a confusing ConnectionRefused from whatever tool call happens to run next.
-    & (Join-Path $PSScriptRoot 'roslynsentinel-vscode-control.ps1') status -VSCodePort $VSCodePort
+    # & (Join-Path $PSScriptRoot 'roslynsentinel-vscode-control.ps1') status -VSCodePort $VSCodePort
 }
 
 exit ([int](-not $ok))

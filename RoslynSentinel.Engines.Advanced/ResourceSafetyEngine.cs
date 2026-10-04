@@ -2,17 +2,16 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-using RoslynSentinel.Common;
-
 namespace RoslynSentinel.Engines.Advanced;
+
 public class ResourceSafetyEngine
 {
     private readonly SentinelConfiguration _config;
     private readonly IWorkspaceManager _workspaceManager;
-    public ResourceSafetyEngine(IWorkspaceManager workspaceManager, SentinelConfiguration config = null)
+    public ResourceSafetyEngine(IWorkspaceManager workspaceManager, SentinelConfiguration? config = null)
     {
         _workspaceManager = workspaceManager;
-        _config = config;
+        _config = config ?? new SentinelConfiguration();
     }
 
     private async Task<IEnumerable<(Document Document, SyntaxNode Root, SemanticModel? SemanticModel)>> GetTargetDocumentsAsync(Solution solution, string? projectName, string? filePath, bool includeSemantic = false, CancellationToken cancellationToken = default)
@@ -23,7 +22,7 @@ public class ResourceSafetyEngine
             projects = projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase) || p.Name.Contains(projectName, StringComparison.OrdinalIgnoreCase));
         }
 
-        var documentList = new List<(Document, SyntaxNode, SemanticModel? )>();
+        var documentList = new List<(Document, SyntaxNode, SemanticModel?)>();
         foreach (var project in projects)
         {
             var docs = project.Documents.AsEnumerable();
@@ -158,7 +157,7 @@ public class ResourceSafetyEngine
 
                     return null;
                 }).Where(n => n != null).ToHashSet(StringComparer.Ordinal);
-                foreach (var(fieldName, line)in staticCollectionFields)
+                foreach (var (fieldName, line) in staticCollectionFields)
                 {
                     if (clearedFields.Contains(fieldName.TrimStart('_')) || clearedFields.Contains(fieldName))
                     {

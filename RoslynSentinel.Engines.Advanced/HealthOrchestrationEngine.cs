@@ -91,7 +91,7 @@ public class HealthOrchestrationEngine
                 // 3. Performance (Respect Toggles)
                 if (targetEngines.Contains(HealthEngineType.Performance))
                 {
-                    if (_config.IsFeatureEnabled("BoxingAllocation"))
+                    if (_config.IsFeatureEnabled("BoxingAllocation") && filePath is not null)
                     {
                         engineTasks.Add(Task.Run(async () =>
                         {
@@ -100,7 +100,7 @@ public class HealthOrchestrationEngine
                         }, cts.Token));
                     }
 
-                    if (_config.IsFeatureEnabled("InefficientStringComparison"))
+                    if (_config.IsFeatureEnabled("InefficientStringComparison") && filePath is not null)
                     {
                         engineTasks.Add(Task.Run(async () =>
                         {
