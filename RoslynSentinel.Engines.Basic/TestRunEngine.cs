@@ -92,10 +92,10 @@ public class TestRunEngine
             {
                 solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             }
-            catch (SolutionNotLoadedException)
+            catch (SolutionNotLoadedException ex)
             {
                 return new EngineResultWrapper<TestRunResult>(EngineOutcome.InvalidInput,
-                    error: new EngineError("No solution is loaded. Call LoadSolution before running RunTest."));
+                    error: new EngineError($"{ex.Message} RunTest needs a loaded solution."));
             }
 
             targets = solution.Projects

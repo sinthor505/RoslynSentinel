@@ -26,7 +26,7 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
         if (string.IsNullOrEmpty(solutionPath))
         {
             return Failure(new ResultError(ToolErrorCode.SolutionNotLoaded,
-                "No solution is loaded. Call LoadSolution first; SubAgentEval branches the loaded solution's git repo."));
+                SolutionNotLoadedMessage.Build(workspaceManager.LoadState) + " SubAgentEval branches the loaded solution's git repo."));
         }
 
         var runId = SubAgentRunNaming.NewRunId();

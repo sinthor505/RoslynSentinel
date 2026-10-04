@@ -415,7 +415,7 @@ public class WorkspaceFileEditImpl
                 {
                     IsSuccess = false,
                     ErrorData = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
-                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, "ReplaceSnippet: no solution is loaded, so 'filePath' could not be resolved. Call LoadSolution first, then retry with the same filePath.")
+                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, SolutionNotLoadedMessage.ForFilePath("ReplaceSnippet", _workspaceManager.LoadState))
                         : new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'filePath' could not be resolved.")
                 };
             }
@@ -622,7 +622,7 @@ public class WorkspaceFileEditImpl
             var filePathResolved = fileGroup.Key;
             if (!filePathResolved.Validated)
             {
-                perEditErrors.Add($"'{fileGroup.Key}': {(filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded ? "no solution is loaded." : "path could not be resolved.")}");
+                perEditErrors.Add($"'{fileGroup.Key}': {(filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded ? SolutionNotLoadedMessage.Build(_workspaceManager.LoadState) : "path could not be resolved.")}");
                 continue;
             }
 
@@ -789,7 +789,7 @@ public class WorkspaceFileEditImpl
                 {
                     IsSuccess = false,
                     ErrorData = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
-                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, "CreateFile: no solution is loaded, so 'filePath' could not be resolved. Call LoadSolution first, then retry with the same filePath.")
+                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, SolutionNotLoadedMessage.ForFilePath("CreateFile", _workspaceManager.LoadState))
                         : new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'filePath' is required.")
                 };
             }

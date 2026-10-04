@@ -23,7 +23,13 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
 
     public Task<Solution> GetCurrentSolutionAsync(CancellationToken cancellationToken)
         => Task.FromResult(CurrentSolution
-            ?? throw new SolutionNotLoadedException("No solution is loaded. Call LoadSolution with a .sln, .slnx, or .csproj path."));
+            ?? throw new SolutionNotLoadedException(SolutionNotLoadedMessage.Build(LoadState)));
+
+    // Settable so a test can simulate a freshly started server (default) or one that has loaded before.
+    public SolutionLoadState LoadState
+    {
+        get; set;
+    } = new(SolutionLoadState.ProcessStartedUtc, null);
 
     public Task<Solution> GetSolutionAsync(ReadSource source, CancellationToken cancellationToken)
         => GetCurrentSolutionAsync(cancellationToken);

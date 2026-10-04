@@ -942,9 +942,9 @@ public class CodeTransformTools
     /// "no solution is loaded" (a precondition failure independent of what filepath was passed) from
     /// "the filepath argument itself was invalid" -> see FilePathWrapper.FailureReason.
     /// </summary>
-    private static ResultError BuildFilePathRequiredError(FilePathWrapper filePath, string kind)
+    private ResultError BuildFilePathRequiredError(FilePathWrapper filePath, string kind)
     {
-        return filePath.FailureReason == FilePathFailureReason.NoSolutionLoaded ? new ResultError(ToolErrorCode.SolutionNotLoaded, $"{kind}: no solution is loaded, so 'filePath' could not be resolved. Call LoadSolution first, then retry with the same filePath.") : new ResultError(ToolErrorCode.InvalidArgument, $"filePath is required for {kind}.");
+        return filePath.FailureReason == FilePathFailureReason.NoSolutionLoaded ? new ResultError(ToolErrorCode.SolutionNotLoaded, SolutionNotLoadedMessage.ForFilePath(kind, _workspaceManager.LoadState)) : new ResultError(ToolErrorCode.InvalidArgument, $"filePath is required for {kind}.");
     }
 
     // ── 3. apply_class_codetransform ────────────────────────────────────────────────

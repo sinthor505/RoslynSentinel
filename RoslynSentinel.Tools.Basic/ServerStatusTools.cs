@@ -24,7 +24,7 @@ public class ServerStatusTools
 
     [McpServerTool(Name = "McpServerStatus")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, serverBinaryPath, serverPid, binaryStaleness = loaded assemblies with a newer build on disk), session-halt state, circuit breaker, loaded workspace, active tool-mode resolution. " +
+    [Description("Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, serverBinaryPath, serverPid, binaryStaleness = loaded assemblies with a newer build on disk), session-halt state, circuit breaker, loaded workspace (isFreshStartup = this server process has not loaded a solution yet, e.g. just restarted), active tool-mode resolution. " +
         "Tools are gated per mode: before concluding a tool does not exist, call with toolListing=inactive.")]
     public object McpServerStatus(
         [Description("inactive: declared tools not active in this mode, with an enabledBy hint. all: every declared tool.")]
@@ -85,6 +85,8 @@ public class ServerStatusTools
                 ServerBinaryPath: ServerBuildInfo.BinaryPath,
                 BinaryStaleness: ServerBinaryStaleness.CheckNow(),
                 SessionHalted: _workspaceManager.IsSessionHalted(),
+                IsFreshStartup: _workspaceManager.LoadState.IsFreshStartup,
+                ServerStartedUtc: _workspaceManager.LoadState.ServerStartedUtc,
                 SolutionPath: _workspaceManager.SolutionPath,
                 ProjectCount: _workspaceManager.ProjectCount,
                 WorkspaceVersion: _workspaceManager.WorkspaceVersion,
@@ -197,6 +199,8 @@ public sealed record McpServerStatusResult(
     string ServerBinaryPath,
     ServerBinaryStalenessReport BinaryStaleness,
     bool SessionHalted,
+    bool IsFreshStartup,
+    DateTime ServerStartedUtc,
     string? SolutionPath,
     int ProjectCount,
     int WorkspaceVersion,

@@ -894,7 +894,7 @@ public class MsToolAugmentEngine
             return new AddUsingsPreview(
                 SolutionRequired: true,
                 UsingsToAdd: [],
-                Warning: "No solution is loaded. Load a solution first using LoadSolution. " +
+                Warning: SolutionNotLoadedMessage.Build(_workspaceManager.LoadState) + " " +
                          "(The standard add_missing_usings tool requires a solution too.)",
                 UpdatedContent: "");
         }

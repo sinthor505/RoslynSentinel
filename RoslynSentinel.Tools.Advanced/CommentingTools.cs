@@ -51,13 +51,13 @@ public class CommentingTools
         {
             await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         }
-        catch (SolutionNotLoadedException)
+        catch (SolutionNotLoadedException ex)
         {
             return new SentinelCallToolResult<CommentingResult>
             {
                 IsSuccess = false,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
-                    "No solution is loaded. Call LoadSolution first.")
+                    ex.Message)
             };
         }
 

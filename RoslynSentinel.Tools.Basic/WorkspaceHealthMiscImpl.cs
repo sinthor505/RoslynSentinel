@@ -96,6 +96,7 @@ public class WorkspaceHealthMiscImpl
     /// </summary>
     public async Task<WorkspaceHealthReport> GetWorkspaceHealthAsync(CancellationToken cancellationToken = default)
     {
+        var loadState = _workspaceManager.LoadState;
         Solution? currentSolution;
         try
         {
@@ -107,21 +108,21 @@ public class WorkspaceHealthMiscImpl
         }
         catch (Exception ex)
         {
-            return new WorkspaceHealthReport(IsOperational: false, HasLoadedSolution: false, LoadedSolutionPath: null, ProjectCount: 0, DocumentCount: 0, LoadErrors: [$"Workspace exception: {ex.Message}"], Summary: $"Workspace is NOT operational: {ex.Message}");
+            return new WorkspaceHealthReport(IsOperational: false, HasLoadedSolution: false, LoadedSolutionPath: null, ProjectCount: 0, DocumentCount: 0, LoadErrors: [$"Workspace exception: {ex.Message}"], Summary: $"Workspace is NOT operational: {ex.Message}", IsFreshStartup: loadState.IsFreshStartup, ServerStartedUtc: loadState.ServerStartedUtc);
         }
 
         var loadErrors = _workspaceManager.GetWorkspaceLoadErrors();
         if (currentSolution == null)
         {
             var msbuildNote = _workspaceManager.GetHealthComponents().MsBuildFound ? "" : " No MSBuild installation was detected - LoadSolution may fail; install Visual Studio, Build Tools, or the .NET SDK.";
-            return new WorkspaceHealthReport(IsOperational: true, HasLoadedSolution: false, LoadedSolutionPath: null, ProjectCount: 0, DocumentCount: 0, LoadErrors: loadErrors, Summary: "Workspace is operational. No solution is currently loaded. " + "Call LoadSolution to load a .sln or .csproj file." + msbuildNote);
+            return new WorkspaceHealthReport(IsOperational: true, HasLoadedSolution: false, LoadedSolutionPath: null, ProjectCount: 0, DocumentCount: 0, LoadErrors: loadErrors, Summary: "Workspace is operational. " + SolutionNotLoadedMessage.Build(loadState) + msbuildNote, IsFreshStartup: loadState.IsFreshStartup, ServerStartedUtc: loadState.ServerStartedUtc);
         }
 
         var projectCount = currentSolution.ProjectIds.Count;
         var documentCount = currentSolution.Projects.SelectMany(p => p.Documents).Count();
         var solutionPath = currentSolution.FilePath ?? _workspaceManager.SolutionPath;
         var status = _workspaceManager.GetWorkspaceStatus();
-        return new WorkspaceHealthReport(IsOperational: true, HasLoadedSolution: true, LoadedSolutionPath: solutionPath, ProjectCount: projectCount, DocumentCount: documentCount, LoadErrors: loadErrors, Summary: $"Workspace operational. {projectCount} project(s) loaded, " + $"{documentCount} document(s). " + (loadErrors.Count > 0 ? $"{loadErrors.Count} load warning(s) recorded (non-fatal)." : "No load errors.") + (status.RequiresReload ? $" {status.StaleDocumentCount} file(s) changed on disk since the last load - call LoadSolution to refresh." : ""), StaleDocumentCount: status.StaleDocumentCount, RequiresReload: status.RequiresReload, SampleStaleFiles: status.SampleStaleFiles);
+        return new WorkspaceHealthReport(IsOperational: true, HasLoadedSolution: true, LoadedSolutionPath: solutionPath, ProjectCount: projectCount, DocumentCount: documentCount, LoadErrors: loadErrors, Summary: $"Workspace operational. {projectCount} project(s) loaded, " + $"{documentCount} document(s). " + (loadErrors.Count > 0 ? $"{loadErrors.Count} load warning(s) recorded (non-fatal)." : "No load errors.") + (status.RequiresReload ? $" {status.StaleDocumentCount} file(s) changed on disk since the last load - call LoadSolution to refresh." : ""), StaleDocumentCount: status.StaleDocumentCount, RequiresReload: status.RequiresReload, SampleStaleFiles: status.SampleStaleFiles, IsFreshStartup: loadState.IsFreshStartup, ServerStartedUtc: loadState.ServerStartedUtc);
     }
 
     public async Task<SentinelCallToolResult<WorkspaceHealthReport, ResultError>> GetWorkspaceHealth(ToolCallReason reason, BuildVerifyLevel verify = BuildVerifyLevel.noBuild,

@@ -142,7 +142,13 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     }
     private volatile int _workspaceVersion = 0;
     private DateTime _lastLoadedAt = DateTime.MinValue;
+    // Unlike _lastLoadedAt (also bumped by in-memory updates and reloads, and set before a failed
+    // load is detected), this is set only when LoadSolutionAsync finishes successfully -> it backs
+    // LoadState, i.e. "has this process ever had a solution".
+    private DateTime? _lastSuccessfulLoadUtc;
     private readonly Timer _debounceTimer;
+
+    public SolutionLoadState LoadState => new(SolutionLoadState.ProcessStartedUtc, _lastSuccessfulLoadUtc);
 
     /// <summary>
     /// Base repository directory used to resolve relative solution paths passed to <see cref="LoadSolutionAsync"/>.
@@ -499,6 +505,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     : "no projects were found.";
                 throw new ToolNotFoundException($"Solution '{solutionPath}' failed to load: {detail}");
             }
+
+            _lastSuccessfulLoadUtc = DateTime.UtcNow;
         }
         finally
         {
@@ -1078,8 +1086,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         await _solutionLock.WaitAsync(cancellationToken);
         try
         {
-            return CurrentSolution ?? throw new SolutionNotLoadedException(
-                "No solution is loaded. Call LoadSolution with a .sln, .slnx, or .csproj path.");
+            return CurrentSolution ?? throw new SolutionNotLoadedException(SolutionNotLoadedMessage.Build(LoadState));
         }
         finally
         {

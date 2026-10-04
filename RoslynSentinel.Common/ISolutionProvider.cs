@@ -33,6 +33,11 @@ public interface ISolutionProvider
     {
         get;
     }
+    /// <summary>Whether this server process has loaded a solution yet; lets "no solution" messages say the server was freshly (re)started.</summary>
+    SolutionLoadState LoadState
+    {
+        get;
+    }
 
     /// <summary>Returns the current in-memory solution. Roslyn's <see cref="Solution"/> is immutable, so callers can apply speculative edits (e.g. <c>WithDocumentText</c>) without affecting this instance or other callers.</summary>
     [Obsolete("Ambiguous once staged writes exist -- use IWorkspaceReader.GetSolutionAsync(ReadSource.Committed/.IncludeStaged) instead. See docs/current/design_read_chokepoint.md.", error: false)]

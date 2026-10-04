@@ -15,4 +15,6 @@ public record WorkspaceHealthReport(
     int StaleDocumentCount = 0,
     bool RequiresReload = false,
     List<string>? SampleStaleFiles = null,
-    BuildResult? BuildVerification = null);
+    BuildResult? BuildVerification = null,
+    bool IsFreshStartup = false,
+    DateTime? ServerStartedUtc = null);

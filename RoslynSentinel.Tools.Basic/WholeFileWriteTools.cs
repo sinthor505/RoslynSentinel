@@ -467,7 +467,7 @@ public class WholeFileWriteTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.SolutionNotLoaded, "ApplyDiff: no solution is loaded, so 'filePath' could not be resolved. Call LoadSolution first, then retry with the same filePath.")
+                        ErrorData = new ResultError(ToolErrorCode.SolutionNotLoaded, SolutionNotLoadedMessage.ForFilePath("ApplyDiff", _workspaceManager.LoadState))
                     };
                 }
 
@@ -618,7 +618,7 @@ public class WholeFileWriteTools
                 {
                     IsSuccess = false,
                     ErrorData = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
-                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, "ApplyUnifiedDiff: no solution is loaded, so 'filePath' could not be resolved. Call LoadSolution first, then retry with the same filePath.")
+                        ? new ResultError(ToolErrorCode.SolutionNotLoaded, SolutionNotLoadedMessage.ForFilePath("ApplyUnifiedDiff", _workspaceManager.LoadState))
                         : new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'filePath' is required (it names the single file the unifiedDiff applies to).")
                 };
             }
