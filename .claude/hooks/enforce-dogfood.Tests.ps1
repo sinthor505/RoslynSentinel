@@ -39,16 +39,84 @@ function Get-FixtureHook([string]$kind) {
 
 $msg = "Fix it`n`nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
+# The hook only blocks .cs paths INSIDE its repo root (out-of-repo is auto-exempt), so the
+# deny cases need real in-repo paths.
+$repo    = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\', '/')
+$repoFwd = $repo.Replace('\', '/')
+
 $cases = @(
     # --- .cs edits: deny ---
     @{ n = 'Edit .cs (backslash path)'; want = 'DENY'
-       p = @{ tool_name = 'Edit';  tool_input = @{ file_path = 'C:\repo\Foo.cs' } } }
+       p = @{ tool_name = 'Edit';  tool_input = @{ file_path = "$repo\Foo.cs" } } }
     @{ n = 'Write .cs (forward path)'; want = 'DENY'
-       p = @{ tool_name = 'Write'; tool_input = @{ file_path = '/c/repo/Bar.cs' } } }
+       p = @{ tool_name = 'Write'; tool_input = @{ file_path = "$repoFwd/Bar.cs" } } }
     @{ n = 'MultiEdit .cs'; want = 'DENY'
-       p = @{ tool_name = 'MultiEdit'; tool_input = @{ file_path = 'C:\repo\Baz.cs' } } }
+       p = @{ tool_name = 'MultiEdit'; tool_input = @{ file_path = "$repo\Baz.cs" } } }
     @{ n = 'Edit .CS (case-insensitive)'; want = 'DENY'
-       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = 'C:\repo\Qux.CS' } } }
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = "$repo\Qux.CS" } } }
+    @{ n = 'Edit .cs relative path (cannot tell: enforce)'; want = 'DENY'
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = 'Foo.cs' } } }
+    @{ n = 'Edit .cs via .. out of repo and back in'; want = 'DENY'
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = "$repo\sub\..\Foo.cs" } } }
+
+    # --- .cs outside this repo: auto-exempt, no keyword needed ---
+    @{ n = 'Edit .cs out-of-repo (C:\tmp)'; want = 'allow'
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = 'C:\tmp\Foo.cs' } } }
+    @{ n = 'Write .cs out-of-repo (git-bash style)'; want = 'allow'
+       p = @{ tool_name = 'Write'; tool_input = @{ file_path = '/c/tmp/Foo.cs' } } }
+    @{ n = 'Edit .cs via .. escaping the repo'; want = 'allow'
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = "$repo\..\elsewhere\Foo.cs" } } }
+    @{ n = 'Edit .cs in sibling dir sharing repo-name prefix'; want = 'allow'
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = "$repo-TestRuns\Foo.cs" } } }
+
+    # --- Grep ---
+    @{ n = 'Grep *.cs glob, no path (in-repo)'; want = 'DENY'
+       p = @{ tool_name = 'Grep'; tool_input = @{ pattern = 'foo bar'; glob = '*.cs' } } }
+    @{ n = 'Grep *.cs glob, out-of-repo path'; want = 'allow'
+       p = @{ tool_name = 'Grep'; tool_input = @{ pattern = 'foo bar'; glob = '*.cs'; path = 'C:\tmp' } } }
+    @{ n = 'Grep *.cs glob, in-repo path'; want = 'DENY'
+       p = @{ tool_name = 'Grep'; tool_input = @{ pattern = 'foo bar'; glob = '*.cs'; path = "$repo\RoslynSentinel.Common" } } }
+
+    # --- deliberate bypass: inline keyword (Bash/PowerShell). Runs in a fixture so the
+    #     bypass log never lands in the real repo's .claude/journal. ---
+    @{ n = 'bypass inline: cat .cs + keyword + reason'; want = 'allow'; fx = 'tok'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'cat Vendor/Foo.cs # DeliberateHookBypass: reading vendored file' } } }
+    @{ n = 'bypass inline: keyword in description'; want = 'allow'; fx = 'tok'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-Content Vendor\Foo.cs'; description = 'DeliberateHookBypass: need raw bytes of a vendored file' } } }
+    @{ n = 'bypass inline: git status + keyword'; want = 'allow'; fx = 'tok'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git status # DeliberateHookBypass: MCP Git is halted by drift latch' } } }
+    @{ n = 'bypass inline: keyword case-insensitive'; want = 'allow'; fx = 'tok'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'cat Foo.cs # deliberatehookbypass: because reasons' } } }
+    @{ n = 'bypass inline: bare keyword, no reason'; want = 'DENY'; fx = 'tok'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'cat Foo.cs # DeliberateHookBypass' } } }
+    @{ n = 'bypass inline: keyword with empty reason'; want = 'DENY'; fx = 'tok'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'cat Foo.cs # DeliberateHookBypass:   ' } } }
+    @{ n = 'bypass inline: keyword with 1-char reason'; want = 'DENY'; fx = 'tok'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'cat Foo.cs # DeliberateHookBypass: x' } } }
+
+    # --- deliberate bypass: token file (Edit/Write/Grep have no free-text field) ---
+    @{ n = 'bypass token: none present'; want = 'DENY'; fx = 'tok'
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = '{ROOT}\Foo.cs' } } }
+    @{ n = 'bypass token: valid, Edit .cs'; want = 'allow'; fx = 'tok'; token = @{ reason = 'deliberate manual edit' }
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = '{ROOT}\Foo.cs' } } }
+    @{ n = 'bypass token: valid, Grep *.cs'; want = 'allow'; fx = 'tok'; token = @{ reason = 'deliberate manual grep' }
+       p = @{ tool_name = 'Grep'; tool_input = @{ pattern = 'foo bar'; glob = '*.cs' } } }
+    @{ n = 'bypass token: valid, shell cat .cs'; want = 'allow'; fx = 'tok'; token = @{ reason = 'deliberate manual read' }
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'cat Foo.cs' } } }
+    @{ n = 'bypass token: expired (11 min old)'; want = 'DENY'; fx = 'tok'; token = @{ reason = 'deliberate manual edit' }; tokenAgeMin = 11
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = '{ROOT}\Foo.cs' } } }
+    @{ n = 'bypass token: no reason'; want = 'DENY'; fx = 'tok'; token = @{ tools = @('Edit') }
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = '{ROOT}\Foo.cs' } } }
+    @{ n = 'bypass token: tools list excludes this tool'; want = 'DENY'; fx = 'tok'; token = @{ reason = 'deliberate manual edit'; tools = @('Write') }
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = '{ROOT}\Foo.cs' } } }
+    @{ n = 'bypass token: paths list matches'; want = 'allow'; fx = 'tok'; token = @{ reason = 'deliberate manual edit'; paths = @('Foo.cs') }
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = '{ROOT}\Foo.cs' } } }
+    @{ n = 'bypass token: paths list does not match'; want = 'DENY'; fx = 'tok'; token = @{ reason = 'deliberate manual edit'; paths = @('Foo.cs') }
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = '{ROOT}\Bar.cs' } } }
+    @{ n = 'bypass token: paths list vs shell (no target)'; want = 'DENY'; fx = 'tok'; token = @{ reason = 'deliberate manual read'; paths = @('Foo.cs') }
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'cat Foo.cs' } } }
+    @{ n = 'bypass token: does not cover commit-trailer check'; want = 'DENY'; fx = 'tok'; token = @{ reason = 'deliberate manual edit' }
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; files = 'A.cs'; message = 'Fix it' } } }
 
     # --- tool-experience journal writes quoting git in the note text ---
     @{ n = 'journal Add-Content quoting git diff'; want = 'allow'
@@ -86,9 +154,9 @@ $cases = @(
 
     # --- non-C# and harness clones: allow ---
     @{ n = 'Edit .md'; want = 'allow'
-       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = 'C:\repo\CLAUDE.md' } } }
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = "$repo\CLAUDE.md" } } }
     @{ n = 'Edit .ps1'; want = 'allow'
-       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = 'C:\repo\build.ps1' } } }
+       p = @{ tool_name = 'Edit'; tool_input = @{ file_path = "$repo\build.ps1" } } }
     @{ n = 'Edit .cs inside Worktree/'; want = 'allow'
        p = @{ tool_name = 'Edit'; tool_input = @{ file_path = 'C:\run\Worktree\src\A.cs' } } }
     @{ n = 'Read .cs (not an edit)'; want = 'allow'
@@ -177,7 +245,20 @@ $pass = 0; $fail = 0
 
 foreach ($c in $cases) {
     $hookPath = if ($c.fx) { Get-FixtureHook $c.fx } else { $hook }
-    $got = Invoke-Hook ($c.p | ConvertTo-Json -Depth 5 -Compress) $hookPath
+    $json = $c.p | ConvertTo-Json -Depth 5 -Compress
+    $tokenPath = $null
+    if ($c.fx) {
+        # {ROOT} -> the fixture's repo root, so a case can name an in-repo path.
+        $fxRoot = Split-Path (Split-Path (Split-Path $hookPath))
+        $json = $json.Replace('{ROOT}', $fxRoot.Replace('\', '\\'))
+        if ($c.token) {
+            $tokenPath = Join-Path $fxRoot '.claude\bypass.local.json'
+            Set-Content -LiteralPath $tokenPath -Value ($c.token | ConvertTo-Json -Depth 5 -Compress) -Encoding UTF8
+            if ($c.tokenAgeMin) { (Get-Item -LiteralPath $tokenPath).LastWriteTime = (Get-Date).AddMinutes(-$c.tokenAgeMin) }
+        }
+    }
+    $got = Invoke-Hook $json $hookPath
+    if ($tokenPath) { Remove-Item -LiteralPath $tokenPath -Force -ErrorAction SilentlyContinue }
 
     if ($got -eq $c.want) { $pass++; $mark = 'ok  ' }
     else                  { $fail++; $mark = 'FAIL' }
@@ -191,6 +272,12 @@ foreach ($bad in @('', 'not json at all', '{"tool_name":"Bash"}')) {
     if ($got -eq 'allow') { $pass++; $mark = 'ok  ' } else { $fail++; $mark = 'FAIL' }
     '{0} {1,-42} want={2,-5} got={3}' -f $mark, "fail-open: $label", 'allow', $got | Write-Host
 }
+
+# Accepted bypasses must leave an audit trail in the fixture's journal dir.
+$bypassLog = Join-Path $fixtureRoots['tok'] '.claude\journal\hook-bypass.jsonl'
+$logged = (Test-Path -LiteralPath $bypassLog) -and ((Get-Content -LiteralPath $bypassLog -Raw) -match '"reason":"reading vendored file"')
+if ($logged) { $pass++; $mark = 'ok  ' } else { $fail++; $mark = 'FAIL' }
+'{0} {1,-42}' -f $mark, 'bypass log records accepted bypass' | Write-Host
 
 foreach ($r in $fixtureRoots.Values) { Remove-Item -LiteralPath $r -Recurse -Force -ErrorAction SilentlyContinue }
 

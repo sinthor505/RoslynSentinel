@@ -138,6 +138,21 @@ mutating tool now fails, or reports state inconsistent with what's on disk) — 
 gets the normal tool-failure treatment above, scoped to the actual anomaly rather than the violation
 that triggered it.
 
+**Hook bypass (deliberate exceptions only).** The hook blocks reflexive calls, not deliberate ones.
+Legitimate cases: a `.cs` file outside this repo, or a manual repo edit/read/git call you have
+decided is right (e.g. raw bytes, a halted `Git` tool you have already reported). Not legitimate: a
+failed or missing MCP tool - that is still a blocker (above), not a bypass. Routes:
+- **Outside this repo:** Edit/Write/Grep on a `.cs` path outside the repo root is exempt automatically.
+- **Bash/PowerShell:** put `DeliberateHookBypass: <reason>` in the command (as a comment) or the
+  `description`. The reason is mandatory; a bare keyword is still blocked.
+- **Edit/Write/Grep on repo files:** write `.claude/bypass.local.json` (local-only, valid 10 minutes):
+  `{"reason": "...", "tools": ["Edit"], "paths": ["Foo.cs"]}` - `reason` required, `tools`/`paths`
+  optional narrowing. Use the narrowest `paths` that fits.
+
+Every accepted bypass is logged to `.claude/journal/hook-bypass.jsonl`. The `ReplaceSnippet`
+parameter check and the commit checks cannot be bypassed. A bypass is also a journal-worthy event:
+note why the tools did not fit.
+
 **Never delete a tracked file with a shell command.** Deleting a file the server has touched
 (created via `CreateFile`, or just loaded into the solution) via `rm`/`Remove-Item` trips the
 external-drift detector on the very next mutating call and halts every mutating tool for the rest of

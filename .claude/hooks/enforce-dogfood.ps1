@@ -37,6 +37,9 @@
 #   - Git(operation: commit) missing a Co-Authored-By trailer, a scope-less commit with nothing
 #     staged, or scope=all/tracked with no files/paths list while the tree is dirty.
 #
+# Deliberate bypass (out-of-repo auto-exempt, inline keyword, token file): see the
+# "Deliberate bypass" block below and CLAUDE.md "Hook bypass".
+#
 # Tests: pwsh -NoProfile -File .claude/hooks/enforce-dogfood.Tests.ps1
 
 $ErrorActionPreference = 'Stop'
@@ -48,6 +51,95 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\', '
 function Deny([string]$reason) {
     [Console]::Error.WriteLine($reason)
     exit 2
+}
+
+# --- Deliberate bypass --------------------------------------------------------------
+# A reflexive call stays blocked; a deliberate one can pass. Policy: CLAUDE.md "Hook bypass".
+# Three routes, none advertised by the block messages themselves (they only point at CLAUDE.md,
+# so the keyword does not become a reflex):
+#   1. Out-of-repo path: Edit/Write/Grep on a .cs path outside this repo's root needs nothing -
+#      the MCP tools cannot see those files, so blocking them is a false positive.
+#   2. Inline keyword (Bash/PowerShell, which have a free-text command/description):
+#      "DeliberateHookBypass: <reason>" in the command (as a comment) or in the description.
+#      The reason is mandatory (3+ chars); a bare keyword is still blocked.
+#   3. Token file .claude/bypass.local.json (local-only, ignored by .claude/*) for tools with no
+#      free-text field. {"reason": "...", "tools": ["Edit"], "paths": ["Foo.cs"]} - reason is
+#      required; tools/paths optional narrowing (paths = case-insensitive substring of the
+#      target path). Valid for 10 minutes from its last write.
+# Every accepted keyword/token bypass is appended to .claude/journal/hook-bypass.jsonl.
+# Not bypassable: the ReplaceSnippet parameter check and the commit checks - those guard
+# correctness, not policy.
+$bypassTokenPath  = Join-Path $repoRoot '.claude\bypass.local.json'
+$bypassTtlMinutes = 10
+$bypassFooter = @"
+
+A deliberate, justified exception is described in CLAUDE.md ("Hook bypass").
+"@
+
+function DenyBypassable([string]$reason) { Deny ($reason + $bypassFooter) }
+
+function Test-PathOutsideRepo([string]$p) {
+    if (-not $p) { return $false }
+    $p = $p.Trim().Trim('"', "'")
+    # Git-Bash style /c/foo -> C:\foo
+    if ($p -match '^/([A-Za-z])/') { $p = ($Matches[1] + ':\' + $p.Substring(3)) }
+    try {
+        # Relative or unresolvable means "can't tell": treat as in-repo, i.e. keep enforcing.
+        if (-not [System.IO.Path]::IsPathRooted($p)) { return $false }
+        $full = [System.IO.Path]::GetFullPath($p).TrimEnd('\', '/')
+    }
+    catch { return $false }
+    return -not ($full -eq $repoRoot -or $full.StartsWith("$repoRoot\", [StringComparison]::OrdinalIgnoreCase) -or $full.StartsWith("$repoRoot/", [StringComparison]::OrdinalIgnoreCase))
+}
+
+function Get-InlineBypassReason([string]$text) {
+    if ($text -match '(?i)DeliberateHookBypass\s*:\s*(?<r>\S[^\r\n]{2,})') { return $Matches['r'].Trim() }
+    return $null
+}
+
+function Get-TokenBypassReason([string]$target) {
+    if (-not (Test-Path -LiteralPath $bypassTokenPath)) { return $null }
+    try {
+        $fi = Get-Item -LiteralPath $bypassTokenPath
+        if (((Get-Date) - $fi.LastWriteTime).TotalMinutes -gt $bypassTtlMinutes) { return $null }
+        $t = Get-Content -LiteralPath $bypassTokenPath -Raw | ConvertFrom-Json
+    }
+    catch { return $null }
+    $reason = ([string]$t.reason).Trim()
+    if ($reason.Length -lt 3) { return $null }
+    if ($t.tools -and ($toolName -notin @($t.tools))) { return $null }
+    if ($t.paths) {
+        if (-not $target) { return $null }
+        $norm = $target.Replace('/', '\')
+        $hit = $false
+        foreach ($pp in @($t.paths)) {
+            if ($norm.IndexOf(([string]$pp).Replace('/', '\'), [StringComparison]::OrdinalIgnoreCase) -ge 0) { $hit = $true; break }
+        }
+        if (-not $hit) { return $null }
+    }
+    return $reason
+}
+
+function Write-BypassLog([string]$source, [string]$target, [string]$reason) {
+    try {
+        $dir = Join-Path $repoRoot '.claude\journal'
+        if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        $entry = [ordered]@{
+            ts = (Get-Date).ToUniversalTime().ToString('o'); session = [string]$payload.session_id
+            tool = $toolName; source = $source; target = $target; reason = $reason
+        } | ConvertTo-Json -Compress
+        [System.IO.File]::AppendAllText((Join-Path $dir 'hook-bypass.jsonl'), $entry + "`n", (New-Object System.Text.UTF8Encoding($false)))
+    }
+    catch { }
+    [Console]::Error.WriteLine("enforce-dogfood.ps1: DeliberateHookBypass accepted ($source): $reason")
+}
+
+# Exits 0 (allow) when an inline keyword or a valid token covers this call; returns otherwise.
+function Exit-IfBypassed([string]$inlineText, [string]$target) {
+    $r = Get-InlineBypassReason $inlineText
+    if ($r) { Write-BypassLog 'inline' $target $r; exit 0 }
+    $r = Get-TokenBypassReason $target
+    if ($r) { Write-BypassLog 'token' $target $r; exit 0 }
 }
 
 try {
@@ -79,7 +171,11 @@ try {
             # worktrees, often not the loaded solution, and blocking there strands the run.
             if ($filePath -match '[\\/]Worktree[\\/]') { exit 0 }
 
-            Deny @"
+            # Outside this repo the MCP tools cannot see the file: nothing to dog-food.
+            if (Test-PathOutsideRepo $filePath) { exit 0 }
+            Exit-IfBypassed '' $filePath
+
+            DenyBypassable @"
 BLOCKED by dog-fooding policy: $toolName on a .cs file.
 
   $filePath
@@ -129,7 +225,10 @@ and end the turn. Do not route around this hook.
         if ($path -and $path -match '[\\/]Worktree[\\/]') { $targetsCs = $false }
 
         if ($targetsCs -and $pattern) {
-            Deny @"
+            if ($path -and (Test-PathOutsideRepo $path)) { exit 0 }
+            Exit-IfBypassed '' $(if ($path) { $path } else { $glob })
+
+            DenyBypassable @"
 BLOCKED by dog-fooding policy: Grep targeting a .cs file/glob.
 
   pattern: $pattern
@@ -247,7 +346,8 @@ positive if the referenced name already exists elsewhere in the file. Proceeding
         if ($command -match '\.cs\b' -and $command -notmatch '[\\/]Worktree[\\/]' -and
             $command -match "(^|[;&|(]\s*|\bxargs\s+)($csReaders)(\s|$)") {
             $which = $Matches[2]
-            Deny @"
+            Exit-IfBypassed "$command`n$([string]$toolInput.description)" $null
+            DenyBypassable @"
 BLOCKED by dog-fooding policy: '$which' via shell on C# source.
 
   $command
@@ -319,8 +419,9 @@ and end the turn. Do not reword the command to get past this hook.
         if ($command -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?($uncovered)\b") { exit 0 }
 
         if ($command -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?($covered)\b") {
+            Exit-IfBypassed "$command`n$([string]$toolInput.description)" $null
 
-            Deny @"
+            DenyBypassable @"
 BLOCKED by dog-fooding policy: git via shell.
 
   $($command.Trim())
