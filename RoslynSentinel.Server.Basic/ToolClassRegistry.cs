@@ -97,7 +97,7 @@ public static class ToolClassRegistry
             // independent of solution/workspace lifecycle ("Workspace" above).
             ["WorkspaceFileContent"] = ["WorkspaceFileEditTools", "WorkspaceReadNavigationTools"],
             ["RefactorSignature"] = ["RefactoringSignatureTools"],
-            ["RefactorStructural"] = ["RefactoringSignatureTools"],
+            ["RefactoringStructural"] = ["RefactoringStructuralTools"],
             ["RefactorExtractionDocs"] = ["RefactoringExtractionDocsTools"],
             ["SymbolNavigation"] = ["SymbolNavigationTools"],
             ["SymbolRelationship"] = ["SymbolRelationshipTools"],
