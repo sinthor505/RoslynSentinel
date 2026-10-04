@@ -167,6 +167,13 @@ public enum AccessibilityLevel
     [JsonStringEnumMemberName("private protected")] privateProtected,
 }
 
+// Operations of the Declaration tool (claude-lean, declarations toolset). Later slices add attribute and baseType.
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum DeclarationOperation
+{
+    modifier, accessibility
+}
+
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum AttributeModifyAction
 {

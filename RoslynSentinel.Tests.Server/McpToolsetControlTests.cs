@@ -207,7 +207,7 @@ public class McpToolsetControlTests
         Assert.That(all, Is.Unique);
         Assert.That(all.Intersect(ToolClassRegistry.ClaudeLeanToolNames), Is.Empty);
         Assert.That(ToolsetCatalog.AllToolNames, Has.Count.EqualTo(all.Length));
-        Assert.That(all, Has.Length.EqualTo(42));
+        Assert.That(all, Has.Length.EqualTo(43));
     }
 
     [Test]
@@ -246,7 +246,9 @@ public class McpToolsetControlTests
             service.SetEnabled(set, true);
         }
 
-        foreach (var name in ToolsetCatalog.AllToolNames)
+        // Declaration is the one catalog tool no startup mode registers (it exists only as an on-demand claude-lean tool,
+        // see DeclarationToolTests), so there is no startup instance to compare it with.
+        foreach (var name in ToolsetCatalog.AllToolNames.Where(n => n != "Declaration"))
         {
             Assert.That(startup.TryGetPrimitive(name, out var expected), Is.True, $"{name} should be a startup tool in --mode claude");
             Assert.That(collection.TryGetPrimitive(name, out var actual), Is.True);
@@ -556,5 +558,81 @@ public class McpToolsetControlTests
 
         Assert.That(call.IsError, Is.True);
         Assert.That(live.ListChangedCount, Is.Zero);
+    }
+
+    // ---- Declaration (step 4a-1a): merged ModifyModifier + ChangeAccessibility, on-demand in claude-lean only ----
+
+    private static readonly string[] DeclarationOriginals = ["ModifyModifier", "ChangeAccessibility", "ModifyAttribute", "ModifyBaseType"];
+
+    [Test]
+    public async Task Declaration_IsAbsentFromLeanUntilTheDeclarationsToolsetIsEnabled_AndLeavesTheOriginalsAlone()
+    {
+        await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean");
+
+        var before = await live.ToolNamesAsync();
+        Assert.That(before, Does.Not.Contain("Declaration"));
+        Assert.That(before, Does.Not.Contain("ModifyModifier"));
+
+        await live.ToggleAsync("declarations", enabled: true);
+        var on = await live.ToolNamesAsync();
+        Assert.That(on, Does.Contain("Declaration"));
+        Assert.That(on, Is.SupersetOf(DeclarationOriginals), "slice A is additive: the four originals stay in the declarations set");
+
+        await live.ToggleAsync("declarations", enabled: false);
+        Assert.That(await live.ToolNamesAsync(), Does.Not.Contain("Declaration"));
+    }
+
+    [Test]
+    public async Task Declaration_EnabledOnLean_IsCallable_AndRejectsAWrongParamSubsetByName()
+    {
+        await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean");
+        await live.ToggleAsync("declarations", enabled: true);
+
+        var call = await live.CallAsync("Declaration", new() { ["reason"] = Reason, ["operation"] = "accessibility", ["filePath"] = "X.cs", ["targetName"] = "M" });
+
+        string text = LiveServer.Text(call);
+        Assert.That(text, Does.Contain("requires 'filePath', 'targetName' and 'accessibility'"), "the class must be constructible from the lean container and the tool callable");
+        Assert.That(text, Does.Not.Contain("Unable to resolve"));
+        Assert.That(text, Does.Not.Contain("No service for type"));
+    }
+
+    [TestCase(true, "Claude")]
+    [TestCase(true, "Workspace")]
+    [TestCase(true, "Refactor")]
+    [TestCase(false, "Claude")]
+    [TestCase(false, "Refactor")]
+    public async Task OtherModes_DoNotExposeDeclaration_AndKeepTheOriginalTools(bool advanced, string mode)
+    {
+        await using var live = await LiveServer.StartAsync(advanced, mode);
+
+        var names = await live.ToolNamesAsync();
+        Assert.That(names, Does.Not.Contain("Declaration"));
+        if (mode is "Claude" or "Refactor")
+        {
+            Assert.That(names, Is.SupersetOf(DeclarationOriginals));
+        }
+    }
+
+    [Test]
+    public async Task IncludeTools_CannotSmuggleDeclarationIntoAnotherMode()
+    {
+        await using var live = await LiveServer.StartAsync(advanced: true, "Claude", includeTools: "DeclarationTools");
+
+        Assert.That(await live.ToolNamesAsync(), Does.Not.Contain("Declaration"));
+    }
+
+    [Test]
+    public void Declaration_EmittedSchema_IsSmallerThanTheTwoToolsItMerges()
+    {
+        var services = new ServiceCollection().BuildServiceProvider();
+        int Size(Type type, string method) =>
+            Json(McpToolSchemaPatcher.CreateSentinelTool(type.GetMethod(method)!, type, services)).Length;
+
+        int declaration = Size(typeof(DeclarationTools), nameof(DeclarationTools.Declaration));
+        int modifier = Size(typeof(RefactoringStructuralTools), nameof(RefactoringStructuralTools.ModifyModifier));
+        int accessibility = Size(typeof(RefactoringSignatureTools), nameof(RefactoringSignatureTools.ChangeAccessibility));
+        TestContext.Out.WriteLine($"Emitted schema chars: Declaration={declaration}, ModifyModifier={modifier}, ChangeAccessibility={accessibility}, originals={modifier + accessibility}");
+
+        Assert.That(declaration, Is.LessThan(modifier + accessibility));
     }
 }

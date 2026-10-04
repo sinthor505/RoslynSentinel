@@ -39,12 +39,16 @@ public static class ToolClassRegistry
         ],
         StringComparer.Ordinal);
 
-    /// <summary>Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool (the same in Basic and Advanced).</summary>
+    /// <summary>
+    /// Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool (the same in Basic and Advanced), plus
+    /// DeclarationTools, whose single tool (Declaration) is on-demand only: the allow-list keeps it out of the startup surface
+    /// and the <c>declarations</c> toolset adds it. Listed here so the class exists in claude-lean and McpServerStatus can name its mode.
+    /// </summary>
     private static readonly string[] ClaudeLeanToolClasses =
     [
         "WorkspaceTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
         "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
-        "AdminTools", "WholeFileWriteTools", "ToolsetControlTools",
+        "AdminTools", "WholeFileWriteTools", "ToolsetControlTools", "DeclarationTools",
     ];
 
     /// <summary>
@@ -52,12 +56,14 @@ public static class ToolClassRegistry
     /// allow-list filters every non-Core tool out at startup), so <c>McpToolsetControl</c> can build any on-demand
     /// tool later and have its class constructed. These are the facade classes of the "Claude" mode; a tool name
     /// also declared by a split class behind a facade resolves to the facade. Only claude-lean uses this.
+    /// DeclarationTools (the merged Declaration tool) is the one entry that is not a facade of the "Claude" mode: it exists
+    /// only in claude-lean, so its Impl dependencies are covered by the Structural/Signature entries above.
     /// </summary>
     public static readonly IReadOnlySet<string> ClaudeLeanOnDemandToolClasses = new HashSet<string>(
         [
             "WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
             "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
-            "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools",
+            "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools", "DeclarationTools",
         ],
         StringComparer.Ordinal);
 

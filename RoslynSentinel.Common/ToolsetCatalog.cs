@@ -26,7 +26,7 @@ public static class ToolsetCatalog
         {
             [ToolSetName.declarations] =
             [
-                "ModifyModifier", "ChangeAccessibility", "ModifyAttribute", "ModifyBaseType", "MethodSignature",
+                "Declaration", "ModifyModifier", "ChangeAccessibility", "ModifyAttribute", "ModifyBaseType", "MethodSignature",
                 "ConstructorParameter", "ModifyEnum", "ChangeSignature", "SyncTypeAndFilename",
             ],
             [ToolSetName.moveExtract] =

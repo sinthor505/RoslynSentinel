@@ -22,7 +22,7 @@ public class ToolsetControlTools
     [McpServerTool(Name = ToolsetCatalog.ControlToolName)]
     [Produces(DataTag.ResultOnly)]
     [Description("Turns an on-demand toolset on or off; the server then sends tools/list_changed so your tool list updates. Idempotent. " +
-        "declarations = ModifyModifier, ChangeAccessibility, ModifyAttribute, ModifyBaseType, MethodSignature, ConstructorParameter, ModifyEnum, ChangeSignature, SyncTypeAndFilename. " +
+        "declarations = Declaration, ModifyModifier, ChangeAccessibility, ModifyAttribute, ModifyBaseType, MethodSignature, ConstructorParameter, ModifyEnum, ChangeSignature, SyncTypeAndFilename. " +
         "moveExtract = MoveMember, MoveType, MoveAllTypesToFiles, Extract*, Inline*, Introduce*, WrapRange, InvertAssignments, ConvertAnonymousToNamed, SyncInterface, SummaryComment, SafeDeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff. " +
         "projectAdmin = CreateProject, SplitProjectByFolder, ListSolutionItems, ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth, GetOperationDetail, RetryFailedChanges, IsSessionHalted, GetTypeInfo, QuerySymbolRelationships, GetBestInsertionPoint.")]
     public SentinelCallToolResult<object> McpToolsetControl(

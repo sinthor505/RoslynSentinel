@@ -157,6 +157,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         if (toolAllowList is not null)
         {
             bool toolsetControlActive = activeToolClasses.Contains("ToolsetControlTools");
+            bool declarationActive = activeToolClasses.Contains("DeclarationTools");
             activeToolClasses = new HashSet<string>(activeToolClasses, StringComparer.OrdinalIgnoreCase);
             foreach (var onDemandClass in ToolClassRegistry.ClaudeLeanOnDemandToolClasses.Where(c => !resolvedExcludeTools.Contains(c)))
             {
@@ -171,6 +172,14 @@ public static class RoslynSentinelServiceExtensionsBasic
                     ToolClassRegistry.ClaudeLeanOnDemandToolClasses));
                 services.AddSingleton<ToolsetControlTools>();
                 mcpBuilder.WithSentinelTools<ToolsetControlTools>();
+            }
+
+            // The merged Declaration tool: on-demand only (the allow-list keeps it out of the startup surface; the
+            // `declarations` toolset adds it). Its Impl dependencies are registered by the Structural/Signature blocks below.
+            if (declarationActive)
+            {
+                services.AddSingleton<DeclarationTools>();
+                mcpBuilder.WithSentinelTools<DeclarationTools>();
             }
         }
 
