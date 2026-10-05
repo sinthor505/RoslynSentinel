@@ -66,6 +66,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<SemanticRefactoringEngine>();
         services.AddSingleton<SemanticReplaceEngine>();
         services.AddSingleton<NamedArgumentsEngine>();
+        services.AddSingleton<TestCategoryTaggingEngine>();
         services.AddSingleton<SolutionManagementEngine>();
         services.AddSingleton<MemberRefactoringEngine>();
         services.AddSingleton<StructuralRefinementEngine>();
@@ -210,6 +211,16 @@ public static class RoslynSentinelServiceExtensionsBasic
         {
             services.AddSingleton<NamedArgumentsTools>();
             mcpBuilder.WithSentinelTools<NamedArgumentsTools>();
+        }
+
+        // TagTestCategories: opt-in via --mode=TestCategories, or on demand in claude-lean (the `testCategories` toolset;
+        // the lean on-demand class set above puts the class in activeToolClasses, the allow-list hides the tool).
+        // TestCategoryTaggingEngine comes from AddRoslynSentinelEnginesBasic; the Impl takes the plain ILogger registered above.
+        if (activeToolClasses.Contains("TestCategoryTaggingTools"))
+        {
+            services.AddSingleton<TestCategoryTaggingImpl>();
+            services.AddSingleton<TestCategoryTaggingTools>();
+            mcpBuilder.WithSentinelTools<TestCategoryTaggingTools>();
         }
 
         if (activeToolClasses.Contains("WorkspaceTools"))

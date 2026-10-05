@@ -24,7 +24,8 @@ public class ToolsetControlTools
     [Description("Turns an on-demand toolset on or off; the server then sends tools/list_changed so your tool list updates. Idempotent. " +
         "declarations = Declaration (modifier, accessibility, attribute, baseType), ParameterEdit (method, constructor), ModifyEnum, ChangeSignature, SyncTypeAndFilename. " +
         "moveExtract = MoveMember, MoveType, MoveAllTypesToFiles, Extract*, Inline*, Introduce*, WrapRange, InvertAssignments, ConvertAnonymousToNamed, SyncInterface, SummaryComment, SafeDeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments. " +
-        "projectAdmin = CreateProject, SplitProjectByFolder, ListSolutionItems, ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth, GetOperationDetail, RetryFailedChanges, IsSessionHalted, GetTypeInfo, QuerySymbolRelationships, GetBestInsertionPoint.")]
+        "projectAdmin = CreateProject, SplitProjectByFolder, ListSolutionItems, ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth, GetOperationDetail, RetryFailedChanges, IsSessionHalted, GetTypeInfo, QuerySymbolRelationships, GetBestInsertionPoint. " +
+        "testCategories = TagTestCategories (plan test-category attributes from the production types each test references; dry run only).")]
     public SentinelCallToolResult<object> McpToolsetControl(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("The toolset to switch.")] ToolSetName toolSet,

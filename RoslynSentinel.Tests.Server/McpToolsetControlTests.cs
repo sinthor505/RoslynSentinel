@@ -55,6 +55,7 @@ public class McpToolsetControlTests
     [TestCase(ToolSetName.declarations)]
     [TestCase(ToolSetName.moveExtract)]
     [TestCase(ToolSetName.projectAdmin)]
+    [TestCase(ToolSetName.testCategories)]
     public void Enable_AddsTheWholeSet_AndAccountsForEveryName(ToolSetName set)
     {
         var (service, collection) = CreateService();
@@ -207,7 +208,7 @@ public class McpToolsetControlTests
         Assert.That(all, Is.Unique);
         Assert.That(all.Intersect(ToolClassRegistry.ClaudeLeanToolNames), Is.Empty);
         Assert.That(ToolsetCatalog.AllToolNames, Has.Count.EqualTo(all.Length));
-        Assert.That(all, Has.Length.EqualTo(40));
+        Assert.That(all, Has.Length.EqualTo(41));
     }
 
     [Test]
@@ -246,10 +247,10 @@ public class McpToolsetControlTests
             service.SetEnabled(set, true);
         }
 
-        // Declaration, ParameterEdit, SemanticFindReplace and NamedArguments are the catalog tools --mode claude does not register (they exist
+        // Declaration, ParameterEdit, SemanticFindReplace, NamedArguments and TagTestCategories are the catalog tools --mode claude does not register (they exist
         // only as on-demand claude-lean tools or behind their own mode, see DeclarationToolTests, ParameterEditToolTests,
         // SemanticFindReplaceToolTests and NamedArgumentsToolTests), so there is no startup instance to compare them with.
-        foreach (var name in ToolsetCatalog.AllToolNames.Where(n => n is not ("Declaration" or "ParameterEdit" or "SemanticFindReplace" or "NamedArguments")))
+        foreach (var name in ToolsetCatalog.AllToolNames.Where(n => n is not ("Declaration" or "ParameterEdit" or "SemanticFindReplace" or "NamedArguments" or "TagTestCategories")))
         {
             Assert.That(startup.TryGetPrimitive(name, out var expected), Is.True, $"{name} should be a startup tool in --mode claude");
             Assert.That(collection.TryGetPrimitive(name, out var actual), Is.True);

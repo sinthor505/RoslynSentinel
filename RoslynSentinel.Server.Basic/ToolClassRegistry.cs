@@ -49,7 +49,7 @@ public static class ToolClassRegistry
         "WorkspaceTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
         "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
         "AdminTools", "WholeFileWriteTools", "ToolsetControlTools", "DeclarationTools", "ParameterEditTools",
-        "SemanticFindReplaceTools", "NamedArgumentsTools",
+        "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools",
     ];
 
     /// <summary>
@@ -65,7 +65,7 @@ public static class ToolClassRegistry
             "WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
             "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
             "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools", "DeclarationTools", "ParameterEditTools",
-            "SemanticFindReplaceTools", "NamedArgumentsTools",
+            "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools",
         ],
         StringComparer.Ordinal);
 
@@ -104,6 +104,7 @@ public static class ToolClassRegistry
             ["SymbolNavigation"] = ["SymbolNavigationTools"],
             ["SymbolRelationship"] = ["SymbolRelationshipTools"],
             ["NamedArguments"] = ["NamedArgumentsTools"],
+            ["TestCategories"] = ["TestCategoryTaggingTools"],
         };
 
     /// <summary>
@@ -131,6 +132,7 @@ public static class ToolClassRegistry
             ["SubAgentEval"] = ["SubAgentEvalTools"],
             ["SubAgent"] = ["SubAgentTools"],
             ["NamedArguments"] = ["NamedArgumentsTools"],
+            ["TestCategories"] = ["TestCategoryTaggingTools"],
             ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
             [ClaudeLeanMode] = ClaudeLeanToolClasses,
         };

@@ -179,7 +179,7 @@ public class ClaudeLeanModeTests
     }
 
     [Test]
-    public void ResolveActiveToolClasses_ClaudeLeanAlone_YieldsFourteenToolClasses()
+    public void ResolveActiveToolClasses_ClaudeLeanAlone_YieldsFifteenToolClasses()
     {
         var classes = ServerStartupHelpers.ResolveActiveToolClasses(
             new HashSet<string>(["claude-lean"], StringComparer.OrdinalIgnoreCase),
@@ -187,14 +187,28 @@ public class ClaudeLeanModeTests
             new HashSet<string>(),
             new HashSet<string>());
 
-        Assert.That(classes, Has.Count.EqualTo(14));
+        Assert.That(classes, Has.Count.EqualTo(15));
         Assert.That(classes, Does.Contain("ToolsetControlTools"));
         Assert.That(classes, Does.Contain("DeclarationTools"));
         Assert.That(classes, Does.Contain("ParameterEditTools"));
         Assert.That(classes, Does.Contain("SemanticFindReplaceTools"));
         Assert.That(classes, Does.Contain("NamedArgumentsTools"));
+        Assert.That(classes, Does.Contain("TestCategoryTaggingTools"));
         Assert.That(classes, Does.Not.Contain("AdvancedRefactoringTools"));
         Assert.That(classes, Does.Not.Contain("DocumentationTools"));
+    }
+
+    [Test]
+    public void TagTestCategories_IsRegisteredInBothModeMaps_AndOnDemandOnlyInClaudeLean()
+    {
+        Assert.That(ToolClassRegistry.BasicModeToToolClasses["TestCategories"], Is.EqualTo(new[] { "TestCategoryTaggingTools" }));
+        Assert.That(ToolClassRegistry.AdvancedModeToToolClasses["TestCategories"], Is.EqualTo(new[] { "TestCategoryTaggingTools" }));
+        Assert.That(ToolClassRegistry.ClaudeLeanOnDemandToolClasses, Does.Contain("TestCategoryTaggingTools"));
+
+        // Off by default in claude-lean: the class is active but the tool is not allow-listed; the toolset switches it on.
+        Assert.That(ToolClassRegistry.ClaudeLeanToolNames, Does.Not.Contain("TagTestCategories"));
+        Assert.That(ToolsetCatalog.FindSet("TagTestCategories"), Is.EqualTo(ToolSetName.testCategories));
+        Assert.That(ToolsetCatalog.AllToolNames, Does.Contain("TagTestCategories"));
     }
 
     // ---- escape-hatch advice must not name tools the allow-list removed ----

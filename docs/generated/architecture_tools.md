@@ -94,6 +94,7 @@
 | SymbolRelationshipTools | GetBestInsertionPoint | Claude, claude-lean, SymbolRelationship, Workspace | - | Returns the best 1-based line number for inserting a new member in a type, following standard C# ordering (fields ->... |
 | SymbolRelationshipTools | PreviewRenameImpact | Claude, claude-lean, SymbolRelationship, Workspace | - | Previews the impact of renaming a symbol across the solution without applying changes. |
 | SymbolRelationshipTools | QuerySymbolRelationships | Claude, claude-lean, SymbolRelationship, Workspace | - | Queries type-relationship facts by name: implementors of an interface, attribute usages, object-creation sites,... |
+| TestCategoryTaggingTools | TagTestCategories | claude-lean, TestCategories | - | Plan test-category attributes: for every test method, find the production types it references (semantic model: calls,... |
 | ToolsetControlTools | McpToolsetControl | claude-lean | - | Turns an on-demand toolset on or off; the server then sends tools/list_changed so your tool list updates. |
 | WholeFileWriteTools | ApplyDiff | Claude, claude-lean, WholeFileWrite | - | Applies or validates a change set as either full file contents (changesetFormat=files) or a unified diff... |
 | WholeFileWriteTools | ApplyUnifiedDiff | Claude, claude-lean, WholeFileWrite | - | Applies or validates a unified diff against a single file; mismatched hunk lines are re-anchored nearby. |
