@@ -140,6 +140,7 @@ public class QualityClass
     // ===================== THROW-GUARD METHODS =====================
     // --- AddGuardClauses ---
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task AddGuardClauses_ValidMethod_ReturnsUpdatedSource()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -148,6 +149,7 @@ public class QualityClass
     }
 
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task AddGuardClauses_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -157,6 +159,7 @@ public class QualityClass
 
     // --- AddBenchmarkStub ---
     [Test]
+    [Category("TestingEngine")] // sentinel:auto-category
     public async Task AddBenchmarkStub_ValidClassAndMethod_ReturnsUpdatedSource()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -165,6 +168,7 @@ public class QualityClass
     }
 
     [Test]
+    [Category("TestingEngine")] // sentinel:auto-category
     public async Task AddBenchmarkStub_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -174,6 +178,7 @@ public class QualityClass
 
     // --- AddConfigureAwaitFalse ---
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task AddConfigureAwaitFalse_FileWithAwaits_ReturnsUpdatedSource()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -182,6 +187,7 @@ public class QualityClass
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task AddConfigureAwaitFalse_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -190,6 +196,7 @@ public class QualityClass
 
     // --- RemoveConfigureAwaitFalse ---
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task RemoveConfigureAwaitFalse_FileWithConfigureAwait_ReturnsUpdatedSource()
     {
         const string src = "using System.Threading.Tasks; namespace TestProj; public class W { public async Task DoAsync() { await System.Threading.Tasks.Task.Delay(1).ConfigureAwait(false); } }";
@@ -199,6 +206,7 @@ public class QualityClass
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task RemoveConfigureAwaitFalse_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -207,6 +215,7 @@ public class QualityClass
 
     // --- ConvertLockToSemaphoreSlim ---
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task ConvertLockToSemaphoreSlim_MethodWithLock_ReturnsUpdatedSource()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -215,6 +224,7 @@ public class QualityClass
     }
 
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task ConvertLockToSemaphoreSlim_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
@@ -223,6 +233,8 @@ public class QualityClass
     }
 
     [Test]
+    [Category("RefactoringToolHelpers")] // sentinel:auto-category
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task ConvertLockToSemaphoreSlim_NonExistentFile_ReportsNotFoundCode()
     {
         SetSource("public class C {}", "Test.cs");
@@ -234,6 +246,7 @@ public class QualityClass
 
     // --- ConvertToAsyncEnumerable---
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task ConvertToAsyncEnumerable_ValidMethod_ReturnsUpdatedSource()
     {
         const string src = @"using System.Collections.Generic; namespace TestProj;
@@ -244,6 +257,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task ConvertToAsyncEnumerable_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
@@ -253,6 +267,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- AddCancellationTokenToMethod---
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task AddCancellationTokenToMethod_AsyncMethod_ReturnsUpdatedSource()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -261,6 +276,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task AddCancellationTokenToMethod_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
@@ -270,6 +286,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- MakeMethodThreadSafe---
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task MakeMethodThreadSafe_ValidMethod_ReturnsUpdatedSource()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -278,6 +295,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     }
 
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task MakeMethodThreadSafe_NonExistentFile_ReturnsNotNull()
     {
         SetSource("public class C {}", "Test.cs");
@@ -288,6 +306,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     // ===================== NON-THROW METHODS =====================
     // --- AnalyzePerformance ---
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task AnalyzePerformance_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -297,6 +316,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- AnalyzeSecurity ---
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task AnalyzeSecurity_FileWithSqlInjection_ReturnsList()
     {
         SetSource(SecuritySource, "Security.cs");
@@ -306,6 +326,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- GenerateTestSkeleton ---
     [Test]
+    [Category("TestingEngine")] // sentinel:auto-category
     public async Task GenerateTestSkeleton_ValidClass_ReturnsReport()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -315,6 +336,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- GenerateTestScaffold ---
     [Test]
+    [Category("TestingEngine")] // sentinel:auto-category
     public async Task GenerateTestScaffold_ValidClass_ReturnsResult()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -324,6 +346,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- AnalyzePathCoverage ---
     [Test]
+    [Category("ControlFlowEngine")] // sentinel:auto-category
     public async Task AnalyzePathCoverage_ValidMethod_ReturnsReport()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -333,6 +356,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindPossibleDeadlocks ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindPossibleDeadlocks_FileWithLock_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -342,6 +366,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- AnalyzeSemaphoreUsage ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task AnalyzeSemaphoreUsage_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -351,6 +376,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- DetectMemoryLeaks ---
     [Test]
+    [Category("ResourceSafetyEngine")] // sentinel:auto-category
     public async Task DetectMemoryLeaks_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -360,6 +386,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindTaskVoidUsage ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskVoidUsage_FileWithAsyncVoid_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -369,6 +396,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindTaskYieldUsage ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskYieldUsage_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -378,6 +406,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- DetectReflectionUsage ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task DetectReflectionUsage_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -387,6 +416,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- CheckForEmptyCatchBlocks ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task CheckForEmptyCatchBlocks_FileWithEmptyCatch_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -396,6 +426,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindTaskDelayUsage ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskDelayUsage_FileWithTaskDelay_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -405,6 +436,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- CheckForRedundantCast ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task CheckForRedundantCast_FileWithRedundantCast_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -414,6 +446,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindTaskDelayZeroUsage ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskDelayZeroUsage_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -423,6 +456,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindTaskWhenAllUsage ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskWhenAllUsage_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -432,6 +466,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- DetectAntiPatterns ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task DetectAntiPatterns_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -441,6 +476,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindPossibleInfiniteLoops ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindPossibleInfiniteLoops_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -450,6 +486,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- DetectMismatchedAwait ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task DetectMismatchedAwait_FileWithMixedAsync_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -459,6 +496,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindHardcodedPaths ---
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task FindHardcodedPaths_FileWithHardcodedPath_ReturnsList()
     {
         SetSource(SecuritySource, "Security.cs");
@@ -468,6 +506,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindMutablePublicProperties ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindMutablePublicProperties_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -477,6 +516,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindNamingViolations ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindNamingViolations_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -486,6 +526,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindStringMagicValues ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindStringMagicValues_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -495,6 +536,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindMissingCancellationTokens ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindMissingCancellationTokens_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -504,6 +546,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- AnalyzeExceptionHandling ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task AnalyzeExceptionHandling_FileWithCatch_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -513,6 +556,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- CheckForSqlInjection ---
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task CheckForSqlInjection_FileWithSqlInjection_ReturnsList()
     {
         SetSource(SecuritySource, "Security.cs");
@@ -522,6 +566,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- AnalyzeMethodControlFlow ---
     [Test]
+    [Category("ControlFlowEngine")] // sentinel:auto-category
     public async Task AnalyzeMethodControlFlow_ValidMethod_ReturnsResult()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -531,6 +576,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- AnalyzeMethodDataFlow ---
     [Test]
+    [Category("ControlFlowEngine")] // sentinel:auto-category
     public async Task AnalyzeMethodDataFlow_ValidMethod_ReturnsResult()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -540,6 +586,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindConfigureAwaitMissing ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindConfigureAwaitMissing_FileWithAwaits_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -549,6 +596,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindBlockingCallsInAsync ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindBlockingCallsInAsync_FileWithThreadSleep_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -558,6 +606,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindAsyncInConstructor ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindAsyncInConstructor_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -567,6 +616,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindTaskRunInAsync ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskRunInAsync_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -576,6 +626,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindConcurrentCollectionOpportunities ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindConcurrentCollectionOpportunities_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -585,6 +636,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindUnsafeLazyInit ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindUnsafeLazyInit_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -594,6 +646,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- DetectValueTaskMisuse ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task DetectValueTaskMisuse_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -603,6 +656,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindAsyncOverSync ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindAsyncOverSync_FileWithSyncMethods_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -612,6 +666,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindUnawaitedFireAndForget ---
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindUnawaitedFireAndForget_FileWithFireAndForget_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -621,6 +676,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindLongParameterList ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindLongParameterList_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -630,6 +686,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- OptimizeResourceDisposal ---
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task OptimizeResourceDisposal_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -639,6 +696,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- DetectInefficientStringComparisons ---
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task DetectInefficientStringComparisons_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -648,6 +706,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindBoxingAllocations ---
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task FindBoxingAllocations_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -657,6 +716,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindPrimitiveObsession ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindPrimitiveObsession_ValidFile_ReturnsList()
     {
         SetSource(QualitySource, "Quality.cs");
@@ -666,6 +726,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- FindInconsistentAsyncSuffix ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindInconsistentAsyncSuffix_ValidFile_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
@@ -675,6 +736,7 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     // --- GetDiagnosticsSummary ---
     [Test]
+    [Category("DiagnosticEngine")] // sentinel:auto-category
     public async Task GetDiagnosticsSummary_ValidFile_ReturnsSummaryResult()
     {
         SetSource(QualitySource, "Quality.cs");

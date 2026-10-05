@@ -84,6 +84,7 @@ public interface IOrderRepository
 
     // --- GenerateClassesFromJson (sync) ---
     [Test]
+    [Category("GenerationTools")] // sentinel:auto-category
     public void GenerateClassesFromJson_ValidJson_ReturnsResult()
     {
         var json = @"{""id"": 1, ""name"": ""test"", ""active"": true}";
@@ -92,6 +93,7 @@ public interface IOrderRepository
     }
 
     [Test]
+    [Category("GenerationTools")] // sentinel:auto-category
     public void GenerateClassesFromJson_NestedJson_ReturnsResult()
     {
         var json = @"{""order"": {""id"": 1, ""items"": [{""sku"": ""A""}]}}";
@@ -101,6 +103,7 @@ public interface IOrderRepository
 
     // --- GenerateHttpClient ---
     [Test]
+    [Category("GenerationTools")] // sentinel:auto-category
     public async Task GenerateHttpClient_ValidController_ReturnsCode()
     {
         SetSource(ControllerSource, "Orders.cs");
@@ -109,6 +112,7 @@ public interface IOrderRepository
     }
 
     [Test]
+    [Category("GenerationTools")] // sentinel:auto-category
     public async Task GenerateHttpClient_NonExistentFile_ReturnsMessage()
     {
         SetSource("public class C {}", "Test.cs");
@@ -118,6 +122,7 @@ public interface IOrderRepository
 
     // --- GenerateConstructor ---
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task GenerateConstructor_ValidClass_ReturnsCode()
     {
         SetSource(PocoSource, "Order.cs");
@@ -126,6 +131,7 @@ public interface IOrderRepository
     }
 
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task GenerateConstructor_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -135,6 +141,7 @@ public interface IOrderRepository
 
     // --- GenerateToString ---
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task GenerateToString_ValidClass_ReturnsResult()
     {
         SetSource(PocoSource, "Order.cs");
@@ -144,6 +151,7 @@ public interface IOrderRepository
 
     // --- GenerateRepositoryInterface ---
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task GenerateRepositoryInterface_ValidClass_ReturnsResult()
     {
         SetSource(PocoSource, "Order.cs");
@@ -153,6 +161,7 @@ public interface IOrderRepository
 
     // --- GenerateFluentBuilder ---
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task GenerateFluentBuilder_ValidClass_ReturnsResult()
     {
         SetSource(PocoSource, "Order.cs");
@@ -162,6 +171,7 @@ public interface IOrderRepository
 
     // --- GenerateDecoratorClass ---
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task GenerateDecoratorClass_ValidInterface_ReturnsResult()
     {
         SetSource(PocoSource, "Order.cs");
@@ -170,6 +180,7 @@ public interface IOrderRepository
     }
 
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task GenerateDecoratorClass_NonExistentInterface_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -179,6 +190,7 @@ public interface IOrderRepository
 
     // --- GenerateDefaultConfigJson ---
     [Test]
+    [Category("GenerationTools")] // sentinel:auto-category
     public async Task GenerateDefaultConfigJson_ValidProject_ReturnsJson()
     {
         SetSource(PocoSource, "Order.cs");
@@ -187,6 +199,7 @@ public interface IOrderRepository
     }
 
     [Test]
+    [Category("GenerationTools")] // sentinel:auto-category
     public async Task GenerateDefaultConfigJson_UnknownProject_ReturnsMessage()
     {
         SetSource("public class C {}", "Test.cs");
@@ -196,6 +209,7 @@ public interface IOrderRepository
 
     // --- GenerateAsyncOverload ---
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task GenerateAsyncOverload_SyncMethod_ReturnsCode()
     {
         const string src = "namespace TestProj; public class Service { public string GetData() { return \"data\"; } }";
@@ -205,6 +219,7 @@ public interface IOrderRepository
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task GenerateAsyncOverload_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -213,6 +228,7 @@ public interface IOrderRepository
 
     // --- AddValidationToPoco ---
     [Test]
+    [Category("ApiGenerationEngine")] // sentinel:auto-category
     public async Task AddValidationToPoco_ValidClass_ReturnsCode()
     {
         SetSource(PocoSource, "Order.cs");
@@ -221,6 +237,7 @@ public interface IOrderRepository
     }
 
     [Test]
+    [Category("ApiGenerationEngine")] // sentinel:auto-category
     public async Task AddValidationToPoco_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -230,6 +247,7 @@ public interface IOrderRepository
 
     // --- ImplementInterfaceSafe ---
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task ImplementInterfaceSafe_ValidClassAndInterface_ReturnsCode()
     {
         // Note: PocoSource's Order class does not declare ": IOrderRepository", so
@@ -257,6 +275,7 @@ public interface IOrderRepository
     }
 
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task ImplementInterfaceSafe_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
@@ -265,6 +284,7 @@ public interface IOrderRepository
     }
 
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task ConvertPropertySafe_AutoPropertyToFull_ReturnsCode()
     {
         SetSource(PocoSource, "Order.cs");
@@ -273,6 +293,7 @@ public interface IOrderRepository
     }
 
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task ConvertPropertySafe_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -282,6 +303,7 @@ public interface IOrderRepository
 
     // --- InterpolateStringSafe ---
     [Test]
+    [Category("GenerationTools")] // sentinel:auto-category
     public async Task InterpolateStringSafe_WithFormatCall_ReturnsCode()
     {
         const string src = @"namespace TestProj; public class Order { public string GetLabel(int id) { return string.Format(""{0}"", id); } }";
@@ -291,6 +313,7 @@ public interface IOrderRepository
     }
 
     [Test]
+    [Category("GenerationTools")] // sentinel:auto-category
     public async Task InterpolateStringSafe_NonExistentFile_ReturnsMessage()
     {
         SetSource("public class C {}", "Test.cs");

@@ -36,6 +36,7 @@ public class AdvancedToolsTests
 
     // ===== Tool 1: DetectValueTaskMisuse =====
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task DetectValueTaskMisuse_FlagsDoubleAwait()
     {
         SetSource(@"
@@ -54,6 +55,7 @@ public class C {
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task DetectValueTaskMisuse_FlagsStoredAndDeferred()
     {
         SetSource(@"
@@ -73,6 +75,7 @@ public class C {
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task DetectValueTaskMisuse_DoesNotFlagImmediateAwait()
     {
         SetSource(@"
@@ -90,6 +93,7 @@ public class C {
 
     // ===== Tool 2: UpgradeToPrimaryConstructor =====
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeToPrimaryConstructor_ConvertsPureAssignmentCtor()
     {
         SetSource(@"
@@ -107,6 +111,7 @@ public class MyService {
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeToPrimaryConstructor_RefusesCtorWithNonAssignmentLogic()
     {
         SetSource(@"
@@ -121,6 +126,7 @@ public class MyService {
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeToPrimaryConstructor_MultipleFields()
     {
         SetSource(@"
@@ -140,6 +146,7 @@ public class MyService {
 
     // ===== Tool 3: AddCancellationTokenToMethod =====
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task AddCancellationTokenToMethod_AddsParameterToMethod()
     {
         SetSource(@"
@@ -154,6 +161,7 @@ public class C {
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task AddCancellationTokenToMethod_DoesNotAddIfAlreadyPresent()
     {
         SetSource(@"
@@ -171,6 +179,7 @@ public class C {
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task AddCancellationTokenToMethod_PropagatesViaSyntacticHeuristic()
     {
         SetSource(@"
@@ -194,6 +203,7 @@ public interface IRepo {
 
     // ===== Tool 4: SyncInterfaceToImplementation =====
     [Test]
+    [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
     public async Task SyncInterfaceToImplementation_AddsMissingMethod()
     {
         SetSource(@"
@@ -208,6 +218,7 @@ public class Service : IService {
     }
 
     [Test]
+    [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
     public async Task SyncInterfaceToImplementation_NoChangeWhenUpToDate()
     {
         SetSource(@"
@@ -224,6 +235,7 @@ public class Service : IService {
     }
 
     [Test]
+    [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
     public async Task SyncInterfaceToImplementation_AddsMissingProperty()
     {
         SetSource(@"
@@ -239,6 +251,7 @@ public class Service : IService {
 
     // ===== Tool 5: IntroduceParameterObject =====
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task IntroduceParameterObject_CreatesRecord()
     {
         SetSource(@"
@@ -256,6 +269,7 @@ public class C {
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task IntroduceParameterObject_RespectsSpecifiedParamNames()
     {
         SetSource(@"
@@ -273,6 +287,7 @@ public class C {
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task IntroduceParameterObject_IncludesTodoComment()
     {
         SetSource(@"

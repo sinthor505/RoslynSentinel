@@ -149,6 +149,7 @@ public enum Status { Active = 1, Pending = 2 }
     // ===================== autoStage METHODS =====================
     // --- ExtractSuperclass ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task ExtractSuperclass_AutoStageTrue_ReturnsAppliedChangeSummary()
     {
         SetMultiFile(("Dog.cs", RefactorSource));
@@ -158,6 +159,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- SafeDeleteSymbol ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task SafeDeleteSymbol_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -167,6 +169,8 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ChangeSignature ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    [Category("ChangeSignatureParameterInput")] // sentinel:auto-category
     public async Task ChangeSignature_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -176,6 +180,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ExtractInterface ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task ExtractInterface_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -185,6 +190,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- MoveTypeToFile ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task MoveTypeToFile_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -194,6 +200,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- MoveAllTypesToFiles ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task MoveAllTypesToFiles_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -206,6 +213,9 @@ public enum Status { Active = 1, Pending = 2 }
     // (filepath, methodName, contextSnippet) -> resolve the handle via SymbolNavigationEngine
     // first, matching how an agent would call LocateSymbol before RenameSymbol.
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
+    [Category("SymbolLocation")] // sentinel:auto-category
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task RenameSymbol_ValidSymbol_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -219,6 +229,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task RenameSymbol_NonExistentSymbol_ReturnsErrorObject()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -229,6 +240,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- MoveAllTypesToFilesInProject ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task MoveAllTypesToFilesInProject_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -238,6 +250,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- MoveAllTypesToFilesInSolution ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task MoveAllTypesToFilesInSolution_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -247,6 +260,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- UsingDirective ---
     [Test]
+    [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
     public async Task UsingDirective_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -255,6 +269,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
     public async Task UsingDirective_AutoStageFalse_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -263,6 +278,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
     public async Task UsingDirective_Add_ChangedContentReflectsActualDiffNotFabricatedString()
     {
         // The engine's AddUsingDirectiveAsync reformats the whole document (Formatter.FormatAsync)
@@ -287,6 +303,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ModifyEnum ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task ModifyEnum_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -296,6 +313,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- Member on enum containers (routes to AddEnumMemberAsync/RemoveEnumMemberAsync/ReplaceEnumMemberAsync) ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Member_Add_OnEnumContainer_Succeeds()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -304,6 +322,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Member_Remove_OnEnumMember_Succeeds()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -312,6 +331,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Member_Replace_OnEnumMember_Succeeds()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -320,6 +340,9 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("MemberSourceInfo")] // sentinel:auto-category
+    [Category("MemberSourceViewResult")] // sentinel:auto-category
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Member_View_WithMemberName_ReturnsThatMembersSource()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -335,6 +358,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Member_View_WithMissingMemberName_ReturnsNotFound()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -344,6 +368,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Member_View_OnEnumContainer_ReturnsEnumMembers()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -353,6 +378,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- InsertMemberAfter ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task InsertMemberAfter_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -362,6 +388,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- InsertMemberBefore ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task InsertMemberBefore_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -371,6 +398,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- AddAttribute ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task AddAttribute_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -380,6 +408,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- AddBaseType ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task AddBaseType_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -389,6 +418,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- RemoveAttribute ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveAttribute_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -398,6 +428,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- RemoveBaseType ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveBaseType_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -407,6 +438,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- MoveMember (pull-up to existing base class) ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task MoveMember_ToBaseClass_AutoStageTrue_ReturnsNotNull()
     {
         SetMultiFile(("Refactor.cs", RefactorSource));
@@ -416,6 +448,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ChangeAccessibility ---
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task ChangeAccessibility_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -424,6 +457,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task ChangeAccessibility_StampsIncreasingWorkspaceVersion()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -439,6 +473,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- AddModifier ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task AddModifier_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -448,6 +483,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- RemoveModifier ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveModifier_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -461,6 +497,7 @@ public enum Status { Active = 1, Pending = 2 }
     // ModifyModifier_RejectsAccessibilityKeyword used to test at this layer.
     // --- SummaryComment ---
     [Test]
+    [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
     public async Task SummaryComment_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -470,6 +507,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- AddProperty ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task AddProperty_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -479,6 +517,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- AddField ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task AddField_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -488,6 +527,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- WrapInTryCatch ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task WrapInTryCatch_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -497,6 +537,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ConstructorParameter ---
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task ConstructorParameter_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -505,6 +546,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task ConstructorParameter_Add_WithDefaultValue_BackwardCompatibleWithExistingCaller()
     {
         SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
@@ -513,6 +555,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task ConstructorParameter_Add_WithNullDefault_BackwardCompatibleWithExistingCaller()
     {
         SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
@@ -521,6 +564,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task ConstructorParameter_Add_NullDefaultAndDefaultValueBothSet_Refused()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -530,6 +574,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task ConstructorParameter_Add_NoDefaultValue_ExistingCallerBreaksAndIsRefused()
     {
         SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
@@ -539,6 +584,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- MethodSignature ---
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task MethodSignature_View_ListsExistingParameters()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -547,6 +593,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task MethodSignature_Add_AppendsRequiredParameter_NoExistingCallers()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -555,6 +602,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task MethodSignature_Add_WithDefaultValue_BackwardCompatibleWithExistingCaller()
     {
         SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public string Use(Order o) => o.GetStatus(); }"));
@@ -563,6 +611,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task MethodSignature_Remove_LastParameter_UpdatesCallSite()
     {
         var orderSourceWithRename = SimpleSource.Replace("public string GetLabel()", "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
@@ -575,6 +624,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task MethodSignature_Remove_NonLastParameter_Refused()
     {
         SetSource(RefactorSource, "Animal.cs");
@@ -585,6 +635,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task MethodSignature_Remove_NamedArgumentCallSite_Refused()
     {
         var orderSourceWithRename = SimpleSource.Replace("public string GetLabel()", "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
@@ -597,6 +648,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- WrapInRegion ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task WrapInRegion_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -607,6 +659,7 @@ public enum Status { Active = 1, Pending = 2 }
     // ===================== SIMPLE DELEGATION METHODS =====================
     // --- SyncTypeAndFilename ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task SyncTypeAndFilename_ValidFile_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -625,6 +678,7 @@ public enum Status { Active = 1, Pending = 2 }
     // asserts the one thing dryRun is responsible for regardless: no destructive action (old-file
     // delete) has occurred, even if validation were to fail for some other reason.
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task SyncTypeAndFilename_DryRun_NeverDeletesOriginalFileAsync()
     {
         const string mismatchedSource = "namespace TestProj;\n\npublic class Widget\n{\n    public int Id { get; set; }\n}\n";
@@ -657,6 +711,7 @@ public enum Status { Active = 1, Pending = 2 }
     // SyncTypeAndFilename_ValidFile_ReturnsString above, which short-circuits on
     // EditOutcome.CannotEdit before ever reaching validation).
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task SyncTypeAndFilename_RealRename_SucceedsAndRemovesOldDocument()
     {
         const string mismatchedSource = "namespace TestProj;\n\npublic class Widget\n{\n    public int Id { get; set; }\n}\n";
@@ -688,6 +743,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- InlineMethod ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task InlineMethod_ValidMethod_ReturnsDictionary()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -697,6 +753,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- IntroduceField ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task IntroduceField_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -706,6 +763,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- IntroduceParameter ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task IntroduceParameter_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -715,6 +773,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- InlineField ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task InlineField_ValidField_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -724,6 +783,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- InlineParameter ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task InlineParameter_ValidParameter_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -733,6 +793,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- MakeMethodStatic ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task MakeMethodStatic_ValidMethod_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -742,6 +803,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ExtensionToStatic ---
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task ExtensionToStatic_ValidMethod_ReturnsString()
     {
         const string src = "namespace TestProj; public static class Helper { public static string Trim(this string s) => s.Trim(); }";
@@ -752,6 +814,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ConvertAbstractToInterface ---
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task ConvertAbstractToInterface_AbstractClass_ReturnsString()
     {
         SetMultiFile(("Refactor.cs", RefactorSource));
@@ -761,6 +824,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- GenerateMapping ---
     [Test]
+    [Category("GenerationTools")] // sentinel:auto-category
     public async Task GenerateMapping_ValidTypes_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -770,6 +834,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- WrapInUsing ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task WrapInUsing_ValidLineRange_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -779,6 +844,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ConvertAnonymousToNamed ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task ConvertAnonymousToNamed_ValidFile_ReturnsDictionary()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -788,6 +854,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- InlineClass ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task InlineClass_CrossFile_MovesMembers()
     {
         SetMultiFile(("Helper.cs", "namespace App; public class Helper { public int Value; public void Go() {} }"), ("Owner.cs", "namespace App; public class Owner {}"));
@@ -804,6 +871,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- IntroduceVariable ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task IntroduceVariable_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -813,6 +881,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- InlineVariable ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task InlineVariable_ValidVariable_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -822,6 +891,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ConvertPropertyToMethods ---
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task ConvertPropertyToMethods_ValidProperty_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -831,6 +901,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ExtractMembersToPartial ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task ExtractMembersToPartial_ValidMembers_ReturnsDictionary()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -840,6 +911,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ConvertMethodToIndexer ---
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task ConvertMethodToIndexer_ValidMethod_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -849,6 +921,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- MoveTypeToOuterScope ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task MoveTypeToOuterScope_ValidType_ReturnsString()
     {
         const string src = "namespace TestProj; public class Outer { public class Inner {} }";
@@ -859,6 +932,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ReplaceMember ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task ReplaceMember_ValidMember_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -868,6 +942,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- AddMemberToClass ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task AddMemberToClass_ValidClass_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -877,6 +952,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- RemoveMember ---
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveMember_ValidMember_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -885,6 +961,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveMember_ZeroReferences_SucceedsAsBefore()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -893,6 +970,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveMember_HasCaller_RefusedByDefault_ListsCaller()
     {
         SetSource("""
@@ -915,6 +993,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveMember_HasCaller_SkipPrecheckTrue_StillRefusedByEngineCallerCheck()
     {
         // skipPrecheck: true bypasses only the new tool-level (callers+implementations) precheck ->
@@ -940,6 +1019,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveMember_HasImplementationOnly_SkipPrecheckTrue_BypassesToolLevelCheck()
     {
         // An interface member's implementation isn't caught by the engine's caller-only
@@ -970,6 +1050,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveMember_OnNamespaceLevelRecord_SkipPrecheckTrue_ReturnsActionableTypeKindMessage()
     {
         // Regression test for blocking_error_member_remove_skipprecheck_targetnotfound_ambiguous_symbol.md.
@@ -1009,6 +1090,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveMember_OverrideWithNoCallersOrImplementations_SucceedsByDefault()
     {
         // An override with no callers of its own and nothing further overriding it isn't flagged by
@@ -1042,6 +1124,7 @@ public enum Status { Active = 1, Pending = 2 }
     // RemoveMember_HasImplementationOnly_SkipPrecheckTrue_BypassesToolLevelCheck above, which exercises
     // that disambiguation from the other direction: same name, implementer must win over the interface).
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task RemoveMember_InterfaceProperty_NoImplementerInFile_Succeeds()
     {
         SetSource("""
@@ -1057,6 +1140,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task ReplaceMember_InterfaceMethod_NoImplementerInFile_Succeeds()
     {
         SetSource("""
@@ -1073,6 +1157,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ReplaceConstructorWithFactory ---
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task ReplaceConstructorWithFactory_ValidClass_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -1082,6 +1167,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- InvertAssignments ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task InvertAssignments_ValidLineRange_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -1091,6 +1177,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- ReduceBlockDepth ---
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task ReduceBlockDepth_ValidMethod_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -1100,6 +1187,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- OptimizeTaskWait ---
     [Test]
+    [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
     public async Task OptimizeTaskWait_ValidFile_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -1109,6 +1197,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     // --- SyncInterfaceToImplementation ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task SyncInterfaceToImplementation_ClassWithInterface_ReturnsString()
     {
         const string src = @"namespace TestProj;
@@ -1121,6 +1210,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
 
     // --- IntroduceParameterObject---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task IntroduceParameterObject_ValidMethod_ReturnsString()
     {
         SetMultiFile(("Refactor.cs", RefactorSource));
@@ -1129,6 +1219,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task IntroduceParameterObject_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
@@ -1138,6 +1229,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
 
     // --- UpdateXmlDocsFromSignature---
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task UpdateXmlDocsFromSignature_ValidMethod_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -1146,6 +1238,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
 
     // --- ConvertExpressionBody ---
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task ConvertExpressionBody_ToBlockBody_ReturnsString()
     {
         SetMultiFile(("Refactor.cs", RefactorSource));
@@ -1154,6 +1247,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
 
     // --- ExtractConstant ---
     [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task ExtractConstant_WithLiteralSnippet_ReturnsString()
     {
         const string src = @"namespace TestProj; public class C { public string GetLabel() { return ""hello""; } }";
@@ -1163,6 +1257,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
 
     // --- AnalyzeControlFlow ---
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task AnalyzeControlFlow_ValidMethod_ReturnsSummary()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -1172,6 +1267,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
 
     // --- AnalyzeDataFlow ---
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task AnalyzeDataFlow_ValidMethod_ReturnsSummary()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -1181,6 +1277,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
 
     // --- FormatDocumentPreview ---
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task FormatDocumentPreview_ValidFile_ReturnsPreviewResult()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -1190,6 +1287,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
 
     // --- ConvertToNullCoalescing ---
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task ConvertToNullCoalescing_ValidFile_ReturnsString()
     {
         const string src = @"namespace TestProj; public class C { public string Get(string s) { if (s == null) s = ""default""; return s; } }";
@@ -1199,6 +1297,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task ConvertToNullCoalescing_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -1208,6 +1307,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
 
     // --- ExtractLocalVariable ---
     [Test]
+    [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
     public async Task ExtractLocalVariable_ValidContext_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -1216,6 +1316,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     [Test]
+    [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
     public async Task ExtractLocalVariable_NonExistentFile_ReturnsStructuredError()
     {
         SetSource("public class C {}", "Test.cs");
@@ -1226,6 +1327,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
 
     // --- ConvertToSwitch ---
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task ConvertToSwitch_FileWithIfElseChain_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -1234,6 +1336,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task ConvertToSwitch_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -1243,6 +1346,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
 
     // --- ConvertToPattern ---
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ConvertToPattern_ValidFile_ReturnsString()
     {
         SetSource(SimpleSource, "Order.cs");
@@ -1251,6 +1355,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ConvertToPattern_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -1263,6 +1368,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     // declared first, not necessarily the one the caller actually wanted. This reproduces that
     // shape - targetTypeName must be able to select the LAST-declared type.
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task SyncTypeAndFilename_TargetTypeName_SelectsNonFirstDeclaredTypeAsync()
     {
         const string mismatchedSource = "namespace TestProj;\n\npublic class HelperResult\n{\n    public bool Ok { get; set; }\n}\n\npublic class MainService\n{\n    public int Id { get; set; }\n}\n";
@@ -1290,6 +1396,7 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
     // Companion negative case: an unknown targetTypeName must fail with an actionable error naming
     // the types that actually exist in the file, not silently fall back to the first-declared type.
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task SyncTypeAndFilename_UnknownTargetTypeName_ReturnsActionableErrorAsync()
     {
         const string mismatchedSource = "namespace TestProj;\n\npublic class HelperResult\n{\n    public bool Ok { get; set; }\n}\n\npublic class MainService\n{\n    public int Id { get; set; }\n}\n";

@@ -23,6 +23,8 @@ using RoslynSentinel.Tools.Advanced;
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
+[Category("DeadCodeEngine")] // sentinel:auto-category
 public class BatteryThirtyThreeTests
 {
     // ── engines for IntelligenceTools (Bug #1) ─────────────────────────

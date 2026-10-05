@@ -163,6 +163,8 @@ public class OrderService : IOrderService
 
     // --- RunScanDetector ---
     [Test]
+    [Category("DetectorId")] // sentinel:auto-category
+    [Category("ScanTools")] // sentinel:auto-category
     public async Task RunScanDetector_UnusedReferencesWithoutProjectScope_ReturnsInvalidArgument()
     {
         SetSource(RichSource, "Test.cs");
@@ -174,6 +176,7 @@ public class OrderService : IOrderService
 
     // --- GetComprehensiveHealthReport ---
     [Test]
+    [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetComprehensiveHealthReport_ValidSolution_ReturnsReport()
     {
         SetSource(RichSource, "Test.cs");
@@ -184,6 +187,7 @@ public class OrderService : IOrderService
 
     // --- GetBlastRadius (via InspectSymbol) ---
     [Test]
+    [Category("SymbolNavigationTools")] // sentinel:auto-category
     public async Task GetBlastRadius_ValidMethod_ReturnsReport()
     {
         SetSource(RichSource, "Test.cs");
@@ -193,6 +197,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("SymbolNavigationTools")] // sentinel:auto-category
     public async Task GetBlastRadius_ValidMethod_ReportHasNoErrorAndNamesSymbol()
     {
         SetSource(RichSource, "Test.cs");
@@ -205,6 +210,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("SymbolNavigationTools")] // sentinel:auto-category
     public async Task GetBlastRadius_UnresolvableSnippet_ReturnsNotFoundError()
     {
         SetSource(RichSource, "Test.cs");
@@ -217,6 +223,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("SymbolNavigationTools")] // sentinel:auto-category
     public async Task InspectSymbol_UnresolvableSnippet_InfoAndBlastRadiusAgree()
     {
         SetSource(RichSource, "Test.cs");
@@ -234,6 +241,7 @@ public class OrderService : IOrderService
 
     // --- FindMethodsByReturnType (via QuerySymbolRelationships) ---
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindMethodsByReturnType_ValidType_ReturnsList()
     {
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "List<string>", FindUsagesSearchKind.methodsByReturnType);
@@ -243,6 +251,7 @@ public class OrderService : IOrderService
 
     // --- GetSolutionMetrics ---
     [Test]
+    [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetSolutionMetrics_LoadedSolution_ReturnsMetrics()
     {
         SetSource(RichSource, "Test.cs");
@@ -252,6 +261,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetSolutionMetrics_WithProjectName_ReturnsMetrics()
     {
         SetSource(RichSource, "Test.cs");
@@ -262,6 +272,7 @@ public class OrderService : IOrderService
 
     // --- GetCodeInventory ---
     [Test]
+    [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetCodeInventory_ValidFile_ReturnsInventory()
     {
         SetSource(RichSource, "Test.cs");
@@ -272,6 +283,7 @@ public class OrderService : IOrderService
 
     // --- FindUnusedPrivateMembers (via DeadCodeEngine) ---
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedPrivateMembers_ValidClass_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -282,6 +294,7 @@ public class OrderService : IOrderService
 
     // --- DetectUnusedPrivateFields (via DeadCodeEngine) ---
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task DetectUnusedPrivateFields_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -292,6 +305,7 @@ public class OrderService : IOrderService
 
     // --- DetectUnusedLocalVariables (via DeadCodeEngine) ---
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task DetectUnusedLocalVariables_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -302,6 +316,7 @@ public class OrderService : IOrderService
 
     // --- DetectLongParameterLists (via AnalysisEngine) ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task DetectLongParameterLists_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -312,6 +327,7 @@ public class OrderService : IOrderService
 
     // --- FindUninstantiatedTypes (via AnalysisEngine) ---
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUninstantiatedTypes_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -322,6 +338,7 @@ public class OrderService : IOrderService
 
     // --- FindCircularDependencies (no params, via AnalysisEngine) ---
     [Test]
+    [Category("SolutionStructureEngine")] // sentinel:auto-category
     public async Task FindCircularDependencies_NoParams_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -332,6 +349,7 @@ public class OrderService : IOrderService
 
     // --- GenerateCallTree (via GetCallGraph "tree") ---
     [Test]
+    [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GenerateCallTree_ValidMethod_ReturnsString()
     {
         SetSource(RichSource, "Test.cs");
@@ -342,6 +360,7 @@ public class OrderService : IOrderService
 
     // --- DocumentPocoFields (via DocumentationEngine) ---
     [Test]
+    [Category("DocumentationEngine")] // sentinel:auto-category
     public async Task DocumentPocoFields_ValidClass_ReturnsString()
     {
         SetSource(RichSource, "Test.cs");
@@ -352,6 +371,7 @@ public class OrderService : IOrderService
 
     // --- GenerateEqualityOverrides (via AnalysisEngine) ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task GenerateEqualityOverrides_ValidClass_ReturnsString()
     {
         SetSource(RichSource, "Test.cs");
@@ -362,6 +382,7 @@ public class OrderService : IOrderService
 
     // --- FindUnusedReferences (via DependencyEngine) ---
     [Test]
+    [Category("DependencyEngine")] // sentinel:auto-category
     public async Task FindUnusedReferences_ValidProject_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -376,6 +397,7 @@ public class OrderService : IOrderService
     // rest of this battery it can't run against TestSolutionBuilder's in-memory fake project
     // path. Uses a real on-disk solution via TestSolutionFixture instead.
     [Test]
+    [Category("DependencyEngine")] // sentinel:auto-category
     public async Task CheckPackageInconsistency_ValidSolution_ReturnsList()
     {
         using var fixture = new TestSolutionFixture();
@@ -389,6 +411,7 @@ public class OrderService : IOrderService
 
     // --- FindUnusedInterfaces (via AnalysisEngine) ---
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedInterfaces_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -399,6 +422,7 @@ public class OrderService : IOrderService
 
     // --- FindInternalClassesThatCouldBePrivate (via AnalysisEngine) ---
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindInternalClassesThatCouldBePrivate_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -409,6 +433,7 @@ public class OrderService : IOrderService
 
     // --- FindLargeSwitchStatements (via AnalysisEngine) ---
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindLargeSwitchStatements_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -419,6 +444,7 @@ public class OrderService : IOrderService
 
     // --- FindStructuralSmells (via SolutionStructureEngine) ---
     [Test]
+    [Category("SolutionStructureEngine")] // sentinel:auto-category
     public async Task FindStructuralSmells_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -429,6 +455,7 @@ public class OrderService : IOrderService
 
     // --- FindUnusedConstructors (via DeadCodeEngine) ---
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedConstructors_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -439,6 +466,7 @@ public class OrderService : IOrderService
 
     // --- CheckForUnusedEventSubscriptions (via DeadCodeEngine) ---
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task CheckForUnusedEventSubscriptions_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -449,6 +477,7 @@ public class OrderService : IOrderService
 
     // --- GetSymbolInfo (via InspectSymbol) ---
     [Test]
+    [Category("SymbolNavigationTools")] // sentinel:auto-category
     public async Task GetSymbolInfo_ValidSymbolSnippet_ReturnsInfo()
     {
         SetSource(RichSource, "Test.cs");
@@ -459,6 +488,7 @@ public class OrderService : IOrderService
 
     // --- FindAllImplementations (via QuerySymbolRelationships) ---
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindAllImplementations_ValidInterface_ReturnsList()
     {
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "IOrderService", FindUsagesSearchKind.implementorsOf);
@@ -468,6 +498,7 @@ public class OrderService : IOrderService
 
     // --- FindReadonlyFieldCandidates (via SymbolNavigationEngine) ---
     [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task FindReadonlyFieldCandidates_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -478,6 +509,7 @@ public class OrderService : IOrderService
 
     // --- FindDiRegistrations (now GetDiRegistrations) ---
     [Test]
+    [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task FindDiRegistrations_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -488,6 +520,7 @@ public class OrderService : IOrderService
 
     // --- GetTypeMembersDetail (via GetTypeInfo) ---
     [Test]
+    [Category("SymbolNavigationTools")] // sentinel:auto-category
     public async Task GetTypeMembersDetail_ValidType_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -498,6 +531,7 @@ public class OrderService : IOrderService
 
     // --- FindExtensionMethods (via QuerySymbolRelationships) ---
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindExtensionMethods_ValidType_ReturnsList()
     {
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "Order", FindUsagesSearchKind.extensionsFor);
@@ -507,6 +541,7 @@ public class OrderService : IOrderService
 
     // --- AnalyzeTypeCohesion (via MetricsEngine) ---
     [Test]
+    [Category("MetricsEngine")] // sentinel:auto-category
     public async Task AnalyzeTypeCohesion_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -517,6 +552,7 @@ public class OrderService : IOrderService
 
     // --- FindCircularDependencies (with projectName, via SolutionStructureEngine) ---
     [Test]
+    [Category("SolutionStructureEngine")] // sentinel:auto-category
     public async Task FindCircularDependencies_WithProjectName_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -527,6 +563,7 @@ public class OrderService : IOrderService
 
     // --- GetCallGraph ---
     [Test]
+    [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetCallGraph_ValidMethod_ReturnsCallGraph()
     {
         SetSource(RichSource, "Test.cs");
@@ -536,6 +573,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetCallGraph_NonExistentMethod_ReturnsStructuredError()
     {
         SetSource(RichSource, "Test.cs");
@@ -546,6 +584,7 @@ public class OrderService : IOrderService
 
     // --- GetReverseCallGraph (via GetCallGraph "reverse") ---
     [Test]
+    [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetReverseCallGraph_ValidMethod_ReturnsCallGraph()
     {
         SetSource(RichSource, "Test.cs");
@@ -555,6 +594,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetReverseCallGraph_NonExistentMethod_ReturnsStructuredError()
     {
         SetSource(RichSource, "Test.cs");
@@ -565,6 +605,7 @@ public class OrderService : IOrderService
 
     // --- MoveFileToNamespaceFolder ---
     [Test]
+    [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task MoveFileToNamespaceFolder_ValidFile_ReturnsString()
     {
         SetSource(RichSource, "Test.cs");
@@ -576,6 +617,7 @@ public class OrderService : IOrderService
 
     // --- FindAllThrowSites (via DiscoveryEngine) ---
     [Test]
+    [Category("DiscoveryEngine")] // sentinel:auto-category
     public async Task FindAllThrowSites_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -586,6 +628,7 @@ public class OrderService : IOrderService
 
     // --- FindObjectCreationSites (via FindByName) ---
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindObjectCreationSites_ValidType_ReturnsList()
     {
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "", FindUsagesSearchKind.objectCreations);
@@ -595,6 +638,7 @@ public class OrderService : IOrderService
 
     // --- GetPublicApiSurface ---
     [Test]
+    [Category("ScanTools")] // sentinel:auto-category
     public async Task GetPublicApiSurface_ValidProject_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -605,6 +649,7 @@ public class OrderService : IOrderService
 
     // --- FindServicesNotRegistered (via DependencyInjectionEngine) ---
     [Test]
+    [Category("DependencyInjectionEngine")] // sentinel:auto-category
     public async Task FindServicesNotRegistered_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -615,6 +660,7 @@ public class OrderService : IOrderService
 
     // --- FindBestInsertionPoint (now GetBestInsertionPoint) ---
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindBestInsertionPoint_ValidClass_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
@@ -625,6 +671,7 @@ public class OrderService : IOrderService
 
     // --- FindTodoFixmeComments (via DiscoveryEngine) ---
     [Test]
+    [Category("DiscoveryEngine")] // sentinel:auto-category
     public async Task FindTodoFixmeComments_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -635,6 +682,7 @@ public class OrderService : IOrderService
 
     // --- PreviewRenameImpact ---
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task PreviewRenameImpact_ValidSymbol_ReturnsPreview()
     {
         SetSource(RichSource, "Test.cs");
@@ -645,6 +693,7 @@ public class OrderService : IOrderService
 
     // --- FindCallersSafe (via FindReferences) ---
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindCallersSafe_ValidSymbol_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -655,6 +704,7 @@ public class OrderService : IOrderService
 
     // --- FindImplementationsSafe (via FindReferences) ---
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindImplementationsSafe_ValidInterface_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -665,6 +715,7 @@ public class OrderService : IOrderService
 
     // --- FindReferences(kind: all) ---
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindReferences_KindAll_ReturnsBothCallersAndImplementations()
     {
         SetSource(RichSource, "Test.cs");
@@ -678,6 +729,7 @@ public class OrderService : IOrderService
 
     // --- QuerySymbolRelationships (renamed from FindUsages) ---
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task QuerySymbolRelationships_ObjectCreationsForRealType_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
@@ -687,6 +739,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task QuerySymbolRelationships_ObjectCreationsForMethodName_ReturnsSemanticGuardError()
     {
         SetSource(RichSource, "Test.cs");
@@ -697,6 +750,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task QuerySymbolRelationships_EmptyTargetedKind_BroadensAndFindsUnderAnotherKind()
     {
         SetSource(RichSource, "Test.cs");
@@ -709,6 +763,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task QuerySymbolRelationships_EmptyUnderAllKinds_ReturnsPlainNotFoundSignal()
     {
         SetSource(RichSource, "Test.cs");
@@ -719,6 +774,7 @@ public class OrderService : IOrderService
 
 
     [Test]
+    [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task QuerySymbolRelationships_AttributeUsages_TopLevelClassTarget_ReturnsMatchNotCrash()
     {
         // Regression test for blocking_error_findattributeusages_first_throws_on_unresolved_target.md:

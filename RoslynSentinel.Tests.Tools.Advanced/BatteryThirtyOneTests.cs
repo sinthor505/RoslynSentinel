@@ -12,6 +12,7 @@ using RoslynSentinel.Tools.Advanced;
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
 [TestFixture]
+[Category("StructuralRefactoringEngine")] // sentinel:auto-category
 public class BatteryThirtyOneTests
 {
     private IWorkspaceManager _workspaceManager;

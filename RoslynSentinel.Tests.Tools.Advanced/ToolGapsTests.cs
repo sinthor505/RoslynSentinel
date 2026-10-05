@@ -54,6 +54,7 @@ public class ToolGapsTests
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task MakeMethodThreadSafe_UsesCustomLockFieldName()
     {
         SetSource(
@@ -65,6 +66,7 @@ public class ToolGapsTests
     }
 
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task MakeMethodThreadSafe_DefaultLockFieldName_IsUsed()
     {
         SetSource(
@@ -75,6 +77,7 @@ public class ToolGapsTests
     }
 
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task MakeMethodThreadSafe_ThrowsIfExistingFieldNotObject()
     {
         SetSource(
@@ -91,6 +94,7 @@ public class ToolGapsTests
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskWhenAll_Flags_SequentialIndependentAwaits()
     {
         SetSource(@"
@@ -107,6 +111,7 @@ public class C {
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskWhenAll_DoesNotFlag_DependentAwaits()
     {
         SetSource(@"
@@ -126,6 +131,7 @@ public class C {
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindAsyncOverSync_Flags_AsyncMethodWithNoAwait()
     {
         SetSource(
@@ -137,6 +143,7 @@ public class C {
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindAsyncOverSync_Flags_AsyncMethodOnlyAwaitingFromResult()
     {
         SetSource(
@@ -148,6 +155,7 @@ public class C {
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindAsyncOverSync_DoesNotFlag_RealAsync()
     {
         SetSource(
@@ -162,6 +170,7 @@ public class C {
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindUnawaitedFireAndForget_Flags_UnawastedAsyncCall()
     {
         SetSource(@"
@@ -175,6 +184,7 @@ public class C {
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindUnawaitedFireAndForget_DoesNotFlag_AwaitedCall()
     {
         SetSource(@"
@@ -187,6 +197,7 @@ public class C {
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindUnawaitedFireAndForget_DoesNotFlag_NonAsyncSuffix()
     {
         SetSource(
@@ -201,6 +212,7 @@ public class C {
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindLongParameterList_Flags_MethodWithFourParams()
     {
         SetSource(
@@ -212,6 +224,7 @@ public class C {
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindLongParameterList_DoesNotFlag_TwoParamMethod()
     {
         SetSource(
@@ -222,6 +235,7 @@ public class C {
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindLongParameterList_RespectsCustomMinParameters()
     {
         SetSource(
@@ -236,6 +250,7 @@ public class C {
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindPrimitiveObsession_Flags_ThreeStringsInMethod()
     {
         SetSource(
@@ -247,6 +262,7 @@ public class C {
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindPrimitiveObsession_DoesNotFlag_TwoStringsInMethod()
     {
         SetSource(
@@ -261,6 +277,7 @@ public class C {
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindInconsistentAsyncSuffix_Flags_AsyncMethodWithoutSuffix()
     {
         SetSource(
@@ -273,6 +290,7 @@ public class C {
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindInconsistentAsyncSuffix_Flags_SyncMethodWithAsyncSuffix()
     {
         SetSource(
@@ -284,6 +302,7 @@ public class C {
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindInconsistentAsyncSuffix_DoesNotFlag_ProperlyNamedMethod()
     {
         SetSource(
@@ -298,6 +317,7 @@ public class C {
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("DiscoveryEngine")] // sentinel:auto-category
     public async Task FindBestInsertionPoint_ReturnsLineForMethod_InEmptyClass()
     {
         SetSource(
@@ -309,6 +329,7 @@ public class C {
     }
 
     [Test]
+    [Category("DiscoveryEngine")] // sentinel:auto-category
     public async Task FindBestInsertionPoint_ReturnsAfterLastField_WhenAddingField()
     {
         SetSource(
@@ -324,6 +345,8 @@ public class C {
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("DiscoveryEngine")] // sentinel:auto-category
+    [Category("TodoCommentFinding")] // sentinel:auto-category
     public async Task FindTodoFixmeComments_FindsTodoComment()
     {
         SetSource(
@@ -335,6 +358,8 @@ public class C {
     }
 
     [Test]
+    [Category("DiscoveryEngine")] // sentinel:auto-category
+    [Category("TodoCommentFinding")] // sentinel:auto-category
     public async Task FindTodoFixmeComments_FindsFixmeComment()
     {
         SetSource(
@@ -346,6 +371,7 @@ public class C {
     }
 
     [Test]
+    [Category("DiscoveryEngine")] // sentinel:auto-category
     public async Task FindTodoFixmeComments_ReturnsEmpty_WhenNoKeywords()
     {
         SetSource(
@@ -360,6 +386,7 @@ public class C {
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task FindUseFrozenCollections_Flags_PrivateStaticReadonlyDictionary()
     {
         SetSource(
@@ -372,6 +399,7 @@ public class C {
     }
 
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task FindUseFrozenCollections_DoesNotFlag_InstanceDictionary()
     {
         // Not static -> should not be flagged
@@ -387,6 +415,7 @@ public class C {
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseExceptionExpressions_ReplacesArgumentNullException()
     {
         SetSource(@"
@@ -405,6 +434,7 @@ public class C {
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task UpdateXmlDocsFromSignature_AddsMissingParamTag()
     {
         SetSource(@"
@@ -417,6 +447,7 @@ public class C {
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task UpdateXmlDocsFromSignature_RemovesStaleParamTag()
     {
         SetSource(@"
@@ -431,6 +462,7 @@ public class C {
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task UpdateXmlDocsFromSignature_NoOp_WhenNoXmlDocs()
     {
         SetSource(

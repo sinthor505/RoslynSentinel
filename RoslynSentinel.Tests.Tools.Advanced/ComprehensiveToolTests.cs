@@ -10,6 +10,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
 [TestFixture]
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class ComprehensiveToolTests
 {
     private LogicSimplificationEngine _advancedLogicEngine;
@@ -172,6 +173,7 @@ public class ComprehensiveToolTests
     }
 
     [Test]
+    [Category("ImpactAnalyzer")] // sentinel:auto-category
     public async Task GetBlastRadius_ShouldReturnReport()
     {
         var source = "public class C { public void M() {} }";
@@ -181,6 +183,7 @@ public class ComprehensiveToolTests
     }
 
     [Test]
+    [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetComprehensiveHealthReport_ShouldReturnReport()
     {
         _workspaceManager.SetTestSolution(CreateSolution("public class C {}"));
@@ -189,6 +192,7 @@ public class ComprehensiveToolTests
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ClassToRecord_ShouldReturnString()
     {
         var source = "public class C { public int Id { get; init; } }";
@@ -198,6 +202,7 @@ public class ComprehensiveToolTests
     }
 
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task FindBoxingAllocations_ShouldReturnList()
     {
         var source = "public class C { void M() { object o = 1; } }";
@@ -207,6 +212,7 @@ public class ComprehensiveToolTests
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task Comprehensive_DeadCode_Analysis()
     {
         SetSource("public class C { private int _unused; }", "C.cs");

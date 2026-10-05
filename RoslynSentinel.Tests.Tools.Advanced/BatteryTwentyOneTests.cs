@@ -154,6 +154,7 @@ public class Worker
 
     // --- FixThreadSleep (via CodeHealingEngine) ---
     [Test]
+    [Category("CodeHealingEngine")] // sentinel:auto-category
     public async Task FixThreadSleep_FileWithThreadSleep_ReturnsUpdatedSource()
     {
         SetSource(AsyncSource, "Worker.cs");
@@ -162,6 +163,7 @@ public class Worker
     }
 
     [Test]
+    [Category("CodeHealingEngine")] // sentinel:auto-category
     public async Task FixThreadSleep_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -170,6 +172,7 @@ public class Worker
 
     // --- AddBraces (via SyntaxUpgradeEngine) ---
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task AddBraces_FileWithBracelessStatements_ReturnsUpdatedSource()
     {
         const string src = "public class C { void M() { if (true) Console.WriteLine(\"x\"); } }";
@@ -179,6 +182,7 @@ public class Worker
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task AddBraces_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -188,6 +192,7 @@ public class Worker
 
     // --- UpgradePatternMatching (via SyntaxUpgradeEngine) ---
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradePatternMatching_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
@@ -196,6 +201,7 @@ public class Worker
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradePatternMatching_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -204,6 +210,7 @@ public class Worker
 
     // --- UseIndexFromEnd (via CodeStyleEngine) ---
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task UseIndexFromEnd_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
@@ -212,6 +219,7 @@ public class Worker
     }
 
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task UseIndexFromEnd_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -220,6 +228,7 @@ public class Worker
 
     // --- UseFieldBackedProperties (via SyntaxUpgradeEngine) ---
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseFieldBackedProperties_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
@@ -228,6 +237,7 @@ public class Worker
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseFieldBackedProperties_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -236,6 +246,7 @@ public class Worker
 
     // --- ClassToRecord (via ModernizationEngine) ---
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ClassToRecord_SimpleClass_ReturnsRecord()
     {
         const string src = "namespace TestProj; public class Point { public int X { get; init; } public int Y { get; init; } }";
@@ -245,6 +256,7 @@ public class Worker
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ClassToRecord_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -253,6 +265,7 @@ public class Worker
 
     // --- RecordToClass (via ModernizationEngine) ---
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task RecordToClass_SimpleRecord_ReturnsClass()
     {
         const string src = "namespace TestProj; public record Point(int X, int Y);";
@@ -262,6 +275,7 @@ public class Worker
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task RecordToClass_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -270,6 +284,7 @@ public class Worker
 
     // --- SimplifyVerbosity (via CodeStyleEngine) ---
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task SimplifyVerbosity_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
@@ -278,6 +293,7 @@ public class Worker
     }
 
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task SimplifyVerbosity_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -286,6 +302,7 @@ public class Worker
 
     // --- UpgradeThreadSafety (via CodeStyleEngine) ---
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task UpgradeThreadSafety_FileWithLock_ReturnsSource()
     {
         SetSource(AsyncSource, "Worker.cs");
@@ -294,6 +311,7 @@ public class Worker
     }
 
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task UpgradeThreadSafety_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -302,6 +320,7 @@ public class Worker
 
     // --- UseTimeProvider (via CodeStyleEngine) ---
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task UseTimeProvider_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
@@ -310,6 +329,7 @@ public class Worker
     }
 
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task UseTimeProvider_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -318,6 +338,7 @@ public class Worker
 
     // --- UpgradeToModernGuards (via SyntaxUpgradeEngine) ---
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeToModernGuards_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
@@ -328,6 +349,7 @@ public class Worker
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeToModernGuards_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -336,6 +358,7 @@ public class Worker
 
     // --- ConvertSwitchToExpression (via SyntaxUpgradeEngine) ---
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task ConvertSwitchToExpression_FileWithSwitch_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
@@ -344,6 +367,7 @@ public class Worker
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task ConvertSwitchToExpression_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -352,6 +376,7 @@ public class Worker
 
     // --- CleanupImplicitSpans (via SyntaxUpgradeEngine) ---
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task CleanupImplicitSpans_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
@@ -360,6 +385,7 @@ public class Worker
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task CleanupImplicitSpans_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -368,6 +394,7 @@ public class Worker
 
     // --- ConvertToSourceGeneratedLogging (via ModernLoggingEngine) ---
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ConvertToSourceGeneratedLogging_ClassWithLogger_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
@@ -376,6 +403,7 @@ public class Worker
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ConvertToSourceGeneratedLogging_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -384,6 +412,7 @@ public class Worker
 
     // --- SimplifyBooleanExpressions (via LogicSimplificationEngine) ---
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task SimplifyBooleanExpressions_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
@@ -392,6 +421,7 @@ public class Worker
     }
 
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task SimplifyBooleanExpressions_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -400,6 +430,7 @@ public class Worker
 
     // --- SimplifyMemberAccess (via IDEStyleEngine) ---
     [Test]
+    [Category("IDEStyleEngine")] // sentinel:auto-category
     public async Task SimplifyMemberAccess_ValidFile_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
@@ -408,6 +439,7 @@ public class Worker
     }
 
     [Test]
+    [Category("IDEStyleEngine")] // sentinel:auto-category
     public async Task SimplifyMemberAccess_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -416,6 +448,7 @@ public class Worker
 
     // --- MakeClassImmutable (via ImmutabilityEngine) ---
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task MakeClassImmutable_ClassWithMutableFields_ReturnsSource()
     {
         const string src = "namespace TestProj; public class Config { public string Host { get; set; } public int Port { get; set; } }";
@@ -425,6 +458,7 @@ public class Worker
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task MakeClassImmutable_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -433,6 +467,7 @@ public class Worker
 
     // --- ConvertStaticToExtension (via AdvancedLogicEngine) ---
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task ConvertStaticToExtension_StaticMethod_ReturnsSource()
     {
         const string src = "namespace TestProj; public static class Helper { public static string Format(string s) => s.Trim(); }";
@@ -442,6 +477,7 @@ public class Worker
     }
 
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task ConvertStaticToExtension_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
@@ -450,6 +486,7 @@ public class Worker
 
     // --- InvertBooleanLogic ---
     [Test]
+    [Category("ModernizationTools")] // sentinel:auto-category
     public async Task InvertBooleanLogic_BoolField_ReturnsDictionary()
     {
         const string src = "namespace TestProj; public class Flags { public bool IsActive; public void Toggle() { IsActive = !IsActive; } }";
@@ -460,6 +497,7 @@ public class Worker
 
     // --- OptimizeToValueTask (via AsyncOptimizationEngine) ---
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task OptimizeToValueTask_AsyncMethod_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
@@ -468,6 +506,7 @@ public class Worker
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task OptimizeToValueTask_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
@@ -476,6 +515,7 @@ public class Worker
 
     // --- OptimizeIndependentAwaits (via AsyncOptimizationEngine) ---
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task OptimizeIndependentAwaits_AsyncMethod_ReturnsSource()
     {
         SetSource(RichSource, "Test.cs");
@@ -484,6 +524,7 @@ public class Worker
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task OptimizeIndependentAwaits_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
@@ -493,6 +534,7 @@ public class Worker
 
     // --- UpgradeToPrimaryConstructor (via SyntaxUpgradeEngine) ---
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeToPrimaryConstructor_SimpleClass_ReturnsSource()
     {
         const string src = @"namespace TestProj;
@@ -508,6 +550,7 @@ public class Service
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeToPrimaryConstructor_NonExistentFile_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
@@ -517,6 +560,7 @@ public class Service
 
     // --- FindUseFrozenCollections (via CodeStyleEngine) ---
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task FindUseFrozenCollections_ValidFile_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
@@ -526,6 +570,7 @@ public class Service
 
     // --- UseExceptionExpressions (via SyntaxUpgradeEngine) ---
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseExceptionExpressions_MethodWithGuard_ReturnsSource()
     {
         const string src = @"namespace TestProj;
@@ -542,6 +587,7 @@ public class Validator
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseExceptionExpressions_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");

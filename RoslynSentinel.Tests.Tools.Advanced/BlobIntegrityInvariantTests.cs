@@ -21,6 +21,7 @@ using RoslynSentinel.Tools.Advanced;
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
 [TestFixture]
+[Category("AdvancedRefactoringTools")] // sentinel:auto-category
 public class BlobIntegrityInvariantTests
 {
     private TestSolutionFixture _fixture;

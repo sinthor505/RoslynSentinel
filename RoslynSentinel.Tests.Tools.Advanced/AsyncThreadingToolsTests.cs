@@ -7,6 +7,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
 [TestFixture]
+[Category("AsyncAnalysisEngine")] // sentinel:auto-category
 public class AsyncThreadingToolsTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -204,6 +205,7 @@ public class C {
     // --- AddConfigureAwaitFalse ---
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task AddConfigureAwaitFalse_AddsToAwaitExpressions()
     {
         SetSource("public class C { public async System.Threading.Tasks.Task M() { await System.Threading.Tasks.Task.Delay(100); } }", "C.cs");
@@ -212,6 +214,7 @@ public class C {
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task AddConfigureAwaitFalse_IsIdempotent()
     {
         SetSource("public class C { public async System.Threading.Tasks.Task M() { await System.Threading.Tasks.Task.Delay(100).ConfigureAwait(false); } }", "C.cs");
@@ -223,6 +226,7 @@ public class C {
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task AddConfigureAwaitTrue_WhenLibraryModeFalse()
     {
         SetSource("public class C { public async System.Threading.Tasks.Task M() { await System.Threading.Tasks.Task.Delay(100); } }", "C.cs");
@@ -233,6 +237,7 @@ public class C {
     // --- RemoveConfigureAwaitFalse ---
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task RemoveConfigureAwaitFalse_RemovesConfigureAwait()
     {
         SetSource("public class C { public async System.Threading.Tasks.Task M() { await System.Threading.Tasks.Task.Delay(100).ConfigureAwait(false); } }", "C.cs");
@@ -242,6 +247,7 @@ public class C {
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task RemoveConfigureAwaitFalse_DoesNotModify_CleanCode()
     {
         const string source = "public class C { public async System.Threading.Tasks.Task M() { await System.Threading.Tasks.Task.Delay(100); } }";
@@ -254,6 +260,7 @@ public class C {
     // --- ConvertLockToSemaphoreSlim ---
 
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task ConvertLockToSemaphoreSlim_TransformsLock()
     {
         var src = @"
@@ -270,6 +277,7 @@ public class C {
     }
 
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task ConvertLockToSemaphoreSlim_MakesMethodAsync()
     {
         var src = @"
@@ -286,6 +294,7 @@ public class C {
     // --- ConvertToAsyncEnumerable ---
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task ConvertToAsyncEnumerable_TransformsListReturn()
     {
         var src = @"
@@ -306,6 +315,7 @@ public class C {
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task ConvertToAsyncEnumerable_DoesNotModify_AlreadyAsyncEnumerable()
     {
         var src = @"
