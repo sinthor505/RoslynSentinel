@@ -1,7 +1,12 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Basic;
+
+/// <summary>Information about a symbol's declaration, including identifier and initializer spans.</summary>
+public sealed record DeclarationInfo(string FilePath, TextSpan IdentifierSpan, TextSpan? InitializerValueSpan, string? InitializerText);
 
 /// <summary>Engine for semantic find-replace operations on symbols.</summary>
 public class SemanticReplaceEngine
@@ -115,5 +120,77 @@ public class SemanticReplaceEngine
         }
 
         return (symbol, null);
+    }
+
+    /// <summary>Describes a symbol's declaration, including identifier and initializer spans.</summary>
+    /// <returns>DeclarationInfo if symbol has a single source declaration, null otherwise.</returns>
+    public static DeclarationInfo? DescribeDeclaration(ISymbol symbol, CancellationToken cancellationToken = default)
+    {
+        if (symbol == null)
+        {
+            return null;
+        }
+
+        // Handle property symbols
+        if (symbol is IPropertySymbol propSymbol)
+        {
+            if (propSymbol.DeclaringSyntaxReferences.Length != 1)
+            {
+                return null;
+            }
+
+            var syntaxRef = propSymbol.DeclaringSyntaxReferences[0];
+            var syntax = syntaxRef.GetSyntax(cancellationToken);
+
+            if (syntax is PropertyDeclarationSyntax propDecl)
+            {
+                var filePath = syntaxRef.SyntaxTree?.FilePath ?? string.Empty;
+                var identifierSpan = propDecl.Identifier.Span;
+
+                // Check for initializer (e.g., { get; set; } = true;)
+                TextSpan? initializerValueSpan = null;
+                string? initializerText = null;
+
+                if (propDecl.Initializer?.Value != null)
+                {
+                    initializerValueSpan = propDecl.Initializer.Value.Span;
+                    initializerText = propDecl.Initializer.Value.ToString();
+                }
+
+                return new DeclarationInfo(filePath, identifierSpan, initializerValueSpan, initializerText);
+            }
+        }
+
+        // Handle field symbols
+        if (symbol is IFieldSymbol fieldSymbol)
+        {
+            if (fieldSymbol.DeclaringSyntaxReferences.Length != 1)
+            {
+                return null;
+            }
+
+            var syntaxRef = fieldSymbol.DeclaringSyntaxReferences[0];
+            var syntax = syntaxRef.GetSyntax(cancellationToken);
+
+            if (syntax is VariableDeclaratorSyntax varDecl)
+            {
+                var filePath = syntaxRef.SyntaxTree?.FilePath ?? string.Empty;
+                var identifierSpan = varDecl.Identifier.Span;
+
+                // Check for initializer (e.g., = true;)
+                TextSpan? initializerValueSpan = null;
+                string? initializerText = null;
+
+                if (varDecl.Initializer?.Value != null)
+                {
+                    initializerValueSpan = varDecl.Initializer.Value.Span;
+                    initializerText = varDecl.Initializer.Value.ToString();
+                }
+
+                return new DeclarationInfo(filePath, identifierSpan, initializerValueSpan, initializerText);
+            }
+        }
+
+        return null;
     }
 }
