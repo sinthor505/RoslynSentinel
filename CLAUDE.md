@@ -5,85 +5,65 @@ language model can reason about and what the compiler actually knows.
 
 ## Mission
 
-Enable agents — **especially weak or self-hosted models** — to safely and efficiently navigate and
-refactor C# codebases. The explicit goal is to let a small local model punch above its weight: it
-should drive meaningful, semantically-correct refactoring by calling structured tools, never by
-falling back to grep, regex search-and-replace, file-read loops, or manual text edits.
+Enable agents - **especially weak or self-hosted models** - to safely and efficiently navigate and
+refactor C# codebases. A small local model should drive meaningful, semantically-correct refactoring
+by calling structured tools, never by falling back to grep, regex search-and-replace, file-read
+loops, or manual text edits.
 
 If an agent reaches for a shell command to inspect or modify C# code, that is a gap in the tool
 surface, not a deficiency in the agent.
 
 ## Where guidance belongs: CLAUDE.md vs. memory
 
-This file is loaded into **every** session unconditionally, from turn one. The auto-memory system
-(`MEMORY.md` and its linked files) is loaded **reactively**, by relevance — which usually means an
-agent finds a memory entry only *after* it has already made the mistake the entry warns about, not
-before. That difference in *when* something is seen, not how well-written it is, is what decides
-where a piece of guidance goes:
+This file is loaded into every session from turn one. Memory (`MEMORY.md` and linked files) is loaded
+reactively, usually after the mistake it warns about has already been made.
 
-- **Put it here** if it's a standing rule, convention, or gotcha an agent must follow or avoid
-  *before* acting — anywhere a fresh session doing the wrong thing on turn one, having never
-  searched memory, would be a real and repeatable failure. This is true almost by default for
-  anything that would otherwise be a `type: feedback` memory (that type exists specifically to stop
-  repeating corrections) and for `type: project` facts describing a still-true tool/architecture
-  limitation or required workaround (not a one-time resolved incident).
-- **Leave it in memory** if reactive discovery is fine — open ideas not yet built, one-off historical
-  incidents that are fully resolved, scoped facts about in-progress work, or pointers to external
-  systems. These are legitimately notes/WIP, not conventions every session needs up front.
-- **When promoting a memory entry into this file:** distill it — cut the incident narrative,
-  dated "updated on"/"superseded" history, and hedging, down to the current rule plus the one-line
-  "why" that makes it stick. Then mark the source memory file as superseded (banner + pointer to the
-  section here) and move its index line to `MEMORY_CLOSED.md`, so a future session that opens the raw
-  file directly doesn't mistake the incident history for the live procedure.
-- If unsure which side a piece of guidance belongs on, the test is: "would getting this wrong on
-  turn one, before ever searching memory, be a costly, repeatable mistake?" If yes, it belongs here.
+- **Put it here:** standing rules, conventions, and gotchas an agent must know *before* acting - where
+  getting it wrong on turn one would be a costly, repeatable mistake. This includes anything that
+  would otherwise be a `type: feedback` memory, and `type: project` facts describing a still-true
+  limitation or required workaround.
+- **Leave it in memory:** open ideas, resolved one-off incidents, scoped facts about in-progress work,
+  pointers to external systems.
+- **When promoting a memory entry here:** distill it to the current rule plus a one-line "why". Mark
+  the source memory file superseded (banner + pointer to the section here) and move its index line to
+  `MEMORY_CLOSED.md`.
 
 ## Shell tool choice
 
 This is a **Windows environment: default to the PowerShell tool for every shell command.** Bash is
-fallback-only, for a genuine POSIX/Git-Bash-only need. Decide from the platform, not from how simple
-or "plain" a given command looks — one-line cmdlets (`Get-Process`, `.\script.ps1`, anything piped
-into `Select-String`/`Where-Object`) still fail when run through Bash: cmdlet resolution, `.`-relative
-path syntax, and non-terminating-error-to-exit-code translation all silently break crossing that
-boundary, and it's never the same failure mode twice. If a Bash call's result looks even slightly
-off, re-run it via the PowerShell tool before trusting it.
+fallback-only, for a genuine POSIX/Git-Bash-only need, however simple the command looks - cmdlets,
+`.\`-relative paths and error-to-exit-code translation silently break when run through Bash. If a
+Bash call's result looks even slightly off, re-run it via PowerShell before trusting it.
 
 ## Diagnosing a "missing" or gated tool
 
-**The tool surface is intentionally gated.** Every active tool's schema costs prompt tokens on every
-session (about 39k tokens for the full `claude` mode), so rarely-needed tools are switched off by
-mode on purpose. A tool you expect but don't see is usually gated, not missing.
+The tool surface is intentionally gated: every active tool's schema costs prompt tokens each session,
+so rarely-needed tools are off by mode. A tool you expect but don't see is usually gated, not missing.
 
-Before concluding a tool doesn't exist, theorizing about a stale binary, or building a duplicate:
-call `McpServerStatus(toolListing: inactive)` (optionally with `toolNameFilter`) - a
-reflection-based, ground-truth list of declared tools with `className`, `activeForThisMode` and an
-`enabledBy` hint saying which mode or flag turns it on. The listing is off by default to keep
-the status call small. This answers both "does it exist" and "is it gated" in one call. Only fall
-back to a text search (`Search(mode: "text", query: "Name = \"ToolName\"")`, for a tool declared in
-an assembly this server flavor doesn't load) or stale-binary theories once this has come back empty.
+Before concluding a tool doesn't exist, suspecting a stale binary, or building a duplicate, call
+`McpServerStatus(toolListing: inactive)` (optionally with `toolNameFilter`). It returns every declared
+tool with `className`, `activeForThisMode` and an `enabledBy` hint. Only if that comes back empty, fall
+back to `Search(mode: "text", query: "Name = \"ToolName\"")` (for a tool in an assembly this server
+flavor doesn't load).
 
-**If the tool exists but is gated and would make the task materially easier, stop and report it** -
-the tool name and its `enabledBy` hint - instead of working around it with many more steps (shell
-commands, repeated `ReplaceSnippet` edits, manual text edits). A gated tool is a configuration
-decision for the user to make, not a tool failure: do not write a `docs/current/blockers/` doc for
-it. (Once `McpToolsetControl` exists, enabling the toolset replaces the stop-and-report.) See
-`docs/current/proposals/proposal_reduce_tool_schema_token_cost.md`.
+If the tool is gated and would make the task materially easier:
+- `enabledBy` names a `McpToolsetControl(toolSet: ..., enabled: true)` call: make that call yourself.
+- `enabledBy` names a mode or flag: stop and report the tool name and hint instead of working around
+  it with many more steps. This is a configuration decision for the user, not a tool failure - do not
+  write a blocker doc.
 
 ## Subagent choice: verification is never a supervisor job
 
 `modeleval-runner` and `planstep-runner` exist only to supervise a run in which **a model is under
-test** (a ModelEval test or PlanStepRunner run against an LLM): monitoring it, triaging its logs,
-assisting it. Ordinary build/test verification - a post-change `Build`, a `RunTest` over a project or
-the full suite, a baseline comparison - is a plain `Build`/`RunTest` call, backgrounded if it must
-stay off the main context. Never dispatch a runner agent for it: there is nothing to supervise, and
-it costs more than the direct call. (The agents were renamed from `test-runner` /
-`planstep-test-runner` because the generic name kept attracting this misuse.)
+test** (ModelEval test or PlanStepRunner run against an LLM). Ordinary build/test verification - a
+post-change `Build`, a `RunTest` over a project or the full suite, a baseline comparison - is a plain
+`Build`/`RunTest` call, backgrounded if it must stay off the main context. Never dispatch a runner
+agent for it.
 
 ## Dispatching `implementer`: the slice contract
 
 `implementer` is Haiku-tier with a 200k context. It finishes small, exactly-specified slices and
-stalls or overruns on anything with a wide blast radius. Cutting the work down is the **dispatcher's**
-job (orchestrator, general-purpose agent, or the main session), not the implementer's. A
+stalls on anything with a wide blast radius. Cutting the work down is the **dispatcher's** job. A
 `PreToolUse` hook (`enforce-dogfood.ps1`) refuses a dispatch that breaks the formal parts below.
 
 **Brief template** - every field on its own line, label first:
@@ -99,338 +79,286 @@ Out of scope: what not to touch (e.g. "do not commit", "items 5-7") - always inc
 
 Dispatch with `model: "haiku"` pinned explicitly.
 
-**Measure first, then slice.** Get the call-site list from `InspectSymbol(aspect: blastRadius)`
-(or `FindReferences`) before writing the brief and paste the result in; don't ask the implementer to
-discover it. `blastRadius` takes one symbol per call (resolve it with `LocateSymbol` first, then pass
-`filePath` + a verbatim `contextSnippet`), returns `totalCallSites` / `affectedProjectsCount` and the
-reference list, but not a distinct-file count or project names - count files from the list yourself.
-A bad snippet now returns `isError:true` (fixed in 3b29b07). A server binary older than that
-(`isServerBinaryStale`) still returns `isError:false` with 0 call sites and the reason in a non-empty
-`error` field, which reads as "zero blast radius" - so also treat a non-empty `error` as a failed
-measurement (see `docs/current/findings/finding_blastradius_failure_reported_as_success.md`).
+**Measure first, then slice.** Get the call-site list from `InspectSymbol(aspect: blastRadius)` (or
+`FindReferences`) and paste it into the brief. `blastRadius` takes one symbol per call (resolve it with
+`LocateSymbol`, then pass `filePath` + a verbatim `contextSnippet`) and returns `totalCallSites`,
+`affectedProjectsCount` and the reference list; count distinct files yourself. Treat a non-empty
+`error` field as a failed measurement even if `isError` is false - on a stale server binary it
+otherwise reads as "zero blast radius".
 
-**Slice limits** (guesses until journal data calibrates them - tighten, don't loosen, on doubt):
+**Slice limits** (tighten, don't loosen, on doubt):
 - 3 files or fewer in `Files:`; about 10 distinct edits at most; one acceptance check.
-- Parts that depend on each other land in one edit: interface plus implementations, or signature plus
-  callers, via one `ReplaceSnippet` with `batchEdits` (definitions first) or a call-site-updating tool
+- Interdependent parts land in one edit: interface plus implementations, or signature plus callers, via
+  one `ReplaceSnippet` with `batchEdits` (definitions first) or a call-site-updating tool
   (`RenameSymbol`, `ChangeSignature`, `MethodSignature`). Name the tool call in the brief.
 - Big migrations are staged so every step compiles: add the new type/overload beside the old, move
   callers a few files at a time, remove the old one in a final slice.
-- Over the limits, or the call-site count is large (about 15+ call sites, or 3+ affected projects):
-  split again, or send straight to `implementer-senior`. Also to the senior: new algorithms, public API
-  shape changes, cross-project type relocation, or work where you cannot name the files up front.
+- Over the limits, or about 15+ call sites, or 3+ affected projects: split again, or send straight to
+  `implementer-senior`. Also to the senior: new algorithms, public API shape changes, cross-project
+  type relocation, or work where you cannot name the files up front.
 
-The implementer re-measures before editing and replies `RESCOPE:` (with its numbers) if the real
-blast radius exceeds the brief's; the dispatcher then re-slices rather than pushing it through.
+The implementer re-measures before editing and replies `RESCOPE:` (with its numbers) if the real blast
+radius exceeds the brief's; the dispatcher then re-slices.
 
-## Dog-fooding is mandatory — this is an instruction, not background
+## Dog-fooding policy (hard rule)
 
-**All C# reads and writes, and all git operations, go through the RoslynSentinel MCP tools.** This
-applies to work on RoslynSentinel's own source, which is nearly every task here — "I'm editing the
-server itself" is *not* an exemption, and treating it as one has silently voided this policy in past
-sessions.
+All C# reads and writes, and all git operations, go through the RoslynSentinel MCP tools. This applies
+to work on RoslynSentinel's own source, which is nearly every task here - "I'm editing the server
+itself" is not an exemption.
+
+- NEVER use plain Grep on C# code. Use `Search` / `FindReferences` (`kind: callers` for callers).
+- NEVER use the built-in Edit/Write tools on `.cs` files. Use `ReplaceSnippet`, `Member`, `MoveMember`
+  and the other MCP tools below.
+- NEVER use shell `git add` or `git commit`. Use the `Git` tool.
+- Edit, Grep and shell are fine for Markdown, JSON, `.ps1`, `.csproj` and other non-C# files, and for
+  any file outside the repo. Git operations the `Git` tool doesn't implement (branch, push, checkout,
+  worktree, stash) legitimately use the shell - see `docs/current/TODO.md`.
 
 | Instead of | Use |
 | --- | --- |
-| `Read` a `.cs` | `ReadFile`, `GetFileOutline`, `GetMethodSource` (methods only — for one field/property/constant use `Member(operation: view, memberName: ...)`, or `ReadFile`) |
+| `Read` a `.cs` | `ReadFile`, `GetFileOutline`, `GetMethodSource` (methods only; for one field/property/constant use `Member(operation: view, memberName: ...)` or `ReadFile`) |
 | `Grep` / `Glob` for C# symbols | `Search(mode: text/symbol/references/all/namespace/class/interface/method/property/struct/record/enum/enum member/constructor/field)`, `FindReferences` |
-| `Edit` / `Write` a `.cs` | `Member`, `MethodSignature`, `ModifyModifier`, `ReplaceSnippet`, `ApplyDiff`, `RenameSymbol` |
+| `Edit` / `Write` a `.cs` | `Member`, `MethodSignature`, `ModifyModifier`, `ReplaceSnippet`, `ApplyDiff`, `RenameSymbol`, `MoveMember` (toolset `moveExtract` - enable via `McpToolsetControl`) |
 | `Bash(git status/log/diff/add/commit/revert)` | `Git(operation: ...)` |
 | `Bash(dotnet build/test)` | `Build`, `RunTest` |
 
-**Common first-try mistakes with the mutating tools:**
-- Never pass `filePath` together with `batchEdits` on `ReplaceSnippet` — each batch edit carries its
+**Why:** chokepointing every operation is the only way to surface in-memory-vs-on-disk drift,
+multi-call sequencing bugs, and edge cases that never appear in an isolated test. Falling back
+whenever a tool is awkward hides exactly those failures - the awkwardness is itself the finding.
+
+### ReplaceSnippet / Member gotchas
+
+- Never pass `filePath` together with `batchEdits` on `ReplaceSnippet` - each batch edit carries its
   own path.
 - Order batch edits so definitions (methods, enum members, fields) come before the call sites that
   reference them; the compile gate rejects any intermediate state that doesn't compile.
 - Rename a field and all of its usages in the same atomic batch.
-- `Member` cannot operate on top-level records — use `ReplaceSnippet` for those.
-- For disambiguation context, copy real surrounding lines from a `ReadFile`/`GetMethodSource` result.
-  Never invent context lines, and match whitespace/line endings exactly.
-- `ModifyEnum`'s `values` parameter is the complete member list, not add-only — omitting a member
-  deletes it.
+- Every snippet must match the file exactly, including whitespace and line endings. Copy surrounding
+  context lines from a `ReadFile`/`GetMethodSource` result; never invent them.
+- `Member(addMember)` takes exactly one declaration per call. Use `addTopLevelType` for a new
+  top-level type; `Member` cannot edit an existing top-level record - use `ReplaceSnippet`.
+- `ModifyEnum`'s `values` is the complete member list, not add-only - omitting a member deletes it.
+- In new method signatures, `CancellationToken` is always the last parameter; new parameters go before it.
 
-**Scope boundary:** non-C# files — `.md`, `.ps1`, `.json`, `.csproj` — are outside the Roslyn
-workspace and have no tool coverage. Use the normal file tools for those directly; that is the edge
-of where the tools apply, not a bypass. Likewise git operations the `Git` tool doesn't implement
-(branch, push, checkout, worktree, stash) legitimately use the shell — see `docs/current/TODO.md`.
-
-**Why it outranks convenience:** chokepointing every operation is the only way to surface
-in-memory-vs-on-disk drift, multi-call sequencing bugs, and edge cases that never appear in an
-isolated test. Falling back whenever a tool is awkward hides precisely the failures this exists to
-find — and the awkwardness *is itself the finding*, per the failure doctrine below.
+### Tool failures, bypasses and hooks
 
 **A tool failure is a blocking finding.** If a needed MCP tool fails, returns wrong data, is
-unreachable, or has no equivalent operation: finish any in-flight edit, stop advancing the task,
-write `docs/current/blockers/blocking_error_<slug>.md` (slug from the real symptom — never a generic
-name, since several can be open at once), and end the turn. Do not retry speculatively, do not route
-around it with shell tools, and do not resume until told the issue is fixed.
+unreachable, or has no equivalent operation: finish any in-flight edit, stop advancing the task, and
+write `docs/current/blockers/blocking_error_<slug>.md` (slug from the real symptom, never generic).
+Do not retry speculatively and do not route around it with shell tools. Then follow the Blocker
+workflow below.
 
-A `PreToolUse` hook (`.claude/hooks/enforce-dogfood.ps1`) blocks the common violations mechanically,
-because a rule enforced only by remembering decays across hundreds of calls. The hook is a backstop,
-not the policy — it cannot see intent, and reading a `.cs` with `Read` still violates this section
-even though nothing stops it. If the hook ever blocks something genuinely necessary, say so and stop;
-do not reword the command to slip past it.
+A `PreToolUse` hook (`.claude/hooks/enforce-dogfood.ps1`) blocks the common violations mechanically.
+It is a backstop, not the policy: it cannot see intent, and `Read` on a `.cs` still violates this
+section even though nothing stops it. If the hook blocks something genuinely necessary, say so and
+stop; do not reword the command to slip past it.
 
-**Recovering from an accidental bypass.** If you catch yourself having used `Read`/`Edit`/`Write`/
-`Bash` on a `.cs` file, or a shell git command, when an MCP tool should have been used instead: that
-is a self-inflicted process violation, not a tool defect. Report it in your response (so the pattern
-gets noticed if it recurs) and continue the task — do not write a `docs/current/blockers/` doc and
-do not stop the turn. A blocker doc is for the environment failing the agent; this is the reverse.
-The one exception is if the bypass itself caused a *new* tool-side symptom you can't explain (e.g. a
-mutating tool now fails, or reports state inconsistent with what's on disk) — that residual effect
-gets the normal tool-failure treatment above, scoped to the actual anomaly rather than the violation
-that triggered it.
+**Recovering from an accidental bypass.** If you used `Read`/`Edit`/`Write`/`Bash` on a `.cs` file, or
+a shell git command, when an MCP tool fit: report it in your response and continue. Do not write a
+blocker doc - a blocker is for the environment failing the agent. Exception: if the bypass caused a
+new tool-side symptom you can't explain (a mutating tool now fails, or reports state inconsistent with
+disk), treat that symptom as a tool failure, scoped to the actual anomaly.
 
-**Hook bypass (deliberate exceptions only).** The hook blocks reflexive calls, not deliberate ones.
-Legitimate cases: a `.cs` file outside this repo, or a manual repo edit/read/git call you have
-decided is right (e.g. raw bytes, a halted `Git` tool you have already reported). Not legitimate: a
-failed or missing MCP tool - that is still a blocker (above), not a bypass. Routes:
+**Deliberate hook bypass** (legitimate: a `.cs` file outside this repo, or a manual repo edit/read/git
+call you have decided is right, e.g. raw bytes or a halted `Git` tool you already reported; never a
+failed or missing MCP tool). Routes:
 - **Outside this repo:** Edit/Write/Grep on a `.cs` path outside the repo root is exempt automatically.
 - **Bash/PowerShell:** put `DeliberateHookBypass: <reason>` in the command (as a comment) or the
-  `description`. The reason is mandatory; a bare keyword is still blocked.
-- **Edit/Write/Grep on repo files:** write `.claude/bypass.local.json` (local-only, valid 10 minutes):
+  `description`. A bare keyword is still blocked.
+- **Edit/Write/Grep on repo files:** write `.claude/bypass.local.json` (valid 10 minutes):
   `{"reason": "...", "tools": ["Edit"], "paths": ["Foo.cs"]}` - `reason` required, `tools`/`paths`
-  optional narrowing. Use the narrowest `paths` that fits.
+  optional narrowing; use the narrowest `paths`.
 
-Every accepted bypass is logged to `.claude/journal/hook-bypass.jsonl`. The `ReplaceSnippet`
-parameter check and the commit checks cannot be bypassed. A bypass is also a journal-worthy event:
-note why the tools did not fit.
+Accepted bypasses are logged to `.claude/journal/hook-bypass.jsonl` and are journal-worthy. The
+`ReplaceSnippet` parameter check and the commit checks cannot be bypassed.
 
-**Never delete a tracked file with a shell command.** Deleting a file the server has touched
-(created via `CreateFile`, or just loaded into the solution) via `rm`/`Remove-Item` trips the
-external-drift detector on the very next mutating call and halts every mutating tool for the rest of
-the session with `errorCode: SessionHalted` — read-only tools keep working. Use `DeleteFile` instead,
-even for a file you're sure is safe to remove. If a session is already halted this way: call
-`ListExternalDiskChanges()` then `AcknowledgeExternalFileChanges()` to clear the latch — no fresh
-session needed. This is a self-inflicted bypass per the recovery rule above (report and continue),
-not a tool defect.
+**Never delete a tracked file with a shell command.** Deleting a file the server has touched via
+`rm`/`Remove-Item` trips the external-drift detector and halts every mutating tool for the session
+(`errorCode: SessionHalted`; read-only tools keep working). Use `DeleteFile`. If already halted: call
+`ListExternalDiskChanges()` then `AcknowledgeExternalFileChanges()`. This is a self-inflicted bypass
+(report and continue), not a tool defect.
 
-**Never dispatch parallel subagents that all touch the same shared MCP server process for C#
-edits.** Subagents share the parent session's single server process, not a process each. If even one
-parallel participant bypasses dogfooding with a plain `Edit`/`Write` on a tracked `.cs` file, the
-write lands outside the drift detector's tracked chokepoint and trips the same session-wide
-`SessionHalted` latch above — for every other subagent and the parent session too, even callers that
-did nothing wrong, and there's no in-band reset short of killing the specific stdio server process by
-its full command line. Dispatch subagents for repo-wide mechanical edits **sequentially** instead.
+**Never dispatch parallel subagents for C# edits.** Subagents share the parent session's single server
+process; one plain `Edit`/`Write` on a tracked `.cs` file trips `SessionHalted` for all of them and the
+parent. Dispatch repo-wide mechanical edits sequentially.
 
 ## Tool-experience journal: note it as it happens
 
-Every session keeps a short journal of what using the tools was like. A `SessionStart` hook prints
-this session's journal path (`.claude/journal/<date>_<sid8>.md`, local-only); it is re-printed after
-compaction. **Append one line right after anything notable - never save notes for the end**, because
-compaction erases them and the session has no reliable end. Format:
-`- HH:mm [+|-|~] ToolName: one sentence` (`+` good, `-` bad, `~` mixed). For example:
+A `SessionStart` hook prints this session's journal path (`.claude/journal/<date>_<sid8>.md`,
+local-only; re-printed after compaction). **Append one line right after anything notable** - never save
+notes for the end, because compaction erases them. Format: `- HH:mm [+|-|~] ToolName: one sentence`
+(`+` good, `-` bad, `~` mixed). Examples:
 
 - `- 14:02 + MoveMember: moved 10 members and fixed 80 call sites in one call`
 - `- 14:20 - ReplaceSnippet: "anchor not unique" didn't say which lines matched; took 3 retries`
 - `- 14:31 ~ Read: read a .cs directly because I needed raw bytes; no MCP tool returns those`
 
-Worth noting: one call replacing many; a confusing description or parameter; an error message that
-did or didn't get you unstuck; and **every time you reach for a shell or built-in tool on C# code**,
-with the reason. These are brief impressions, not blocker/finding docs - a real tool failure still
-gets the blocking-finding treatment above. A `Stop` hook asks for a line when enough unjournaled
-activity builds up (15 MCP calls, any failed call, or any C# fallback); "`~ nothing notable`" is a
-fine answer. `/journal-review` summarizes a session. A hook-written call log sits next to each
-journal, so there's no need to record call counts yourself.
+Worth noting: one call replacing many; a confusing description or parameter; an error message that did
+or didn't get you unstuck; and **every time you reach for a shell or built-in tool on C# code**, with
+the reason. These are brief impressions, not blocker docs. A `Stop` hook asks for a line after 15 MCP
+calls, any failed call, or any C# fallback; "`~ nothing notable`" is a fine answer. `/journal-review`
+summarizes a session.
 
 ## Failure doctrine: the environment is responsible
 
-This is the governing frame for interpreting **every** model-eval run, PlanStepRunner step, and
-task failure in this repo.
+This is the governing frame for interpreting **every** model-eval run, PlanStepRunner step, and task
+failure in this repo.
 
-The model under test is a **novice**. The environment — server, tools, schemas, tool descriptions,
-error messages, prompts, harness, test assertions — is the **expert**. When the novice fails, that
-is first and foremost a failure of the expert to guide, constrain, or protect.
-
-This holds *even when the model is plainly wrong*. A model calling a tool with invalid parameters
-is not the end of the analysis; it is the beginning. The question is never "was the model wrong?"
-(usually yes, and you cannot change the model). The question is:
+The model under test is a **novice**. The environment - server, tools, schemas, tool descriptions,
+error messages, prompts, harness, test assertions - is the **expert**. When the novice fails, that is
+first a failure of the expert to guide, constrain, or protect, even when the model is plainly wrong.
+The question is never "was the model wrong?" but:
 
 > **What change to the environment would have prevented this, made it impossible, or made recovery
 > immediate?**
 
-Physical-safety analogues for the kind of answer we want:
-
-- A welder wears a helmet — the hazard is not removed, but the operator is protected by default.
-- A stove has a "surface hot" light — invisible danger made visible before contact.
-- An electrician uses a non-contact voltage detector — a safe way to check, instead of repeatedly
-  grabbing the wire to find out.
-
 Environment fixes look like: a clearer tool `[Description]`; a schema that makes the invalid call
-unrepresentable; a required parameter instead of an optional one that relocates the failure; an
-error message that names the exact parameter and the correct value; a guardrail that halts before
-corruption instead of after; a preview/dry-run affordance so the model can check instead of guess.
+unrepresentable; a required parameter instead of an optional one that relocates the failure; an error
+message that names the exact parameter and the correct value; a guardrail that halts before corruption
+instead of after; a preview/dry-run affordance so the model can check instead of guess.
 
-Blaming the model, or reporting "the model should have known X", is not an actionable finding.
+"The model should have known X" is not an actionable finding.
 
 ## Root-cause discipline: never stop at the surface
 
-Skimming a transcript and concluding *"the model called ModifyEnum with invalid parameters, the
-value wasn't added, it burned 4 turns and eventually succeeded with a different tool"* is an
-accurate **restatement of the log**. It is not a root cause, and it will never expose an
-environmental defect.
-
-Taking transcripts and tool results at face value is the single most common analysis failure in
-this repo. Tool results can be wrong, misleading, or silently truncated; a "success" result does
-not prove the write landed, and an error message does not prove its own stated reason is the real
-one.
-
-For any failed or inefficient model action, trace to source and gather evidence:
+Restating the log ("the model called ModifyEnum with invalid parameters, burned 4 turns, then used a
+different tool") is not a root cause. Tool results can be wrong, misleading, or truncated: a "success"
+does not prove the write landed, and an error message does not prove its own stated reason is the real
+one. For any failed or inefficient model action, trace to source:
 
 1. **What did the environment actually tell the model?** Read the tool's real `[Description]`,
-   parameter `<summary>` docs, and the **schema actually emitted** (not the C# signature — this
-   repo has a history of schema-emission bugs where the emitted JSON schema differed from what the
-   source implied). Was the model's call reasonable given only what it could see?
-2. **Why did the call actually fail?** Read the tool's implementation and find the specific branch
-   that produced that error. The message may be inaccurate, generic, or describing a symptom of a
-   different underlying fault.
-3. **Did the error message enable recovery?** Did it name the offending parameter and a correct
-   value, or merely reject? Count the turns to recovery — a slow recovery is an error-message
-   defect, not model slowness.
-4. **Is the harness or assertion itself at fault?** A test can fail because the assertion is wrong,
-   the fixture drifted, the prompt omitted something, or the server binary is stale. Rule these out
-   rather than assuming the model-facing path is where the bug lives.
-5. **Cite evidence.** Every claimed cause gets a `file:line`, a quoted error string, or a specific
-   turn number. A cause you have not traced to source is a hypothesis — label it as one.
+   parameter `<summary>` docs, and the **schema actually emitted** (not the C# signature - emitted
+   schemas have differed from what the source implied). Was the call reasonable given only that?
+2. **Why did the call actually fail?** Read the implementation and find the specific branch that
+   produced the error; the message may be generic or describe a symptom of a different fault.
+3. **Did the error message enable recovery?** Did it name the offending parameter and a correct value?
+   Slow recovery is an error-message defect, not model slowness.
+4. **Is the harness or assertion at fault?** Rule out a wrong assertion, drifted fixture, prompt
+   omission, or stale server binary before blaming the model-facing path.
+5. **Cite evidence.** Every claimed cause gets a `file:line`, a quoted error string, or a turn number.
+   A cause not traced to source is a hypothesis - label it as one.
 
-Prefer verification over theorising: check the literal error's named identifier against the actual
-source before constructing an explanation for it.
+Check the literal error's named identifier against the actual source before theorising.
 
 ## Working conventions
 
 - Build (0 errors) before committing.
-- Never leak raw exceptions, stack traces, or internal paths into a tool's `ResultError` — catch at
-  the tool boundary and return a structured, actionable error.
-- Any unhandled `CS####` surfacing during automated work gets a writeup in
-  `docs/current/blockers/` immediately, not deferred.
+- Never leak raw exceptions, stack traces, or internal paths into a tool's `ResultError` - catch at the
+  tool boundary and return a structured, actionable error.
+- Any unhandled `CS####` surfacing during automated work gets a writeup in `docs/current/blockers/`
+  immediately, not deferred.
 - `docs/current/TODO.md` is open-items-only; resolved entries move to `docs/current/CLOSED.md`.
 - Writing a blocker, finding, proposal, issue, design, plan, idea or reference doc: read
   `docs/current/templates/README.md` for the folder and filename rule, then copy the matching
-  template. Never read existing docs to learn the house style; the templates are canonical.
-- `*/Worktree/` folders under a PlanStepRunner run are harness clones — exclude from diffs,
-  searches, and reviews. Never run git commands inside one and treat the output as authoritative.
-- Use ASCII-only punctuation in any comment, doc, commit message, or prompt text you write —
-  `-`/`--` instead of en/em dashes, straight quotes instead of curly ones, `<=`/`>=` instead of the
-  single-character Unicode comparison-operator glyphs. Non-ASCII punctuation is exactly the content that turns into mojibake
-  (e.g. `Γçö`) when it crosses an encoding mismatch somewhere in a serialize/deserialize chain
-  (file -> server -> MCP tool -> harness -> MCP tool -> server -> file). ASCII bytes are identical
-  under every encoding in play, so this class of corruption is structurally impossible for them.
-  This does not apply to non-ASCII characters that are the actual subject of a task (e.g. test
-  fixture content intentionally containing accented characters).
-- In new method signatures, `CancellationToken` is always the last parameter.
+  template. Never read existing docs to learn the house style.
+- `*/Worktree/` folders under a PlanStepRunner run are harness clones - exclude them from diffs,
+  searches, and reviews, and never treat git output from inside one as authoritative.
+- Use ASCII-only punctuation in any comment, doc, commit message, or prompt text you write: `-`/`--`
+  for dashes, straight quotes, `<=`/`>=` for comparison glyphs. Non-ASCII punctuation turns into
+  mojibake when it crosses an encoding mismatch in the file -> server -> MCP -> harness chain. Does not
+  apply to non-ASCII characters that are the actual subject of a task (e.g. accented test fixtures).
 - Before hand-rolling a shell loop for a repeated task (e.g. N model-eval runs), check the repo root
-  for an existing front-door `.ps1` script first — it likely already handles the failure modes (build
-  races against a still-exiting `testhost.exe`, env vars, filter syntax) that a naive loop will hit.
-- The repo's top-level solution file is `RoslynSentinel.slnx` (XML format) — there is no root
-  `.sln`. Target `RoslynSentinel.slnx` directly for solution-wide `dotnet build`/`dotnet test`.
+  for an existing front-door `.ps1` script - it likely handles failure modes (testhost.exe races, env
+  vars, filter syntax) a naive loop will hit.
+- The top-level solution file is `RoslynSentinel.slnx` (no root `.sln`). Target it directly for
+  solution-wide `dotnet build`/`dotnet test`.
 
 ## Architecture
 
-The architecture map below is imported so it is in context from turn one: it says which file owns
-what, how a tool call flows to disk, and where registration and the breakers live. Tables of every
-tool and project are generated into `docs/generated/` (read those instead of searching). If the map
-and the source disagree, trust the source and fix the map.
+The architecture map below is imported so it is in context from turn one. Tables of every tool and
+project are generated into `docs/generated/` (read those instead of searching). If the map and the
+source disagree, trust the source and fix the map.
 
 @docs/current/references/reference_architecture_map.md
 
-- **Layering is one-way:** `Common` <- `Engines.*` <- `Tools.*` <- `Server.*`. Each layer has one job:
-  - `RoslynSentinel.Engines.Basic` / `.Engines.Advanced` - Roslyn analysis and refactoring logic.
-    Keep MCP protocol types (`RequestContext<>`, tool attributes) out of engine code.
-  - `RoslynSentinel.Tools.Basic` / `.Tools.Advanced` / `.Tools.Experimental` - the
-    `[McpServerToolType]` classes. The `*Impl` classes backing the Basic tools live in `Tools.Basic`.
-  - `RoslynSentinel.Server.Basic` / `.Server.Advanced` - hosting, transport, mode resolution and DI
-    registration only. No tool or engine logic.
-  - `RoslynSentinel.Utilities.PlanStepRunner` - the plan-step harness exe. It references only
-    `Common`; the shared agent loop lives in `Common/AgentLoop`.
-- **Sibling projects cannot see each other.** `Tools.Advanced` does not reference `Tools.Basic`, and
+- **Layering is one-way:** `Common` <- `Engines.*` <- `Tools.*` <- `Server.*`.
+  - `Engines.Basic` / `Engines.Advanced` - Roslyn analysis and refactoring logic. No MCP protocol
+    types (`RequestContext<>`, tool attributes).
+  - `Tools.Basic` / `Tools.Advanced` / `Tools.Experimental` - the `[McpServerToolType]` classes. The
+    `*Impl` classes backing the Basic tools live in `Tools.Basic`.
+  - `Server.Basic` / `Server.Advanced` - hosting, transport, mode resolution and DI registration only.
+  - `Utilities.PlanStepRunner` - the plan-step harness exe; references only `Common`. The shared agent
+    loop lives in `Common/AgentLoop`.
+- **Sibling projects cannot see each other.** `Tools.Advanced` does not reference `Tools.Basic`;
   `Engines.Basic` cannot reference `Engines.Advanced`. A helper needed on both sides goes one layer
-  down: `Engines.Basic` for engine logic, `Common` for result/MCP plumbing. Check each project's
-  `.csproj` `<ProjectReference>` list if unsure.
-- **Advanced is additive, not a fork.** `Engines.Advanced` builds on `Engines.Basic`, and
-  `Server.Advanced` references `Server.Basic` and `Tools.Basic` rather than re-declaring them, so a fix
-  in a Basic project is sufficient on its own; there is no duplicate to hunt for in Advanced. Verify
-  with `build.ps1 -Flavor Solution` (or both `-Flavor Basic` and `-Flavor Advanced`).
-- **Adding a new MCP tool requires three things, not one:**
-  1. the `[McpServerToolType]`/`[McpServerTool(Name = ...)]` class, in `Tools.Basic`,
-     `Tools.Advanced` or `Tools.Experimental`;
+  down: `Engines.Basic` for engine logic, `Common` for result/MCP plumbing. Check the `.csproj`
+  `<ProjectReference>` list if unsure.
+- **Advanced is additive, not a fork.** A fix in a Basic project is sufficient on its own; there is no
+  duplicate in Advanced. Verify with `build.ps1 -Flavor Solution` (or `-Flavor Basic` and
+  `-Flavor Advanced`).
+- **Adding a new MCP tool requires three things:**
+  1. the `[McpServerToolType]`/`[McpServerTool(Name = ...)]` class, in a `Tools.*` project;
   2. an entry in a mode dictionary in `Server.Basic/ToolClassRegistry.cs` (shared by both servers);
-  3. an explicit `if (activeToolClasses.Contains("..."))` DI-registration block in
+  3. an explicit `if (activeToolClasses.Contains("..."))` DI block in
      `Server.Basic/ServiceRegistrationExtensionsBasic.cs` or
      `Server.Advanced/ServiceRegistrationExtensionsAdvanced.cs`.
 
-  None of these alone makes a tool callable - attributes without a registry entry and DI block
-  silently produce a dead tool with no error at startup. A new `Tools.*` project also needs a
-  `<ProjectReference>` from the `Server.*` project that hosts it (`Tools.Experimental` is hosted by
-  `Server.Advanced` only).
-- **The `*Tools` suffix is reserved for classes that declare `[McpServerTool]` methods.** Helpers
-  used by tool classes take a different suffix (e.g. `TaskEnabledToolsHelper`), so the name alone
-  tells you whether a class exposes tools.
+  Any one alone silently produces a dead tool with no startup error. A new `Tools.*` project also
+  needs a `<ProjectReference>` from the `Server.*` project that hosts it (`Tools.Experimental` is
+  hosted by `Server.Advanced` only).
+- **The `*Tools` suffix is reserved for classes that declare `[McpServerTool]` methods.** Helpers use a
+  different suffix (e.g. `TaskEnabledToolsHelper`).
 
 ## Commits
 
-- Commit **only** the files changed in the current session — other sessions or in-flight work may
-  share this worktree, so leave unrelated dirty or untracked files unstaged. Before committing,
-  double-check that no session file was missed, so no amend is needed.
-- Stage explicitly via the `Git` tool naming every file (scope `listed`, not a blanket add). Never
-  use shell `git add`/`git commit`.
+- Commit **only** the files changed in this session. Leave pre-existing dirty or untracked files and
+  other sessions' changes unstaged unless told otherwise. If the user edited CLAUDE.md or a doc during
+  the session, that counts as in-scope; ask if unsure. Before committing, check that no session file
+  was missed, so no amend is needed.
+- Use `Git` commit with scope `listed` and an explicit file list, staging before committing. Never use
+  a blanket add or shell `git add`/`git commit`.
 - Every commit message includes the `Co-Authored-By` trailer (see attribution instructions).
-- Never count commit hash characters manually — read `CommitHashLength` off the `Git` tool's result.
+- Report commit hashes exactly as `Git` returns them. Never count characters by hand; read
+  `CommitHashLength` off the result (a full SHA-1 is 40 characters).
 
 ## Blocker workflow
 
-- Before writing a fix for an open blocker, check `git log` and `docs/current/CLOSED.md` /
-  `docs/current/proposals/` for prior attempts — the fix may already exist, or may have been tried
-  and reverted.
-- When a blocker is fixed: add a regression test, verify against the pre-existing-failure baseline,
-  then move its doc from `docs/current/blockers/` to resolved with a resolution note citing the
-  commit hash (see also the CS#### rule above and `docs/current/CLOSED.md` conventions).
+- Before investigating or fixing, check `MEMORY.md`, `git log`, `docs/current/CLOSED.md` and
+  `docs/current/proposals/` for prior attempts - the gap may already be fixed, or tried and reverted.
+- Once the blocker doc is written, dispatch an `implementer` to fix it (obeying the slice contract;
+  `implementer-senior` if over the limits), confirm the fix, then restart the server with
+  `McpServerControl` (see Verification) before resuming the original task.
+- When fixed: add a regression test, compare against the pre-existing-failure baseline, then in the
+  same commit add a resolution note (root cause, fix, commit hash, tests) and move the doc from
+  `docs/current/blockers/` to `docs/current/blockers/resolved/`.
+- If the workspace looks stale (a fix appears missing), reload the solution (`LoadSolution`) before
+  concluding anything.
+- If test runs fail on file locks, kill only stray `testhost` processes that belong to your own session
+  (identify by PID/command line); other sessions may share this machine.
 
 ## Verification
 
-**Changed server source and a tool's live behavior contradicts current source? Stop the server.
-That's the whole fix.** VS Code only builds and spawns a fresh server when a session starts — it
-never rebuilds a server that's already running. The server detects this itself: it compares the
-MVID of every loaded `RoslynSentinel.*.dll` against the newest build of the same assembly under each
-project's `bin/<Config>/`, and any response carries `"isServerBinaryStale": true` while a newer,
-different build exists (the field is omitted when the server is current; it can lag a few seconds
-behind a build). A `Build(level: fullBuild)` writes those DLLs, so the flag shows on the Build
-response itself; `Build(quickBuild)` is in-memory and does not trigger it. Call `McpServerStatus` for
-`binaryStaleness.staleAssemblies` (which assemblies differ), plus `serverVersion`,
-`serverBuildTimeUtc` (the on-disk DLL's mtime, not a loaded-assembly identity), `serverBinaryPath`
-and `serverPid`. The flag only knows about builds written to disk, so if you edited RoslynSentinel's
-own source this session but haven't run a `fullBuild`, assume the live server is running the *old*
-binary. When the flag is set, do this immediately, don't troubleshoot around it:
-1. Call `McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)` (the confirm
-   param is a one-value enum guarding against an accidental stop; omitting it returns a refusal and
-   stops nothing). Give it a few real seconds to return before assuming
-   it's hung — a clean `Connection closed` is normal, not an error.
-2. VS Code relaunches it on a fresh build automatically. Reconnect and re-run `LoadSolution`.
-Today this is safe to do any time in your own session: writes go straight to disk, so nothing is
-held only in memory. It stops being automatically safe once in-memory-only edits are supported, or
-if other subagents are actively mid-operation against the same server — in either case, stopping the
-server can lose unwritten work, so check for that before reaching for step 1 reflexively.
+### Live MCP server freshness
 
-**`LoadSolution` does not rebind which binary executes tool logic — only which files it analyzes.**
-Pointing a live session's server at a different worktree's `.slnx` (e.g. a PlanStepRunner worktree)
-loads that worktree's *files*, but every tool call still runs the *already-running process's*
-compiled code — whatever branch it was originally built and launched from. This fails silently: file
-paths resolve, every call succeeds, the output just reflects the wrong branch's logic with no error
-anywhere. Before trusting a live tool result as evidence about a specific worktree's code, confirm
-the connected server was actually built from that worktree (`McpServerStatus`'s `serverBinaryPath`
-and `serverBuildTimeUtc` vs. `git log` on the relevant file). If it wasn't and can't be rebuilt/rebound for that worktree from the
-current session, prefer `dotnet test` against that worktree directly over live MCP calls.
+Rebuilding RoslynSentinel does not change the running server: VS Code builds and spawns a server only
+when a session starts. After changing server source, the running server is **stale** until stopped and
+respawned, so restart it before verifying fixes live.
 
+- Server instances are isolated per session, so you may restart your own at any time:
+  `McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)`. Omitting the confirm
+  param returns a refusal and stops nothing. Allow a few seconds; a clean `Connection closed` is
+  normal. VS Code relaunches it on a fresh build; reconnect and re-run `LoadSolution`.
+- Detection: any response carries `"isServerBinaryStale": true` while a newer build of a loaded
+  `RoslynSentinel.*.dll` exists under a project's `bin/<Config>/` (omitted when current; can lag a few
+  seconds). `Build(level: fullBuild)` writes those DLLs and so sets the flag; `Build(quickBuild)` is
+  in-memory and does not. `McpServerStatus` gives `binaryStaleness.staleAssemblies`, `serverBinaryPath`,
+  `serverBuildTimeUtc` (DLL mtime on disk) and `serverPid`. If you edited server source but have not run
+  a `fullBuild`, assume the live server is old.
+- Before restarting, make sure no subagent is mid-operation against the same server.
 - If `Build` reports a suspicious warning/error count, force a full rebuild; incremental builds can
   skip recompiles and under-report.
-- Reload the workspace (`LoadSolution`) before concluding a change is "missing" — a stale in-memory
-  workspace looks identical to a real gap.
-- Compare test results against the known pre-existing-failure baseline
-  (`docs/current` / memory `reference_known_failing_tests`) and report only *new* failures.
+
+**`LoadSolution` does not rebind which binary executes tool logic - only which files it analyzes.**
+Pointing the server at another worktree's `.slnx` loads that worktree's files, but tool calls still run
+the already-running process's code, with no error. Before trusting a live result as evidence about a
+specific worktree, confirm the server was built from it (`serverBinaryPath` and `serverBuildTimeUtc` vs.
+`git log`). If not, prefer `dotnet test` against that worktree over live MCP calls.
+
+- Compare test results against the known pre-existing-failure baseline (`docs/current` / memory
+  `reference_known_failing_tests`) and report only *new* failures.
 
 ## Compact instructions
 
-When summarizing this conversation for compaction, keep: this session's tool-experience journal path
-(`.claude/journal/...md`), and any notable tool experiences (good or bad, including shell/built-in
-fallbacks on C# and why) that have not yet been written to that journal - list them so they can be
-appended right after compaction.
+When summarizing for compaction, keep this session's journal path (`.claude/journal/...md`) and list any
+notable tool experiences (including shell/built-in fallbacks on C# and why) not yet written to it, so
+they can be appended right after compaction.
