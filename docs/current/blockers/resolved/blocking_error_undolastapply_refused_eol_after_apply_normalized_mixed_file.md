@@ -1,6 +1,6 @@
 # `TagTestCategories` / `UndoLastApply` apply silently normalized mixed-EOL files, then undo refused the restore as an EOL change
 
-**Status:** OPEN 2026-10-05. Not traced to source: the symptom and its inference from the undo error are confirmed, the code path that rewrote the CRLF lines is a hypothesis (no `.cs` file was read while writing this doc).
+**Status:** FIXED 2026-10-05 in 30bc781576d8892cf051b74fba37a147f0020ffd. See the Resolution section at the end; the sections below are the original report, written before tracing.
 
 ## What was being attempted
 
@@ -153,3 +153,36 @@ run the repro with byte capture at the three points listed under Source trace.
 
 `Search(mode: method, query: "<name>")` returned all 6092 methods (a ~1.5 MB large result) instead of
 filtering by name; `Search(mode: text)` worked. Separate defect, not investigated here.
+
+## Resolution
+
+Fixed 2026-10-05 in commit 30bc781576d8892cf051b74fba37a147f0020ffd.
+
+**Root cause (hypothesis 1 confirmed; 2 and 3 refuted).** `PersistentWorkspaceManager.ApplyProposedChangesAsync`
+(Common) ran a whole-file `EolUtilities.NormalizeEol` in its write loop, after the dominant-style
+`EolChangeGuard.Check`. A mostly-LF file with a few stray CRLF lines was therefore rewritten to pure LF. The
+guard labels each side by dominant style ("mixed, LF-dominant" vs "LF" = no change) and ran before the
+normalization, so it never saw the rewrite. The undo then presented a pure-LF current file against a mixed
+pre-image, which the guard refused. `TestCategoryTextEditor.Apply` and Roslyn `SourceText` preserve untouched
+terminators, so they were not the cause. Secondary hazard in the same method: the whitespace-only no-op skip
+would have swallowed an EOL-only restore.
+
+**Fix.**
+- `EolUtilities.NormalizeEolOfChangedLines(before, after, dominantEol)` replaces the whole-file normalize on the
+  write path: untouched lines keep their original terminator, inserted or changed lines take the dominant EOL.
+- New last parameter `exactRestore` (default false) on `IWorkspaceMutator.ApplyProposedChangesAsync`. When true it
+  bypasses the EOL guard, the normalization and the whitespace no-op skip. Only `UndoLastApply`
+  (`WorkspaceFileEditImpl`) sets it: restoring a server-captured pre-image is intended by definition.
+
+**Tests.** Regression tests in `Tests.Basic/WriteChokepointGuardrailTests.cs`, `Tests/DiskWriteRoundTripTests.cs`,
+`Tests.Tools.Basic/UndoLastApplyTests.cs` and `Tests.Basic/TestCategoryTextEditorTests.cs` (mixed-EOL apply/undo
+round trip, per-line normalization, untouched stray CRLF preserved on disk).
+
+**Audit of earlier batches.** The Tests.SubAgent, Tests.Battery.Basic and Tests.Integration applies did not
+normalize any stray CRLF lines. Only the two Tests.Asyncify files of batch `6d172f4a` were affected.
+
+**Still open.** The apply-side guard still classifies by dominant style (the writer was fixed, not the guard).
+Tool-layer whole-file `NormalizeEol` calls (ReplaceSnippet, WriteFile, ApplyDiff, `RoslynFormattingHelper`,
+`AddUsingDirectiveAsync`, `MemberRefactoringEngine`) still run first; the chokepoint now preserves untouched
+terminators afterwards, but they remain cleanup candidates. The `Search(mode: method)` side observation is a
+separate defect.
