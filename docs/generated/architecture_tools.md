@@ -70,6 +70,7 @@
 | DeclarationTools | Declaration | claude-lean | - | Changes a declaration's modifier, accessibility, attribute or base type. |
 | DocumentationTools | ProjectDoc | Claude, Workspace | - | Reads, writes, appends, or lists project doc files under docs/. |
 | GitTools | Git | Claude, claude-lean, Workspace | Allowed | Unified git tool. |
+| NamedArgumentsTools | NamedArguments | claude-lean, NamedArguments | - | Convert positional call arguments to named arguments (M(1, 2) -> M(a: 1, b: 2)) using the compiler's binding, for... |
 | ParameterEditTools | ParameterEdit | claude-lean | - | Add, remove, or view parameters of a method (operation method, any method) or of a class's DI constructor (operation... |
 | RefactoringExtractionDocsTools | ExtractLocalVariable | Claude, claude-lean, Refactor, RefactorExtractionDocs | - | Extracts an inline expression into a named local variable declaration. exactExpressionText must be the WHOLE... |
 | RefactoringExtractionDocsTools | ExtractMethodSafe | Claude, claude-lean, Refactor, RefactorExtractionDocs | - | Extracts selected statements into a new method with the return type inferred from the selection. |

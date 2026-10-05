@@ -179,7 +179,7 @@ public class ClaudeLeanModeTests
     }
 
     [Test]
-    public void ResolveActiveToolClasses_ClaudeLeanAlone_YieldsThirteenToolClasses()
+    public void ResolveActiveToolClasses_ClaudeLeanAlone_YieldsFourteenToolClasses()
     {
         var classes = ServerStartupHelpers.ResolveActiveToolClasses(
             new HashSet<string>(["claude-lean"], StringComparer.OrdinalIgnoreCase),
@@ -187,11 +187,12 @@ public class ClaudeLeanModeTests
             new HashSet<string>(),
             new HashSet<string>());
 
-        Assert.That(classes, Has.Count.EqualTo(13));
+        Assert.That(classes, Has.Count.EqualTo(14));
         Assert.That(classes, Does.Contain("ToolsetControlTools"));
         Assert.That(classes, Does.Contain("DeclarationTools"));
         Assert.That(classes, Does.Contain("ParameterEditTools"));
         Assert.That(classes, Does.Contain("SemanticFindReplaceTools"));
+        Assert.That(classes, Does.Contain("NamedArgumentsTools"));
         Assert.That(classes, Does.Not.Contain("AdvancedRefactoringTools"));
         Assert.That(classes, Does.Not.Contain("DocumentationTools"));
     }

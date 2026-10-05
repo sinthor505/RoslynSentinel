@@ -65,6 +65,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<BasicRefactoringEngine>();
         services.AddSingleton<SemanticRefactoringEngine>();
         services.AddSingleton<SemanticReplaceEngine>();
+        services.AddSingleton<NamedArgumentsEngine>();
         services.AddSingleton<SolutionManagementEngine>();
         services.AddSingleton<MemberRefactoringEngine>();
         services.AddSingleton<StructuralRefinementEngine>();
@@ -200,6 +201,15 @@ public static class RoslynSentinelServiceExtensionsBasic
                 services.AddSingleton<SemanticFindReplaceTools>();
                 mcpBuilder.WithSentinelTools<SemanticFindReplaceTools>();
             }
+        }
+
+        // NamedArguments: opt-in via --mode=NamedArguments, or on demand in claude-lean (the `moveExtract` toolset;
+        // the lean on-demand class set above puts the class in activeToolClasses, the allow-list hides the tool).
+        // Dependencies (NamedArgumentsEngine, ValidationEngine, IWorkspaceManager) come from AddRoslynSentinelEnginesBasic.
+        if (activeToolClasses.Contains("NamedArgumentsTools"))
+        {
+            services.AddSingleton<NamedArgumentsTools>();
+            mcpBuilder.WithSentinelTools<NamedArgumentsTools>();
         }
 
         if (activeToolClasses.Contains("WorkspaceTools"))

@@ -358,3 +358,18 @@ public enum SemanticReplaceMode
     /// <summary>Apply the changes to the source files.</summary>
     apply
 }
+
+// -- NamedArguments ------------------------------------------------------------
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum NamedArgumentsScope
+{
+    /// <summary>Every project in the loaded solution.</summary>
+    solution,
+
+    /// <summary>One project, selected by scopeName.</summary>
+    project,
+
+    /// <summary>One file, selected by scopeName.</summary>
+    file
+}

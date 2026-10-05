@@ -49,7 +49,7 @@ public static class ToolClassRegistry
         "WorkspaceTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
         "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
         "AdminTools", "WholeFileWriteTools", "ToolsetControlTools", "DeclarationTools", "ParameterEditTools",
-        "SemanticFindReplaceTools",
+        "SemanticFindReplaceTools", "NamedArgumentsTools",
     ];
 
     /// <summary>
@@ -65,7 +65,7 @@ public static class ToolClassRegistry
             "WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
             "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
             "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools", "DeclarationTools", "ParameterEditTools",
-            "SemanticFindReplaceTools",
+            "SemanticFindReplaceTools", "NamedArgumentsTools",
         ],
         StringComparer.Ordinal);
 
@@ -103,6 +103,7 @@ public static class ToolClassRegistry
             ["RefactorExtractionDocs"] = ["RefactoringExtractionDocsTools"],
             ["SymbolNavigation"] = ["SymbolNavigationTools"],
             ["SymbolRelationship"] = ["SymbolRelationshipTools"],
+            ["NamedArguments"] = ["NamedArgumentsTools"],
         };
 
     /// <summary>
@@ -129,6 +130,7 @@ public static class ToolClassRegistry
             // SubAgentChildServerLauncher.ExcludedToolClasses).
             ["SubAgentEval"] = ["SubAgentEvalTools"],
             ["SubAgent"] = ["SubAgentTools"],
+            ["NamedArguments"] = ["NamedArgumentsTools"],
             ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
             [ClaudeLeanMode] = ClaudeLeanToolClasses,
         };
