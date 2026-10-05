@@ -1131,4 +1131,145 @@ public class SemanticReplaceEngineTests
         Assert.That(sites, Is.Not.Empty);
         Assert.That(sites.All(s => s.UnsupportedReason is null), Is.True);
     }
+
+    // ---- Record positional parameters -------------------------------------------------------------------------------------
+
+    /// <summary>Compiles source as a library and returns its compiler errors (empty when it compiles).</summary>
+    private static async Task<string[]> CompileErrorsAsync(string source)
+    {
+        var compilation = await CreateMultiDocumentSolution(source).Projects.First().GetCompilationAsync();
+        var library = compilation!.WithOptions(new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        return library.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).Select(d => d.ToString()).ToArray();
+    }
+
+    [Test]
+    public async Task InvertBooleanAndRenameAsync_RecordPositionalParameter_NamedArgumentReadAndWithWriteInvertAndCompile()
+    {
+        var code = Source(
+            "namespace Test;",
+            "public sealed record R(bool Success, int Count);",
+            "public class U",
+            "{",
+            "    public R Make() => new R(Success: true, Count: 1);",
+            "    public bool Read(R r) => r.Success;",
+            "    public R Fail(R r) => r with { Success = false };",
+            "}");
+        Assert.That(await CompileErrorsAsync(code), Is.Empty);
+        var engine = CreateEngine(CreateMultiDocumentSolution(code));
+
+        var outcome = await engine.InvertBooleanAndRenameAsync("P:Test.R.Success", "IsError");
+
+        Assert.That(outcome.Error, Is.Null, outcome.Error?.Message);
+        var expected = Source(
+            "namespace Test;",
+            "public sealed record R(bool IsError, int Count);",
+            "public class U",
+            "{",
+            "    public R Make() => new R(IsError: false, Count: 1);",
+            "    public bool Read(R r) => !r.IsError;",
+            "    public R Fail(R r) => r with { IsError = true };",
+            "}");
+        Assert.That(outcome.Changes.Values.Single(), Is.EqualTo(expected));
+        Assert.That(await CompileErrorsAsync(expected), Is.Empty);
+    }
+
+    [Test]
+    public async Task InvertBooleanAndRenameAsync_RecordPositionalParameterDefault_FlipsDefaultAndInRecordInitializerRead()
+    {
+        var code = Source(
+            "namespace Test;",
+            "public sealed record R(int Count, bool Success = true)",
+            "{",
+            "    public string Label { get; } = Success ? \"ok\" : \"bad\";",
+            "}",
+            "public class U",
+            "{",
+            "    public R Default() => new R(1);",
+            "    public R Named() => new R(2, Success: false);",
+            "}");
+        Assert.That(await CompileErrorsAsync(code), Is.Empty);
+        var engine = CreateEngine(CreateMultiDocumentSolution(code));
+
+        var outcome = await engine.InvertBooleanAndRenameAsync("P:Test.R.Success", "IsError");
+
+        Assert.That(outcome.Error, Is.Null, outcome.Error?.Message);
+        var expected = Source(
+            "namespace Test;",
+            "public sealed record R(int Count, bool IsError = false)",
+            "{",
+            "    public string Label { get; } = !IsError ? \"ok\" : \"bad\";",
+            "}",
+            "public class U",
+            "{",
+            "    public R Default() => new R(1);",
+            "    public R Named() => new R(2, IsError: true);",
+            "}");
+        Assert.That(outcome.Changes.Values.Single(), Is.EqualTo(expected));
+        Assert.That(await CompileErrorsAsync(expected), Is.Empty);
+    }
+
+    [Test]
+    public async Task InvertBooleanAndRenameAsync_RecordPositionalConstructorArguments_AreFlipped()
+    {
+        var code = Source(
+            "namespace Test;",
+            "public record R(bool Success, int Count);",
+            "public record D(bool Flag) : R(Flag, 0);",
+            "public class U",
+            "{",
+            "    public R Literal() => new R(true, 1);",
+            "    public R Expression(bool a, bool b) => new R(a && b, 2);",
+            "    public R Simple(bool a) => new R(a, 3);",
+            "    public R TargetTyped() { R r = new(false, 4); return r; }",
+            "    public R Nested(R other) => new R(other.Success, 5);",
+            "}");
+        Assert.That(await CompileErrorsAsync(code), Is.Empty);
+        var engine = CreateEngine(CreateMultiDocumentSolution(code));
+
+        var outcome = await engine.InvertBooleanAndRenameAsync("P:Test.R.Success", "IsError");
+
+        Assert.That(outcome.Error, Is.Null, outcome.Error?.Message);
+        var expected = Source(
+            "namespace Test;",
+            "public record R(bool IsError, int Count);",
+            "public record D(bool Flag) : R(!Flag, 0);",
+            "public class U",
+            "{",
+            "    public R Literal() => new R(false, 1);",
+            "    public R Expression(bool a, bool b) => new R(!(a && b), 2);",
+            "    public R Simple(bool a) => new R(!a, 3);",
+            "    public R TargetTyped() { R r = new(true, 4); return r; }",
+            "    public R Nested(R other) => new R(!(!other.IsError), 5);",
+            "}");
+        Assert.That(outcome.Changes.Values.Single(), Is.EqualTo(expected));
+        Assert.That(await CompileErrorsAsync(expected), Is.Empty);
+    }
+
+    [Test]
+    public async Task InvertBooleanAndRenameAsync_RecordDeconstructionAndPositionalPattern_RefuseWithFileAndLine()
+    {
+        var code = Source(
+            "namespace Test;",
+            "public sealed record R(bool Success, int Count);",
+            "public class U",
+            "{",
+            "    public bool Read(R r) => r.Success;",
+            "    public bool Split(R r) { var (ok, _) = r; return ok; }",
+            "    public bool Match(R r) => r is R(true, _);",
+            "    public bool Tuple((int, int) t) { var (a, b) = t; return a == b; }",
+            "}");
+        Assert.That(await CompileErrorsAsync(code), Is.Empty);
+        var engine = CreateEngine(CreateMultiDocumentSolution(code));
+
+        var outcome = await engine.InvertBooleanAndRenameAsync("P:Test.R.Success", "IsError");
+
+        Assert.That(outcome.Error, Is.Not.Null);
+        Assert.That(outcome.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(outcome.Error.Message, Does.Contain("2 unsupported site(s)"));
+        Assert.That(outcome.Error.Message, Does.Contain("Test0.cs:6 - deconstruction of 'R'"));
+        Assert.That(outcome.Error.Message, Does.Contain("Test0.cs:7 - deconstruction of 'R'"));
+        Assert.That(outcome.Changes, Is.Empty);
+        var unsupported = outcome.Sites.Where(s => s.Role == SemanticReplaceRole.Unsupported).Select(s => s.Line).ToList();
+        Assert.That(unsupported, Is.EqualTo(new[] { 6, 7 }));
+    }
 }

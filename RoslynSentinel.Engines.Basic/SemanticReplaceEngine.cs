@@ -352,6 +352,13 @@ public class SemanticReplaceEngine
 
                 return new DeclarationInfo(filePath, identifierSpan, initializerValueSpan, initializerText);
             }
+
+            // A record positional parameter (record R(bool Success = true)) declares the property; its default value plays the initializer.
+            if (syntax is ParameterSyntax { Parent: ParameterListSyntax { Parent: RecordDeclarationSyntax } } recordParameter)
+            {
+                var defaultValue = recordParameter.Default?.Value;
+                return new DeclarationInfo(syntaxRef.SyntaxTree?.FilePath ?? string.Empty, recordParameter.Identifier.Span, defaultValue?.Span, defaultValue?.ToString());
+            }
         }
 
         // Handle field symbols
@@ -458,7 +465,7 @@ public class SemanticReplaceEngine
         {
             var notPlain = new ResultError(
                 ToolErrorCode.TargetIneligible,
-                $"'{symbol.Name}' is not declared by exactly one plain property or field declaration (for example a record positional parameter or a partial member); pick a different symbol.");
+                $"'{symbol.Name}' is not declared by exactly one plain property, field or record positional parameter declaration (for example a partial member); pick a different symbol.");
             return (new List<SemanticReplaceSite>(), new List<ReferenceEdit>(), notPlain);
         }
 
@@ -489,17 +496,45 @@ public class SemanticReplaceEngine
             }
         }
 
-        // The references. Only the ReferencedSymbol for this symbol itself is used: FindReferences also cascades to
-        // interface/override relatives, and rewriting those is out of scope (the compile gate catches the fallout).
-        var symbolId = symbol.GetDocumentationCommentId();
-        var referencedSymbols = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
         var parsedDocuments = new Dictionary<DocumentId, (SyntaxNode Root, SourceText Text)>();
         var seen = new HashSet<(string FilePath, int Start)>();
-        foreach (var referenced in referencedSymbols)
+
+        // A record positional property is also a primary constructor parameter. Constructor calls bind their arguments to the
+        // parameter (named or positional), initializers inside the record read the parameter, and deconstruction reads it by position:
+        // all three are invisible to the property's own references, so they are collected here.
+        var targets = new List<ISymbol> { symbol };
+        if (symbol is IPropertySymbol recordProperty && aliasDeclaration.GetSyntax(cancellationToken) is ParameterSyntax)
         {
+            var recordParameter = GetRecordPrimaryParameter(recordProperty, cancellationToken);
+            if (recordParameter is null)
+            {
+                var noConstructor = new ResultError(
+                    ToolErrorCode.TargetIneligible,
+                    $"'{symbol.Name}' is a record positional parameter but its primary constructor could not be resolved; nothing was changed.");
+                return (new List<SemanticReplaceSite>(), new List<ReferenceEdit>(), noConstructor);
+            }
+
+            await CollectRecordPositionalSitesAsync(collection, seen, parsedDocuments, solution, recordParameter, aliasDeclaration.SyntaxTree, newName, cancellationToken);
+            targets.Add(recordParameter);
+        }
+
+        // The references. Only the ReferencedSymbol for each target itself is used: FindReferences also cascades to
+        // interface/override relatives, and rewriting those is out of scope (the compile gate catches the fallout).
+        var referencedSymbols = new List<(ISymbol Target, ReferencedSymbol Referenced)>();
+        foreach (var target in targets)
+        {
+            foreach (var found in await SymbolFinder.FindReferencesAsync(target, solution, cancellationToken))
+            {
+                referencedSymbols.Add((target, found));
+            }
+        }
+
+        foreach (var (target, referenced) in referencedSymbols)
+        {
+            var targetId = target.GetDocumentationCommentId();
             var definition = referenced.Definition;
-            var isTarget = SymbolEqualityComparer.Default.Equals(definition, symbol)
-                || (symbolId is not null && definition.GetDocumentationCommentId() == symbolId);
+            var isTarget = SymbolEqualityComparer.Default.Equals(definition, target)
+                || (targetId is not null && definition.GetDocumentationCommentId() == targetId);
             if (!isTarget)
             {
                 continue;
@@ -521,16 +556,9 @@ public class SemanticReplaceEngine
                 }
 
                 var document = location.Document;
-                if (!parsedDocuments.TryGetValue(document.Id, out var parsed))
+                if (await GetParsedAsync(parsedDocuments, document, cancellationToken) is not { } parsed)
                 {
-                    var root = await document.GetSyntaxRootAsync(cancellationToken);
-                    if (root is null)
-                    {
-                        continue;
-                    }
-
-                    parsed = (root, await document.GetTextAsync(cancellationToken));
-                    parsedDocuments[document.Id] = parsed;
+                    continue;
                 }
 
                 var filePath = document.FilePath ?? document.Name;
@@ -547,6 +575,14 @@ public class SemanticReplaceEngine
                 {
                     var line = parsed.Text.Lines.GetLinePosition(span.Start).Line + 1;
                     collection.AddSite(filePath, line, span, SemanticReplaceRole.Unsupported, parsed.Text, "reference is not a simple identifier");
+                    continue;
+                }
+
+                if (identifier.Parent is NameColonSyntax { Parent: ArgumentSyntax })
+                {
+                    // Named arguments of primary constructor calls were handled above; any other one is a shape this pass cannot rewrite.
+                    var namedLine = parsed.Text.Lines.GetLinePosition(span.Start).Line + 1;
+                    collection.AddSite(filePath, namedLine, span, SemanticReplaceRole.Unsupported, parsed.Text, "named argument outside a primary constructor call is not supported");
                     continue;
                 }
 
@@ -885,6 +921,201 @@ public class SemanticReplaceEngine
             default:
                 collection.AddSite(filePath, line, reference.Span, SemanticReplaceRole.Unsupported, text, reason ?? "unsupported reference shape");
                 return;
+        }
+    }
+
+    /// <summary>Parses a document once per CollectSitesAsync run; null when it has no syntax root.</summary>
+    private static async Task<(SyntaxNode Root, SourceText Text)?> GetParsedAsync(Dictionary<DocumentId, (SyntaxNode Root, SourceText Text)> parsedDocuments, Document document, CancellationToken cancellationToken)
+    {
+        if (parsedDocuments.TryGetValue(document.Id, out var parsed))
+        {
+            return parsed;
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root is null)
+        {
+            return null;
+        }
+
+        parsed = (root, await document.GetTextAsync(cancellationToken));
+        parsedDocuments[document.Id] = parsed;
+        return parsed;
+    }
+
+    /// <summary>For a record positional property, the primary constructor parameter declared by the same ParameterSyntax; else null.</summary>
+    private static IParameterSymbol? GetRecordPrimaryParameter(IPropertySymbol property, CancellationToken cancellationToken)
+    {
+        if (property.DeclaringSyntaxReferences.Length != 1
+            || property.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken) is not ParameterSyntax { Parent: ParameterListSyntax { Parent: RecordDeclarationSyntax } } parameterSyntax)
+        {
+            return null;
+        }
+
+        foreach (var constructor in property.ContainingType.InstanceConstructors)
+        {
+            foreach (var parameter in constructor.Parameters)
+            {
+                if (parameter.DeclaringSyntaxReferences.Any(r => r.SyntaxTree == parameterSyntax.SyntaxTree && r.Span == parameterSyntax.Span))
+                {
+                    return parameter;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The argument bound to parameter: the one named after it, else the positional argument at its ordinal (C# binds a positional argument to its own index).</summary>
+    private static ArgumentSyntax? FindArgumentFor(ArgumentListSyntax argumentList, IParameterSymbol parameter)
+    {
+        var arguments = argumentList.Arguments;
+        var named = arguments.FirstOrDefault(a => a.NameColon?.Name.Identifier.ValueText == parameter.Name);
+        if (named is not null)
+        {
+            return named;
+        }
+
+        return parameter.Ordinal < arguments.Count && arguments[parameter.Ordinal].NameColon is null ? arguments[parameter.Ordinal] : null;
+    }
+
+    private static bool IsRecordDeconstruct(IMethodSymbol method, INamedTypeSymbol recordType)
+    {
+        return method.Name == WellKnownMemberNames.DeconstructMethodName
+            && SymbolEqualityComparer.Default.Equals(method.ContainingType?.OriginalDefinition, recordType.OriginalDefinition);
+    }
+
+    private static bool UsesRecordDeconstruct(DeconstructionInfo info, INamedTypeSymbol recordType)
+    {
+        return (info.Method is { } method && IsRecordDeconstruct(method, recordType)) || info.Nested.Any(n => UsesRecordDeconstruct(n, recordType));
+    }
+
+    /// <summary>Cheap syntax prefilter: deconstructing assignment/declaration, foreach deconstruction, or a positional pattern.</summary>
+    private static bool IsDeconstructionCandidate(SyntaxNode node)
+    {
+        return node switch
+        {
+            AssignmentExpressionSyntax assignment => assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) && assignment.Left is TupleExpressionSyntax or DeclarationExpressionSyntax,
+            ForEachVariableStatementSyntax => true,
+            PositionalPatternClauseSyntax => true,
+            _ => false
+        };
+    }
+
+    /// <summary>True when node (a deconstruction candidate) calls the record's Deconstruct, at any nesting depth.</summary>
+    private static bool DeconstructsRecord(SemanticModel model, SyntaxNode node, INamedTypeSymbol recordType, CancellationToken cancellationToken)
+    {
+        return node switch
+        {
+            AssignmentExpressionSyntax assignment => UsesRecordDeconstruct(model.GetDeconstructionInfo(assignment), recordType),
+            ForEachVariableStatementSyntax loop => UsesRecordDeconstruct(model.GetDeconstructionInfo(loop), recordType),
+            PositionalPatternClauseSyntax { Parent: RecursivePatternSyntax pattern } =>
+                model.GetOperation(pattern, cancellationToken) is Microsoft.CodeAnalysis.Operations.IRecursivePatternOperation { DeconstructSymbol: IMethodSymbol method }
+                && IsRecordDeconstruct(method, recordType),
+            _ => false
+        };
+    }
+
+    /// <summary>The argument list of a node that can call a constructor (new R(...), target-typed new(...), this(...)/base(...), a record base list entry); else null.</summary>
+    private static ArgumentListSyntax? ConstructorArgumentList(SyntaxNode node)
+    {
+        return node switch
+        {
+            ObjectCreationExpressionSyntax creation => creation.ArgumentList,
+            ImplicitObjectCreationExpressionSyntax implicitCreation => implicitCreation.ArgumentList,
+            ConstructorInitializerSyntax initializer => initializer.ArgumentList,
+            PrimaryConstructorBaseTypeSyntax baseType => baseType.ArgumentList,
+            _ => null
+        };
+    }
+
+    /// <summary>Records one primary constructor argument: a named argument's name is renamed; named or positional, its value is flipped.</summary>
+    private static void CollectConstructorArgument(SiteCollection collection, HashSet<(string FilePath, int Start)> seen, string filePath, SourceText text, ArgumentSyntax argument, string newName)
+    {
+        var line = text.Lines.GetLinePosition(argument.SpanStart).Line + 1;
+        if (!argument.RefKindKeyword.IsKind(SyntaxKind.None))
+        {
+            collection.AddSite(filePath, line, argument.Span, SemanticReplaceRole.Unsupported, text, "ref/out/in constructor argument is not supported");
+            return;
+        }
+
+        var role = argument.Expression.IsKind(SyntaxKind.TrueLiteralExpression) || argument.Expression.IsKind(SyntaxKind.FalseLiteralExpression)
+            ? SemanticReplaceRole.WriteLiteral
+            : SemanticReplaceRole.WriteExpression;
+        var site = collection.AddSite(filePath, line, argument.Span, role, text);
+        if (argument.NameColon is { } nameColon)
+        {
+            seen.Add((filePath, nameColon.Name.SpanStart)); // the parameter's own reference pass must not see it again
+            collection.AddEdit(site, filePath, nameColon.Name.Identifier.Span, newName, line);
+        }
+
+        collection.Writes.Add(new PendingWrite(site, argument.Expression.Span, text.ToString(argument.Expression.Span), line));
+    }
+
+    /// <summary>
+    /// One pass over the declaring project and every project that depends on it, for the record-only sites the property's references miss:
+    /// - every call of the primary constructor (new R(...), target-typed new(...), this(...), a derived record's base list): the argument
+    ///   bound to the parameter is flipped, and renamed when named. A call that omits it uses the default, flipped with the declaration.
+    /// - every deconstruction (var (a, b) = r; foreach (var (a, b) in rs); r is R(true, _)): Unsupported, because Deconstruct hands out the
+    ///   inverted value positionally under the caller's own variable name, so nothing at that site would reveal the polarity change.
+    /// Calls are found by syntax and then bound, not via SymbolFinder: constructor references do not reliably surface target-typed new(...).
+    /// </summary>
+    private static async Task CollectRecordPositionalSitesAsync(SiteCollection collection, HashSet<(string FilePath, int Start)> seen, Dictionary<DocumentId, (SyntaxNode Root, SourceText Text)> parsedDocuments, Solution solution, IParameterSymbol parameter, SyntaxTree declarationTree, string newName, CancellationToken cancellationToken)
+    {
+        var constructor = (IMethodSymbol)parameter.ContainingSymbol;
+        var recordType = constructor.ContainingType;
+        var declaringProject = solution.GetDocument(declarationTree)?.Project.Id;
+        var projectIds = declaringProject is null
+            ? solution.ProjectIds.ToList()
+            : new[] { declaringProject }.Concat(solution.GetProjectDependencyGraph().GetProjectsThatTransitivelyDependOnThisProject(declaringProject)).ToList();
+        var seenDeconstructions = new HashSet<(string FilePath, int Start)>();
+        foreach (var document in projectIds.SelectMany(id => solution.GetProject(id)?.Documents ?? Enumerable.Empty<Document>()))
+        {
+            if (await GetParsedAsync(parsedDocuments, document, cancellationToken) is not { } parsed)
+            {
+                continue;
+            }
+
+            // Syntax prefilter: only calls that pass an argument for this parameter, and deconstruction shapes, are bound.
+            var calls = new List<(SyntaxNode Call, ArgumentListSyntax List, ArgumentSyntax Argument)>();
+            var deconstructions = new List<SyntaxNode>();
+            foreach (var node in parsed.Root.DescendantNodes())
+            {
+                if (IsDeconstructionCandidate(node))
+                {
+                    deconstructions.Add(node);
+                }
+                else if (ConstructorArgumentList(node) is { } list && FindArgumentFor(list, parameter) is { } argument)
+                {
+                    calls.Add((node, list, argument));
+                }
+            }
+
+            if ((calls.Count == 0 && deconstructions.Count == 0) || await document.GetSemanticModelAsync(cancellationToken) is not { } model)
+            {
+                continue;
+            }
+
+            var filePath = document.FilePath ?? document.Name;
+            foreach (var (call, list, argument) in calls)
+            {
+                var bound = model.GetSymbolInfo(call, cancellationToken).Symbol;
+                if (SymbolEqualityComparer.Default.Equals(bound?.OriginalDefinition, constructor.OriginalDefinition)
+                    && seen.Add((filePath, list.SpanStart))) // the same file reached through a second project is skipped
+                {
+                    CollectConstructorArgument(collection, seen, filePath, parsed.Text, argument, newName);
+                }
+            }
+
+            foreach (var node in deconstructions)
+            {
+                if (DeconstructsRecord(model, node, recordType, cancellationToken) && seenDeconstructions.Add((filePath, node.SpanStart)))
+                {
+                    var line = parsed.Text.Lines.GetLinePosition(node.SpanStart).Line + 1;
+                    collection.AddSite(filePath, line, node.Span, SemanticReplaceRole.Unsupported, parsed.Text,
+                        $"deconstruction of '{recordType.Name}' reads the inverted value positionally; replace it with property access first");
+                }
+            }
         }
     }
 
