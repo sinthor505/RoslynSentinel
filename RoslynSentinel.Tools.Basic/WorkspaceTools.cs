@@ -2,7 +2,6 @@ using System.ComponentModel;
 
 using Microsoft.Extensions.Logging;
 
-using RoslynSentinel;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
@@ -156,6 +155,7 @@ public class WorkspaceTools
     // WorkspaceFileEditImpl (Decision 7 step 2 facade split). This class keeps its original
     // constructor/tool signatures, delegating internally.
     [McpServerTool(Name = "ReplaceSnippet")]
+    [SupportsBatching]
     [Produces(DataTag.ChangeId)]
     // Deliberately names no whole-file-write tool. Attribute arguments must be compile-time
     // constants, so this text can't be generated per-session from the tool registry the way the

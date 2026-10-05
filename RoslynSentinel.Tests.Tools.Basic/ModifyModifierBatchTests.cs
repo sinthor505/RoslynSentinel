@@ -50,8 +50,8 @@ public class ModifyModifierBatchTests
         var path = workspace.PathOf(FixtureRelativePath);
 
         var result = await tools.ModifyModifier(
-            reason: "batch test same file two edits",
-            edits:
+            reason: "batch test same file two batchEdits",
+            batchEdits:
             [
                 new ModifierEdit { FilePath = path, TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
                 new ModifierEdit { FilePath = path, TargetName = "MethodTwo", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
@@ -85,7 +85,7 @@ public class ModifyModifierBatchTests
 
         var result = await tools.ModifyModifier(
             reason: "batch test across two files",
-            edits:
+            batchEdits:
             [
                 new ModifierEdit { FilePath = workspace.PathOf(FixtureRelativePath), TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
                 new ModifierEdit { FilePath = workspace.PathOf(secondRelativePath), TargetName = "MethodThree", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
@@ -111,7 +111,7 @@ public class ModifyModifierBatchTests
 
         var result = await tools.ModifyModifier(
             reason: "batch test same node collision",
-            edits:
+            batchEdits:
             [
                 new ModifierEdit { FilePath = path, TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
                 new ModifierEdit { FilePath = path, TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@virtual, Action = AddRemoveAction.add },
@@ -133,7 +133,7 @@ public class ModifyModifierBatchTests
 
         var result = await tools.ModifyModifier(
             reason: "batch test one edit not found",
-            edits:
+            batchEdits:
             [
                 new ModifierEdit { FilePath = path, TargetName = "MethodOne", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
                 new ModifierEdit { FilePath = path, TargetName = "MethodDoesNotExist", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
@@ -159,7 +159,7 @@ public class ModifyModifierBatchTests
             targetName: "MethodOne",
             modifier: NonAccessibilityModifier.@static,
             action: AddRemoveAction.add,
-            edits: [new ModifierEdit { FilePath = path, TargetName = "MethodTwo", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add }],
+            batchEdits: [new ModifierEdit { FilePath = path, TargetName = "MethodTwo", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(!result.IsError, Is.False);
@@ -184,7 +184,7 @@ public class ModifyModifierBatchTests
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.ModifyModifier(reason: "batch test empty edits", edits: [], dryRun: false, returnDiff: false, cancellationToken: default);
+        var result = await tools.ModifyModifier(reason: "batch test empty batchEdits", batchEdits: [], dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
@@ -201,7 +201,7 @@ public class ModifyModifierBatchTests
             .Select(i => new ModifierEdit { FilePath = path, TargetName = $"NonexistentMethod{i}", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add })
             .ToList();
 
-        var result = await tools.ModifyModifier(reason: "batch test over cap", edits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
+        var result = await tools.ModifyModifier(reason: "batch test over cap", batchEdits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));

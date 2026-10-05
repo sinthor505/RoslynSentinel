@@ -1,7 +1,5 @@
 using System.ComponentModel;
 
-using RoslynSentinel;
-
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
@@ -53,6 +51,7 @@ public class WorkspaceFileEditTools
         => _impl.ReadFile(reason, filePath, startLine, endLine, cancellationToken);
 
     [McpServerTool(Name = "ReplaceSnippet")]
+    [SupportsBatching]
     [Produces(DataTag.ChangeId)]
     // Deliberately names no whole-file-write tool. Attribute arguments must be compile-time
     // constants, so this text can't be generated per-session from the tool registry the way the

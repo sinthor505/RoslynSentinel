@@ -171,6 +171,7 @@ public class RefactoringStructuralTools
         _impl.ModifyEnum(reason, filePath, enumName, values, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyAttribute")]
+    [SupportsBatching]
     [Produces(DataTag.ChangeId)]
     [Description("Adds, replaces, or removes an [Attribute] on a type or member. Use ChangeAccessibility for accessibility keywords and ModifyModifier for other modifier keywords.")]
     public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyAttribute(
@@ -198,8 +199,9 @@ public class RefactoringStructuralTools
         _impl.ModifyAttribute(reason, filePath, targetName, existingAttribute, action, newAttribute, attribute, contextSnippet, lineBefore, lineAfter, batchEdits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyModifier", UseStructuredContent = false, OutputSchemaType = typeof(ModifyModifierResultEnvelope))]
+    [SupportsBatching]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a non-accessibility modifier keyword (use ChangeAccessibility for private/public/etc., ModifyAttribute for [Attribute]). For overloaded targets, provide contextSnippet and optionally lineBefore/lineAfter. ADD STATIC on a method or property is a conversion: the member must use no instance state (no this/base or instance members of its type), and instance-qualified callers (receiver.M(...), receiver.P) are rewritten to Type.M(...) in the same atomic change; members that only use each other may be converted together in one 'edits' batch. Not supported for add static: auto-properties, init accessors, virtual/override/abstract members, interface implementations, members of generic types. Returns changeId.")]
+    [Description("Adds or removes a non-accessibility modifier keyword (use ChangeAccessibility for private/public/etc., ModifyAttribute for [Attribute]). For overloaded targets, provide contextSnippet and optionally lineBefore/lineAfter. ADD STATIC on a method or property is a conversion: the member must use no instance state (no this/base or instance members of its type), and instance-qualified callers (receiver.M(...), receiver.P) are rewritten to Type.M(...) in the same atomic change; members that only use each other may be converted together in one 'batchEdits' batch. Not supported for add static: auto-properties, init accessors, virtual/override/abstract members, interface implementations, members of generic types. Returns changeId.")]
     public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyModifier(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
@@ -210,14 +212,15 @@ public class RefactoringStructuralTools
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.ModifierEdits)] List<ModifierEdit>? edits = null,
+        [Description(ToolParams.ModifierEdits)] List<ModifierEdit>? batchEdits = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default) =>
-        _impl.ModifyModifier(reason, filePath, targetName, modifier, action, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
+        _impl.ModifyModifier(reason, filePath, targetName, modifier, action, contextSnippet, lineBefore, lineAfter, batchEdits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "ModifyBaseType")]
+    [SupportsBatching]
     [Produces(DataTag.ChangeId)]
     [Description("Adds or removes a base type or interface from a type declaration.")]
     public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyBaseType(
@@ -231,12 +234,12 @@ public class RefactoringStructuralTools
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.BaseTypeEdits)] List<BaseTypeEdit>? edits = null,
+        [Description(ToolParams.BaseTypeEdits)] List<BaseTypeEdit>? batchEdits = null,
         [Description(ToolParams.AutoStage)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default) =>
-        _impl.ModifyBaseType(reason, filePath, typeName, baseTypeName, action, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
+        _impl.ModifyBaseType(reason, filePath, typeName, baseTypeName, action, contextSnippet, lineBefore, lineAfter, batchEdits, autoStage, dryRun, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "SyncTypeAndFilename")]
     [Produces(DataTag.ResultOnly)]

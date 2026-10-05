@@ -23,7 +23,7 @@ public class RefactoringStructuralImpl
     private readonly ILogger _logger;
 
     // Reuses ReplaceSnippet's batch cap (WorkspaceTools.MaxSnippetEditsPerBatch) as a starting
-    // value -> these are keyword/name edits rather than text blocks, so the limit is purely count-based,
+    // value -> these are keyword/name batchEdits rather than text blocks, so the limit is purely count-based,
     // not size-derived.
     private const int MaxModifierFamilyEditsPerBatch = 20;
 
@@ -127,7 +127,7 @@ public class RefactoringStructuralImpl
             {
                 IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    $"ModifyModifier: edits has {edits.Count} entries (limit {MaxModifierFamilyEditsPerBatch}). Split into multiple calls.")
+                    $"ModifyModifier: batchEdits has {edits.Count} entries (limit {MaxModifierFamilyEditsPerBatch}). Split into multiple calls.")
             };
         }
 
@@ -136,11 +136,11 @@ public class RefactoringStructuralImpl
         {
             if (string.IsNullOrEmpty(edits[i].FilePath))
             {
-                perEditErrors.Add($"edits[{i}]: filePath is required.");
+                perEditErrors.Add($"batchEdits[{i}]: filePath is required.");
             }
             if (string.IsNullOrEmpty(edits[i].TargetName))
             {
-                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): targetName is required.");
+                perEditErrors.Add($"batchEdits[{i}] ({edits[i].FilePath}): targetName is required.");
             }
         }
 
@@ -211,7 +211,7 @@ public class RefactoringStructuralImpl
             if (finalContents.ContainsKey(filePathResolved))
             {
                 // Both halves were computed against the file's original text, so they cannot be merged: refuse rather than drop one.
-                perEditErrors.Add($"'{filePathResolved}': this file is changed both by an 'add static' conversion (which also rewrites callers) and by other modifier edits ({string.Join(", ", fileGroup.Select(p => $"edits[{p.index}]"))}). Split them into separate calls.");
+                perEditErrors.Add($"'{filePathResolved}': this file is changed both by an 'add static' conversion (which also rewrites callers) and by other modifier batchEdits ({string.Join(", ", fileGroup.Select(p => $"batchEdits[{p.index}]"))}). Split them into separate calls.");
                 continue;
             }
 
@@ -357,10 +357,10 @@ public class RefactoringStructuralImpl
                 continue;
             }
 
-            // Never trust the number of edits submitted: only the engine knows which ones changed text.
+            // Never trust the number of batchEdits submitted: only the engine knows which ones changed text.
             if (updated.AppliedEditIndexes is null)
             {
-                perEditErrors.Add($"'{filePathResolved}': the engine did not report which edits were applied, so success cannot be confirmed.");
+                perEditErrors.Add($"'{filePathResolved}': the engine did not report which batchEdits were applied, so success cannot be confirmed.");
                 continue;
             }
 
@@ -419,7 +419,7 @@ public class RefactoringStructuralImpl
             {
                 IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    $"ModifyBaseType: edits has {edits.Count} entries (limit {MaxModifierFamilyEditsPerBatch}). Split into multiple calls.")
+                    $"ModifyBaseType: batchEdits has {edits.Count} entries (limit {MaxModifierFamilyEditsPerBatch}). Split into multiple calls.")
             };
         }
 
@@ -428,15 +428,15 @@ public class RefactoringStructuralImpl
         {
             if (string.IsNullOrEmpty(edits[i].FilePath))
             {
-                perEditErrors.Add($"edits[{i}]: filePath is required.");
+                perEditErrors.Add($"batchEdits[{i}]: filePath is required.");
             }
             if (string.IsNullOrEmpty(edits[i].TypeName))
             {
-                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): typeName is required.");
+                perEditErrors.Add($"batchEdits[{i}] ({edits[i].FilePath}): typeName is required.");
             }
             if (string.IsNullOrEmpty(edits[i].BaseTypeName))
             {
-                perEditErrors.Add($"edits[{i}] ({edits[i].FilePath}): baseTypeName is required.");
+                perEditErrors.Add($"batchEdits[{i}] ({edits[i].FilePath}): baseTypeName is required.");
             }
         }
 
@@ -963,14 +963,14 @@ public class RefactoringStructuralImpl
         string? contextSnippet = null,
         string? lineBefore = null,
         string? lineAfter = null,
-        List<AttributeEdit>? edits = null,
+        List<AttributeEdit>? batchEdits = null,
         bool autoStage = true,
         bool dryRun = false,
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
         bool hasSingularEdit = filePath is not null || !string.IsNullOrEmpty(targetName) || !string.IsNullOrEmpty(existingAttribute) || !string.IsNullOrEmpty(attribute) || action.HasValue;
-        bool hasBatchEdit = edits != null;
+        bool hasBatchEdit = batchEdits != null;
 
         if (hasSingularEdit && hasBatchEdit)
         {
@@ -984,7 +984,7 @@ public class RefactoringStructuralImpl
 
         if (hasBatchEdit)
         {
-            if (edits!.Count == 0)
+            if (batchEdits!.Count == 0)
             {
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
@@ -993,7 +993,7 @@ public class RefactoringStructuralImpl
                 };
             }
 
-            return await ModifyAttributeBatch(edits, dryRun, returnDiff, cancellationToken);
+            return await ModifyAttributeBatch(batchEdits, dryRun, returnDiff, cancellationToken);
         }
 
         var resolvedAttributeSource = ResolveAttributeAlias(existingAttribute, attribute, "ModifyAttribute", out var aliasError);
@@ -1100,14 +1100,14 @@ public class RefactoringStructuralImpl
         string? contextSnippet = null,
         string? lineBefore = null,
         string? lineAfter = null,
-        List<ModifierEdit>? edits = null,
+        List<ModifierEdit>? batchEdits = null,
         bool autoStage = true,
         bool dryRun = false,
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
         bool hasSingularEdit = filePath is not null || !string.IsNullOrEmpty(targetName) || modifier.HasValue || action.HasValue;
-        bool hasBatchEdit = edits != null;
+        bool hasBatchEdit = batchEdits != null;
 
         if (hasSingularEdit && hasBatchEdit)
         {
@@ -1115,22 +1115,22 @@ public class RefactoringStructuralImpl
             {
                 IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyModifier: supply either filePath/targetName/modifier/action or 'edits', not both.")
+                    "ModifyModifier: supply either filePath/targetName/modifier/action or 'batchEdits', not both.")
             };
         }
 
         if (hasBatchEdit)
         {
-            if (edits!.Count == 0)
+            if (batchEdits!.Count == 0)
             {
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ModifyModifier: 'edits' was supplied but is empty.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ModifyModifier: 'batchEdits' was supplied but is empty.")
                 };
             }
 
-            return await ModifyModifierBatch(edits, dryRun, returnDiff, cancellationToken);
+            return await ModifyModifierBatch(batchEdits, dryRun, returnDiff, cancellationToken);
         }
 
         if (filePath is null || string.IsNullOrEmpty(targetName) || !modifier.HasValue || !action.HasValue)
@@ -1139,7 +1139,7 @@ public class RefactoringStructuralImpl
             {
                 IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyModifier: 'filePath', 'targetName', 'modifier', and 'action' are all required, unless 'edits' is supplied instead.")
+                    "ModifyModifier: 'filePath', 'targetName', 'modifier', and 'action' are all required, unless 'batchEdits' is supplied instead.")
             };
         }
 
@@ -1218,14 +1218,14 @@ public class RefactoringStructuralImpl
         string? contextSnippet = null,
         string? lineBefore = null,
         string? lineAfter = null,
-        List<BaseTypeEdit>? edits = null,
+        List<BaseTypeEdit>? batchEdits = null,
         bool autoStage = true,
         bool dryRun = false,
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
         bool hasSingularEdit = filePath is not null || !string.IsNullOrEmpty(typeName) || !string.IsNullOrEmpty(baseTypeName) || action.HasValue;
-        bool hasBatchEdit = edits != null;
+        bool hasBatchEdit = batchEdits != null;
 
         if (hasSingularEdit && hasBatchEdit)
         {
@@ -1233,22 +1233,22 @@ public class RefactoringStructuralImpl
             {
                 IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyBaseType: supply either filePath/typeName/baseTypeName/action or 'edits', not both.")
+                    "ModifyBaseType: supply either filePath/typeName/baseTypeName/action or 'batchEdits', not both.")
             };
         }
 
         if (hasBatchEdit)
         {
-            if (edits!.Count == 0)
+            if (batchEdits!.Count == 0)
             {
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ModifyBaseType: 'edits' was supplied but is empty.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ModifyBaseType: 'batchEdits' was supplied but is empty.")
                 };
             }
 
-            return await ModifyBaseTypeBatch(edits, dryRun, returnDiff, cancellationToken);
+            return await ModifyBaseTypeBatch(batchEdits, dryRun, returnDiff, cancellationToken);
         }
 
         if (filePath is null || string.IsNullOrEmpty(typeName) || string.IsNullOrEmpty(baseTypeName) || !action.HasValue)
@@ -1257,7 +1257,7 @@ public class RefactoringStructuralImpl
             {
                 IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    "ModifyBaseType: 'filePath', 'typeName', 'baseTypeName', and 'action' are all required, unless 'edits' is supplied instead.")
+                    "ModifyBaseType: 'filePath', 'typeName', 'baseTypeName', and 'action' are all required, unless 'batchEdits' is supplied instead.")
             };
         }
 

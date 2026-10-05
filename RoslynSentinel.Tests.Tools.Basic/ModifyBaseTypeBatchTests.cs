@@ -67,8 +67,8 @@ public class ModifyBaseTypeBatchTests
         var path = workspace.PathOf(FixtureRelativePath);
 
         var result = await tools.ModifyBaseType(
-            reason: "batch test same file two edits",
-            edits:
+            reason: "batch test same file two batchEdits",
+            batchEdits:
             [
                 new BaseTypeEdit { FilePath = path, TypeName = "BaseTypeBatchTargetA", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.add },
                 new BaseTypeEdit { FilePath = path, TypeName = "BaseTypeBatchTargetB", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.remove },
@@ -93,7 +93,7 @@ public class ModifyBaseTypeBatchTests
 
         var result = await tools.ModifyBaseType(
             reason: "batch test across two files",
-            edits:
+            batchEdits:
             [
                 new BaseTypeEdit { FilePath = workspace.PathOf(FixtureRelativePath), TypeName = "BaseTypeBatchTargetA", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.add },
                 new BaseTypeEdit { FilePath = workspace.PathOf(SecondFixtureRelativePath), TypeName = "BaseTypeBatchTargetC", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.add },
@@ -120,7 +120,7 @@ public class ModifyBaseTypeBatchTests
 
         var result = await tools.ModifyBaseType(
             reason: "batch test same node collision",
-            edits:
+            batchEdits:
             [
                 new BaseTypeEdit { FilePath = path, TypeName = "BaseTypeBatchTargetB", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.remove },
                 new BaseTypeEdit { FilePath = path, TypeName = "BaseTypeBatchTargetB", BaseTypeName = "IDisposable", Action = AddRemoveAction.add },
@@ -143,7 +143,7 @@ public class ModifyBaseTypeBatchTests
 
         var result = await tools.ModifyBaseType(
             reason: "batch test target not found",
-            edits:
+            batchEdits:
             [
                 new BaseTypeEdit { FilePath = path, TypeName = "BaseTypeBatchTargetA", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.add },
                 new BaseTypeEdit { FilePath = path, TypeName = "BaseTypeBatchTargetDoesNotExist", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.add },
@@ -167,7 +167,7 @@ public class ModifyBaseTypeBatchTests
             typeName: "BaseTypeBatchTargetA",
             baseTypeName: "IBaseTypeBatchMarker",
             action: AddRemoveAction.add,
-            edits: [new BaseTypeEdit { FilePath = path, TypeName = "BaseTypeBatchTargetB", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.remove }],
+            batchEdits: [new BaseTypeEdit { FilePath = path, TypeName = "BaseTypeBatchTargetB", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.remove }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(!result.IsError, Is.False);
@@ -185,7 +185,7 @@ public class ModifyBaseTypeBatchTests
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(!result.IsError, Is.False);
-        Assert.That(result.ErrorData!.Message, Does.Contain("edits"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("batchEdits"));
     }
 
     [Test]
@@ -195,8 +195,8 @@ public class ModifyBaseTypeBatchTests
         var tools = BuildTools(workspace.Manager);
 
         var result = await tools.ModifyBaseType(
-            reason: "batch test empty edits array",
-            edits: [],
+            reason: "batch test empty batchEdits array",
+            batchEdits: [],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(!result.IsError, Is.False);
@@ -214,13 +214,13 @@ public class ModifyBaseTypeBatchTests
             .Select(i => new BaseTypeEdit { FilePath = path, TypeName = $"NonexistentType{i}", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.add })
             .ToList();
 
-        var result = await tools.ModifyBaseType(reason: "batch test over cap", edits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
+        var result = await tools.ModifyBaseType(reason: "batch test over cap", batchEdits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));
     }
 
-    // ---- Regression: a nested type and its containing type in one batch (text-span edits, not a ReplaceNode fold) ----
+    // ---- Regression: a nested type and its containing type in one batch (text-span batchEdits, not a ReplaceNode fold) ----
 
     private const string NestedFixtureRelativePath = "ContosoOrders.Core/BaseTypeNestedFixture.cs";
 
@@ -257,7 +257,7 @@ public class ModifyBaseTypeBatchTests
 
         var result = await tools.ModifyBaseType(
             reason: "regression: ancestor/descendant type targets in one batch",
-            edits: outerFirst ? [outerEdit, innerEdit] : [innerEdit, outerEdit],
+            batchEdits: outerFirst ? [outerEdit, innerEdit] : [innerEdit, outerEdit],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
@@ -307,8 +307,8 @@ public class ModifyBaseTypeBatchTests
         var before = workspace.ReadText(FormattingFixtureRelativePath);
 
         var result = await tools.ModifyBaseType(
-            reason: "regression: base-list edits must not reformat the rest of the type",
-            edits:
+            reason: "regression: base-list batchEdits must not reformat the rest of the type",
+            batchEdits:
             [
                 new BaseTypeEdit { FilePath = path, TypeName = "Weird", BaseTypeName = "IFormatMarker", Action = AddRemoveAction.add },
                 new BaseTypeEdit { FilePath = path, TypeName = "Keeper", BaseTypeName = "IOtherFormatMarker", Action = AddRemoveAction.remove },
@@ -335,7 +335,7 @@ public class ModifyBaseTypeBatchTests
 
         var result = await tools.ModifyBaseType(
             reason: "regression: a remove that matches nothing must not be reported as applied",
-            edits:
+            batchEdits:
             [
                 new BaseTypeEdit { FilePath = path, TypeName = "BaseTypeBatchTargetA", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.add },
                 new BaseTypeEdit { FilePath = path, TypeName = "BaseTypeBatchTargetB", BaseTypeName = "INotThere", Action = AddRemoveAction.remove },
@@ -345,7 +345,7 @@ public class ModifyBaseTypeBatchTests
         Assert.That(!result.IsError, Is.False);
         Assert.Multiple(() =>
         {
-            Assert.That(result.ErrorData!.Message, Does.Contain("edits[1]"));
+            Assert.That(result.ErrorData!.Message, Does.Contain("batchEdits[1]"));
             Assert.That(result.ErrorData!.Message, Does.Contain("INotThere"));
             Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before));
         });
@@ -366,8 +366,8 @@ public class ModifyBaseTypeBatchTests
 
         var applied = AttributeTextEditBuilder.TryApply(text, edits, out var error);
 
-        Assert.That(applied, Is.Null, "overlapping edits must never produce a partial result");
-        Assert.That(error, Does.Contain("edits[0]").And.Contain("edits[1]"));
+        Assert.That(applied, Is.Null, "overlapping batchEdits must never produce a partial result");
+        Assert.That(error, Does.Contain("batchEdits[0]").And.Contain("batchEdits[1]"));
     }
 
     // ---- RoslynFormattingHelper.ReplaceNodesFormattedAsync must not skip an unlocatable replacement silently ----

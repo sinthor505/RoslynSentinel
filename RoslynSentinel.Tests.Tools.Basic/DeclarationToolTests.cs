@@ -94,8 +94,8 @@ public class DeclarationToolTests
             new ModifierEdit { FilePath = ws.PathOf(FixtureRelativePath), TargetName = "MethodTwo", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add },
         ];
 
-        var expected = await BuildTools(original.Manager).Structural.ModifyModifier(reason: "parity original", edits: EditsFor(original), dryRun: false, returnDiff: false, cancellationToken: default);
-        var actual = await BuildTools(merged.Manager).Declaration.Declaration(reason: "parity merged", operation: DeclarationOperation.modifier, edits: EditsFor(merged), cancellationToken: default);
+        var expected = await BuildTools(original.Manager).Structural.ModifyModifier(reason: "parity original", batchEdits: EditsFor(original), dryRun: false, returnDiff: false, cancellationToken: default);
+        var actual = await BuildTools(merged.Manager).Declaration.Declaration(reason: "parity merged", operation: DeclarationOperation.modifier, modifierBatchEdits: EditsFor(merged), cancellationToken: default);
 
         AssertSameOutcome(expected, actual, original.ReadText(FixtureRelativePath), merged.ReadText(FixtureRelativePath));
         Assert.That(merged.ReadText(FixtureRelativePath), Does.Contain("static void MethodOne").And.Contain("static void MethodTwo"));
@@ -234,7 +234,7 @@ public class DeclarationToolTests
 
         var text = await AssertParityAsync(
             (t, ws) => t.Structural.ModifyAttribute(reason: "parity original", batchEdits: EditsFor(ws), cancellationToken: default),
-            (t, ws) => t.Declaration.Declaration(reason: "parity merged", operation: DeclarationOperation.attribute, batchEdits: EditsFor(ws), cancellationToken: default));
+            (t, ws) => t.Declaration.Declaration(reason: "parity merged", operation: DeclarationOperation.attribute, attributeBatchEdits: EditsFor(ws), cancellationToken: default));
 
         Assert.That(text, Does.Contain("[Other]").And.Not.Contain("[Marker]"));
     }
@@ -268,8 +268,8 @@ public class DeclarationToolTests
         ];
 
         var text = await AssertParityAsync(
-            (t, ws) => t.Structural.ModifyBaseType(reason: "parity original", edits: EditsFor(ws), cancellationToken: default),
-            (t, ws) => t.Declaration.Declaration(reason: "parity merged", operation: DeclarationOperation.baseType, baseTypeEdits: EditsFor(ws), cancellationToken: default));
+            (t, ws) => t.Structural.ModifyBaseType(reason: "parity original", batchEdits: EditsFor(ws), cancellationToken: default),
+            (t, ws) => t.Declaration.Declaration(reason: "parity merged", operation: DeclarationOperation.baseType, baseTypeBatchEdits: EditsFor(ws), cancellationToken: default));
 
         Assert.That(text, Does.Contain("IMarker, IOther"));
     }
@@ -298,7 +298,7 @@ public class DeclarationToolTests
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-        Assert.That(result.ErrorData.Message, Does.Contain("'existingAttribute'").And.Contain("'action'").And.Contain("'batchEdits'"));
+        Assert.That(result.ErrorData.Message, Does.Contain("'existingAttribute'").And.Contain("'action'").And.Contain("'attributeBatchEdits'"));
     }
 
     [Test]
@@ -308,7 +308,7 @@ public class DeclarationToolTests
 
         var result = await BuildTools(workspace.Manager).Declaration.Declaration(
             reason: "both forms", operation: DeclarationOperation.attribute, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne",
-            existingAttribute: "Marker", action: DeclarationAction.remove, batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(FixtureRelativePath), TargetName = "MethodOne", ExistingAttribute = "Marker" }],
+            existingAttribute: "Marker", action: DeclarationAction.remove, attributeBatchEdits: [new AttributeEdit { FilePath = workspace.PathOf(FixtureRelativePath), TargetName = "MethodOne", ExistingAttribute = "Marker" }],
             cancellationToken: default);
 
         Assert.That(!result.IsError, Is.False);
@@ -342,7 +342,7 @@ public class DeclarationToolTests
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-        Assert.That(result.ErrorData.Message, Does.Contain("'typeName'").And.Contain("'baseTypeName'").And.Contain("'baseTypeEdits'"));
+        Assert.That(result.ErrorData.Message, Does.Contain("'typeName'").And.Contain("'baseTypeName'").And.Contain("'baseTypeBatchEdits'"));
     }
 
     [Test]

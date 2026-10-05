@@ -25,6 +25,7 @@ public class DeclarationTools
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: the required-param set depends on 'operation' (documented once on it);
     // the checks below turn a wrong subset into an InvalidArgument naming the missing/unexpected params.
     [McpServerTool(Name = "Declaration")]
+    [SupportsBatching]
     [Produces(DataTag.ChangeId)]
     [Description("Changes a declaration's modifier, accessibility, attribute or base type. For overloaded targets provide contextSnippet. " +
         "modifier: ADD STATIC on a method or property is a conversion - the member must use no instance state, and instance-qualified callers are rewritten to Type.M(...) in the same atomic change; " +
@@ -32,10 +33,10 @@ public class DeclarationTools
     public Task<SentinelCallToolResult<AppliedChangeSummary>> Declaration(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Required params per operation. " +
-            "modifier: add or remove a non-accessibility modifier keyword; filePath+targetName+modifier+action (add|remove), or edits instead of those four. " +
+            "modifier: add or remove a non-accessibility modifier keyword; filePath+targetName+modifier+action (add|remove), or modifierBatchEdits instead of those four. " +
             "accessibility: set accessibility, replacing the current one; filePath+targetName+accessibility. " +
-            "attribute: add, replace or remove an [Attribute]; filePath+targetName+existingAttribute+action, plus newAttribute for replace, or batchEdits instead. " +
-            "baseType: add or remove a base type or interface; filePath+typeName+baseTypeName+action (add|remove), or baseTypeEdits instead.")]
+            "attribute: add, replace or remove an [Attribute]; filePath+targetName+existingAttribute+action, plus newAttribute for replace, or attributeBatchEdits instead. " +
+            "baseType: add or remove a base type or interface; filePath+typeName+baseTypeName+action (add|remove), or baseTypeBatchEdits instead.")]
         [Consumes(DataTag.Action, required: true)] DeclarationOperation operation,
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
         [Description("modifier, accessibility, attribute: the declaration to change.")]
@@ -54,9 +55,9 @@ public class DeclarationTools
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description("modifier. " + ToolParams.ModifierEdits)] List<ModifierEdit>? edits = null,
-        [Description("attribute. " + ToolParams.AttributeEdits)] List<AttributeEdit>? batchEdits = null,
-        [Description("baseType. " + ToolParams.BaseTypeEdits)] List<BaseTypeEdit>? baseTypeEdits = null,
+        [Description("modifier. " + ToolParams.ModifierEdits)] List<ModifierEdit>? modifierBatchEdits = null,
+        [Description("attribute. " + ToolParams.AttributeEdits)] List<AttributeEdit>? attributeBatchEdits = null,
+        [Description("baseType. " + ToolParams.BaseTypeEdits)] List<BaseTypeEdit>? baseTypeBatchEdits = null,
         [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
@@ -65,101 +66,101 @@ public class DeclarationTools
         switch (operation)
         {
             case DeclarationOperation.modifier:
-            {
-                var rejected = RejectForeignParams("modifier", ("accessibility", accessibility.HasValue), ("existingAttribute", existingAttribute is not null),
-                    ("newAttribute", newAttribute is not null), ("typeName", typeName is not null), ("baseTypeName", baseTypeName is not null),
-                    ("batchEdits", batchEdits is not null), ("baseTypeEdits", baseTypeEdits is not null));
-                if (rejected is not null)
                 {
-                    return rejected;
-                }
+                    var rejected = RejectForeignParams("modifier", ("accessibility", accessibility.HasValue), ("existingAttribute", existingAttribute is not null),
+                        ("newAttribute", newAttribute is not null), ("typeName", typeName is not null), ("baseTypeName", baseTypeName is not null),
+                        ("attributeBatchEdits", attributeBatchEdits is not null), ("baseTypeBatchEdits", baseTypeBatchEdits is not null));
+                    if (rejected is not null)
+                    {
+                        return rejected;
+                    }
 
-                if (!TryToAddRemove(action, out var addRemove))
-                {
-                    return InvalidArgument("action 'replace' is only valid for operation 'attribute'; operation 'modifier' takes add or remove.");
-                }
+                    if (!TryToAddRemove(action, out var addRemove))
+                    {
+                        return InvalidArgument("action 'replace' is only valid for operation 'attribute'; operation 'modifier' takes add or remove.");
+                    }
 
-                return _structural.ModifyModifier(reason, filePath, targetName, modifier, addRemove, contextSnippet, lineBefore, lineAfter, edits, autoStage, dryRun, returnDiff, cancellationToken);
-            }
+                    return _structural.ModifyModifier(reason, filePath, targetName, modifier, addRemove, contextSnippet, lineBefore, lineAfter, modifierBatchEdits, autoStage, dryRun, returnDiff, cancellationToken);
+                }
 
             case DeclarationOperation.accessibility:
-            {
-                var rejected = RejectForeignParams("accessibility", ("modifier", modifier.HasValue), ("action", action.HasValue), ("edits", edits is not null),
-                    ("existingAttribute", existingAttribute is not null), ("newAttribute", newAttribute is not null), ("typeName", typeName is not null),
-                    ("baseTypeName", baseTypeName is not null), ("batchEdits", batchEdits is not null), ("baseTypeEdits", baseTypeEdits is not null));
-                if (rejected is not null)
                 {
-                    return rejected;
-                }
+                    var rejected = RejectForeignParams("accessibility", ("modifier", modifier.HasValue), ("action", action.HasValue), ("modifierBatchEdits", modifierBatchEdits is not null),
+                        ("existingAttribute", existingAttribute is not null), ("newAttribute", newAttribute is not null), ("typeName", typeName is not null),
+                        ("baseTypeName", baseTypeName is not null), ("attributeBatchEdits", attributeBatchEdits is not null), ("baseTypeBatchEdits", baseTypeBatchEdits is not null));
+                    if (rejected is not null)
+                    {
+                        return rejected;
+                    }
 
-                if (filePath is null || string.IsNullOrEmpty(targetName) || !accessibility.HasValue)
-                {
-                    return InvalidArgument("operation 'accessibility' requires 'filePath', 'targetName' and 'accessibility'.");
-                }
+                    if (filePath is null || string.IsNullOrEmpty(targetName) || !accessibility.HasValue)
+                    {
+                        return InvalidArgument("operation 'accessibility' requires 'filePath', 'targetName' and 'accessibility'.");
+                    }
 
-                return _signature.ChangeAccessibility(reason, filePath, targetName, accessibility.Value, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
-            }
+                    return _signature.ChangeAccessibility(reason, filePath, targetName, accessibility.Value, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
+                }
 
             case DeclarationOperation.attribute:
-            {
-                var rejected = RejectForeignParams("attribute", ("modifier", modifier.HasValue), ("accessibility", accessibility.HasValue), ("edits", edits is not null),
-                    ("typeName", typeName is not null), ("baseTypeName", baseTypeName is not null), ("baseTypeEdits", baseTypeEdits is not null));
-                if (rejected is not null)
                 {
-                    return rejected;
-                }
+                    var rejected = RejectForeignParams("attribute", ("modifier", modifier.HasValue), ("accessibility", accessibility.HasValue), ("modifierBatchEdits", modifierBatchEdits is not null),
+                        ("typeName", typeName is not null), ("baseTypeName", baseTypeName is not null), ("baseTypeBatchEdits", baseTypeBatchEdits is not null));
+                    if (rejected is not null)
+                    {
+                        return rejected;
+                    }
 
-                bool hasSingular = filePath is not null || !string.IsNullOrEmpty(targetName) || !string.IsNullOrEmpty(existingAttribute) || action.HasValue;
-                if (hasSingular && batchEdits is not null)
-                {
-                    return InvalidArgument("operation 'attribute' takes either filePath/targetName/existingAttribute/action or 'batchEdits', not both.");
-                }
+                    bool hasSingular = filePath is not null || !string.IsNullOrEmpty(targetName) || !string.IsNullOrEmpty(existingAttribute) || action.HasValue;
+                    if (hasSingular && attributeBatchEdits is not null)
+                    {
+                        return InvalidArgument("operation 'attribute' takes either filePath/targetName/existingAttribute/action or 'attributeBatchEdits', not both.");
+                    }
 
-                if (batchEdits is { Count: 0 })
-                {
-                    return InvalidArgument("operation 'attribute': 'batchEdits' was supplied but is empty.");
-                }
+                    if (attributeBatchEdits is { Count: 0 })
+                    {
+                        return InvalidArgument("operation 'attribute': 'attributeBatchEdits' was supplied but is empty.");
+                    }
 
-                if (batchEdits is null && (filePath is null || string.IsNullOrEmpty(targetName) || string.IsNullOrEmpty(existingAttribute) || !action.HasValue))
-                {
-                    return InvalidArgument("operation 'attribute' requires 'filePath', 'targetName', 'existingAttribute' and 'action' (plus 'newAttribute' for replace), unless 'batchEdits' is supplied instead.");
-                }
+                    if (attributeBatchEdits is null && (filePath is null || string.IsNullOrEmpty(targetName) || string.IsNullOrEmpty(existingAttribute) || !action.HasValue))
+                    {
+                        return InvalidArgument("operation 'attribute' requires 'filePath', 'targetName', 'existingAttribute' and 'action' (plus 'newAttribute' for replace), unless 'attributeBatchEdits' is supplied instead.");
+                    }
 
-                return _structural.ModifyAttribute(reason, filePath, targetName, existingAttribute, ToAttributeAction(action), newAttribute, null, contextSnippet, lineBefore, lineAfter, batchEdits, autoStage, dryRun, returnDiff, cancellationToken);
-            }
+                    return _structural.ModifyAttribute(reason, filePath, targetName, existingAttribute, ToAttributeAction(action), newAttribute, null, contextSnippet, lineBefore, lineAfter, attributeBatchEdits, autoStage, dryRun, returnDiff, cancellationToken);
+                }
 
             case DeclarationOperation.baseType:
-            {
-                var rejected = RejectForeignParams("baseType", ("modifier", modifier.HasValue), ("accessibility", accessibility.HasValue), ("targetName", targetName is not null),
-                    ("existingAttribute", existingAttribute is not null), ("newAttribute", newAttribute is not null), ("edits", edits is not null), ("batchEdits", batchEdits is not null));
-                if (rejected is not null)
                 {
-                    return rejected;
-                }
+                    var rejected = RejectForeignParams("baseType", ("modifier", modifier.HasValue), ("accessibility", accessibility.HasValue), ("targetName", targetName is not null),
+                        ("existingAttribute", existingAttribute is not null), ("newAttribute", newAttribute is not null), ("modifierBatchEdits", modifierBatchEdits is not null), ("attributeBatchEdits", attributeBatchEdits is not null));
+                    if (rejected is not null)
+                    {
+                        return rejected;
+                    }
 
-                if (!TryToAddRemove(action, out var addRemove))
-                {
-                    return InvalidArgument("action 'replace' is only valid for operation 'attribute'; operation 'baseType' takes add or remove.");
-                }
+                    if (!TryToAddRemove(action, out var addRemove))
+                    {
+                        return InvalidArgument("action 'replace' is only valid for operation 'attribute'; operation 'baseType' takes add or remove.");
+                    }
 
-                bool hasSingular = filePath is not null || !string.IsNullOrEmpty(typeName) || !string.IsNullOrEmpty(baseTypeName) || action.HasValue;
-                if (hasSingular && baseTypeEdits is not null)
-                {
-                    return InvalidArgument("operation 'baseType' takes either filePath/typeName/baseTypeName/action or 'baseTypeEdits', not both.");
-                }
+                    bool hasSingular = filePath is not null || !string.IsNullOrEmpty(typeName) || !string.IsNullOrEmpty(baseTypeName) || action.HasValue;
+                    if (hasSingular && baseTypeBatchEdits is not null)
+                    {
+                        return InvalidArgument("operation 'baseType' takes either filePath/typeName/baseTypeName/action or 'baseTypeBatchEdits', not both.");
+                    }
 
-                if (baseTypeEdits is { Count: 0 })
-                {
-                    return InvalidArgument("operation 'baseType': 'baseTypeEdits' was supplied but is empty.");
-                }
+                    if (baseTypeBatchEdits is { Count: 0 })
+                    {
+                        return InvalidArgument("operation 'baseType': 'baseTypeBatchEdits' was supplied but is empty.");
+                    }
 
-                if (baseTypeEdits is null && (filePath is null || string.IsNullOrEmpty(typeName) || string.IsNullOrEmpty(baseTypeName) || !addRemove.HasValue))
-                {
-                    return InvalidArgument("operation 'baseType' requires 'filePath', 'typeName', 'baseTypeName' and 'action', unless 'baseTypeEdits' is supplied instead.");
-                }
+                    if (baseTypeBatchEdits is null && (filePath is null || string.IsNullOrEmpty(typeName) || string.IsNullOrEmpty(baseTypeName) || !addRemove.HasValue))
+                    {
+                        return InvalidArgument("operation 'baseType' requires 'filePath', 'typeName', 'baseTypeName' and 'action', unless 'baseTypeBatchEdits' is supplied instead.");
+                    }
 
-                return _structural.ModifyBaseType(reason, filePath, typeName, baseTypeName, addRemove, contextSnippet, lineBefore, lineAfter, baseTypeEdits, autoStage, dryRun, returnDiff, cancellationToken);
-            }
+                    return _structural.ModifyBaseType(reason, filePath, typeName, baseTypeName, addRemove, contextSnippet, lineBefore, lineAfter, baseTypeBatchEdits, autoStage, dryRun, returnDiff, cancellationToken);
+                }
 
             default:
                 return InvalidArgument($"Unhandled operation '{operation}'. Valid values: {string.Join(", ", Enum.GetNames<DeclarationOperation>())}.");

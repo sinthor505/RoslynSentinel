@@ -364,7 +364,7 @@ public class WorkspaceFileEditImpl
         string? newContent = null,
         string? lineBefore = null,
         string? lineAfter = null,
-        List<SnippetEdit>? edits = null,
+        List<SnippetEdit>? batchEdits = null,
         bool validateOnApply = true,
         bool returnDiff = false,
         CancellationToken cancellationToken = default)
@@ -372,7 +372,7 @@ public class WorkspaceFileEditImpl
         try
         {
             bool hasSingularEdit = filePath is not null || !string.IsNullOrEmpty(oldContent) || newContent != null;
-            bool hasBatchEdit = edits != null;
+            bool hasBatchEdit = batchEdits != null;
 
             if (hasSingularEdit && hasBatchEdit)
             {
@@ -380,22 +380,22 @@ public class WorkspaceFileEditImpl
                 {
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                        "ReplaceSnippet: supply either filePath/oldContent/newContent or 'edits', not both.")
+                        "ReplaceSnippet: supply either filePath/oldContent/newContent or 'batchEdits', not both.")
                 };
             }
 
             if (hasBatchEdit)
             {
-                if (edits!.Count == 0)
+                if (batchEdits!.Count == 0)
                 {
                     return new SentinelCallToolResult<ReplaceSnippetResult>()
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'edits' was supplied but is empty.")
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'batchEdits' was supplied but is empty.")
                     };
                 }
 
-                return await ReplaceSnippetBatch(edits, action, validateOnApply, returnDiff, cancellationToken);
+                return await ReplaceSnippetBatch(batchEdits, action, validateOnApply, returnDiff, cancellationToken);
             }
 
             if (filePath is null)
@@ -404,7 +404,7 @@ public class WorkspaceFileEditImpl
                 {
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                        "ReplaceSnippet: 'filePath' is required (it names the single file oldContent/newContent applies to), unless 'edits' is supplied instead.")
+                        "ReplaceSnippet: 'filePath' is required (it names the single file oldContent/newContent applies to), unless 'batchEdits' is supplied instead.")
                 };
             }
 
@@ -553,46 +553,46 @@ public class WorkspaceFileEditImpl
     }
 
     private async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippetBatch(
-        List<SnippetEdit> edits,
+        List<SnippetEdit> batchEdits,
         ProposedChangeAction action,
         bool validateOnApply,
         bool returnDiff,
         CancellationToken cancellationToken)
     {
-        if (edits.Count > MaxSnippetEditsPerBatch)
+        if (batchEdits.Count > MaxSnippetEditsPerBatch)
         {
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
                 IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
-                    $"ReplaceSnippet: edits has {edits.Count} entries (limit {MaxSnippetEditsPerBatch}). Split into multiple calls.")
+                    $"ReplaceSnippet: batchEdits has {batchEdits.Count} entries (limit {MaxSnippetEditsPerBatch}). Split into multiple calls.")
             };
         }
 
         var perEditErrors = new List<string>();
         var anySizeBoundExceeded = false;
-        for (int i = 0; i < edits.Count; i++)
+        for (int i = 0; i < batchEdits.Count; i++)
         {
-            var edit = edits[i];
+            var edit = batchEdits[i];
             if (string.IsNullOrEmpty(edit.FilePath))
             {
-                perEditErrors.Add($"edits[{i}]: filePath is required.");
+                perEditErrors.Add($"batchEdits[{i}]: filePath is required.");
                 continue;
             }
             if (string.IsNullOrEmpty(edit.OldContent))
             {
-                perEditErrors.Add($"edits[{i}] ({edit.FilePath}): oldContent is required.");
+                perEditErrors.Add($"batchEdits[{i}] ({edit.FilePath}): oldContent is required.");
                 continue;
             }
             if (edit.NewContent == null)
             {
-                perEditErrors.Add($"edits[{i}] ({edit.FilePath}): newContent is required (pass an empty string for a pure deletion).");
+                perEditErrors.Add($"batchEdits[{i}] ({edit.FilePath}): newContent is required (pass an empty string for a pure deletion).");
                 continue;
             }
             var exceeded = DescribeExceededSnippetSizeBounds(edit.OldContent, edit.NewContent);
             if (exceeded.Count > 0)
             {
-                perEditErrors.Add($"edits[{i}] ({edit.FilePath}): {string.Join("; ", exceeded)}.");
+                perEditErrors.Add($"batchEdits[{i}] ({edit.FilePath}): {string.Join("; ", exceeded)}.");
                 anySizeBoundExceeded = true;
             }
         }
@@ -612,7 +612,7 @@ public class WorkspaceFileEditImpl
         }
 
         var failureCodes = new List<string>();
-        var editsByFile = edits
+        var editsByFile = batchEdits
             .Select((edit, index) => (edit, index))
             .GroupBy(pair => _workspaceManager.ResolveFromWire(pair.edit.FilePath));
 
@@ -639,7 +639,7 @@ public class WorkspaceFileEditImpl
             // Key the result by the document's own path, not the caller's spelling. Two groups can
             // reach the same file under different spellings (e.g. a bare name and a full path); each
             // would otherwise be spliced against the original text and the later one would silently
-            // overwrite the earlier one's edits.
+            // overwrite the earlier one's batchEdits.
             var canonicalPath = new FilePathWrapper(document.FilePath ?? filePathResolved.Absolute, _workspaceManager.GetSolutionRoot(), validated: true);
             if (finalContents.ContainsKey(canonicalPath))
             {
@@ -664,7 +664,7 @@ public class WorkspaceFileEditImpl
                 }
                 catch (ToolException toolEx)
                 {
-                    perEditErrors.Add($"edits[{index}] ({filePathResolved}): {toolEx.Message}"); failureCodes.Add(toolEx.ErrorCode);
+                    perEditErrors.Add($"batchEdits[{index}] ({filePathResolved}): {toolEx.Message}"); failureCodes.Add(toolEx.ErrorCode);
                 }
             }
 
@@ -685,9 +685,9 @@ public class WorkspaceFileEditImpl
                 if (curr.match.Start < prev.match.Start + prev.match.Length)
                 {
                     perEditErrors.Add(
-                        $"edits[{prev.index}] and edits[{curr.index}] ({filePathResolved}) have overlapping matches " +
-                        $"(edits[{prev.index}]: [{prev.match.Start}, {prev.match.Start + prev.match.Length}), " +
-                        $"edits[{curr.index}]: [{curr.match.Start}, {curr.match.Start + curr.match.Length})). " +
+                        $"batchEdits[{prev.index}] and batchEdits[{curr.index}] ({filePathResolved}) have overlapping matches " +
+                        $"(batchEdits[{prev.index}]: [{prev.match.Start}, {prev.match.Start + prev.match.Length}), " +
+                        $"batchEdits[{curr.index}]: [{curr.match.Start}, {curr.match.Start + curr.match.Length})). " +
                         "Split these into separate ReplaceSnippet calls.");
                 }
             }

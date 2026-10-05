@@ -449,6 +449,110 @@ public static class ToolArgumentValidator
         return notes;
     }
 
+    /// <summary>
+    /// Suffix that marks a tool parameter as a batch-edit array (<c>batchEdits</c>,
+    /// <c>modifierBatchEdits</c>, ...). The repair in <see cref="WrapFlatBatchParameters"/> only
+    /// considers parameters with this suffix.
+    /// </summary>
+    private const string BatchEditsSuffix = "batchEdits";
+
+    /// <summary>
+    /// Repairs a call that passes one edit's fields flat (e.g. <c>filePath</c>, <c>oldContent</c>,
+    /// <c>newContent</c>) to a tool whose only way to carry them is a batch-edit array: the flat keys
+    /// are moved into a one-element array under that parameter, and one note per call tells the model
+    /// the nested form to use next time.
+    /// <para>
+    /// Schema-driven, with no per-tool table: a candidate is a declared parameter whose name ends in
+    /// <c>batchEdits</c>, is absent from the call, and whose emitted <c>items.properties</c> declare
+    /// every key the call supplies that is not itself a declared top-level parameter. Item property
+    /// names match case-insensitively and are rewritten to their declared spelling. The wrap is
+    /// skipped - leaving the keys for <see cref="Validate"/> to reject as unknown - when the call
+    /// already supplies the array (two values for one meaning must not be merged silently), when
+    /// any undeclared key is not an item property (the call is not a flat edit), when more than one
+    /// batch parameter would fit (the tool cannot tell which was meant), or when the items schema is
+    /// not an inline object schema. Run after <see cref="ApplyParameterAliases"/>.
+    /// </para>
+    /// </summary>
+    /// <returns>One note per wrapped call, or <see langword="null"/> when nothing changed.</returns>
+    public static System.Collections.Generic.IReadOnlyList<string>? WrapFlatBatchParameters(
+        ModelContextProtocol.Server.McpServer? server,
+        string? toolName,
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments)
+    {
+        if (arguments is null || arguments.Count == 0 || string.IsNullOrEmpty(toolName))
+            return null;
+
+        var schema = TryGetSchemaParameters(server, toolName);
+        if (schema is null)
+            return null;
+
+        var declared = schema.Value.All;
+
+        // Copy first: the wrap removes keys from the dictionary being inspected.
+        var flatKeys = arguments.Keys
+            .Where(key => !declared.Contains(key) && !RoslynSentinel.Common.HiddenSchemaParams.IsHidden(toolName, key))
+            .ToList();
+        if (flatKeys.Count == 0)
+            return null;
+
+        string? batchParameter = null;
+        System.Collections.Generic.Dictionary<string, string>? itemNames = null;
+        foreach (var (name, propertySchema) in schema.Value.Properties)
+        {
+            if (!name.EndsWith(BatchEditsSuffix, StringComparison.OrdinalIgnoreCase) || arguments.ContainsKey(name))
+                continue;
+
+            var candidateItemNames = TryGetItemPropertyNames(propertySchema);
+            if (candidateItemNames is null || !flatKeys.All(candidateItemNames.ContainsKey))
+                continue;
+
+            if (batchParameter is not null)
+                return null;
+
+            batchParameter = name;
+            itemNames = candidateItemNames;
+        }
+
+        if (batchParameter is null || itemNames is null)
+            return null;
+
+        var item = new System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement>(StringComparer.Ordinal);
+        foreach (var key in flatKeys)
+        {
+            item[itemNames[key]] = arguments[key];
+            arguments.Remove(key);
+        }
+
+        arguments[batchParameter] = System.Text.Json.JsonSerializer.SerializeToElement(new[] { item });
+
+        var keyList = string.Join(", ", flatKeys.Select(key => $"'{key}'"));
+        return
+        [
+            $"Note: {keyList} {(flatKeys.Count == 1 ? "is not a parameter" : "are not parameters")} of {toolName}; the call was treated as a single entry of '{batchParameter}'. " +
+            $"Pass '{batchParameter}: [{{ ... }}]' in future calls, one object per edit."
+        ];
+    }
+
+    /// <summary>
+    /// Reads the declared item property names (case-insensitive -> declared spelling) out of an
+    /// array parameter's emitted schema, or <see langword="null"/> when the items are not an inline
+    /// object schema with properties (e.g. a <c>$ref</c>, which this repair deliberately does not chase).
+    /// </summary>
+    private static System.Collections.Generic.Dictionary<string, string>? TryGetItemPropertyNames(System.Text.Json.JsonElement arraySchema)
+    {
+        if (!arraySchema.TryGetProperty("items", out var items) || items.ValueKind != System.Text.Json.JsonValueKind.Object)
+            return null;
+
+        if (!items.TryGetProperty("properties", out var properties) || properties.ValueKind != System.Text.Json.JsonValueKind.Object)
+            return null;
+
+        var names = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in properties.EnumerateObject())
+            names[property.Name] = property.Name;
+
+        return names.Count == 0 ? null : names;
+    }
+
     /// Checks a tool call's arguments against the tool's emitted input schema BEFORE dispatch, and
     /// returns an actionable error message when the call cannot succeed as written -> or
     /// <see langword="null"/> to let the call proceed.

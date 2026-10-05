@@ -882,6 +882,11 @@ public static class RoslynSentinelServiceExtensionsBasic
                     aliasNotes = ToolArgumentValidator.ApplyParameterAliases(
                         context.Server, context.Params?.Name, context.Params?.Arguments);
 
+                    var wrapNotes = ToolArgumentValidator.WrapFlatBatchParameters(
+                        context.Server, context.Params?.Name, context.Params?.Arguments);
+                    if (wrapNotes is not null)
+                        aliasNotes = aliasNotes is null ? wrapNotes : [.. aliasNotes, .. wrapNotes];
+
                     var validationError = ToolArgumentValidator.Validate(
                         context.Server, context.Params?.Name, context.Params?.Arguments);
 
