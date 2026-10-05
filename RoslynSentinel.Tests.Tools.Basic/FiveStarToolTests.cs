@@ -22,6 +22,8 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 // ══════════════════════════════════════════════════════════════════════════════
 
 [TestFixture]
+[Category("MsAugmentResult")] // sentinel:auto-category
+[Category("MsToolAugmentEngine")] // sentinel:auto-category
 public class ExtractConstantSafeStrongTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -331,6 +333,8 @@ public class ExtractConstantSafeStrongTests
 // ══════════════════════════════════════════════════════════════════════════════
 
 [TestFixture]
+[Category("MsAugmentResult")] // sentinel:auto-category
+[Category("MsToolAugmentEngine")] // sentinel:auto-category
 public class ConvertStringFormatSmartTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -545,6 +549,8 @@ public class ConvertStringFormatSmartTests
 // ══════════════════════════════════════════════════════════════════════════════
 
 [TestFixture]
+[Category("AddUsingsPreview")] // sentinel:auto-category
+[Category("MsToolAugmentEngine")] // sentinel:auto-category
 public class PreviewAddMissingUsingsLoadedTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -708,6 +714,8 @@ public class PreviewAddMissingUsingsLoadedTests
 // ══════════════════════════════════════════════════════════════════════════════
 
 [TestFixture]
+[Category("MsAugmentResult")] // sentinel:auto-category
+[Category("MsToolAugmentEngine")] // sentinel:auto-category
 public class FormatDocumentSafeTests
 {
     private IWorkspaceManager _workspaceManager;

@@ -13,6 +13,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 // write). See ModifyAttributeBatchTests for the pattern.
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
+[Category("RefactoringStructuralTools")] // sentinel:auto-category
 public class ModifyBaseTypeBatchTests
 {
     private const string FixtureRelativePath = "ContosoOrders.Core/BaseTypeBatchFixture.cs";
@@ -352,6 +353,8 @@ public class ModifyBaseTypeBatchTests
     }
 
     [Test]
+    [Category("AttributeTextEditBuilder")] // sentinel:auto-category
+    [Category("BaseTypeTextEditBuilder")] // sentinel:auto-category
     public void BaseTypeTextEdits_TwoEditsRewritingTheSameBaseList_AreRejectedNamingBothEdits()
     {
         var text = Microsoft.CodeAnalysis.Text.SourceText.From("public class C : IA, IB\n{\n}\n");

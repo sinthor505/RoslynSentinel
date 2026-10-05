@@ -254,6 +254,8 @@ namespace Fixtures
 
     [Test]
     [Description("framework is the closed TestCategoryFramework enum (default Auto) serialized by name, so the schema lists the valid values")]
+    [Category("TestCategoryFramework")] // sentinel:auto-category
+    [Category("TestCategoryTaggingTools")] // sentinel:auto-category
     public void FrameworkParameter_IsAStringNamedEnumDefaultingToAuto()
     {
         var parameter = typeof(TestCategoryTaggingTools).GetMethod(nameof(TestCategoryTaggingTools.TagTestCategories))!
@@ -273,6 +275,7 @@ namespace Fixtures
     [TestCase(TestCategoryFramework.NUnit)]
     [TestCase(TestCategoryFramework.Auto)]
     [Description("An explicit framework that matches the project drives the plan like Auto does")]
+    [Category("TestCategoryFramework")] // sentinel:auto-category
     public async Task Framework_Explicit_PlansForMatchingProject(TestCategoryFramework framework)
     {
         var json = ToJson(await CallAsync(framework: framework));
@@ -294,6 +297,7 @@ namespace Fixtures
 
     [Test]
     [Description("The tool is declared with McpServerTool and belongs to the testCategories toolset in the catalog")]
+    [Category("TestCategoryTaggingTools")] // sentinel:auto-category
     public void Tool_IsDeclaredAndCatalogued()
     {
         var method = typeof(TestCategoryTaggingTools).GetMethod(nameof(TestCategoryTaggingTools.TagTestCategories));

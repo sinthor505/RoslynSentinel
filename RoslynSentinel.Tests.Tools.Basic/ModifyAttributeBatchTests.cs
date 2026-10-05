@@ -11,6 +11,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 // fidelity (BOM, line endings, write-through) is covered by the dedicated disk tests, not here.
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
+[Category("RefactoringStructuralTools")] // sentinel:auto-category
 public class ModifyAttributeBatchTests
 {
     private const string FixtureRelativePath = "ContosoOrders.Core/AttributeBatchFixture.cs";

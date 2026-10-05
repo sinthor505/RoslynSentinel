@@ -17,6 +17,9 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
 [Category("Disk")]
+[Category("SymbolNavigationEngine")] // sentinel:auto-category
+[Category("WholeFileWriteTools")] // sentinel:auto-category
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class EolInheritanceTests
 {
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)

@@ -16,6 +16,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class ReplaceSnippetErrorCodeTests
 {
     private const string DupHolderRelativePath = "ContosoOrders.Core/DupHolder.cs";

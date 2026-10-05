@@ -11,6 +11,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 // the original on one InMemoryWorkspace and Declaration on a second, identical one, then compares outcome and file text.
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
+[Category("DeclarationTools")] // sentinel:auto-category
 public class DeclarationToolTests
 {
     private const string FixtureRelativePath = "ContosoOrders.Core/DeclarationFixture.cs";
@@ -66,6 +67,7 @@ public class DeclarationToolTests
 
     [TestCase(AddRemoveAction.add, NonAccessibilityModifier.@static, "static void MethodOne")]
     [TestCase(AddRemoveAction.add, NonAccessibilityModifier.@new, "new void MethodOne")]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Declaration_Modifier_MatchesModifyModifierAsync(AddRemoveAction action, NonAccessibilityModifier modifier, string expectedText)
     {
         using var original = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
@@ -83,6 +85,7 @@ public class DeclarationToolTests
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Declaration_ModifierEditsBatch_MatchesModifyModifierBatchAsync()
     {
         using var original = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
@@ -104,6 +107,7 @@ public class DeclarationToolTests
     [TestCase(AccessibilityLevel.@public, "public void MethodOne")]
     [TestCase(AccessibilityLevel.@internal, "internal void MethodOne")]
     [TestCase(AccessibilityLevel.protectedInternal, "protected internal void MethodOne")]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task Declaration_Accessibility_MatchesChangeAccessibilityAsync(AccessibilityLevel level, string expectedText)
     {
         using var original = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
@@ -120,6 +124,7 @@ public class DeclarationToolTests
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task Declaration_Accessibility_DryRun_MatchesAndDoesNotWriteAsync()
     {
         using var original = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
@@ -180,6 +185,7 @@ public class DeclarationToolTests
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Declaration_Modifier_MissingParams_ReturnsTheSameErrorAsModifyModifierAsync()
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
@@ -194,6 +200,7 @@ public class DeclarationToolTests
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Declaration_AttributeAdd_MatchesModifyAttributeAsync()
     {
         var text = await AssertParityAsync(
@@ -204,6 +211,7 @@ public class DeclarationToolTests
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Declaration_AttributeReplace_MatchesModifyAttributeAsync()
     {
         var text = await AssertParityAsync(
@@ -214,6 +222,7 @@ public class DeclarationToolTests
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Declaration_AttributeRemove_MatchesModifyAttributeAsync()
     {
         var text = await AssertParityAsync(
@@ -224,6 +233,7 @@ public class DeclarationToolTests
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Declaration_AttributeBatch_MatchesModifyAttributeBatchAsync()
     {
         List<AttributeEdit> EditsFor(InMemoryWorkspace ws) =>
@@ -240,6 +250,7 @@ public class DeclarationToolTests
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Declaration_BaseTypeAdd_MatchesModifyBaseTypeAsync()
     {
         var text = await AssertParityAsync(
@@ -250,6 +261,7 @@ public class DeclarationToolTests
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Declaration_BaseTypeRemove_MatchesModifyBaseTypeAsync()
     {
         var text = await AssertParityAsync(
@@ -260,6 +272,7 @@ public class DeclarationToolTests
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Declaration_BaseTypeBatch_MatchesModifyBaseTypeBatchAsync()
     {
         List<BaseTypeEdit> EditsFor(InMemoryWorkspace ws) =>
@@ -275,6 +288,7 @@ public class DeclarationToolTests
     }
 
     [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Declaration_AttributeReplaceWithoutNewAttribute_ReturnsTheSameErrorAsModifyAttributeAsync()
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, RichSource));

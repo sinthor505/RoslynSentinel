@@ -15,6 +15,8 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Category("ProjectFrameworkSummary")] // sentinel:auto-category
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class ListProjectFrameworkTargetsTests
 {
     private FakeWorkspaceManager _workspaceManager;

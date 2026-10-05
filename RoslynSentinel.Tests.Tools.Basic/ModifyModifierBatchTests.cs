@@ -10,6 +10,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 // write). See ModifyAttributeBatchTests for the pattern.
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
+[Category("RefactoringStructuralTools")] // sentinel:auto-category
 public class ModifyModifierBatchTests
 {
     private const string FixtureRelativePath = "ContosoOrders.Core/ModifierBatchFixture.cs";

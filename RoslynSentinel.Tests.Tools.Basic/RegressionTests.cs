@@ -26,6 +26,7 @@ namespace RoslynSentinel.Tests;
 ///  10. ContextHelper -> snippet disambiguation with lineBefore/lineAfter
 /// </summary>
 [TestFixture]
+[Category("MsToolAugmentEngine")] // sentinel:auto-category
 public class RegressionTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -66,6 +67,9 @@ public class RegressionTests
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    [Category("ExistingParameterSpec")] // sentinel:auto-category
     public async Task ChangeSignature_ReordersCallSiteArguments_NotJustDeclaration()
     {
         // Regression: ChangeSignatureAsync was a stub that returned an empty dict.
@@ -110,6 +114,9 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    [Category("ExistingParameterSpec")] // sentinel:auto-category
     public async Task ChangeSignature_TwoParam_Swap_RoundTrip()
     {
         // Swapping parameters and back should produce stable output.
@@ -129,6 +136,7 @@ public class RegressionTests
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task ExtractInterface_BlockStyleNamespace_IncludesNamespaceInGeneratedFile()
     {
         // Regression: earlier version only handled file-scoped namespaces (namespace Foo;).
@@ -161,6 +169,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task ExtractInterface_FileScopedNamespace_StillWorks()
     {
         // Ensure the file-scoped namespace path remains functional (regression guard).
@@ -186,6 +195,7 @@ public class RegressionTests
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task MoveTypeToFile_InterfaceType_MovesToOwnFile()
     {
         // Tests moving an interface (not class/record) -> untested by prior tests.
@@ -213,6 +223,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task MoveTypeToFile_SingleTypeFile_ReturnsEmptyDict()
     {
         // When a file contains only one type whose name matches the filename, it's already in its own
@@ -233,6 +244,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task MoveTypeToFile_EnumType_MovesToOwnFile()
     {
         // Enums are BaseTypeDeclarationSyntax -> should be movable.
@@ -260,6 +272,7 @@ public class RegressionTests
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task FindCallersSafe_OverloadedMethod_ContextSnippetSelectsCorrectOverload()
     {
         // When the same method name has multiple overloads, contextSnippet disambiguates.
@@ -297,6 +310,8 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("CallerInfo")] // sentinel:auto-category
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task FindCallersSafe_NoContextSnippet_FindsAllOverloads()
     {
         // Without contextSnippet, all overloads' callers are returned.
@@ -323,6 +338,8 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("CallerInfo")] // sentinel:auto-category
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task FindCallersSafe_FieldNameShadowedByCtorParam_ContextSnippetOnAssignmentLineResolvesToField()
     {
         // Regression for docs/current/blockers/blocking_error_findreferences_field_contextsnippet_resolves_to_ctorparam.md:
@@ -359,6 +376,8 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("CallerInfo")] // sentinel:auto-category
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task FindCallersSafe_FieldNameOnly_NoContextSnippet_ResolvesDeclaredField()
     {
         // Regression for the same blocker doc: pinning filePath with symbolName alone (no
@@ -391,6 +410,9 @@ public class RegressionTests
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("FormatHunk")] // sentinel:auto-category
+    [Category("FormatPreviewResult")] // sentinel:auto-category
     public async Task FormatDocumentPreview_ChangedFile_HunksHaveRemovedOrAddedContent()
     {
         // A hunk must carry actual line content -> not just empty lists.
@@ -410,6 +432,8 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("FormatPreviewResult")] // sentinel:auto-category
     public async Task FormatDocumentPreview_TotalHunks_MatchesHunkListCount()
     {
         // TotalHunks property must match the Hunks list length -> structural consistency.
@@ -422,6 +446,8 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("FormatPreviewResult")] // sentinel:auto-category
     public async Task FormatDocumentPreview_UnchangedFile_TotalHunksIsZero()
     {
         // A perfectly-formatted file must produce zero hunks and Changed=false.
@@ -446,6 +472,8 @@ public class RegressionTests
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("DiagnosticEngine")] // sentinel:auto-category
+    [Category("DiagnosticSummary")] // sentinel:auto-category
     public async Task GetDiagnosticsSummary_MultipleErrorsSameId_AreGrouped()
     {
         // Multiple occurrences of the same diagnostic ID must be grouped/counted,
@@ -476,6 +504,8 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("DiagnosticEngine")] // sentinel:auto-category
+    [Category("DiagnosticSummary")] // sentinel:auto-category
     public async Task GetFileDiagnosticsSummary_WellFormedFile_ZeroErrors()
     {
         // REGRESSION: DiagnosticEngine must not falsely report errors on valid code.
@@ -499,6 +529,7 @@ public class RegressionTests
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task MoveTypeToFile_BothFiles_HaveSubstantialContent()
     {
         // Session 11 fix: MoveTypeToFile now returns content previews.
@@ -528,6 +559,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task MoveAllTypesToFiles_EachNewFile_HasNamespaceAndType()
     {
         // Batch move: every generated file must have a namespace and the expected type.
@@ -563,6 +595,7 @@ public class RegressionTests
     // ── EncapsulateFieldSafe ──────────────────────────────────────────────────
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
     public async Task EncapsulateFieldSafe_BackingFieldUsesUnderscoreCamelCase()
     {
         // Bug: standard encapsulate_field generates "private int SuccessCount;"
@@ -586,6 +619,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
     public async Task EncapsulateFieldSafe_PropertyNameIsPascalCase()
     {
         SetSource("""
@@ -604,6 +638,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
     public async Task EncapsulateFieldSafe_PropertyGetterReferencesBackingField_NotItself()
     {
         // Core regression: property body must reference _fieldName, not FieldName
@@ -627,6 +662,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
     public async Task EncapsulateFieldSafe_ExistingUsagesRewritten_ToNewFieldName()
     {
         // All references to the field in method bodies must also be updated to _fieldName
@@ -652,6 +688,7 @@ public class RegressionTests
     // ── AnalyzeSwitchForPatternConversion ─────────────────────────────────────
 
     [Test]
+    [Category("SwitchConversionAnalysis")] // sentinel:auto-category
     public async Task AnalyzeSwitchForPatternConversion_SingleAssignPerCase_IsSafe()
     {
         // A switch where every case assigns exactly one variable -> safe to convert
@@ -681,6 +718,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("SwitchConversionAnalysis")] // sentinel:auto-category
     public async Task AnalyzeSwitchForPatternConversion_MultiAssignPerCase_IsUnsafe()
     {
         // The MS bug: multi-assign per case causes silent data loss
@@ -713,6 +751,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("SwitchConversionAnalysis")] // sentinel:auto-category
     public async Task AnalyzeSwitchForPatternConversion_ReturnsPerCase_IsSafe()
     {
         // Return-per-case is a valid pattern expression target
@@ -741,6 +780,7 @@ public class RegressionTests
     // ── ConvertSwitchToPatternSafe ────────────────────────────────────────────
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
     public async Task ConvertSwitchToPatternSafe_MultiAssign_RejectsWithError()
     {
         // Critical: must NOT silently drop assignments (the MS bug)
@@ -773,6 +813,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
     public async Task ConvertSwitchToPatternSafe_SingleAssign_ConvertsCorrectly()
     {
         SetSource("""
@@ -808,6 +849,7 @@ public class RegressionTests
     // ── ConvertStringFormatToInterpolatedSmart ────────────────────────────────
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
     public async Task ConvertStringFormatToInterpolatedSmart_ConstFormatString_Converts()
     {
         // Standard tool fails on named constants -> ours resolves via semantic model
@@ -835,6 +877,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
     public async Task ConvertStringFormatToInterpolatedSmart_LiteralFormatString_Converts()
     {
         // Also works on plain literals (same as standard tool, just our path)
@@ -862,6 +905,7 @@ public class RegressionTests
     // ── SortAndDeduplicateUsings ──────────────────────────────────────────────
 
     [Test]
+    [Category("UsingsCleanupResult")] // sentinel:auto-category
     public async Task SortAndDeduplicateUsings_DuplicatesAreRemoved()
     {
         // Standard sort_usings does NOT remove duplicates -> ours does
@@ -893,6 +937,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("UsingsCleanupResult")] // sentinel:auto-category
     public async Task SortAndDeduplicateUsings_SystemUsingsFirst()
     {
         // System.* usings must come before non-system usings after sort
@@ -919,6 +964,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("UsingsCleanupResult")] // sentinel:auto-category
     public async Task SortAndDeduplicateUsings_NoDuplicates_OriginalCountMatchesResult()
     {
         SetSource("""
@@ -944,6 +990,7 @@ public class RegressionTests
     // ── FormatDocumentSafe ────────────────────────────────────────────────────
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
     public async Task FormatDocumentSafe_Preview_DoesNotModifyDisk()
     {
         // Arrange: write a poorly-formatted file to disk
@@ -981,6 +1028,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
     public async Task FormatDocumentSafe_Apply_WritesFormattedContentToDisk()
     {
         var tempFile = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.cs");
@@ -1017,6 +1065,7 @@ public class RegressionTests
     // ── AnalyzeForeachForLinqConversion ───────────────────────────────────────
 
     [Test]
+    [Category("ForeachLinqAnalysis")] // sentinel:auto-category
     public async Task AnalyzeForeachForLinq_NoModificationsBeforeForeach_ReportsSafe()
     {
         var tempFile = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.cs");
@@ -1059,6 +1108,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("ForeachLinqAnalysis")] // sentinel:auto-category
     public async Task AnalyzeForeachForLinq_WithPreForeachModification_ReportsUnsafe()
     {
         // Demonstrates the MS bug: results.Add("header") would be silently dropped
@@ -1106,6 +1156,7 @@ public class RegressionTests
     // ── GetWorkspaceHealthAsync ────────────────────────────────────────────────────
 
     [Test]
+    [Category("WorkspaceHealthMiscImpl")] // sentinel:auto-category
     public async Task GetWorkspaceHealth_NoSolutionLoaded_IsOperationalTrue_HasLoadedSolutionFalse()
     {
         // Create a fresh workspace manager with NO solution loaded
@@ -1125,6 +1176,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("WorkspaceHealthMiscImpl")] // sentinel:auto-category
     public async Task GetWorkspaceHealth_WithLoadedSolution_ReportsCorrectCounts()
     {
         SetSource("""
@@ -1144,6 +1196,7 @@ public class RegressionTests
     // ── PreviewAddMissingUsings ───────────────────────────────────────────────
 
     [Test]
+    [Category("AddUsingsPreview")] // sentinel:auto-category
     public async Task PreviewAddMissingUsings_NoSolutionLoaded_ReturnsSolutionRequired()
     {
         using var freshManager = new PersistentWorkspaceManager(
@@ -1158,6 +1211,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("AddUsingsPreview")] // sentinel:auto-category
     public async Task PreviewAddMissingUsings_FileNotInSolution_ReturnsWarning()
     {
         SetSource("public class Foo { }");
@@ -1174,6 +1228,7 @@ public class RegressionTests
     // ── ExtractConstantSafe ───────────────────────────────────────────────────
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
     public async Task ExtractConstantSafe_StringLiteral_InsertsConstDeclaration()
     {
         var tempFile = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.cs");
@@ -1207,6 +1262,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
     public async Task ExtractConstantSafe_ReplacesAllIdenticalLiterals()
     {
         var tempFile = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.cs");
@@ -1245,6 +1301,7 @@ public class RegressionTests
     }
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
     public async Task ExtractConstantSafe_InvalidIdentifier_ReturnsFailure()
     {
         var tempFile = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}.cs");

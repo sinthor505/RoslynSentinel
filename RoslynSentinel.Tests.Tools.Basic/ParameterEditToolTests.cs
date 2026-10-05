@@ -13,6 +13,8 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 // runs the original on one InMemoryWorkspace and ParameterEdit on a second, identical one, then compares outcome and file text.
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
+[Category("ParameterEditTools")] // sentinel:auto-category
+[Category("RefactoringSignatureTools")] // sentinel:auto-category
 public class ParameterEditToolTests
 {
     private const string FixtureRelativePath = "ContosoOrders.Core/ParameterEditFixture.cs";

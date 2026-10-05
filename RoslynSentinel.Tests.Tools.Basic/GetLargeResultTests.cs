@@ -21,6 +21,7 @@ namespace RoslynSentinel.Tests.Basic;
 ///   T6  – FilePathWrapper outside largeresults directory -> error
 /// </summary>
 [TestFixture]
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class GetLargeResultTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -173,6 +174,7 @@ public class GetLargeResultTests
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
+    [Category("ApiSurfaceEntry")] // sentinel:auto-category
     public async Task T4_GetLargeResult_ValidScanId_ApiSurfaceEntryList_ReturnsEntries()
     {
         var resultId = Guid.NewGuid().ToString("N");

@@ -24,6 +24,8 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// Fix: use SemanticModel.GetTypeInfo() on the return expression.
 /// </summary>
 [TestFixture]
+[Category("MsAugmentResult")] // sentinel:auto-category
+[Category("MsToolAugmentEngine")] // sentinel:auto-category
 public class AugmentToolsTests
 {
     private IWorkspaceManager _workspaceManager;

@@ -17,6 +17,8 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Category("SymbolNavigationEngine")] // sentinel:auto-category
+[Category("WholeFileWriteTools")] // sentinel:auto-category
 public class MutatingToolRejectionMessageTests
 {
     private const string HelperFileContent = """

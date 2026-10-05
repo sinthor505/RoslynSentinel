@@ -11,6 +11,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// Tests for RefactoringToolHelpers: ErrorCodeFor overloads and RequireUpdatedText behavior with ErrorCode precedence.
 /// </summary>
 [TestFixture]
+[Category("RefactoringToolHelpers")] // sentinel:auto-category
 public class RefactoringToolHelpersTests
 {
     [Test]

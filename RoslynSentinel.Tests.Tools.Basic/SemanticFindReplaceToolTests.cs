@@ -13,6 +13,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// Tests for SemanticFindReplaceTools: rename a bool property/field and invert its polarity at every site.
 /// </summary>
 [TestFixture]
+[Category("SemanticFindReplaceTools")] // sentinel:auto-category
 public class SemanticFindReplaceToolTests
 {
     private IWorkspaceManager _workspaceManager;

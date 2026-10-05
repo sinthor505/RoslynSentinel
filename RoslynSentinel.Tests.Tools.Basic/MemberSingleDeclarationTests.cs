@@ -18,6 +18,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 /// </summary>
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
+[Category("RefactoringStructuralTools")] // sentinel:auto-category
 public class MemberSingleDeclarationTests
 {
     private const string FixtureRelativePath = "ContosoOrders.Core/MemberSingleDeclarationFixture.cs";

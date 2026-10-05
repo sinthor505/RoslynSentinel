@@ -3,6 +3,9 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Tools.Basic;
 
 [TestFixture]
+[Category("McpServerStatusDeclaredTool")] // sentinel:auto-category
+[Category("McpServerStatusResult")] // sentinel:auto-category
+[Category("McpServerStatusToolListing")] // sentinel:auto-category
 public class McpServerStatusToolListingTests
 {
     private PersistentWorkspaceManager _manager = null!;
@@ -116,6 +119,7 @@ public class McpServerStatusToolListingTests
     }
 
     [Test]
+    [Category("ServerStatusTools")] // sentinel:auto-category
     public void ClaudeLeanAllowList_MarksToolsOutsideItInactive_AndHintsAtWiderModes()
     {
         // claude-lean activates WorkspaceTools/GitTools/... as classes, but only the allow-listed tools.
@@ -158,6 +162,7 @@ public class McpServerStatusToolListingTests
     }
 
     [Test]
+    [Category("ServerStatusTools")] // sentinel:auto-category
     public void NoAllowList_InactiveClassKeepsOrdinaryClassLevelHint()
     {
         var modes = new Dictionary<string, IReadOnlyList<string>>

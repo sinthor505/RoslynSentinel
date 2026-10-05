@@ -16,6 +16,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
 [FixtureLifeCycle(LifeCycle.InstancePerTestCase)]
+[Category("GitTools")] // sentinel:auto-category
 public class GitToolsSmokeTests
 {
     // Generous relative to GitProcessTimeout's 30s -> this isn't testing the timeout boundary
@@ -234,6 +235,11 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitCommitEntry")] // sentinel:auto-category
+    [Category("GitLogResult")] // sentinel:auto-category
+    [Category("GitResult")] // sentinel:auto-category
+    [Category("GitStatusEntry")] // sentinel:auto-category
+    [Category("GitStatusResult")] // sentinel:auto-category
     public async Task Git_Reset_Soft_MovesHeadAndRestagesChangesAsync()
     {
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "second commit content");
@@ -256,6 +262,9 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitResult")] // sentinel:auto-category
+    [Category("GitStatusEntry")] // sentinel:auto-category
+    [Category("GitStatusResult")] // sentinel:auto-category
     public async Task Git_Reset_Mixed_UnstagesButKeepsWorkingTreeChangesAsync()
     {
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "second commit content");
@@ -276,6 +285,9 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitResult")] // sentinel:auto-category
+    [Category("GitStatusEntry")] // sentinel:auto-category
+    [Category("GitStatusResult")] // sentinel:auto-category
     public async Task Git_Status_RepoPath_TargetsADifferentRepoThanTheLoadedSolutionAsync()
     {
         var otherRepoDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelGitSmoke_Other_" + Guid.NewGuid());
@@ -314,6 +326,7 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitCommitResult")] // sentinel:auto-category
     public async Task Git_Commit_ReturnsCommitHashLengthMatchingActualHashAsync()
     {
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "commit hash length test");
@@ -329,6 +342,9 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitCommitEntry")] // sentinel:auto-category
+    [Category("GitLogResult")] // sentinel:auto-category
+    [Category("GitRevertResult")] // sentinel:auto-category
     public async Task Git_Revert_ReturnsCommitHashLengthMatchingActualHashAsync()
     {
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "revert hash length test");
@@ -366,6 +382,8 @@ public class GitToolsSmokeTests
     // (the legacy OS codepage) instead of UTF-8, so any non-ASCII multi-byte character in a diffed
     // file's content came back as mojibake. This asserts the actual UTF-8 character round-trips.
     [Test]
+    [Category("GitDiffResult")] // sentinel:auto-category
+    [Category("GitResult")] // sentinel:auto-category
     public async Task Git_Diff_RoundTripsNonAsciiCharacterCorrectlyAsync()
     {
         // U+2014 EM DASH is UTF-8 encoded as the 3-byte sequence E2 80 94 - exactly the shape that
@@ -385,6 +403,8 @@ public class GitToolsSmokeTests
 
 
     [Test]
+    [Category("GitResult")] // sentinel:auto-category
+    [Category("GitShowResult")] // sentinel:auto-category
     public async Task Git_Show_RoundTripsNonAsciiCharacterInFileContentCorrectlyAsync()
     {
         const string emDash = "—";
@@ -404,6 +424,8 @@ public class GitToolsSmokeTests
 
 
     [Test]
+    [Category("GitDiffResult")] // sentinel:auto-category
+    [Category("GitResult")] // sentinel:auto-category
     public async Task Git_Diff_WarnsWhenOutputContainsReplacementCharacterAsync()
     {
         // Simulates a genuinely undecodable byte sequence reaching the diff text (rather than
@@ -454,6 +476,7 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitCommitResult")] // sentinel:auto-category
     public async Task Git_Commit_ListedScope_ForceTrackedFileUnderGitignoredDirAsync()
     {
         // Blocker case 2: a force-tracked file under a gitignored directory is deleted
@@ -484,6 +507,7 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitCommitResult")] // sentinel:auto-category
     public async Task Git_Commit_FilesWithoutScope_CommitsExactPathsAndLeavesOtherStaged_GapAAsync()
     {
         // Gap A: commit with files and no scope should commit exactly those paths
@@ -615,6 +639,7 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitCommitResult")] // sentinel:auto-category
     public async Task Git_Commit_RenameWithOnlyOneListedSide_LeavesOtherSideStaged_Async()
     {
         // Rename listed by only one side: commit succeeds, RemainingStaged contains the other side.
@@ -640,6 +665,7 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitCommitResult")] // sentinel:auto-category
     public async Task Git_Commit_ListedScope_AlreadyStagedDeletion_CommitsOnlyItAndReportsCleanRemainingStagedAsync()
     {
         // Answers the plan's open question: git commit --only -- <path> resolves a path whose
@@ -824,6 +850,9 @@ public class GitToolsSmokeTests
     // Phase 3 tests: read-side parity (status -z parsing, maxEntries, nameOnly/stat, byte cap, conflicts)
 
     [Test]
+    [Category("GitCommitResult")] // sentinel:auto-category
+    [Category("GitStatusEntry")] // sentinel:auto-category
+    [Category("GitStatusResult")] // sentinel:auto-category
     public async Task Git_Status_PathsWithSpacesAndNonAscii_RoundTripIntoFilesAsync()
     {
         // Non-ASCII built from char codes (e-acute, u-umlaut) so this source file stays ASCII-only.
@@ -858,6 +887,8 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitStatusEntry")] // sentinel:auto-category
+    [Category("GitStatusResult")] // sentinel:auto-category
     public async Task Git_Status_StagedRename_ReturnsPathAndOriginalPathAsync()
     {
         WriteFile("old name.txt", "line one\nline two\nline three\nline four\nline five\n");
@@ -886,6 +917,7 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitStatusResult")] // sentinel:auto-category
     public async Task Git_Status_MaxEntries_ControlsTruncationThresholdAsync()
     {
         for (var i = 0; i < 60; i++)
@@ -930,6 +962,8 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitDiffResult")] // sentinel:auto-category
+    [Category("GitShowResult")] // sentinel:auto-category
     public async Task Git_ShowAndDiff_NameOnlyAndStat_ReturnFileListAndStatInsteadOfPatchAsync()
     {
         var accented = "caf" + (char)0xE9 + ".txt";
@@ -982,6 +1016,7 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitDiffResult")] // sentinel:auto-category
     public async Task Git_Diff_MaxBytes_CountsUtf8BytesAndNeverSplitsSurrogatePairAsync()
     {
         // U+1F600 is 4 UTF-8 bytes and a 2-char surrogate pair in .NET: 2000 of them are 8000
@@ -1035,6 +1070,8 @@ public class GitToolsSmokeTests
 
     [TestCase("shared.txt", true, "UU")]
     [TestCase("bothadded.txt", false, "AA")]
+    [Category("GitStatusEntry")] // sentinel:auto-category
+    [Category("GitStatusResult")] // sentinel:auto-category
     public async Task Git_Status_MergeConflict_IsLabelledConflictOnBothSidesAsync(string relPath, bool existsInBase, string expectedPair)
     {
         CreateMergeConflict(relPath, existsInBase);
@@ -1075,6 +1112,10 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitCommitEntry")] // sentinel:auto-category
+    [Category("GitDiffResult")] // sentinel:auto-category
+    [Category("GitLogResult")] // sentinel:auto-category
+    [Category("GitShowResult")] // sentinel:auto-category
     public async Task Git_Ref_WorksOnLogShowDiffAndReset_AndAliasesStillAcceptedAsync()
     {
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "second commit content");
@@ -1161,6 +1202,7 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitCheckoutResult")] // sentinel:auto-category
     public async Task Git_Checkout_CreateBranch_ExistingIsPlainCheckoutAndNewIsCreated_ReportedTruthfullyAsync()
     {
         var baseBranch = RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim();
@@ -1355,6 +1397,7 @@ public class GitToolsSmokeTests
     // Phase 5 tests: abort, InProgress, conflict advice, revert of a merge commit
 
     [Test]
+    [Category("GitStatusResult")] // sentinel:auto-category
     public async Task Git_Abort_ConflictedMerge_RestoresCleanTreeAsync()
     {
         CreateMergeConflict("shared.txt", existsInBase: true);
@@ -1384,6 +1427,7 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitStatusResult")] // sentinel:auto-category
     public async Task Git_Status_InProgress_IsNullWhenIdleAndMergeDuringConflictedMergeAsync()
     {
         var idle = await _gitTools.Git(reason: "status when idle", GitOperation.status);
@@ -1414,6 +1458,7 @@ public class GitToolsSmokeTests
 
     [TestCase(false, "merge")]
     [TestCase(true, "rebase")]
+    [Category("GitStatusResult")] // sentinel:auto-category
     public async Task Git_Pull_Conflict_MentionsAbortAndStateThenAbortRestoresLocalHeadAsync(bool rebase, string expectedState)
     {
         var branch = AddBareRemoteAndPush();
@@ -1434,6 +1479,7 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitStatusResult")] // sentinel:auto-category
     public async Task Git_Revert_Conflict_MentionsAbortThenAbortRestoresCleanTreeAsync()
     {
         foreach (var version in new[] { "v1", "v2", "v3" })
@@ -1719,6 +1765,7 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    [Category("GitStatusResult")] // sentinel:auto-category
     public async Task Git_Status_UntrackedFiles_ExpandsDirectoriesToIndividualFilesAsync()
     {
         // Create untracked nested directory structure.

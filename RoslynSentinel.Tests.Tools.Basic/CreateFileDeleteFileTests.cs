@@ -15,6 +15,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
+[Category("SymbolNavigationEngine")] // sentinel:auto-category
+[Category("WholeFileWriteTools")] // sentinel:auto-category
 public class CreateFileDeleteFileTests
 {
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
@@ -193,6 +195,7 @@ public class CreateFileDeleteFileTests
     }
 
     [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
     public async Task CreateFile_NonCsFile_ThenReadFile_ReturnsContentAsync()
     {
         // CreateFile writes any file regardless of extension; PersistentWorkspaceManager's
@@ -261,6 +264,7 @@ public class CreateFileDeleteFileTests
     }
 
     [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
     public async Task DeleteFile_ThenUndoLastApply_RestoresFileAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -336,6 +340,7 @@ public class CreateFileDeleteFileTests
     // populatable type.
 
     [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
     public async Task CreateFileTool_MissingNamespaceForCsFile_FailsAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -354,6 +359,7 @@ public class CreateFileDeleteFileTests
 
     [TestCase(null, "Foo", TestName = "CreateFileTool_MissingTypeKindForCsFile_FailsAsync")]
     [TestCase(NewTypeKind.@class, null, TestName = "CreateFileTool_MissingTypeNameForCsFile_FailsAsync")]
+    [Category("WorkspaceTools")] // sentinel:auto-category
     public async Task CreateFileTool_MissingTypeKindOrTypeNameForCsFile_FailsAsync(NewTypeKind? typeKind, string? typeName)
     {
         using var fixture = new TestSolutionFixture();
@@ -371,6 +377,7 @@ public class CreateFileDeleteFileTests
     }
 
     [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
     public async Task CreateFileTool_AlreadyExists_FailsWithoutOverwritingAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -389,6 +396,7 @@ public class CreateFileDeleteFileTests
     }
 
     [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
     public async Task CreateFileTool_ParentDirectoryMissing_CreatesDirectoryAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -405,6 +413,7 @@ public class CreateFileDeleteFileTests
     }
 
     [Test]
+    [Category("WorkspaceTools")] // sentinel:auto-category
     public async Task CreateFileTool_NonCsFile_SeedsEmptyContentIgnoringNamespaceAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -427,6 +436,7 @@ public class CreateFileDeleteFileTests
     [TestCase(NewTypeKind.@enum, "public enum Foo\n{\n}\n")]
     [TestCase(NewTypeKind.@struct, "public struct Foo\n{\n}\n")]
     [TestCase(NewTypeKind.staticClass, "public static class Foo\n{\n}\n")]
+    [Category("WorkspaceTools")] // sentinel:auto-category
     public async Task CreateFileTool_WithTypeKindAndName_SeedsTypeSkeletonAsync(NewTypeKind typeKind, string expectedTypeSource)
     {
         using var fixture = new TestSolutionFixture();
@@ -447,6 +457,14 @@ public class CreateFileDeleteFileTests
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("MemberRefactoringEngine")] // sentinel:auto-category
+    [Category("MsToolAugmentEngine")] // sentinel:auto-category
+    [Category("RefactoringStructuralImpl")] // sentinel:auto-category
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    [Category("SemanticRefactoringEngine")] // sentinel:auto-category
+    [Category("StructuralRefinementEngine")] // sentinel:auto-category
+    [Category("WorkspaceTools")] // sentinel:auto-category
     public async Task CreateFileTool_ThenMemberAdd_PopulatesMembersAndAddsSecondTypeAsync()
     {
         // The actual end-to-end scenario the tool exists for: Member/ModifyEnum/etc. all require

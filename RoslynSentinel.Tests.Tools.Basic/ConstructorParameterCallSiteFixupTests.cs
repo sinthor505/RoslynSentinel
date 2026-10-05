@@ -14,6 +14,7 @@ namespace RoslynSentinel.Tests.Basic;
 /// tests go through the tool surface (error codes, dryRun, compile gate).
 /// </summary>
 [TestFixture]
+[Category("AddConstructorParameterCascadeResult")] // sentinel:auto-category
 public class ConstructorParameterCallSiteFixupTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -293,6 +294,7 @@ public class Caller
     }
 
     [Test]
+    [Category("UnresolvedConstructorCallSite")] // sentinel:auto-category
     public async Task AddConstructorParameter_CallSiteFixups_UnresolvedWithoutDefault_ReportsSiteKeysAndChangesNothing()
     {
         SetFiles(("Svc.cs", SvcSource), ("Caller.cs", SimpleCaller), ("Other.cs", OtherCaller));
@@ -337,6 +339,7 @@ public class Caller
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task ConstructorParameterTool_CallSiteFixups_WithRemove_IsInvalidArgument()
     {
         SetFiles(("Svc.cs", SvcSource));
@@ -349,6 +352,7 @@ public class Caller
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task ConstructorParameterTool_CallSiteFixups_UnresolvedSites_ReturnsUnresolvedCallSitesWithKeys()
     {
         SetFiles(("Svc.cs", SvcSource), ("Caller.cs", SimpleCaller), ("Other.cs", OtherCaller));
@@ -362,6 +366,7 @@ public class Caller
     }
 
     [Test]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task ConstructorParameterTool_CallSiteFixups_DryRun_PassesCompileGateAndWritesNothing()
     {
         SetFiles(("Svc.cs", SvcSource), ("Caller.cs", SimpleCaller));

@@ -8,6 +8,9 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Category("AdminTools")] // sentinel:auto-category
+[Category("McpServerControlOperation")] // sentinel:auto-category
+[Category("McpServerStopConfirmation")] // sentinel:auto-category
 public class AdminToolsTests
 {
     private IWorkspaceManager _workspaceManager;

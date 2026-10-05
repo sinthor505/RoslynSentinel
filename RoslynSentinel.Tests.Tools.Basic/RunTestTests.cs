@@ -12,6 +12,8 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
+[Category("TestRunResult")] // sentinel:auto-category
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class RunTestTests
 {
     private static WorkspaceTools BuildTools(IWorkspaceManager workspaceManager)
@@ -53,6 +55,7 @@ public class RunTestTests
         """;
 
     [Test]
+    [Category("TestCaseResult")] // sentinel:auto-category
     public async Task RunTest_MixedPassAndFail_ReportsCountsAndFailureMessageAsync()
     {
         using var fixture = new TestSolutionFixture();
@@ -216,6 +219,7 @@ public class RunTestTests
     }
 
     [Test]
+    [Category("TestCaseResult")] // sentinel:auto-category
     public async Task RunTest_ResultsTypeFailed_ReturnsOnlyFailedEntriesAsync()
     {
         using var fixture = new TestSolutionFixture();

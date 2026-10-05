@@ -14,6 +14,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// Tests for NamedArgumentsTools: positional-to-named argument conversion with preview/apply modes and argument validation.
 /// </summary>
 [TestFixture]
+[Category("NamedArgumentsTools")] // sentinel:auto-category
 public class NamedArgumentsToolTests
 {
     private const string Source = @"public class C

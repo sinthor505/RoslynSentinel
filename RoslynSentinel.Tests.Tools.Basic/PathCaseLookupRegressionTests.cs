@@ -18,6 +18,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class PathCaseLookupRegressionTests
 {
     public enum PathSpelling
@@ -204,6 +205,7 @@ public class PathCaseLookupRegressionTests
 
     [TestCase(PathSpelling.MixedCaseDirectory)]
     [TestCase(PathSpelling.UpperDriveLetter)]
+    [Category("WholeFileWriteTools")] // sentinel:auto-category
     public async Task ApplyDiff_DiffFormat_MisCasedPath_FindsDocumentAndWritesAsync(PathSpelling spelling)
     {
         using var h = await CreateHarnessAsync();
@@ -222,6 +224,7 @@ public class PathCaseLookupRegressionTests
 
     [TestCase(PathSpelling.MixedCaseDirectory)]
     [TestCase(PathSpelling.UpperDriveLetter)]
+    [Category("WholeFileWriteTools")] // sentinel:auto-category
     public async Task ApplyUnifiedDiff_MisCasedPath_FindsDocumentAndWritesAsync(PathSpelling spelling)
     {
         using var h = await CreateHarnessAsync();
@@ -277,6 +280,9 @@ public class PathCaseLookupRegressionTests
 
     [TestCase(PathSpelling.MixedCaseDirectory)]
     [TestCase(PathSpelling.UpperDriveLetter)]
+    [Category("DiscoveryEngine")] // sentinel:auto-category
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    [Category("SymbolRelationshipImpl")] // sentinel:auto-category
     public async Task FindReferences_MisCasedFilePath_ResolvesAsync(PathSpelling spelling)
     {
         using var h = await CreateHarnessAsync();
@@ -296,6 +302,9 @@ public class PathCaseLookupRegressionTests
     }
 
     [Test]
+    [Category("DiscoveryEngine")] // sentinel:auto-category
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    [Category("SymbolRelationshipImpl")] // sentinel:auto-category
     public async Task FindReferences_FileNotInSolution_ReportsNotFoundNotExceptionAsync()
     {
         using var h = await CreateHarnessAsync();
@@ -319,6 +328,7 @@ public class PathCaseLookupRegressionTests
     // GetDiagnostics(scope: file) + a solution-relative path: the implicit string -> FilePathWrapper
     // conversion is root-less, so a tool must resolve the wire path with ResolveFromWire first.
     [Test]
+    [Category("DiagnosticEngine")] // sentinel:auto-category
     public async Task GetFileDiagnostics_RelativePath_ResolvesOnlyViaResolveFromWireAsync()
     {
         using var h = await CreateHarnessAsync();

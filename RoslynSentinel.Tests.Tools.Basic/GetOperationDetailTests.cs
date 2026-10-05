@@ -17,6 +17,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class GetOperationDetailTests
 {
     private static readonly JsonSerializerOptions PrettyJson = new() { WriteIndented = true };

@@ -6,6 +6,8 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests;
 
 [TestFixture]
+[Category("DocReadResult")] // sentinel:auto-category
+[Category("DocumentationTools")] // sentinel:auto-category
 public class DocumentationToolsTests
 {
     private string _solutionRoot = "";

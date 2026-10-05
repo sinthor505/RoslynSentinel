@@ -23,6 +23,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class UndoLastApplyTests
 {
     private static readonly JsonSerializerOptions PrettyJson = new() { WriteIndented = true };
@@ -251,6 +252,12 @@ public class UndoLastApplyTests
     // pre-image is captured like any other tracked delete, so a rename changeId should be fully
     // revertible: old file restored.
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("MemberRefactoringEngine")] // sentinel:auto-category
+    [Category("RefactoringStructuralImpl")] // sentinel:auto-category
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    [Category("StructuralRefinementEngine")] // sentinel:auto-category
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task UndoLastApply_RealRevert_RestoresRenamedFileFromSyncTypeAndFilenameAsync()
     {
         using var fixture = new TestSolutionFixture();

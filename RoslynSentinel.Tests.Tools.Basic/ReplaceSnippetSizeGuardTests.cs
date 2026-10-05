@@ -17,6 +17,7 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class ReplaceSnippetSizeGuardTests
 {
     private const string TargetRelativePath = "ContosoOrders.Core/OrderStatus.cs";

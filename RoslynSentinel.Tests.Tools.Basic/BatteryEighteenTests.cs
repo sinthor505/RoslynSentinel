@@ -11,6 +11,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Category("MsToolAugmentEngine")] // sentinel:auto-category
 public class BatteryEighteenTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -234,6 +235,7 @@ public class OrderService : IOrderService
     // --- GetWorkspaceHealthAsync ---
 
     [Test]
+    [Category("WorkspaceHealthMiscImpl")] // sentinel:auto-category
     public async Task GetWorkspaceHealth_WithLoadedSolution_ReturnsReport()
     {
         SetSource("public class C {}", "Test.cs");
@@ -242,6 +244,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("WorkspaceHealthMiscImpl")] // sentinel:auto-category
     public async Task GetWorkspaceHealth_NoSolution_ReturnsReport()
     {
         var result = await _workspaceHealthMisc.GetWorkspaceHealthAsync();

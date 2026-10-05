@@ -28,6 +28,8 @@ namespace RoslynSentinel.Tests;
 /// verifies that the augmented tool handles it correctly.
 /// </summary>
 [TestFixture]
+[Category("MsAugmentResult")] // sentinel:auto-category
+[Category("MsToolAugmentEngine")] // sentinel:auto-category
 public class RealProjectPatternTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -65,6 +67,7 @@ public class RealProjectPatternTests
 
     [Test]
     [Description("Pattern from LowStockMonitorWorker.cs: duplicate using directive must be removed")]
+    [Category("UsingsCleanupResult")] // sentinel:auto-category
     public async Task SortAndDeduplicate_DuplicateUsingFromLowStockWorker_RemovesDuplicate()
     {
         // Exact pattern from LowStockMonitorWorker.cs -> two identical using directives
@@ -96,6 +99,7 @@ public class LowStockMonitorWorker { }";
 
     [Test]
     [Description("SortAndDedup: System.* usings must be sorted before domain usings (ExpressRecipe.*)")]
+    [Category("UsingsCleanupResult")] // sentinel:auto-category
     public async Task SortAndDeduplicate_SystemUsingsFirstPolicy_ExpressRecipePattern()
     {
         // Mixed ordering from ExpressRecipe service pattern
@@ -128,6 +132,7 @@ public class C { }";
 
     [Test]
     [Description("SortAndDedup: No duplicates means RemovedDuplicates = 0")]
+    [Category("UsingsCleanupResult")] // sentinel:auto-category
     public async Task SortAndDeduplicate_NoDuplicates_RemovesZero()
     {
         const string source = @"using System;
@@ -145,6 +150,7 @@ public class C { }";
 
     [Test]
     [Description("SortAndDedup: Multiple identical duplicates all removed, output has exactly one")]
+    [Category("UsingsCleanupResult")] // sentinel:auto-category
     public async Task SortAndDeduplicate_ThreeCopiesOfSameUsing_ReducesToOne()
     {
         const string source = @"using System.Threading;
@@ -344,6 +350,7 @@ public class Service
 
     [Test]
     [Description("Pattern from ShoppingOptimizationService.cs: foreach with storeDetails[k]=v - .Add not present")]
+    [Category("ForeachLinqAnalysis")] // sentinel:auto-category
     public async Task AnalyzeForeach_DictionaryIndexAssignmentInForEach_ReportsNoAddCalls()
     {
         // Pattern from OptimizeAsync method -> not a List.Add() pattern
@@ -387,6 +394,7 @@ public class ShoppingOpt
 
     [Test]
     [Description("Pattern from AllergenDetectionService: simple foreach + .Add - safe to convert")]
+    [Category("ForeachLinqAnalysis")] // sentinel:auto-category
     public async Task AnalyzeForeach_SimpleForEachWithAdd_SafeToConvert()
     {
         // Simple pattern: declare list, foreach, add -> no modifications between decl and foreach
@@ -424,6 +432,7 @@ public class AllergenService
 
     [Test]
     [Description("Unsafe pattern: collection modified before foreach - standard tool would silently drop pre-modifications")]
+    [Category("ForeachLinqAnalysis")] // sentinel:auto-category
     public async Task AnalyzeForeach_CollectionModifiedBeforeForeach_NotSafeToConvert()
     {
         // This is the CRITICAL BUG the analyzer prevents:
@@ -622,6 +631,7 @@ public class MealScorer
 
     [Test]
     [Description("Workspace health with solution loaded: must report operational=true and solution path")]
+    [Category("WorkspaceHealthMiscImpl")] // sentinel:auto-category
     public async Task GetWorkspaceHealth_WithSolutionLoaded_ReportsOperational()
     {
         const string source = @"
@@ -641,6 +651,7 @@ public class InventoryRepository { }";
 
     [Test]
     [Description("Workspace health with no solution loaded: operational=true (workspace is up) but HasLoadedSolution=false")]
+    [Category("WorkspaceHealthMiscImpl")] // sentinel:auto-category
     public async Task GetWorkspaceHealth_NoSolutionLoaded_ReportsNoSolutionButOperational()
     {
         // Fresh workspace manager with no solution set -> workspace itself is operational,
@@ -669,6 +680,7 @@ public class InventoryRepository { }";
 
     [Test]
     [Description("File with no usings at all - must return success with OriginalCount=0")]
+    [Category("UsingsCleanupResult")] // sentinel:auto-category
     public async Task SortAndDeduplicate_NoUsings_SucceedsWithZeroCount()
     {
         const string source = @"namespace Test;
@@ -684,6 +696,7 @@ public class C { }";
 
     [Test]
     [Description("Multiple namespace groups: System.*, Microsoft.*, then domain usings - sorted correctly")]
+    [Category("UsingsCleanupResult")] // sentinel:auto-category
     public async Task SortAndDeduplicate_ThreeNamespaceGroups_SortedSystemFirst()
     {
         // Common pattern: ExpressRecipe services have all 3 groups
@@ -861,6 +874,7 @@ public class NutritionService
 
     [Test]
     [Description("Regression: SortAndDedup must use workspace-first read like GenerateToString does")]
+    [Category("UsingsCleanupResult")] // sentinel:auto-category
     public async Task SortAndDeduplicate_WorkspaceFirstRead_FileOnlyInMemory()
     {
         // File exists only in workspace, not on disk

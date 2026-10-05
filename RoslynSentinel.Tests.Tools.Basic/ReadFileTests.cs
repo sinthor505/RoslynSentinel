@@ -16,6 +16,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class ReadFileTests
 {
     private FakeWorkspaceManager _workspaceManager;

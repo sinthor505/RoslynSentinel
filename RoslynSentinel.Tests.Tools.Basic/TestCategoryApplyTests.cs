@@ -17,6 +17,13 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// run is a no-op, and one test project's rejected batch does not block the others.
 /// </summary>
 [TestFixture]
+[Category("TestCategoryApplyEngine")] // sentinel:auto-category
+[Category("TestCategoryApplyResult")] // sentinel:auto-category
+[Category("TestCategoryFramework")] // sentinel:auto-category
+[Category("TestCategoryPlan")] // sentinel:auto-category
+[Category("TestCategoryProjectApplyResult")] // sentinel:auto-category
+[Category("TestCategoryTaggingImpl")] // sentinel:auto-category
+[Category("TestCategoryTaggingTools")] // sentinel:auto-category
 public class TestCategoryApplyTests
 {
     private const string Marker = "// sentinel:auto-category";
@@ -159,6 +166,7 @@ namespace FixturesBad
 
     [Test]
     [Description("A re-plan after apply yields zero edits (add is idempotent) and a second apply writes nothing")]
+    [Category("TestProjectPlan")] // sentinel:auto-category
     public async Task Apply_SecondRun_ProducesZeroEdits()
     {
         _workspaceManager.SetTestSolution(BuildSolution(includeBad: false));
@@ -176,6 +184,7 @@ namespace FixturesBad
 
     [Test]
     [Description("A test project whose batch fails to compile is reported and left unchanged while the other project still applies")]
+    [Category("TestProjectPlan")] // sentinel:auto-category
     public async Task Apply_OneProjectFailsCompile_OtherProjectStillApplies()
     {
         _workspaceManager.SetTestSolution(BuildSolution(includeBad: true));

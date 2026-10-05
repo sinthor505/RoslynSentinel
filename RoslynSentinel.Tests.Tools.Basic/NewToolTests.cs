@@ -13,6 +13,7 @@ namespace RoslynSentinel.Tests;
 /// FindImplementationsSafe, FormatDocumentPreview, GetDiagnosticsSummary.
 /// </summary>
 [TestFixture]
+[Category("SymbolNavigationEngine")] // sentinel:auto-category
 public class NewToolTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -51,6 +52,7 @@ public class NewToolTests
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("CallerInfo")] // sentinel:auto-category
     public async Task FindCallersSafe_ReturnsCallSites()
     {
         SetMultipleFiles(
@@ -94,6 +96,7 @@ public class NewToolTests
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("ImplementationInfo")] // sentinel:auto-category
     public async Task FindImplementationsSafe_ReturnsImplementations()
     {
         SetMultipleFiles(
@@ -137,6 +140,8 @@ public class NewToolTests
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("FormatPreviewResult")] // sentinel:auto-category
     public async Task FormatDocumentPreview_UnformattedFile_ReturnsHunks()
     {
         // Deliberately messy indentation
@@ -150,6 +155,8 @@ public class NewToolTests
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("FormatPreviewResult")] // sentinel:auto-category
     public async Task FormatDocumentPreview_AlreadyFormatted_ReturnsNoChanges()
     {
         SetSource("""
@@ -170,6 +177,8 @@ public class NewToolTests
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("DiagnosticEngine")] // sentinel:auto-category
+    [Category("DiagnosticSummary")] // sentinel:auto-category
     public async Task GetDiagnosticsSummary_WellFormedFile_ReturnsZeroErrors()
     {
         SetSource("""
@@ -185,6 +194,8 @@ public class NewToolTests
     }
 
     [Test]
+    [Category("DiagnosticEngine")] // sentinel:auto-category
+    [Category("DiagnosticSummary")] // sentinel:auto-category
     public async Task GetDiagnosticsSummary_GroupsByDiagnosticId()
     {
         // Source with two undefined-symbol errors

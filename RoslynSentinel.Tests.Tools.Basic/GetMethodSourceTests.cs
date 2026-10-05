@@ -14,6 +14,8 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Category("MethodSourceResult")] // sentinel:auto-category
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class GetMethodSourceTests
 {
     private FakeWorkspaceManager _workspaceManager;

@@ -6,6 +6,8 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
 
+[Category("BuildEngine")] // sentinel:auto-category
+[Category("DiagnosticEngine")] // sentinel:auto-category
 public class BuildEngineTests
 {
     [Test]

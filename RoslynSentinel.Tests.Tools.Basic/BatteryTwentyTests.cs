@@ -10,6 +10,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class BatteryTwentyTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -569,6 +570,7 @@ public class BatteryTwentyTests
     // --- ApplyDiff (consolidated: format × action; formerly named ProposedChange) ---
 
     [Test]
+    [Category("WholeFileWriteTools")] // sentinel:auto-category
     public async Task ApplyDiff_Diff_Validate_ReturnsDiagnosticReport()
     {
         SetSource(SimpleSource, "Test.cs");
@@ -579,6 +581,7 @@ public class BatteryTwentyTests
     }
 
     [Test]
+    [Category("WholeFileWriteTools")] // sentinel:auto-category
     public async Task ApplyDiff_Files_Validate_ReturnsDiagnosticReport()
     {
         SetSource(SimpleSource, "Test.cs");
@@ -591,6 +594,7 @@ public class BatteryTwentyTests
     }
 
     [Test]
+    [Category("WholeFileWriteTools")] // sentinel:auto-category
     public async Task ApplyDiff_Diff_Apply_NonExistentFile_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
@@ -603,6 +607,7 @@ public class BatteryTwentyTests
     // --- ApplyUnifiedDiff (diff-only sibling of ApplyDiff; filepath+unifiedDiff always required) ---
 
     [Test]
+    [Category("WholeFileWriteTools")] // sentinel:auto-category
     public async Task ApplyUnifiedDiff_Validate_ReturnsDiagnosticReport()
     {
         SetSource(SimpleSource, "Test.cs");
@@ -612,6 +617,7 @@ public class BatteryTwentyTests
     }
 
     [Test]
+    [Category("WholeFileWriteTools")] // sentinel:auto-category
     public async Task ApplyUnifiedDiff_MissingFilepath_ReturnsInvalidArgument()
     {
         SetSource(SimpleSource, "Test.cs");
@@ -622,6 +628,7 @@ public class BatteryTwentyTests
     }
 
     [Test]
+    [Category("WholeFileWriteTools")] // sentinel:auto-category
     public async Task ApplyUnifiedDiff_MissingUnifiedDiff_ReturnsInvalidArgument()
     {
         SetSource(SimpleSource, "Test.cs");
@@ -632,6 +639,7 @@ public class BatteryTwentyTests
     }
 
     [Test]
+    [Category("WholeFileWriteTools")] // sentinel:auto-category
     public async Task ApplyUnifiedDiff_Apply_NonExistentFile_ReturnsStructuredError()
     {
         SetSource(SimpleSource, "Test.cs");
@@ -642,6 +650,7 @@ public class BatteryTwentyTests
     }
 
     [Test]
+    [Category("WholeFileWriteTools")] // sentinel:auto-category
     public async Task ApplyDiff_Files_Apply_EmptyChanges_ReturnsResult()
     {
         SetSource(SimpleSource, "Test.cs");
@@ -826,6 +835,7 @@ public class Order
     }
 
     [Test]
+    [Category("DiagnosticSummary")] // sentinel:auto-category
     public async Task GetDiagnostics_VerifyQuickBuild_AttachesBuildVerification()
     {
         SetSource(SimpleSource, "Test.cs");
