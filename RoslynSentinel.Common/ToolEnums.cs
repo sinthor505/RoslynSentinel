@@ -339,3 +339,22 @@ public enum SearchMode
     [JsonStringEnumMemberName("enum member")] enumMember,
     constructor, field,
 }
+
+// ── SemanticFindReplace ────────────────────────────────────────────────────────
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum SemanticReplaceOperation
+{
+    /// <summary>Rename a bool property or field and invert its polarity at every site.</summary>
+    invertBoolean
+}
+
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum SemanticReplaceMode
+{
+    /// <summary>List the sites (before/after text) without writing anything.</summary>
+    preview,
+
+    /// <summary>Apply the changes to the source files.</summary>
+    apply
+}
