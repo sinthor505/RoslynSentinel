@@ -128,8 +128,8 @@ public record SentinelCallToolResult<TSuccess, TError> : IResultStatus
     /// </summary>
     public bool? IsServerBinaryStale { get; init; } = ServerBinaryStaleness.EnvelopeFlag;
 
-    // Fails closed: an envelope nobody marked successful is an error. This is the default the old IsSuccess
-    // (default false) had, so a construction site that forgets to set a flag behaves as before.
+    // Fails closed: an envelope nobody marked successful is an error, so a construction site that forgets to
+    // set a flag reports failure rather than success.
     private bool _isError = true;
 
     /// <summary>
@@ -140,18 +140,6 @@ public record SentinelCallToolResult<TSuccess, TError> : IResultStatus
     {
         get => _isError;
         init => _isError = value;
-    }
-
-    /// <summary>
-    /// Source-compat alias for <c>!</c><see cref="IsError"/> so the many existing <c>IsSuccess = true</c> construction and
-    /// read sites keep compiling while they migrate to <see cref="IsError"/>. Never serialized: the wire carries only
-    /// <c>isError</c>. Do not add new uses.
-    /// </summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public bool IsSuccess
-    {
-        get => !_isError;
-        init => _isError = !value;
     }
 
     /// <summary>

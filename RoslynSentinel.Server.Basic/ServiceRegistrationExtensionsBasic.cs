@@ -351,7 +351,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     catch (Exception ex)
                     {
                         // Every tool in this codebase catches its own exceptions and returns a
-                        // SentinelCallToolResult with IsSuccess=false instead of throwing (see
+                        // SentinelCallToolResult with IsError=true instead of throwing (see
                         // docs/current/feedback_agent_friendly_error_messages.md), so reaching here
                         // means an exception escaped that path entirely -> e.g. the MCP SDK's own
                         // argument-binding failure (a required parameter missing from the call), or

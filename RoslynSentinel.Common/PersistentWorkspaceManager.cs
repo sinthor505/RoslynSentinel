@@ -497,7 +497,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             // _workspaceLoadErrors populated but returned normally, so a bad path silently reported
             // success with an empty CurrentSolution. Surface it as a real failure instead -> the
             // LoadSolution tool wrapper's catch block already turns a thrown ToolException into a
-            // correct IsSuccess=false SentinelCallToolResult.
+            // correct IsError=true SentinelCallToolResult.
             if (CurrentSolution == null || CurrentSolution.ProjectIds.Count == 0)
             {
                 var detail = _workspaceLoadErrors.Count > 0
@@ -1573,7 +1573,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             // per-file write loop above. If some files failed after others already succeeded,
             // restore the succeeded files to their pre-images so the change doesn't land
             // half-applied. Best-effort: a rollback write failure is logged, not thrown -> the
-            // caller already sees IsSuccess=false and can inspect Summary/FailedFiles.
+            // caller already sees IsError=true and can inspect Summary/FailedFiles.
             var rolledBack = new List<string>();
             if (rollbackOnPartialFailure && failed.Count > 0 && succeeded.Count > 0)
             {

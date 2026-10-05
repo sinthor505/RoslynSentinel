@@ -83,15 +83,6 @@ public class ResultStatusTests
     }
 
     [Test]
-    public void Envelope_IsSuccessAlias_SetsAndReadsInverseOfIsError()
-    {
-        var ok = new SentinelCallToolResult<string> { IsError = false };
-
-        Assert.That(ok.IsError, Is.False);
-        Assert.That(!ok.IsError, Is.True);
-    }
-
-    [Test]
     public void Envelope_RoundTripsThroughJson()
     {
         var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };

@@ -147,7 +147,7 @@ public class MigrationScanResultTests
     /// Adapts a plain <see cref="SentinelCallToolResult{object}"/> to a typed <see cref="MigrationEnvelope{T}"/>.
     /// The migration-scan-result-handling spec (v2) this test file was written against expected
     /// scan tools to return a nested envelope (SuccessDetails = MigrationEnvelope&lt;T&gt;). The shipped
-    /// implementation flattens that: IsSuccess/ErrorDetails/TotalRecords/HasMorePages/LargeResult all live
+    /// implementation flattens that: IsError/ErrorDetails/TotalRecords/HasMorePages/LargeResult all live
     /// directly on the outer SentinelCallToolResult&lt;object&gt;, and SuccessDetails is the plain T. Rather than rewrite
     /// every assertion in this file against the outer result, wrap it back into the shape the
     /// tests already expect.
