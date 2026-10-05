@@ -2,6 +2,12 @@ namespace RoslynSentinel.Common;
 
 public static class ToolParams
 {
+    public const string UseScratchDir =
+        "false (default): build in the repo's own bin/obj folders; if another dotnet/msbuild build against this solution " +
+        "is already running, waits up to 30s for it to finish, then fails naming the blocking process. " +
+        "true: build into a private scratch directory (.scratch/roslynsentinel-builds/<server pid>/) so parallel sessions " +
+        "cannot block each other; the repo's own bin/ is NOT updated, so isServerBinaryStale will not react to this build.";
+
     public const string ProjectName =
         "Project name returned by LocateSymbol in the projectName field. " +
         "Must match exactly - case-sensitive.";

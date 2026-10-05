@@ -154,7 +154,7 @@ public class WorkspaceBuildTestImpl
 
     public async Task<SentinelCallToolResult<object>> Build(ToolCallReason reason, BuildVerifyLevel level = BuildVerifyLevel.fullBuild,
         ToolScope scope = ToolScope.solution, string? scopeName = null, int maxDetails = 50,
-        CancellationToken cancellationToken = default)
+        bool useScratchDir = false, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -165,7 +165,7 @@ public class WorkspaceBuildTestImpl
             }
 
             var result = level == BuildVerifyLevel.fullBuild
-                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails)
+                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails, useScratchDir)
                 : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken);
 
             if (!result.TryGetData(out var buildResult))
@@ -187,7 +187,8 @@ public class WorkspaceBuildTestImpl
 
     public async Task<SentinelCallToolResult<object>> RunTest(ToolCallReason reason, ToolScope scope = ToolScope.solution,
         string? scopeName = null, string? filter = null, TestResultsFilter resultsType = TestResultsFilter.failed,
-        int maxDetails = 50, int timeoutSeconds = 600, bool summary = false, CancellationToken cancellationToken = default)
+        int maxDetails = 50, int timeoutSeconds = 600, bool summary = false, bool useScratchDir = false,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -197,7 +198,7 @@ public class WorkspaceBuildTestImpl
                 return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, rateLimitError) };
             }
 
-            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, cancellationToken);
+            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, cancellationToken);
 
             if (!result.TryGetData(out var testRunResult))
             {

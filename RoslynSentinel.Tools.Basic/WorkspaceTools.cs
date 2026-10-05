@@ -504,8 +504,9 @@ public class WorkspaceTools
         ToolScope scope = ToolScope.solution,
         string? scopeName = null,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
+        [Description("Only used by level=fullBuild. " + ToolParams.UseScratchDir)] bool useScratchDir = false,
         CancellationToken cancellationToken = default)
-        => _buildTest.Build(reason, level, scope, scopeName, maxDetails, cancellationToken);
+        => _buildTest.Build(reason, level, scope, scopeName, maxDetails, useScratchDir, cancellationToken);
 
     [McpServerTool(Name = "RunTest")]
     [Produces(DataTag.Report)]
@@ -519,8 +520,9 @@ public class WorkspaceTools
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
         int timeoutSeconds = 600,
         [Description("If true, omit the per-test Results list entirely (just counts + FailureSummary).")] bool summary = false,
+        [Description(ToolParams.UseScratchDir)] bool useScratchDir = false,
         CancellationToken cancellationToken = default)
-        => _buildTest.RunTest(reason, scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, cancellationToken);
+        => _buildTest.RunTest(reason, scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, cancellationToken);
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: none of projectName/docCommentId/symbolName/line/column is
     // individually required -> the tool needs exactly one full resolution strategy: (projectName +
     // docCommentId), or symbolName (optionally with contextSnippet/lineBefore/lineAfter), or

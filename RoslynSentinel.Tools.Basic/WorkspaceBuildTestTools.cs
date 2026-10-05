@@ -41,8 +41,9 @@ public class WorkspaceBuildTestTools
         ToolScope scope = ToolScope.solution,
         string? scopeName = null,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
+        [Description("Only used by level=fullBuild. " + ToolParams.UseScratchDir)] bool useScratchDir = false,
         CancellationToken cancellationToken = default)
-        => _impl.Build(reason, level, scope, scopeName, maxDetails, cancellationToken);
+        => _impl.Build(reason, level, scope, scopeName, maxDetails, useScratchDir, cancellationToken);
 
     [McpServerTool(Name = "RunTest")]
     [Produces(DataTag.Report)]
@@ -56,6 +57,7 @@ public class WorkspaceBuildTestTools
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
         int timeoutSeconds = 600,
         [Description("If true, omit the per-test Results list from the response entirely - only counts and FailureSummary are returned, independent of resultsType.")] bool summary = false,
+        [Description(ToolParams.UseScratchDir)] bool useScratchDir = false,
         CancellationToken cancellationToken = default)
-        => _impl.RunTest(reason, scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, cancellationToken);
+        => _impl.RunTest(reason, scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, cancellationToken);
 }

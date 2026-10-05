@@ -128,7 +128,7 @@ public class BuildEngine
     private static readonly Regex DiagnosticLineRegex = new(
         @"^(?<path>.+?)\((?<line>\d+),(?<col>\d+)\):\s*(?<severity>error|warning)\s+(?<id>[A-Za-z0-9]+):\s*(?<message>.+?)\s*\[.+\]\r?$",
         RegexOptions.Compiled | RegexOptions.Multiline);
-    public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50)
+    public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50, bool useScratchDir = false)
     {
         var start = DateTime.UtcNow;
         var currentSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -147,6 +147,21 @@ public class BuildEngine
                 new EngineError(
                     EngineErrorCode.BuildNotRun,
                     "Full build compiled zero projects. The loaded solution contains no projects -- no compile verdict is available. Call LoadSolution with a populated .slnx/.sln, or ListAll(kind: \"all\") to inspect the current workspace."));
+        }
+
+        if (!useScratchDir)
+        {
+            // A scratch build is isolated, so only a build writing to the repo's own obj/ and bin/ can collide.
+            var targetPaths = new List<string> { solutionPath };
+            targetPaths.AddRange(currentSolution?.Projects.Select(p => p.FilePath).OfType<string>() ?? []);
+            var waitStart = DateTime.UtcNow;
+            var competing = await BuildIsolation.WaitForNoCompetingBuildAsync(targetPaths, BuildIsolation.DefaultMaxWait, cancellationToken);
+            if (competing.Count > 0)
+            {
+                return EngineResultWrapper<BuildResult>.Failure(
+                    EngineOutcome.Failure,
+                    new EngineError(EngineErrorCode.BuildNotRun, BuildIsolation.DescribeCompetingBuilds(competing, DateTime.UtcNow - waitStart)));
+            }
         }
 
         using var process = new Process();
@@ -171,6 +186,10 @@ public class BuildEngine
         // true even though real CS0618/Obsolete warnings existed on disk. fullBuild's whole purpose
         // is an authoritative from-scratch compile, so always force one.
         process.StartInfo.ArgumentList.Add("--no-incremental");
+        if (useScratchDir)
+        {
+            BuildIsolation.ApplyScratchArtifactsPath(process.StartInfo, Path.GetDirectoryName(solutionPath)!);
+        }
 
         // MSBuildLocator.RegisterDefaults() (see PersistentWorkspaceManager) pins this process's
         // environment to a specific MSBuild toolset. Strip the pin from the spawned "dotnet build"
@@ -244,6 +263,11 @@ public class BuildEngine
             stderrText.Contains("MSB3021") || stdoutText.Contains("MSB3021"))
         {
             detail = "Build failed to copy the output file - it is likely locked by a running process (e.g. this MCP server or an IDE holding the binary). Close the process holding the file and retry.";
+        }
+
+        if (useScratchDir)
+        {
+            detail ??= "useScratchDir: output went to .scratch/roslynsentinel-builds/<server pid>/ next to the solution, not the projects' own bin/ and obj/ folders.";
         }
 
         const int TailLines = 40;

@@ -56,6 +56,7 @@ public class TestRunEngine
         int maxDetails,
         int timeoutSeconds,
         bool summary = false,
+        bool useScratchDir = false,
         CancellationToken cancellationToken = default)
     {
         var start = DateTime.UtcNow;
@@ -131,10 +132,34 @@ public class TestRunEngine
         // parsed result -> every other project's counts were silently discarded. Giving each project
         // its own process and TRX file, then aggregating here, is what makes counts trustworthy for
         // scope=solution.
+        var solutionPath = _workspaceManager.SolutionPath;
+        string? scratchSolutionDirectory = null;
+        if (useScratchDir)
+        {
+            scratchSolutionDirectory = Path.GetDirectoryName(string.IsNullOrEmpty(solutionPath) ? targets[0].Path : solutionPath);
+        }
+        else
+        {
+            // A scratch run is isolated, so only a build writing to the repo's own obj/ and bin/ can collide.
+            var targetPaths = targets.Select(t => t.Path).ToList();
+            if (!string.IsNullOrEmpty(solutionPath))
+            {
+                targetPaths.Add(solutionPath);
+            }
+
+            var waitStart = DateTime.UtcNow;
+            var competing = await BuildIsolation.WaitForNoCompetingBuildAsync(targetPaths, BuildIsolation.DefaultMaxWait, cancellationToken);
+            if (competing.Count > 0)
+            {
+                return new EngineResultWrapper<TestRunResult>(EngineOutcome.Failure,
+                    error: new EngineError(BuildIsolation.DescribeCompetingBuilds(competing, DateTime.UtcNow - waitStart)));
+            }
+        }
+
         var projectResults = new List<(TestRunResult Result, string ProjectName)>();
         foreach (var (name, path) in targets)
         {
-            var result = await RunOneProjectAsync(name, path, filter, timeoutSeconds, cancellationToken);
+            var result = await RunOneProjectAsync(name, path, filter, timeoutSeconds, scratchSolutionDirectory, cancellationToken);
             projectResults.Add((result, name));
         }
 
@@ -236,6 +261,7 @@ public class TestRunEngine
         string projectPath,
         string? filter,
         int timeoutSeconds,
+        string? scratchSolutionDirectory,
         CancellationToken cancellationToken)
     {
         var start = DateTime.UtcNow;
@@ -263,6 +289,10 @@ public class TestRunEngine
             process.StartInfo.ArgumentList.Add("quiet");
             process.StartInfo.ArgumentList.Add("--logger");
             process.StartInfo.ArgumentList.Add($"trx;LogFileName={trxPath}");
+            if (scratchSolutionDirectory is not null)
+            {
+                BuildIsolation.ApplyScratchArtifactsPath(process.StartInfo, scratchSolutionDirectory);
+            }
             if (!string.IsNullOrEmpty(filter))
             {
                 process.StartInfo.ArgumentList.Add("--filter");
