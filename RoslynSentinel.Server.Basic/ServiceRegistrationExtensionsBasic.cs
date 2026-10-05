@@ -821,6 +821,23 @@ public static class RoslynSentinelServiceExtensionsBasic
     }
 
     /// <summary>
+    /// Appends each parameter-alias note (see <see cref="ToolArgumentValidator.ApplyParameterAliases"/>)
+    /// as its own trailing text block, so the model learns the declared parameter name without the
+    /// response's first block - which other filters stamp and parse - being altered.
+    /// </summary>
+    private static void AppendAliasNotes(
+        ModelContextProtocol.Protocol.CallToolResult result,
+        System.Collections.Generic.IReadOnlyList<string>? notes)
+    {
+        if (notes is null || notes.Count == 0)
+            return;
+
+        result.Content ??= [];
+        foreach (var note in notes)
+            result.Content.Add(new ModelContextProtocol.Protocol.TextContentBlock { Text = note });
+    }
+
+    /// <summary>
     /// Registers the argument pre-flight filter: first silently repairs a case-only parameter
     /// name mismatch (e.g. "filepath" -> "filePath"), then rejects a call whose arguments still
     /// cannot succeed as written, before the SDK's binder ever sees either.
@@ -846,9 +863,13 @@ public static class RoslynSentinelServiceExtensionsBasic
             ModelContextProtocol.Protocol.CallToolResult>(
             async (context, cancellationToken) =>
             {
+                System.Collections.Generic.IReadOnlyList<string>? aliasNotes = null;
                 try
                 {
                     ToolArgumentValidator.NormalizeParameterCase(
+                        context.Server, context.Params?.Name, context.Params?.Arguments);
+
+                    aliasNotes = ToolArgumentValidator.ApplyParameterAliases(
                         context.Server, context.Params?.Name, context.Params?.Arguments);
 
                     var validationError = ToolArgumentValidator.Validate(
@@ -856,11 +877,13 @@ public static class RoslynSentinelServiceExtensionsBasic
 
                     if (validationError is not null)
                     {
-                        return new ModelContextProtocol.Protocol.CallToolResult
+                        var rejection = new ModelContextProtocol.Protocol.CallToolResult
                         {
                             Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = validationError }],
                             IsError = true,
                         };
+                        AppendAliasNotes(rejection, aliasNotes);
+                        return rejection;
                     }
                 }
                 catch (Exception ex)
@@ -870,7 +893,12 @@ public static class RoslynSentinelServiceExtensionsBasic
                     Debug.WriteLine($"Tool argument validation filter failed: {ex}");
                 }
 
-                return await next(context, cancellationToken);
+                var result = await next(context, cancellationToken);
+
+                // A separate trailing block, so the first block (which the echo filter stamps and
+                // the domain-failure filter parses as JSON) is left untouched.
+                AppendAliasNotes(result, aliasNotes);
+                return result;
             }));
     }
 }

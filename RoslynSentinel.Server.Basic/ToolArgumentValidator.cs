@@ -303,6 +303,152 @@ public static class ToolArgumentValidator
         }
     }
 
+    /// <summary>
+    /// Per-tool alias -> declared-parameter map for names a model repeatedly supplies instead of
+    /// the declared one. Mined from real transcripts (scripts/Get-UnknownParameterReport.ps1), and
+    /// only for pairs that mean the same thing and take the same type: an alias that merely
+    /// resembles the right parameter would silently run the tool with a different meaning, which is
+    /// the failure the unknown-parameter rejection exists to prevent. Per-tool on purpose - the same
+    /// word is a real, different parameter elsewhere (e.g. "memberName" is declared on Member).
+    /// Applied by <see cref="ApplyParameterAliases"/>; alias keys match case-insensitively.
+    /// </summary>
+    public static readonly System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyDictionary<string, string>> ParameterAliases =
+        new System.Collections.Generic.Dictionary<string, System.Collections.Generic.IReadOnlyDictionary<string, string>>(StringComparer.Ordinal)
+        {
+            ["GetMethodSource"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["memberName"] = "methodName",
+                ["symbolName"] = "methodName",
+            },
+            ["RunTest"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["testFilter"] = "filter",
+                ["testFilterExpression"] = "filter",
+            },
+            ["LoadSolution"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["path"] = "solutionPath",
+            },
+            ["Git"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["maxCount"] = "count",
+            },
+            ["Member"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["newText"] = "newMemberSource",
+                ["newMemberCode"] = "newMemberSource",
+                ["memberSource"] = "newMemberSource",
+                ["className"] = "containerName",
+            },
+            ["Search"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["pattern"] = "query",
+                ["filePattern"] = "fileGlob",
+                ["glob"] = "fileGlob",
+            },
+            ["FindReferences"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["symbol"] = "symbolName",
+            },
+            ["LocateSymbol"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["name"] = "symbolName",
+            },
+            ["WriteFile"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["fileContent"] = "content",
+            },
+            ["ApplyUnifiedDiff"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["diff"] = "unifiedDiff",
+            },
+            ["UsingDirective"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["usingName"] = "namespaceName",
+                ["usingNamespace"] = "namespaceName",
+                ["usingText"] = "namespaceName",
+            },
+            ["GetLargeResult"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["maxItems"] = "limit",
+                ["maxRecords"] = "limit",
+                ["pageSize"] = "limit",
+            },
+            ["Build"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["verifyLevel"] = "level",
+                ["buildVerifyLevel"] = "level",
+            },
+            ["ChangeAccessibility"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["newAccessibility"] = "accessibility",
+            },
+        };
+
+    /// <summary>
+    /// Rewrites <paramref name="arguments"/> in place, renaming each key listed in
+    /// <see cref="ParameterAliases"/> for this tool to its declared parameter, and returns one
+    /// short note per rename (or <see langword="null"/> when nothing changed) so the caller can tell
+    /// the model which name is the real one.
+    /// <para>
+    /// A rename is skipped - leaving the key for <see cref="Validate"/> to reject as unknown - when
+    /// the alias is itself a declared parameter of the tool (the declared meaning wins), when the
+    /// alias target is not declared in the emitted schema (a stale table entry must not invent a
+    /// parameter), or when the call already supplies the target (renaming would silently overwrite
+    /// one of two values the caller passed, the same rule as <see cref="NormalizeParameterCase"/>).
+    /// Run after <see cref="NormalizeParameterCase"/>.
+    /// </para>
+    /// </summary>
+    public static System.Collections.Generic.IReadOnlyList<string>? ApplyParameterAliases(
+        ModelContextProtocol.Server.McpServer? server,
+        string? toolName,
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments)
+    {
+        if (arguments is null || arguments.Count == 0 || string.IsNullOrEmpty(toolName))
+            return null;
+
+        if (!ParameterAliases.TryGetValue(toolName, out var aliases))
+            return null;
+
+        var schema = TryGetSchemaParameters(server, toolName);
+        if (schema is null)
+            return null;
+
+        var declared = schema.Value.All;
+
+        // Collect renames first rather than mutating while enumerating arguments.Keys.
+        System.Collections.Generic.List<(string From, string To)>? renames = null;
+        foreach (var key in arguments.Keys)
+        {
+            if (declared.Contains(key) || !aliases.TryGetValue(key, out var canonical))
+                continue;
+
+            if (!declared.Contains(canonical) || arguments.ContainsKey(canonical))
+                continue;
+
+            // Two aliases of the same target in one call: the first wins, the second is left for
+            // Validate to reject rather than silently overwriting the first.
+            if (renames is not null && renames.Exists(r => r.To == canonical))
+                continue;
+
+            (renames ??= new System.Collections.Generic.List<(string, string)>()).Add((key, canonical));
+        }
+
+        if (renames is null)
+            return null;
+
+        var notes = new System.Collections.Generic.List<string>(renames.Count);
+        foreach (var (from, to) in renames)
+        {
+            var value = arguments[from];
+            arguments.Remove(from);
+            arguments[to] = value;
+            notes.Add($"Note: '{from}' is not a parameter of {toolName}; it was treated as '{to}'. Use '{to}' in future calls.");
+        }
+
+        return notes;
+    }
+
     /// Checks a tool call's arguments against the tool's emitted input schema BEFORE dispatch, and
     /// returns an actionable error message when the call cannot succeed as written -> or
     /// <see langword="null"/> to let the call proceed.
