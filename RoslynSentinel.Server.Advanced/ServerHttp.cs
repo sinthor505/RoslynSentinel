@@ -75,7 +75,7 @@ public class ServerHttp
         builder.Services.AddSingleton(new StoppedByScriptMarker(
             WasFound: stoppedByScriptDetails is not null, Details: stoppedByScriptDetails));
 
-        var mcpBuilder = builder.Services.AddMcpServer().WithHttpTransport();
+        var mcpBuilder = builder.Services.AddMcpServer().WithHttpTransport(o => o.Stateless = false);
         mcpBuilder.WithTasks(
             new InMemoryMcpTaskStore(),
             o => o.ExecutionModeSelector = TaskEnabledToolsHelper.SelectExecutionMode);
