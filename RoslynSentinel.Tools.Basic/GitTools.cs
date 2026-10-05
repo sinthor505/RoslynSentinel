@@ -164,10 +164,10 @@ public class GitTools
             GitOperation.push => await _gitImpl.PushAsync(gitRoot, remoteName, setUpstream, cancellationToken),
             GitOperation.fetch => await _gitImpl.FetchAsync(gitRoot, remoteName, cancellationToken),
             GitOperation.pull => await _gitImpl.PullAsync(gitRoot, remoteName, rebase, cancellationToken),
-            _ => new GitResult { Success = false, Error = $"Unknown operation '{operation}'." }
+            _ => new GitResult { IsError = true, Error = $"Unknown operation '{operation}'." }
         };
 
-        if (((GitResult)result).Success)
+        if (!((GitResult)result).IsError)
         {
             return new SentinelCallToolResult<object> { IsError = false, SuccessData = result };
         }

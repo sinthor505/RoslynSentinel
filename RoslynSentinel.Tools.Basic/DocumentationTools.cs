@@ -35,7 +35,7 @@ public class DocReadResult
 
 public class DocWriteResult
 {
-    public bool Success
+    public bool IsError
     {
         get; set;
     }
@@ -305,7 +305,7 @@ public class DocumentationTools
         var (ok, fullPath, guardError) = DocPathGuard.ResolveSafe(subdir, filename);
         if (!ok)
         {
-            return new DocWriteResult { Success = false, Filename = filename, Error = guardError };
+            return new DocWriteResult { IsError = true, Filename = filename, Error = guardError };
         }
 
         int bytes = Encoding.UTF8.GetByteCount(content);
@@ -313,7 +313,7 @@ public class DocumentationTools
         {
             return new DocWriteResult
             {
-                Success = false,
+                IsError = true,
                 Filename = filename,
                 Error = $"Content exceeds {MaxDocBytes} bytes. Documentation files should be concise."
             };
@@ -332,7 +332,7 @@ public class DocumentationTools
 
         return new DocWriteResult
         {
-            Success = true,
+            IsError = false,
             Filename = filename,
             FullPath = fullPath,
             BytesWritten = bytes
@@ -366,7 +366,7 @@ public class DocumentationTools
             {
                 return action == DocAction.read || action == DocAction.list
                     ? (object)new DocReadResult { Found = false, Filename = name ?? "", Error = rateLimitError }
-                    : new DocWriteResult { Success = false, Filename = name ?? "", Error = rateLimitError };
+                    : new DocWriteResult { IsError = true, Filename = name ?? "", Error = rateLimitError };
             }
 
             var docsRoot = TryGetDocsRoot(out var error);
@@ -374,7 +374,7 @@ public class DocumentationTools
             {
                 return action == DocAction.read || action == DocAction.list
                     ? (object)new DocReadResult { Found = false, Filename = name ?? "", Error = error }
-                    : new DocWriteResult { Success = false, Filename = name ?? "", Error = error };
+                    : new DocWriteResult { IsError = true, Filename = name ?? "", Error = error };
             }
 
             // ── list ───────────────────────────────────────────────────────────────
@@ -409,22 +409,22 @@ public class DocumentationTools
                 {
                     if (content is null)
                     {
-                        return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = "content is required for action=write." };
+                        return new DocWriteResult { IsError = true, Filename = "migration-state.yaml", Error = "content is required for action=write." };
                     }
 
                     int bytes = System.Text.Encoding.UTF8.GetByteCount(content);
                     if (bytes > MaxDocBytes)
                     {
-                        return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = $"Content exceeds {MaxDocBytes} bytes." };
+                        return new DocWriteResult { IsError = true, Filename = "migration-state.yaml", Error = $"Content exceeds {MaxDocBytes} bytes." };
                     }
 
                     var stateDir = Path.Combine(docsRoot);
                     var statePath = Path.Combine(stateDir, "migration-state.yaml");
                     Directory.CreateDirectory(stateDir);
                     File.WriteAllText(statePath, content);
-                    return new DocWriteResult { Success = true, Filename = "migration-state.yaml", FullPath = statePath, BytesWritten = bytes };
+                    return new DocWriteResult { IsError = false, Filename = "migration-state.yaml", FullPath = statePath, BytesWritten = bytes };
                 }
-                return new DocWriteResult { Success = false, Filename = "migration-state.yaml", Error = $"action='{action}' is not valid for docType=state. Valid: read, write." };
+                return new DocWriteResult { IsError = true, Filename = "migration-state.yaml", Error = $"action='{action}' is not valid for docType=state. Valid: read, write." };
             }
 
             // ── file-based doc types ───────────────────────────────────────────────
@@ -432,7 +432,7 @@ public class DocumentationTools
             {
                 return action == DocAction.read
                     ? (object)new DocReadResult { Found = false, Filename = "", Error = "name is required for file-based operations." }
-                    : new DocWriteResult { Success = false, Filename = "", Error = "name is required for file-based operations." };
+                    : new DocWriteResult { IsError = true, Filename = "", Error = "name is required for file-based operations." };
             }
 
             var docTypeSubdirRoot = GetDocTypeSubdirRoot(docsRoot);
@@ -449,17 +449,17 @@ public class DocumentationTools
             {
                 return action == DocAction.read
                     ? (object)new DocReadResult { Found = false, Filename = name, Error = $"Unhandled docType '{docType}'." }
-                    : new DocWriteResult { Success = false, Filename = name, Error = $"Unhandled docType '{docType}'." };
+                    : new DocWriteResult { IsError = true, Filename = name, Error = $"Unhandled docType '{docType}'." };
             }
 
             if (action == DocAction.write && content is null)
             {
-                return new DocWriteResult { Success = false, Filename = name, Error = "content is required for action=write." };
+                return new DocWriteResult { IsError = true, Filename = name, Error = "content is required for action=write." };
             }
 
             if (action == DocAction.append && content is null)
             {
-                return new DocWriteResult { Success = false, Filename = name, Error = "content is required for action=append." };
+                return new DocWriteResult { IsError = true, Filename = name, Error = "content is required for action=append." };
             }
 
             return action switch
@@ -468,14 +468,14 @@ public class DocumentationTools
                 DocAction.write => WriteFile(subdir, name, content!),
                 DocAction.append => docType == DocType.completed_work
                     ? WriteFile(subdir, name, content!, append: true)
-                    : (object)new DocWriteResult { Success = false, Filename = name, Error = "action=append is only valid for docType=completed_work." },
-                _ => (object)new DocWriteResult { Success = false, Filename = name, Error = $"Unhandled action '{action}'." }
+                    : (object)new DocWriteResult { IsError = true, Filename = name, Error = "action=append is only valid for docType=completed_work." },
+                _ => (object)new DocWriteResult { IsError = true, Filename = name, Error = $"Unhandled action '{action}'." }
             };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "ProjectDoc ({Action}/{DocType}) failed", action, docType);
-            return new DocWriteResult { Success = false, Filename = name ?? "", Error = $"ProjectDoc failed: {ex.GetType().Name}: {ex.Message}" };
+            return new DocWriteResult { IsError = true, Filename = name ?? "", Error = $"ProjectDoc failed: {ex.GetType().Name}: {ex.Message}" };
         }
     }
 }

@@ -9,7 +9,7 @@ namespace RoslynSentinel.Tools.Basic;
 // ─── Result types ────────────────────────────────────────────────────────────
 public record GitResult
 {
-    public bool Success
+    public bool IsError
     {
         get; set;
     }
@@ -703,7 +703,7 @@ public class GitImpl : IGitOperations
         {
             return new GitStatusResult
             {
-                Success = false,
+                IsError = true,
                 Error = $"maxEntries must be between 1 and {MaxStatusMaxEntries} (got {maxEntries}). " +
                         $"Retry with a value in that range, e.g. maxEntries: {DefaultStatusMaxEntries}. Nothing was changed.",
             };
@@ -721,7 +721,7 @@ public class GitImpl : IGitOperations
             var statusRaw = await RunGitAsync(gitRoot,
                 ["-c", "core.quotePath=false", "status", "--porcelain=v1", "-z", "--untracked-files=all"], cancellationToken);
             if (statusRaw.ExitCode != 0)
-                return new GitStatusResult { Success = false, Branch = branch, Error = CleanGitStderr(statusRaw.Stderr) };
+                return new GitStatusResult { IsError = true, Branch = branch, Error = CleanGitStderr(statusRaw.Stderr) };
 
             var staged = new List<GitStatusEntry>();
             var unstaged = new List<GitStatusEntry>();
@@ -791,7 +791,7 @@ public class GitImpl : IGitOperations
             {
                 return new GitStatusResult
                 {
-                    Success = true,
+                    IsError = false,
                     Branch = branch,
                     IsClean = isClean,
                     IsTruncated = true,
@@ -809,7 +809,7 @@ public class GitImpl : IGitOperations
 
             return new GitStatusResult
             {
-                Success = true,
+                IsError = false,
                 Branch = branch,
                 IsClean = isClean,
                 InProgress = inProgress,
@@ -821,7 +821,7 @@ public class GitImpl : IGitOperations
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git status failed");
-            return new GitStatusResult { Success = false, Error = $"Git status failed: {ex.Message}" };
+            return new GitStatusResult { IsError = true, Error = $"Git status failed: {ex.Message}" };
         }
     }
 
@@ -845,7 +845,7 @@ public class GitImpl : IGitOperations
             {
                 var parsedPaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
                 if (pathsError != null)
-                    return new GitLogResult { Success = false, Error = pathsError };
+                    return new GitLogResult { IsError = true, Error = pathsError };
 
                 args.Add("--");
                 args.AddRange(parsedPaths!);
@@ -854,7 +854,7 @@ public class GitImpl : IGitOperations
             var logRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (logRaw.ExitCode != 0)
-                return new GitLogResult { Success = false, Error = CleanGitStderr(logRaw.Stderr) };
+                return new GitLogResult { IsError = true, Error = CleanGitStderr(logRaw.Stderr) };
 
             var commits = new List<GitCommitEntry>();
             foreach (var record in logRaw.Stdout.Split(recordSep, StringSplitOptions.RemoveEmptyEntries))
@@ -872,12 +872,12 @@ public class GitImpl : IGitOperations
                 });
             }
 
-            return new GitLogResult { Success = true, Commits = commits };
+            return new GitLogResult { IsError = false, Commits = commits };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git log failed");
-            return new GitLogResult { Success = false, Error = $"Git log failed: {ex.Message}" };
+            return new GitLogResult { IsError = true, Error = $"Git log failed: {ex.Message}" };
         }
     }
 
@@ -949,7 +949,7 @@ public class GitImpl : IGitOperations
         maxBytes = Math.Clamp(maxBytes, 1024, 524288);
         var formatError = ValidateDiffFormatFlags("diff", nameOnly, stat);
         if (formatError is not null)
-            return new GitDiffResult { Success = false, Error = formatError };
+            return new GitDiffResult { IsError = true, Error = formatError };
 
         try
         {
@@ -985,7 +985,7 @@ public class GitImpl : IGitOperations
             {
                 var parsedPaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
                 if (pathsError != null)
-                    return new GitDiffResult { Success = false, Error = pathsError };
+                    return new GitDiffResult { IsError = true, Error = pathsError };
 
                 args.Add("--");
                 args.AddRange(parsedPaths!);
@@ -994,17 +994,17 @@ public class GitImpl : IGitOperations
             var diffRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (diffRaw.ExitCode != 0)
-                return new GitDiffResult { Success = false, Error = CleanGitStderr(diffRaw.Stderr) };
+                return new GitDiffResult { IsError = true, Error = CleanGitStderr(diffRaw.Stderr) };
 
             var filesChanged = CountChangedFiles(diffRaw.Stdout, nameOnly, stat);
             var diff = CapToUtf8Bytes(diffRaw.Stdout, maxBytes);
 
-            return new GitDiffResult { Success = true, Diff = diff, FilesChanged = filesChanged, Warning = DetectDecodeCorruption(diff) };
+            return new GitDiffResult { IsError = false, Diff = diff, FilesChanged = filesChanged, Warning = DetectDecodeCorruption(diff) };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git diff failed (target={Target})", target);
-            return new GitDiffResult { Success = false, Error = $"Git diff failed: {ex.Message}" };
+            return new GitDiffResult { IsError = true, Error = $"Git diff failed: {ex.Message}" };
         }
     }
 
@@ -1019,7 +1019,7 @@ public class GitImpl : IGitOperations
         maxBytes = Math.Clamp(maxBytes, 1024, 524288);
         var formatError = ValidateDiffFormatFlags("show", nameOnly, stat);
         if (formatError is not null)
-            return new GitShowResult { Success = false, Error = formatError };
+            return new GitShowResult { IsError = true, Error = formatError };
 
         try
         {
@@ -1029,11 +1029,11 @@ public class GitImpl : IGitOperations
             var metaRaw = await RunGitAsync(
                 gitRoot, ["show", $"--format={format}", "--no-patch", target], cancellationToken);
             if (metaRaw.ExitCode != 0)
-                return new GitShowResult { Success = false, Error = CleanGitStderr(metaRaw.Stderr) };
+                return new GitShowResult { IsError = true, Error = CleanGitStderr(metaRaw.Stderr) };
 
             var metaParts = metaRaw.Stdout.TrimEnd('\n', '\r').Split(fieldSep);
             if (metaParts.Length < 5)
-                return new GitShowResult { Success = false, Error = $"Could not parse commit metadata for '{target}'." };
+                return new GitShowResult { IsError = true, Error = $"Could not parse commit metadata for '{target}'." };
 
             var revParseRaw = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"{target}^"], cancellationToken);
             // core.quotePath=false so non-ASCII paths in headers and file lists are not octal-escaped.
@@ -1048,7 +1048,7 @@ public class GitImpl : IGitOperations
             {
                 var parsedPaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
                 if (pathsError != null)
-                    return new GitShowResult { Success = false, Error = pathsError };
+                    return new GitShowResult { IsError = true, Error = pathsError };
 
                 diffArgs.Add("--");
                 diffArgs.AddRange(parsedPaths!);
@@ -1056,14 +1056,14 @@ public class GitImpl : IGitOperations
 
             var diffRaw = await RunGitAsync(gitRoot, [.. diffArgs], cancellationToken);
             if (diffRaw.ExitCode != 0)
-                return new GitShowResult { Success = false, Error = CleanGitStderr(diffRaw.Stderr) };
+                return new GitShowResult { IsError = true, Error = CleanGitStderr(diffRaw.Stderr) };
 
             var filesChanged = CountChangedFiles(diffRaw.Stdout, nameOnly, stat);
             var diff = CapToUtf8Bytes(diffRaw.Stdout, maxBytes);
 
             return new GitShowResult
             {
-                Success = true,
+                IsError = false,
                 Hash = metaParts[0],
                 Author = metaParts[2],
                 Date = metaParts[3],
@@ -1076,7 +1076,7 @@ public class GitImpl : IGitOperations
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git show failed (target={Target})", target);
-            return new GitShowResult { Success = false, Error = $"Git show failed: {ex.Message}" };
+            return new GitShowResult { IsError = true, Error = $"Git show failed: {ex.Message}" };
         }
     }
 
@@ -1317,7 +1317,7 @@ public class GitImpl : IGitOperations
         {
             return new GitStatusResult
             {
-                Success = false,
+                IsError = true,
                 Error = $"You named files to stage but passed scope=\"{scope}\", which ignores them. " +
                         "Pass scope=\"listed\" to stage exactly the files you named (untracked ones " +
                         $"included), or drop the file list to stage by scope=\"{scope}\". Nothing was staged."
@@ -1328,7 +1328,7 @@ public class GitImpl : IGitOperations
         {
             return new GitStatusResult
             {
-                Success = false,
+                IsError = true,
                 Error = "scope=\"listed\" stages exactly the files you name, but no files were given. " +
                         "Pass files (or paths) as a comma-separated list of repo-relative paths, e.g. " +
                         "files: \"src/Foo.cs,docs/notes.md\". To stage without naming files use " +
@@ -1350,7 +1350,7 @@ public class GitImpl : IGitOperations
                     // and ignored files (Untracked under .gitignore) correctly.
                     var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
                     if (pathsError != null)
-                        return new GitStatusResult { Success = false, Error = pathsError };
+                        return new GitStatusResult { IsError = true, Error = pathsError };
 
                     // Validate that paths stay within repo
                     foreach (var p in filePaths!)
@@ -1360,7 +1360,7 @@ public class GitImpl : IGitOperations
                         {
                             return new GitStatusResult
                             {
-                                Success = false,
+                                IsError = true,
                                 ErrorKind = GitErrorCodes.PathNotFound,
                                 ErrorDetail = GitErrorDetails.PathNotFound,
                                 Error = $"{error}. Nothing was staged."
@@ -1378,7 +1378,7 @@ public class GitImpl : IGitOperations
                         var missingList = string.Join(", ", missing.Select(m => $"\"{m.Path}\""));
                         return new GitStatusResult
                         {
-                            Success = false,
+                            IsError = true,
                             ErrorKind = GitErrorCodes.PathNotFound,
                             ErrorDetail = GitErrorDetails.PathNotFound,
                             Error = $"The following paths are not tracked and do not exist on disk: {missingList}. Nothing was staged."
@@ -1400,7 +1400,7 @@ public class GitImpl : IGitOperations
                         {
                             return new GitStatusResult
                             {
-                                Success = false,
+                                IsError = true,
                                 Error = $"git add -u failed: {CleanGitStderr(addURaw.Stderr)}"
                             };
                         }
@@ -1421,7 +1421,7 @@ public class GitImpl : IGitOperations
                             var ignoredNames = string.Join(", ", ignoredListed.Select(p => $"\"{p}\""));
                             return new GitStatusResult
                             {
-                                Success = false,
+                                IsError = true,
                                 ErrorKind = GitErrorCodes.IgnoredPath,
                                 ErrorDetail = GitErrorDetails.IgnoredPath,
                                 Error = $"The following paths are ignored by .gitignore: {ignoredNames}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to stage them. Nothing was staged."
@@ -1441,7 +1441,7 @@ public class GitImpl : IGitOperations
                                 var ignoredList = string.Join(", ", ignoredPaths.Select(p => $"\"{p}\""));
                                 return new GitStatusResult
                                 {
-                                    Success = false,
+                                    IsError = true,
                                     ErrorKind = GitErrorCodes.IgnoredPath,
                                     ErrorDetail = GitErrorDetails.IgnoredPath,
                                     Error = $"The following paths are ignored by .gitignore: {ignoredList}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to stage them. Nothing was staged."
@@ -1453,7 +1453,7 @@ public class GitImpl : IGitOperations
                         {
                             return new GitStatusResult
                             {
-                                Success = false,
+                                IsError = true,
                                 Error = $"git add failed: {CleanGitStderr(addRaw.Stderr)}"
                             };
                         }
@@ -1465,20 +1465,20 @@ public class GitImpl : IGitOperations
                     stageArgs = ["--literal-pathspecs", "add", "-u"];
                     var trackedRaw = await RunGitAsync(gitRoot, stageArgs, cancellationToken);
                     if (trackedRaw.ExitCode != 0)
-                        return new GitStatusResult { Success = false, Error = $"git add failed: {CleanGitStderr(trackedRaw.Stderr)}" };
+                        return new GitStatusResult { IsError = true, Error = $"git add failed: {CleanGitStderr(trackedRaw.Stderr)}" };
                     return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
             }
 
             var stageRaw = await RunGitAsync(gitRoot, stageArgs, cancellationToken);
             if (stageRaw.ExitCode != 0)
-                return new GitStatusResult { Success = false, Error = $"git add failed: {CleanGitStderr(stageRaw.Stderr)}" };
+                return new GitStatusResult { IsError = true, Error = $"git add failed: {CleanGitStderr(stageRaw.Stderr)}" };
 
             return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git stage failed");
-            return new GitStatusResult { Success = false, Error = $"Git stage failed: {ex.Message}" };
+            return new GitStatusResult { IsError = true, Error = $"Git stage failed: {ex.Message}" };
         }
     }
     /// <summary>
@@ -1504,7 +1504,7 @@ public class GitImpl : IGitOperations
             {
                 var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
                 if (pathsError != null)
-                    return new GitStatusResult { Success = false, Error = pathsError };
+                    return new GitStatusResult { IsError = true, Error = pathsError };
                 resetArgs = ["reset", "--", .. filePaths!];
             }
 
@@ -1515,14 +1515,14 @@ public class GitImpl : IGitOperations
             // rather than trusting the exit code alone.
             var resetErrText = CleanGitStderr(resetRaw.Stderr);
             if (resetRaw.ExitCode != 0 && resetErrText.Length > 0)
-                return new GitStatusResult { Success = false, Error = $"git reset failed: {resetErrText}" };
+                return new GitStatusResult { IsError = true, Error = $"git reset failed: {resetErrText}" };
 
             return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git unstage failed");
-            return new GitStatusResult { Success = false, Error = $"Git unstage failed: {ex.Message}" };
+            return new GitStatusResult { IsError = true, Error = $"Git unstage failed: {ex.Message}" };
         }
     }
     public async Task<GitCommitResult> CommitAsync(
@@ -1534,7 +1534,7 @@ public class GitImpl : IGitOperations
         {
             return new GitCommitResult
             {
-                Success = false,
+                IsError = true,
                 Error = "message is required for operation=commit. Pass message: \"<what this commit does>\". Nothing was committed."
             };
         }
@@ -1559,7 +1559,7 @@ public class GitImpl : IGitOperations
                     {
                         return new GitCommitResult
                         {
-                            Success = false,
+                            IsError = true,
                             Error = $"HEAD is already contained in its upstream '{upstreamName}', so amending it would rewrite published history, " +
                                     "and this tool does not expose force-push (the branch would diverge from the remote). " +
                                     "Make a new commit instead, or use operation=revert to undo the pushed commit. Nothing was amended."
@@ -1575,7 +1575,7 @@ public class GitImpl : IGitOperations
             {
                 var filePaths = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
                 if (pathsError != null)
-                    return new GitCommitResult { Success = false, Error = pathsError };
+                    return new GitCommitResult { IsError = true, Error = pathsError };
 
                 // Validate that paths stay within repo
                 foreach (var p in filePaths!)
@@ -1585,7 +1585,7 @@ public class GitImpl : IGitOperations
                     {
                         return new GitCommitResult
                         {
-                            Success = false,
+                            IsError = true,
                             ErrorKind = GitErrorCodes.PathNotFound,
                             ErrorDetail = GitErrorDetails.PathNotFound,
                             Error = $"{error}. Nothing was committed."
@@ -1603,7 +1603,7 @@ public class GitImpl : IGitOperations
                     var missingList = string.Join(", ", missing.Select(m => $"\"{m.Path}\""));
                     return new GitCommitResult
                     {
-                        Success = false,
+                        IsError = true,
                         ErrorKind = GitErrorCodes.PathNotFound,
                         ErrorDetail = GitErrorDetails.PathNotFound,
                         Error = $"The following paths are not tracked and do not exist on disk: {missingList}. Nothing was committed."
@@ -1622,7 +1622,7 @@ public class GitImpl : IGitOperations
                         var ignoredNames = string.Join(", ", ignoredListed.Select(p => $"\"{p}\""));
                         return new GitCommitResult
                         {
-                            Success = false,
+                            IsError = true,
                             ErrorKind = GitErrorCodes.IgnoredPath,
                             ErrorDetail = GitErrorDetails.IgnoredPath,
                             Error = $"The following paths are ignored by .gitignore: {ignoredNames}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to commit them. Nothing was committed."
@@ -1642,7 +1642,7 @@ public class GitImpl : IGitOperations
                             var ignoredList = string.Join(", ", ignoredPaths.Select(p => $"\"{p}\""));
                             return new GitCommitResult
                             {
-                                Success = false,
+                                IsError = true,
                                 ErrorKind = GitErrorCodes.IgnoredPath,
                                 ErrorDetail = GitErrorDetails.IgnoredPath,
                                 Error = $"The following paths are ignored by .gitignore: {ignoredList}. The tool has no -f flag to force-add them. Remove them from the list or un-ignore them in .gitignore to commit them. Nothing was committed."
@@ -1654,7 +1654,7 @@ public class GitImpl : IGitOperations
                     {
                         return new GitCommitResult
                         {
-                            Success = false,
+                            IsError = true,
                             Error = $"git add failed: {CleanGitStderr(addRaw.Stderr)}"
                         };
                     }
@@ -1666,8 +1666,8 @@ public class GitImpl : IGitOperations
             {
                 // For scope=all or scope=tracked, pre-stage as requested
                 var stageResult = await StageAsync(gitRoot, explicitScope, paths, cancellationToken);
-                if (!stageResult.Success)
-                    return new GitCommitResult { Success = false, Error = stageResult.Error };
+                if (stageResult.IsError)
+                    return new GitCommitResult { IsError = true, Error = stageResult.Error };
             }
 
             // Build commit arguments
@@ -1716,7 +1716,7 @@ public class GitImpl : IGitOperations
                     failureNote = $" Staging already ran; the index now holds {stagedCount} staged paths. Call Git(operation: unstage) to undo.";
                 }
 
-                var failed = new GitCommitResult { Success = false, Error = $"git commit failed: {errorText}{failureNote}" };
+                var failed = new GitCommitResult { IsError = true, Error = $"git commit failed: {errorText}{failureNote}" };
 
                 // Classify structurally, not from git's localizable text. Amend is skipped (an amend
                 // with nothing staged is legal), as is a path list that was not classified up front
@@ -1766,12 +1766,12 @@ public class GitImpl : IGitOperations
                     .ToList();
             }
 
-            return new GitCommitResult { Success = true, CommitHash = hash, Message = finalMessage, RemainingStaged = remainingStaged };
+            return new GitCommitResult { IsError = false, CommitHash = hash, Message = finalMessage, RemainingStaged = remainingStaged };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git commit failed");
-            return new GitCommitResult { Success = false, Error = $"Git commit failed: {ex.Message}" };
+            return new GitCommitResult { IsError = true, Error = $"Git commit failed: {ex.Message}" };
         }
     }
 
@@ -1790,7 +1790,7 @@ public class GitImpl : IGitOperations
             {
                 return new GitStatusResult
                 {
-                    Success = false,
+                    IsError = true,
                     Error = "Nothing to abort: no merge, rebase, cherry-pick, revert or am is in progress. Call status to see the current state. Nothing was changed."
                 };
             }
@@ -1799,7 +1799,7 @@ public class GitImpl : IGitOperations
             if (abortRaw.ExitCode != 0)
             {
                 var detail = string.Join("\n", new[] { abortRaw.Stdout.Trim(), CleanGitStderr(abortRaw.Stderr) }.Where(s => s.Length > 0));
-                return new GitStatusResult { Success = false, Error = $"git {op} --abort failed: {detail} The repository is still mid-{op}." };
+                return new GitStatusResult { IsError = true, Error = $"git {op} --abort failed: {detail} The repository is still mid-{op}." };
             }
 
             var status = await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
@@ -1809,7 +1809,7 @@ public class GitImpl : IGitOperations
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git abort failed");
-            return new GitStatusResult { Success = false, Error = $"Git abort failed: {ex.Message}" };
+            return new GitStatusResult { IsError = true, Error = $"Git abort failed: {ex.Message}" };
         }
     }
 
@@ -1817,10 +1817,10 @@ public class GitImpl : IGitOperations
         string gitRoot, string? commitHash, bool noCommit, int? mainline, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(commitHash))
-            return new GitRevertResult { Success = false, ErrorKind = GitErrorCodes.RefRequired, ErrorDetail = GitErrorDetails.RefRequiredRevert, Error = "commitHash is required for operation=revert." };
+            return new GitRevertResult { IsError = true, ErrorKind = GitErrorCodes.RefRequired, ErrorDetail = GitErrorDetails.RefRequiredRevert, Error = "commitHash is required for operation=revert." };
 
         if (mainline is < 1)
-            return new GitRevertResult { Success = false, Error = $"mainline must be 1 or greater (got {mainline}); 1 is the parent that was merged into. Nothing was reverted." };
+            return new GitRevertResult { IsError = true, Error = $"mainline must be 1 or greater (got {mainline}); 1 is the parent that was merged into. Nothing was reverted." };
 
         try
         {
@@ -1828,17 +1828,17 @@ public class GitImpl : IGitOperations
             // `mainline` parameter, rather than git's "commit X is a merge but no -m option was given".
             var parentsRaw = await RunGitAsync(gitRoot, ["rev-list", "--parents", "-n", "1", commitHash, "--"], cancellationToken);
             if (parentsRaw.ExitCode != 0)
-                return new GitRevertResult { Success = false, CommitHash = commitHash, Error = $"Cannot resolve commitHash '{commitHash}': {CleanGitStderr(parentsRaw.Stderr)} Nothing was reverted." };
+                return new GitRevertResult { IsError = true, CommitHash = commitHash, Error = $"Cannot resolve commitHash '{commitHash}': {CleanGitStderr(parentsRaw.Stderr)} Nothing was reverted." };
 
             var parentCount = parentsRaw.Stdout.Split([' ', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Length - 1;
             if (parentCount > 1 && mainline is null)
-                return new GitRevertResult { Success = false, CommitHash = commitHash, Error = $"Commit '{commitHash}' is a merge commit with {parentCount} parents. Pass mainline: 1 (the branch merged into; almost always right) to {parentCount} to say which parent to keep. Nothing was reverted." };
+                return new GitRevertResult { IsError = true, CommitHash = commitHash, Error = $"Commit '{commitHash}' is a merge commit with {parentCount} parents. Pass mainline: 1 (the branch merged into; almost always right) to {parentCount} to say which parent to keep. Nothing was reverted." };
             if (mainline is { } requestedMainline)
             {
                 if (parentCount <= 1)
-                    return new GitRevertResult { Success = false, CommitHash = commitHash, Error = $"mainline was supplied but commit '{commitHash}' is not a merge commit. Omit mainline. Nothing was reverted." };
+                    return new GitRevertResult { IsError = true, CommitHash = commitHash, Error = $"mainline was supplied but commit '{commitHash}' is not a merge commit. Omit mainline. Nothing was reverted." };
                 if (requestedMainline > parentCount)
-                    return new GitRevertResult { Success = false, CommitHash = commitHash, Error = $"mainline {requestedMainline} is out of range: commit '{commitHash}' has {parentCount} parents. Nothing was reverted." };
+                    return new GitRevertResult { IsError = true, CommitHash = commitHash, Error = $"mainline {requestedMainline} is out of range: commit '{commitHash}' has {parentCount} parents. Nothing was reverted." };
             }
 
             var args = new List<string> { "revert", "--no-edit" };
@@ -1854,7 +1854,7 @@ public class GitImpl : IGitOperations
             var revertRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (revertRaw.ExitCode != 0)
-                return await AppendInProgressAsync(new GitRevertResult { Success = false, CommitHash = commitHash, Error = CleanGitStderr(revertRaw.Stderr) }, gitRoot, cancellationToken);
+                return await AppendInProgressAsync(new GitRevertResult { IsError = true, CommitHash = commitHash, Error = CleanGitStderr(revertRaw.Stderr) }, gitRoot, cancellationToken);
 
             string newHash = "";
             if (!noCommit)
@@ -1865,7 +1865,7 @@ public class GitImpl : IGitOperations
 
             return new GitRevertResult
             {
-                Success = true,
+                IsError = false,
                 CommitHash = newHash,
                 Message = noCommit ? "Revert staged - call commit to finalise." : revertRaw.Stdout.Trim(),
                 PendingCommit = noCommit,
@@ -1874,7 +1874,7 @@ public class GitImpl : IGitOperations
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git revert failed (hash={Hash})", commitHash);
-            return new GitRevertResult { Success = false, Error = $"Git revert failed: {ex.Message}" };
+            return new GitRevertResult { IsError = true, Error = $"Git revert failed: {ex.Message}" };
         }
     }
 
@@ -1892,7 +1892,7 @@ public class GitImpl : IGitOperations
         {
             return new GitStatusResult
             {
-                Success = false,
+                IsError = true,
                 ErrorKind = GitErrorCodes.RefRequired,
                 ErrorDetail = GitErrorDetails.RefRequiredReset,
                 Error = "reset needs an explicit ref, e.g. ref: \"HEAD~1\" to undo the last commit (working tree kept). " +
@@ -1908,14 +1908,14 @@ public class GitImpl : IGitOperations
             var resetRaw = await RunGitAsync(gitRoot, ["reset", modeFlag, target], cancellationToken);
 
             if (resetRaw.ExitCode != 0)
-                return new GitStatusResult { Success = false, Error = $"git reset failed: {CleanGitStderr(resetRaw.Stderr)}" };
+                return new GitStatusResult { IsError = true, Error = $"git reset failed: {CleanGitStderr(resetRaw.Stderr)}" };
 
             return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git reset failed (ref={Ref}, mode={Mode})", target, mode);
-            return new GitStatusResult { Success = false, Error = $"Git reset failed: {ex.Message}" };
+            return new GitStatusResult { IsError = true, Error = $"Git reset failed: {ex.Message}" };
         }
     }
 
@@ -1936,7 +1936,7 @@ public class GitImpl : IGitOperations
                 var listRaw = await RunGitAsync(gitRoot,
                     ["branch", "--list", "--all"], cancellationToken);
                 if (listRaw.ExitCode != 0)
-                    return new GitBranchResult { Success = false, Error = CleanGitStderr(listRaw.Stderr) };
+                    return new GitBranchResult { IsError = true, Error = CleanGitStderr(listRaw.Stderr) };
 
                 var branches = new List<GitBranchEntry>();
                 foreach (var rawLine in listRaw.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
@@ -1955,7 +1955,7 @@ public class GitImpl : IGitOperations
                     });
                 }
 
-                return new GitBranchResult { Success = true, Branches = branches };
+                return new GitBranchResult { IsError = false, Branches = branches };
             }
 
             if (deleteBranch)
@@ -1965,11 +1965,11 @@ public class GitImpl : IGitOperations
                 if (delRaw.ExitCode != 0)
                     return new GitBranchResult
                     {
-                        Success = false,
+                        IsError = true,
                         Error = $"git branch -d failed: {CleanGitStderr(delRaw.Stderr)}. If the branch truly should be discarded unmerged, this tool deliberately does not expose -D; use the shell as a documented exception."
                     };
 
-                return new GitBranchResult { Success = true, Deleted = branchName };
+                return new GitBranchResult { IsError = false, Deleted = branchName };
             }
 
             string[] createArgs = string.IsNullOrWhiteSpace(startPoint)
@@ -1977,14 +1977,14 @@ public class GitImpl : IGitOperations
                 : ["branch", branchName, startPoint];
             var createRaw = await RunGitAsync(gitRoot, createArgs, cancellationToken);
             if (createRaw.ExitCode != 0)
-                return new GitBranchResult { Success = false, Error = $"git branch failed: {CleanGitStderr(createRaw.Stderr)}" };
+                return new GitBranchResult { IsError = true, Error = $"git branch failed: {CleanGitStderr(createRaw.Stderr)}" };
 
-            return new GitBranchResult { Success = true, Created = branchName };
+            return new GitBranchResult { IsError = false, Created = branchName };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git branch failed");
-            return new GitBranchResult { Success = false, Error = $"Git branch failed: {ex.Message}" };
+            return new GitBranchResult { IsError = true, Error = $"Git branch failed: {ex.Message}" };
         }
     }
 
@@ -2000,7 +2000,7 @@ public class GitImpl : IGitOperations
         {
             return new GitCheckoutResult
             {
-                Success = false,
+                IsError = true,
                 ErrorKind = GitErrorCodes.RefRequired,
                 ErrorDetail = GitErrorDetails.RefRequiredCheckout,
                 Error = "branchName is required for operation=checkout. Pass the branch to switch to, and createBranch=true if it doesn't exist yet."
@@ -2013,7 +2013,7 @@ public class GitImpl : IGitOperations
         {
             return new GitCheckoutResult
             {
-                Success = false,
+                IsError = true,
                 Branch = branchName,
                 Error = $"startPoint '{startPoint}' was supplied without createBranch=true, so it would be ignored. " +
                         "Pass createBranch=true to create the branch from it, or omit startPoint to switch to an existing branch. Nothing was checked out."
@@ -2052,14 +2052,14 @@ public class GitImpl : IGitOperations
 
             var checkoutRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
             if (checkoutRaw.ExitCode != 0)
-                return new GitCheckoutResult { Success = false, Branch = branchName, Error = CleanGitStderr(checkoutRaw.Stderr) };
+                return new GitCheckoutResult { IsError = true, Branch = branchName, Error = CleanGitStderr(checkoutRaw.Stderr) };
 
-            return new GitCheckoutResult { Success = true, Branch = branchName, CreatedNewBranch = createNew, Note = note };
+            return new GitCheckoutResult { IsError = false, Branch = branchName, CreatedNewBranch = createNew, Note = note };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git checkout failed (branch={Branch})", branchName);
-            return new GitCheckoutResult { Success = false, Branch = branchName, Error = $"Git checkout failed: {ex.Message}" };
+            return new GitCheckoutResult { IsError = true, Branch = branchName, Error = $"Git checkout failed: {ex.Message}" };
         }
     }
 
@@ -2087,14 +2087,14 @@ public class GitImpl : IGitOperations
             var pushRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
             var detail = string.Join("\n", new[] { pushRaw.Stdout.Trim(), CleanGitStderr(pushRaw.Stderr) }.Where(s => s.Length > 0));
             if (pushRaw.ExitCode != 0)
-                return new GitRemoteResult { Success = false, Operation = "push", Error = detail.Length > 0 ? detail : $"git push exited with code {pushRaw.ExitCode}" };
+                return new GitRemoteResult { IsError = true, Operation = "push", Error = detail.Length > 0 ? detail : $"git push exited with code {pushRaw.ExitCode}" };
 
-            return new GitRemoteResult { Success = true, Operation = "push", Detail = detail };
+            return new GitRemoteResult { IsError = false, Operation = "push", Detail = detail };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git push failed (remote={Remote})", remoteName);
-            return new GitRemoteResult { Success = false, Operation = "push", Error = $"Git push failed: {ex.Message}" };
+            return new GitRemoteResult { IsError = true, Operation = "push", Error = $"Git push failed: {ex.Message}" };
         }
     }
 
@@ -2106,14 +2106,14 @@ public class GitImpl : IGitOperations
             var fetchRaw = await RunGitAsync(gitRoot, ["fetch", remoteName], cancellationToken);
             var detail = string.Join("\n", new[] { fetchRaw.Stdout.Trim(), CleanGitStderr(fetchRaw.Stderr) }.Where(s => s.Length > 0));
             if (fetchRaw.ExitCode != 0)
-                return new GitRemoteResult { Success = false, Operation = "fetch", Error = detail.Length > 0 ? detail : $"git fetch exited with code {fetchRaw.ExitCode}" };
+                return new GitRemoteResult { IsError = true, Operation = "fetch", Error = detail.Length > 0 ? detail : $"git fetch exited with code {fetchRaw.ExitCode}" };
 
-            return new GitRemoteResult { Success = true, Operation = "fetch", Detail = detail };
+            return new GitRemoteResult { IsError = false, Operation = "fetch", Detail = detail };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git fetch failed (remote={Remote})", remoteName);
-            return new GitRemoteResult { Success = false, Operation = "fetch", Error = $"Git fetch failed: {ex.Message}" };
+            return new GitRemoteResult { IsError = true, Operation = "fetch", Error = $"Git fetch failed: {ex.Message}" };
         }
     }
 
@@ -2134,14 +2134,14 @@ public class GitImpl : IGitOperations
             var pullRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
             var detail = string.Join("\n", new[] { pullRaw.Stdout.Trim(), CleanGitStderr(pullRaw.Stderr) }.Where(s => s.Length > 0));
             if (pullRaw.ExitCode != 0)
-                return await AppendInProgressAsync(new GitRemoteResult { Success = false, Operation = "pull", Error = detail.Length > 0 ? detail : $"git pull exited with code {pullRaw.ExitCode}" }, gitRoot, cancellationToken);
+                return await AppendInProgressAsync(new GitRemoteResult { IsError = true, Operation = "pull", Error = detail.Length > 0 ? detail : $"git pull exited with code {pullRaw.ExitCode}" }, gitRoot, cancellationToken);
 
-            return new GitRemoteResult { Success = true, Operation = "pull", Detail = detail };
+            return new GitRemoteResult { IsError = false, Operation = "pull", Detail = detail };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Git pull failed (remote={Remote})", remoteName);
-            return new GitRemoteResult { Success = false, Operation = "pull", Error = $"Git pull failed: {ex.Message}" };
+            return new GitRemoteResult { IsError = true, Operation = "pull", Error = $"Git pull failed: {ex.Message}" };
         }
     }
 }

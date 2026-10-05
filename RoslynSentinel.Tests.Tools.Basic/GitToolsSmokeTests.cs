@@ -244,8 +244,9 @@ public class GitToolsSmokeTests
 
         Assert.That(result, Is.Not.Null);
         var status = result.SuccessData as GitStatusResult;
-        Assert.That(status?.Success, Is.True);
-        Assert.That(status?.Staged.Select(s => s.Path), Does.Contain("README.md"),
+        Assert.That(status, Is.Not.Null);
+        Assert.That(!status!.IsError, Is.True);
+        Assert.That(status.Staged.Select(s => s.Path), Does.Contain("README.md"),
             "git reset --soft should leave the second commit's change staged, not discarded.");
 
         var log = await _gitTools.Git(reason: "test message", GitOperation.log, count: 5);
@@ -265,8 +266,9 @@ public class GitToolsSmokeTests
 
         Assert.That(result, Is.Not.Null);
         var status = result.SuccessData as GitStatusResult;
-        Assert.That(status?.Success, Is.True, status?.Error);
-        Assert.That(status?.Staged, Is.Empty, "git reset --mixed should leave nothing staged.");
+        Assert.That(status, Is.Not.Null);
+        Assert.That(!status!.IsError, Is.True, status.Error);
+        Assert.That(status.Staged, Is.Empty, "git reset --mixed should leave nothing staged.");
         Assert.That(status?.Unstaged.Select(s => s.Path), Does.Contain("README.md"),
             "git reset --mixed should leave the second commit's change unstaged, not discarded.");
         Assert.That(File.ReadAllText(Path.Combine(_repoDir, "README.md")), Is.EqualTo("second commit content"),
@@ -296,7 +298,7 @@ public class GitToolsSmokeTests
             Assert.That(!result.IsError, Is.True);
             Assert.That(result.SuccessData, Is.Not.Null);
             var status = (GitStatusResult)result.SuccessData;
-            Assert.That(status.Success, Is.True, status.Error);
+            Assert.That(!status.IsError, Is.True, status.Error);
             Assert.That(status.IsClean, Is.False, "the other repo has an uncommitted change and should not report clean.");
             Assert.That(status.Unstaged.Select(s => s.Path), Does.Contain("OTHER.md"));
         }
@@ -375,7 +377,7 @@ public class GitToolsSmokeTests
 
         Assert.That(!result.IsError, Is.True);
         var diff = (GitDiffResult)result.SuccessData!;
-        Assert.That(diff.Success, Is.True, diff.Error);
+        Assert.That(!diff.IsError, Is.True, diff.Error);
         Assert.That(diff.Diff, Does.Contain(emDash),
             "the diff should contain the real UTF-8 em dash, not a mis-decoded mojibake substitute.");
         Assert.That(diff.Warning, Is.Null, "a correctly-decoded diff should not raise a corruption warning.");
@@ -394,7 +396,7 @@ public class GitToolsSmokeTests
 
         Assert.That(!result.IsError, Is.True);
         var show = (GitShowResult)result.SuccessData!;
-        Assert.That(show.Success, Is.True, show.Error);
+        Assert.That(!show.IsError, Is.True, show.Error);
         Assert.That(show.Diff, Does.Contain(emDash),
             "git show's diff should contain the real UTF-8 em dash, not a mis-decoded mojibake substitute.");
         Assert.That(show.Warning, Is.Null, "a correctly-decoded show result should not raise a corruption warning.");
@@ -414,7 +416,7 @@ public class GitToolsSmokeTests
 
         Assert.That(!result.IsError, Is.True);
         var diff = (GitDiffResult)result.SuccessData!;
-        Assert.That(diff.Success, Is.True, diff.Error);
+        Assert.That(!diff.IsError, Is.True, diff.Error);
         Assert.That(diff.Warning, Is.Not.Null.And.Contains("U+FFFD"),
             "a diff containing the Unicode replacement character must raise a decode-corruption warning.");
     }
