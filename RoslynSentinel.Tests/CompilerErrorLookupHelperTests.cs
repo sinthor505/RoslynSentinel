@@ -15,6 +15,7 @@ namespace RoslynSentinel.Tests;
 /// private, then reverted the class without ever touching the method.
 /// </summary>
 [TestFixture]
+[Category("CompilerErrorLookupHelper")] // sentinel:auto-category
 public class CompilerErrorLookupHelperTests
 {
     private IWorkspaceManager _workspaceManager;

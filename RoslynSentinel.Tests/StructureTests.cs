@@ -12,6 +12,7 @@ namespace RoslynSentinel.Tests;
 
 [ExcludeFromCodeCoverage]
 [GeneratedCode("RoslynSentinel", "1.0.0.0")]
+[Category("SolutionStructureEngine")] // sentinel:auto-category
 public class StructureTests
 {
     private IWorkspaceManager _workspaceManager;
