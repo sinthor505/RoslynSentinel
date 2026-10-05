@@ -136,7 +136,7 @@ public class BuildEngine
         if (string.IsNullOrEmpty(solutionPath))
         {
             return new EngineResultWrapper<BuildResult>(EngineOutcome.InvalidInput,
-                error: new EngineError("No solution is loaded. Call LoadSolution before running a full build."));
+                error: new EngineError(SolutionNotLoadedMessage.Build(_workspaceManager.LoadState) + " A full build needs a loaded solution."));
         }
 
         var projectNames = currentSolution?.Projects.Select(p => p.Name).ToList() ?? [];
