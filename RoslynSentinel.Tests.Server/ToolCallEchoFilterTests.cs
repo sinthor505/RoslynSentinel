@@ -289,6 +289,7 @@ public class ToolCallEchoTruncationTests
         ToolCallEcho.CreateEcho("0123456789ab", "SomeTool", Args(json))["arguments"]!.AsObject();
 
     [Test]
+    [Category("ToolCallEcho")] // sentinel:auto-category
     public void CreateEcho_BuildsIdNameAndArguments()
     {
         var echo = ToolCallEcho.CreateEcho("0123456789ab", "SomeTool", Args("{\"a\":1}"));
@@ -298,6 +299,7 @@ public class ToolCallEchoTruncationTests
     }
 
     [Test]
+    [Category("ToolCallEcho")] // sentinel:auto-category
     public void CreateEcho_NullArguments_YieldsEmptyArgumentsObject()
     {
         var echo = ToolCallEcho.CreateEcho("0123456789ab", "SomeTool", null);
@@ -305,6 +307,7 @@ public class ToolCallEchoTruncationTests
     }
 
     [Test]
+    [Category("ToolCallEcho")] // sentinel:auto-category
     public void NewToolCallId_IsTwelveLowercaseHexChars()
     {
         Assert.That(ToolCallEcho.NewToolCallId(), Does.Match("^[0-9a-f]{12}$"));
@@ -392,6 +395,7 @@ public class ToolCallEchoTruncationTests
     }
 
     [Test]
+    [Category("ToolCallEcho")] // sentinel:auto-category
     public void OverallCap_ReplacesObjectAndArrayArguments_ButKeepsScalars()
     {
         // 20 properties of 150-char strings: each survives per-value truncation, but together the

@@ -168,6 +168,7 @@ public class ToolParameterAliasTests
     }
 
     [Test]
+    [Category("ToolArgumentValidator")] // sentinel:auto-category
     public async Task EveryAliasEntry_ForAnActiveTool_PointsAtADeclaredParameter_AndIsNotItselfDeclared()
     {
         // Guards the table against drift: an alias that became a real parameter (declared meaning

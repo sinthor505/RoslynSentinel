@@ -20,6 +20,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Server;
 
 [TestFixture]
+[Category("ToolClassRegistry")] // sentinel:auto-category
 public class ClaudeLeanModeTests
 {
     /// <summary>The proposal's Core set plus McpToolsetControl (slice 4b-2), spelled out independently of ToolClassRegistry.ClaudeLeanToolNames.</summary>
@@ -144,6 +145,7 @@ public class ClaudeLeanModeTests
     }
 
     [Test]
+    [Category("ServerStatusTools")] // sentinel:auto-category
     public void Registry_EveryCoreToolName_IsDeclaredByAToolMethod()
     {
         // Guards against a typo in the allow-list silently dropping a tool from the surface.
@@ -157,6 +159,7 @@ public class ClaudeLeanModeTests
 
     [TestCase("all")]
     [TestCase("ALL")]
+    [Category("ServerStartupHelpers")] // sentinel:auto-category
     public void ParseArgs_All_DoesNotExpandToClaudeLean(string all)
     {
         var allModes = new HashSet<string>(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
@@ -169,6 +172,7 @@ public class ClaudeLeanModeTests
 
     [TestCase("claude-lean")]
     [TestCase("all,claude-lean")]
+    [Category("ServerStartupHelpers")] // sentinel:auto-category
     public void ParseArgs_NamedExplicitly_ActivatesClaudeLean(string modeArg)
     {
         var allModes = new HashSet<string>(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
@@ -179,6 +183,7 @@ public class ClaudeLeanModeTests
     }
 
     [Test]
+    [Category("ServerStartupHelpers")] // sentinel:auto-category
     public void ResolveActiveToolClasses_ClaudeLeanAlone_YieldsFifteenToolClasses()
     {
         var classes = ServerStartupHelpers.ResolveActiveToolClasses(

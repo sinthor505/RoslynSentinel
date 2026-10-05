@@ -121,6 +121,7 @@ public class NoActiveToolsStartupTests
     }
 
     [Test]
+    [Category("ToolClassRegistry")] // sentinel:auto-category
     public void ModeAll_IsNotReported()
     {
         var allModes = new HashSet<string>(ToolClassRegistry.AdvancedModeToToolClasses.Keys, StringComparer.OrdinalIgnoreCase);
@@ -129,6 +130,8 @@ public class NoActiveToolsStartupTests
         Assert.That(failure, Is.Null);
     }
     [Test]
+    [Category("ServerStartupHelpers")] // sentinel:auto-category
+    [Category("ToolClassRegistry")] // sentinel:auto-category
     public void ModeAll_ResolvesToEveryRegisteredToolClass_IncludingAdminAndWholeFileWrite()
     {
         // Regression test for the "--mode=all" drift bug: each of the 4 server entry points used
@@ -159,6 +162,8 @@ public class NoActiveToolsStartupTests
     }
 
     [Test]
+    [Category("ServerStartupHelpers")] // sentinel:auto-category
+    [Category("WorkspaceTools")] // sentinel:auto-category
     public void SmokeResolve_SkipsTypesTheRunDidNotActivate()
     {
         // The other half of the fix. An empty service provider stands in for "nothing registered":
@@ -176,6 +181,8 @@ public class NoActiveToolsStartupTests
     }
 
     [Test]
+    [Category("ServerStartupHelpers")] // sentinel:auto-category
+    [Category("WorkspaceTools")] // sentinel:auto-category
     public void SmokeResolve_ActiveButUnregisteredType_NamesTheClassAndPointsAtItsDependencies()
     {
         // When a class really is active and really can't be built, the message should say so and

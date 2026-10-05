@@ -15,6 +15,8 @@ namespace RoslynSentinel.Tests.Server;
 
 [TestFixture]
 
+[Category("McpServerStatusResult")] // sentinel:auto-category
+[Category("McpServerStatusToolSurface")] // sentinel:auto-category
 public class McpServerStatusStructuredContentTests
 {
     private IHost _host = null!;

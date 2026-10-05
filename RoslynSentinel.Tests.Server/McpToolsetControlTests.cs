@@ -201,6 +201,7 @@ public class McpToolsetControlTests
     }
 
     [Test]
+    [Category("ToolClassRegistry")] // sentinel:auto-category
     public void Catalog_SetsAreDisjoint_AndExcludeCoreTools()
     {
         var all = Enum.GetValues<ToolSetName>().SelectMany(AllSetToolNames).ToArray();
@@ -212,6 +213,7 @@ public class McpToolsetControlTests
     }
 
     [Test]
+    [Category("ToolsetControlTools")] // sentinel:auto-category
     public void Catalog_EveryToolIsDeclared_AndTheDescriptionNamesEverySetAndTool()
     {
         var declared = McpToolSchemaPatcher.DiscoverToolMethods(ToolAssemblies).Select(t => t.ToolName).ToHashSet(StringComparer.Ordinal);
@@ -495,6 +497,8 @@ public class McpToolsetControlTests
 
     [TestCase(true)]
     [TestCase(false)]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    [Category("ToolClassRegistry")] // sentinel:auto-category
     public void OnDemandClasses_AreConstructibleFromTheLeanContainer(bool advanced)
     {
         using var host = BuildHost(advanced, "claude-lean", includeTools: null);
@@ -627,6 +631,9 @@ public class McpToolsetControlTests
     }
 
     [Test]
+    [Category("DeclarationTools")] // sentinel:auto-category
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public void Declaration_EmittedSchema_IsSmallerThanTheFourToolsItMerges()
     {
         var services = new ServiceCollection().BuildServiceProvider();
@@ -709,6 +716,8 @@ public class McpToolsetControlTests
     }
 
     [Test]
+    [Category("ParameterEditTools")] // sentinel:auto-category
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public void ParameterEdit_EmittedSchema_IsSmallerThanTheTwoToolsItMerges()
     {
         var services = new ServiceCollection().BuildServiceProvider();
