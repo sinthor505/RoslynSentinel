@@ -1,6 +1,6 @@
 # Finding: InspectSymbol blastRadius reports a failed lookup as a successful "0 call sites"
 
-**Status:** FIXED 2026-10-04 (commit 3b29b07, both `blastRadius` and `info`). Recommendations 2-3 and the `info` error-code question remain open. Matters because blastRadius is the measuring step of the implementer slice contract (CLAUDE.md).
+**Status:** FIXED 2026-10-04 (commit 3b29b07 for both `blastRadius` and `info`; error codes aligned in the follow-up commit). Recommendations 2-3 remain open. Matters because blastRadius is the measuring step of the implementer slice contract (CLAUDE.md).
 
 ## Context
 Checking whether the existing blast-radius capability could gate `implementer` slice sizing. It is not a
@@ -48,8 +48,8 @@ snippet not found, no symbol, no semantic model) and they came back as `IsSucces
    `GetBlastRadius_ValidMethod_ReportHasNoErrorAndNamesSymbol`,
    `InspectSymbol_UnresolvableSnippet_InfoAndBlastRadiusAgree`. A server binary older than that commit
    still shows the old behavior (`isServerBinaryStale`).
-   Open follow-up: `info` reports not-found as `ToolErrorCode.Exception` while `blastRadius` uses
-   `NotFound`; align them.
+   Follow-up DONE (same day): `info` now also reports `ToolErrorCode.NotFound`, matching `blastRadius`;
+   `InspectSymbol_UnresolvableSnippet_InfoAndBlastRadiusAgree` asserts both codes.
 2. Open: add `affectedFileCount` and project names to the report so callers need not post-process
    a potentially large reference list. Cheap, additive.
 3. Open: a multi-symbol or staging-suggesting wrapper is only worth building if journal data from the

@@ -93,7 +93,8 @@ Files: <=3 .cs files, full paths including the project
 Symbols: exact types/members to change
 Call sites: pre-measured list (file:line), or "none"
 Acceptance: ONE check - a clean Build, or one named test/diagnostic
-Out of scope: what not to touch (e.g. "do not commit", "items 5-7")
+Out of scope: what not to touch (e.g. "do not commit", "items 5-7") - always include "edit nothing
+  outside the named symbols/branches; if a test seems to need another change, reply RESCOPE:"
 ```
 
 Dispatch with `model: "haiku"` pinned explicitly.

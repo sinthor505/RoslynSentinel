@@ -99,7 +99,7 @@ public class SymbolNavigationImpl
                     return new SentinelCallToolResult<object>
                     {
                         IsSuccess = false,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, errorMsg)
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, errorMsg)
                     };
                 }
                 return new SentinelCallToolResult<object>

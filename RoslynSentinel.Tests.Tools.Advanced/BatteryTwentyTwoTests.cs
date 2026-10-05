@@ -228,6 +228,8 @@ public class OrderService : IOrderService
         Assert.That(resultBlastRadius.ErrorData, Is.Not.Null);
         Assert.That(resultInfo.ErrorData!.Message, Is.Not.Null.And.Not.Empty);
         Assert.That(resultBlastRadius.ErrorData!.Message, Is.Not.Null.And.Not.Empty);
+        Assert.That(resultInfo.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound.ToString()));
+        Assert.That(resultBlastRadius.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound.ToString()));
     }
 
     // --- FindMethodsByReturnType (via QuerySymbolRelationships) ---
