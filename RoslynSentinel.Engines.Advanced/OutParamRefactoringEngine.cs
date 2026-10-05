@@ -9,7 +9,7 @@ using RoslynSentinel.Common;
 namespace RoslynSentinel.Engines.Advanced;
 
 public record OutParamConversionResult(
-    bool Success,
+    bool IsError,
     string Message,
     string? OriginalSignature,
     string? NewSignature,
@@ -45,19 +45,19 @@ public class OutParamRefactoringEngine
 
         if (document == null)
         {
-            return new OutParamConversionResult(false, $"File not found: {filePath}", null, null, 0, []);
+            return new OutParamConversionResult(true, $"File not found: {filePath}", null, null, 0, []);
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (semanticModel == null)
         {
-            return new OutParamConversionResult(false, "Could not get semantic model.", null, null, 0, []);
+            return new OutParamConversionResult(true, "Could not get semantic model.", null, null, 0, []);
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new OutParamConversionResult(false, "Could not get syntax root.", null, null, 0, []);
+            return new OutParamConversionResult(true, "Could not get syntax root.", null, null, 0, []);
         }
 
         // Find the target method
@@ -67,7 +67,7 @@ public class OutParamRefactoringEngine
 
         if (methodDecl == null)
         {
-            return new OutParamConversionResult(false, $"Method '{methodName}' not found in {filePath}.", null, null, 0, []);
+            return new OutParamConversionResult(true, $"Method '{methodName}' not found in {filePath}.", null, null, 0, []);
         }
 
         var outParams = methodDecl.ParameterList.Parameters
@@ -76,14 +76,14 @@ public class OutParamRefactoringEngine
 
         if (outParams.Count < 2)
         {
-            return new OutParamConversionResult(false,
+            return new OutParamConversionResult(true,
                 $"Method '{methodName}' has fewer than 2 out parameters ({outParams.Count}). No conversion needed.",
                 null, null, 0, []);
         }
 
         if (semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken) is not IMethodSymbol methodSymbol)
         {
-            return new OutParamConversionResult(false, "Could not resolve method symbol.", null, null, 0, []);
+            return new OutParamConversionResult(true, "Could not resolve method symbol.", null, null, 0, []);
         }
 
         string originalReturn = methodDecl.ReturnType.ToString();
@@ -297,7 +297,7 @@ public class OutParamRefactoringEngine
 
         var newSig = $"{tupleType} {methodName}({string.Join(", ", methodDecl.ParameterList.Parameters.Where(p => !p.Modifiers.Any(m => m.IsKind(SyntaxKind.OutKeyword))))})";
         return new OutParamConversionResult(
-            true,
+            false,
             $"Converted '{methodName}' to return {tupleType}. {callSitesRewritten} call site(s) rewritten.",
             originalSignature,
             newSig,

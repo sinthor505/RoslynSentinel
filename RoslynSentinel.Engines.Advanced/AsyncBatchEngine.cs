@@ -466,7 +466,7 @@ public class AsyncBatchEngine
                         var ctValidation = await _validationEngine.ValidateChangesAsync(
                             new Dictionary<FilePathWrapper, string> { { candidate.FilePath, ctResult.UpdatedText } },
                             cancellationToken);
-                        if (ctValidation.Success)
+                        if (!ctValidation.IsError)
                         {
                             string? beforeSource = File.Exists(candidate.FilePath)
                                 ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken) : null;
@@ -508,7 +508,7 @@ public class AsyncBatchEngine
                             var bodyValidation = await _validationEngine.ValidateChangesAsync(
                                 new Dictionary<FilePathWrapper, string> { { candidate.FilePath, bodyRewrite.UpdatedText } },
                                 cancellationToken);
-                            if (bodyValidation.Success)
+                            if (!bodyValidation.IsError)
                             {
                                 string? beforeSource = File.Exists(candidate.FilePath)
                                     ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken) : null;
@@ -689,7 +689,7 @@ public class AsyncBatchEngine
                 new Dictionary<FilePathWrapper, string> { { candidate.FilePath, sourceToValidate } },
                 cancellationToken);
 
-            if (!validation.Success)
+            if (validation.IsError)
             {
                 _logger.LogWarning(
                     "In-memory validation failed for {Method} ({DiagCount} errors): {FirstDiag}",
@@ -1024,7 +1024,7 @@ public class AsyncBatchEngine
                     new Dictionary<FilePathWrapper, string> { { callerFilePath, transformed! } },
                     cancellationToken);
 
-                if (!validation.Success)
+                if (validation.IsError)
                 {
                     _logger.LogWarning(
                         "In-memory validation failed for uplifted {Method} ({DiagCount} errors): {First}",
@@ -1700,7 +1700,7 @@ public class AsyncBatchEngine
                 new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } },
                 cancellationToken: cancellationToken);
 
-            if (!validation.Success)
+            if (validation.IsError)
             {
                 var diagMessages = validation.Diagnostics
                     .Select(d => $"[{d.Id}] {d.Message} ({d.FilePath}:{d.StartLine})")

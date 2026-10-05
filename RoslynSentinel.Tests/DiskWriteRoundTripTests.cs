@@ -189,7 +189,7 @@ public class DiskWriteRoundTripTests
         var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("CrlfDominant.cs", Encoding.UTF8.GetBytes(original), proposed);
 
         Assert.That(tracked, Is.True, "Fixture file must be a loaded document, otherwise EOL tracking was never captured.");
-        Assert.That(result.Success, Is.True, result.Summary);
+        Assert.That(!result.IsError, Is.True, result.Summary);
         Assert.That(Encoding.UTF8.GetString(diskBytes), Does.Contain("// Added comment"), "Content should be updated");
         for (var i = 0; i < diskBytes.Length; i++)
         {
@@ -214,7 +214,7 @@ public class DiskWriteRoundTripTests
         var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("LfDominant.cs", Encoding.UTF8.GetBytes(original), proposed);
 
         Assert.That(tracked, Is.True, "Fixture file must be a loaded document, otherwise EOL tracking was never captured.");
-        Assert.That(result.Success, Is.True, result.Summary);
+        Assert.That(!result.IsError, Is.True, result.Summary);
         Assert.That(Encoding.UTF8.GetString(diskBytes), Does.Contain("// Added comment"), "Content should be updated");
         Assert.That(diskBytes, Does.Not.Contain((byte)0x0D), "No CR may remain in an LF-dominant file.");
 
@@ -234,7 +234,7 @@ public class DiskWriteRoundTripTests
         var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("CrlfSingleStyle.cs", originalBytes, proposed);
 
         Assert.That(tracked, Is.True);
-        Assert.That(result.Success, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.RefusalCode, Is.EqualTo(ToolErrorCode.EolChangeRefused));
         Assert.That(diskBytes, Is.EqualTo(originalBytes), "A refused change must not touch the file.");
     }
@@ -251,7 +251,7 @@ public class DiskWriteRoundTripTests
         var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("WithBom.cs", originalBytes, proposed);
 
         Assert.That(tracked, Is.True, "Fixture file must be a loaded document, otherwise BOM tracking was never captured.");
-        Assert.That(result.Success, Is.True, result.Summary);
+        Assert.That(!result.IsError, Is.True, result.Summary);
         Assert.That(diskBytes.Take(3), Is.EqualTo(Utf8Bom), "UTF-8 BOM must survive the edit.");
         Assert.That(diskBytes, Is.EqualTo(Utf8Bom.Concat(Encoding.UTF8.GetBytes(proposed)).ToArray()), "Exactly one BOM followed by the updated content.");
     }
@@ -265,7 +265,7 @@ public class DiskWriteRoundTripTests
         var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("NoBom.cs", Encoding.UTF8.GetBytes(original), proposed);
 
         Assert.That(tracked, Is.True);
-        Assert.That(result.Success, Is.True, result.Summary);
+        Assert.That(!result.IsError, Is.True, result.Summary);
         Assert.That(diskBytes.Take(3), Is.Not.EqualTo(Utf8Bom));
         Assert.That(diskBytes, Is.EqualTo(Encoding.UTF8.GetBytes(proposed)));
     }
@@ -287,7 +287,7 @@ public class DiskWriteRoundTripTests
             var changes = new Dictionary<FilePathWrapper, string> { [fpw] = newContent };
 
             var result = await workspaceManager.ApplyProposedChangesAsync(changes);
-            Assert.That(result.Success, Is.True, result.Summary);
+            Assert.That(!result.IsError, Is.True, result.Summary);
 
             // Verify file exists and content is correct.
             Assert.That(File.Exists(filePath), Is.True, "New file should exist on disk");

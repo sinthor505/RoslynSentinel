@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 namespace RoslynSentinel.Common;
 
 public record DiagnosticReport(
-    bool Success,
+    bool IsError,
     List<DiagnosticInfo> Diagnostics
 );
 

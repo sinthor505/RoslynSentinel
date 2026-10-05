@@ -311,7 +311,7 @@ public class RefactoringExtractionDocsImpl
             var result = await _msToolAugmentEngine.ExtractMethodSafeAsync(
                 filePathResolved, newMethodName, exactSourceBlock, lineBefore, lineAfter, cancellationToken: cancellationToken);
 
-            if (!result.Success)
+            if (result.IsError)
             {
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {

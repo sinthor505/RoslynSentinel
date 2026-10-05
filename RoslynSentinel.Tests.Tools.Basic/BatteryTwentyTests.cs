@@ -330,7 +330,7 @@ public class BatteryTwentyTests
             await File.WriteAllTextAsync(tempFile, updatedContent);
             var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
                 new Dictionary<FilePathWrapper, string> { [tempFile] = updatedContent });
-            Assert.That(applyResult.Success, Is.True);
+            Assert.That(!applyResult.IsError, Is.True);
 
             var after = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Baz");
 

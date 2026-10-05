@@ -10,10 +10,10 @@ namespace RoslynSentinel.Engines.Basic;
 
 // ── Result Types ──────────────────────────────────────────────────────────────
 
-public record MsAugmentResult(bool Success, string? Error, string? UpdatedContent, string? ErrorCode = null)
+public record MsAugmentResult(bool IsError, string? Error, string? UpdatedContent, string? ErrorCode = null)
 {
-    public static MsAugmentResult Fail(string error, string? errorCode = null) => new(false, error, null, errorCode);
-    public static MsAugmentResult Ok(string content) => new(true, null, content);
+    public static MsAugmentResult Fail(string error, string? errorCode = null) => new(true, error, null, errorCode);
+    public static MsAugmentResult Ok(string content) => new(false, null, content);
 }
 
 public record SwitchCaseInfo(
@@ -709,7 +709,7 @@ public class MsToolAugmentEngine
                 var result = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { [filePath] = formatted },
                     cancellationToken: cancellationToken);
-                if (!result.Success)
+                if (result.IsError)
                 {
                     return MsAugmentResult.Fail($"Could not write file '{filePath}': {result.Summary}");
                 }

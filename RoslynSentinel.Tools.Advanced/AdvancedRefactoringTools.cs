@@ -733,7 +733,7 @@ public class AdvancedRefactoringTools
             else if (newType == IntroduceAsType.constant)
             {
                 var constResult = await _augmentEngine.ExtractConstantSafeAsync(resolvedFilePath, contextSnippet, newName, lineBefore, lineAfter, cancellationToken: cancellationToken);
-                if (!constResult.Success || string.IsNullOrEmpty(constResult.UpdatedContent))
+                if (constResult.IsError || string.IsNullOrEmpty(constResult.UpdatedContent))
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,

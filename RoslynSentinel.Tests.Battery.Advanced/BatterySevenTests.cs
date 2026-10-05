@@ -308,7 +308,7 @@ public class MathHelper
         // Line 3 = "        int sum = a + b;"
         var result = await _memberRefactoringEngine.ExtractMethodAsync("Calc.cs", 3, "int sum = a + b;", 3, "int sum = a + b;", "ComputeSum");
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.Success || result.ErrorMessage != null, Is.True, "Should return IsSuccess or a descriptive error");
+        Assert.That(!result.IsError || result.ErrorMessage != null, Is.True, "Should return IsSuccess or a descriptive error");
     }
 
     [Test]
@@ -318,7 +318,7 @@ public class MathHelper
         _workspaceManager.SetTestSolution(solution);
         var result = await _memberRefactoringEngine.ExtractMethodAsync("NoFile.cs", 1, "x", 1, "x", "NewMethod");
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.Success, Is.False, "Should fail gracefully for unknown file");
+        Assert.That(!result.IsError, Is.False, "Should fail gracefully for unknown file");
     }
 
     [Test]

@@ -120,7 +120,7 @@ public class UnrecoverableBreakerTests
 
         var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: false);
 
-        Assert.That(result.Success, Is.True, result.Summary);
+        Assert.That(!result.IsError, Is.True, result.Summary);
     }
 
     [Test]

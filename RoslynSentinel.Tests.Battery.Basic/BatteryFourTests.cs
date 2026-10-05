@@ -53,7 +53,7 @@ public class EncapsulateFieldSafeAdvancedTests
 
         var result = await _engine.EncapsulateFieldSafeAsync("Test.cs", "MaxAttempts");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("get"),
             "Property must have a getter");
         Assert.That(result.UpdatedContent, Does.Not.Contain("set"),
@@ -73,7 +73,7 @@ public class EncapsulateFieldSafeAdvancedTests
 
         var result = await _engine.EncapsulateFieldSafeAsync("Test.cs", "Environment");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         // At minimum two 'static' keywords: one for backing field, one for property
         var staticCount = result.UpdatedContent!
             .Split(' ', StringSplitOptions.RemoveEmptyEntries)
@@ -95,7 +95,7 @@ public class EncapsulateFieldSafeAdvancedTests
 
         var result = await _engine.EncapsulateFieldSafeAsync("Test.cs", "_count");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("Count"),
             "Property name must be 'Count' (PascalCase strip of '_count')");
         Assert.That(result.UpdatedContent, Does.Contain("_count"),
@@ -118,7 +118,7 @@ public class EncapsulateFieldSafeAdvancedTests
         var result = await _engine.EncapsulateFieldSafeAsync(
             "Test.cs", "hitCount", overridePropertyName: "HitRate");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("HitRate"),
             "Override property name 'HitRate' must appear in the output");
         Assert.That(result.UpdatedContent, Does.Not.Contain("HitCount"),
@@ -140,7 +140,7 @@ public class EncapsulateFieldSafeAdvancedTests
 
         var result = await _engine.EncapsulateFieldSafeAsync("Test.cs", "retryCount");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("private int _retryCount"),
             "Backing field must be declared as 'private int _retryCount'");
         Assert.That(result.UpdatedContent, Does.Contain("RetryCount"),
@@ -397,7 +397,7 @@ public class SwitchConversionAdvancedTests
 
         var result = await _engine.ConvertSwitchToPatternSafeAsync("Test.cs", "switch (code)");
 
-        Assert.That(result.Success, Is.True,
+        Assert.That(!result.IsError, Is.True,
             $"Return-per-case switch should convert successfully. ErrorDetails: {result.Error}");
         Assert.That(result.UpdatedContent, Does.Contain("return"),
             "Converted output must contain a return statement");
@@ -420,7 +420,7 @@ public class SwitchConversionAdvancedTests
         var result = await _engine.ConvertSwitchToPatternSafeAsync(
             "NotInWorkspace.cs", "switch (x)");
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "File absent from workspace must cause conversion to fail");
         Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
             "ErrorDetails message must explain the failure cause");
@@ -465,7 +465,7 @@ public class SwitchConversionAdvancedTests
             "Test.cs", "switch (code)");
 
         // Convert cannot emit valid C# for throw-only; must fail explicitly (not silently corrupt).
-        Assert.That(conversion.Success, Is.False,
+        Assert.That(!conversion.IsError, Is.False,
             "Known limitation: throw-only switch cannot be converted to switch expression by this tool version");
         Assert.That(conversion.Error, Does.Contain("Could not determine replacement form")
                                           .Or.Contain("Manual conversion required"),

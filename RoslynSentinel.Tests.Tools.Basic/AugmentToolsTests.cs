@@ -66,7 +66,7 @@ public class AuthUser
 
         var result = await _engine.GenerateToStringSafeAsync("AuthUser.cs", "AuthUser");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         // CRITICAL: literal braces must be escaped as {{ and }}
         Assert.That(result.UpdatedContent, Does.Contain("{{ "),
             "Must use {{ for the literal opening brace (CS8086 regression)");
@@ -99,7 +99,7 @@ public class MyModel
 
         var result = await _engine.GenerateToStringSafeAsync("MyModel.cs", "MyModel");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
 
         // Verify the generated file compiles without errors
         // Must specify DynamicallyLinkedLibrary -> the file is a class, not a console app.
@@ -134,7 +134,7 @@ public class User
         var result = await _engine.GenerateToStringSafeAsync(
             "User.cs", "User", ["Id", "Name"]);
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("{Id}"),
             "Should include Id");
         Assert.That(result.UpdatedContent, Does.Contain("{Name}"),
@@ -157,7 +157,7 @@ public class Point
 
         var result = await _engine.GenerateToStringSafeAsync("Point.cs", "Point");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("{X}"), "Should include field X");
         Assert.That(result.UpdatedContent, Does.Contain("{Y}"), "Should include field Y");
     }
@@ -176,7 +176,7 @@ public class Config
 
         var result = await _engine.GenerateToStringSafeAsync("Config.cs", "Config");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("{Name}"),
             "Instance property Name should be included");
         Assert.That(result.UpdatedContent, Does.Not.Contain("{MaxRetry}"),
@@ -191,7 +191,7 @@ public class Config
 
         var result = await _engine.GenerateToStringSafeAsync("Foo.cs", "NonExistentType");
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "Should return Fail when the type does not exist");
         Assert.That(result.Error, Does.Contain("NonExistentType"),
             "ErrorData message should identify the missing type");
@@ -211,7 +211,7 @@ public class Foo
 
         var result = await _engine.GenerateToStringSafeAsync("Foo.cs", "Foo");
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "Should return Fail when ToString() is already present");
         Assert.That(result.Error, Does.Contain("already"),
             "ErrorData message should mention the conflict");
@@ -231,7 +231,7 @@ public class InternalOnly
 
         var result = await _engine.GenerateToStringSafeAsync("InternalOnly.cs", "InternalOnly");
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "Should return Fail when there are no public members to include");
     }
 
@@ -242,7 +242,7 @@ public class InternalOnly
         var result = await _engine.GenerateToStringSafeAsync(
             @"C:\does\not\exist.cs", "SomeType");
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "Should return Fail for a non-existent file");
         Assert.That(result.Error, Does.Contain("exist.cs").Or.Contain("not"),
             "ErrorData should reference the missing file");
@@ -263,7 +263,7 @@ public record OrderItem
 
         var result = await _engine.GenerateToStringSafeAsync("OrderItem.cs", "OrderItem");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("{{ "),
             "Must use escaped braces even for record types");
         Assert.That(result.UpdatedContent, Does.Contain("{ProductId}"));
@@ -301,7 +301,7 @@ public class Builder
         var result = await _engine.ExtractMethodSafeAsync(
             "Builder.cs", "CreatePayload", "return new Payload { Value = x }");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         // CRITICAL: must not be void (the MS bug)
         Assert.That(result.UpdatedContent, Does.Not.Contain("void CreatePayload("),
             "Must NOT generate void return type for a value-returning extraction (Bug #12)");
@@ -330,7 +330,7 @@ public class Logger
         var result = await _engine.ExtractMethodSafeAsync(
             "Logger.cs", "AppendLog", "_log += formatted");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("void AppendLog("),
             "Void block extraction should produce void return type");
     }
@@ -352,7 +352,7 @@ public class Calc
         var result = await _engine.ExtractMethodSafeAsync(
             "Calc.cs", "ComputeDouble", "return value * 2");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("int ComputeDouble("),
             "Should have int return type (not void)");
         // 'value' flows in from outside and must become a parameter
@@ -377,7 +377,7 @@ public class Formatter
         var result = await _engine.ExtractMethodSafeAsync(
             "Formatter.cs", "NormalizeInput", "return input.Trim().ToUpperInvariant()");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("string NormalizeInput("),
             "Should have string return type");
     }
@@ -398,7 +398,7 @@ public class C
 
         var result = await _engine.ExtractMethodSafeAsync("C.cs", "123Invalid", "int x = 1");
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "Invalid C# identifier should return Fail");
         Assert.That(result.Error, Does.Contain("123Invalid").Or.Contain("identifier"),
             "ErrorData should mention the invalid name");
@@ -421,7 +421,7 @@ public class C
         var result = await _engine.ExtractMethodSafeAsync(
             "C.cs", "ExtractedMethod", "this snippet does not exist anywhere");
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "A snippet that cannot be found should return Fail");
     }
 
@@ -434,7 +434,7 @@ public class C
         var result = await _engine.ExtractMethodSafeAsync(
             @"C:\not\in\solution.cs", "NewMethod", "some code");
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "File not in solution should return Fail");
         Assert.That(result.Error, Does.Contain("solution").Or.Contain("not found"),
             "ErrorData should explain the file is not in the loaded solution");
@@ -457,7 +457,7 @@ public class MathHelper
         var result = await _engine.ExtractMethodSafeAsync(
             "MathHelper.cs", "Square", "return input * input");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("static"),
             "Extracted method inside a static method should also be static");
     }
@@ -479,7 +479,7 @@ public class Counter
         var result = await _engine.ExtractMethodSafeAsync(
             "Counter.cs", "ComputeTriple", "return n * 3");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         // The original return statement should be replaced with a call to the new method
         Assert.That(result.UpdatedContent, Does.Contain("return ComputeTriple("),
             "Original call site should call the extracted method");
@@ -514,7 +514,7 @@ public class WorkspaceOnlyModel
 
         var result = await _engine.GenerateToStringSafeAsync("WorkspaceOnlyModel.cs", "WorkspaceOnlyModel");
 
-        Assert.That(result.Success, Is.True,
+        Assert.That(!result.IsError, Is.True,
             "WORKSPACE-FIRST-READ REGRESSION: GenerateToStringSafeAsync must read from the "
             + "Roslyn workspace when the file isn't on disk. If this fails, the engine has "
             + "regressed to disk-only reading (File.ReadAllTextAsync without workspace fallback).");
@@ -541,7 +541,7 @@ public class Entity
 
         var result = await _engine.GenerateToStringSafeAsync("Entity.cs", "Entity");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
 
         var tree = CSharpSyntaxTree.ParseText(result.UpdatedContent!);
         var compilation = CSharpCompilation.Create("CS8086Test",
@@ -575,7 +575,7 @@ public struct Vector3
 
         var result = await _engine.GenerateToStringSafeAsync("Vector3.cs", "Vector3");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("{{ "), "Struct must use escaped braces");
         Assert.That(result.UpdatedContent, Does.Contain("{X}"), "X must appear");
         Assert.That(result.UpdatedContent, Does.Contain("{Y}"), "Y must appear");
@@ -600,7 +600,7 @@ namespace ExpressRecipe.Models
 
         var result = await _engine.GenerateToStringSafeAsync("Product.cs", "Product");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("{ProductId}"), "ProductId must appear");
         Assert.That(result.UpdatedContent, Does.Contain("{Name}"), "Name must appear");
         Assert.That(result.UpdatedContent, Does.Contain("{Price}"), "Price must appear");
@@ -621,7 +621,7 @@ public class ImmutableDto
 
         var result = await _engine.GenerateToStringSafeAsync("ImmutableDto.cs", "ImmutableDto");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("{Id}"), "Id must appear");
         Assert.That(result.UpdatedContent, Does.Contain("{Name}"), "Name must appear");
         Assert.That(result.UpdatedContent, Does.Contain("{CreatedAt}"), "CreatedAt must appear");
@@ -640,7 +640,7 @@ public class Wrapper
 
         var result = await _engine.GenerateToStringSafeAsync("Wrapper.cs", "Wrapper");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("{Value}"), "Value must appear");
         Assert.That(result.UpdatedContent, Does.Contain("{{ "), "Opening escaped brace required");
         Assert.That(result.UpdatedContent, Does.Contain(" }}"), "Closing escaped brace required");
@@ -666,7 +666,7 @@ public class BigModel
 
         var result = await _engine.GenerateToStringSafeAsync("BigModel.cs", "BigModel");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
 
         var allMembers = new[] { "Id", "FirstName", "LastName", "Email", "Age", "IsActive", "CreatedAt" };
         foreach (var member in allMembers)
@@ -699,7 +699,7 @@ public class DataFactory
         var result = await _engine.ExtractMethodSafeAsync(
             "DataFactory.cs", "CreatePair", "return new List<string> { a, b }");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Not.Contain("void CreatePair("),
             "GENERIC-RETURN REGRESSION (Bug #12): must not generate void for a List<string> return");
         // Return type should contain "List" (full generic may vary by display format)
@@ -724,7 +724,7 @@ public class Validator
         var result = await _engine.ExtractMethodSafeAsync(
             "Validator.cs", "IsPositive", "return value > 0");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Not.Contain("void IsPositive("),
             "Must NOT be void for a bool-returning extraction (Bug #12 regression)");
         Assert.That(result.UpdatedContent, Does.Contain("bool IsPositive("),
@@ -753,7 +753,7 @@ public class Service
         var result = await _engine.ExtractMethodSafeAsync(
             "Service.cs", "Square", "return x * x");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         // All three original methods must still be present
         Assert.That(result.UpdatedContent, Does.Contain("GetName"),
             "GetName must be preserved after extraction");
@@ -791,7 +791,7 @@ public class AuthResult
         var result = await _engine.ExtractMethodSafeAsync(
             "AuthUserMapper.cs", "CreateAuthResult", "return new AuthResult { User = user }");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Not.Contain("void CreateAuthResult("),
             "Must NOT be void for an object-returning extraction inside an if block "
             + "(exact pattern from AuthRepository ExpressRecipe live test - Bug #12 regression)");
@@ -841,7 +841,7 @@ public class OrderLine
 
         var result = await _engine.ExtractMethodSafeAsync("Order.cs", "ComputeTotals", snippet);
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("foreach"),
             "ComputeTotals must contain the foreach loop, not just its first statement");
         Assert.That(result.UpdatedContent, Does.Contain("totalUnits"),
@@ -867,7 +867,7 @@ public class OrderLine
 
         var result = await _engine.ExtractMethodSafeAsync("Order.cs", "ComputeTotals", snippet);
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "Must refuse rather than silently produce a per-iteration call that drops totalUnits");
         Assert.That(result.Error, Does.Contain("loop"),
             "ErrorData should explain the loop-body ambiguity");
@@ -892,7 +892,7 @@ public class OrderLine
 
         var result = await _engine.ExtractMethodSafeAsync("Order.cs", "ComputeTotals", snippet);
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "Must refuse rather than silently produce a method that always returns 0 and strands the foreach");
         Assert.That(result.Error, Does.Contain("loop"),
             "ErrorData should explain the followed-by-a-loop ambiguity");
@@ -944,7 +944,7 @@ public class OrderLine
 
         var result = await _engine.ExtractMethodSafeAsync("Order.cs", "ComputeTotals", snippet);
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Not.Contain("StringBuilder? sb"),
             "The synthesized 'sb' parameter must not be nullable - 'sb' is never null at this point, " +
             "the '?' came from flow-state analysis, not the variable's real declared nullability");

@@ -39,7 +39,7 @@ public sealed record RenameSymbolData(
 /// see proposal_structuredcontent_rollout.md.
 /// </summary>
 public sealed record RenameSymbolResultEnvelope(
-    bool Success,
+    bool IsError,
     RenameSymbolData? Data);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
@@ -54,7 +54,7 @@ public sealed record RenameSymbolResultEnvelope(
 /// via the existing [Produces(DataTag.ChangeId)] instead.
 /// </summary>
 public sealed record ModifyModifierResultEnvelope(
-    bool Success,
+    bool IsError,
     AppliedChangeSummary? Data);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
@@ -84,7 +84,7 @@ public sealed record MethodSignatureViewData(
 /// POC - see proposal_structuredcontent_rollout.md.
 /// </summary>
 public sealed record MethodSignatureViewResultEnvelope(
-    bool Success,
+    bool IsError,
     MethodSignatureViewData? Data);
 
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): MCP-surface half of the

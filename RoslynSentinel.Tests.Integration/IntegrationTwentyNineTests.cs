@@ -497,7 +497,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
         // preview=true (default) -> returns formatted content without writing to disk
         Assert.DoesNotThrowAsync(async () => result = await engine.FormatDocumentSafeAsync(_realFilePath, preview: true), "FormatDocumentSafeAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.Success, Is.True, "Formatting a real file must succeed.");
+        Assert.That(!result!.IsError, Is.True, "Formatting a real file must succeed.");
         Assert.That(result.UpdatedContent, Is.Not.Null.And.Not.Empty, "Formatted content must not be empty.");
     }
 
@@ -509,7 +509,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
         Assert.DoesNotThrowAsync(async () => result = await engine.GenerateToStringSafeAsync(_realFilePath, _realClassName), "GenerateToStringSafeAsync must not throw on real solution.");
         Assert.That(result, Is.Not.Null);
         // IsSuccess OR graceful failure -> either way, result must carry a message
-        if (!result!.Success)
+        if (result!.IsError)
         {
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty, "Failed result must carry a non-empty error message.");
         }
@@ -522,7 +522,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
         MsAugmentResult? result = null;
         Assert.DoesNotThrowAsync(async () => result = await engine.EncapsulateFieldSafeAsync(_realFilePath, "__nonExistentFieldXYZ__"), "EncapsulateFieldSafeAsync must not throw when field is not found.");
         Assert.That(result, Is.Not.Null, "Must return a result object (not null) on field-not-found.");
-        Assert.That(result!.Success, Is.False, "Result must be IsSuccess=false when field does not exist.");
+        Assert.That(!result!.IsError, Is.False, "Result must be IsSuccess=false when field does not exist.");
         Assert.That(result.Error, Is.Not.Null.And.Not.Empty, "ErrorDetails property must carry a descriptive message when field not found.");
     }
 

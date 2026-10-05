@@ -614,7 +614,7 @@ public class PreviewInstanceMoveCallSitesTests
         Assume.That(result.PendingLedgerEntries, Is.Not.Null.And.Count.EqualTo(1));
 
         var applyResult = await workspace.Manager.ApplyProposedChangesAsync(result.Changes, validateChanges: false);
-        Assert.That(applyResult.Success, Is.True, applyResult.Summary);
+        Assert.That(!applyResult.IsError, Is.True, applyResult.Summary);
 
         var opened = ((IScopedOperationLedger)workspace.Manager).TryOpen(
             "MoveMember_Test_Decision5", result.PendingLedgerEntries!, out var rejectionReason);
@@ -632,7 +632,7 @@ public class PreviewInstanceMoveCallSitesTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(blockedResult.Success, Is.False);
+            Assert.That(!blockedResult.IsError, Is.False);
             Assert.That(blockedResult.Summary, Does.Contain("scoped operation ledger"));
         });
 
@@ -646,7 +646,7 @@ public class PreviewInstanceMoveCallSitesTests
             [fixupPath] = fixupText.Replace("_f1.Foo", "_f1.Foo")
         };
         var fixupApply = await workspace.Manager.ApplyProposedChangesAsync(fixupChange, validateChanges: false);
-        Assert.That(fixupApply.Success, Is.True, fixupApply.Summary);
+        Assert.That(!fixupApply.IsError, Is.True, fixupApply.Summary);
     }
 
     // docs/current/blockers/resolved/blocking_error_movemember_analysisengine_antipatternengine_friction.md:

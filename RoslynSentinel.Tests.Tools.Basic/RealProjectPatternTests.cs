@@ -185,7 +185,7 @@ public sealed class NutritionEstimateDto
 
         var result = await _engine.GenerateToStringSafeAsync("NutritionEstimateDto.cs", "NutritionEstimateDto");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("{{ "),
             "Sealed class must still use escaped braces for literal opening brace");
         Assert.That(result.UpdatedContent, Does.Contain("{Calories}"),
@@ -234,7 +234,7 @@ public class AllergenDetectionService
 
         var result = await _engine.GenerateToStringSafeAsync("AllergenDetectionService.cs", "AllergenDetectionService");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("{ServiceName}"));
         Assert.That(result.UpdatedContent, Does.Contain("{DetectionCount}"));
     }
@@ -255,7 +255,7 @@ public sealed class NutritionEstimateDto
 
         var result = await _engine.GenerateToStringSafeAsync("NutritionEstimateDto.cs", "NutritionEstimateDto");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
 
         var tree = CSharpSyntaxTree.ParseText(result.UpdatedContent!);
         var compilation = CSharpCompilation.Create("NutritionTest",
@@ -291,7 +291,7 @@ public class InventoryCache
 
         var result = await _engine.EncapsulateFieldSafeAsync("InventoryCache.cs", "RefreshCount");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         // Backing field must be _camelCase
         Assert.That(result.UpdatedContent, Does.Contain("_refreshCount").Or.Contain("_RefreshCount"),
             "Backing field must be _camelCase to avoid self-referential recursion (Bug #1 fix)");
@@ -330,7 +330,7 @@ public class Service
 
         var result = await _engine.EncapsulateFieldSafeAsync("C.cs", "NonExistentField");
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "Must fail for non-existent field");
         Assert.That(result.Error, Does.Contain("NonExistentField"),
             "ErrorData must reference the missing field name");
@@ -489,7 +489,7 @@ public class InventoryItemService
         // Engine must return result without crashing
         Assert.That(result, Is.Not.Null, "ExtractConstant must not throw");
         // Even if it fails (interpolated string can't be const), it should explain why
-        if (!result.Success)
+        if (result.IsError)
         {
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
                 "Failure must have a descriptive error message");
@@ -516,7 +516,7 @@ public class ShoppingService
             "DefaultStrategy");
 
         Assert.That(result, Is.Not.Null, "ExtractConstant must not throw");
-        if (result.Success)
+        if (!result.IsError)
         {
             Assert.That(result.UpdatedContent, Does.Contain("DefaultStrategy"),
                 "New constant name must appear in output");
@@ -555,7 +555,7 @@ public class Optimizer
 
         // Guard clauses often can't be extracted cleanly -> accept either success or descriptive failure
         Assert.That(result, Is.Not.Null, "Must return a result without throwing");
-        if (!result.Success)
+        if (result.IsError)
         {
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
                 "Failure must have a descriptive error message");
@@ -609,7 +609,7 @@ public class MealScorer
         var result = await _engine.ExtractMethodSafeAsync(
             "MealScorer.cs", "ComputeRatingScore", "return userRating * UserRatingWeight");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("decimal ComputeRatingScore("),
             "Extracted method must have decimal return type (not void)");
         Assert.That(result.UpdatedContent, Does.Not.Contain("void ComputeRatingScore("),
@@ -732,7 +732,7 @@ public partial class InventoryRepository
 
         // Partial class support: either succeeds (if engine handles it) or fails gracefully
         Assert.That(result, Is.Not.Null, "Must not throw for partial class");
-        if (result.Success)
+        if (!result.IsError)
         {
             Assert.That(result.UpdatedContent, Does.Contain("{{ "),
                 "Partial class output must still use escaped braces");
@@ -757,7 +757,7 @@ public class MealSuggestionService
 
         var result = await _engine.GenerateToStringSafeAsync("MealSuggestionService.cs", "MealSuggestionService");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("{ServiceName}"),
             "ServiceName must appear in outer class ToString");
         // The engine returns the full file content (nested records declarations remain).
@@ -795,7 +795,7 @@ public class ShoppingOptimizationService : IShoppingOptimizationService
         var result = await _engine.GenerateToStringSafeAsync(
             "ShoppingOptimizationService.cs", "ShoppingOptimizationService");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("{Strategy}"),
             "Strategy must appear - correct class was targeted");
         Assert.That(result.UpdatedContent, Does.Contain("{MinSavings}"),
@@ -825,7 +825,7 @@ public class AllergenProcessor
         var result = await _engine.ExtractMethodSafeAsync(
             "AllergenProcessor.cs", "TryAddAllergen", "return seen.Add(allergenId)");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("bool TryAddAllergen("),
             "Return type must be bool, not void (Bug #12 guard)");
     }
@@ -850,7 +850,7 @@ public class NutritionService
         var result = await _engine.ExtractMethodSafeAsync(
             "NutritionService.cs", "FormatCacheKey", "return string.Format(KeyFmt, userId)");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         Assert.That(result.UpdatedContent, Does.Contain("string FormatCacheKey("),
             "Return type must be string, not void (Bug #12 guard)");
     }
@@ -891,7 +891,7 @@ public class Stats
 
         var result = await _engine.EncapsulateFieldSafeAsync("Stats.cs", "SuccessCount");
 
-        Assert.That(result.Success, Is.True, result.Error);
+        Assert.That(!result.IsError, Is.True, result.Error);
         // Critical: getter must NOT return SuccessCount (the property itself) -> infinite recursion
         // It should return _successCount (the backing field)
         Assert.That(result.UpdatedContent, Does.Not.Match(@"return SuccessCount;"),
@@ -929,7 +929,7 @@ public interface ILogger { }";
         // BackgroundService with only private fields has no public members to include
         // Engine should fail gracefully -> no crash, descriptive error
         Assert.That(result, Is.Not.Null, "Engine must not throw for BackgroundService pattern");
-        if (!result.Success)
+        if (result.IsError)
         {
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
                 "Failure must have descriptive error message");

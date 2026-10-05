@@ -767,7 +767,7 @@ public class Clean
 
         var result = await _outParamEngine.ConvertOutParamsToValueTupleAsync("DoesNotExist.cs", "M");
 
-        Assert.That(result.Success, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.Message, Does.Contain("not found").IgnoreCase);
     }
 
@@ -778,7 +778,7 @@ public class Clean
 
         var result = await _outParamEngine.ConvertOutParamsToValueTupleAsync("C.cs", "NonExistentMethod");
 
-        Assert.That(result.Success, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.Message, Does.Contain("not found").IgnoreCase);
     }
 
@@ -797,7 +797,7 @@ public class C
 
         var result = await _outParamEngine.ConvertOutParamsToValueTupleAsync("C.cs", "TryGet");
 
-        Assert.That(result.Success, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.Message, Does.Contain("fewer than 2").IgnoreCase);
     }
 
@@ -815,7 +815,7 @@ public class MyParser
 
         var result = await _outParamEngine.ConvertOutParamsToValueTupleAsync("MyParser.cs", "Parse");
 
-        Assert.That(result.Success, Is.True, $"Expected success but got: {result.Message}");
+        Assert.That(!result.IsError, Is.True, $"Expected success but got: {result.Message}");
         Assert.That(result.NewSignature, Does.Contain("number"));
         Assert.That(result.NewSignature, Does.Contain("success"));
         Assert.That(result.OriginalSignature, Does.Contain("out int number"));
@@ -841,7 +841,7 @@ public class MyParser
 
         var result = await _outParamEngine.ConvertOutParamsToValueTupleAsync("MyParser.cs", "TryParse");
 
-        Assert.That(result.Success, Is.True, $"Expected success but got: {result.Message}");
+        Assert.That(!result.IsError, Is.True, $"Expected success but got: {result.Message}");
         // Non-void return: new signature should contain the original return type + out param types
         Assert.That(result.NewSignature, Does.Contain("number").Or.Contain("formatted"));
     }
@@ -873,7 +873,7 @@ public class C
 
         var result = await _outParamEngine.ConvertOutParamsToValueTupleAsync("C.cs", "M");
 
-        Assert.That(result.Success, Is.True, $"Expected success but got: {result.Message}");
+        Assert.That(!result.IsError, Is.True, $"Expected success but got: {result.Message}");
         Assert.That(result.CallSitesRewritten, Is.Zero, "No callers in this solution");
     }
 
@@ -888,7 +888,7 @@ public class C
 
         var result = await _outParamEngine.ConvertOutParamsToValueTupleAsync("C.cs", "M");
 
-        Assert.That(result.Success, Is.True);
+        Assert.That(!result.IsError, Is.True);
         Assert.That(result.CallSiteWarnings, Is.Empty);
     }
 
@@ -918,6 +918,6 @@ public class Parser
 
         // Step 2: convert
         var result = await _outParamEngine.ConvertOutParamsToValueTupleAsync(detection.FilePath, detection.MethodName);
-        Assert.That(result.Success, Is.True, $"Conversion failed: {result.Message}");
+        Assert.That(!result.IsError, Is.True, $"Conversion failed: {result.Message}");
     }
 }

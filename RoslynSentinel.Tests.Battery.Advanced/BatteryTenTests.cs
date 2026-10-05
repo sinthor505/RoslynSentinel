@@ -42,7 +42,7 @@ public class ValidationEngineTests
             [new FilePathWrapper("Greeter.cs")] = "public class Greeter { public string Greet() => \"Hi!\"; }"
         });
 
-        Assert.That(result.Success, Is.True, "Syntactically valid replacement should pass");
+        Assert.That(!result.IsError, Is.True, "Syntactically valid replacement should pass");
         Assert.That(result.Diagnostics, Is.Empty, "No compiler errors expected for valid code");
     }
 
@@ -59,7 +59,7 @@ public class ValidationEngineTests
             [new FilePathWrapper("DoesNotExist.cs")] = "public class X {}"
         });
 
-        Assert.That(result.Success, Is.True,
+        Assert.That(!result.IsError, Is.True,
             "A new file with no attributable project can't be compiled, so it passes through");
         Assert.That(result.Diagnostics, Is.Empty);
     }
@@ -78,7 +78,7 @@ public class ValidationEngineTests
             [new FilePathWrapper(newFilePath)] = "public class NewFile { public NoSuchType Field; }"
         });
 
-        Assert.That(result.Success, Is.False, "A brand-new file with an unresolved type should fail validation");
+        Assert.That(!result.IsError, Is.False, "A brand-new file with an unresolved type should fail validation");
         Assert.That(result.Diagnostics, Is.Not.Empty, "At least one error diagnostic expected");
     }
 
@@ -96,7 +96,7 @@ public class ValidationEngineTests
             [new FilePathWrapper(newFilePath)] = "public class NewFile { public string Name; }"
         });
 
-        Assert.That(result.Success, Is.True, "A syntactically and semantically valid new file should pass");
+        Assert.That(!result.IsError, Is.True, "A syntactically and semantically valid new file should pass");
         Assert.That(result.Diagnostics, Is.Empty);
     }
 
@@ -110,7 +110,7 @@ public class ValidationEngineTests
         });
 
         Assert.That(result, Is.Not.Null, "Should always return a report, never throw");
-        Assert.That(result.Success, Is.False, "Type-mismatch compile error should fail validation");
+        Assert.That(!result.IsError, Is.False, "Type-mismatch compile error should fail validation");
         Assert.That(result.Diagnostics, Is.Not.Empty, "At least one error diagnostic expected");
     }
 }

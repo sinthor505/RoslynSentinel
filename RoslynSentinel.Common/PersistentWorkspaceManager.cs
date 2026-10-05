@@ -1277,7 +1277,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             if (_ledger.IsBlocked(target, out var ledgerBlockReason))
             {
                 return new ApplyChangesResult(
-                    Success: false,
+                    IsError: true,
                     SucceededFiles: [],
                     FailedFiles: new Dictionary<FilePathWrapper, string> { [target] = ledgerBlockReason ?? "Blocked by an open scoped operation ledger entry." },
                     Summary: $"Refused - '{Path.GetFileName(target)}' has an open scoped operation ledger entry: {ledgerBlockReason}");
@@ -1288,7 +1288,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         {
             var overlap = changes.Keys.Where(deletePaths.Contains).ToList();
             return new ApplyChangesResult(
-                Success: false,
+                IsError: true,
                 SucceededFiles: [],
                 FailedFiles: overlap.ToDictionary(f => f, _ => "Path given as both a write and a delete target."),
                 Summary: $"Refused - {overlap.Count} path(s) appear in both changes and deletePaths: " +
@@ -1317,10 +1317,10 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         if (validateChanges && CurrentSolution != null)
         {
             validationReport = await ValidationEngine.ValidateChangesAsync(CurrentSolution, changes, cancellationToken: cancellationToken);
-            if (!validationReport.Success)
+            if (validationReport.IsError)
             {
                 return new ApplyChangesResult(
-                    Success: false,
+                    IsError: true,
                     SucceededFiles: [],
                     FailedFiles: [],
                     Summary: $"Validation failed with {validationReport.Diagnostics.Count} new error(s); no files written.",
@@ -1387,7 +1387,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 }
 
                 return new ApplyChangesResult(
-                    false,
+                    true,
                     [],
                     eolViolations.ToDictionary(v => (FilePathWrapper)v.FilePath, v => refusalMessage),
                     $"{ToolErrorCode.EolChangeRefused}: {refusalMessage}",
@@ -1661,7 +1661,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 summary += $" The operation was successful. The old and new content of {noOp.Count} file(s) were semantically identical: {string.Join(", ", noOp.Select(Path.GetFileName))}.";
             }
 
-            return new ApplyChangesResult(failed.Count == 0, succeeded, failed, summary,
+            return new ApplyChangesResult(!(failed.Count == 0), succeeded, failed, summary,
                 workspaceInSync, _workspaceVersion, preImages, validationReport,
                 rolledBack.Count > 0 ? rolledBack : null,
                 noOp.Count > 0 ? noOp : null);
@@ -1897,7 +1897,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
         if (toRetry.Count == 0)
         {
-            return new ApplyChangesResult(true, new List<string>(), new Dictionary<FilePathWrapper, string>(), "No matching failed changes found in cache to retry.");
+            return new ApplyChangesResult(false, new List<string>(), new Dictionary<FilePathWrapper, string>(), "No matching failed changes found in cache to retry.");
         }
 
         return await ApplyProposedChangesAsync(toRetry, retryCount);

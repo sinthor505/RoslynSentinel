@@ -17,7 +17,7 @@ namespace RoslynSentinel.Common;
 /// partial write -> to avoid misleading callers into thinking their change didn't take effect.</para>
 /// </summary>
 public record ApplyChangesResult(
-    bool Success,
+    bool IsError,
     List<string> SucceededFiles,
     Dictionary<FilePathWrapper, string> FailedFiles,
     string Summary,

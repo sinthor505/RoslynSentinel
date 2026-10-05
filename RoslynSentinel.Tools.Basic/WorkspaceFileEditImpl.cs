@@ -491,7 +491,7 @@ public class WorkspaceFileEditImpl
                     if (action == ProposedChangeAction.validate)
                     {
                         var validationResult = await _validationEngine.ValidateChangesAsync(snippetChanges, cancellationToken: cancellationToken);
-                        return validationResult.Success ? new SentinelCallToolResult<ReplaceSnippetResult>()
+                        return !validationResult.IsError ? new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsError = false,
                             SuccessData = new ReplaceSnippetResult(null, validationResult, null)
@@ -504,7 +504,7 @@ public class WorkspaceFileEditImpl
                     }
 
                     var result = await _workspaceManager.ApplyProposedChangesAsync(snippetChanges, validateChanges: validateOnApply);
-                    if (!result.Success && result.ValidationResult != null)
+                    if (result.IsError && result.ValidationResult != null)
                         return new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
                             IsError = true,
@@ -728,7 +728,7 @@ public class WorkspaceFileEditImpl
         if (action == ProposedChangeAction.validate)
         {
             var validationResult = await _validationEngine.ValidateChangesAsync(finalContents, cancellationToken: cancellationToken);
-            return validationResult.Success
+            return !validationResult.IsError
                 ? new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = false, SuccessData = new ReplaceSnippetResult(null, validationResult, null) }
                 : new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
@@ -740,7 +740,7 @@ public class WorkspaceFileEditImpl
         try
         {
             var result = await _workspaceManager.ApplyProposedChangesAsync(finalContents, validateChanges: validateOnApply);
-            if (!result.Success && result.ValidationResult != null)
+            if (result.IsError && result.ValidationResult != null)
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
                     IsError = true,
@@ -841,7 +841,7 @@ public class WorkspaceFileEditImpl
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = content };
             var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: true, cancellationToken: cancellationToken);
-            if (!result.Success && result.ValidationResult != null)
+            if (result.IsError && result.ValidationResult != null)
             {
                 string writeFileHint = _writeAdvice.IsExposed("WriteFile")
                     ? "\nAlternatively, WriteFile(operation=CreateFile) can create this file with its full, already-correct body in one call, avoiding the empty-scaffold-then-populate sequence entirely."
@@ -857,7 +857,7 @@ public class WorkspaceFileEditImpl
                 };
             }
 
-            if (!result.Success)
+            if (result.IsError)
             {
                 return new SentinelCallToolResult<object>()
                 {

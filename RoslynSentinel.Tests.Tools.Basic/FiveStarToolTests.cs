@@ -58,7 +58,7 @@ public class ExtractConstantSafeStrongTests
             var result = await _engine.ExtractConstantSafeAsync(
                 tempFile, "5", "MaxRetries", lineBefore: "public int GetMaxRetries() =>");
 
-            Assert.That(result.Success, Is.True, result.Error);
+            Assert.That(!result.IsError, Is.True, result.Error);
             Assert.That(result.UpdatedContent, Does.Contain("const int MaxRetries"),
                 "const int declaration must be emitted");
             Assert.That(result.UpdatedContent, Does.Contain("MaxRetries = 5"),
@@ -89,7 +89,7 @@ public class ExtractConstantSafeStrongTests
             var result = await _engine.ExtractConstantSafeAsync(
                 tempFile, "1.5m", "ScoreMultiplier");
 
-            Assert.That(result.Success, Is.True, result.Error);
+            Assert.That(!result.IsError, Is.True, result.Error);
             Assert.That(result.UpdatedContent, Does.Contain("const decimal ScoreMultiplier"),
                 "const decimal declaration must be emitted");
             Assert.That(result.UpdatedContent, Does.Contain("ScoreMultiplier"),
@@ -117,7 +117,7 @@ public class ExtractConstantSafeStrongTests
             var result = await _engine.ExtractConstantSafeAsync(
                 tempFile, "true", "DefaultEnabled", lineBefore: "public bool IsDebug() =>");
 
-            Assert.That(result.Success, Is.True, result.Error);
+            Assert.That(!result.IsError, Is.True, result.Error);
             Assert.That(result.UpdatedContent, Does.Contain("const bool DefaultEnabled"),
                 "const bool declaration must be emitted");
         }
@@ -142,7 +142,7 @@ public class ExtractConstantSafeStrongTests
             var result = await _engine.ExtractConstantSafeAsync(
                 tempFile, "','", "CsvDelimiter");
 
-            Assert.That(result.Success, Is.True, result.Error);
+            Assert.That(!result.IsError, Is.True, result.Error);
             Assert.That(result.UpdatedContent, Does.Contain("const char CsvDelimiter"),
                 "const char declaration must be emitted");
         }
@@ -173,7 +173,7 @@ public class ExtractConstantSafeStrongTests
                 tempFile, "\"localhost\"", "DefaultHost",
                 lineBefore: "public string GetA() =>");
 
-            Assert.That(result.Success, Is.True, result.Error);
+            Assert.That(!result.IsError, Is.True, result.Error);
             Assert.That(result.UpdatedContent, Does.Contain("const string DefaultHost = \"localhost\""),
                 "One const declaration must exist");
             // After extraction, raw "localhost" string appears only in the const decl
@@ -207,7 +207,7 @@ public class ExtractConstantSafeStrongTests
             var result = await _engine.ExtractConstantSafeAsync(
                 tempFile, "\"/api/v1\"", "ApiEndpoint");
 
-            Assert.That(result.Success, Is.True, result.Error);
+            Assert.That(!result.IsError, Is.True, result.Error);
             Assert.That(result.UpdatedContent, Does.Contain("const string ApiEndpoint"),
                 "Constant must be inserted into the inner class");
         }
@@ -233,7 +233,7 @@ public class ExtractConstantSafeStrongTests
             var result = await _engine.ExtractConstantSafeAsync(
                 tempFile, "\"DOES_NOT_EXIST_IN_FILE\"", "MissingConst");
 
-            Assert.That(result.Success, Is.False,
+            Assert.That(!result.IsError, Is.False,
                 "Non-existent snippet must produce a failure");
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
                 "ErrorData message must be non-empty and human-readable");
@@ -251,7 +251,7 @@ public class ExtractConstantSafeStrongTests
         var result = await _engine.ExtractConstantSafeAsync(
             @"C:\nonexistent\path\missing.cs", "\"any\"", "AnyConst");
 
-        Assert.That(result.Success, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.Error, Does.Contain("missing.cs"),
             "ErrorData must mention the missing file name");
     }
@@ -268,7 +268,7 @@ public class ExtractConstantSafeStrongTests
             var result = await _engine.ExtractConstantSafeAsync(
                 tempFile, "\"hi\"", "99InvalidName");
 
-            Assert.That(result.Success, Is.False);
+            Assert.That(!result.IsError, Is.False);
             Assert.That(result.Error, Does.Contain("99InvalidName").Or.Contain("identifier"),
                 "ErrorData must identify the invalid name");
         }
@@ -299,7 +299,7 @@ public class ExtractConstantSafeStrongTests
             // (b) succeed if it finds an adjacent string piece
             // Either way: no throw, no null result, always has an error message when IsSuccess=false
             Assert.That(result, Is.Not.Null);
-            if (!result.Success)
+            if (result.IsError)
             {
                 Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
                     "Failure must include an actionable error message");
@@ -372,7 +372,7 @@ public class ConvertStringFormatSmartTests
         var result = await _engine.ConvertStringFormatToInterpolatedSmartAsync(
             "Test.cs", "string.Format(\"Hello");
 
-        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(!result.IsError, Is.True, $"Should succeed: {result.Error}");
         Assert.That(result.UpdatedContent, Does.Contain("$\""),
             "Result must be an interpolated string");
         Assert.That(result.UpdatedContent, Does.Contain("first"),
@@ -405,7 +405,7 @@ public class ConvertStringFormatSmartTests
         var result = await _engine.ConvertStringFormatToInterpolatedSmartAsync(
             "Test.cs", "string.Format(\"Report");
 
-        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(!result.IsError, Is.True, $"Should succeed: {result.Error}");
         Assert.That(result.UpdatedContent, Does.Contain("yyyy-MM-dd"),
             "Format specifier must be preserved in the interpolated string");
         Assert.That(result.UpdatedContent, Does.Contain("dt"),
@@ -431,7 +431,7 @@ public class ConvertStringFormatSmartTests
         var result = await _engine.ConvertStringFormatToInterpolatedSmartAsync(
             "Test.cs", "string.Format(\"{{");
 
-        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(!result.IsError, Is.True, $"Should succeed: {result.Error}");
         Assert.That(result.UpdatedContent, Does.Contain("$\""),
             "Result must be an interpolated string");
         // The escaped {{ must appear as {{ in the interpolated string literal
@@ -455,7 +455,7 @@ public class ConvertStringFormatSmartTests
         var result = await _engine.ConvertStringFormatToInterpolatedSmartAsync(
             "Test.cs", "\"hello world\"");
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "Non-Format snippet must produce a failure result");
         Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
             "ErrorData message must be non-empty");
@@ -478,7 +478,7 @@ public class ConvertStringFormatSmartTests
         var result = await _engine.ConvertStringFormatToInterpolatedSmartAsync(
             "Test.cs", "string.Format(fmt");
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "Non-constant format argument must produce a failure result");
         Assert.That(result.Error, Does.Contain("constant").Or.Contain("literal").Or.Contain("resolve"),
             "ErrorData must explain WHY it failed");
@@ -503,7 +503,7 @@ public class ConvertStringFormatSmartTests
         var result = await _engine.ConvertStringFormatToInterpolatedSmartAsync(
             "Test.cs", "string.Format(\"Welcome");
 
-        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(!result.IsError, Is.True, $"Should succeed: {result.Error}");
         Assert.That(result.UpdatedContent, Does.Contain("Welcome to ExpressRecipe"),
             "Literal text must survive");
     }
@@ -529,7 +529,7 @@ public class ConvertStringFormatSmartTests
         var result = await _engine.ConvertStringFormatToInterpolatedSmartAsync(
             "Test.cs", "string.Format(EntryFmt");
 
-        Assert.That(result.Success, Is.True,
+        Assert.That(!result.IsError, Is.True,
             "Named const - this is the core bug fix; must succeed");
         Assert.That(result.UpdatedContent, Does.Contain("action"),
             "First arg must appear in output");
@@ -738,7 +738,7 @@ public class FormatDocumentSafeTests
 
             var result = await _engine.FormatDocumentSafeAsync(tempFile, preview: true);
 
-            Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+            Assert.That(!result.IsError, Is.True, $"Should succeed: {result.Error}");
             Assert.That(result.UpdatedContent, Is.Not.Null.And.Not.Empty,
                 "Formatted content must be returned");
             // Roslyn formatter adds proper indentation -> body should be indented
@@ -782,7 +782,7 @@ public class FormatDocumentSafeTests
 
             var result = await _engine.FormatDocumentSafeAsync(tempFile, preview: false);
 
-            Assert.That(result.Success, Is.True, $"Apply should succeed: {result.Error}");
+            Assert.That(!result.IsError, Is.True, $"Apply should succeed: {result.Error}");
             var diskContent = await File.ReadAllTextAsync(tempFile);
             Assert.That(diskContent, Is.Not.EqualTo(ugly),
                 "FormatDocumentSafe(preview=false) MUST write to disk");
@@ -816,7 +816,7 @@ public class FormatDocumentSafeTests
 
             var result = await _engine.FormatDocumentSafeAsync(tempFile, preview: true);
 
-            Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+            Assert.That(!result.IsError, Is.True, $"Should succeed: {result.Error}");
             // The content may differ by trailing whitespace / CRLF normalization,
             // but the identifiers and structure must all be present
             Assert.That(result.UpdatedContent, Does.Contain("class Formatter"),
@@ -836,7 +836,7 @@ public class FormatDocumentSafeTests
         var result = await _engine.FormatDocumentSafeAsync(
             @"C:\nonexistent_rs_test\missing_rs.cs");
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "Missing file must produce a failure result");
         Assert.That(result.Error, Does.Contain("missing_rs.cs").Or.Contain("nonexistent"),
             "ErrorData must identify the missing path");

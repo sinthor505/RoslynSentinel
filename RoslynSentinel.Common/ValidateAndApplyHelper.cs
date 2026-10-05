@@ -71,7 +71,7 @@ public static class ValidateAndApplyHelper
             return new ApplyOutcome(null, ToolErrorMapper.ToResultError(ex, workspaceManager, $"{operationName} pre-validate"), dryRun);
         }
 
-        if (!validation.Success)
+        if (validation.IsError)
         {
             var detail = validation.Diagnostics;
             var detailString = describeValidationFailure != null
@@ -99,7 +99,7 @@ public static class ValidateAndApplyHelper
             changes, retryCount: 3, validateChanges: false, rollbackOnPartialFailure: true,
             progress: progress, cancellationToken: cancellationToken, deletePaths: deletePaths);
 
-        if (!applyResult.Success)
+        if (applyResult.IsError)
         {
             // The chokepoint's own EOL backstop reports RefusalCode; surface it as its distinct code.
             var applyError = applyResult.RefusalCode != null

@@ -42,7 +42,7 @@ public class CompilerErrorLookupHelperTests
             .Select(d => d.ToInfo())
             .ToList();
 
-        return new DiagnosticReport(diagnostics.Count == 0, diagnostics);
+        return new DiagnosticReport(!(diagnostics.Count == 0), diagnostics);
     }
 
     [Test]
@@ -66,7 +66,7 @@ public class CompilerErrorLookupHelperTests
             }
             """));
 
-        Assert.That(report.Success, Is.False, "the private call should produce a CS0122");
+        Assert.That(!report.IsError, Is.False, "the private call should produce a CS0122");
         Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS0122"));
 
         var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
@@ -108,7 +108,7 @@ public class CompilerErrorLookupHelperTests
             }
             """));
 
-        Assert.That(report.Success, Is.False, "two files declaring the same type/member should collide");
+        Assert.That(!report.IsError, Is.False, "two files declaring the same type/member should collide");
         Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS0111").Or.Contain("CS0101"));
 
         var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
@@ -136,7 +136,7 @@ public class CompilerErrorLookupHelperTests
         }
 
         diagnostics.Insert(3, new DiagnosticInfo("CS1002", "Error", "; expected", "C:\\repo\\Other.cs", 7, 1, 7, 2));
-        var report = new DiagnosticReport(false, diagnostics);
+        var report = new DiagnosticReport(true, diagnostics);
 
         var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
         var lines = description.Split('\n');

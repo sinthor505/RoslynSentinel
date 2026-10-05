@@ -4155,7 +4155,7 @@ public class MemberRefactoringEngine
     {
         if (!(_config ?? new SentinelConfiguration()).IsFeatureEnabled("ExtractMethod"))
         {
-            return new ExtractMethodResult(false, "ExtractMethod feature is disabled.", null, null, null, null);
+            return new ExtractMethodResult(true, "ExtractMethod feature is disabled.", null, null, null, null);
         }
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -4163,18 +4163,18 @@ public class MemberRefactoringEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new ExtractMethodResult(false, $"File '{filePath}' not found in solution.", null, null, null, null);
+            return new ExtractMethodResult(true, $"File '{filePath}' not found in solution.", null, null, null, null);
         }
 
         var text = await document.GetTextAsync(cancellationToken);
         if (startLine < 1 || startLine > text.Lines.Count)
         {
-            return new ExtractMethodResult(false, $"startLine {startLine} out of range (file has {text.Lines.Count} lines).", null, null, null, null);
+            return new ExtractMethodResult(true, $"startLine {startLine} out of range (file has {text.Lines.Count} lines).", null, null, null, null);
         }
 
         if (endLine < startLine || endLine > text.Lines.Count)
         {
-            return new ExtractMethodResult(false, $"endLine {endLine} is out of range.", null, null, null, null);
+            return new ExtractMethodResult(true, $"endLine {endLine} is out of range.", null, null, null, null);
         }
 
         // Stale-file validation: physical line text must match what the caller observed
@@ -4182,19 +4182,19 @@ public class MemberRefactoringEngine
         var actualEnd = text.Lines[endLine - 1].ToString().Trim();
         if (actualStart != startLineText.Trim())
         {
-            return new ExtractMethodResult(false, $"startLine mismatch: expected '{startLineText.Trim()}' but found '{actualStart}'. File may have changed.", null, null, null, null);
+            return new ExtractMethodResult(true, $"startLine mismatch: expected '{startLineText.Trim()}' but found '{actualStart}'. File may have changed.", null, null, null, null);
         }
 
         if (actualEnd != endLineText.Trim())
         {
-            return new ExtractMethodResult(false, $"endLine mismatch: expected '{endLineText.Trim()}' but found '{actualEnd}'. File may have changed.", null, null, null, null);
+            return new ExtractMethodResult(true, $"endLine mismatch: expected '{endLineText.Trim()}' but found '{actualEnd}'. File may have changed.", null, null, null, null);
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (root == null || semanticModel == null)
         {
-            return new ExtractMethodResult(false, "Could not obtain syntax root or semantic model.", null, null, null, null);
+            return new ExtractMethodResult(true, "Could not obtain syntax root or semantic model.", null, null, null, null);
         }
 
         var startPos = text.Lines[startLine - 1].Start;
@@ -4204,14 +4204,14 @@ public class MemberRefactoringEngine
         var containingMethod = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Body != null).FirstOrDefault(m => m.Body!.Span.Contains(span));
         if (containingMethod?.Body == null)
         {
-            return new ExtractMethodResult(false, "Selected range must be inside a block-body method (expression-bodied methods are not supported).", null, null, null, null);
+            return new ExtractMethodResult(true, "Selected range must be inside a block-body method (expression-bodied methods are not supported).", null, null, null, null);
         }
 
         // Collect direct body statements that overlap the selection
         var selectedStatements = containingMethod.Body.Statements.Where(s => s.Span.IntersectsWith(span)).ToList();
         if (selectedStatements.Count == 0)
         {
-            return new ExtractMethodResult(false, "No complete statements found in the selected line range.", null, null, null, null);
+            return new ExtractMethodResult(true, "No complete statements found in the selected line range.", null, null, null, null);
         }
 
         // SuccessData flow analysis to infer parameters and return type
@@ -4222,7 +4222,7 @@ public class MemberRefactoringEngine
         }
         catch (Exception ex)
         {
-            return new ExtractMethodResult(false, $"SuccessData flow analysis failed: {ex.Message}", null, null, null, null);
+            return new ExtractMethodResult(true, $"SuccessData flow analysis failed: {ex.Message}", null, null, null, null);
         }
 
         // Parameters: symbols flowing in -> local vars and non-this method parameters only
@@ -4231,14 +4231,14 @@ public class MemberRefactoringEngine
         var refOutFlowOut = dataFlow.DataFlowsOut.OfType<IParameterSymbol>().Where(p => p.RefKind != RefKind.None && !p.IsThis).ToList();
         if (refOutFlowOut.Count > 0)
         {
-            return new ExtractMethodResult(false, $"Cannot extract: ref/out parameter(s) '{string.Join(", ", refOutFlowOut.Select(p => p.Name))}' are " + "written inside the selection and read after it. This case cannot be auto-extracted - refactor manually.", null, null, null, null);
+            return new ExtractMethodResult(true, $"Cannot extract: ref/out parameter(s) '{string.Join(", ", refOutFlowOut.Select(p => p.Name))}' are " + "written inside the selection and read after it. This case cannot be auto-extracted - refactor manually.", null, null, null, null);
         }
 
         // Return value: local variables assigned inside that are used after the region
         var flowsOut = dataFlow.DataFlowsOut.Where(s => s.Kind == SymbolKind.Local).ToList();
         if (flowsOut.Count > 1)
         {
-            return new ExtractMethodResult(false, $"Multiple variables flow out ({string.Join(", ", flowsOut.Select(s => s.Name))}). " + "Cannot auto-determine return type - narrow the selection or handle manually.", null, null, null, null);
+            return new ExtractMethodResult(true, $"Multiple variables flow out ({string.Join(", ", flowsOut.Select(s => s.Name))}). " + "Cannot auto-determine return type - narrow the selection or handle manually.", null, null, null, null);
         }
 
         ILocalSymbol? returnVar = flowsOut.Count == 1 ? (ILocalSymbol)flowsOut[0] : null;
@@ -4358,7 +4358,7 @@ public class MemberRefactoringEngine
         var updatedMethod = containingMethod.WithBody(containingMethod.Body.WithStatements(SyntaxFactory.List(newStmts)));
         if (containingMethod.Parent is not TypeDeclarationSyntax parentType)
         {
-            return new ExtractMethodResult(false, "Could not find the containing type declaration.", null, null, null, null);
+            return new ExtractMethodResult(true, "Could not find the containing type declaration.", null, null, null, null);
         }
 
         // Append extracted method after the type's existing members
@@ -4369,7 +4369,7 @@ public class MemberRefactoringEngine
         var beforeSnippet = string.Concat(selectedStatements.Select(s => s.ToFullString())).Trim();
         var callSiteText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(callStatement).ToFullString().Trim();
         var extractedMethodText = extractedMethod.ToFullString().Trim();
-        return new ExtractMethodResult(true, null, beforeSnippet, callSiteText, extractedMethodText, updatedContent);
+        return new ExtractMethodResult(false, null, beforeSnippet, callSiteText, extractedMethodText, updatedContent);
     }
 
     /// <summary>

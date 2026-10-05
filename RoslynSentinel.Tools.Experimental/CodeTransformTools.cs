@@ -652,7 +652,7 @@ public class CodeTransformTools
 
                 case "convert_out_params_to_value_tuple":
                     var result = await _outParamRefactoringEngine.ConvertOutParamsToValueTupleAsync(resolvedFilePath, methodName, cancellationToken);
-                    if (result is not { Success: true, Changes.Count: > 0 })
+                    if (result is null || result.IsError || result.Changes is not { Count: > 0 })
                     {
                         return new SentinelCallToolResult<object>
                         {

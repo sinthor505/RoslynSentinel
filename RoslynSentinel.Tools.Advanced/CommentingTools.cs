@@ -144,7 +144,7 @@ public class CommentingTools
         if (seedChanges.Count > 0 && !dryRun)
         {
             var seedApply = await _workspaceManager.ApplyProposedChangesAsync(seedChanges, validateChanges: true, cancellationToken: cancellationToken);
-            if (!seedApply.Success)
+            if (seedApply.IsError)
             {
                 var diagnosticCount = seedApply.ValidationResult?.Diagnostics.Count ?? 0;
                 _logger.LogWarning("BulkComment: validation found {Count} error(s) in seed-phase changes; aborting before the work phase",
@@ -307,7 +307,7 @@ public class CommentingTools
             var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
                 new Dictionary<FilePathWrapper, string> { { currentFilePath, finalText } }, validateChanges: true, cancellationToken: cancellationToken);
 
-            if (!applyResult.Success)
+            if (applyResult.IsError)
             {
                 var reason = applyResult.ValidationResult != null
                     ? $"apply validation failed ({applyResult.ValidationResult.Diagnostics.Count} diagnostic(s))"

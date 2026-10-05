@@ -95,7 +95,7 @@ public sealed record LocatedSymbolInfo(
 /// envelope with no Data) - see proposal_structuredcontent_rollout.md.
 /// </summary>
 public sealed record LocateSymbolResult(
-    bool Success,
+    bool IsError,
     IReadOnlyList<LocatedSymbolInfo>? Data,
     int? TotalRecords,
     int? WorkspaceVersion);

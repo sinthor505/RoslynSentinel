@@ -1488,7 +1488,7 @@ public class AsyncifyTools
                     var bridgeValidation = await _validationEngine.ValidateChangesAsync(
                         new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } },
                         cancellationToken: cancellationToken);
-                    if (!bridgeValidation.Success)
+                    if (bridgeValidation.IsError)
                     {
                         var diagMsg = string.Join("; ", bridgeValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                         var reason782 = $"Validation: {bridgeValidation.Diagnostics.Count} error(s) - {diagMsg}";
@@ -1538,7 +1538,7 @@ public class AsyncifyTools
                                 var ctApplyResult = await _workspaceManager.ApplyProposedChangesAsync(
                                     new Dictionary<FilePathWrapper, string> { { target.FilePath, ctResult.UpdatedText } },
                                     validateChanges: true);
-                                if (ctApplyResult.Success)
+                                if (!ctApplyResult.IsError)
                                 {
                                     string? beforeSrc = null;
                                     ctApplyResult.PreImages?.TryGetValue(target.FilePath, out beforeSrc);
@@ -1710,7 +1710,7 @@ public class AsyncifyTools
                         var ctFileValidation = await _validationEngine.ValidateChangesAsync(
                             new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } },
                             cancellationToken: cancellationToken);
-                        if (!ctFileValidation.Success)
+                        if (ctFileValidation.IsError)
                         {
                             var diagMsg = string.Join("; ", ctFileValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                             var valReason = $"Validation: {ctFileValidation.Diagnostics.Count} error(s) - {diagMsg}";
@@ -2122,7 +2122,7 @@ public class AsyncifyTools
                 {
                     var applyResult1126 = await _workspaceManager.ApplyProposedChangesAsync(
                         engineResult.Changes, validateChanges: true, cancellationToken: cancellationToken);
-                    if (!applyResult1126.Success && applyResult1126.ValidationResult != null)
+                    if (applyResult1126.IsError && applyResult1126.ValidationResult != null)
                         _logger.LogWarning("FlagMigrationCandidates: validation found {Count} error(s) in attribute changes - skipping write",
                             applyResult1126.ValidationResult.Diagnostics.Count);
 
@@ -2242,7 +2242,7 @@ public class AsyncifyTools
                 {
                     var applyResult1223 = await _workspaceManager.ApplyProposedChangesAsync(
                         allChanges, validateChanges: true);
-                    if (!applyResult1223.Success && applyResult1223.ValidationResult != null)
+                    if (applyResult1223.IsError && applyResult1223.ValidationResult != null)
                         _logger.LogWarning("FlagMigrationCandidates: validation found {Count} error(s) in attribute changes - skipping write",
                             applyResult1223.ValidationResult.Diagnostics.Count);
                     if (applyResult1223.PreImages != null)
@@ -2470,7 +2470,7 @@ public class AsyncifyTools
                     extractEntireBody: true,
                     cancellationToken: state.InnerToken);
 
-                if (!extractResult.Success)
+                if (extractResult.IsError)
                 {
                     var reason = extractResult.Error ?? "extraction returned no error message";
                     state.Items.Add(new OperationItemRecord
@@ -2497,7 +2497,7 @@ public class AsyncifyTools
                 var extractValidation = await _validationEngine.ValidateChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
                     cancellationToken: state.InnerToken);
-                if (!extractValidation.Success)
+                if (extractValidation.IsError)
                 {
                     var diagMsg = string.Join("; ", extractValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                     var valReason = $"Validation: {extractValidation.Diagnostics.Count} error(s) - {diagMsg}";
@@ -2567,7 +2567,7 @@ public class AsyncifyTools
             {
                 var applyResult1317 = await _workspaceManager.ApplyProposedChangesAsync(
                     flagResult.Changes, validateChanges: true);
-                if (!applyResult1317.Success && applyResult1317.ValidationResult != null)
+                if (applyResult1317.IsError && applyResult1317.ValidationResult != null)
                     _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in flag attribute changes - skipping write",
                         applyResult1317.ValidationResult.Diagnostics.Count);
 
@@ -2703,7 +2703,7 @@ public class AsyncifyTools
                 {
                     var applyResult1421 = await _workspaceManager.ApplyProposedChangesAsync(
                         allChanges, validateChanges: true);
-                    if (!applyResult1421.Success && applyResult1421.ValidationResult != null)
+                    if (applyResult1421.IsError && applyResult1421.ValidationResult != null)
                         _logger.LogWarning("AsyncifyCore Phase 1: validation found {Count} error(s) in explicit-target flag changes - skipping write",
                             applyResult1421.ValidationResult.Diagnostics.Count);
                     if (applyResult1421.PreImages != null)
@@ -3014,7 +3014,7 @@ public class AsyncifyTools
                 var applyResult3a = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { candidate.FilePath, updatedSource } },
                     validateChanges: true, cancellationToken: state.InnerToken);
-                if (!applyResult3a.Success && applyResult3a.ValidationResult != null)
+                if (applyResult3a.IsError && applyResult3a.ValidationResult != null)
                 {
                     var diagMsg = string.Join("; ", applyResult3a.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                     throw new InvalidOperationException($"Validation: {applyResult3a.ValidationResult.Diagnostics.Count} error(s) - {diagMsg}");
@@ -3118,7 +3118,7 @@ public class AsyncifyTools
                     var applyResult3b = await _workspaceManager.ApplyProposedChangesAsync(
                         new Dictionary<FilePathWrapper, string> { { handler.FilePath, handlerResult.UpdatedText } },
                         validateChanges: true, cancellationToken: state.InnerToken);
-                    if (!applyResult3b.Success && applyResult3b.ValidationResult != null)
+                    if (applyResult3b.IsError && applyResult3b.ValidationResult != null)
                     {
                         var diagMsg = string.Join("; ", applyResult3b.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                         throw new InvalidOperationException($"Validation: {applyResult3b.ValidationResult.Diagnostics.Count} error(s) - {diagMsg}");
@@ -3504,7 +3504,7 @@ public class AsyncifyTools
                 var handlerToAsyncValidation = await _validationEngine.ValidateChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { filePath, updatedSource } },
                     cancellationToken: cancellationToken);
-                if (!handlerToAsyncValidation.Success)
+                if (handlerToAsyncValidation.IsError)
                 {
                     var diagMsg = string.Join("; ", handlerToAsyncValidation.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                     throw new InvalidOperationException($"Validation: {handlerToAsyncValidation.Diagnostics.Count} error(s) - {diagMsg}");
@@ -3683,7 +3683,7 @@ public class AsyncifyTools
                 continue;
             }
 
-            if (!extractResult.Success)
+            if (extractResult.IsError)
             {
                 var reason = extractResult.Error ?? "ExtractConstantSafeAsync returned failure with no message";
                 items.Add(new OperationItemRecord

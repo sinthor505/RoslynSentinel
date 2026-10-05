@@ -236,7 +236,7 @@ public class DiffEngineTests
 
         var report = await validationEngine.ValidateDiffAsync("C.cs", diff);
 
-        Assert.That(report.Success, Is.True);
+        Assert.That(!report.IsError, Is.True);
         Assert.That(report.Diagnostics.Count, Is.Zero);
     }
 
@@ -256,7 +256,7 @@ public class DiffEngineTests
 
         var report = await validationEngine.ValidateDiffAsync("C.cs", diff);
 
-        Assert.That(report.Success, Is.False);
+        Assert.That(!report.IsError, Is.False);
         Assert.That(report.Diagnostics.Any(d => d.Severity == "Error"), Is.True);
     }
 

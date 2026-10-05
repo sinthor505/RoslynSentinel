@@ -66,7 +66,7 @@ public class ScopedOperationLedgerBlockingTests
 
         var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: false);
 
-        Assert.That(result.Success, Is.True, result.Summary);
+        Assert.That(!result.IsError, Is.True, result.Summary);
     }
 
     [Test]
@@ -86,7 +86,7 @@ public class ScopedOperationLedgerBlockingTests
 
         var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: false);
 
-        Assert.That(result.Success, Is.True, result.Summary);
+        Assert.That(!result.IsError, Is.True, result.Summary);
     }
 
     [Test]
@@ -129,7 +129,7 @@ public class ScopedOperationLedgerBlockingTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(result.Success, Is.False);
+            Assert.That(!result.IsError, Is.False);
             Assert.That(result.Summary, Does.Contain("scoped operation ledger"));
         });
         Assert.That(await File.ReadAllTextAsync(unrelatedFile), Is.EqualTo(unrelatedOriginal),

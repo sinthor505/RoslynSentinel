@@ -578,7 +578,7 @@ public class RegressionTests
         var engine = CreateAugmentEngine();
         var result = await engine.EncapsulateFieldSafeAsync("Test.cs", "SuccessCount");
 
-        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(!result.IsError, Is.True, $"Should succeed: {result.Error}");
         Assert.That(result.UpdatedContent, Does.Contain("_successCount"),
             "Backing field must be renamed to _successCount");
         Assert.That(result.UpdatedContent, Does.Not.Contain("private int SuccessCount"),
@@ -598,7 +598,7 @@ public class RegressionTests
         var engine = CreateAugmentEngine();
         var result = await engine.EncapsulateFieldSafeAsync("Test.cs", "successCount");
 
-        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(!result.IsError, Is.True, $"Should succeed: {result.Error}");
         Assert.That(result.UpdatedContent, Does.Contain("public int SuccessCount"),
             "Property must be PascalCase");
     }
@@ -617,7 +617,7 @@ public class RegressionTests
         var engine = CreateAugmentEngine();
         var result = await engine.EncapsulateFieldSafeAsync("Test.cs", "Label");
 
-        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(!result.IsError, Is.True, $"Should succeed: {result.Error}");
         // The property getter must reference _label, not Label
         Assert.That(result.UpdatedContent, Does.Contain("_label"),
             "Property body must reference _label (backing field)");
@@ -643,7 +643,7 @@ public class RegressionTests
         var engine = CreateAugmentEngine();
         var result = await engine.EncapsulateFieldSafeAsync("Test.cs", "Total");
 
-        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(!result.IsError, Is.True, $"Should succeed: {result.Error}");
         // Method bodies must use _total now
         Assert.That(result.UpdatedContent, Does.Contain("_total"),
             "Usages in method bodies must reference the renamed backing field _total");
@@ -766,7 +766,7 @@ public class RegressionTests
         var engine = CreateAugmentEngine();
         var result = await engine.ConvertSwitchToPatternSafeAsync("Test.cs", "switch (unit)");
 
-        Assert.That(result.Success, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "Must REJECT multi-assign switch - not silently corrupt it");
         Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
             "Must explain WHY conversion was rejected");
@@ -795,7 +795,7 @@ public class RegressionTests
         var engine = CreateAugmentEngine();
         var result = await engine.ConvertSwitchToPatternSafeAsync("Test.cs", "switch (unit)");
 
-        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(!result.IsError, Is.True, $"Should succeed: {result.Error}");
         Assert.That(result.UpdatedContent, Does.Contain("switch"),
             "Result must contain a switch expression");
         Assert.That(result.UpdatedContent, Does.Contain("1.0"),
@@ -827,7 +827,7 @@ public class RegressionTests
         var result = await engine.ConvertStringFormatToInterpolatedSmartAsync(
             "Test.cs", "string.Format(CacheKeyFmt");
 
-        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(!result.IsError, Is.True, $"Should succeed: {result.Error}");
         Assert.That(result.UpdatedContent, Does.Contain("$\""),
             "Result must be an interpolated string");
         Assert.That(result.UpdatedContent, Does.Contain("userId"),
@@ -852,7 +852,7 @@ public class RegressionTests
         var result = await engine.ConvertStringFormatToInterpolatedSmartAsync(
             "Test.cs", "string.Format(\"Hello");
 
-        Assert.That(result.Success, Is.True, $"Should succeed: {result.Error}");
+        Assert.That(!result.IsError, Is.True, $"Should succeed: {result.Error}");
         Assert.That(result.UpdatedContent, Does.Contain("$\""),
             "Result must be an interpolated string");
         Assert.That(result.UpdatedContent, Does.Contain("name").And.Contain("count"),
@@ -959,7 +959,7 @@ public class RegressionTests
             var result = await engine.FormatDocumentSafeAsync(tempFile, preview: true);
 
             // Assert: result is successful and returns formatted content
-            Assert.That(result.Success, Is.True, "FormatDocumentSafe preview should succeed");
+            Assert.That(!result.IsError, Is.True, "FormatDocumentSafe preview should succeed");
             Assert.That(result.UpdatedContent, Is.Not.Null.And.Not.Empty);
 
             // File on disk must NOT have been changed
@@ -994,7 +994,7 @@ public class RegressionTests
             // Act: preview=false -> should write to disk
             var result = await engine.FormatDocumentSafeAsync(tempFile, preview: false);
 
-            Assert.That(result.Success, Is.True, "FormatDocumentSafe apply should succeed");
+            Assert.That(!result.IsError, Is.True, "FormatDocumentSafe apply should succeed");
 
             // File on disk must now equal the formatted result
             var diskContent = await File.ReadAllTextAsync(tempFile);
@@ -1191,7 +1191,7 @@ public class RegressionTests
             var result = await engine.ExtractConstantSafeAsync(
                 tempFile, "\"hello world\"", "GreetingMessage");
 
-            Assert.That(result.Success, Is.True, result.Error);
+            Assert.That(!result.IsError, Is.True, result.Error);
             Assert.That(result.UpdatedContent, Does.Contain("const string GreetingMessage"),
                 "Constant declaration must be present in the output");
             Assert.That(result.UpdatedContent, Does.Contain("GreetingMessage"),
@@ -1226,7 +1226,7 @@ public class RegressionTests
                 tempFile, "\"localhost\"", "DefaultHost",
                 lineBefore: "public string GetHost() =>");
 
-            Assert.That(result.Success, Is.True, result.Error);
+            Assert.That(!result.IsError, Is.True, result.Error);
             // After extraction there must be EXACTLY one string literal "localhost"
             // -> the one in the const declaration itself
             var rawLiteralCount = CountStringOccurrences(result.UpdatedContent!, "\"localhost\"");
@@ -1256,7 +1256,7 @@ public class RegressionTests
             var result = await engine.ExtractConstantSafeAsync(
                 tempFile, "\"hi\"", "123InvalidName");
 
-            Assert.That(result.Success, Is.False,
+            Assert.That(!result.IsError, Is.False,
                 "An invalid identifier should produce a failure result");
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty);
         }

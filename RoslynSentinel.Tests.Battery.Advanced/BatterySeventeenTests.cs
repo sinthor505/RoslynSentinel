@@ -95,7 +95,7 @@ public class MsToolAugmentEngineTests
     public async Task EncapsulateFieldSafe_UnknownFile_ReturnsFailResult()
     {
         var result = await _engine.EncapsulateFieldSafeAsync("NoSuchFile.cs", "MyClass", "_field");
-        Assert.That(result.Success, Is.False, "unknown file should return a failure result");
+        Assert.That(!result.IsError, Is.False, "unknown file should return a failure result");
         Assert.That(result.Error, Is.Not.Null.And.Not.Empty, "failure result must contain error message");
     }
 
@@ -103,7 +103,7 @@ public class MsToolAugmentEngineTests
     public async Task FormatDocumentSafe_UnknownFile_ReturnsFailResult()
     {
         var result = await _engine.FormatDocumentSafeAsync("NoSuchFile.cs");
-        Assert.That(result.Success, Is.False, "unknown file should return a failure result");
+        Assert.That(!result.IsError, Is.False, "unknown file should return a failure result");
     }
 
     [Test]
@@ -119,7 +119,7 @@ public class MsToolAugmentEngineTests
     public async Task EncapsulateFieldSafeAsync_NonExistentFile_ReturnsNotFoundErrorCode()
     {
         var result = await _engine.EncapsulateFieldSafeAsync("NonExistent.cs", "MyField");
-        Assert.That(result.Success, Is.False, "non-existent file should return failure");
+        Assert.That(!result.IsError, Is.False, "non-existent file should return failure");
         Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "error should be NotFound code");
     }
 }

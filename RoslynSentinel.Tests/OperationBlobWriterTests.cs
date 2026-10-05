@@ -128,7 +128,7 @@ public class OperationBlobWriterTests
     {
         var result = await OperationBlobWriter.WriteApplyBlobAsync(
             "Member", "bbb22222",
-            new ApplyChangesResult(Success: true, SucceededFiles: [], FailedFiles: new(), Summary: "no-op"),
+            new ApplyChangesResult(IsError: false, SucceededFiles: [], FailedFiles: new(), Summary: "no-op"),
             _solutionRoot);
 
         Assert.Multiple(() =>

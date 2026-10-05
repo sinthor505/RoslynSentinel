@@ -460,7 +460,7 @@ public class WorkspaceProjectManagementImpl
                 [filePathResolved] = result.UpdatedText
             };
             var apply = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount: 3, validateChanges: true, cancellationToken: cancellationToken);
-            if (!apply.Success)
+            if (apply.IsError)
             {
                 var reason = apply.ValidationResult is not null ? $"introduces new compiler errors - change not applied. Fix diagnostics and retry: {apply.ValidationResult.Diagnostics.ToJson()}" : $"failed to write to disk: {apply.Summary}";
                 return new SentinelCallToolResult<object>()

@@ -47,7 +47,7 @@ public class ValidationEngine
 
         if (documentId == null)
         {
-            return new DiagnosticReport(false, new List<DiagnosticInfo>
+            return new DiagnosticReport(true, new List<DiagnosticInfo>
             {
                 new DiagnosticInfo("RS001", "Error", $"File not found: {filePath}", filePath, 0, 0, 0, 0)
             });
@@ -63,7 +63,7 @@ public class ValidationEngine
         }
         catch (Exception ex)
         {
-            return new DiagnosticReport(false, new List<DiagnosticInfo>
+            return new DiagnosticReport(true, new List<DiagnosticInfo>
             {
                 new DiagnosticInfo("RS003", "Error", $"Failed to apply diff: {ex.Message}", filePath, 0, 0, 0, 0)
             });
@@ -93,7 +93,7 @@ public class ValidationEngine
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var report = await ValidateChangesAsync(solution, fileChanges, removePaths, cancellationToken);
 
-        if (!report.Success && report.Diagnostics.Count > 0)
+        if (report.IsError && report.Diagnostics.Count > 0)
         {
             _ = OperationBlobWriter.WriteValidationFailureAsync(
                 fileChanges.Keys.Select(p => p.ToString()),
@@ -174,7 +174,7 @@ public class ValidationEngine
         if (affectedProjectIds.Count == 0)
         {
             Debug.WriteLine("No files could be mapped to solution documents, nothing to validate.");
-            return new DiagnosticReport(true, new List<DiagnosticInfo>());
+            return new DiagnosticReport(false, new List<DiagnosticInfo>());
         }
 
         // A change can compile cleanly within its own project (e.g. removing a public member
@@ -235,7 +235,7 @@ public class ValidationEngine
         }
 
         Debug.WriteLine($"Validation complete. Introduced errors: {introducedDiagnostics.Count}");
-        return new DiagnosticReport(introducedDiagnostics.Count == 0, introducedDiagnostics);
+        return new DiagnosticReport(!(introducedDiagnostics.Count == 0), introducedDiagnostics);
     }
 
     private static string DiagnosticKey(Diagnostic d)

@@ -78,7 +78,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
             if (_ledger.IsBlocked(target, out var ledgerBlockReason))
             {
                 return new ApplyChangesResult(
-                    Success: false,
+                    IsError: true,
                     SucceededFiles: [],
                     FailedFiles: new Dictionary<FilePathWrapper, string> { [target] = ledgerBlockReason ?? "Blocked by an open scoped operation ledger entry." },
                     Summary: $"Refused - '{Path.GetFileName(target)}' has an open scoped operation ledger entry: {ledgerBlockReason}");
@@ -90,10 +90,10 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
         if (validateChanges)
         {
             var validationReport = await ValidationEngine.ValidateChangesAsync(solution, changes, cancellationToken: cancellationToken);
-            if (!validationReport.Success)
+            if (validationReport.IsError)
             {
                 return new ApplyChangesResult(
-                    Success: false,
+                    IsError: true,
                     SucceededFiles: [],
                     FailedFiles: [],
                     Summary: $"Validation failed with {validationReport.Diagnostics.Count} new error(s); no files written.",
@@ -138,7 +138,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
         }
 
         CurrentSolution = solution;
-        return new ApplyChangesResult(Success: true, SucceededFiles: succeeded, FailedFiles: [], Summary: $"Applied {succeeded.Count} file(s) in memory.", WorkspaceInSync: true, PreImages: preImages);
+        return new ApplyChangesResult(IsError: false, SucceededFiles: succeeded, FailedFiles: [], Summary: $"Applied {succeeded.Count} file(s) in memory.", WorkspaceInSync: true, PreImages: preImages);
     }
     public BatchResultSummary? CheckBreaker() => throw new NotImplementedException();
     // Always under limit -> tests exercising real rate-limit behavior use their own IRateLimiter (see RunTestTests).

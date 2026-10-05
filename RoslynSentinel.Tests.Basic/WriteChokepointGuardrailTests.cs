@@ -178,7 +178,7 @@ public class WriteChokepointGuardrailTests
             var result = await manager.ApplyProposedChangesAsync(
                 new() { [file] = CrlfSource.Replace("\r\n", "\n") }, retryCount: 0, validateChanges: false);
 
-            Assert.That(result.Success, Is.False);
+            Assert.That(!result.IsError, Is.False);
             Assert.That(result.RefusalCode, Is.EqualTo(ToolErrorCode.EolChangeRefused));
             Assert.That(result.SucceededFiles, Is.Empty);
             Assert.That(await File.ReadAllTextAsync(file), Is.EqualTo(CrlfSource), "disk must be untouched");

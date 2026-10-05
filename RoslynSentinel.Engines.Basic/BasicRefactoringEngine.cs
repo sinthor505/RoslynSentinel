@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace RoslynSentinel.Engines.Basic;
 
-public record ExtractMethodResult(bool Success, string? ErrorMessage, string? BeforeSnippet, string? CallSiteReplacement, string? ExtractedMethodText, string? UpdatedSourceContent);
+public record ExtractMethodResult(bool IsError, string? ErrorMessage, string? BeforeSnippet, string? CallSiteReplacement, string? ExtractedMethodText, string? UpdatedSourceContent);
 public record UsingDirectiveInfo(string Name, bool IsStatic, string? Alias);
 public record ResidualMention(FilePathWrapper FilePath, int LineNumber, string LineText);
 public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null);

@@ -74,7 +74,7 @@ public class WholeFileWriteTools
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = normalizedContent };
             var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: validateOnApply, cancellationToken: cancellationToken);
-            if (!result.Success && result.ValidationResult != null)
+            if (result.IsError && result.ValidationResult != null)
             {
                 return new SentinelCallToolResult<object>()
                 {
@@ -85,7 +85,7 @@ public class WholeFileWriteTools
                 };
             }
 
-            if (!result.Success)
+            if (result.IsError)
             {
                 return new SentinelCallToolResult<object>()
                 {
@@ -136,7 +136,7 @@ public class WholeFileWriteTools
                 changes: [],
                 cancellationToken: cancellationToken,
                 deletePaths: [filePathResolved]);
-            if (!result.Success)
+            if (result.IsError)
             {
                 return new SentinelCallToolResult<object>()
                 {
@@ -389,7 +389,7 @@ public class WholeFileWriteTools
                     }
 
                     var result = await _workspaceManager.ApplyProposedChangesAsync(normalizedChanges, retryCount, validateChanges: validateOnApply);
-                    if (!result.Success && result.ValidationResult != null)
+                    if (result.IsError && result.ValidationResult != null)
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = true,
@@ -437,7 +437,7 @@ public class WholeFileWriteTools
                         }
 
                         var validationResult = await _validationEngine.ValidateChangesAsync(normalizedValidateChanges, cancellationToken: cancellationToken);
-                        return validationResult.Success ? new SentinelCallToolResult<object>()
+                        return !validationResult.IsError ? new SentinelCallToolResult<object>()
                         {
                             IsError = false,
                             SuccessData = validationResult
@@ -522,7 +522,7 @@ public class WholeFileWriteTools
                             [targetPath] = newContent
                         };
                         var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply);
-                        if (!result.Success && result.ValidationResult != null)
+                        if (result.IsError && result.ValidationResult != null)
                             return new SentinelCallToolResult<object>()
                             {
                                 IsError = true,
@@ -553,7 +553,7 @@ public class WholeFileWriteTools
                 if (action == ProposedChangeAction.validate)
                 {
                     var validationResult = await _validationEngine.ValidateDiffAsync(filePathResolved.Absolute, unifiedDiff, cancellationToken: cancellationToken);
-                    return validationResult.Success ? new SentinelCallToolResult<object>()
+                    return !validationResult.IsError ? new SentinelCallToolResult<object>()
                     {
                         IsError = false,
                         SuccessData = validationResult
@@ -656,7 +656,7 @@ public class WholeFileWriteTools
                         [targetPath] = newContent
                     };
                     var result = await _workspaceManager.ApplyProposedChangesAsync(diffChanges, validateChanges: validateOnApply);
-                    if (!result.Success && result.ValidationResult != null)
+                    if (result.IsError && result.ValidationResult != null)
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = true,
@@ -690,7 +690,7 @@ public class WholeFileWriteTools
             if (action == ProposedChangeAction.validate)
             {
                 var validationResult = await _validationEngine.ValidateDiffAsync(filePathResolved.Absolute, unifiedDiff, cancellationToken: cancellationToken);
-                return validationResult.Success ? new SentinelCallToolResult<object>()
+                return !validationResult.IsError ? new SentinelCallToolResult<object>()
                 {
                     IsError = false,
                     SuccessData = validationResult
