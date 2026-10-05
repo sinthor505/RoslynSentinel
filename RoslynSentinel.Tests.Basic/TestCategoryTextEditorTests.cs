@@ -163,6 +163,20 @@ public class TestCategoryTextEditorTests
     }
 
     [Test]
+    [Description("Blocker undolastapply_refused_eol_after_apply_normalized_mixed_file, layer (a): the editor splices at line level, so stray CRLF lines in an otherwise-LF file survive byte for byte, before and after the insertion")]
+    public void Add_OnMixedEolFile_KeepsUntouchedStrayCrlfLinesByteIdentical()
+    {
+        // Lines 1 and 11 end in CRLF in an otherwise-LF file; the insertion lands between them (above line 8).
+        var mixed = BasicSource("\n").Replace("using NUnit.Framework;\n", "using NUnit.Framework;\r\n").Replace("    }\n", "    }\r\n");
+
+        var result = TestCategoryTextEditor.Apply(mixed, [AddMethod(8, "T1", "Alpha")]);
+
+        var inserted = "        [Category(\"Alpha\")] " + Marker + "\n";
+        Assert.That(result.NewText, Does.Contain(inserted), "the new line uses the dominant EOL (LF)");
+        Assert.That(result.NewText.Replace(inserted, string.Empty), Is.EqualTo(mixed), "every untouched line keeps its exact original terminator");
+    }
+
+    [Test]
     [Description("Tabs used for indentation are reused for the inserted line")]
     public void Add_ReusesTabIndentation()
     {

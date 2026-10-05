@@ -160,6 +160,36 @@ public class WriteChokepointGuardrailTests
         Assert.That(EolChangeGuard.Check("C:\\x\\A.cs", null, "a\nb\r\n"), Is.Null);
     }
 
+    // Blocker undolastapply_refused_eol_after_apply_normalized_mixed_file: the write path normalizes only the lines a
+    // change added or rewrote; untouched lines keep their own terminator even in a mixed-EOL file.
+    [TestCase("a\nb\r\nc\n", "a\nX\nb\r\nc\n", "\n", "a\nX\nb\r\nc\n", Description = "inserted LF line, stray CRLF kept")]
+    [TestCase("a\nb\r\nc\n", "a\nX\r\nb\r\nc\n", "\n", "a\nX\nb\r\nc\n", Description = "inserted CRLF line in an LF-dominant file becomes LF")]
+    [TestCase("a\nb\r\nc\n", "a\nb\nc\nd\n", "\n", "a\nb\r\nc\nd\n", Description = "proposal that was whole-content normalized by a tool: untouched CRLF line restored, new line LF")]
+    [TestCase("a\r\nb\nc\n", "a\r\nc\n", "\n", "a\r\nc\n", Description = "removed line takes its own terminator with it")]
+    [TestCase("a\r\nb\r\nc\n", "a\r\nX\nb\r\nc\n", "\r\n", "a\r\nX\r\nb\r\nc\n", Description = "CRLF-dominant file: inserted LF line becomes CRLF")]
+    [TestCase("a\nb\r\nc\nd\ne\r\nf\n", "a\nX\nb\nc\nd\nY\nf\n", "\n", "a\nX\nb\r\nc\nd\nY\nf\n", Description = "LCS path: stray CRLF on a matched middle line survives, rewritten lines are LF")]
+    [TestCase("a\nb\nc\n", "a\nb\nX\nc\n", "\n", "a\nb\nX\nc\n", Description = "pure LF behaves as before")]
+    [TestCase("a\r\nb\r\n", "a\r\nb\r\nc\r\n", "\r\n", "a\r\nb\r\nc\r\n", Description = "pure CRLF behaves as before")]
+    [TestCase("a\nb", "a\nb\nc", "\n", "a\nb\nc", Description = "final line gaining a successor gets the dominant EOL; new final line stays unterminated")]
+    [TestCase("a\nb\n", "a\nb", "\n", "a\nb", Description = "lost final newline is not re-added")]
+    public void NormalizeEolOfChangedLines_ChangesOnlyTheTouchedLines(string before, string after, string dominant, string expected)
+    {
+        Assert.That(EolUtilities.NormalizeEolOfChangedLines(before, after, dominant), Is.EqualTo(expected));
+    }
+
+    [Test]
+    public void NormalizeEolOfChangedLines_MiddleTooLargeForTheLcsTable_TreatsItAsChangedWithoutFailing()
+    {
+        // 3000 x 3000 differing lines exceeds the LCS table cap: the whole middle is treated as rewritten, so it takes
+        // the dominant EOL (over-normalizes) instead of throwing or allocating a huge table.
+        var before = string.Concat(Enumerable.Range(0, 3000).Select(i => $"old{i}\r\n"));
+        var after = string.Concat(Enumerable.Range(0, 3000).Select(i => $"new{i}\r\n"));
+
+        var result = EolUtilities.NormalizeEolOfChangedLines(before, after, "\n");
+
+        Assert.That(result, Is.EqualTo(after.Replace("\r\n", "\n")));
+    }
+
     [Test]
     public async Task Chokepoint_RefusesEolChangeBeforeTouchingDiskAsync()
     {

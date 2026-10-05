@@ -285,4 +285,88 @@ public class UndoLastApplyTests
         Assert.That(File.Exists(oldPath), Is.True, "Old file should be restored by UndoLastApply.");
         Assert.That(await File.ReadAllTextAsync(oldPath), Is.EqualTo(widgetSource));
     }
+
+    // Regression tests for blocking_error_undolastapply_refused_eol_after_apply_normalized_mixed_file.md.
+    // LF-dominant file with two stray CRLF lines (one before, one after the insertion point). Built with
+    // explicit escapes so no tool or editor can normalize the fixture.
+    private const string MixedEolSource = "namespace Fx;\n\npublic class Sample\r\n{\n    public int A() => 1;\n    public int B() => 2;\r\n}\n";
+
+    private const string MixedEolWithInsertedLine = "namespace Fx;\n\npublic class Sample\r\n{\n    // added\n    public int A() => 1;\n    public int B() => 2;\r\n}\n";
+
+    private static async Task WriteUndoBlobAsync(TestSolutionFixture fixture, string changeId, string filePath, string beforeSource)
+    {
+        var dir = Path.Combine(fixture.SolutionDirectory, ".roslynsentinel", "operations");
+        Directory.CreateDirectory(dir);
+        var payload = new
+        {
+            toolName = "apply_diff",
+            changeId,
+            generatedUtc = DateTime.UtcNow.ToString("O"),
+            itemCount = 1,
+            items = new[] { new { FilePath = filePath, Outcome = ItemRecordOutcome.Succeeded, BeforeSource = beforeSource } },
+        };
+        await File.WriteAllTextAsync(
+            Path.Combine(dir, $"apply_diff_20260101T000000Z_{changeId}.json"),
+            JsonSerializer.Serialize(payload, PrettyJson));
+    }
+
+    [Test]
+    [Description("A file already normalized to pure LF by an earlier write can still be restored to its mixed-EOL pre-image: undo is an explicit exact restore, not a normal edit")]
+    public async Task UndoLastApply_PreImageIsMixedButFileIsNowPureLf_RestoresExactBytesAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "DamagedEol.cs");
+        // The state the blocker left on disk: pure LF (stray CRLFs already rewritten) plus the inserted line.
+        await File.WriteAllTextAsync(targetFile, MixedEolWithInsertedLine.Replace("\r\n", "\n"));
+
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var changeId = "change-mixed-eol-damaged";
+        await WriteUndoBlobAsync(fixture, changeId, targetFile, MixedEolSource);
+        workspaceManager.ClearExternalFileChanges();
+
+        var result = await workspaceTools.UndoLastApply(reason: "test message", changeId: changeId);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That((string)result.SuccessData!, Does.Contain("Reverted 1 files").And.Not.Contain("Failures"));
+        Assert.That(
+            await File.ReadAllBytesAsync(targetFile),
+            Is.EqualTo(System.Text.Encoding.UTF8.GetBytes(MixedEolSource)),
+            "undo must restore the exact pre-image bytes, including the stray CRLF lines");
+    }
+
+    [Test]
+    [Description("Apply on a mixed-EOL file keeps the untouched stray CRLF lines, and UndoLastApply then restores the exact pre-image bytes")]
+    public async Task UndoLastApply_AfterApplyOnMixedEolFile_RestoresByteIdenticalPreImageAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        var targetFile = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "MixedEol.cs");
+        var originalBytes = System.Text.Encoding.UTF8.GetBytes(MixedEolSource);
+        await File.WriteAllBytesAsync(targetFile, originalBytes);
+
+        // EOL tracking is captured at load, so the file must exist on disk before LoadSolutionAsync.
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var apply = await workspaceManager.ApplyProposedChangesAsync(
+            new Dictionary<FilePathWrapper, string> { [new FilePathWrapper(targetFile)] = MixedEolWithInsertedLine });
+        Assert.That(!apply.IsError, Is.True, apply.Summary);
+        Assert.That(
+            await File.ReadAllBytesAsync(targetFile),
+            Is.EqualTo(System.Text.Encoding.UTF8.GetBytes(MixedEolWithInsertedLine)),
+            "the apply must leave the untouched stray CRLF lines as CRLF");
+
+        var changeId = "change-mixed-eol-roundtrip";
+        await WriteUndoBlobAsync(fixture, changeId, targetFile, apply.PreImages![targetFile]!);
+        workspaceManager.ClearExternalFileChanges();
+
+        var result = await workspaceTools.UndoLastApply(reason: "test message", changeId: changeId);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That((string)result.SuccessData!, Does.Contain("Reverted 1 files").And.Not.Contain("Failures"));
+        Assert.That(await File.ReadAllBytesAsync(targetFile), Is.EqualTo(originalBytes), "undo must restore the exact pre-image bytes");
+    }
 }

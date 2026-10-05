@@ -1241,7 +1241,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         bool rollbackOnPartialFailure = false,
         IProgress<EngineProgress>? progress = default,
         CancellationToken cancellationToken = default,
-        IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
+        IReadOnlyCollection<FilePathWrapper>? deletePaths = null,
+        bool exactRestore = false)
     {
         deletePaths ??= [];
 
@@ -1376,8 +1377,14 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             // (see EolChangeGuard). ValidateAndApplyHelper runs the same check earlier so tools get
             // a structured error; this covers callers that reach the chokepoint directly. New
             // files (null pre-image) are exempt.
-            var eolViolations = EolChangeGuard.CheckAll(
-                changes, p => preImages.TryGetValue(p, out var before) ? before : null);
+            //
+            // exactRestore (UndoLastApply) skips the check: it writes back a pre-image this server captured
+            // itself, so the change is intended by definition, and a pre-image that is mixed-EOL must be
+            // restorable even over a file that has since become single-style (see EolUtilities.NormalizeEolOfChangedLines).
+            List<EolChangeViolation> eolViolations = exactRestore
+                ? []
+                : EolChangeGuard.CheckAll(
+                    changes, p => preImages.TryGetValue(p, out var before) ? before : null);
             if (eolViolations.Count > 0)
             {
                 var refusalMessage = EolChangeGuard.BuildMessage("ApplyProposedChanges", eolViolations);
@@ -1449,7 +1456,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 // normalization -> e.g. NormalizeWhitespace() adding blank lines between methods
                 // that were already present in the original. Parsing both sides and comparing
                 // their normalized forms catches any engine that forgot to preserve formatting.
-                if (EnableAstNormalizationNoOpCheck && preImage != null &&
+                // Skipped for exactRestore: a restore that differs from the file only in line endings is exactly
+                // the change that must be written, not a whitespace-only no-op.
+                if (EnableAstNormalizationNoOpCheck && !exactRestore && preImage != null &&
                     string.Equals(Path.GetExtension(filePath), ".cs", StringComparison.OrdinalIgnoreCase))
                 {
                     try
@@ -1495,12 +1504,15 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     }
                 }
 
-                // Normalize line endings: if this is an existing file, match its dominant EOL.
-                // If it's a new file (preImage is null), keep the content as-is (no normalization).
+                // Normalize line endings: if this is an existing file, lines this change added or rewrote take its
+                // dominant EOL, while every untouched line keeps its own original terminator (a whole-content
+                // NormalizeEol here used to turn the stray CRLF lines of a mixed-EOL file into the dominant style
+                // after EolChangeGuard had already passed it, and UndoLastApply then refused to restore them).
+                // If it's a new file (preImage is null), or an exactRestore, keep the content as-is.
                 var contentToWrite = newContent;
-                if (preImage != null && _knownFileEolPresence.TryGetValue(filePath, out var targetEol))
+                if (!exactRestore && preImage != null && _knownFileEolPresence.TryGetValue(filePath, out var targetEol))
                 {
-                    contentToWrite = EolUtilities.NormalizeEol(newContent, targetEol);
+                    contentToWrite = EolUtilities.NormalizeEolOfChangedLines(preImage, newContent, targetEol);
                 }
 
                 // Mark as internal change before writing to avoid FileSystemWatcher loop.

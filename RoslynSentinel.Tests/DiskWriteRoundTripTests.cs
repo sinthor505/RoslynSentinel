@@ -182,7 +182,8 @@ public class DiskWriteRoundTripTests
     {
         // On disk: CRLF-dominant with one stray bare LF (mixed, so EolChangeGuard does not refuse an edit that
         // keeps CRLF dominant). The proposed edit splices in a new line terminated by a bare LF, as an agent
-        // typing LF would. The tracked dominant EOL (captured at LoadSolutionAsync) must be applied on write.
+        // typing LF would. The tracked dominant EOL (captured at LoadSolutionAsync) must be applied to the SPLICED
+        // line only; the untouched stray LF line keeps its own terminator (see ..._KeepsUntouchedStrayCrlfLines...).
         const string original = "class Sample\r\n{\r\n    void Method() { }\r\n\r\n    void Other() { }\n}\r\n";
         const string proposed = "class Sample\r\n{\r\n    // Added comment\n    void Method() { }\r\n\r\n    void Other() { }\n}\r\n";
 
@@ -191,23 +192,17 @@ public class DiskWriteRoundTripTests
         Assert.That(tracked, Is.True, "Fixture file must be a loaded document, otherwise EOL tracking was never captured.");
         Assert.That(!result.IsError, Is.True, result.Summary);
         Assert.That(Encoding.UTF8.GetString(diskBytes), Does.Contain("// Added comment"), "Content should be updated");
-        for (var i = 0; i < diskBytes.Length; i++)
-        {
-            if (diskBytes[i] == 0x0A)
-            {
-                Assert.That(i > 0 && diskBytes[i - 1] == 0x0D, Is.True, $"Bare LF at byte {i}; every LF must be preceded by CR in a CRLF-dominant file.");
-            }
-        }
-
-        var expected = Encoding.UTF8.GetBytes(proposed.Replace("\r\n", "\n").Replace("\n", "\r\n"));
-        Assert.That(diskBytes, Is.EqualTo(expected));
+        // Only the spliced line is normalized (LF -> CRLF); the pre-existing stray LF after "Other() { }" is untouched.
+        const string expectedText = "class Sample\r\n{\r\n    // Added comment\r\n    void Method() { }\r\n\r\n    void Other() { }\n}\r\n";
+        Assert.That(diskBytes, Is.EqualTo(Encoding.UTF8.GetBytes(expectedText)));
     }
 
     [Test]
     public async Task ApplyProposedChanges_LfDominantFile_NormalizesSplicedCrlfToLfOnDiskAsync()
     {
         // On disk: LF-dominant with one stray CRLF (mixed). The edit splices in a CRLF-terminated line; the
-        // tracked dominant EOL (LF) must be applied on write, so no 0x0D remains on disk.
+        // tracked dominant EOL (LF) must be applied to the SPLICED line only, so exactly one 0x0D remains on disk:
+        // the untouched stray CRLF.
         const string original = "class Sample\n{\n    void Method() { }\n\n    void Other() { }\r\n}\n";
         const string proposed = "class Sample\n{\n    // Added comment\r\n    void Method() { }\n\n    void Other() { }\r\n}\n";
 
@@ -216,10 +211,26 @@ public class DiskWriteRoundTripTests
         Assert.That(tracked, Is.True, "Fixture file must be a loaded document, otherwise EOL tracking was never captured.");
         Assert.That(!result.IsError, Is.True, result.Summary);
         Assert.That(Encoding.UTF8.GetString(diskBytes), Does.Contain("// Added comment"), "Content should be updated");
-        Assert.That(diskBytes, Does.Not.Contain((byte)0x0D), "No CR may remain in an LF-dominant file.");
+        Assert.That(diskBytes.Count(b => b == 0x0D), Is.EqualTo(1), "Only the untouched stray CRLF may keep its CR.");
 
-        var expected = Encoding.UTF8.GetBytes(proposed.Replace("\r\n", "\n"));
-        Assert.That(diskBytes, Is.EqualTo(expected));
+        const string expectedText = "class Sample\n{\n    // Added comment\n    void Method() { }\n\n    void Other() { }\r\n}\n";
+        Assert.That(diskBytes, Is.EqualTo(Encoding.UTF8.GetBytes(expectedText)));
+    }
+
+    [Test]
+    [Description("Blocker undolastapply_refused_eol_after_apply_normalized_mixed_file: the write path must only normalize the lines a change touched, never rewrite untouched stray terminators")]
+    public async Task ApplyProposedChanges_LfDominantFile_KeepsUntouchedStrayCrlfLinesOnDiskAsync()
+    {
+        // LF-dominant with two stray CRLF lines, one before and one after the inserted line. The proposal is what a
+        // line-level editor (TestCategoryTextEditor) produces: the stray lines unchanged, one LF line spliced in.
+        const string original = "class Sample\r\n{\n    void Method() { }\n\n    void Other() { }\r\n}\n";
+        const string proposed = "class Sample\r\n{\n    // Added comment\n    void Method() { }\n\n    void Other() { }\r\n}\n";
+
+        var (result, diskBytes, tracked) = await ApplyToTrackedFileAsync("LfDominantStray.cs", Encoding.UTF8.GetBytes(original), proposed);
+
+        Assert.That(tracked, Is.True, "Fixture file must be a loaded document, otherwise EOL tracking was never captured.");
+        Assert.That(!result.IsError, Is.True, result.Summary);
+        Assert.That(diskBytes, Is.EqualTo(Encoding.UTF8.GetBytes(proposed)), "untouched stray CRLF lines must stay CRLF");
     }
 
     [Test]

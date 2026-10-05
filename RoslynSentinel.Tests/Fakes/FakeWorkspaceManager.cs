@@ -66,7 +66,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     }
     public int WorkspaceVersion => 0;
 
-    public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null)
+    public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, bool exactRestore = false)
     {
         var solution = CurrentSolution ?? throw new SolutionNotLoadedException("Solution not loaded.");
 
