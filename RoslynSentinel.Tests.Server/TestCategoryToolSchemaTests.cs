@@ -89,6 +89,25 @@ public class TestCategoryToolSchemaTests
 
         Assert.That(required, Does.Contain("targets"));
         Assert.That(required, Does.Not.Contain("framework"));
+        Assert.That(required, Does.Not.Contain("applyProjects"));
+    }
+
+    [Test]
+    [Description("applyProjects is emitted as an optional parameter so subset edits do not need testScope")]
+    public async Task EmittedSchema_ApplyProjectsIsAnOptionalParameter()
+    {
+        var (names, required) = await WithClientAsync(async client =>
+        {
+            var tools = await client.ListToolsAsync(cancellationToken: TestContext.CurrentContext.CancellationToken);
+            var schema = tools.Single(t => t.Name == "TagTestCategories").ProtocolTool.InputSchema;
+            return (
+                schema.GetProperty("properties").EnumerateObject().Select(p => p.Name).ToList(),
+                schema.GetProperty("required").EnumerateArray().Select(e => e.GetString()).ToList());
+        });
+
+        Assert.That(names, Does.Contain("applyProjects"));
+        Assert.That(names, Does.Contain("testScope"));
+        Assert.That(required, Does.Not.Contain("applyProjects"));
     }
 
     private static async Task<(bool IsError, string Text)> CallWithFrameworkAsync(string framework)

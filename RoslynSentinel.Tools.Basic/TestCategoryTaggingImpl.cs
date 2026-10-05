@@ -46,6 +46,7 @@ public class TestCategoryTaggingImpl
         TestCategoryFramework framework,
         bool dryRun,
         string? reportProject,
+        string? applyProjects,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(targets))
@@ -57,7 +58,7 @@ public class TestCategoryTaggingImpl
         if (double.IsNaN(maxTestShare) || maxTestShare < 0 || maxTestShare > 1)
         {
             return Error(ToolErrorCode.InvalidArgument,
-                $"maxTestShare must be between 0 and 1 (a fraction of all scanned tests); got {maxTestShare}. Omit it for the default 0.25.");
+                $"maxTestShare must be between 0 and 1 (a fraction of all scanned tests, i.e. of the testScope set); got {maxTestShare}. Omit it for the default 0.25.");
         }
 
         if (double.IsNaN(classLevelThreshold) || classLevelThreshold < 0 || classLevelThreshold > 1)
@@ -84,14 +85,22 @@ public class TestCategoryTaggingImpl
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = plan.Error };
             }
 
+            // Planning above always ran over the full testScope, so shares and exclusions do not depend on applyProjects.
+            // applyProjects only narrows what is applied and reported (the boundary), never the plan itself.
+            var (selected, applyError) = ResolveApplyProjects(plan, applyProjects);
+            if (applyError is not null)
+            {
+                return applyError;
+            }
+
             if (!dryRun)
             {
-                return await ApplyPlanAsync(plan, cancellationToken);
+                return await ApplyPlanAsync(plan with { Projects = selected }, cancellationToken);
             }
 
             if (string.IsNullOrWhiteSpace(reportProject))
             {
-                return Success(BuildSummary(plan));
+                return Success(BuildSummary(plan, selected, string.IsNullOrWhiteSpace(applyProjects) ? null : selected.Select(p => p.ProjectName).ToList()));
             }
 
             var project = plan.Projects.FirstOrDefault(p => string.Equals(p.ProjectName, reportProject.Trim(), StringComparison.OrdinalIgnoreCase));
@@ -102,6 +111,12 @@ public class TestCategoryTaggingImpl
                     : string.Join(", ", plan.Projects.Select(p => p.ProjectName));
                 return Error(ToolErrorCode.InvalidArgument,
                     $"reportProject '{reportProject}' is not a scanned test project. Valid values: {valid}. Omit reportProject for the solution-wide summary.");
+            }
+
+            if (!selected.Contains(project))
+            {
+                return Error(ToolErrorCode.InvalidArgument,
+                    $"reportProject '{reportProject}' is outside applyProjects ({string.Join(", ", selected.Select(p => p.ProjectName))}). Pass a project listed in applyProjects, or omit reportProject.");
             }
 
             return Success(BuildDetail(plan, project));
@@ -116,6 +131,43 @@ public class TestCategoryTaggingImpl
             return Error(ToolErrorCode.Exception,
                 "Planning or applying test categories failed unexpectedly. Check that the solution is loaded and compiles (Build), then retry; the server log has the details.");
         }
+    }
+
+    /// <summary>
+    /// Resolves the applyProjects CSV (case-insensitive, trimmed) against the scanned test projects. Null/blank selects every
+    /// scanned project. An unknown name is an InvalidArgument error listing the valid names. The returned projects keep plan order.
+    /// </summary>
+    private static (IReadOnlyList<TestProjectPlan> Projects, SentinelCallToolResult<object>? Error) ResolveApplyProjects(
+        TestCategoryPlan plan,
+        string? applyProjects)
+    {
+        var names = (applyProjects ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (names.Length == 0)
+        {
+            return (plan.Projects, null);
+        }
+
+        var selected = new List<TestProjectPlan>();
+        foreach (var name in names)
+        {
+            var match = plan.Projects.FirstOrDefault(p => string.Equals(p.ProjectName, name, StringComparison.OrdinalIgnoreCase));
+            if (match is null)
+            {
+                var valid = plan.Projects.Count == 0
+                    ? "none (no test project was scanned; check testScope and targets)"
+                    : string.Join(", ", plan.Projects.Select(p => p.ProjectName));
+                return ([], Error(ToolErrorCode.InvalidArgument,
+                    $"applyProjects '{name}' is not a scanned test project. Valid values: {valid}. Omit applyProjects to apply to every scanned project."));
+            }
+
+            if (!selected.Contains(match))
+            {
+                selected.Add(match);
+            }
+        }
+
+        return (plan.Projects.Where(selected.Contains).ToList(), null);
     }
 
     private async Task<SentinelCallToolResult<object>> ApplyPlanAsync(TestCategoryPlan plan, CancellationToken cancellationToken)
@@ -141,11 +193,12 @@ public class TestCategoryTaggingImpl
         return Success(summary);
     }
 
-    private static object BuildSummary(TestCategoryPlan plan) => new
+    private static object BuildSummary(TestCategoryPlan plan, IReadOnlyList<TestProjectPlan> shownProjects, IReadOnlyList<string>? applyProjects) => new
     {
         mode = "dryRun",
         view = "summary",
         parametersUsed = ShapeParameters(plan.Parameters),
+        applyProjects,
         totalTestsScanned = plan.TotalTestsScanned,
         autoExcludedTypes = plan.AutoExcludedTypes.Select(u => new
         {
@@ -161,7 +214,7 @@ public class TestCategoryTaggingImpl
             members = g.Members.Select(m => new { type = m.TypeFullName, category = m.CategoryName }).ToList(),
         }).ToList(),
         warnings = plan.Warnings,
-        projects = plan.Projects.Select(p => new
+        projects = shownProjects.Select(p => new
         {
             project = p.ProjectName,
             framework = p.Framework.ToString(),

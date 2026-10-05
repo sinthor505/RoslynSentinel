@@ -48,14 +48,27 @@ by parameters, not hard-coded to RoslynSentinel namespaces.
 | Param | Meaning | Default |
 | --- | --- | --- |
 | `targets` | CSV of projects or namespace prefixes whose types become categories, e.g. `RoslynSentinel.Engines.Basic,RoslynSentinel.Tools.Basic`. | required |
-| `testScope` | CSV of test projects to scan. | projects referencing a known test framework |
+| `testScope` | CSV of test projects to scan. Changes the statistics: ubiquity shares (`maxTestShare`), class-level thresholds and collision qualification are computed over the scanned tests only. To edit a subset of projects use `applyProjects`, not this. | projects referencing a known test framework |
 | `excludedTargets` | CSV of namespaces/types never used as categories, e.g. `RoslynSentinel.Common`. Excludes callees (the would-be categories), not test callers. | none |
 | `excludedTests` | CSV of test projects/namespaces/types skipped as callers (helpers, a project you do not want touched). | none |
-| `maxTestShare` | A type touched by more than this fraction of all scanned tests is auto-excluded as ubiquitous (e.g. a workspace manager, result types). | 0.25 |
+| `maxTestShare` | A type touched by more than this fraction of the scanned tests (the `testScope` set, not the whole solution unless `testScope` is omitted) is auto-excluded as ubiquitous (e.g. a workspace manager, result types). To edit a subset of projects, prefer `applyProjects` so the share stays solution-wide. | 0.25 |
 | `classLevelThreshold` | Minimum share of a fixture's test methods touching a type for a class-level attribute. | 0.5 |
 | `framework` | `auto`, `nunit`, `xunit`, `mstest`. | `auto` |
 | `dryRun` | Report only. | true |
-| `reportProject` | Test project whose detail section to return. Omitted: return only the per-project summary table. | none |
+| `reportProject` | Test project whose detail section to return. Omitted: return only the per-project summary table. Must be one of `applyProjects` when that is set. | none |
+| `applyProjects` | CSV of scanned test projects whose edits are applied (`dryRun: false`) and whose rows the dry-run summary lists. Does not change planning. Unknown name: `InvalidArgument` listing the valid names (case-insensitive match). | all scanned projects |
+
+**`testScope` vs `applyProjects`.** `testScope` decides which projects are scanned, so it changes the
+statistics: ubiquity shares, class-level thresholds and collision qualification are computed over the
+scanned tests. `applyProjects` does not. Planning always runs over the full `testScope`, so a project's
+plan (edits, auto-excluded types) is identical with or without `applyProjects`; the filter is applied
+only at the report/apply boundary (the per-project table, `reportProject`, and which projects'
+batches are written, including stale removal). Solution-wide parts of the dry-run summary
+(`autoExcludedTypes`, `collisionGroups`, `totalTestsScanned`) are unchanged by it, and the summary echoes
+the selection as `applyProjects`. Discovery 2026-10-05 (live dry run on `RoslynSentinel.Tests.Battery.Basic`):
+scoped to that one project, `MemberRefactoringEngine` is touched by 36/71 tests (51%) and was auto-excluded;
+in the full 3154-test run it is about 1% and is kept; class-level adds went from 14 (full run) to 9
+(scoped). Ubiquity is a solution-wide property and must not depend on which projects are being edited.
 
 `targets` is mandatory (no sane default for an arbitrary solution). `maxTestShare` and
 `classLevelThreshold` are numeric with defaults so the first call works, but the report echoes the
@@ -81,7 +94,8 @@ test projects are all NUnit (`NUnit` 4.6.1 in `RoslynSentinel.Tests*.csproj`).
    interface is the category.
 3. Keep only types declared in `targets`, minus `excludedTargets`; drop test callers in
    `excludedTests`.
-4. Compute per-type test share; auto-exclude those above `maxTestShare` (listed in the report).
+4. Compute per-type test share over the scanned tests (all of `testScope`; never narrowed by
+   `applyProjects`); auto-exclude those above `maxTestShare` (listed in the report).
 5. Per fixture: compute each remaining type's share of the fixture's test methods; assign class-level
    attributes at or above `classLevelThreshold`; assign method-level attributes for the remaining
    (method, type) pairs not already covered by a class-level attribute.
@@ -120,7 +134,7 @@ returns the solution-wide parts (parameter values used, auto-excluded ubiquitous
 groups) and a summary table with one row per test project (tests scanned, fixtures, class-level /
 method-level counts, ambiguous fixtures, uncategorized tests, stale to remove). Passing
 `reportProject: <name>` returns that project's detail (the per-fixture list, uncategorized test
-names, stale attributes). Per-project paging keeps each response bounded, so the large-result offload
+names, stale attributes). With `applyProjects` set, the table lists only those projects. Per-project paging keeps each response bounded, so the large-result offload
 (`Common/LargeResultHelper.cs`) remains a backstop only. An apply batches per test project by the
 same boundary.
 
