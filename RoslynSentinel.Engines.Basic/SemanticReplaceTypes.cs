@@ -59,3 +59,6 @@ public sealed record ReferenceEdit(string FilePath, Microsoft.CodeAnalysis.Text.
         return byStart != 0 ? byStart : right.Span.End.CompareTo(left.Span.End);
     }
 }
+
+/// <summary>Result of a semantic find-replace operation: sites found, file changes, and any error that occurred.</summary>
+public sealed record SemanticReplaceOutcome(List<SemanticReplaceSite> Sites, Dictionary<FilePathWrapper, string> Changes, ResultError? Error);

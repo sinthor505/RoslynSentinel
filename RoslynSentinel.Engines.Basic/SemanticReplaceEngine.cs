@@ -757,4 +757,26 @@ public class SemanticReplaceEngine
 
         return (sites, changes, null);
     }
+
+    /// <summary>
+    /// Orchestrates the full semantic find-replace operation: resolves a docCommentId to a symbol,
+    /// then plans the inversion and rename. Returns both sites and file changes.
+    /// </summary>
+    /// <remarks>
+    /// Errors from ResolveBoolMemberAsync or PlanInvertBooleanAsync are returned immediately.
+    /// </remarks>
+    /// <returns>SemanticReplaceOutcome with sites, changes, and optional error.</returns>
+    public async Task<SemanticReplaceOutcome> InvertBooleanAndRenameAsync(string docCommentId, string newName, CancellationToken cancellationToken = default)
+    {
+        // Step 1: Resolve the docCommentId to a symbol
+        var (symbol, resolveError) = await ResolveBoolMemberAsync(docCommentId, cancellationToken);
+        if (resolveError is not null)
+        {
+            return new SemanticReplaceOutcome(new List<SemanticReplaceSite>(), new Dictionary<FilePathWrapper, string>(), resolveError);
+        }
+
+        // Step 2: Plan the operation
+        var (sites, changes, planError) = await PlanInvertBooleanAsync(symbol!, newName, cancellationToken);
+        return new SemanticReplaceOutcome(sites, changes, planError);
+    }
 }

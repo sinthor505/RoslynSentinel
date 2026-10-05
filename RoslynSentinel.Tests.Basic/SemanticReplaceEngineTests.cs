@@ -678,4 +678,83 @@ public class SemanticReplaceEngineTests
         Assert.That(error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(changes, Is.Empty);
     }
+
+    // ---- InvertBooleanAndRenameAsync -------------------------------------------------------------------------------------
+
+    [Test]
+    public async Task InvertBooleanAndRenameAsync_EndToEndSingleDocument_ReturnsFullNewText()
+    {
+        var code = Source(
+            "namespace Test;",
+            "public class C { public bool IsSuccess { get; set; } }",
+            "public class Unrelated { public bool IsSuccess { get; init; } }",
+            "public class U",
+            "{",
+            "    public void M(C c, bool a, bool b)",
+            "    {",
+            "        if (c.IsSuccess) { }",
+            "        if (!c.IsSuccess) { }",
+            "        c.IsSuccess = true;",
+            "        c.IsSuccess = !c.IsSuccess;",
+            "    }",
+            "}");
+        var solution = CreateMultiDocumentSolution(code);
+        var engine = CreateEngine(solution);
+        var docCommentId = await GetDocCommentId(solution, "IsSuccess");
+
+        var outcome = await engine.InvertBooleanAndRenameAsync(docCommentId!, "HasError");
+
+        Assert.That(outcome.Error, Is.Null);
+        Assert.That(outcome.Sites, Is.Not.Empty);
+        Assert.That(outcome.Changes.Count, Is.EqualTo(1));
+        Assert.That(outcome.Changes.Values.Single(), Is.EqualTo(Source(
+            "namespace Test;",
+            "public class C { public bool HasError { get; set; } }",
+            "public class Unrelated { public bool IsSuccess { get; init; } }",
+            "public class U",
+            "{",
+            "    public void M(C c, bool a, bool b)",
+            "    {",
+            "        if (!c.HasError) { }",
+            "        if (c.HasError) { }",
+            "        c.HasError = false;",
+            "        c.HasError = !(c.HasError);",
+            "    }",
+            "}")));
+    }
+
+    [Test]
+    public async Task InvertBooleanAndRenameAsync_UnknownDocCommentId_ReturnsNotFoundError()
+    {
+        var code = Source(
+            "namespace Test;",
+            "public class C { public bool IsSuccess { get; set; } }");
+        var solution = CreateMultiDocumentSolution(code);
+        var engine = CreateEngine(solution);
+
+        var outcome = await engine.InvertBooleanAndRenameAsync("T:Unknown", "IsError");
+
+        Assert.That(outcome.Error, Is.Not.Null);
+        Assert.That(outcome.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(outcome.Sites, Is.Empty);
+        Assert.That(outcome.Changes, Is.Empty);
+    }
+
+    [Test]
+    public async Task InvertBooleanAndRenameAsync_NonBoolMember_ReturnsInvalidArgumentError()
+    {
+        var code = Source(
+            "namespace Test;",
+            "public class C { public int Value { get; set; } }");
+        var solution = CreateMultiDocumentSolution(code);
+        var engine = CreateEngine(solution);
+        var docCommentId = await GetDocCommentId(solution, "Value");
+
+        var outcome = await engine.InvertBooleanAndRenameAsync(docCommentId!, "NewValue");
+
+        Assert.That(outcome.Error, Is.Not.Null);
+        Assert.That(outcome.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(outcome.Sites, Is.Empty);
+        Assert.That(outcome.Changes, Is.Empty);
+    }
 }
