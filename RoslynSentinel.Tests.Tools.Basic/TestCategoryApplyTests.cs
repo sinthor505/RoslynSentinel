@@ -247,4 +247,21 @@ namespace FixturesBad
         Assert.That(result.ErrorData.Message, Does.Contain("FixturesBad"));
         Assert.That(await TextAsync(BadPath), Is.EqualTo(BadSource));
     }
+
+    [Test]
+    [Description("A ToolException from the write chokepoint (here SessionHalted) keeps its own code and message instead of a generic Exception")]
+    public async Task Tool_DryRunFalse_SessionHalted_ReportsSessionHaltedNotGenericException()
+    {
+        _workspaceManager.SetTestSolution(BuildSolution(includeBad: false));
+        _workspaceManager.ApplyException = new SessionHaltedException("Session halted: external file drift was detected on a tracked file.");
+        var tool = new TestCategoryTaggingTools(new TestCategoryTaggingImpl(_planner, _applier, _workspaceManager, NullLogger.Instance));
+
+        var result = await tool.TagTestCategories(
+            new ToolCallReason("testing the TagTestCategories tool"), "Targets", null, null, null, 1.0, 0.5,
+            TestCategoryFramework.Auto, dryRun: false);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.SessionHalted));
+        Assert.That(result.ErrorData.Message, Does.Contain("external file drift"));
+    }
 }

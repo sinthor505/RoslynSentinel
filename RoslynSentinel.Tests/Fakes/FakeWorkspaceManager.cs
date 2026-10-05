@@ -21,6 +21,12 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
 
     public void SetTestSolution(Solution solution) => CurrentSolution = solution;
 
+    // When set, ApplyProposedChangesAsync throws it, so a test can simulate e.g. SessionHaltedException from the chokepoint.
+    public Exception? ApplyException
+    {
+        get; set;
+    }
+
     public Task<Solution> GetCurrentSolutionAsync(CancellationToken cancellationToken)
         => Task.FromResult(CurrentSolution
             ?? throw new SolutionNotLoadedException(SolutionNotLoadedMessage.Build(LoadState)));
@@ -68,6 +74,11 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
 
     public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, bool exactRestore = false)
     {
+        if (ApplyException is not null)
+        {
+            throw ApplyException;
+        }
+
         var solution = CurrentSolution ?? throw new SolutionNotLoadedException("Solution not loaded.");
 
         // Scoped operation ledger gate: mirrors PersistentWorkspaceManager's per-target check.

@@ -128,8 +128,14 @@ public class TestCategoryTaggingImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "{Tool} failed while planning or applying test categories", ToolName);
-            return Error(ToolErrorCode.Exception,
-                "Planning or applying test categories failed unexpectedly. Check that the solution is loaded and compiles (Build), then retry; the server log has the details.");
+
+            // ToolException subclasses (SessionHalted, SolutionNotLoaded, ...) carry their own code and an agent-facing
+            // message; the mapper keeps them instead of flattening every failure to a generic Exception.
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, ToolName),
+            };
         }
     }
 
