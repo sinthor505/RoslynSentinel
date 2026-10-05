@@ -16,6 +16,9 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
 [FixtureLifeCycle(LifeCycle.InstancePerTestCase)]
+[Category("MemberRefactoringEngine")] // sentinel:auto-category
+[Category("MoveMemberResult")] // sentinel:auto-category
+[Category("PreviewCallSite")] // sentinel:auto-category
 public class PreviewInstanceMoveCallSitesTests
 {
     private TestSolutionFixture _fixture;
@@ -715,6 +718,7 @@ public class PreviewInstanceMoveCallSitesTests
     }
 
     [Test]
+    [Category("AppliedCallSiteFixup")] // sentinel:auto-category
     public async Task MoveMemberAsync_NewFixupParameterlessTarget_RewritesToNewTargetAsync()
     {
         var (workspace, engine) = CreateInMemoryTestFixture(
@@ -773,6 +777,7 @@ public class PreviewInstanceMoveCallSitesTests
     // Bulk keys: one "*" entry stands in for every unresolved "FilePath:Line" key (86 identical
     // entries in the originating blocker). Wildcard-resolved rows count as resolved - no ledger entry.
     [Test]
+    [Category("AppliedCallSiteFixup")] // sentinel:auto-category
     public async Task MoveMemberAsync_GlobalWildcardFixup_ResolvesEveryUnresolvedSiteAsync()
     {
         var (workspace, engine) = CreateInMemoryTestFixture(
@@ -838,6 +843,7 @@ public class PreviewInstanceMoveCallSitesTests
     // solution-relative, upper-cased path to also pin that file keys are normalized (relative paths
     // resolved against the solution root) and matched case-insensitively.
     [Test]
+    [Category("AppliedCallSiteFixup")] // sentinel:auto-category
     public async Task MoveMemberAsync_FixupKeyPrecedence_ExactBeatsFileWildcardBeatsGlobalAsync()
     {
         var (workspace, engine) = CreateInMemoryTestFixture(

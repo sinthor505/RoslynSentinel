@@ -19,6 +19,8 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 // A. EncapsulateFieldSafe -> advanced edge cases
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("MsAugmentResult")] // sentinel:auto-category
+[Category("MsToolAugmentEngine")] // sentinel:auto-category
 public class EncapsulateFieldSafeAdvancedTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -156,6 +158,8 @@ public class EncapsulateFieldSafeAdvancedTests
 // B. AnalyzeForeachForLinqConversion -> advanced edge cases
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("ForeachLinqAnalysis")] // sentinel:auto-category
+[Category("MsToolAugmentEngine")] // sentinel:auto-category
 public class AnalyzeForeachAdvancedTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -291,6 +295,9 @@ public class AnalyzeForeachAdvancedTests
 // C. SwitchConversionAdvanced -> AnalyzeSwitchForPatternConversion + ConvertSwitchToPatternSafe
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("MsAugmentResult")] // sentinel:auto-category
+[Category("MsToolAugmentEngine")] // sentinel:auto-category
+[Category("SwitchConversionAnalysis")] // sentinel:auto-category
 public class SwitchConversionAdvancedTests
 {
     private IWorkspaceManager _workspaceManager;

@@ -12,6 +12,8 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 /// 'static' keyword) changing. See docs/current/blockers/blocking_error_no_tool_converts_instance_member_to_static_with_caller_rewrite.md.
 /// </summary>
 [TestFixture]
+[Category("MemberRefactoringEngine")] // sentinel:auto-category
+[Category("StaticConversionResult")] // sentinel:auto-category
 public class MakeStaticRewritesCallersTests
 {
     private static string[] HelperLines() =>
@@ -182,6 +184,7 @@ public class MakeStaticRewritesCallersTests
 
     [TestCase("\n")]
     [TestCase("\r\n")]
+    [Category("MoveMemberResult")] // sentinel:auto-category
     public async Task MoveInstanceMemberIntoStaticClass_MakesItStaticAndRewritesCaller(string eol)
     {
         var source = Lines(eol, "namespace Example;", "", "public class Helper", "{", "    public int Length(string s) => s.Length;", "", "    public string Normalize(string input) => input.Trim().ToLower();", "}");

@@ -18,6 +18,8 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 /// (removed member, inserted member, rewritten call sites, updated crefs).
 /// </summary>
 [TestFixture]
+[Category("MemberRefactoringEngine")] // sentinel:auto-category
+[Category("MoveMemberResult")] // sentinel:auto-category
 public class MoveMemberPreservesUntouchedTextTests
 {
     [Test]
@@ -762,6 +764,7 @@ public class MoveMemberPreservesUntouchedTextTests
     }
 
     [Test]
+    [Category("PreviewCallSite")] // sentinel:auto-category
     public async Task InstanceMovePreview_TrialTextEqualsAppliedTextAndCallSiteStillResolves()
     {
         const string eol = "\r\n";
