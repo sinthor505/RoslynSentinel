@@ -62,7 +62,7 @@ public class GetMethodSourceTests
     {
         var result = await _tools.GetMethodSource(reason: "test message", _documentPath, "Bar");
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var data = (MethodSourceResult)result.SuccessData!;
         Assert.That(data.Source, Does.Contain("return x + 1;"));
         Assert.That(data.Signature, Does.Contain("Bar"));
@@ -87,7 +87,7 @@ public class GetMethodSourceTests
 
         var result = await _tools.GetMethodSource(reason: "test message", ctorDocPath, "WithCtor");
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var data = (MethodSourceResult)result.SuccessData!;
         Assert.That(data.Source, Does.Contain("public WithCtor(int x)"));
     }
@@ -99,7 +99,7 @@ public class GetMethodSourceTests
 
         var result = await _tools.GetMethodSource(reason: "test message", missingPath, "Bar");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("FileNotFound"));
     }
 
@@ -108,7 +108,7 @@ public class GetMethodSourceTests
     {
         var result = await _tools.GetMethodSource(reason: "test message", _documentPath, "NoSuchMethod");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("MethodNotFound"));
     }
 
@@ -117,7 +117,7 @@ public class GetMethodSourceTests
     {
         var result = await _tools.GetMethodSource(reason: "test message", _documentPath, "bar");
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var data = (MethodSourceResult)result.SuccessData!;
         Assert.That(data.Signature, Does.Contain("Bar"));
     }
@@ -139,7 +139,7 @@ public class GetMethodSourceTests
 
         var result = await _tools.GetMethodSource(reason: "test message", bigDocPath, "Huge");
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         Assert.That(result.LargeResult, Is.Not.Null);
         Assert.That(result.LargeResult!.ResultType, Is.EqualTo("MethodSource"));
     }

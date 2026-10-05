@@ -167,7 +167,7 @@ public class ComprehensiveToolTests
     public async Task LoadSolution_NonExistentFile_ReturnsErrorResult()
     {
         var result = await _workspaceTools.LoadSolution(reason: "test message", "fake.sln");
-        Assert.That(result.IsSuccess, Is.False, "fake.sln does not exist");
+        Assert.That(!result.IsError, Is.False, "fake.sln does not exist");
         Assert.That(result.ErrorData?.Message, Is.Not.Null.And.Not.Empty);
     }
 
@@ -225,7 +225,7 @@ public class ComprehensiveToolTests
         SetSource("namespace N;\npublic enum Status\n{\n    Pending,\n    Shipped\n}", "Status.cs");
         var result = await _workspaceTools.GetFileOutline(reason: "test message", "Status.cs");
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var items = ((FileOutlineResult)result.SuccessData!).Symbols;
         Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum", "Status")));
         Assert.That(items.Select(i => (i.Kind, i.Name)), Contains.Item(("enum member", "Pending")));
@@ -248,7 +248,7 @@ public class ComprehensiveToolTests
 
         var result = await _workspaceTools.ListAll(reason: "test message");
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var entries = (List<SolutionSymbolEntry>)result.SuccessData!;
         Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("class", "Order")));
         Assert.That(entries.Select(e => (e.Kind, e.Name)), Contains.Item(("method", "Ship")));
@@ -269,7 +269,7 @@ public class ComprehensiveToolTests
 
         var result = await _workspaceTools.ListAll(reason: "test message", kind: ListAllKind.method);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var entries = (List<SolutionSymbolEntry>)result.SuccessData!;
         Assert.That(entries, Has.All.Matches<SolutionSymbolEntry>(e => e?.Kind == "method"));
         Assert.That(entries.Select(e => e.Name), Contains.Item("Ship"));
@@ -282,7 +282,7 @@ public class ComprehensiveToolTests
 
         var result = await _workspaceTools.ListAll(reason: "test message", kind: ListAllKind.enumMember);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var entries = (List<SolutionSymbolEntry>)result.SuccessData!;
         Assert.That(entries, Has.Count.EqualTo(2));
         Assert.That(entries.Select(e => e.Name), Is.EquivalentTo(new[] { "Pending", "Shipped" }));

@@ -76,7 +76,7 @@ public class Usage
             SemanticReplaceMode.preview);
 
         // Assert preview mode returns success with data
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(result.SuccessData, Is.Not.Null);
         
         // Verify file is unchanged on disk
@@ -123,12 +123,12 @@ public class Usage
             SemanticReplaceMode.apply);
 
         // Assert apply mode succeeds
-        if (!result.IsSuccess)
+        if (result.IsError)
         {
             Assert.Fail($"Apply mode failed with error: {result.ErrorData?.Message ?? "unknown error"}");
         }
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
         
         // Verify file content changed on disk
@@ -166,7 +166,7 @@ public class Usage
             SemanticReplaceMode.preview);
 
         // Assert NotFound error
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
@@ -206,7 +206,7 @@ public class Usage
             SemanticReplaceMode.preview);
 
         // Assert failure with proper error code
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
         
@@ -260,7 +260,7 @@ public class Usage
             docCommentId,
             "HasSucceeded",
             SemanticReplaceMode.preview);
-        Assert.That(refused.IsSuccess, Is.False);
+        Assert.That(!refused.IsError, Is.False);
         Assert.That(refused.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
         Assert.That(refused.ErrorData.Message, Does.Contain("alias retarget"));
         Assert.That(refused.ErrorData.Message, Does.Contain("'IsError'"));
@@ -271,7 +271,7 @@ public class Usage
             docCommentId,
             "IsError",
             SemanticReplaceMode.preview);
-        Assert.That(preview.IsSuccess, Is.True, preview.ErrorData?.Message);
+        Assert.That(!preview.IsError, Is.True, preview.ErrorData?.Message);
         Assert.That(File.ReadAllText(targetFile), Is.EqualTo(originalContent), "File should be unchanged after preview");
 
         var apply = await _tool.SemanticFindReplace(
@@ -280,7 +280,7 @@ public class Usage
             docCommentId,
             "IsError",
             SemanticReplaceMode.apply);
-        Assert.That(apply.IsSuccess, Is.True, apply.ErrorData?.Message);
+        Assert.That(!apply.IsError, Is.True, apply.ErrorData?.Message);
 
         var expected = originalContent
             .Replace("if (_c.IsSuccess)", "if (!_c.IsError)")

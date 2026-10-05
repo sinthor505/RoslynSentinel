@@ -135,7 +135,7 @@ public class ParameterEditTools
     private static Task<SentinelCallToolResult<object>> InvalidArgument(string message) =>
         Task.FromResult(new SentinelCallToolResult<object>
         {
-            IsSuccess = false,
+            IsError = true,
             ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"ParameterEdit: {message}"),
         });
 }

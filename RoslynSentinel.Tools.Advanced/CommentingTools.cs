@@ -55,7 +55,7 @@ public class CommentingTools
         {
             return new SentinelCallToolResult<CommentingResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                     ex.Message)
             };
@@ -65,7 +65,7 @@ public class CommentingTools
         {
             return new SentinelCallToolResult<CommentingResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.InvalidArgument, "projectName is required when scope=project.")
             };
         }
@@ -76,7 +76,7 @@ public class CommentingTools
         {
             return new SentinelCallToolResult<CommentingResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.InvalidArgument, "filePath is required when scope=file.")
             };
         }
@@ -86,7 +86,7 @@ public class CommentingTools
         {
             return new SentinelCallToolResult<CommentingResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.Exception,
                     $"Circuit breaker is open: {halt.Directive}")
             };
@@ -95,13 +95,13 @@ public class CommentingTools
         try
         {
             var result = await RunAsync(scope, projectName, resolvedFilePath, dryRun, maxMembers, maxRuntimeSeconds, cancellationToken);
-            return new SentinelCallToolResult<CommentingResult> { IsSuccess = true, SuccessData = result };
+            return new SentinelCallToolResult<CommentingResult> { IsError = false, SuccessData = result };
         }
         catch (Exception ex)
         {
             return new SentinelCallToolResult<CommentingResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "BulkComment")
             };
         }

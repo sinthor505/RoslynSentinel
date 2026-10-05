@@ -45,7 +45,7 @@ public class ListSolutionItemsAllTests
 
         var result = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
     }
 
     [Test]
@@ -57,7 +57,7 @@ public class ListSolutionItemsAllTests
         var workspaceTools = BuildTools(workspaceManager);
 
         var result = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var combined = (SolutionItemsAllResult)result.SuccessData!;
 

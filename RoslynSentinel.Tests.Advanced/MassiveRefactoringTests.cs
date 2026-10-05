@@ -84,7 +84,7 @@ public class MassiveRefactoringTests
         var result = await _advancedRefactoringTools.ExtractMembers(reason: "test message", $"C{id}.cs", $"C{id}", ExtractAsType.@interface, $"IC{id}", autoStage: false);
 
         // With autoStage:false the tool returns SuccessDetails = AppliedChangeSummary { ChangedContent = Dictionary<FilePathWrapper, string> }.
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var changes = ((AppliedChangeSummary)result.SuccessData!).ChangedContent;
         Assert.That(changes, Is.Not.Null.And.Not.Empty);
     }
@@ -138,7 +138,7 @@ namespace MyApp.Services
         var result = await _refactoringSignatureTools.RenameSymbol(
             reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!,
             newName: $"NewM{id}");
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var json = System.Text.Json.JsonSerializer.Serialize(result);
         Assert.That(json, Contains.Substring($"NewM{id}"));
     }
@@ -155,7 +155,7 @@ namespace MyApp.Services
         var result = await _advancedRefactoringTools.MoveType(reason: "test message", $"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
 
         // Dictionary keys are FilePathWrapper, not string, since the server split.
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = result.SuccessData?.ChangedContent;
         Assert.That(data?.Count, Is.GreaterThan(1));
     }

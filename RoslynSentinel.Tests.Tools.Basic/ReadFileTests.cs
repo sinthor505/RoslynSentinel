@@ -67,7 +67,7 @@ public class ReadFileTests
     {
         var result = await _tools.ReadFile(reason: "test message", _documentPath);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var data = result.SuccessData!;
         Assert.That((string)GetProp(data, "source")!, Does.Contain("line1"));
         Assert.That((string)GetProp(data, "source")!, Does.Contain("line5"));
@@ -81,7 +81,7 @@ public class ReadFileTests
 
         var result = await _tools.ReadFile(reason: "test message", missingPath);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("FileNotFound"));
     }
 
@@ -100,7 +100,7 @@ public class ReadFileTests
         {
             var result = await _tools.ReadFile(reason: "test message", onDiskOnlyPath);
 
-            Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+            Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
             Assert.That((string)GetProp(result.SuccessData!, "source")!, Is.EqualTo(content));
         }
         finally
@@ -114,7 +114,7 @@ public class ReadFileTests
     {
         var result = await _tools.ReadFile(reason: "test message", _documentPath, startLine: 2, endLine: 3);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var data = result.SuccessData!;
         Assert.That((string)GetProp(data, "source")!, Does.Contain("line2"));
         Assert.That((string)GetProp(data, "source")!, Does.Contain("line3"));
@@ -128,7 +128,7 @@ public class ReadFileTests
     {
         var result = await _tools.ReadFile(reason: "test message", _documentPath, startLine: 100, endLine: 200);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
@@ -148,7 +148,7 @@ public class ReadFileTests
 
         var result = await _tools.ReadFile(reason: "test message", bigDocPath);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         Assert.That(result.LargeResult, Is.Not.Null);
         Assert.That(result.LargeResult!.ResultType, Is.EqualTo("FileSource"));
     }

@@ -69,7 +69,7 @@ public class ModifyAttributeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var newContent = workspace.ReadText(FixtureRelativePath);
         Assert.Multiple(() =>
@@ -94,7 +94,7 @@ public class ModifyAttributeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         Assert.Multiple(() =>
         {
@@ -121,7 +121,7 @@ public class ModifyAttributeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(beforeContent));
     }
 
@@ -143,7 +143,7 @@ public class ModifyAttributeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(beforeContent));
     }
 
@@ -163,7 +163,7 @@ public class ModifyAttributeBatchTests
             batchEdits: [new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetB", Action = AttributeModifyAction.add, NewAttribute = "Serializable" }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
     }
 
@@ -177,7 +177,7 @@ public class ModifyAttributeBatchTests
             reason: "batch test neither supplied",
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("batchEdits"));
     }
 
@@ -192,7 +192,7 @@ public class ModifyAttributeBatchTests
             batchEdits: [],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
     }
 
@@ -209,7 +209,7 @@ public class ModifyAttributeBatchTests
 
         var result = await tools.ModifyAttribute(reason: "batch test over cap", batchEdits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));
     }
 
@@ -279,7 +279,7 @@ public class ModifyAttributeBatchTests
             batchEdits: typeEditFirst ? [typeEdit, methodEdit] : [methodEdit, typeEdit],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var newContent = workspace.ReadText(NestedFixtureRelativePath);
         Assert.Multiple(() =>
@@ -308,7 +308,7 @@ public class ModifyAttributeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var expected = before
             .Replace("public class AttributeNestedTarget", "[Serializable]" + eol + "public class AttributeNestedTarget")
@@ -329,7 +329,7 @@ public class ModifyAttributeBatchTests
             batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(WeirdFormattingRelativePath), TargetName = "AttributeFormattingTarget", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var expected = before.Replace("public class AttributeFormattingTarget", "[Serializable]" + eol + "public class AttributeFormattingTarget");
         Assert.That(workspace.ReadText(WeirdFormattingRelativePath), Is.EqualTo(expected));
@@ -351,7 +351,7 @@ public class ModifyAttributeBatchTests
             action: AttributeModifyAction.add,
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var expected = before.Replace("public class AttributeFormattingTarget", "[Serializable]" + eol + "public class AttributeFormattingTarget");
         Assert.That(workspace.ReadText(WeirdFormattingRelativePath), Is.EqualTo(expected));
@@ -370,7 +370,7 @@ public class ModifyAttributeBatchTests
             batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(WeirdFormattingRelativePath), TargetName = "Other", Action = AttributeModifyAction.add, ExistingAttribute = "Obsolete" }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var expected = before.Replace("    public void   Other(  )", "    [Obsolete]" + eol + "    public void   Other(  )");
         Assert.That(workspace.ReadText(WeirdFormattingRelativePath), Is.EqualTo(expected));
@@ -392,7 +392,7 @@ public class ModifyAttributeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var newContent = workspace.ReadText(NestedFixtureRelativePath);
         var writtenAttributes = new[] { "[Serializable]", "[Obsolete(\"first\")]" }.Count(a => newContent.Contains(a));
         Assert.That(writtenAttributes, Is.EqualTo(2));
@@ -415,7 +415,7 @@ public class ModifyAttributeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var description = result.SuccessData!.Description;
         Assert.Multiple(() =>
         {
@@ -437,7 +437,7 @@ public class ModifyAttributeBatchTests
             batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(NestedFixtureRelativePath), TargetName = "First", Action = AttributeModifyAction.remove, ExistingAttribute = "Conditional" }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("batchEdits[0]"));
         Assert.That(workspace.ReadText(NestedFixtureRelativePath), Is.EqualTo(before));
     }
@@ -458,7 +458,7 @@ public class ModifyAttributeBatchTests
             action: AttributeModifyAction.add,
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(workspace.ReadText(SecondFixtureRelativePath), Does.Match(@"\[Serializable\]\s*public class AttributeBatchTargetC"));
     }
 
@@ -476,7 +476,7 @@ public class ModifyAttributeBatchTests
             action: AttributeModifyAction.remove,
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(workspace.ReadText(NestedFixtureRelativePath), Does.Not.Match(@"\[Obsolete\]\s*public void Second"));
     }
 
@@ -495,7 +495,7 @@ public class ModifyAttributeBatchTests
             action: AttributeModifyAction.add,
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
     }
 
     [Test]
@@ -514,7 +514,7 @@ public class ModifyAttributeBatchTests
             action: AttributeModifyAction.add,
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.Multiple(() =>
         {
             Assert.That(result.ErrorData!.Message, Does.Contain("'attribute'"));
@@ -536,7 +536,7 @@ public class ModifyAttributeBatchTests
             batchEdits: [new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetC", Action = AttributeModifyAction.add, Attribute = "Obsolete" }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
     }
 
@@ -557,7 +557,7 @@ public class ModifyAttributeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var newContent = workspace.ReadText(NestedFixtureRelativePath);
         Assert.Multiple(() =>
         {
@@ -585,7 +585,7 @@ public class ModifyAttributeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.Multiple(() =>
         {
             Assert.That(result.ErrorData!.Message, Does.Contain("batchEdits[1]"));
@@ -606,7 +606,7 @@ public class ModifyAttributeBatchTests
             batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(NestedFixtureRelativePath), TargetName = "First", Action = AttributeModifyAction.add }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("existingAttribute").And.Contain("'attribute'"));
     }
 }

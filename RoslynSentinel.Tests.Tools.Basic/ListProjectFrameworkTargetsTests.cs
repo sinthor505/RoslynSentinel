@@ -72,7 +72,7 @@ public class ListProjectFrameworkTargetsTests
 
         var result = await _tools.ListProjectFrameworkTargets(reason: "test message");
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var data = (List<ProjectFrameworkSummary>)result.SuccessData!;
         Assert.That(data, Has.Count.EqualTo(1));
         Assert.That(data[0].ProjectName, Is.EqualTo("TestProj"));
@@ -93,7 +93,7 @@ public class ListProjectFrameworkTargetsTests
 
         var result = await _tools.ListProjectFrameworkTargets(reason: "test message");
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var data = (List<ProjectFrameworkSummary>)result.SuccessData!;
         Assert.That(data, Has.Count.EqualTo(1));
         Assert.That(data[0].TargetFramework, Is.EqualTo("unknown"));
@@ -114,7 +114,7 @@ public class ListProjectFrameworkTargetsTests
 
         var result = await _tools.ListProjectFrameworkTargets(reason: "test message");
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var data = (List<ProjectFrameworkSummary>)result.SuccessData!;
         Assert.That(data[0].TargetFramework, Is.EqualTo("unknown"));
     }

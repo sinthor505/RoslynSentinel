@@ -73,7 +73,7 @@ public class SemanticFindReplaceTools
         {
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = outcome.Error
             };
         }
@@ -83,7 +83,7 @@ public class SemanticFindReplaceTools
         {
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new
                 {
                     mode = "preview",
@@ -107,14 +107,14 @@ public class SemanticFindReplaceTools
         {
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = applyOutcome.Error
             };
         }
 
         return new SentinelCallToolResult<object>
         {
-            IsSuccess = true,
+            IsError = false,
             SuccessData = new
             {
                 mode = "apply",
@@ -128,7 +128,7 @@ public class SemanticFindReplaceTools
     private static SentinelCallToolResult<object> InvalidArgument(string message) =>
         new SentinelCallToolResult<object>
         {
-            IsSuccess = false,
+            IsError = true,
             ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"SemanticFindReplace: {message}")
         };
 }

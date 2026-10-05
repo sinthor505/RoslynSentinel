@@ -167,7 +167,7 @@ public class OrderService : IOrderService
     {
         SetSource(RichSource, "Test.cs");
         var result = await _scanTools.RunScanDetector(reason: "test message", detector: ScanTools.DetectorId.unused_references, scope: ToolScope.file, filePath: "Test.cs");
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
@@ -179,7 +179,7 @@ public class OrderService : IOrderService
         SetSource(RichSource, "Test.cs");
         var result = await _tools.GetComprehensiveHealthReport(reason: "test message", timeoutSeconds: 5);
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
     }
 
     // --- GetBlastRadius (via InspectSymbol) ---
@@ -189,7 +189,7 @@ public class OrderService : IOrderService
         SetSource(RichSource, "Test.cs");
         var result = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ProcessAsync", InspectSymbolAspect.blastRadius);
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
     }
 
     [Test]
@@ -198,7 +198,7 @@ public class OrderService : IOrderService
         SetSource(RichSource, "Test.cs");
         var result = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ProcessAsync", InspectSymbolAspect.blastRadius);
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var report = (ImpactReport)result.SuccessData!;
         Assert.That(report.Error, Is.Null);
         Assert.That(report.SymbolName, Does.Contain("ProcessAsync"));
@@ -210,7 +210,7 @@ public class OrderService : IOrderService
         SetSource(RichSource, "Test.cs");
         var result = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.blastRadius);
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound.ToString()));
         Assert.That(result.ErrorData!.Message, Is.Not.Null.And.Not.Empty);
@@ -222,8 +222,8 @@ public class OrderService : IOrderService
         SetSource(RichSource, "Test.cs");
         var resultInfo = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.info);
         var resultBlastRadius = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.blastRadius);
-        Assert.That(resultInfo.IsSuccess, Is.False);
-        Assert.That(resultBlastRadius.IsSuccess, Is.False);
+        Assert.That(!resultInfo.IsError, Is.False);
+        Assert.That(!resultBlastRadius.IsError, Is.False);
         Assert.That(resultInfo.ErrorData, Is.Not.Null);
         Assert.That(resultBlastRadius.ErrorData, Is.Not.Null);
         Assert.That(resultInfo.ErrorData!.Message, Is.Not.Null.And.Not.Empty);
@@ -248,7 +248,7 @@ public class OrderService : IOrderService
         SetSource(RichSource, "Test.cs");
         var result = await _tools.GetSolutionMetrics(reason: "test message");
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
     }
 
     [Test]
@@ -257,7 +257,7 @@ public class OrderService : IOrderService
         SetSource(RichSource, "Test.cs");
         var result = await _tools.GetSolutionMetrics(reason: "test message", "TestProj");
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
     }
 
     // --- GetCodeInventory ---
@@ -540,7 +540,7 @@ public class OrderService : IOrderService
     {
         SetSource(RichSource, "Test.cs");
         var result = await _tools.GetCallGraph(reason: "test message", "Test.cs", "NoSuchMethod99");
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
@@ -551,7 +551,7 @@ public class OrderService : IOrderService
         SetSource(RichSource, "Test.cs");
         var result = await _tools.GetCallGraph(reason: "test message", "Test.cs", "GetStatus", "reverse");
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
     }
 
     [Test]
@@ -559,7 +559,7 @@ public class OrderService : IOrderService
     {
         SetSource(RichSource, "Test.cs");
         var result = await _tools.GetCallGraph(reason: "test message", "Test.cs", "NoSuchMethod99", "reverse");
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
@@ -571,7 +571,7 @@ public class OrderService : IOrderService
         var result = await _tools.PreviewMoveFileToNamespaceFolder(reason: "test message", "Test.cs");
         Assert.That(result, Is.Not.Null);
         Assert.That(result.SuccessData, Is.Not.Null);
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
     }
 
     // --- FindAllThrowSites (via DiscoveryEngine) ---
@@ -620,7 +620,7 @@ public class OrderService : IOrderService
         SetSource(RichSource, "Test.cs");
         var result = await _symbolRelationshipTools.GetBestInsertionPoint(reason: "test message", "Test.cs", "Order", InsertionMemberKind.method);
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
     }
 
     // --- FindTodoFixmeComments (via DiscoveryEngine) ---
@@ -669,7 +669,7 @@ public class OrderService : IOrderService
     {
         SetSource(RichSource, "Test.cs");
         var result = await _symbolRelationshipTools.FindReferences(reason: "test message", "ProcessAsync", FindReferencesKind.all, filePath: "Test.cs");
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
         var json = System.Text.Json.JsonSerializer.Serialize(result.SuccessData);
         Assert.That(json, Does.Contain("callers"));
@@ -683,7 +683,7 @@ public class OrderService : IOrderService
         SetSource(RichSource, "Test.cs");
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "Order", FindUsagesSearchKind.objectCreations);
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
     }
 
     [Test]
@@ -691,7 +691,7 @@ public class OrderService : IOrderService
     {
         SetSource(RichSource, "Test.cs");
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "ProcessAsync", FindUsagesSearchKind.objectCreations);
-        Assert.That(result.IsSuccess, Is.False, "objectCreations against a method name must be rejected, not silently return [].");
+        Assert.That(!result.IsError, Is.False, "objectCreations against a method name must be rejected, not silently return [].");
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.Message, Does.Contain("FindReferences"), "The guard should point the caller at FindReferences instead of objectCreations for a member name.");
     }
@@ -703,7 +703,7 @@ public class OrderService : IOrderService
         // "IOrderService" has zero attribute usages, but a real implementor exists (OrderService) ->
         // broaden-on-empty should surface that under 'implementorsOf' instead of just returning [].
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "IOrderService", FindUsagesSearchKind.attributeUsages);
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         Assert.That(result.WarningDetails, Is.Not.Null.And.Contains("Broadened"));
         Assert.That(result.WarningDetails, Does.Contain("implementorsOf"));
     }
@@ -713,7 +713,7 @@ public class OrderService : IOrderService
     {
         SetSource(RichSource, "Test.cs");
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "ThisNameAppearsNowhereInTheSolution", FindUsagesSearchKind.attributeUsages);
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         Assert.That(result.WarningDetails, Does.Contain("nothing found under any kind"));
     }
 
@@ -738,7 +738,7 @@ public class AttributedTarget { }
 ";
         SetSource(source, "AttributeProbe.cs");
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages);
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var sites = (result.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
         Assert.That(sites, Is.Not.Null.And.Count.EqualTo(1));
     }

@@ -89,7 +89,7 @@ public class ReplaceSnippetBatchTests
                 new SnippetEdit { FilePath = targetFile, OldContent = lastNonEmptyLine, NewContent = lastNonEmptyLine + " // edit-b" },
             ]);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
     }
 
     [Test]
@@ -112,7 +112,7 @@ public class ReplaceSnippetBatchTests
                 new SnippetEdit { FilePath = fileB, OldContent = anchorB, NewContent = anchorB + " // touched-b" },
             ]);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var newContentA = workspace.ReadText(LineRelativePath);
         var newContentB = workspace.ReadText(StatusRelativePath);
@@ -145,7 +145,7 @@ public class ReplaceSnippetBatchTests
                 new SnippetEdit { FilePath = targetFile, OldContent = overlappingFragment, NewContent = "// replaced-fragment" },
             ]);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("overlap"));
 
         var unchangedContent = workspace.ReadText(StatusRelativePath);
@@ -171,7 +171,7 @@ public class ReplaceSnippetBatchTests
                 new SnippetEdit { FilePath = fileA, OldContent = "this text does not exist anywhere in the file", NewContent = "irrelevant" },
             ]);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
 
         var unchangedContentA = workspace.ReadText(LineRelativePath);
         Assert.That(unchangedContentA, Is.EqualTo(originalContentA),
@@ -195,7 +195,7 @@ public class ReplaceSnippetBatchTests
             newContent: anchor + " // x",
             batchEdits: [new SnippetEdit { FilePath = targetFile, OldContent = anchor, NewContent = anchor + " // y" }]);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
     }
 
@@ -210,7 +210,7 @@ public class ReplaceSnippetBatchTests
             ProposedChangeAction.validate,
             batchEdits: []);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
     }
 
@@ -230,7 +230,7 @@ public class ReplaceSnippetBatchTests
             ProposedChangeAction.validate,
             batchEdits: edits);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));
     }
 
@@ -255,7 +255,7 @@ public class ReplaceSnippetBatchTests
                 new SnippetEdit { FilePath = targetFile, OldContent = anchor, NewContent = new string('y', 2500) },
             ]);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         var message = result.ErrorData!.Message;
         Assert.Multiple(() =>
         {
@@ -280,7 +280,7 @@ public class ReplaceSnippetBatchTests
             ProposedChangeAction.validate,
             batchEdits: [new SnippetEdit { FilePath = targetFile, OldContent = anchor, NewContent = null! }]);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.Multiple(() =>
         {
             Assert.That(result.ErrorData!.Message, Does.Contain("newContent is required"));

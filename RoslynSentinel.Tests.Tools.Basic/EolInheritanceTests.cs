@@ -91,7 +91,7 @@ public class EolInheritanceTests
             newContent: "// first\n// second\npublic class EolMarker",
             validateOnApply: false);
 
-        Assert.That(result.IsSuccess, Is.True, $"ReplaceSnippet should succeed: {result.ErrorData?.Message}");
+        Assert.That(!result.IsError, Is.True, $"ReplaceSnippet should succeed: {result.ErrorData?.Message}");
 
         var (crlf, cr, lf) = CountLineEndings(File.ReadAllBytes(targetFile));
         Assert.That(lf, Is.EqualTo(0), "File should have no bare LF");
@@ -127,7 +127,7 @@ public class EolInheritanceTests
             ],
             validateOnApply: false);
 
-        Assert.That(result.IsSuccess, Is.True, $"ReplaceSnippet batch should succeed: {result.ErrorData?.Message}");
+        Assert.That(!result.IsError, Is.True, $"ReplaceSnippet batch should succeed: {result.ErrorData?.Message}");
 
         var (crlf, cr, lf) = CountLineEndings(File.ReadAllBytes(targetFile));
         Assert.That(lf, Is.EqualTo(0), "File should have no bare LF");
@@ -169,7 +169,7 @@ public class EolInheritanceTests
             content: mixedContent,
             validateOnApply: false);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
 
         var bytes = File.ReadAllBytes(targetFile);
         var (crlf, cr, lf) = CountLineEndings(bytes);
@@ -200,7 +200,7 @@ public class EolInheritanceTests
             newContent: "ModifiedLine",
             validateOnApply: false);
 
-        Assert.That(result.IsSuccess, Is.True, $"ReplaceSnippet should succeed: {result.ErrorData?.Message}");
+        Assert.That(!result.IsError, Is.True, $"ReplaceSnippet should succeed: {result.ErrorData?.Message}");
         Assert.That(File.ReadAllText(targetFile), Is.EqualTo("class ModifiedLine { }"));
 
         var (crlf, cr, lf) = CountLineEndings(File.ReadAllBytes(targetFile));
@@ -242,7 +242,7 @@ public class EolInheritanceTests
             content: lfContent,
             validateOnApply: false);
 
-        Assert.That(result.IsSuccess, Is.True, $"WriteFile should succeed: {result.ErrorData?.Message}");
+        Assert.That(!result.IsError, Is.True, $"WriteFile should succeed: {result.ErrorData?.Message}");
 
         var bytes = File.ReadAllBytes(targetFile);
         var (crlf, cr, lf) = CountLineEndings(bytes);
@@ -286,7 +286,7 @@ public class EolInheritanceTests
             changes: new Dictionary<string, string> { [targetFile] = lfContent },
             validateOnApply: false);
 
-        Assert.That(result.IsSuccess, Is.True, $"ApplyDiff should succeed: {result.ErrorData?.Message}");
+        Assert.That(!result.IsError, Is.True, $"ApplyDiff should succeed: {result.ErrorData?.Message}");
 
         var bytes = File.ReadAllBytes(targetFile);
         var (crlf, cr, lf) = CountLineEndings(bytes);

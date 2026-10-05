@@ -123,7 +123,7 @@ public class GetLargeResultTests
     {
         var result = await _workspaceTools.GetLargeResult(reason: "test message");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.Message, Does.Contain("Result file not found").Or.Contain("resultId").Or.Contain("filePath"),
             "ErrorData should explain that a resultId or filePath is required.");
@@ -138,7 +138,7 @@ public class GetLargeResultTests
     {
         var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: "00000000000000000000000000000000");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
@@ -155,7 +155,7 @@ public class GetLargeResultTests
 
         var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 3, offset: 0);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(5), "TotalRecords must match the item count in the file.");
         Assert.That(result.HasMoreData, Is.True, "limit=3 of 5 total -> HasMoreData should be true.");
 
@@ -181,7 +181,7 @@ public class GetLargeResultTests
 
         var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 10, offset: 0);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(4));
         Assert.That(result.HasMoreData, Is.False, "limit=10 of 4 total -> HasMoreData should be false.");
 
@@ -204,7 +204,7 @@ public class GetLargeResultTests
 
         var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 3, offset: 0);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(5));
         Assert.That(result.HasMoreData, Is.True, "limit=3 of 5 total -> HasMoreData should be true.");
 
@@ -239,7 +239,7 @@ public class GetLargeResultTests
 
         var result = await _workspaceTools.GetLargeResult(reason: "test message", filePath: filePath);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(2));
         Assert.That(result.SuccessData, Is.InstanceOf<List<MigrationCandidateFinding>>());
     }
@@ -257,7 +257,7 @@ public class GetLargeResultTests
 
         var result = await _workspaceTools.GetLargeResult(reason: "test message", filePath: outsidePath);
 
-        Assert.That(result.IsSuccess, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "A result file outside .roslynsentinel/largeresults/ must be rejected.");
         Assert.That(result.ErrorData, Is.Not.Null);
     }
@@ -283,7 +283,7 @@ public class GetLargeResultTests
         // one window.
         var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, charLimit: LargeResultHelper.OffloadThresholdBytes);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         Assert.That(result.HasMoreData, Is.False, "The whole stored text fits in one window, so there should be no more pages.");
         Assert.That(result.WarningDetails, Is.Null);
 
@@ -312,7 +312,7 @@ public class GetLargeResultTests
             // charLimit controls the raw-text window size (limit means "N records" and is ignored
             // for Raw results) - pass the full threshold explicitly on every page.
             var page = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, offset: offset.Value, charLimit: LargeResultHelper.OffloadThresholdBytes);
-            Assert.That(page.IsSuccess, Is.True);
+            Assert.That(!page.IsError, Is.True);
 
             var pageDataType = page.SuccessData!.GetType();
             var text = (string)pageDataType.GetProperty("text")!.GetValue(page.SuccessData)!;
@@ -347,7 +347,7 @@ public class GetLargeResultTests
 
         var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, offset: 100_000);
 
-        Assert.That(result.IsSuccess, Is.True, "An offset far past the end of the stored text must clamp, not throw a Substring range exception.");
+        Assert.That(!result.IsError, Is.True, "An offset far past the end of the stored text must clamp, not throw a Substring range exception.");
         var text = (string)result.SuccessData!.GetType().GetProperty("text")!.GetValue(result.SuccessData)!;
         Assert.That(text, Is.Empty);
         Assert.That(result.HasMoreData, Is.False);
@@ -362,7 +362,7 @@ public class GetLargeResultTests
 
         var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, offset: 0, charLimit: 50);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var text = (string)result.SuccessData!.GetType().GetProperty("text")!.GetValue(result.SuccessData)!;
         Assert.That(text.Length, Is.EqualTo(50), "A charLimit smaller than OffloadThresholdBytes should be honored as the window size, not ignored.");
         Assert.That(result.HasMoreData, Is.True);

@@ -77,7 +77,7 @@ public class ApplyDiffSizeGuardTests
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [targetFile] = fragment });
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
         Assert.That(result.ErrorData!.Message, Does.Contain("re-submit"));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent), "rejected apply must not touch disk");
@@ -106,7 +106,7 @@ public class ApplyDiffSizeGuardTests
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [targetFile] = commentedOut });
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("ConfirmationRequired"));
         Assert.That(result.ErrorData!.Message, Does.Contain("active code lines"));
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(originalContent), "rejected apply must not touch disk");
@@ -225,7 +225,7 @@ public class ApplyDiffSizeGuardTests
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [targetFile] = lfContent });
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         // After normalization, LF content should be normalized to CRLF (the file's dominant EOL)
         var expectedNormalized = originalContent + "\r\n// small trailing comment\r\n";
         Assert.That(await File.ReadAllTextAsync(targetFile), Is.EqualTo(expectedNormalized));
@@ -250,7 +250,7 @@ public class ApplyDiffSizeGuardTests
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [newFilePath] = content });
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         Assert.That(await File.ReadAllTextAsync(newFilePath), Is.EqualTo(content));
     }
 

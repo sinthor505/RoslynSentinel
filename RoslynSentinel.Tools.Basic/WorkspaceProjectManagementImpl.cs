@@ -64,7 +64,7 @@ public class WorkspaceProjectManagementImpl
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.SolutionNotLoaded, "No solution loaded. Call LoadSolution first.")
                     };
                 }
@@ -85,7 +85,7 @@ public class WorkspaceProjectManagementImpl
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when kind=files.")
                     };
                 }
@@ -98,7 +98,7 @@ public class WorkspaceProjectManagementImpl
                     {
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = new ResultError(ToolErrorCode.NotFound, $"Project '{projectName}' not found.")
                         };
                     }
@@ -118,7 +118,7 @@ public class WorkspaceProjectManagementImpl
                     _logger.LogError(ex, "List files unexpected exception for project '{ProjectName}'", projectName);
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"List files for project '{projectName}'")
                     };
                 }
@@ -130,7 +130,7 @@ public class WorkspaceProjectManagementImpl
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "projectName is required when kind=dependencies.")
                     };
                 }
@@ -138,7 +138,7 @@ public class WorkspaceProjectManagementImpl
                 var result = await _dependencyEngine.GetProjectDependenciesAsync(projectName, cancellationToken);
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = result
                 };
             }
@@ -192,7 +192,7 @@ public class WorkspaceProjectManagementImpl
 
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown kind '{kind}'.")
             };
         }
@@ -201,7 +201,7 @@ public class WorkspaceProjectManagementImpl
             _logger.LogError(ex, "List ({Kind}) failed", kind);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "List")
             };
         }
@@ -214,7 +214,7 @@ public class WorkspaceProjectManagementImpl
         {
             return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError("InvalidArgument", $"Directory not found: '{workspacePath}'")
             };
         }
@@ -228,7 +228,7 @@ public class WorkspaceProjectManagementImpl
         {
             return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError("InvalidArgument", $"workspacePath '{workspacePath}' resolves to the drive root '{pathRoot}'. Pass a real project/repo directory instead - scanning an entire drive is not supported.")
             };
         }
@@ -246,7 +246,7 @@ public class WorkspaceProjectManagementImpl
                     {
                         return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = new ResultError("InvalidArgument", $"workspacePath '{workspacePath}' contains more than {ListWorkspaceSolutionsMaxFilesWalked} matching files - this looks like too broad a root. Pass a narrower project/repo directory instead.")
                         };
                     }
@@ -256,7 +256,7 @@ public class WorkspaceProjectManagementImpl
             files.Sort((a, b) => string.CompareOrdinal(a.Path, b.Path));
             return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = files,
                 TotalRecords = files.Count
             };
@@ -270,7 +270,7 @@ public class WorkspaceProjectManagementImpl
             _logger.LogError(ex, "ListWorkspaceSolutions failed for '{WorkspacePath}'", workspacePath);
             return new SentinelCallToolResult<List<SolutionFileInfo>, ResultError>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.Exception, $"ListWorkspaceSolutions failed unexpectedly ({ex.GetType().Name}) while scanning '{workspacePath}'. Data: {ex.Message}")
             };
         }
@@ -327,7 +327,7 @@ public class WorkspaceProjectManagementImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = $"Solution '{currentPath}' is already loaded - no changes made. Pass forceReload:true to discard in-memory state and re-open it from disk."
                 };
             }
@@ -343,7 +343,7 @@ public class WorkspaceProjectManagementImpl
                     : "";
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = $"Solution {verb}: {solutionPath}.{reloadNote}{BuildPostLoadHint(solutionRoot)}"
                 };
             }
@@ -351,7 +351,7 @@ public class WorkspaceProjectManagementImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, $"LoadSolution failed: Workspace root is null after loading '{solutionPath}'.")
                 };
             }
@@ -364,7 +364,7 @@ public class WorkspaceProjectManagementImpl
                 : (ToolErrorCode.Exception, $"failed unexpectedly ({ex.GetType().Name}): {ex.Message}");
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(codeAndMessage.Item1, $"LoadSolution '{solutionPath}' {codeAndMessage.Item2}")
             };
         }
@@ -378,7 +378,7 @@ public class WorkspaceProjectManagementImpl
             var result = await _solutionManagementEngine.CreateProjectAsync(projectName, projectType, cancellationToken);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = result
             };
         }
@@ -387,7 +387,7 @@ public class WorkspaceProjectManagementImpl
             _logger.LogError(ex, "CreateProject failed for '{ProjectName}'", projectName);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "CreateProject")
             };
         }
@@ -401,7 +401,7 @@ public class WorkspaceProjectManagementImpl
             var result = await _solutionManagementEngine.SplitProjectByFolderAsync(sourceProjectName, folderName, targetProjectName, cancellationToken);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = result
             };
         }
@@ -410,7 +410,7 @@ public class WorkspaceProjectManagementImpl
             _logger.LogError(ex, "SplitProjectByFolder failed for '{SourceProjectName}'", sourceProjectName);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SplitProjectByFolder")
             };
         }
@@ -423,7 +423,7 @@ public class WorkspaceProjectManagementImpl
             var result = await _projectConsistencyEngine.GetProjectFrameworkSummaryAsync(cancellationToken);
             return new SentinelCallToolResult<List<ProjectFrameworkSummary>, ResultError>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = result
             };
         }
@@ -432,7 +432,7 @@ public class WorkspaceProjectManagementImpl
             _logger.LogError(ex, "GetProjectFrameworkSummary failed");
             return new SentinelCallToolResult<List<ProjectFrameworkSummary>, ResultError>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetProjectFrameworkSummary")
             };
         }
@@ -450,7 +450,7 @@ public class WorkspaceProjectManagementImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol: no change produced for '{filePathResolved}' ({result.Outcome}). {result.Message}")
                 };
             }
@@ -465,7 +465,7 @@ public class WorkspaceProjectManagementImpl
                 var reason = apply.ValidationResult is not null ? $"introduces new compiler errors - change not applied. Fix diagnostics and retry: {apply.ValidationResult.Diagnostics.ToJson()}" : $"failed to write to disk: {apply.Summary}";
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol {reason}")
                 };
             }
@@ -474,7 +474,7 @@ public class WorkspaceProjectManagementImpl
             await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "safe_delete_unused_symbol", apply, changeId, cancellationToken);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new AppliedChangeSummary(changeId, [filePathResolved], $"Deleted unused symbol in {Path.GetFileName(filePathResolved)}.", false)
             };
         }
@@ -488,7 +488,7 @@ public class WorkspaceProjectManagementImpl
                 {
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.Exception, resolution.Error!.Message)
                     };
                 }
@@ -511,7 +511,7 @@ public class WorkspaceProjectManagementImpl
 
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "SafeDeleteUnusedSymbol requires one of: (projectName, docCommentId) for handle-based resolution, (symbolName, optionally with contextSnippet/lineBefore/lineAfter) for name-based resolution, or (line, column) for legacy line/column-based resolution.")
             };
         }
@@ -520,7 +520,7 @@ public class WorkspaceProjectManagementImpl
             _logger.LogError(ex, "SafeDeleteUnusedSymbol failed for '{FilePathWrapper}' at {Line}:{Column} or handle {ProjectName}/{DocCommentId}", filePathResolved, line, column, projectName, docCommentId);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SafeDeleteUnusedSymbol")
             };
         }

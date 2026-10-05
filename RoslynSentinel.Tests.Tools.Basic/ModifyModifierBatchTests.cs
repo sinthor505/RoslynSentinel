@@ -58,7 +58,7 @@ public class ModifyModifierBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var newContent = workspace.ReadText(FixtureRelativePath);
         Assert.Multiple(() =>
@@ -92,7 +92,7 @@ public class ModifyModifierBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         Assert.Multiple(() =>
         {
@@ -118,7 +118,7 @@ public class ModifyModifierBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
 
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(originalContent), "a same-node collision must not write anything");
     }
@@ -140,7 +140,7 @@ public class ModifyModifierBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
 
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(originalContent),
             "one unresolvable edit in a batch must roll back the whole batch, not partially apply it");
@@ -162,7 +162,7 @@ public class ModifyModifierBatchTests
             edits: [new ModifierEdit { FilePath = path, TargetName = "MethodTwo", Modifier = NonAccessibilityModifier.@static, Action = AddRemoveAction.add }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
     }
 
@@ -174,7 +174,7 @@ public class ModifyModifierBatchTests
 
         var result = await tools.ModifyModifier(reason: "batch test neither supplied", dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("required"));
     }
 
@@ -186,7 +186,7 @@ public class ModifyModifierBatchTests
 
         var result = await tools.ModifyModifier(reason: "batch test empty edits", edits: [], dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
     }
 
@@ -203,7 +203,7 @@ public class ModifyModifierBatchTests
 
         var result = await tools.ModifyModifier(reason: "batch test over cap", edits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));
     }
 }

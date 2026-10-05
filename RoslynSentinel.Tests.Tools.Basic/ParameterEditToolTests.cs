@@ -265,15 +265,15 @@ public class ParameterEditToolTests
         var actual = await tools.ParameterEdit.ParameterEdit(reason: "exclusive defaults", operation: ParameterEditOperation.method, filePath: workspace.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add,
             methodName: "Compute", paramName: "third", paramType: "string", defaultValue: "\"x\"", nullDefault: true, cancellationToken: default);
 
-        Assert.That(expected.IsSuccess, Is.False);
-        Assert.That(actual.IsSuccess, Is.False);
+        Assert.That(!expected.IsError, Is.False);
+        Assert.That(!actual.IsError, Is.False);
         Assert.That(actual.ErrorData!.ErrorCode, Is.EqualTo(expected.ErrorData!.ErrorCode));
         Assert.That(actual.ErrorData.Message, Is.EqualTo(expected.ErrorData.Message));
     }
 
     private static void AssertInvalidArgument(SentinelCallToolResult<object> result, string expectedMessagePart)
     {
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(result.ErrorData.Message, Does.Contain(expectedMessagePart));
     }
@@ -305,8 +305,8 @@ public class ParameterEditToolTests
     // compared as JSON with both masked.
     private static void AssertSameOutcome(InMemoryWorkspace original, InMemoryWorkspace merged, SentinelCallToolResult<object> expected, SentinelCallToolResult<object> actual)
     {
-        Assert.That(expected.IsSuccess, Is.True, expected.ErrorData?.Message);
-        Assert.That(actual.IsSuccess, Is.True, actual.ErrorData?.Message);
+        Assert.That(!expected.IsError, Is.True, expected.ErrorData?.Message);
+        Assert.That(!actual.IsError, Is.True, actual.ErrorData?.Message);
         Assert.Multiple(() =>
         {
             Assert.That(Normalize(actual.SuccessData, merged), Is.EqualTo(Normalize(expected.SuccessData, original)));

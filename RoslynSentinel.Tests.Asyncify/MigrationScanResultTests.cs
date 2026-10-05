@@ -156,7 +156,7 @@ public class MigrationScanResultTests
     {
         return new MigrationEnvelope<T>
         {
-            IsSuccess = raw.IsSuccess,
+            IsError = raw.IsError,
             SuccessData = raw.SuccessData as T,
             ErrorData = raw.ErrorData,
             LargeResult = raw.LargeResult,
@@ -222,7 +222,7 @@ public class Svc
 
         var result = Wrap<MigrationScanSummary>(rawResult);
         Assert.That(result, Is.Not.Null, "Should return MigrationEnvelope<MigrationScanSummary> when summarize=true.");
-        Assert.That(result!.IsSuccess, Is.True);
+        Assert.That(!result!.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
 
         var summary = result.SuccessData!;
@@ -270,7 +270,7 @@ public class Svc
 
         var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.IsSuccess, Is.True);
+        Assert.That(!result!.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null, "Inline SuccessDetails should be populated.");
         Assert.That(result.LargeResult, Is.Null, "LargeResult should be null for a small page.");
         Assert.That(result.SuccessData!.Count, Is.EqualTo(3), "Page should contain 3 items.");
@@ -296,7 +296,7 @@ public class Svc
 
         var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.IsSuccess, Is.True);
+        Assert.That(!result!.IsError, Is.True);
         Assert.That(result.LargeResult, Is.Null,
             "A ~9 KB page must NOT trigger the server-side file-write threshold (15 KB). " +
             "If this fails, check that the threshold measures serialized bytes, not item count.");
@@ -354,7 +354,7 @@ public class Svc
 
         // ── page 1 (limit=10, offset=0) ───────────────────────────────────────
         var page1Result = Wrap<List<MigrationCandidateFinding>>(await _workspaceTools.GetLargeResult(reason: "test message", resultId: operationId, limit: 10, offset: 0));
-        Assert.That(page1Result.IsSuccess, Is.True);
+        Assert.That(!page1Result.IsError, Is.True);
         Assert.That(page1Result.SuccessData, Is.Not.Null);
         Assert.That(page1Result.SuccessData!.Count, Is.EqualTo(10));
         Assert.That(page1Result.TotalRecords, Is.EqualTo(totalFromT4),
@@ -370,7 +370,7 @@ public class Svc
 
         // ── page 2 (limit=10, offset=10) -> must be disjoint from page 1 ──────
         var page2Result = Wrap<List<MigrationCandidateFinding>>(await _workspaceTools.GetLargeResult(reason: "test message", resultId: operationId, limit: 10, offset: 10));
-        Assert.That(page2Result.IsSuccess, Is.True);
+        Assert.That(!page2Result.IsError, Is.True);
         var page1Names = page1Result.SuccessData!.Select(f => f.MethodName).ToHashSet();
         var page2Names = page2Result.SuccessData!.Select(f => f.MethodName).ToHashSet();
         Assert.That(page1Names.Intersect(page2Names), Is.Empty,
@@ -401,13 +401,13 @@ public class Svc
         // Query using only the filename (suffix match).
         var rawSuffix = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", filePath: "Service.cs");
         var suffixResult = Wrap<List<MigrationCandidateFinding>>(rawSuffix);
-        Assert.That(suffixResult?.IsSuccess, Is.True, "Suffix-only filePath should succeed.");
+        Assert.That(suffixResult?.IsError, Is.False, "Suffix-only filePath should succeed.");
         Assert.That(suffixResult!.SuccessData?.Count, Is.EqualTo(1));
 
         // Query using the full absolute path -> should yield the same finding.
         var rawAbs = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", filePath: AbsPath);
         var absResult = Wrap<List<MigrationCandidateFinding>>(rawAbs);
-        Assert.That(absResult?.IsSuccess, Is.True, "Full absolute filePath should succeed.");
+        Assert.That(absResult?.IsError, Is.False, "Full absolute filePath should succeed.");
         Assert.That(absResult!.SuccessData?.Count, Is.EqualTo(1));
 
         Assert.That(
@@ -442,7 +442,7 @@ public class Svc
 
         var result = Wrap<object>(rawResult);
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.IsSuccess, Is.False);
+        Assert.That(!result!.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(MigrationErrorCode.InvalidArgument));
     }
@@ -457,7 +457,7 @@ public class Svc
         // Intentionally do NOT set a solution.
         var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test message");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
     }
@@ -479,7 +479,7 @@ public class Svc
         var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test message",
             cancellationToken: cts.Token);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(MigrationErrorCode.Exception));
         Assert.That(result.ErrorData.Detail, Is.Not.Null.And.Not.Empty,
@@ -510,7 +510,7 @@ public class Svc
         var result = Wrap<MigrationScanSummary>(rawResult);
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.IsSuccess, Is.True);
+        Assert.That(!result!.IsError, Is.True);
         var summary = result.SuccessData!;
 
         // Normal summary counts reflect post-minScore filter (B7).
@@ -547,7 +547,7 @@ public class Svc
         var result = Wrap<MigrationScanSummary>(rawResult);
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.IsSuccess, Is.True);
+        Assert.That(!result!.IsError, Is.True);
         Assert.That(result.SuccessData!.TopCandidates, Is.Null,
             "TopCandidates must be null when neither topN nor minScore is set.");
     }
@@ -589,7 +589,7 @@ public class Svc
 
         var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test message");
 
-        Assert.That(result.IsSuccess, Is.True, "Should succeed with a loaded solution.");
+        Assert.That(!result.IsError, Is.True, "Should succeed with a loaded solution.");
         Assert.That(result.ErrorData, Is.Null);
         Assert.That(result.SuccessData, Is.Not.Null);
         Assert.That(result.SuccessData!.TotalAsyncMethods, Is.GreaterThanOrEqualTo(0));
@@ -611,7 +611,7 @@ public class Svc
 
         var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test message", projectName: "TestProj");
 
-        Assert.That(result.IsSuccess, Is.True, "Scoped project query should succeed.");
+        Assert.That(!result.IsError, Is.True, "Scoped project query should succeed.");
         Assert.That(result.ErrorData, Is.Null);
         Assert.That(result.SuccessData, Is.Not.Null);
     }
@@ -669,7 +669,7 @@ public class Svc
         var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.IsSuccess, Is.True);
+        Assert.That(!result!.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
 
         var tokenPattern = new System.Text.RegularExpressions.Regex(@"^[\w\-]+:[0-9\-]+$");
@@ -704,7 +704,7 @@ public class Svc
         // Intentionally do NOT set a solution.
         var result = await _asyncifyTools.Asyncify(reason: "test message");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(MigrationErrorCode.SolutionNotLoaded));
     }
@@ -772,7 +772,7 @@ public class Svc
         var result = Wrap<MigrationScanSummary>(rawResult);
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.IsSuccess, Is.True);
+        Assert.That(!result!.IsError, Is.True);
         var summary = result.SuccessData!;
 
         // TotalCandidates must equal only the count of candidates with Score >= 80.
@@ -824,7 +824,7 @@ public class Svc
         var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.IsSuccess, Is.True);
+        Assert.That(!result!.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
 
         // All returned candidates must satisfy minScore=85.

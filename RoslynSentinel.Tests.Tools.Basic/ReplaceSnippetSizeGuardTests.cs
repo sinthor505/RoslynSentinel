@@ -99,7 +99,7 @@ public class ReplaceSnippetSizeGuardTests
             reason: "test message", ProposedChangeAction.validate, targetFile,
             oldContent: anchor, newContent: oversized);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("newContent is 2500 chars"),
             "the message must name the bound that tripped and the actual value");
         Assert.That(result.ErrorData!.Message, Does.Contain("limit 2000"));
@@ -120,7 +120,7 @@ public class ReplaceSnippetSizeGuardTests
             reason: "test message", ProposedChangeAction.validate, targetFile,
             oldContent: tooManyLines, newContent: new string('y', 2500));
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.Multiple(() =>
         {
             Assert.That(result.ErrorData!.Message, Does.Contain("oldContent is 120 lines"));
@@ -144,7 +144,7 @@ public class ReplaceSnippetSizeGuardTests
             reason: "test message", ProposedChangeAction.validate, targetFile,
             oldContent: anchor, newContent: new string('z', 2500));
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.Multiple(() =>
         {
             Assert.That(result.ErrorData!.Message, Does.Not.Contain("WriteFile"));

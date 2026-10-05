@@ -61,7 +61,7 @@ public class MemberSingleDeclarationTests
             memberName: "Alpha",
             newMemberSource: "public int Alpha() => 10;\n\npublic int Gamma() => 3;\n\nprivate string _delta = \"d\";");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         var message = result.ErrorData!.Message;
         Assert.Multiple(() =>
         {
@@ -92,7 +92,7 @@ public class MemberSingleDeclarationTests
             memberName: "Alpha",
             newMemberSource: "public int Alpha() { return ; + }");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.Multiple(() =>
         {
             Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -117,7 +117,7 @@ public class MemberSingleDeclarationTests
             position: position,
             newMemberSource: "public int Gamma() => 3;\n\npublic string Name { get; set; } = \"\";");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         var message = result.ErrorData!.Message;
         Assert.Multiple(() =>
         {

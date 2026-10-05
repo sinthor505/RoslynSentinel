@@ -87,19 +87,19 @@ public class GitTools
         var isReadOnlyOperation = operation is GitOperation.status or GitOperation.log or GitOperation.diff or GitOperation.show;
         if (!string.IsNullOrWhiteSpace(repoPath) && !isReadOnlyOperation)
         {
-            return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"repoPath is only supported for status/log/diff/show - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or switch to a read-only operation.", Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"repoPath is only supported for status/log/diff/show - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or switch to a read-only operation.", Detail: null) };
         }
 
         var gitRoot = _gitImpl.TryGetGitRoot(out var rootError, isReadOnlyOperation ? repoPath : null);
         if (gitRoot is null)
-            return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "GitRootNotFound", Message: rootError, Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "GitRootNotFound", Message: rootError, Detail: null) };
 
         // `files` and `paths` name the same concept; `paths` is the git-native spelling that `diff`
         // already used, so `files` stays an accepted alias rather than breaking callers. Setting
         // both is ambiguous, so it is refused instead of letting one silently win.
         if (!string.IsNullOrWhiteSpace(files) && !string.IsNullOrWhiteSpace(paths))
         {
-            return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: "Both 'files' and 'paths' were supplied - they are aliases for the same list and must not be combined. Pass just one of them (either spelling is accepted).", Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: "Both 'files' and 'paths' were supplied - they are aliases for the same list and must not be combined. Pass just one of them (either spelling is accepted).", Detail: null) };
         }
         var resolvedPaths = !string.IsNullOrWhiteSpace(files) ? files : paths;
 
@@ -118,17 +118,17 @@ public class GitTools
             resolvedRef = ResolveRef(@ref, aliases, out var refError);
             if (refError is not null)
             {
-                return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: refError, Detail: null) };
+                return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: refError, Detail: null) };
             }
         }
         else if (!string.IsNullOrWhiteSpace(@ref))
         {
-            return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"ref is only supported for log/show/diff/reset - operation '{operation}' takes its ref from another parameter (revert: commitHash; branch/checkout: branchName, startPoint). Omit ref.", Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"ref is only supported for log/show/diff/reset - operation '{operation}' takes its ref from another parameter (revert: commitHash; branch/checkout: branchName, startPoint). Omit ref.", Detail: null) };
         }
 
         if (mainline is not null && operation != GitOperation.revert)
         {
-            return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"mainline is only supported for revert - operation '{operation}' does not use it. Omit mainline.", Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"mainline is only supported for revert - operation '{operation}' does not use it. Omit mainline.", Detail: null) };
         }
 
         // Gap A/B: when files are supplied and scope is null, infer scope=listed for stage/add/commit.
@@ -144,7 +144,7 @@ public class GitTools
         if ((operation == GitOperation.stage || operation == GitOperation.add || operation == GitOperation.commit) &&
             !string.IsNullOrWhiteSpace(resolvedPaths) && scope != null && scope != GitStageScope.listed)
         {
-            return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"You passed both a file list and scope=\"{scope}\", which is ambiguous. scope=\"{scope}\" ignores the file list and stages/commits by scope instead. Pass scope=\"listed\" to stage/commit exactly the files you named, or drop the file list to use scope=\"{scope}\".", Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"You passed both a file list and scope=\"{scope}\", which is ambiguous. scope=\"{scope}\" ignores the file list and stages/commits by scope instead. Pass scope=\"listed\" to stage/commit exactly the files you named, or drop the file list to use scope=\"{scope}\".", Detail: null) };
         }
 
         GitResult result = operation switch
@@ -169,11 +169,11 @@ public class GitTools
 
         if (((GitResult)result).Success)
         {
-            return new SentinelCallToolResult<object> { IsSuccess = true, SuccessData = result };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = result };
         }
         else
         {
-            return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ErrorCode: result.ErrorKind ?? GitErrorCodes.Fallback, Message: result.Error ?? "Unknown Git error", Detail: result.ErrorDetail) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: result.ErrorKind ?? GitErrorCodes.Fallback, Message: result.Error ?? "Unknown Git error", Detail: result.ErrorDetail) };
         }
     }
 

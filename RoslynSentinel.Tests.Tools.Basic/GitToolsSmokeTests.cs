@@ -293,7 +293,7 @@ public class GitToolsSmokeTests
             var result = await _gitTools.Git(reason: "test message", GitOperation.status, repoPath: otherRepoDir);
 
             Assert.That(result, Is.Not.Null);
-            Assert.That(result.IsSuccess, Is.True);
+            Assert.That(!result.IsError, Is.True);
             Assert.That(result.SuccessData, Is.Not.Null);
             var status = (GitStatusResult)result.SuccessData;
             Assert.That(status.Success, Is.True, status.Error);
@@ -317,7 +317,7 @@ public class GitToolsSmokeTests
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "commit hash length test");
         var result = await _gitTools.Git(reason: "test message", GitOperation.commit, message: "test commit", scope: GitStageScope.tracked);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var commit = result.SuccessData as GitCommitResult;
         Assert.That(commit, Is.Not.Null);
         Assert.That(commit!.CommitHashLength, Is.EqualTo(commit.CommitHash.Length),
@@ -337,7 +337,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "test message", GitOperation.revert, commitHash: hashToRevert);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var revert = result.SuccessData as GitRevertResult;
         Assert.That(revert, Is.Not.Null);
         Assert.That(revert!.CommitHashLength, Is.EqualTo(revert.CommitHash.Length),
@@ -375,7 +375,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "test message", GitOperation.diff);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var diff = (GitDiffResult)result.SuccessData!;
         Assert.That(diff.Success, Is.True, diff.Error);
         Assert.That(diff.Diff, Does.Contain(emDash),
@@ -394,7 +394,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "test message", GitOperation.show, target: "HEAD");
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var show = (GitShowResult)result.SuccessData!;
         Assert.That(show.Success, Is.True, show.Error);
         Assert.That(show.Diff, Does.Contain(emDash),
@@ -414,7 +414,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "test message", GitOperation.diff);
 
-        Assert.That(result.IsSuccess, Is.True);
+        Assert.That(!result.IsError, Is.True);
         var diff = (GitDiffResult)result.SuccessData!;
         Assert.That(diff.Success, Is.True, diff.Error);
         Assert.That(diff.Warning, Is.Not.Null.And.Contains("U+FFFD"),
@@ -434,7 +434,7 @@ public class GitToolsSmokeTests
 
         File.Move(Path.Combine(_repoDir, "original.txt"), Path.Combine(_repoDir, "renamed.txt"));
         var stageResult = await _gitTools.Git(reason: "stage rename", GitOperation.stage, scope: GitStageScope.all);
-        Assert.That(stageResult.IsSuccess, Is.True, stageResult.ErrorData?.Message);
+        Assert.That(!stageResult.IsError, Is.True, stageResult.ErrorData?.Message);
 
         var commitResult = await _gitTools.Git(
             reason: "commit both sides of rename",
@@ -443,7 +443,7 @@ public class GitToolsSmokeTests
             scope: GitStageScope.listed,
             files: "original.txt,renamed.txt");
 
-        Assert.That(commitResult.IsSuccess, Is.True, commitResult.ErrorData?.Message);
+        Assert.That(!commitResult.IsError, Is.True, commitResult.ErrorData?.Message);
         var commit = commitResult.SuccessData as GitCommitResult;
         var headPaths = HeadPaths();
         Assert.That(headPaths, Does.Contain("renamed.txt"),
@@ -471,7 +471,7 @@ public class GitToolsSmokeTests
             scope: GitStageScope.listed,
             files: "TestResults/test.coverage");
 
-        Assert.That(commitResult.IsSuccess, Is.True, commitResult.ErrorData?.Message);
+        Assert.That(!commitResult.IsError, Is.True, commitResult.ErrorData?.Message);
         var commit = commitResult.SuccessData as GitCommitResult;
         Assert.That(commit!.CommitHash.Length, Is.GreaterThan(0),
             "commit should have a hash");
@@ -505,7 +505,7 @@ public class GitToolsSmokeTests
             message: "modify file1",
             files: "file1.txt");
 
-        Assert.That(commitResult.IsSuccess, Is.True, commitResult.ErrorData?.Message);
+        Assert.That(!commitResult.IsError, Is.True, commitResult.ErrorData?.Message);
         var commit = commitResult.SuccessData as GitCommitResult;
 
         // Verify file1 was committed.
@@ -534,7 +534,7 @@ public class GitToolsSmokeTests
             GitOperation.stage,
             files: "new1.txt");
 
-        Assert.That(stageResult.IsSuccess, Is.True, stageResult.ErrorData?.Message);
+        Assert.That(!stageResult.IsError, Is.True, stageResult.ErrorData?.Message);
 
         // Verify only new1.txt is staged.
         var stagedPaths = StagedPaths();
@@ -559,7 +559,7 @@ public class GitToolsSmokeTests
             scope: GitStageScope.listed,
             files: "missing.txt");
 
-        Assert.That(stageResult.IsSuccess, Is.False,
+        Assert.That(!stageResult.IsError, Is.False,
             "staging a missing path should fail");
         var error = stageResult.ErrorData;
         Assert.That(error?.Message, Does.Contain("missing.txt"),
@@ -584,7 +584,7 @@ public class GitToolsSmokeTests
             scope: GitStageScope.listed,
             files: "ignored/file.txt");
 
-        Assert.That(stageResult.IsSuccess, Is.False,
+        Assert.That(!stageResult.IsError, Is.False,
             "staging an ignored path should fail");
         var error = stageResult.ErrorData;
         Assert.That(error?.Message, Does.Contain("ignored/file.txt"),
@@ -608,7 +608,7 @@ public class GitToolsSmokeTests
             scope: GitStageScope.listed,
             files: "ok.txt,ignored/file.txt");
 
-        Assert.That(stageResult.IsSuccess, Is.False);
+        Assert.That(!stageResult.IsError, Is.False);
         Assert.That(stageResult.ErrorData?.Message, Does.Contain("ignored/file.txt"));
         Assert.That(stageResult.ErrorData?.Message, Does.Contain("Nothing was staged"));
         Assert.That(StagedPaths(), Is.Empty, "ok.txt must not have been staged by the failed call");
@@ -633,7 +633,7 @@ public class GitToolsSmokeTests
             scope: GitStageScope.listed,
             files: "renamed.txt");
 
-        Assert.That(commitResult.IsSuccess, Is.True, commitResult.ErrorData?.Message);
+        Assert.That(!commitResult.IsError, Is.True, commitResult.ErrorData?.Message);
         var commit = commitResult.SuccessData as GitCommitResult;
         Assert.That(commit!.RemainingStaged, Does.Contain("original.txt"),
             "the old side of the rename should remain staged");
@@ -664,7 +664,7 @@ public class GitToolsSmokeTests
             scope: GitStageScope.listed,
             files: "b.txt");
 
-        Assert.That(commitResult.IsSuccess, Is.True, commitResult.ErrorData?.Message);
+        Assert.That(!commitResult.IsError, Is.True, commitResult.ErrorData?.Message);
         var commit = (GitCommitResult)commitResult.SuccessData!;
         Assert.That(HeadPaths(), Is.EqualTo(new[] { "b.txt" }), "HEAD should contain only the deletion of b.txt");
         Assert.That(commit.RemainingStaged, Is.EquivalentTo(new[] { "a.txt", "c.txt" }),
@@ -691,7 +691,7 @@ public class GitToolsSmokeTests
             scope: GitStageScope.listed,
             files: "subdir");
 
-        Assert.That(stageResult.IsSuccess, Is.True, stageResult.ErrorData?.Message);
+        Assert.That(!stageResult.IsError, Is.True, stageResult.ErrorData?.Message);
         Assert.That(StagedPaths(), Is.EquivalentTo(new[] { "subdir/one.txt", "subdir/nested/two.txt" }),
             "both deletions under the removed directory should be staged");
     }
@@ -710,7 +710,7 @@ public class GitToolsSmokeTests
             scope: GitStageScope.listed,
             files: "test[a].txt");
 
-        Assert.That(stageResult.IsSuccess, Is.True, stageResult.ErrorData?.Message);
+        Assert.That(!stageResult.IsError, Is.True, stageResult.ErrorData?.Message);
 
         var stagedPaths = StagedPaths();
         Assert.That(stagedPaths, Does.Contain("test[a].txt"),
@@ -751,7 +751,7 @@ public class GitToolsSmokeTests
             scope: GitStageScope.listed,
             files: "lf.txt");
 
-        Assert.That(commitResult.IsSuccess, Is.False, "the failing pre-commit hook should fail the commit");
+        Assert.That(!commitResult.IsError, Is.False, "the failing pre-commit hook should fail the commit");
         var message = commitResult.ErrorData?.Message;
         Assert.That(message, Does.Contain("hook-rejected"),
             "the hook's stderr should still reach the caller");
@@ -773,7 +773,7 @@ public class GitToolsSmokeTests
             scope: GitStageScope.all,
             files: "README.md");
 
-        Assert.That(result.IsSuccess, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "files plus scope: all should be rejected");
         var error = result.ErrorData;
         Assert.That(error?.Message, Does.Contain("files").Or.Contain("scope"),
@@ -792,7 +792,7 @@ public class GitToolsSmokeTests
             scope: GitStageScope.all,
             files: "new.txt");
 
-        Assert.That(result.IsSuccess, Is.False,
+        Assert.That(!result.IsError, Is.False,
             "files plus scope: all should be rejected for stage");
         var error = result.ErrorData;
         Assert.That(error?.Message, Does.Contain("files").Or.Contain("scope"),
@@ -812,7 +812,7 @@ public class GitToolsSmokeTests
             scope: GitStageScope.listed,
             files: "subdir");
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var stagedPaths = StagedPaths();
         Assert.That(stagedPaths, Does.Contain("subdir/file1.txt"),
@@ -833,7 +833,7 @@ public class GitToolsSmokeTests
         WriteFile(accented, "b");
 
         var statusResult = await _gitTools.Git(reason: "list untracked paths", GitOperation.status);
-        Assert.That(statusResult.IsSuccess, Is.True, statusResult.ErrorData?.Message);
+        Assert.That(!statusResult.IsError, Is.True, statusResult.ErrorData?.Message);
         var status = (GitStatusResult)statusResult.SuccessData!;
         Assert.That(status.Untracked, Is.EquivalentTo(new[] { spaced, accented }),
             "status must return the real names (no quotes, no octal escapes) so they are usable as-is");
@@ -841,7 +841,7 @@ public class GitToolsSmokeTests
         // Stage using exactly the strings status returned.
         var files = System.Text.Json.JsonSerializer.Serialize(status.Untracked.ToArray());
         var stageResult = await _gitTools.Git(reason: "stage status-returned paths", GitOperation.stage, files: files);
-        Assert.That(stageResult.IsSuccess, Is.True, stageResult.ErrorData?.Message);
+        Assert.That(!stageResult.IsError, Is.True, stageResult.ErrorData?.Message);
         Assert.That(StagedPaths(), Is.EquivalentTo(new[] { spaced, accented }));
 
         var stagedStatus = (GitStatusResult)stageResult.SuccessData!;
@@ -851,7 +851,7 @@ public class GitToolsSmokeTests
         // other one unquoted so it too can be fed back into files.
         var commitResult = await _gitTools.Git(
             reason: "commit the spaced path", GitOperation.commit, message: "add spaced", files: spaced);
-        Assert.That(commitResult.IsSuccess, Is.True, commitResult.ErrorData?.Message);
+        Assert.That(!commitResult.IsError, Is.True, commitResult.ErrorData?.Message);
         var commit = (GitCommitResult)commitResult.SuccessData!;
         Assert.That(commit.RemainingStaged, Is.EqualTo(new[] { accented }),
             "RemainingStaged must list the non-ASCII path verbatim, not octal-escaped");
@@ -869,7 +869,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "mv", "old name.txt", "new name.txt");
 
         var result = await _gitTools.Git(reason: "status after rename", GitOperation.status);
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var status = (GitStatusResult)result.SuccessData!;
 
         var renamed = status.Staged.Single(e => e.Status == "renamed");
@@ -902,7 +902,7 @@ public class GitToolsSmokeTests
 
         // maxEntries above 50 lists every entry, no truncation.
         var bigResult = await _gitTools.Git(reason: "status with larger cap", GitOperation.status, maxEntries: 100);
-        Assert.That(bigResult.IsSuccess, Is.True, bigResult.ErrorData?.Message);
+        Assert.That(!bigResult.IsError, Is.True, bigResult.ErrorData?.Message);
         var full = (GitStatusResult)bigResult.SuccessData!;
         Assert.That(full.IsTruncated, Is.False);
         Assert.That(full.Untracked, Has.Count.EqualTo(60), "maxEntries: 100 must return every one of the 60 entries");
@@ -922,7 +922,7 @@ public class GitToolsSmokeTests
     {
         var result = await _gitTools.Git(reason: "out of range cap", GitOperation.status, maxEntries: maxEntries);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         var message = result.ErrorData?.Message;
         Assert.That(message, Does.Contain("maxEntries"), "error must name the offending parameter");
         Assert.That(message, Does.Contain("1").And.Contain("5000"), "error must state the valid range");
@@ -941,7 +941,7 @@ public class GitToolsSmokeTests
 
         // show + nameOnly: --name-status lines, no patch.
         var nameOnly = await _gitTools.Git(reason: "show name list", GitOperation.show, target: "HEAD", nameOnly: true);
-        Assert.That(nameOnly.IsSuccess, Is.True, nameOnly.ErrorData?.Message);
+        Assert.That(!nameOnly.IsError, Is.True, nameOnly.ErrorData?.Message);
         var nameShow = (GitShowResult)nameOnly.SuccessData!;
         Assert.That(nameShow.FilesChanged, Is.EqualTo(3));
         Assert.That(nameShow.Diff, Does.Contain("A\ta.txt").And.Contain("A\tsub dir/b.txt").And.Contain("A\t" + accented),
@@ -950,7 +950,7 @@ public class GitToolsSmokeTests
 
         // show + stat: --stat text, no patch.
         var statOnly = await _gitTools.Git(reason: "show stat", GitOperation.show, target: "HEAD", stat: true);
-        Assert.That(statOnly.IsSuccess, Is.True, statOnly.ErrorData?.Message);
+        Assert.That(!statOnly.IsError, Is.True, statOnly.ErrorData?.Message);
         var statShow = (GitShowResult)statOnly.SuccessData!;
         Assert.That(statShow.FilesChanged, Is.EqualTo(3));
         Assert.That(statShow.Diff, Does.Contain("a.txt").And.Contain("3 files changed"));
@@ -976,7 +976,7 @@ public class GitToolsSmokeTests
     {
         var result = await _gitTools.Git(reason: "both format flags", operation, target: operation == GitOperation.show ? "HEAD" : "working", nameOnly: true, stat: true);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.Message, Does.Contain("nameOnly").And.Contain("stat"),
             "refusal must name both conflicting parameters");
     }
@@ -992,7 +992,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "diff with tiny cap", GitOperation.diff, maxBytes: 1024);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var diff = (GitDiffResult)result.SuccessData!;
         const string marker = "\n... (truncated at 1024 bytes)";
         Assert.That(diff.Diff, Does.EndWith(marker), "output past the cap must be marked truncated");
@@ -1043,7 +1043,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "status during merge conflict", GitOperation.status);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var status = (GitStatusResult)result.SuccessData!;
         var staged = status.Staged.Single(e => e.Path == relPath);
         var unstaged = status.Unstaged.Single(e => e.Path == relPath);
@@ -1065,7 +1065,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "bare reset", GitOperation.reset, mode: mode);
 
-        Assert.That(result.IsSuccess, Is.False, "reset must no longer default to HEAD~1");
+        Assert.That(!result.IsError, Is.False, "reset must no longer default to HEAD~1");
         var message = result.ErrorData?.Message;
         Assert.That(message, Does.Contain("ref"), "error must name the ref parameter");
         Assert.That(message, Does.Contain("HEAD~1"), "error must show a concrete example value");
@@ -1084,14 +1084,14 @@ public class GitToolsSmokeTests
 
         // log: ref is the start ref, so history begins at the first commit.
         var log = await _gitTools.Git(reason: "log from ref", GitOperation.log, @ref: "HEAD~1");
-        Assert.That(log.IsSuccess, Is.True, log.ErrorData?.Message);
+        Assert.That(!log.IsError, Is.True, log.ErrorData?.Message);
         Assert.That(((GitLogResult)log.SuccessData!).Commits.Select(c => c.Message), Is.EqualTo(new[] { "initial commit" }));
 
         // log: the branchName alias still works and agrees with ref when both carry the same value.
         var aliasLog = await _gitTools.Git(reason: "log from alias", GitOperation.log, branchName: "HEAD~1");
         Assert.That(((GitLogResult)aliasLog.SuccessData!).Commits, Has.Count.EqualTo(1));
         var sameLog = await _gitTools.Git(reason: "log with equal ref and alias", GitOperation.log, @ref: "HEAD~1", branchName: "HEAD~1");
-        Assert.That(sameLog.IsSuccess, Is.True, "identical values are not a conflict");
+        Assert.That(!sameLog.IsError, Is.True, "identical values are not a conflict");
 
         // show: ref names the commit; commitHash and target aliases resolve to the same commit.
         foreach (var show in new[]
@@ -1101,18 +1101,18 @@ public class GitToolsSmokeTests
             await _gitTools.Git(reason: "show by target", GitOperation.show, target: firstHash),
         })
         {
-            Assert.That(show.IsSuccess, Is.True, show.ErrorData?.Message);
+            Assert.That(!show.IsError, Is.True, show.ErrorData?.Message);
             Assert.That(((GitShowResult)show.SuccessData!).Hash, Is.EqualTo(firstHash));
         }
 
         // diff: ref diffs the working tree against that ref.
         var diff = await _gitTools.Git(reason: "diff against ref", GitOperation.diff, @ref: "HEAD~1", nameOnly: true);
-        Assert.That(diff.IsSuccess, Is.True, diff.ErrorData?.Message);
+        Assert.That(!diff.IsError, Is.True, diff.ErrorData?.Message);
         Assert.That(((GitDiffResult)diff.SuccessData!).Diff.Trim(), Is.EqualTo("M\tREADME.md"));
 
         // reset: the branchName alias is still accepted as the ref.
         var reset = await _gitTools.Git(reason: "reset via alias", GitOperation.reset, branchName: "HEAD~1", mode: GitResetMode.soft);
-        Assert.That(reset.IsSuccess, Is.True, reset.ErrorData?.Message);
+        Assert.That(!reset.IsError, Is.True, reset.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(firstHash));
     }
 
@@ -1138,7 +1138,7 @@ public class GitToolsSmokeTests
         foreach (var (label, aliasName, call) in cases)
         {
             var result = await call();
-            Assert.That(result.IsSuccess, Is.False, label);
+            Assert.That(!result.IsError, Is.False, label);
             Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"), label);
             Assert.That(result.ErrorData?.Message, Does.Contain(aliasName), $"{label}: message must name the alias parameter");
             if (!label.Contains('+'))
@@ -1155,7 +1155,7 @@ public class GitToolsSmokeTests
     {
         var result = await _gitTools.Git(reason: "ref on branch", GitOperation.branch, @ref: "HEAD");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
         Assert.That(result.ErrorData?.Message, Does.Contain("ref").And.Contain("log/show/diff/reset"));
     }
@@ -1167,7 +1167,7 @@ public class GitToolsSmokeTests
 
         // Missing branch: created, and reported as created.
         var created = await _gitTools.Git(reason: "create and switch", GitOperation.checkout, branchName: "topic", createBranch: true);
-        Assert.That(created.IsSuccess, Is.True, created.ErrorData?.Message);
+        Assert.That(!created.IsError, Is.True, created.ErrorData?.Message);
         var createdResult = (GitCheckoutResult)created.SuccessData!;
         Assert.That(createdResult.CreatedNewBranch, Is.True);
         Assert.That(createdResult.Note, Is.Null);
@@ -1182,7 +1182,7 @@ public class GitToolsSmokeTests
 
         // Existing branch: plain checkout, not an error, and CreatedNewBranch is false.
         var existing = await _gitTools.Git(reason: "create-or-switch existing", GitOperation.checkout, branchName: "topic", createBranch: true);
-        Assert.That(existing.IsSuccess, Is.True, existing.ErrorData?.Message);
+        Assert.That(!existing.IsError, Is.True, existing.ErrorData?.Message);
         var existingResult = (GitCheckoutResult)existing.SuccessData!;
         Assert.That(existingResult.CreatedNewBranch, Is.False, "the branch already existed, so nothing was created");
         Assert.That(existingResult.Branch, Is.EqualTo("topic"));
@@ -1192,7 +1192,7 @@ public class GitToolsSmokeTests
         // A startPoint cannot apply to an existing branch: still a plain checkout, but say so.
         RunGit(_repoDir, "checkout", baseBranch);
         var withStart = await _gitTools.Git(reason: "existing with startPoint", GitOperation.checkout, branchName: "topic", createBranch: true, startPoint: "HEAD");
-        Assert.That(withStart.IsSuccess, Is.True, withStart.ErrorData?.Message);
+        Assert.That(!withStart.IsError, Is.True, withStart.ErrorData?.Message);
         var withStartResult = (GitCheckoutResult)withStart.SuccessData!;
         Assert.That(withStartResult.CreatedNewBranch, Is.False);
         Assert.That(withStartResult.Note, Does.Contain("startPoint").And.Contain("ignored"));
@@ -1207,7 +1207,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "startPoint alone", GitOperation.checkout, branchName: "other", startPoint: "HEAD");
 
-        Assert.That(result.IsSuccess, Is.False, "a startPoint that would be silently ignored must be refused");
+        Assert.That(!result.IsError, Is.False, "a startPoint that would be silently ignored must be refused");
         Assert.That(result.ErrorData?.Message, Does.Contain("startPoint").And.Contain("createBranch"));
         Assert.That(RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim(), Is.EqualTo(baseBranch), "nothing may be checked out");
     }
@@ -1241,7 +1241,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "checkout ambiguous name", GitOperation.checkout, branchName: "feat");
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim(), Is.EqualTo("feat"));
         Assert.That(baseBranch, Is.Not.EqualTo("feat"));
     }
@@ -1285,7 +1285,7 @@ public class GitToolsSmokeTests
 
             var result = await _gitTools.Git(reason: "pull divergent", GitOperation.pull);
 
-            Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+            Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
             Assert.That(File.Exists(Path.Combine(_repoDir, "remote.txt")), Is.True, "the remote commit must be merged in");
             Assert.That(File.Exists(Path.Combine(_repoDir, "local.txt")), Is.True, "the local commit must be kept");
             Assert.That(RunGitCapture("rev-list", "--merges", "--count", "HEAD").Trim(), Is.EqualTo("1"), "rebase=false must produce a merge commit");
@@ -1304,7 +1304,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "pull with rebase", GitOperation.pull, rebase: true);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-list", "--merges", "--count", "HEAD").Trim(), Is.EqualTo("0"), "rebase=true must not create a merge commit");
         Assert.That(File.Exists(Path.Combine(_repoDir, "remote.txt")), Is.True);
         Assert.That(File.Exists(Path.Combine(_repoDir, "local.txt")), Is.True);
@@ -1318,7 +1318,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "amend pushed head", GitOperation.commit, amend: true, message: "reworded");
 
-        Assert.That(result.IsSuccess, Is.False, "amending a commit already contained in its upstream must be refused");
+        Assert.That(!result.IsError, Is.False, "amending a commit already contained in its upstream must be refused");
         Assert.That(result.ErrorData?.Message, Does.Contain("upstream"), "error must explain the upstream reason");
         Assert.That(result.ErrorData?.Message, Does.Contain("Nothing was amended"));
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(headBefore), "HEAD must not be rewritten");
@@ -1331,7 +1331,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "amend local only", GitOperation.commit, amend: true, message: "reworded locally");
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.Not.EqualTo(headBefore), "amend must rewrite HEAD");
         Assert.That(RunGitCapture("log", "-1", "--format=%s").Trim(), Is.EqualTo("reworded locally"));
     }
@@ -1347,7 +1347,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "amend unpushed head", GitOperation.commit, amend: true, message: "reworded unpushed");
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.Not.EqualTo(headBefore), "amend must rewrite the unpushed HEAD");
         Assert.That(RunGitCapture("log", "-1", "--format=%s").Trim(), Is.EqualTo("reworded unpushed"));
     }
@@ -1362,7 +1362,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "abort conflicted merge", GitOperation.abort);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var status = (GitStatusResult)result.SuccessData!;
         Assert.That(status.AbortedOperation, Is.EqualTo("merge"));
         Assert.That(status.InProgress, Is.Null, "nothing may remain in progress after the abort");
@@ -1378,7 +1378,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "abort with nothing to abort", GitOperation.abort);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.Message, Does.Contain("Nothing to abort"));
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(headBefore));
     }
@@ -1392,7 +1392,7 @@ public class GitToolsSmokeTests
         CreateMergeConflict("shared.txt", existsInBase: true);
         var merging = await _gitTools.Git(reason: "status during merge", GitOperation.status);
 
-        Assert.That(merging.IsSuccess, Is.True, merging.ErrorData?.Message);
+        Assert.That(!merging.IsError, Is.True, merging.ErrorData?.Message);
         Assert.That(((GitStatusResult)merging.SuccessData!).InProgress, Is.EqualTo("merge"));
     }
 
@@ -1421,14 +1421,14 @@ public class GitToolsSmokeTests
 
         var pull = await _gitTools.Git(reason: "conflicting pull", GitOperation.pull, rebase: rebase);
 
-        Assert.That(pull.IsSuccess, Is.False, "fixture must produce a conflict");
+        Assert.That(!pull.IsError, Is.False, "fixture must produce a conflict");
         Assert.That(pull.ErrorData?.Message, Does.Contain("mid-" + expectedState).And.Contain("operation: abort"));
         var during = (GitStatusResult)(await _gitTools.Git(reason: "status mid-pull", GitOperation.status)).SuccessData!;
         Assert.That(during.InProgress, Is.EqualTo(expectedState));
 
         var abort = await _gitTools.Git(reason: "abort conflicting pull", GitOperation.abort);
 
-        Assert.That(abort.IsSuccess, Is.True, abort.ErrorData?.Message);
+        Assert.That(!abort.IsError, Is.True, abort.ErrorData?.Message);
         Assert.That(((GitStatusResult)abort.SuccessData!).IsClean, Is.True);
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(localHead), "abort must restore the pre-pull HEAD");
     }
@@ -1447,11 +1447,11 @@ public class GitToolsSmokeTests
 
         var revert = await _gitTools.Git(reason: "conflicting revert", GitOperation.revert, commitHash: v2);
 
-        Assert.That(revert.IsSuccess, Is.False, "reverting v2 under v3 must conflict");
+        Assert.That(!revert.IsError, Is.False, "reverting v2 under v3 must conflict");
         Assert.That(revert.ErrorData?.Message, Does.Contain("mid-revert").And.Contain("operation: abort"));
         var abort = await _gitTools.Git(reason: "abort conflicting revert", GitOperation.abort);
 
-        Assert.That(abort.IsSuccess, Is.True, abort.ErrorData?.Message);
+        Assert.That(!abort.IsError, Is.True, abort.ErrorData?.Message);
         var status = (GitStatusResult)abort.SuccessData!;
         Assert.That(status.AbortedOperation, Is.EqualTo("revert"));
         Assert.That(status.IsClean, Is.True);
@@ -1483,7 +1483,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "revert merge without mainline", GitOperation.revert, commitHash: mergeHash);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.Message, Does.Contain("mainline").And.Contain("merge commit"));
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(mergeHash), "nothing may be reverted");
         Assert.That(RunGitCapture("status", "--porcelain"), Is.Empty);
@@ -1496,7 +1496,7 @@ public class GitToolsSmokeTests
 
         var result = await _gitTools.Git(reason: "revert merge with mainline", GitOperation.revert, commitHash: mergeHash, mainline: 1);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.Not.EqualTo(mergeHash), "a revert commit must be created");
         Assert.That(File.Exists(Path.Combine(_repoDir, "feature.txt")), Is.False, "the merged-in branch's change must be undone");
         Assert.That(File.Exists(Path.Combine(_repoDir, "main.txt")), Is.True, "the mainline's own change must stay");
@@ -1564,7 +1564,7 @@ public class GitToolsSmokeTests
 
             Assert.That(finished, Is.SameAs(task), "git fetch blocked instead of failing fast - credential prompting is not disabled");
             var result = await task;
-            Assert.That(result.IsSuccess, Is.False);
+            Assert.That(!result.IsError, Is.False);
             Assert.That(result.ErrorData?.Message, Does.Contain("terminal prompts disabled"));
         }
         finally
@@ -1578,7 +1578,7 @@ public class GitToolsSmokeTests
 
     private static void AssertCoded(SentinelCallToolResult<object> result, string expectedCode)
     {
-        Assert.That(result.IsSuccess, Is.False, "the call must fail");
+        Assert.That(!result.IsError, Is.False, "the call must fail");
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(expectedCode), result.ErrorData?.Message);
         Assert.That(result.ErrorData?.Message, Is.Not.Empty);
         Assert.That(result.ErrorData?.Detail, Is.Not.Null.And.Not.Empty, "a classified failure must carry an actionable Detail");
@@ -1704,7 +1704,7 @@ public class GitToolsSmokeTests
     {
         var result = await _gitTools.Git(reason: "reset to unknown ref", GitOperation.reset, @ref: "no-such-ref-anywhere");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("GitError"));
         Assert.That(result.ErrorData?.Detail, Is.Null, "unclassified failures carry no invented next step");
         Assert.That(result.ErrorData?.Message, Does.Contain("git reset failed"));
@@ -1727,7 +1727,7 @@ public class GitToolsSmokeTests
         WriteFile("NewDir/sub/c.txt", "content c");
 
         var result = await _gitTools.Git(reason: "status with nested untracked files", GitOperation.status, maxEntries: 50);
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var status = (GitStatusResult)result.SuccessData!;
 

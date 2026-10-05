@@ -76,7 +76,7 @@ public class ServerStatusTools
 
         return new SentinelCallToolResult<McpServerStatusResult>
         {
-            IsSuccess = true,
+            IsError = false,
             StatusMessage = "McpServerStatus executed successfully.",
             SuccessData = new McpServerStatusResult(
                 ServerPid: Environment.ProcessId,

@@ -70,12 +70,12 @@ public class WorkspaceHealthMiscImpl
 
             return action switch
             {
-                FeaturesAction.list => new SentinelCallToolResult<object> { IsSuccess = true, SuccessData = _config.GetFeatureStatuses() },
-                FeaturesAction.get => new SentinelCallToolResult<object> { IsSuccess = true, SuccessData = _config.GetFeatureStatuses(names) },
-                FeaturesAction.update => new SentinelCallToolResult<object> { IsSuccess = true, SuccessData = UpdateFeaturesInternal(enabled ?? []) },
+                FeaturesAction.list => new SentinelCallToolResult<object> { IsError = false, SuccessData = _config.GetFeatureStatuses() },
+                FeaturesAction.get => new SentinelCallToolResult<object> { IsError = false, SuccessData = _config.GetFeatureStatuses(names) },
+                FeaturesAction.update => new SentinelCallToolResult<object> { IsError = false, SuccessData = UpdateFeaturesInternal(enabled ?? []) },
                 _ => new SentinelCallToolResult<object>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown action '{action}'. Valid values: list, get, update.")
                 }
             };
@@ -85,7 +85,7 @@ public class WorkspaceHealthMiscImpl
             _logger.LogError(ex, "Features ({Action}) failed", action);
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Features")
             };
         }
@@ -150,7 +150,7 @@ public class WorkspaceHealthMiscImpl
 
             return new SentinelCallToolResult<WorkspaceHealthReport, ResultError>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = result
             };
         }
@@ -159,7 +159,7 @@ public class WorkspaceHealthMiscImpl
             _logger.LogError(ex, "GetWorkspaceHealth failed");
             return new SentinelCallToolResult<WorkspaceHealthReport, ResultError>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetWorkspaceHealth")
             };
         }

@@ -40,7 +40,7 @@ public class WorkspaceBuildTestImpl
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "scopeName (filePath) is required when scope=file.")
                     };
                 }
@@ -54,7 +54,7 @@ public class WorkspaceBuildTestImpl
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "scopeName (projectName) is required when scope=project.")
                     };
                 }
@@ -71,7 +71,7 @@ public class WorkspaceBuildTestImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, $"Unhandled scope '{scope}'.")
                 };
             }
@@ -89,7 +89,7 @@ public class WorkspaceBuildTestImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = result.Data with { BuildVerification = buildVerification },
                     Findings = result.Findings
                 };
@@ -99,7 +99,7 @@ public class WorkspaceBuildTestImpl
             var groups = relevant.GroupBySeverity(topN);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new DiagnosticsSummaryResult(TotalIssues: relevant.Count, Errors: summary.Errors, Warnings: summary.Warnings, TopIssues: groups, BuildVerification: buildVerification),
                 Findings = result.Findings
             };
@@ -109,7 +109,7 @@ public class WorkspaceBuildTestImpl
             _logger.LogError(ex, "GetDiagnostics ({Scope}) failed", scope);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetDiagnostics")
             };
         }
@@ -161,7 +161,7 @@ public class WorkspaceBuildTestImpl
             var rateLimitError = _workspaceManager.CheckRateLimit("Build", 10);
             if (rateLimitError is not null)
             {
-                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.BuildFailed, rateLimitError) };
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, rateLimitError) };
             }
 
             var result = level == BuildVerifyLevel.fullBuild
@@ -170,7 +170,7 @@ public class WorkspaceBuildTestImpl
 
             if (!result.TryGetData(out var buildResult))
             {
-                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.BuildFailed, result.Error?.Message ?? "Build failed unexpectedly."), Findings = result.Findings };
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, result.Error?.Message ?? "Build failed unexpectedly."), Findings = result.Findings };
             }
 
             var buildToolResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
@@ -181,7 +181,7 @@ public class WorkspaceBuildTestImpl
         catch (Exception ex)
         {
             _logger.LogError(ex, "Build ({Level}) failed", level);
-            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"Build failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and dotnet is on PATH. Data: {ex.Message}") };
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"Build failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and dotnet is on PATH. Data: {ex.Message}") };
         }
     }
 
@@ -195,27 +195,27 @@ public class WorkspaceBuildTestImpl
             var rateLimitError = _workspaceManager.CheckRateLimit("RunTest", 10);
             if (rateLimitError is not null)
             {
-                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, rateLimitError) };
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, rateLimitError) };
             }
 
             var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, cancellationToken);
 
             if (!result.TryGetData(out var testRunResult))
             {
-                return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, result.Error?.Message ?? "Test run failed unexpectedly."), Findings = result.Findings };
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, result.Error?.Message ?? "Test run failed unexpectedly."), Findings = result.Findings };
             }
 
             if (!testRunResult.RunCompleted)
             {
-                return new SentinelCallToolResult<object>() { IsSuccess = false, SuccessData = testRunResult, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, testRunResult.Detail ?? "Test run did not complete."), WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
+                return new SentinelCallToolResult<object>() { IsError = true, SuccessData = testRunResult, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, testRunResult.Detail ?? "Test run did not complete."), WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
             }
 
-            return new SentinelCallToolResult<object>() { IsSuccess = true, SuccessData = WithoutTailsWhenClean(testRunResult), StatusMessage = SummarizeTestRun(testRunResult), WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
+            return new SentinelCallToolResult<object>() { IsError = false, SuccessData = WithoutTailsWhenClean(testRunResult), StatusMessage = SummarizeTestRun(testRunResult), WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "RunTest failed");
-            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"RunTest failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and dotnet is on PATH. Data: {ex.Message}") };
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"RunTest failed unexpectedly ({ex.GetType().Name}). Check that the solution is loaded and dotnet is on PATH. Data: {ex.Message}") };
         }
     }
 }

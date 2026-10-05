@@ -144,7 +144,7 @@ public class DeclarationToolTests
             reason: "missing accessibility", operation: DeclarationOperation.accessibility, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne",
             cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(result.ErrorData.Message, Does.Contain("'accessibility'").And.Contain("'filePath'").And.Contain("'targetName'"));
         Assert.That(workspace.ReadText(FixtureRelativePath), Does.Not.Contain("public void MethodOne"));
@@ -159,7 +159,7 @@ public class DeclarationToolTests
             reason: "mixed params", operation: DeclarationOperation.accessibility, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne",
             accessibility: AccessibilityLevel.@public, modifier: NonAccessibilityModifier.@static, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(result.ErrorData.Message, Does.Contain("does not take 'modifier'"));
     }
@@ -173,7 +173,7 @@ public class DeclarationToolTests
             reason: "mixed params", operation: DeclarationOperation.modifier, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne",
             modifier: NonAccessibilityModifier.@static, action: DeclarationAction.add, accessibility: AccessibilityLevel.@public, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(result.ErrorData.Message, Does.Contain("does not take 'accessibility'"));
         Assert.That(workspace.ReadText(FixtureRelativePath), Does.Not.Contain("static void MethodOne"));
@@ -188,7 +188,7 @@ public class DeclarationToolTests
         var expected = await tools.Structural.ModifyModifier(reason: "missing params", dryRun: false, returnDiff: false, cancellationToken: default);
         var actual = await tools.Declaration.Declaration(reason: "missing params", operation: DeclarationOperation.modifier, cancellationToken: default);
 
-        Assert.That(actual.IsSuccess, Is.False);
+        Assert.That(!actual.IsError, Is.False);
         Assert.That(actual.ErrorData!.ErrorCode, Is.EqualTo(expected.ErrorData!.ErrorCode));
         Assert.That(actual.ErrorData.Message, Is.EqualTo(expected.ErrorData.Message));
     }
@@ -283,7 +283,7 @@ public class DeclarationToolTests
         var expected = await tools.Structural.ModifyAttribute(reason: "missing newAttribute", filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne", existingAttribute: "Marker", action: AttributeModifyAction.replace, cancellationToken: default);
         var actual = await tools.Declaration.Declaration(reason: "missing newAttribute", operation: DeclarationOperation.attribute, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne", existingAttribute: "Marker", action: DeclarationAction.replace, cancellationToken: default);
 
-        Assert.That(actual.IsSuccess, Is.False);
+        Assert.That(!actual.IsError, Is.False);
         Assert.That(actual.ErrorData!.ErrorCode, Is.EqualTo(expected.ErrorData!.ErrorCode));
         Assert.That(actual.ErrorData.Message, Is.EqualTo(expected.ErrorData.Message));
     }
@@ -296,7 +296,7 @@ public class DeclarationToolTests
         var result = await BuildTools(workspace.Manager).Declaration.Declaration(
             reason: "missing params", operation: DeclarationOperation.attribute, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne", cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(result.ErrorData.Message, Does.Contain("'existingAttribute'").And.Contain("'action'").And.Contain("'batchEdits'"));
     }
@@ -311,7 +311,7 @@ public class DeclarationToolTests
             existingAttribute: "Marker", action: DeclarationAction.remove, batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(FixtureRelativePath), TargetName = "MethodOne", ExistingAttribute = "Marker" }],
             cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(result.ErrorData.Message, Does.Contain("not both"));
         Assert.That(workspace.ReadText(FixtureRelativePath), Does.Contain("[Marker]"));
@@ -326,7 +326,7 @@ public class DeclarationToolTests
             reason: "mixed params", operation: DeclarationOperation.attribute, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne",
             existingAttribute: "Marker", action: DeclarationAction.remove, modifier: NonAccessibilityModifier.@static, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(result.ErrorData.Message, Does.Contain("does not take 'modifier'"));
         Assert.That(workspace.ReadText(FixtureRelativePath), Does.Contain("[Marker]"));
@@ -340,7 +340,7 @@ public class DeclarationToolTests
         var result = await BuildTools(workspace.Manager).Declaration.Declaration(
             reason: "missing params", operation: DeclarationOperation.baseType, filePath: workspace.PathOf(FixtureRelativePath), cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(result.ErrorData.Message, Does.Contain("'typeName'").And.Contain("'baseTypeName'").And.Contain("'baseTypeEdits'"));
     }
@@ -354,7 +354,7 @@ public class DeclarationToolTests
             reason: "wrong name param", operation: DeclarationOperation.baseType, filePath: workspace.PathOf(FixtureRelativePath), targetName: "DeclarationTarget",
             baseTypeName: "IOther", action: DeclarationAction.add, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(result.ErrorData.Message, Does.Contain("does not take 'targetName'"));
         Assert.That(workspace.ReadText(FixtureRelativePath), Does.Not.Contain("IOther,"));
@@ -369,7 +369,7 @@ public class DeclarationToolTests
             reason: "replace action", operation: DeclarationOperation.modifier, filePath: workspace.PathOf(FixtureRelativePath), targetName: "MethodOne",
             modifier: NonAccessibilityModifier.@static, action: DeclarationAction.replace, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(result.ErrorData.Message, Does.Contain("only valid for operation 'attribute'"));
     }
@@ -383,7 +383,7 @@ public class DeclarationToolTests
             reason: "replace action", operation: DeclarationOperation.baseType, filePath: workspace.PathOf(FixtureRelativePath), typeName: "DeclarationTarget",
             baseTypeName: "IOther", action: DeclarationAction.replace, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(result.ErrorData.Message, Does.Contain("only valid for operation 'attribute'"));
     }
@@ -412,8 +412,8 @@ public class DeclarationToolTests
     private static void AssertSameOutcome(
         SentinelCallToolResult<AppliedChangeSummary> expected, SentinelCallToolResult<AppliedChangeSummary> actual, string expectedText, string actualText)
     {
-        Assert.That(expected.IsSuccess, Is.True, expected.ErrorData?.Message);
-        Assert.That(actual.IsSuccess, Is.True, actual.ErrorData?.Message);
+        Assert.That(!expected.IsError, Is.True, expected.ErrorData?.Message);
+        Assert.That(!actual.IsError, Is.True, actual.ErrorData?.Message);
         Assert.Multiple(() =>
         {
             Assert.That(actual.SuccessData!.Description, Is.EqualTo(expected.SuccessData!.Description));

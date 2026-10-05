@@ -63,7 +63,7 @@ public class SymbolRelationshipImpl
                     var kindsFound = string.Join(", ", resolved.Select(s => s.SymbolKind).Distinct());
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"'{name}' resolves to a {kindsFound} ({resolved.Count} declaration(s) found), not a type - " + "objectCreations only matches 'new TypeName(...)' expressions and is structurally incapable of " + $"returning anything for a member name. Use FindReferences(symbolName: \"{name}\", kind: callers) " + "to find call sites, or kind: implementations for overrides.")
                     };
                 }
@@ -102,7 +102,7 @@ public class SymbolRelationshipImpl
             {
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = results,
                     WarningDetails = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " + "nothing found under any kind. This is a trustworthy 'not found anywhere' signal, not an error."
                 };
@@ -121,7 +121,7 @@ public class SymbolRelationshipImpl
             _logger.LogError(ex, "QuerySymbolRelationships ({Kind}) failed for '{Name}'", searchKind, name);
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "QuerySymbolRelationships")
             };
         }
@@ -136,7 +136,7 @@ public class SymbolRelationshipImpl
             var result = await _discoveryEngine.FindBestInsertionPointAsync(filePathResolved, containerName, memberKind.ToString(), cancellationToken: cancellationToken);
             return new SentinelCallToolResult<BestInsertionResult, ResultError>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = result
             };
         }
@@ -145,7 +145,7 @@ public class SymbolRelationshipImpl
             _logger.LogError(ex, "GetBestInsertionPoint failed for '{ContainerName}' in '{FilePathWrapper}'", containerName, filePathResolved);
             return new SentinelCallToolResult<BestInsertionResult, ResultError>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetBestInsertionPoint")
             };
         }
@@ -159,7 +159,7 @@ public class SymbolRelationshipImpl
             var result = await _discoveryEngine.PreviewRenameImpactAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, docCommentId, projectName, cancellationToken);
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = result
             };
         }
@@ -168,7 +168,7 @@ public class SymbolRelationshipImpl
             _logger.LogError(ex, "PreviewRenameImpact failed for '{SymbolName}' in '{FilePathWrapper}'", symbolName, filePathResolved);
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PreviewRenameImpact")
             };
         }
@@ -185,7 +185,7 @@ public class SymbolRelationshipImpl
                 var summary = SummarizeListResult.Build(result, c => c.FilePath);
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new
                     {
                         callers = result,
@@ -202,7 +202,7 @@ public class SymbolRelationshipImpl
                 var summary = SummarizeListResult.Build(result, i => i.FilePath ?? "(unknown)");
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new
                     {
                         implementations = result,
@@ -221,7 +221,7 @@ public class SymbolRelationshipImpl
                 var summary = SummarizeListResult.Build(combinedPaths, p => p);
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new
                     {
                         callers,
@@ -235,7 +235,7 @@ public class SymbolRelationshipImpl
 
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled kind '{kind}'.")
             };
         }
@@ -244,7 +244,7 @@ public class SymbolRelationshipImpl
             _logger.LogError(ex, "FindReferences ({Kind}) failed for '{SymbolName}'", kind, symbolName);
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "FindReferences")
             };
         }

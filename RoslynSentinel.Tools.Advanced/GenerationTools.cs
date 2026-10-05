@@ -254,18 +254,18 @@ public class GenerationTools
 
             var result = await _mappingEngine.GenerateMappingAsync(filePathResolved, fromType, toType, cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
-                return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' -> '{toType}' in '{filePathResolved}'. Ensure both types exist in the solution.") };
+                return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' -> '{toType}' in '{filePathResolved}'. Ensure both types exist in the solution.") };
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
             if (apply.Error is not null)
-                return new SentinelCallToolResult<object> { IsSuccess = false, ErrorData = apply.Error };
-            return new SentinelCallToolResult<object> { IsSuccess = true, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Generated mapping from '{fromType}' to '{toType}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff) };
+                return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Generated mapping from '{fromType}' to '{toType}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff) };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "GenerateMapping failed for '{FromType}' to '{ToType}' in '{FilePathWrapper}'", fromType, toType, filePathResolved);
-            return new SentinelCallToolResult<object>() { IsSuccess = false, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GenerateMapping") };
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GenerateMapping") };
         }
     }
 

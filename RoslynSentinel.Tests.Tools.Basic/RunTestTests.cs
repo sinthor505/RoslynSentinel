@@ -63,7 +63,7 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
         Assert.That(data.RunSucceeded, Is.False);
         Assert.That(data.PassedCount, Is.EqualTo(2));
@@ -87,7 +87,7 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
         Assert.That(data.RunSucceeded, Is.True);
         Assert.That(data.StdoutTail, Is.Null);
@@ -105,7 +105,7 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.project, scopeName: "DoesNotExist");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("TestRunFailed"));
         Assert.That(result.ErrorData!.Message, Does.Contain("DoesNotExist"));
     }
@@ -120,7 +120,7 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.file);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("TestRunFailed"));
         Assert.That(result.ErrorData!.Message, Does.Contain("scope=file"));
     }
@@ -139,7 +139,7 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, filter: "FullyQualifiedName~AlwaysFails", timeoutSeconds: 120);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
         Assert.That(data.TotalCount, Is.EqualTo(1));
         Assert.That(data.FailedCount, Is.EqualTo(1));
@@ -162,7 +162,7 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, filter: "FullyQualifiedName~NoSuchTestNameAnywhere", timeoutSeconds: 120);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
         Assert.That(data.TotalCount, Is.Zero);
         Assert.That(data.Detail, Does.Contain("matched filter"));
@@ -207,7 +207,7 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.skipped, timeoutSeconds: 120);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
         Assert.That(data.FailedCount, Is.EqualTo(6), "FailureSummary/FailedCount reflect the full run regardless of the resultsType filter applied to Results.");
         Assert.That(data.FailureSummary, Is.Not.Empty);
@@ -226,7 +226,7 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.failed, timeoutSeconds: 120);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
         Assert.That(data.Results, Is.Not.Empty);
         Assert.That(data.Results, Has.All.Matches<TestCaseResult>(r => r?.Outcome == TestOutcome.Failed));
@@ -243,7 +243,7 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.all, summary: true, timeoutSeconds: 120);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
         Assert.That(data.Results, Is.Empty);
         Assert.That(data.FailedCount, Is.EqualTo(1));
@@ -258,7 +258,7 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.Not.EqualTo("Exception"));
     }
 
@@ -280,7 +280,7 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("TestRunFailed"));
     }
 
@@ -302,7 +302,7 @@ public class RunTestTests
 
         var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var after = Directory.EnumerateFiles(Path.GetTempPath(), "roslynsentinel_runtest_*.trx");
         var newLeftovers = after.Where(f => !before.Contains(f)).ToList();
         Assert.That(newLeftovers, Is.Empty, "no new roslynsentinel_runtest_*.trx file should remain after RunTest completes.");

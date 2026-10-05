@@ -22,7 +22,7 @@ public class RefactoringToolHelpersTests
             "X.cs");
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.IsSuccess, Is.False);
+        Assert.That(!result!.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
     }
@@ -36,7 +36,7 @@ public class RefactoringToolHelpersTests
             "X.cs");
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.IsSuccess, Is.False);
+        Assert.That(!result!.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
@@ -50,7 +50,7 @@ public class RefactoringToolHelpersTests
             "X.cs");
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.IsSuccess, Is.False);
+        Assert.That(!result!.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Exception));
     }
@@ -64,7 +64,7 @@ public class RefactoringToolHelpersTests
             "X.cs");
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(result!.IsSuccess, Is.False);
+        Assert.That(!result!.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
     }

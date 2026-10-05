@@ -10,7 +10,7 @@ public class ResultStatusTests
     [Test]
     public void Envelope_Success_IsNotError_AndStatusIsSuccess()
     {
-        IResultStatus result = new SentinelCallToolResult<string> { IsSuccess = true, SuccessData = "x" };
+        IResultStatus result = new SentinelCallToolResult<string> { IsError = false, SuccessData = "x" };
 
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
@@ -30,7 +30,7 @@ public class ResultStatusTests
     {
         IResultStatus result = new SentinelCallToolResult<string>
         {
-            IsSuccess = false,
+            IsError = true,
             ErrorData = new ResultError(code, "boom")
         };
 
@@ -43,7 +43,7 @@ public class ResultStatusTests
     [Test]
     public void Envelope_FailureWithoutErrorData_IsFailed()
     {
-        IResultStatus result = new SentinelCallToolResult<string> { IsSuccess = false };
+        IResultStatus result = new SentinelCallToolResult<string> { IsError = true };
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
@@ -79,16 +79,16 @@ public class ResultStatusTests
         var result = new SentinelCallToolResult<string>();
 
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
     }
 
     [Test]
     public void Envelope_IsSuccessAlias_SetsAndReadsInverseOfIsError()
     {
-        var ok = new SentinelCallToolResult<string> { IsSuccess = true };
+        var ok = new SentinelCallToolResult<string> { IsError = false };
 
         Assert.That(ok.IsError, Is.False);
-        Assert.That(ok.IsSuccess, Is.True);
+        Assert.That(!ok.IsError, Is.True);
     }
 
     [Test]

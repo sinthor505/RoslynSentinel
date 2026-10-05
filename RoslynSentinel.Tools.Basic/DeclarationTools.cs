@@ -198,7 +198,7 @@ public class DeclarationTools
     private static Task<SentinelCallToolResult<AppliedChangeSummary>> InvalidArgument(string message) =>
         Task.FromResult(new SentinelCallToolResult<AppliedChangeSummary>
         {
-            IsSuccess = false,
+            IsError = true,
             ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Declaration: {message}"),
         });
 }

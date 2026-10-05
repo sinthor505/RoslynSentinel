@@ -68,7 +68,7 @@ public class ReplaceSnippetErrorCodeTests
             ProposedChangeAction.apply,
             batchEdits: [new SnippetEdit { FilePath = h.DupHolderPath, OldContent = "Run();", NewContent = "Run(1);" }]);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
         Assert.That(result.ErrorData.Message, Does.Contain("oldContent is ambiguous").And.Not.Contain("contextSnippet"),
             "the message must name the parameter the caller actually passed");
@@ -85,7 +85,7 @@ public class ReplaceSnippetErrorCodeTests
             ProposedChangeAction.apply,
             batchEdits: [new SnippetEdit { FilePath = h.DupHolderPath, OldContent = "ThisTextIsNotInTheFile();", NewContent = "x" }]);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
@@ -103,7 +103,7 @@ public class ReplaceSnippetErrorCodeTests
                 new SnippetEdit { FilePath = h.DupHolderPath, OldContent = "ThisTextIsNotInTheFile();", NewContent = "x" },
             ]);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous),
             "when every rejection is a lookup-style failure the actionable one (disambiguate) wins");
     }
@@ -120,7 +120,7 @@ public class ReplaceSnippetErrorCodeTests
             oldContent: "Run();",
             newContent: "Run(1);");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
         Assert.That(result.ErrorData.Message, Does.Contain("oldContent is ambiguous").And.Not.Contain("contextSnippet"));
     }

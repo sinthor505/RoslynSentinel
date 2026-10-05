@@ -114,5 +114,5 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
     }
 
     private static SentinelCallToolResult<SubAgentEvalResult> Failure(ResultError error) =>
-        new() { IsSuccess = false, ErrorData = error };
+        new() { IsError = true, ErrorData = error };
 }

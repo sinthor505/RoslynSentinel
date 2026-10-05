@@ -94,7 +94,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
             };
@@ -103,7 +103,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ScanAsyncMigrationCandidates")
             };
         }
@@ -114,7 +114,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.InvalidArgument, "scope=\"file\" requires a filePath.")
             };
         }
@@ -147,7 +147,7 @@ public class AsyncifyTools
             {
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
                 };
             }
@@ -155,7 +155,7 @@ public class AsyncifyTools
             {
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ScanAsyncMigrationCandidates")
                 };
             }
@@ -252,7 +252,7 @@ public class AsyncifyTools
             {
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(MigrationErrorCode.InvalidArgument, ex.Message)
                 };
             }
@@ -260,7 +260,7 @@ public class AsyncifyTools
             {
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ScanAsyncMigrationCandidates")
                 };
             }
@@ -281,7 +281,7 @@ public class AsyncifyTools
             {
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     TotalRecords = totalCount,
                     HasMoreData = hasMorePages,
                     LargeResult = new LargeResultInfo(
@@ -300,7 +300,7 @@ public class AsyncifyTools
             // ── inline result ─────────────────────────────────────────────────
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = page,
                 TotalRecords = totalCount,
                 HasMoreData = hasMorePages,
@@ -329,7 +329,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<AsyncMigrationProgressReport>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
             };
@@ -338,7 +338,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<AsyncMigrationProgressReport>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetAsyncMigrationProgress")
             };
         }
@@ -349,7 +349,7 @@ public class AsyncifyTools
                 .GetAsyncMigrationProgressAsync(projectName, cancellationToken);
             return new SentinelCallToolResult<AsyncMigrationProgressReport>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = report
             };
         }
@@ -357,7 +357,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<AsyncMigrationProgressReport>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetAsyncMigrationProgress")
             };
         }
@@ -391,7 +391,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
             };
@@ -400,7 +400,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "FlagAsyncMigrationCandidates")
             };
         }
@@ -408,7 +408,7 @@ public class AsyncifyTools
         if (scope == "targets" && (flagTargets == null || flagTargets.Count == 0))
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new BatchResultSummary
                 {
                     Severity = "ok",
@@ -433,13 +433,13 @@ public class AsyncifyTools
                 },
                 progress.ToEngineProgress(),
                 cancellationToken);
-            return new SentinelCallToolResult<BatchResultSummary> { IsSuccess = true, SuccessData = result };
+            return new SentinelCallToolResult<BatchResultSummary> { IsError = false, SuccessData = result };
         }
         catch (Exception ex)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "FlagAsyncMigrationCandidates")
             };
         }
@@ -475,7 +475,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
             };
@@ -484,7 +484,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ClearAsyncMigrationCandidateFlags")
             };
         }
@@ -497,7 +497,7 @@ public class AsyncifyTools
                 if (string.IsNullOrEmpty(resolvedFilePath))
                     return new SentinelCallToolResult<BatchResultSummary>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(MigrationErrorCode.InvalidArgument,
                                       "scope=\"file\" requires a filePath.")
                     };
@@ -541,7 +541,7 @@ public class AsyncifyTools
 
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new BatchResultSummary
                 {
                     BlobName = blobName,
@@ -565,7 +565,7 @@ public class AsyncifyTools
             _logger.LogError(ex, "ClearAsyncMigrationCandidateFlags failed");
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ClearAsyncMigrationCandidateFlags")
             };
         }
@@ -601,7 +601,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BridgeAsyncMethodsResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
             };
@@ -610,7 +610,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BridgeAsyncMethodsResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "BridgeAsyncMethods")
             };
         }
@@ -618,7 +618,7 @@ public class AsyncifyTools
         if (targets == null || targets.Count == 0)
             return new SentinelCallToolResult<BridgeAsyncMethodsResult>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new BridgeAsyncMethodsResult
                 {
                     Summary = new BatchResultSummary { Directive = "targets was empty - no methods processed. Call scan_migration_candidates(summarize: true) first to discover and flag candidates.", DirectiveKind = DirectiveKind.ReviewRequired },
@@ -635,7 +635,7 @@ public class AsyncifyTools
                 cancellationToken);
             return new SentinelCallToolResult<BridgeAsyncMethodsResult>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new BridgeAsyncMethodsResult
                 {
                     Summary = summary,
@@ -647,7 +647,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BridgeAsyncMethodsResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "BridgeAsyncMethods")
             };
         }
@@ -683,7 +683,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<UpliftCallersResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
             };
@@ -692,7 +692,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<UpliftCallersResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UpliftCallers")
             };
         }
@@ -700,7 +700,7 @@ public class AsyncifyTools
         if (targets == null || targets.Count == 0)
             return new SentinelCallToolResult<UpliftCallersResult>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new UpliftCallersResult
                 {
                     Summary = new BatchResultSummary { Directive = "targets was empty - no callers uplifted. Pass SuggestedUpliftTargets from BridgeAsyncMethods as targets, or use the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired },
@@ -722,7 +722,7 @@ public class AsyncifyTools
                 cancellationToken);
             return new SentinelCallToolResult<UpliftCallersResult>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new UpliftCallersResult
                 {
                     Summary = summary,
@@ -735,7 +735,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<UpliftCallersResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UpliftCallers")
             };
         }
@@ -769,7 +769,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
             };
@@ -778,7 +778,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PropagateCancellationToken")
             };
         }
@@ -786,7 +786,7 @@ public class AsyncifyTools
         if (targets == null || targets.Count == 0)
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new BatchResultSummary { Directive = "targets was empty - no files processed. Pass SuggestedPropagateTargets from UpliftCallers as targets, or specify files explicitly. Prefer the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired }
             };
 
@@ -796,13 +796,13 @@ public class AsyncifyTools
                 new BatchTargetInput { Targets = targets, DryRun = dryRun, MaxItems = maxItems },
                 progress.ToEngineProgress(),
                 cancellationToken);
-            return new SentinelCallToolResult<BatchResultSummary> { IsSuccess = true, SuccessData = result };
+            return new SentinelCallToolResult<BatchResultSummary> { IsError = false, SuccessData = result };
         }
         catch (Exception ex)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "PropagateCancellationToken")
             };
         }
@@ -837,7 +837,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
             };
@@ -846,7 +846,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AddCancellationToken")
             };
         }
@@ -854,7 +854,7 @@ public class AsyncifyTools
         if (targets == null || targets.Count == 0)
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new BatchResultSummary { Directive = "targets was empty - no files processed. Specify the files (FilePathWrapper) where CancellationToken parameters should be added. Prefer the asyncify macro.", DirectiveKind = DirectiveKind.ReviewRequired }
             };
 
@@ -864,13 +864,13 @@ public class AsyncifyTools
                 new BatchTargetInput { Targets = targets, DryRun = dryRun, MaxItems = maxItems },
                 progress.ToEngineProgress(),
                 cancellationToken);
-            return new SentinelCallToolResult<BatchResultSummary> { IsSuccess = true, SuccessData = result };
+            return new SentinelCallToolResult<BatchResultSummary> { IsError = false, SuccessData = result };
         }
         catch (Exception ex)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AddCancellationToken")
             };
         }
@@ -902,7 +902,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
             };
@@ -911,7 +911,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractEventHandlers")
             };
         }
@@ -919,20 +919,20 @@ public class AsyncifyTools
         if (targets == null || targets.Count == 0)
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new BatchResultSummary { Directive = "targets was empty - no handlers extracted. Call scan_migration_candidates(pattern: \"HandlerExtractCandidate\") to find candidates, then pass them as targets. Prefer the asyncify macro for auto-extraction.", DirectiveKind = DirectiveKind.ReviewRequired }
             };
 
         try
         {
             var result = await HandlerExtractCore(targets, dryRun, progress.ToEngineProgress(), cancellationToken);
-            return new SentinelCallToolResult<BatchResultSummary> { IsSuccess = true, SuccessData = result };
+            return new SentinelCallToolResult<BatchResultSummary> { IsError = false, SuccessData = result };
         }
         catch (Exception ex)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractEventHandlers")
             };
         }
@@ -968,7 +968,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
             };
@@ -977,7 +977,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "EventHandlersToAsync")
             };
         }
@@ -986,13 +986,13 @@ public class AsyncifyTools
         {
             var result = await HandlerToAsyncCore(
                 projectName, dryRun, maxItems, propagateCancellationTokens, progress.ToEngineProgress(), cancellationToken);
-            return new SentinelCallToolResult<BatchResultSummary> { IsSuccess = true, SuccessData = result };
+            return new SentinelCallToolResult<BatchResultSummary> { IsError = false, SuccessData = result };
         }
         catch (Exception ex)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "EventHandlersToAsync")
             };
         }
@@ -1047,7 +1047,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
             };
@@ -1056,7 +1056,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Asyncify")
             };
         }
@@ -1079,13 +1079,13 @@ public class AsyncifyTools
                     MaxIterations = maxIterations,
                 },
                 progress.ToEngineProgress(), cancellationToken);
-            return new SentinelCallToolResult<BatchResultSummary> { IsSuccess = true, SuccessData = result };
+            return new SentinelCallToolResult<BatchResultSummary> { IsError = false, SuccessData = result };
         }
         catch (Exception ex)
         {
             return new SentinelCallToolResult<BatchResultSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Asyncify")
             };
         }
@@ -1136,7 +1136,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<AsyncifyLoopResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(MigrationErrorCode.SolutionNotLoaded,
                               "No solution is loaded. Call LoadSolution first.")
             };
@@ -1145,7 +1145,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<AsyncifyLoopResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "AsyncifyLoop")
             };
         }
@@ -1235,7 +1235,7 @@ public class AsyncifyTools
         {
             return new SentinelCallToolResult<AsyncifyLoopResult>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"AsyncifyLoop iteration {iterations.Count + 1}")
             };
         }
@@ -1268,7 +1268,7 @@ public class AsyncifyTools
 
         return new SentinelCallToolResult<AsyncifyLoopResult>
         {
-            IsSuccess = true,
+            IsError = false,
             SuccessData = new AsyncifyLoopResult
             {
                 LoopsCompleted = iterations.Count,
@@ -1293,7 +1293,7 @@ public class AsyncifyTools
     {
         return new SentinelCallToolResult<LedgerSnapshot>
         {
-            IsSuccess = true,
+            IsError = false,
             SuccessData = _ledger.GetSnapshot(phase, repeatedOnly),
         };
     }
@@ -1312,7 +1312,7 @@ public class AsyncifyTools
         await _ledger.ResetAsync();
         return new SentinelCallToolResult<LedgerSnapshot>
         {
-            IsSuccess = true,
+            IsError = false,
             SuccessData = _ledger.GetSnapshot(),
         };
     }
@@ -3824,7 +3824,7 @@ public class AsyncifyTools
         ((IManualCircuitBreaker)_workspaceManager).Reset();
         return new SentinelCallToolResult<object>()
         {
-            IsSuccess = true,
+            IsError = false,
             SuccessData = "Mutation circuit breaker reset. Failure counters cleared. Batch mutating tools re-enabled."
         };
     }
@@ -3836,7 +3836,7 @@ public class AsyncifyTools
     {
         return new SentinelCallToolResult<object>()
         {
-            IsSuccess = true,
+            IsError = false,
             SuccessData = _workspaceManager.GetBreakerStatus()
         };
     }

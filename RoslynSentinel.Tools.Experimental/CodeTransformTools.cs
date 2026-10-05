@@ -89,14 +89,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No brace-less control flow statements found in '{resolvedFilePath}'. File already uses braces consistently."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = r.ToJsonSummary()
                         };
                     }
@@ -108,14 +108,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No implicit Span/Memory conversion patterns found in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = r.ToJsonSummary()
                         };
                     }
@@ -127,14 +127,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No null-check patterns eligible for ??/??= conversion found in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = r.ToJsonSummary()
                         };
                     }
@@ -146,14 +146,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No if/switch chains eligible for pattern-matching conversion found in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = r.ToJsonSummary()
                         };
                     }
@@ -165,14 +165,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No if-else chains eligible for switch expression conversion found in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = r.ToJsonSummary()
                         };
                     }
@@ -184,14 +184,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No namespace/folder mismatches found in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = r.ToJsonSummary()
                         };
                     }
@@ -205,14 +205,14 @@ public class CodeTransformTools
                             {
                                 return new SentinelCallToolResult<object>()
                                 {
-                                    IsSuccess = true,
+                                    IsError = false,
                                     SuccessData = $"No Thread.Sleep calls eligible for async conversion found in '{resolvedFilePath}'."
                                 };
                             }
 
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = r.ToJsonSummary()
                             };
                         }
@@ -221,7 +221,7 @@ public class CodeTransformTools
                             _logger.LogError(ex, "fix_thread_sleep unexpected exception for '{FilePathWrapper}'", resolvedFilePath);
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"fix_thread_sleep for '{resolvedFilePath}'")
                             };
                         }
@@ -231,14 +231,14 @@ public class CodeTransformTools
                     var result = await _refactoringEngine.FormatDocumentPreviewAsync(resolvedFilePath, cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = result
                     };
                 case "format_document_safe":
                     var result2 = await _msToolAugmentEngine.FormatDocumentSafeAsync(resolvedFilePath, preview, cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = result2
                     };
                 case "generate_xml_documentation_stubs":
@@ -248,14 +248,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No undocumented public members found in '{resolvedFilePath}'. File already has XML doc stubs."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = r.ToJsonSummary()
                         };
                     }
@@ -267,14 +267,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No synchronous Task.Wait/.Result/.GetAwaiter().GetResult() patterns found in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result3.Outcome
                         };
                     }
@@ -283,7 +283,7 @@ public class CodeTransformTools
                     var result4 = await _msToolAugmentEngine.PreviewAddMissingUsingsAsync(resolvedFilePath, cancellationToken);
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = result4
                     };
                 case "add_configure_await_false":
@@ -293,14 +293,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No awaits missing .ConfigureAwait(false) found in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(result5.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -312,14 +312,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No .ConfigureAwait(false) calls found to remove in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(result6.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -331,14 +331,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No boolean expressions eligible for simplification found in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result7
                         };
                     }
@@ -350,14 +350,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No qualified member access patterns found to simplify in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result8
                         };
                     }
@@ -369,14 +369,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No verbose patterns found to simplify in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result9
                         };
                     }
@@ -388,14 +388,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No unsorted or duplicate using directives found in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result17
                         };
                     }
@@ -407,14 +407,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No type-check/cast patterns eligible for modern pattern matching found in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result10
                         };
                     }
@@ -426,14 +426,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No dangerous lock patterns found in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result11
                         };
                     }
@@ -445,14 +445,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No block-scoped namespace declarations found in '{resolvedFilePath}'. File already uses file-scoped namespaces."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result12
                         };
                     }
@@ -464,14 +464,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No legacy null/argument guard patterns found in '{resolvedFilePath}'. File already uses modern guards."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result13
                         };
                     }
@@ -483,14 +483,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No auto-properties eligible for field-backed conversion found in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result14
                         };
                     }
@@ -502,14 +502,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No array/list indexing patterns eligible for index-from-end (^n) syntax found in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result15
                         };
                     }
@@ -521,14 +521,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No DateTime.Now/UtcNow calls found to replace with ITimeProvider in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result16
                         };
                     }
@@ -536,7 +536,7 @@ public class CodeTransformTools
                 default:
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown transform '{transform}'. Valid values: add_braces, cleanup_implicit_spans, " + "convert_to_null_coalescing, convert_to_pattern, convert_to_switch, fix_mismatched_namespaces, " + "fix_thread_sleep, format_document_preview, format_document_safe, generate_xml_documentation_stubs, " + "optimize_task_wait, preview_add_missing_usings, add_configure_await_false, remove_configure_await_false, " + "simplify_boolean_expressions, simplify_member_access, simplify_verbosity, sort_and_deduplicate_usings, " + "upgrade_pattern_matching, upgrade_thread_safety, upgrade_to_file_scoped_namespace, " + "upgrade_to_modern_guards, use_field_backed_properties, use_index_from_end, use_time_provider.")
                     };
             }
@@ -546,7 +546,7 @@ public class CodeTransformTools
             _logger.LogError(ex, "ApplyFileCodeTransform ({Transform}) failed", transform);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyFileCodeTransform ({transform})")
             };
         }
@@ -572,14 +572,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No parameters eligible for guard clause insertion found in '{methodName}' in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -590,7 +590,7 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "direction is required for convert_expression_body. Valid values: ToExpression, ToBlock.")
                             };
                         }
@@ -600,14 +600,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_expression_body ({direction}) found nothing to convert for '{methodName}' in '{resolvedFilePath}'. " + "Possible causes: member not found (verify name and file are correct), member already has the target body style, " + "or contextSnippet did not uniquely match. Use GetFileOutline to confirm the member exists.")
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -619,14 +619,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No lock statements found in '{methodName}' in '{resolvedFilePath}' to convert to SemaphoreSlim."
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -638,14 +638,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_method_to_indexer: method '{methodName}' not found or not eligible in '{resolvedFilePath}'. " + "The method must have exactly one parameter and return a value. Use GetFileOutline to verify the method exists.")
                             };
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -656,14 +656,14 @@ public class CodeTransformTools
                     {
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_out_params_to_value_tuple failed for '{methodName}' in '{resolvedFilePath}': {result?.Message}")
                         };
                     }
 
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = result
                     };
                 case "convert_static_to_extension":
@@ -675,14 +675,14 @@ public class CodeTransformTools
                             {
                                 return new SentinelCallToolResult<object>()
                                 {
-                                    IsSuccess = false,
+                                    IsError = true,
                                     ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_static_to_extension: method '{methodName}' not found or not eligible in '{resolvedFilePath}'. " + "The method must be static and have at least one parameter to become the 'this' parameter. Use GetFileOutline to verify.")
                                 };
                             }
 
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                             };
                         }
@@ -691,7 +691,7 @@ public class CodeTransformTools
                             _logger.LogError(ex, "convert_static_to_extension unexpected exception for '{MethodName}' in '{FilePathWrapper}'", methodName, resolvedFilePath);
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"convert_static_to_extension for '{methodName}' in '{resolvedFilePath}'")
                             };
                         }
@@ -704,14 +704,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No switch statements eligible for switch expression conversion found in '{methodName}' in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -723,14 +723,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_to_async_enumerable: method '{methodName}' not found or not eligible in '{resolvedFilePath}'. " + "The method must return Task<List<T>> or Task<IEnumerable<T>>. Use GetFileOutline to verify the method signature.")
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -742,14 +742,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception, $"extension_to_static: method '{methodName}' not found or not an extension method in '{resolvedFilePath}'. " + "The method must be in a static class and have a 'this' parameter. Use GetFileOutline to verify.")
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -763,14 +763,14 @@ public class CodeTransformTools
                             {
                                 return new SentinelCallToolResult<object>
                                 {
-                                    IsSuccess = false,
+                                    IsError = true,
                                     ErrorData = new ResultError(ToolErrorCode.Exception, $"generate_async_overload: method '{methodName}' not found or not eligible in '{resolvedFilePath}'. " + "The method must be synchronous and non-void. Use GetFileOutline to verify the method exists and its signature.")
                                 };
                             }
 
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                             };
                         }
@@ -779,7 +779,7 @@ public class CodeTransformTools
                             _logger.LogError(ex, "generate_async_overload unexpected exception for '{MethodName}' in '{FilePathWrapper}'", methodName, resolvedFilePath);
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"generate_async_overload for '{methodName}' in '{resolvedFilePath}'")
                             };
                         }
@@ -792,14 +792,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception, $"make_method_static: method '{methodName}' not found or not eligible in '{resolvedFilePath}'. " + "The method must not access instance members. Use GetFileOutline to verify the method exists.")
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -811,14 +811,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception, $"make_method_thread_safe: method '{methodName}' not found in '{resolvedFilePath}'. " + "Use GetFileOutline to verify the method name (case-sensitive).")
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -830,14 +830,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No sequential independent awaits found to parallelize in '{methodName}' in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -849,14 +849,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception, $"optimize_to_value_task: method '{methodName}' not found or not eligible in '{resolvedFilePath}'. " + "The method must return Task or Task<T> and be async. Use GetFileOutline to verify.")
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -868,14 +868,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No deeply nested blocks found to flatten in '{methodName}' in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -887,14 +887,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No XML doc parameters out of sync with the signature of '{methodName}' in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -906,14 +906,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No if-throw guard patterns eligible for exception expression conversion found in '{methodName}' in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -921,7 +921,7 @@ public class CodeTransformTools
                 default:
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown transform '{transform}'. Valid values: add_guard_clauses, convert_expression_body, " + "convert_lock_to_semaphore_slim, convert_method_to_indexer, convert_out_params_to_value_tuple, " + "convert_static_to_extension, convert_switch_to_expression, convert_to_async_enumerable, " + "extension_to_static, generate_async_overload, make_method_static, make_method_thread_safe, " + "optimize_independent_awaits, optimize_to_value_task, reduce_block_depth, " + "update_xml_docs_from_signature, use_exception_expressions.")
                     };
             }
@@ -931,7 +931,7 @@ public class CodeTransformTools
             _logger.LogError(ex, "ApplyMethodCodeTransform ({Transform}) failed for '{MethodName}'", transform, methodName);
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyMethodCodeTransform ({transform})")
             };
         }
@@ -969,14 +969,14 @@ public class CodeTransformTools
                             {
                                 return new SentinelCallToolResult<object>
                                 {
-                                    IsSuccess = true,
+                                    IsError = false,
                                     SuccessData = $"No unvalidated properties found on '{className}' in '{resolvedFilePath}'. Class may already have validation attributes or have no settable properties."
                                 };
                             }
 
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                             };
                         }
@@ -984,7 +984,7 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception, $"add_validation_to_poco: class '{className}' not found in '{resolvedFilePath}'. {ioe.Message} " + "Use GetFileOutline to verify the class name (case-sensitive).")
                             };
                         }
@@ -993,7 +993,7 @@ public class CodeTransformTools
                             _logger.LogError(ex, "add_validation_to_poco unexpected exception for '{ClassName}' in '{FilePathWrapper}'", className, resolvedFilePath);
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"add_validation_to_poco for '{className}' in '{resolvedFilePath}'")
                             };
                         }
@@ -1006,14 +1006,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception, $"class_to_record: class '{className}' not found or not eligible in '{resolvedFilePath}'. " + "The class must have no custom methods beyond property accessors. Use GetFileOutline to verify.")
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -1027,14 +1027,14 @@ public class CodeTransformTools
                             {
                                 return new SentinelCallToolResult<object>
                                 {
-                                    IsSuccess = false,
+                                    IsError = true,
                                     ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_abstract_to_interface: class '{className}' not found or is not abstract in '{resolvedFilePath}'. " + "The class must be declared with the 'abstract' keyword. Use GetFileOutline to verify.")
                                 };
                             }
 
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                             };
                         }
@@ -1042,7 +1042,7 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_abstract_to_interface: class '{className}' not eligible in '{resolvedFilePath}'. {ioe.Message}")
                             };
                         }
@@ -1051,7 +1051,7 @@ public class CodeTransformTools
                             _logger.LogError(ex, "convert_abstract_to_interface unexpected exception for '{ClassName}' in '{FilePathWrapper}'", className, resolvedFilePath);
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"convert_abstract_to_interface for '{className}' in '{resolvedFilePath}'")
                             };
                         }
@@ -1064,7 +1064,7 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "direction is required for convert_property_safe. Valid values: ToFullProperty, ToAutoProperty.")
                             };
                         }
@@ -1074,14 +1074,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.NotFound, $"convert_property_safe ({direction}): property '{propName}' not found or not eligible in '{resolvedFilePath}'. " + "Possible causes: property name is wrong (case-sensitive), property already has the target style, " + "or contextSnippet did not uniquely identify it. Use GetFileOutline to list available properties.")
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -1094,14 +1094,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.NotFound, $"convert_property_to_methods: property '{propName}' not found in '{resolvedFilePath}'. " + "Use GetFileOutline to list available properties (name is case-sensitive).")
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -1113,14 +1113,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.NotFound, $"convert_to_background_service: class '{className}' not found or not eligible in '{resolvedFilePath}'. " + "The class must not already implement BackgroundService. Use GetFileOutline to verify.")
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -1132,14 +1132,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No ILogger.Log calls found to convert to source-generated logging in '{className}' in '{resolvedFilePath}'."
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -1151,14 +1151,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No undocumented fields/properties found on '{className}' in '{resolvedFilePath}'. Class may already be documented or have no public fields."
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -1170,14 +1170,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception, $"make_class_immutable: class '{className}' not found or already immutable in '{resolvedFilePath}'. " + "Use GetFileOutline to verify the class exists and has mutable properties.")
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -1189,14 +1189,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.NotFound, $"record_to_class: record '{className}' not found in '{resolvedFilePath}'. " + "The type must be declared as a 'record'. Use GetFileOutline to verify.")
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -1208,14 +1208,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception, $"replace_constructor_with_factory: class '{className}' not found or not eligible in '{resolvedFilePath}'. " + "Use GetFileOutline to verify the class name (case-sensitive).")
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -1227,14 +1227,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = $"No members to reorder found in '{className}' in '{resolvedFilePath}'. Type may be empty or already sorted."
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -1246,14 +1246,14 @@ public class CodeTransformTools
                         {
                             return new SentinelCallToolResult<object>
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = new ResultError(ToolErrorCode.Exception, $"upgrade_to_primary_constructor: class '{className}' not found or not eligible in '{resolvedFilePath}'. " + "The constructor must only assign parameters to readonly fields (no other logic). Use GetFileOutline to verify the class exists.")
                             };
                         }
 
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -1261,7 +1261,7 @@ public class CodeTransformTools
                 default:
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown transform '{transform}'. Valid values: add_validation_to_poco, class_to_record, " + "convert_abstract_to_interface, convert_property_safe, convert_property_to_methods, " + "convert_to_background_service, convert_to_source_generated_logging, document_poco_fields, " + "make_class_immutable, record_to_class, replace_constructor_with_factory, sort_members, " + "upgrade_to_primary_constructor.")
                     };
             }
@@ -1271,7 +1271,7 @@ public class CodeTransformTools
             _logger.LogError(ex, "ApplyClassCodeTransform ({Transform}) failed for '{ClassName}'", transform, className);
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ApplyClassCodeTransform ({transform})")
             };
         }
@@ -1327,7 +1327,7 @@ public class CodeTransformTools
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                         };
                     }
@@ -1361,7 +1361,7 @@ public class CodeTransformTools
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result.ToJsonSummary()
                         };
                     }
@@ -1387,7 +1387,7 @@ public class CodeTransformTools
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result
                         };
                     }
@@ -1421,7 +1421,7 @@ public class CodeTransformTools
 
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result.ToJsonSummary()
                         };
                     }
@@ -1449,7 +1449,7 @@ public class CodeTransformTools
                             var result = await _codeGenerationEngine.GenerateFluentBuilderAsync(resolvedFilePath, className, cancellationToken);
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = true,
+                                IsError = false,
                                 SuccessData = result
                             };
                         }
@@ -1458,7 +1458,7 @@ public class CodeTransformTools
                             _logger.LogError(ex, "generate_fluent_builder failed for '{ClassName}' in '{FilePathWrapper}'", className, resolvedFilePath);
                             return new SentinelCallToolResult<object>()
                             {
-                                IsSuccess = false,
+                                IsError = true,
                                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"generate_fluent_builder for '{className}' in '{resolvedFilePath}'")
                             };
                         }
@@ -1485,7 +1485,7 @@ public class CodeTransformTools
                         var result = await _pathDrivenTestEngine.GeneratePathDrivenTestsAsync(resolvedFilePath, methodName, framework, disambiguateLine, cancellationToken);
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result
                         };
                     }
@@ -1511,7 +1511,7 @@ public class CodeTransformTools
                         var result = await _codeGenerationEngine.GenerateRepositoryInterfaceAsync(resolvedFilePath, className, cancellationToken);
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result
                         };
                     }
@@ -1537,7 +1537,7 @@ public class CodeTransformTools
                         var result = await _testingEngine.GenerateTestScaffoldAsync(resolvedFilePath, className, cancellationToken);
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result
                         };
                     }
@@ -1563,7 +1563,7 @@ public class CodeTransformTools
                         var result = await _testingEngine.GenerateTestSkeletonAsync(resolvedFilePath, className, cancellationToken: cancellationToken);
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result
                         };
                     }
@@ -1590,7 +1590,7 @@ public class CodeTransformTools
                         var result = await _msToolAugmentEngine.GenerateToStringSafeAsync(resolvedFilePath, className, memberList, cancellationToken);
                         return new SentinelCallToolResult<object>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = result
                         };
                     }

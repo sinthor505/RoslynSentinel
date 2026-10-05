@@ -693,7 +693,7 @@ public class WorkspaceTools
                 {
                     return Task.FromResult(new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "contextSnippet is required for mode: references - pass a short unique verbatim fragment identifying the target symbol.")
                     });
                 }
@@ -701,7 +701,7 @@ public class WorkspaceTools
                 {
                     return Task.FromResult(new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "referencesKind is required for mode: references - pass \"callers\", \"implementations\", or \"all\".")
                     });
                 }

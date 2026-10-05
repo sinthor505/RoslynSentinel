@@ -43,7 +43,7 @@ public class ToolsetControlTools
         {
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(
                     ErrorCode: "UnknownToolset",
                     Message: ex.Message,
@@ -54,7 +54,7 @@ public class ToolsetControlTools
         {
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(
                     ErrorCode: "ToolsetsUnavailable",
                     Message: ex.Message,
@@ -78,7 +78,7 @@ public class ToolsetControlTools
 
         return new SentinelCallToolResult<object>
         {
-            IsSuccess = true,
+            IsError = false,
             StatusMessage = summary,
             SuccessData = change,
         };

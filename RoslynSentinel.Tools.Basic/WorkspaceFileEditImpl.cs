@@ -49,7 +49,7 @@ public class WorkspaceFileEditImpl
         {
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = await _workspaceManager.RetryFailedChangesAsync(specificFiles, retryCount, cancellationToken)
             };
         }
@@ -58,7 +58,7 @@ public class WorkspaceFileEditImpl
             _logger.LogError(ex, "RetryFailedChanges failed");
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "RetryFailedChanges")
             };
         }
@@ -74,7 +74,7 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError("NoOperationBlobFound",
                         $"No operation blob found for changeId '{changeId}' under .roslynsentinel/operations/. " +
                         "This does not mean the change failed - it may well be on disk. It means no undo record " +
@@ -92,7 +92,7 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError("NoReversibleItems",
                         $"The operation blob for changeId '{changeId}' was found, but none of its items carry the " +
                         "original file contents needed to revert. The change itself completed - this is a gap in " +
@@ -151,7 +151,7 @@ public class WorkspaceFileEditImpl
                 : "";
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = $"Reverted {reverted.Count} files{noOpPart}. Files: {string.Join(", ", reverted)}{failedPart}"
             };
         }
@@ -160,7 +160,7 @@ public class WorkspaceFileEditImpl
             _logger.LogError(ex, "UndoLastApply failed for '{ChangeId}'", changeId);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "UndoLastApply")
             };
         }
@@ -207,7 +207,7 @@ public class WorkspaceFileEditImpl
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = BuildFileNotFoundError(solution, normalizedPath)
                     };
                 }
@@ -224,7 +224,7 @@ public class WorkspaceFileEditImpl
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"ReadFile: requested range {from}-{to} is out of bounds for a {totalLines}-line file.")
                     };
                 }
@@ -234,7 +234,7 @@ public class WorkspaceFileEditImpl
                 var slice = sourceText.ToString(TextSpan.FromBounds(start, end));
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new
                     {
                         filePath = (string)filePathResolved,
@@ -270,7 +270,7 @@ public class WorkspaceFileEditImpl
 
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     // Paging here goes through LargeResult/GetLargeResult, not HasMoreData -> leaving it
                     // false avoids signalling a second, redundant continuation mechanism.
                     HasMoreData = false,
@@ -286,7 +286,7 @@ public class WorkspaceFileEditImpl
 
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new
                 {
                     filePath = (string)filePathResolved,
@@ -304,7 +304,7 @@ public class WorkspaceFileEditImpl
             _logger.LogError(ex, "ReadFile failed for '{FilePathWrapper}'", filePathResolved);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReadFile")
             };
         }
@@ -378,7 +378,7 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
                         "ReplaceSnippet: supply either filePath/oldContent/newContent or 'edits', not both.")
                 };
@@ -390,7 +390,7 @@ public class WorkspaceFileEditImpl
                 {
                     return new SentinelCallToolResult<ReplaceSnippetResult>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'edits' was supplied but is empty.")
                     };
                 }
@@ -402,7 +402,7 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
                         "ReplaceSnippet: 'filePath' is required (it names the single file oldContent/newContent applies to), unless 'edits' is supplied instead.")
                 };
@@ -413,7 +413,7 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
                         ? new ResultError(ToolErrorCode.SolutionNotLoaded, SolutionNotLoadedMessage.ForFilePath("ReplaceSnippet", _workspaceManager.LoadState))
                         : new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'filePath' could not be resolved.")
@@ -424,7 +424,7 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'oldContent' is required.")
                 };
             }
@@ -433,7 +433,7 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet: 'newContent' is required (pass an empty string for a pure deletion).")
                 };
             }
@@ -450,7 +450,7 @@ public class WorkspaceFileEditImpl
                 var advice = _writeAdvice.AdviseForOversizedEdit("ReplaceSnippet");
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
                         $"ReplaceSnippet: {string.Join("; ", exceeded)}. " + advice.Sentence)
                 };
@@ -467,7 +467,7 @@ public class WorkspaceFileEditImpl
                     {
                         return new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = lookup.ToResultError()
                         };
                     }
@@ -493,12 +493,12 @@ public class WorkspaceFileEditImpl
                         var validationResult = await _validationEngine.ValidateChangesAsync(snippetChanges, cancellationToken: cancellationToken);
                         return validationResult.Success ? new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new ReplaceSnippetResult(null, validationResult, null)
                         }
                         : new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet validate failed: {validationResult.Diagnostics.ToInfo()}")
                         };
                     }
@@ -507,7 +507,7 @@ public class WorkspaceFileEditImpl
                     if (!result.Success && result.ValidationResult != null)
                         return new SentinelCallToolResult<ReplaceSnippetResult>()
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = new ResultError(ToolErrorCode.Exception,
                                 "ReplaceSnippet: the edit matched the target file, but the resulting code introduces new compiler errors - change not applied. Fix the issue(s) below and retry:\n" +
                                 "[COMPILER ERROR]\n" +
@@ -520,7 +520,7 @@ public class WorkspaceFileEditImpl
                         : null;
                     return new SentinelCallToolResult<ReplaceSnippetResult>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent)
                     };
                 }
@@ -529,7 +529,7 @@ public class WorkspaceFileEditImpl
                     _logger.LogError(ex, "ReplaceSnippet {Action} unexpected exception for '{FilePathWrapper}'", action, filePathResolved);
                     return new SentinelCallToolResult<ReplaceSnippetResult>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet {action} for '{filePathResolved}'")
                     };
                 }
@@ -537,7 +537,7 @@ public class WorkspaceFileEditImpl
 
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.Exception, $"Unhandled action '{action}'.")
             };
         }
@@ -546,7 +546,7 @@ public class WorkspaceFileEditImpl
             _logger.LogError(ex, "ReplaceSnippet ({Action}) failed", action);
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReplaceSnippet")
             };
         }
@@ -563,7 +563,7 @@ public class WorkspaceFileEditImpl
         {
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument,
                     $"ReplaceSnippet: edits has {edits.Count} entries (limit {MaxSnippetEditsPerBatch}). Split into multiple calls.")
             };
@@ -606,7 +606,7 @@ public class WorkspaceFileEditImpl
                 : "";
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReplaceSnippet batch rejected before anchoring:\n" + string.Join("\n", perEditErrors) + sizeAdvice)
             };
         }
@@ -720,7 +720,7 @@ public class WorkspaceFileEditImpl
                 : ToolErrorCode.InvalidArgument;
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(errorCode, "ReplaceSnippet batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
             };
         }
@@ -729,10 +729,10 @@ public class WorkspaceFileEditImpl
         {
             var validationResult = await _validationEngine.ValidateChangesAsync(finalContents, cancellationToken: cancellationToken);
             return validationResult.Success
-                ? new SentinelCallToolResult<ReplaceSnippetResult>() { IsSuccess = true, SuccessData = new ReplaceSnippetResult(null, validationResult, null) }
+                ? new SentinelCallToolResult<ReplaceSnippetResult>() { IsError = false, SuccessData = new ReplaceSnippetResult(null, validationResult, null) }
                 : new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, $"ReplaceSnippet batch validate failed.", StructuredDetail: validationResult.Diagnostics)
                 };
         }
@@ -743,7 +743,7 @@ public class WorkspaceFileEditImpl
             if (!result.Success && result.ValidationResult != null)
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception,
                         "ReplaceSnippet batch: every edit matched, but the resulting code introduces new compiler errors - no changes were written. Fix the issue(s) below and retry:\n" +
                         "[COMPILER ERROR]\n" +
@@ -757,7 +757,7 @@ public class WorkspaceFileEditImpl
                 : null;
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new ReplaceSnippetResult(strippedResult, null, diffContent)
             };
         }
@@ -766,7 +766,7 @@ public class WorkspaceFileEditImpl
             _logger.LogError(ex, "ReplaceSnippet batch ({Action}) unexpected exception for {Count} file(s)", action, finalContents.Count);
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ReplaceSnippet batch {action} for {finalContents.Count} file(s)")
             };
         }
@@ -787,7 +787,7 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
                         ? new ResultError(ToolErrorCode.SolutionNotLoaded, SolutionNotLoadedMessage.ForFilePath("CreateFile", _workspaceManager.LoadState))
                         : new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'filePath' is required.")
@@ -798,7 +798,7 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: '{filePathResolved}' already exists. CreateFile never overwrites - use Member/ReplaceSnippet to edit an existing file.")
                 };
             }
@@ -808,7 +808,7 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'namespaceName' is required for a .cs file, so the new file starts as a valid compilation unit that Member(add) can populate.")
                 };
             }
@@ -817,7 +817,7 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'typeKind' and 'typeName' are both required for a .cs file, so the new file starts with an empty top-level type that Member(add) can populate members into.")
                 };
             }
@@ -848,7 +848,7 @@ public class WorkspaceFileEditImpl
                     : "";
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception,
                         "CreateFile: this content would introduce new compiler errors - not written to disk. Fix the issue(s) below and retry:\n" +
                         "[COMPILER ERROR]\n" +
@@ -861,7 +861,7 @@ public class WorkspaceFileEditImpl
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, $"CreateFile failed to write '{filePathResolved}': {result.Summary}")
                 };
             }
@@ -870,7 +870,7 @@ public class WorkspaceFileEditImpl
             var strippedResult = result with { PreImages = null };
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = strippedResult,
                 Findings = _writeAdvice.IsExposed("WriteFile")
                     ? [new Finding("CreateFile",
@@ -884,7 +884,7 @@ public class WorkspaceFileEditImpl
             _logger.LogError(ex, "CreateFile failed for '{FilePathWrapper}'", filePathResolved);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "CreateFile")
             };
         }

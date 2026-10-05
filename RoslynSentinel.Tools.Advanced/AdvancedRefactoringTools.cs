@@ -132,7 +132,7 @@ public class AdvancedRefactoringTools
                 {
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Each parameters entry must set either originalIndex (to keep an existing parameter), or all of name/type/defaultValue (to insert a new one).")
                     };
                 }
@@ -142,7 +142,7 @@ public class AdvancedRefactoringTools
             if (result.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, result.Error)
                 };
             var changes = result.Changes;
@@ -153,7 +153,7 @@ public class AdvancedRefactoringTools
                     noStageSummaryNote += $" WARNING: {result.SkippedCallSites.Count} call site(s) could not be automatically reordered and must be fixed manually: " + string.Join("; ", result.SkippedCallSites.Select(s => $"{Path.GetFileName(s.FilePath)}:{s.LineNumber} ({s.Reason})"));
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: changes.Keys.ToList(), Description: noStageSummaryNote, DryRun: false, Diff: null, ChangedContent: changes, Validated: false)
                 };
             }
@@ -162,7 +162,7 @@ public class AdvancedRefactoringTools
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = apply.Error
                 };
             // Not wired into MemberChangedContentResult: this already has bespoke handling
@@ -174,7 +174,7 @@ public class AdvancedRefactoringTools
                 summaryNote += $" WARNING: {result.SkippedCallSites.Count} call site(s) could not be automatically reordered and must be fixed manually: " + string.Join("; ", result.SkippedCallSites.Select(s => $"{Path.GetFileName(s.FilePath)}:{s.LineNumber} ({s.Reason})"));
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true)
             };
         }
@@ -183,7 +183,7 @@ public class AdvancedRefactoringTools
             _logger.LogError(ex, "ChangeSignature failed for '{MethodName}' in '{FilePathWrapper}'", methodName, resolvedFilePath);
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ChangeSignature")
             };
         }
@@ -202,7 +202,7 @@ public class AdvancedRefactoringTools
             if (changes.Count == 0)
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, $"ConvertAnonymousToNamed: no anonymous object found in '{resolvedFilePath}'.")
                 };
             // Not wired into MemberChangedContentResult: the generated class's text isn't caller-
@@ -214,12 +214,12 @@ public class AdvancedRefactoringTools
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = apply.Error
                 };
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Converted anonymous object to named class '{newClassName}' in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff)
             };
         }
@@ -228,7 +228,7 @@ public class AdvancedRefactoringTools
             _logger.LogError(ex, "ConvertAnonymousToNamed failed for '{NewClassName}' in '{FilePathWrapper}'", newClassName, resolvedFilePath);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ConvertAnonymousToNamed")
             };
         }
@@ -248,19 +248,19 @@ public class AdvancedRefactoringTools
             if (changes.Count == 0)
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, $"InlineClass: class '{className}' not found in '{sourceFilePath}'.")
                 };
             var apply = await ValidateAndApplyAsync(changes, $"Inline class '{className}' into target.", "InlineClass", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = apply.Error
                 };
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Inlined '{className}' members into target class across {changes.Count} file(s).", apply.DryRun, apply.Diff)
             };
         }
@@ -269,7 +269,7 @@ public class AdvancedRefactoringTools
             _logger.LogError(ex, "InlineClass failed for '{ClassName}'", className);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InlineClass")
             };
         }
@@ -290,7 +290,7 @@ public class AdvancedRefactoringTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "target (file path) is required for scope=file.")
                     };
                 }
@@ -304,7 +304,7 @@ public class AdvancedRefactoringTools
                 {
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "target (project name) is required for scope=project.")
                     };
                 }
@@ -319,7 +319,7 @@ public class AdvancedRefactoringTools
 
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown scope '{scope}'. Valid: file, project, solution.")
             };
         }
@@ -328,7 +328,7 @@ public class AdvancedRefactoringTools
             _logger.LogError(ex, "MoveAllTypesToFiles ({Scope}) failed", scope);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MoveAllTypesToFiles")
             };
         }
@@ -340,7 +340,7 @@ public class AdvancedRefactoringTools
         {
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: changes.Keys.ToList(), Description: description, DryRun: false, Diff: null, ChangedContent: changes.Count == 0 ? null : changes, Validated: false)
             };
         }
@@ -348,21 +348,21 @@ public class AdvancedRefactoringTools
         if (changes.Count == 0)
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = "No secondary types found to move."
             };
         var apply = await ValidateAndApplyAsync(changes, description, "MoveAllTypesToFiles", dryRun, returnDiff, cancellationToken: cancellationToken);
         if (apply.Error is not null)
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = apply.Error
             };
         if (previewFiles)
         {
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new
                 {
                     ChangeId = apply.ChangeId,
@@ -377,7 +377,7 @@ public class AdvancedRefactoringTools
 
         return new SentinelCallToolResult<object>()
         {
-            IsSuccess = true,
+            IsError = false,
             SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true)
         };
     }
@@ -399,7 +399,7 @@ public class AdvancedRefactoringTools
                 if (string.IsNullOrEmpty(result.UpdatedText))
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.Exception, $"InvertAssignments: no assignments found in the snippet of '{resolvedFilePath}'.")
                     };
                 var changes = new Dictionary<FilePathWrapper, string>
@@ -410,12 +410,12 @@ public class AdvancedRefactoringTools
                 if (apply.Error is not null)
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = apply.Error
                     };
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Inverted assignments in snippet of {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff)
                 };
             }
@@ -425,7 +425,7 @@ public class AdvancedRefactoringTools
                 if (string.IsNullOrEmpty(result.UpdatedText))
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.Exception, $"InvertAssignments: no assignments found in lines {startLine}-{endLine} of '{resolvedFilePath}'.")
                     };
                 var changes = new Dictionary<FilePathWrapper, string>
@@ -436,12 +436,12 @@ public class AdvancedRefactoringTools
                 if (apply.Error is not null)
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = apply.Error
                     };
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Inverted assignments in lines {startLine}-{endLine} of {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff)
                 };
             }
@@ -449,7 +449,7 @@ public class AdvancedRefactoringTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Either provide contextSnippet or both startLine and endLine (1-based).")
                 };
             }
@@ -459,7 +459,7 @@ public class AdvancedRefactoringTools
             _logger.LogError(ex, "InvertAssignments failed in '{FilePathWrapper}'", resolvedFilePath);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InvertAssignments")
             };
         }
@@ -478,7 +478,7 @@ public class AdvancedRefactoringTools
             {
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "memberNames is required and must be non-empty.")
                 };
             }
@@ -489,7 +489,7 @@ public class AdvancedRefactoringTools
             {
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: result.Changes.Keys.ToList(), Description: $"Move [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.", DryRun: false, Diff: null, ChangedContent: result.Changes.Count == 0 ? null : result.Changes, Validated: false)
                 };
             }
@@ -509,7 +509,7 @@ public class AdvancedRefactoringTools
                     var detail = string.Join("; ", unresolvedEntries.Select(e => $"{e.FilePath}:{e.Line} [{e.BrokenExpression}] {e.Status} ({e.BlockReason})" + (e.CandidatesInScope.Count > 0 ? $" - candidates in scope: {string.Join(", ", e.CandidatesInScope)}" : "") + (e.SuggestedFix != null ? $" - suggested fix: {e.SuggestedFix}" : "")));
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = await ResultError.ForPossiblyLargeDetailAsync(ToolErrorCode.UnresolvedCallSites, $"{unresolvedEntries.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site, or \"FilePath:*\" / \"*\" to apply one value to every unresolved site in a file / everywhere.", detail, unresolvedEntries.Cast<object>().ToList(), _workspaceManager.GetSolutionRoot(), cancellationToken)
                     };
                 }
@@ -519,7 +519,7 @@ public class AdvancedRefactoringTools
                     var detail = string.Join("; ", result.SkippedCallSites.Select(s => $"{s.FilePath}:{s.LineNumber} ({s.Reason})"));
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = await ResultError.ForPossiblyLargeDetailAsync(ToolErrorCode.UnresolvedCallSites, $"{result.SkippedCallSites.Count} call site(s) could not be automatically rewritten, so the move was rejected. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) for each site, or \"FilePath:*\" / \"*\" to apply one value to every unresolved site in a file / everywhere.", detail, result.SkippedCallSites.Cast<object>().ToList(), _workspaceManager.GetSolutionRoot(), cancellationToken)
                     };
                 }
@@ -530,7 +530,7 @@ public class AdvancedRefactoringTools
                 var rawError = callSiteFixups is { Count: > 0 } && apply.Error.ErrorCode != ToolErrorCode.EolChangeRefused ? AttributeValidationErrorsToCallSiteFixups(apply.Error, apply.Validation, result.AppliedFixups, _workspaceManager.GetSolutionRoot()) : apply.Error;
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = rawError
                 };
             }
@@ -554,7 +554,7 @@ public class AdvancedRefactoringTools
             // single-file operations do -> the moved member's text is already visible in the diff.
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
-                IsSuccess = true,
+                IsError = false,
                 Findings = conversionFindings,
                 SuccessData = new AppliedChangeSummary(apply.ChangeId, result.Changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff, ChangedContent: result.Changes, Validated: true, LineChanges: apply.LineChanges)
             };
@@ -564,7 +564,7 @@ public class AdvancedRefactoringTools
             _logger.LogError(ex, "MoveMember failed for [{MemberNames}] in '{ClassName}'", string.Join(", ", memberNames ?? []), className);
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MoveMember")
             };
         }
@@ -661,14 +661,14 @@ public class AdvancedRefactoringTools
             if (fileErr != null)
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, fileErr)
                 };
             var result = await _advancedStructuralEngine.IntroduceParameterObjectAsync(resolvedFilePath, methodName, newTypeName, parameterNames, cancellationToken: cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, $"IntroduceParameterObject: method '{methodName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " + "Verify the method name (case-sensitive) or use GetFileOutline to list available methods.")
                 };
             // Not wired into MemberChangedContentResult: the generated record's text isn't caller-
@@ -684,12 +684,12 @@ public class AdvancedRefactoringTools
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = apply.Error
                 };
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Introduced parameter object for '{methodName}' in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff)
             };
         }
@@ -698,7 +698,7 @@ public class AdvancedRefactoringTools
             _logger.LogError(ex, "IntroduceParameterObject failed for '{MethodName}' in '{FilePathWrapper}'", methodName, resolvedFilePath);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "IntroduceParameterObject")
             };
         }
@@ -736,7 +736,7 @@ public class AdvancedRefactoringTools
                 if (!constResult.Success || string.IsNullOrEmpty(constResult.UpdatedContent))
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(constResult.ErrorCode ?? ToolErrorCode.Exception, constResult.Error ?? "ExtractConstantSafe failed.")
                     };
                 var constChanges = new Dictionary<FilePathWrapper, string>
@@ -747,12 +747,12 @@ public class AdvancedRefactoringTools
                 if (constApply.Error is not null)
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = constApply.Error
                     };
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new AppliedChangeSummary(constApply.ChangeId, [resolvedFilePath], $"Introduced '{newName}' as a constant in {Path.GetFileName(resolvedFilePath)}.", constApply.DryRun, constApply.Diff)
                 };
             }
@@ -760,7 +760,7 @@ public class AdvancedRefactoringTools
             {
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown newType '{newType}'. Valid values: localVariable, field, parameter, constant.")
                 };
             }
@@ -768,7 +768,7 @@ public class AdvancedRefactoringTools
             if (string.IsNullOrEmpty(result.UpdatedText))
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.NotFound, $"Introduce({newType}): context snippet '{contextSnippet}' not matched in '{resolvedFilePath}'.")
                 };
             // Not wired into MemberChangedContentResult: the new declaration's text isn't caller-
@@ -784,12 +784,12 @@ public class AdvancedRefactoringTools
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = apply.Error
                 };
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Introduced '{newName}' as {(newType == IntroduceAsType.localVariable ? "a local variable" : newType)} in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff)
             };
         }
@@ -798,7 +798,7 @@ public class AdvancedRefactoringTools
             _logger.LogError(ex, "Introduce ({As}) failed for '{NewName}' in '{FilePathWrapper}'", newType, newName, resolvedFilePath);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Introduce")
             };
         }
@@ -839,7 +839,7 @@ public class AdvancedRefactoringTools
                 {
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "newTypeName (interface name) is required when newType=interface.")
                     };
                 }
@@ -851,7 +851,7 @@ public class AdvancedRefactoringTools
                     {
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: changes.Keys.ToList(), Description: $"Extract interface '{newTypeName}' from '{className}'.", DryRun: false, Diff: null, ChangedContent: changes.Count == 0 ? null : changes, Validated: false)
                         };
                     }
@@ -860,12 +860,12 @@ public class AdvancedRefactoringTools
                     if (apply.Error is not null)
                         return new SentinelCallToolResult<AppliedChangeSummary>
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = apply.Error
                         };
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Extracted interface '{newTypeName}' from '{className}'.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true)
                     };
                 }
@@ -874,7 +874,7 @@ public class AdvancedRefactoringTools
                     _logger.LogError(ex, "ExtractMembers/interface unexpected exception for '{NewTypeName}'", newTypeName);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ExtractMembers newType=interface for '{newTypeName}'")
                     };
                 }
@@ -886,7 +886,7 @@ public class AdvancedRefactoringTools
                 {
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "memberNames is required when newType=partial.")
                     };
                 }
@@ -896,7 +896,7 @@ public class AdvancedRefactoringTools
                 {
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: partialChanges.Keys.ToList(), Description: $"Extract members to partial for '{className}'.", DryRun: false, Diff: null, ChangedContent: partialChanges.Count == 0 ? null : partialChanges, Validated: false)
                     };
                 }
@@ -905,12 +905,12 @@ public class AdvancedRefactoringTools
                 if (partialApply.Error is not null)
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = partialApply.Error
                     };
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new AppliedChangeSummary(partialApply.ChangeId, partialChanges.Keys.ToList(), $"Extracted members of '{className}' to a new partial file.", partialApply.DryRun, partialApply.Diff, ChangedContent: partialChanges, Validated: true)
                 };
             }
@@ -921,7 +921,7 @@ public class AdvancedRefactoringTools
                 {
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "newTypeName (new base class name) is required when newType=superclass.")
                     };
                 }
@@ -937,7 +937,7 @@ public class AdvancedRefactoringTools
                     {
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: changes.Keys.ToList(), Description: $"Extract superclass '{newTypeName}' from {actualClassNames.Length} class(es).", DryRun: false, Diff: null, ChangedContent: changes.Count == 0 ? null : changes, Validated: false)
                         };
                     }
@@ -946,12 +946,12 @@ public class AdvancedRefactoringTools
                     if (apply.Error is not null)
                         return new SentinelCallToolResult<AppliedChangeSummary>
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = apply.Error
                         };
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Extracted superclass '{newTypeName}' from {actualClassNames.Length} class(es).", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true)
                     };
                 }
@@ -960,7 +960,7 @@ public class AdvancedRefactoringTools
                     _logger.LogError(ex, "ExtractMembers/superclass unexpected exception for '{NewTypeName}'", newTypeName);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ExtractMembers newType=superclass for '{newTypeName}'")
                     };
                 }
@@ -968,7 +968,7 @@ public class AdvancedRefactoringTools
 
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown newType '{newType}'. Valid values: interface, partial, superclass. For newType=class, use MoveMember instead.")
             };
         }
@@ -977,7 +977,7 @@ public class AdvancedRefactoringTools
             _logger.LogError(ex, "ExtractMembers ({As}) failed for '{ClassName}' in '{FilePathWrapper}'", newType, className, resolvedFilePath);
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractMembers")
             };
         }
@@ -998,21 +998,21 @@ public class AdvancedRefactoringTools
                 if (string.IsNullOrEmpty(className))
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required when action=implement.")
                     };
                 var implFileErr = await GetFileNotInSolutionError(resolvedFilePath, cancellationToken);
                 if (implFileErr != null)
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.Exception, implFileErr)
                     };
                 var implResult = await _codeGenerationEngine.ImplementInterfaceAsync(resolvedFilePath, className, interfaceName, cancellationToken: cancellationToken);
                 if (string.IsNullOrEmpty(implResult.UpdatedText))
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.NotFound, $"SyncInterface implement: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " + "Verify both names are spelled correctly (case-sensitive). Use LocateSymbol to confirm the interface exists in the solution.")
                     };
                 var implChanges = new Dictionary<FilePathWrapper, string>
@@ -1023,12 +1023,12 @@ public class AdvancedRefactoringTools
                 if (implApply.Error is not null)
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = implApply.Error
                     };
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new AppliedChangeSummary(implApply.ChangeId, [resolvedFilePath], $"Implemented '{interfaceName}' on '{className}' in {Path.GetFileName(resolvedFilePath)}.", implApply.DryRun, implApply.Diff)
                 };
             }
@@ -1038,21 +1038,21 @@ public class AdvancedRefactoringTools
                 if (string.IsNullOrEmpty(className))
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "className is required when action=sync.")
                     };
                 var syncFileErr = await GetFileNotInSolutionError(resolvedFilePath, cancellationToken);
                 if (syncFileErr != null)
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.Exception, syncFileErr)
                     };
                 var syncResult = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync(resolvedFilePath, className, interfaceName, cancellationToken: cancellationToken);
                 if (string.IsNullOrEmpty(syncResult.UpdatedText))
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.NotFound, $"SyncInterface sync: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " + "Verify both names are spelled correctly (case-sensitive). Use LocateSymbol to confirm the interface exists in the solution.")
                     };
                 var syncChanges = new Dictionary<FilePathWrapper, string>
@@ -1063,12 +1063,12 @@ public class AdvancedRefactoringTools
                 if (syncApply.Error is not null)
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = syncApply.Error
                     };
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new AppliedChangeSummary(syncApply.ChangeId, [resolvedFilePath], $"Synced '{interfaceName}' to '{className}' implementation in {Path.GetFileName(resolvedFilePath)}.", syncApply.DryRun, syncApply.Diff)
                 };
             }
@@ -1078,14 +1078,14 @@ public class AdvancedRefactoringTools
                 var result = await _symbolNavigationEngine.VerifyInterfaceCompletenessAsync(interfaceName, projectName, cancellationToken);
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = result
                 };
             }
 
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown action '{action}'. Valid values: implement, sync, verify.")
             };
         }
@@ -1094,7 +1094,7 @@ public class AdvancedRefactoringTools
             _logger.LogError(ex, "SyncInterface ({Action}) failed for '{InterfaceName}'", action, interfaceName);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SyncInterface")
             };
         }
@@ -1119,12 +1119,12 @@ public class AdvancedRefactoringTools
                     if (methodApply.Error is not null)
                         return new SentinelCallToolResult<object>
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = methodApply.Error
                         };
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = new AppliedChangeSummary(methodApply.ChangeId, methodChanges.Keys.ToList(), $"Inlined '{targetName}' at all call sites across {methodChanges.Count} file(s).", methodApply.DryRun, methodApply.Diff)
                     };
                 }
@@ -1133,7 +1133,7 @@ public class AdvancedRefactoringTools
                     _logger.LogError(ex, "Inline/method unexpected exception for '{TargetName}' in '{FilePathWrapper}'", targetName, resolvedFilePath);
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"Inline method '{targetName}' in '{resolvedFilePath}'")
                     };
                 }
@@ -1145,7 +1145,7 @@ public class AdvancedRefactoringTools
                 if (string.IsNullOrEmpty(updated))
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.NotFound, $"Inline/variable: variable '{targetName}' not found in '{resolvedFilePath}'.")
                     };
                 var varChanges = new Dictionary<FilePathWrapper, string>
@@ -1156,12 +1156,12 @@ public class AdvancedRefactoringTools
                 if (varApply.Error is not null)
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = varApply.Error
                     };
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new AppliedChangeSummary(varApply.ChangeId, [resolvedFilePath], $"Inlined variable '{targetName}' into its usages in {Path.GetFileName(resolvedFilePath)}.", varApply.DryRun, varApply.Diff)
                 };
             }
@@ -1172,7 +1172,7 @@ public class AdvancedRefactoringTools
                 if (string.IsNullOrEmpty(fieldResult.UpdatedText))
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.NotFound, $"Inline/field: field '{targetName}' not found in '{resolvedFilePath}'.")
                     };
                 var fieldChanges = new Dictionary<FilePathWrapper, string>
@@ -1183,12 +1183,12 @@ public class AdvancedRefactoringTools
                 if (fieldApply.Error is not null)
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = fieldApply.Error
                     };
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new AppliedChangeSummary(fieldApply.ChangeId, [resolvedFilePath], $"Inlined field '{targetName}' into its usages in {Path.GetFileName(resolvedFilePath)}.", fieldApply.DryRun, fieldApply.Diff)
                 };
             }
@@ -1198,14 +1198,14 @@ public class AdvancedRefactoringTools
                 if (string.IsNullOrEmpty(methodName))
                     return new SentinelCallToolResult<object>()
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "methodName is required when kind=parameter.")
                     };
                 var paramResult = await _advancedStructuralEngine.InlineParameterAsync(resolvedFilePath, methodName, targetName, cancellationToken: cancellationToken);
                 if (string.IsNullOrEmpty(paramResult.UpdatedText))
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.NotFound, $"Inline/parameter: parameter '{targetName}' not found in method '{methodName}' in '{resolvedFilePath}'.")
                     };
                 var paramChanges = new Dictionary<FilePathWrapper, string>
@@ -1216,19 +1216,19 @@ public class AdvancedRefactoringTools
                 if (paramApply.Error is not null)
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = paramApply.Error
                     };
                 return new SentinelCallToolResult<object>()
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new AppliedChangeSummary(paramApply.ChangeId, [resolvedFilePath], $"Inlined parameter '{targetName}' into '{methodName}' body in {Path.GetFileName(resolvedFilePath)}.", paramApply.DryRun, paramApply.Diff)
                 };
             }
 
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown kind '{kind}'. Valid values: method, variable, field, parameter.")
             };
         }
@@ -1237,7 +1237,7 @@ public class AdvancedRefactoringTools
             _logger.LogError(ex, "Inline ({Kind}) failed for '{TargetName}' in '{FilePathWrapper}'", kind, targetName, resolvedFilePath);
             return new SentinelCallToolResult<object>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Inline")
             };
         }
@@ -1270,7 +1270,7 @@ public class AdvancedRefactoringTools
                         };
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: noStageChanges.Keys.ToList(), Description: "Wrap snippet in try/catch.", DryRun: false, Diff: null, ChangedContent: noStageChanges.Count == 0 ? null : noStageChanges, Validated: false)
                         };
                     }
@@ -1283,13 +1283,13 @@ public class AdvancedRefactoringTools
                     if (apply.Error is not null)
                         return new SentinelCallToolResult<AppliedChangeSummary>
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = apply.Error
                         };
                     var summary = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Wrapped snippet in a try/{exceptionType} block in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = summary
                     };
                 }
@@ -1300,7 +1300,7 @@ public class AdvancedRefactoringTools
                     {
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "name (disposalName) is required when wrapper=using.")
                         };
                     }
@@ -1314,7 +1314,7 @@ public class AdvancedRefactoringTools
                         };
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: noStageUsingChanges.Keys.ToList(), Description: $"Wrap snippet in using ({name}).", DryRun: false, Diff: null, ChangedContent: noStageUsingChanges.Count == 0 ? null : noStageUsingChanges, Validated: false)
                         };
                     }
@@ -1327,13 +1327,13 @@ public class AdvancedRefactoringTools
                     if (usingApply.Error is not null)
                         return new SentinelCallToolResult<AppliedChangeSummary>
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = usingApply.Error
                         };
                     var usingSummary = new AppliedChangeSummary(usingApply.ChangeId, [resolvedFilePath], $"Wrapped snippet in a using ({name}) block in {Path.GetFileName(resolvedFilePath)}.", usingApply.DryRun, usingApply.Diff, ChangedContent: usingChanges, Validated: true);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = usingSummary
                     };
                 }
@@ -1344,7 +1344,7 @@ public class AdvancedRefactoringTools
                     {
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "name (regionName) is required when wrapper=region.")
                         };
                     }
@@ -1358,7 +1358,7 @@ public class AdvancedRefactoringTools
                         };
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: noStageChanges.Keys.ToList(), Description: $"Wrap snippet in #region '{name}'.", DryRun: false, Diff: null, ChangedContent: noStageChanges.Count == 0 ? null : noStageChanges, Validated: false)
                         };
                     }
@@ -1371,20 +1371,20 @@ public class AdvancedRefactoringTools
                     if (apply.Error is not null)
                         return new SentinelCallToolResult<AppliedChangeSummary>
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = apply.Error
                         };
                     var summary = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Wrapped snippet in #region '{name}' in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = summary
                     };
                 }
 
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown wrapper '{wrapper}'. Valid values: tryCatch, using, region.")
                 };
             }
@@ -1403,7 +1403,7 @@ public class AdvancedRefactoringTools
                         };
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: noStageChanges.Keys.ToList(), Description: $"Wrap lines {startLine}-{endLine} in try/catch.", DryRun: false, Diff: null, ChangedContent: noStageChanges.Count == 0 ? null : noStageChanges, Validated: false)
                         };
                     }
@@ -1416,13 +1416,13 @@ public class AdvancedRefactoringTools
                     if (apply.Error is not null)
                         return new SentinelCallToolResult<AppliedChangeSummary>
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = apply.Error
                         };
                     var summary = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Wrapped lines {startLine}-{endLine} in a try/{exceptionType} block in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = summary
                     };
                 }
@@ -1433,7 +1433,7 @@ public class AdvancedRefactoringTools
                     {
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "name (disposalName) is required when wrapper=using.")
                         };
                     }
@@ -1447,7 +1447,7 @@ public class AdvancedRefactoringTools
                         };
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: noStageUsingChanges.Keys.ToList(), Description: $"Wrap lines {startLine}-{endLine} in using ({name}).", DryRun: false, Diff: null, ChangedContent: noStageUsingChanges.Count == 0 ? null : noStageUsingChanges, Validated: false)
                         };
                     }
@@ -1460,13 +1460,13 @@ public class AdvancedRefactoringTools
                     if (usingApply.Error is not null)
                         return new SentinelCallToolResult<AppliedChangeSummary>
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = usingApply.Error
                         };
                     var usingSummary = new AppliedChangeSummary(usingApply.ChangeId, [resolvedFilePath], $"Wrapped lines {startLine}-{endLine} in a using ({name}) block in {Path.GetFileName(resolvedFilePath)}.", usingApply.DryRun, usingApply.Diff, ChangedContent: usingChanges, Validated: true);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = usingSummary
                     };
                 }
@@ -1477,7 +1477,7 @@ public class AdvancedRefactoringTools
                     {
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "name (regionName) is required when wrapper=region.")
                         };
                     }
@@ -1491,7 +1491,7 @@ public class AdvancedRefactoringTools
                         };
                         return new SentinelCallToolResult<AppliedChangeSummary>()
                         {
-                            IsSuccess = true,
+                            IsError = false,
                             SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: noStageChanges.Keys.ToList(), Description: $"Wrap lines {startLine}-{endLine} in #region '{name}'.", DryRun: false, Diff: null, ChangedContent: noStageChanges.Count == 0 ? null : noStageChanges, Validated: false)
                         };
                     }
@@ -1504,20 +1504,20 @@ public class AdvancedRefactoringTools
                     if (apply.Error is not null)
                         return new SentinelCallToolResult<AppliedChangeSummary>
                         {
-                            IsSuccess = false,
+                            IsError = true,
                             ErrorData = apply.Error
                         };
                     var summary = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Wrapped lines {startLine}-{endLine} in #region '{name}' in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = summary
                     };
                 }
 
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown wrapper '{wrapper}'. Valid values: tryCatch, using, region.")
                 };
             }
@@ -1525,7 +1525,7 @@ public class AdvancedRefactoringTools
             {
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Either provide contextSnippet or both startLine and endLine (1-based).")
                 };
             }
@@ -1535,7 +1535,7 @@ public class AdvancedRefactoringTools
             _logger.LogError(ex, "WrapRange ({Wrapper}) failed in '{FilePathWrapper}'", wrapper, resolvedFilePath);
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "WrapRange")
             };
         }
@@ -1557,7 +1557,7 @@ public class AdvancedRefactoringTools
                 {
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: changes.Keys.ToList(), Description: $"Move type '{typeName}' from '{Path.GetFileName(resolvedFilePath)}'.", DryRun: false, Diff: null, ChangedContent: changes.Count == 0 ? null : changes, Validated: false)
                     };
                 }
@@ -1566,13 +1566,13 @@ public class AdvancedRefactoringTools
                 if (apply.Error is not null)
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = apply.Error
                     };
                 var ownFileDescription = apply.ChangeId is not null ? $"Moves '{typeName}' to its own file. Call UndoLastApply(changeId=\"{apply.ChangeId}\") to revert if needed." : $"Moves '{typeName}' to its own file.";
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), ownFileDescription, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true)
                 };
             }
@@ -1588,7 +1588,7 @@ public class AdvancedRefactoringTools
                     };
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
-                        IsSuccess = true,
+                        IsError = false,
                         SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: noStageOuterChanges.Keys.ToList(), Description: $"Move type '{typeName}' to outer scope.", DryRun: false, Diff: null, ChangedContent: noStageOuterChanges.Count == 0 ? null : noStageOuterChanges, Validated: false)
                     };
                 }
@@ -1596,7 +1596,7 @@ public class AdvancedRefactoringTools
                 if (string.IsNullOrEmpty(outerResult.UpdatedText))
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.NotFound, $"MoveType/outerScope: nested type '{typeName}' not found in '{resolvedFilePath}'.")
                     };
                 var outerChanges = new Dictionary<FilePathWrapper, string>
@@ -1607,19 +1607,19 @@ public class AdvancedRefactoringTools
                 if (outerApply.Error is not null)
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = outerApply.Error
                     };
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new AppliedChangeSummary(outerApply.ChangeId, [resolvedFilePath], $"Moved '{typeName}' to outer namespace scope in {Path.GetFileName(resolvedFilePath)}.", outerApply.DryRun, outerApply.Diff, ChangedContent: outerChanges, Validated: true)
                 };
             }
 
             return new SentinelCallToolResult<AppliedChangeSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.Exception, $"Unknown destination '{destination}'. Valid values: ownFile, outerScope.")
             };
         }
@@ -1628,7 +1628,7 @@ public class AdvancedRefactoringTools
             _logger.LogError(ex, "MoveType ({Destination}) failed for '{TypeName}' in '{FilePathWrapper}'", destination, typeName, resolvedFilePath);
             return new SentinelCallToolResult<AppliedChangeSummary>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "MoveType")
             };
         }

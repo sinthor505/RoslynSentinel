@@ -75,7 +75,7 @@ public class ModifyBaseTypeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var newContent = workspace.ReadText(FixtureRelativePath);
         Assert.Multiple(() =>
@@ -100,7 +100,7 @@ public class ModifyBaseTypeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         Assert.Multiple(() =>
         {
@@ -127,7 +127,7 @@ public class ModifyBaseTypeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("same target"), "must be rejected for the collision, not for an unrelated reason");
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(beforeContent));
     }
@@ -150,7 +150,7 @@ public class ModifyBaseTypeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(beforeContent));
     }
 
@@ -170,7 +170,7 @@ public class ModifyBaseTypeBatchTests
             edits: [new BaseTypeEdit { FilePath = path, TypeName = "BaseTypeBatchTargetB", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.remove }],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("not both"));
     }
 
@@ -184,7 +184,7 @@ public class ModifyBaseTypeBatchTests
             reason: "batch test neither supplied",
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("edits"));
     }
 
@@ -199,7 +199,7 @@ public class ModifyBaseTypeBatchTests
             edits: [],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("empty"));
     }
 
@@ -216,7 +216,7 @@ public class ModifyBaseTypeBatchTests
 
         var result = await tools.ModifyBaseType(reason: "batch test over cap", edits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));
     }
 
@@ -260,7 +260,7 @@ public class ModifyBaseTypeBatchTests
             edits: outerFirst ? [outerEdit, innerEdit] : [innerEdit, outerEdit],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var expected = before
             .Replace("public class OuterHost", "public class OuterHost : IOuterMarker")
@@ -316,7 +316,7 @@ public class ModifyBaseTypeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var expected = before
             .Replace("Weird<T>   where", "Weird<T> : IFormatMarker   where")
@@ -342,7 +342,7 @@ public class ModifyBaseTypeBatchTests
             ],
             dryRun: false, returnDiff: false, cancellationToken: default);
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.Multiple(() =>
         {
             Assert.That(result.ErrorData!.Message, Does.Contain("edits[1]"));

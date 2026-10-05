@@ -344,7 +344,7 @@ public class Caller
 
         var result = await tools.ConstructorParameter(reason: "test", "Svc.cs", AddRemoveViewAction.remove, "Svc", "config", callSiteFixups: new() { ["*"] = "cfg" });
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
@@ -356,7 +356,7 @@ public class Caller
 
         var result = await tools.ConstructorParameter(reason: "test", "Svc.cs", AddRemoveViewAction.add, "Svc", "config", "Config", dryRun: true, callSiteFixups: new() { ["Other.cs:*"] = "cfg" });
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.UnresolvedCallSites));
         Assert.That(result.ErrorData?.Detail, Does.Contain($"Caller.cs:{LineOf(SimpleCaller, "new Svc(1)")}"));
     }
@@ -369,7 +369,7 @@ public class Caller
 
         var result = await tools.ConstructorParameter(reason: "test", "Svc.cs", AddRemoveViewAction.add, "Svc", "config", "Config", dryRun: true, callSiteFixups: new() { ["*"] = "new Config()" });
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.Message + " " + result.ErrorData?.Detail);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message + " " + result.ErrorData?.Detail);
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         var documents = solution.Projects.SelectMany(p => p.Documents).ToList();
         var callerText = (await documents.First(d => d.Name == "Caller.cs").GetTextAsync()).ToString();

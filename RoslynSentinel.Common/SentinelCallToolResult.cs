@@ -193,7 +193,7 @@ public record SentinelCallToolResult<TSuccess, TError> : IResultStatus
         get; init;
     }
 
-    /// <summary>ErrorData details. Non-null when <see cref="IsSuccess"/> is false.</summary>
+    /// <summary>ErrorData details. Non-null when <see cref="IsError"/> is false.</summary>
     public TError? ErrorData
     {
         get; init;
@@ -280,12 +280,12 @@ public record SentinelCallToolResult<T> : SentinelCallToolResult<T, ResultError>
         var stored = await LargeResultHelper.StoreLargeResultAsync(data, solutionRoot, wrapperType, cancellationToken);
         if (!stored.offloaded)
         {
-            return new SentinelCallToolResult<T> { IsSuccess = true, SuccessData = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion, StatusMessage = statusMessage, ListSummary = listSummary };
+            return new SentinelCallToolResult<T> { IsError = false, SuccessData = data, TotalRecords = totalRecords, WorkspaceVersion = workspaceVersion, StatusMessage = statusMessage, ListSummary = listSummary };
         }
 
         return new SentinelCallToolResult<T>
         {
-            IsSuccess = true,
+            IsError = false,
             TotalRecords = totalRecords,
             WorkspaceVersion = workspaceVersion,
             StatusMessage = statusMessage,

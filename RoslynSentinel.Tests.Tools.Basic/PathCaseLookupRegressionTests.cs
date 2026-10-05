@@ -128,7 +128,7 @@ public class PathCaseLookupRegressionTests
             oldContent: anchor,
             newContent: anchor + " // single-touched");
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
         Assert.That(await File.ReadAllTextAsync(real), Does.Contain("// single-touched"));
     }
 
@@ -151,7 +151,7 @@ public class PathCaseLookupRegressionTests
                 new SnippetEdit { FilePath = Spell(spelling, realB), OldContent = anchorB, NewContent = anchorB + " // batch-b" },
             ]);
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
         Assert.Multiple(async () =>
         {
             Assert.That(await File.ReadAllTextAsync(realA), Does.Contain("// batch-a"));
@@ -176,7 +176,7 @@ public class PathCaseLookupRegressionTests
                 new SnippetEdit { FilePath = Spell(PathSpelling.MixedCaseDirectory, real), OldContent = "Pending = 0", NewContent = "Pending = 0 // two" },
             ]);
 
-        Assert.That(result.IsSuccess, Is.False, "two spellings of one file must not silently produce two competing rewrites");
+        Assert.That(!result.IsError, Is.False, "two spellings of one file must not silently produce two competing rewrites");
         Assert.That(await File.ReadAllTextAsync(real), Is.EqualTo(original), "a rejected batch must not write anything");
     }
 
@@ -195,7 +195,7 @@ public class PathCaseLookupRegressionTests
             oldContent: "Pending = 0",
             newContent: "Pending = 0 // must-not-land");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
         Assert.That(result.ErrorData.Message, Does.Contain("ContosoOrders.Tests").And.Contain("ContosoOrders.Core"),
             "the error must name the candidate files so the caller can retry with a full path");
@@ -216,7 +216,7 @@ public class PathCaseLookupRegressionTests
             filePath: Spell(spelling, real),
             unifiedDiff: ThreeLineDiff("diff-touched"));
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
         Assert.That(await File.ReadAllTextAsync(real), Does.Contain("// diff-touched"));
     }
 
@@ -233,7 +233,7 @@ public class PathCaseLookupRegressionTests
             filePath: Spell(spelling, real),
             unifiedDiff: ThreeLineDiff("unified-touched"));
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
         Assert.That(await File.ReadAllTextAsync(real), Does.Contain("// unified-touched"));
     }
 
@@ -254,7 +254,7 @@ public class PathCaseLookupRegressionTests
             query: "OrderStatus",
             filePath: Spell(spelling, real));
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
     }
 
     [TestCase(PathSpelling.MixedCaseDirectory)]
@@ -272,7 +272,7 @@ public class PathCaseLookupRegressionTests
             filePath: Spell(spelling, real),
             contextSnippet: "public enum OrderStatus");
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
     }
 
     [TestCase(PathSpelling.MixedCaseDirectory)]
@@ -292,7 +292,7 @@ public class PathCaseLookupRegressionTests
             filePath: Spell(spelling, real),
             contextSnippet: "public enum OrderStatus");
 
-        Assert.That(result.IsSuccess, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
     }
 
     [Test]
@@ -311,7 +311,7 @@ public class PathCaseLookupRegressionTests
             filePath: missing,
             contextSnippet: "public enum OrderStatus");
 
-        Assert.That(result.IsSuccess, Is.False);
+        Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound),
             "a file missing from the solution is a NotFound, not a raw 'Exception'");
     }

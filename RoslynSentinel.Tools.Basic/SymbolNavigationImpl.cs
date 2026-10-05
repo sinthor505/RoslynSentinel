@@ -43,7 +43,7 @@ public class SymbolNavigationImpl
             {
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = false,
+                    IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.NotFound, $"Symbol '{symbolName}' not found in the solution" +
                         (projectName != null ? $" (project: {projectName})" : "") +
                         ". Try exactMatch=false for a broader search, verify the symbol name and symbolKind, or call ListAll for a cheap solution-wide orientation listing if you're not sure of the exact name.")
@@ -52,7 +52,7 @@ public class SymbolNavigationImpl
 
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = true,
+                IsError = false,
                 SuccessData = result,
                 TotalRecords = result.Count,
                 WorkspaceVersion = _workspaceManager.WorkspaceVersion
@@ -63,7 +63,7 @@ public class SymbolNavigationImpl
             _logger.LogError(ex, "LocateSymbol failed for '{SymbolName}'", symbolName);
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "LocateSymbol")
             };
         }
@@ -98,13 +98,13 @@ public class SymbolNavigationImpl
                         : symbolInfo!.Error;
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.NotFound, errorMsg)
                     };
                 }
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = symbolInfo
                 };
             }
@@ -116,20 +116,20 @@ public class SymbolNavigationImpl
                 {
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.NotFound, result.Error)
                     };
                 }
 
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = result
                 };
             }
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled aspect '{aspect}'.")
             };
         }
@@ -138,7 +138,7 @@ public class SymbolNavigationImpl
             _logger.LogError(ex, "InspectSymbol ({Aspect}) failed in '{FilePathWrapper}'", aspect, filePathResolved);
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "InspectSymbol")
             };
         }
@@ -166,7 +166,7 @@ public class SymbolNavigationImpl
                     // error here rather than letting either include mode return a bare IsSuccess=true.
                     return new SentinelCallToolResult<object>
                     {
-                        IsSuccess = false,
+                        IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, hierarchy.Error)
                     };
                 }
@@ -179,7 +179,7 @@ public class SymbolNavigationImpl
             {
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = hierarchy!
                 };
             }
@@ -190,7 +190,7 @@ public class SymbolNavigationImpl
                     : null;
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = members!,
                     WarningDetails = warning
                 };
@@ -199,13 +199,13 @@ public class SymbolNavigationImpl
             {
                 return new SentinelCallToolResult<object>
                 {
-                    IsSuccess = true,
+                    IsError = false,
                     SuccessData = new { Hierarchy = hierarchy, Members = members }
                 };
             }
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unhandled include '{include}'.")
             };
         }
@@ -214,7 +214,7 @@ public class SymbolNavigationImpl
             _logger.LogError(ex, "GetTypeInfo ({Include}) failed for '{TypeName}'", include, typeName);
             return new SentinelCallToolResult<object>
             {
-                IsSuccess = false,
+                IsError = true,
                 ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "GetTypeInfo")
             };
         }
