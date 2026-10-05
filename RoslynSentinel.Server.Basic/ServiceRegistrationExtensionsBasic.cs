@@ -64,6 +64,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<SolutionStructureEngine>();
         services.AddSingleton<BasicRefactoringEngine>();
         services.AddSingleton<SemanticRefactoringEngine>();
+        services.AddSingleton<SemanticReplaceEngine>();
         services.AddSingleton<SolutionManagementEngine>();
         services.AddSingleton<MemberRefactoringEngine>();
         services.AddSingleton<StructuralRefinementEngine>();
@@ -159,6 +160,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             bool toolsetControlActive = activeToolClasses.Contains("ToolsetControlTools");
             bool declarationActive = activeToolClasses.Contains("DeclarationTools");
             bool parameterEditActive = activeToolClasses.Contains("ParameterEditTools");
+            bool semanticFindReplaceActive = activeToolClasses.Contains("SemanticFindReplaceTools");
             activeToolClasses = new HashSet<string>(activeToolClasses, StringComparer.OrdinalIgnoreCase);
             foreach (var onDemandClass in ToolClassRegistry.ClaudeLeanOnDemandToolClasses.Where(c => !resolvedExcludeTools.Contains(c)))
             {
@@ -189,6 +191,14 @@ public static class RoslynSentinelServiceExtensionsBasic
             {
                 services.AddSingleton<ParameterEditTools>();
                 mcpBuilder.WithSentinelTools<ParameterEditTools>();
+            }
+
+            // The SemanticFindReplace tool: on-demand only, added by the `moveExtract` toolset. Its dependencies
+            // (SemanticReplaceEngine, ValidationEngine, IWorkspaceManager) are registered by AddRoslynSentinelEnginesBasic.
+            if (semanticFindReplaceActive)
+            {
+                services.AddSingleton<SemanticFindReplaceTools>();
+                mcpBuilder.WithSentinelTools<SemanticFindReplaceTools>();
             }
         }
 

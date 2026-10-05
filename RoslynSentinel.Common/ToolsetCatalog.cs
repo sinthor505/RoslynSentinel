@@ -36,7 +36,7 @@ public static class ToolsetCatalog
                 "MoveMember", "MoveType", "MoveAllTypesToFiles", "ExtractLocalVariable", "ExtractMembers",
                 "ExtractMethodSafe", "Inline", "InlineClass", "Introduce", "IntroduceParameterObject", "WrapRange",
                 "InvertAssignments", "ConvertAnonymousToNamed", "SyncInterface", "SummaryComment",
-                "SafeDeleteUnusedSymbol", "PreviewRenameImpact", "ApplyDiff", "ApplyUnifiedDiff",
+                "SafeDeleteUnusedSymbol", "PreviewRenameImpact", "ApplyDiff", "ApplyUnifiedDiff", "SemanticFindReplace",
             ],
             [ToolSetName.projectAdmin] =
             [

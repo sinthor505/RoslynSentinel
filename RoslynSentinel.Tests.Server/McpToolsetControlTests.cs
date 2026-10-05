@@ -207,7 +207,7 @@ public class McpToolsetControlTests
         Assert.That(all, Is.Unique);
         Assert.That(all.Intersect(ToolClassRegistry.ClaudeLeanToolNames), Is.Empty);
         Assert.That(ToolsetCatalog.AllToolNames, Has.Count.EqualTo(all.Length));
-        Assert.That(all, Has.Length.EqualTo(38));
+        Assert.That(all, Has.Length.EqualTo(39));
     }
 
     [Test]
@@ -246,9 +246,10 @@ public class McpToolsetControlTests
             service.SetEnabled(set, true);
         }
 
-        // Declaration and ParameterEdit are the catalog tools no startup mode registers (they exist only as on-demand claude-lean tools,
-        // see DeclarationToolTests and ParameterEditToolTests), so there is no startup instance to compare them with.
-        foreach (var name in ToolsetCatalog.AllToolNames.Where(n => n is not ("Declaration" or "ParameterEdit")))
+        // Declaration, ParameterEdit and SemanticFindReplace are the catalog tools no startup mode registers (they exist only as on-demand
+        // claude-lean tools, see DeclarationToolTests, ParameterEditToolTests and SemanticFindReplaceToolTests), so there is no startup
+        // instance to compare them with.
+        foreach (var name in ToolsetCatalog.AllToolNames.Where(n => n is not ("Declaration" or "ParameterEdit" or "SemanticFindReplace")))
         {
             Assert.That(startup.TryGetPrimitive(name, out var expected), Is.True, $"{name} should be a startup tool in --mode claude");
             Assert.That(collection.TryGetPrimitive(name, out var actual), Is.True);
