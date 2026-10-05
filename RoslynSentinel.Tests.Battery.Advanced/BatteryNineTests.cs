@@ -20,6 +20,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // A. TestingEngineTests
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("TestingEngine")] // sentinel:auto-category
 public class TestingEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -83,6 +84,7 @@ namespace MyApp
     }
 
     [Test]
+    [Category("TestScaffoldResult")] // sentinel:auto-category
     public async Task GenerateTestScaffold_ClassWithInterfaceConstructor_GeneratesMockSetup()
     {
         SetSource(@"
@@ -108,6 +110,7 @@ namespace MyApp
 // B. SolutionManagementEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SolutionManagementEngine")] // sentinel:auto-category
 public class SolutionManagementEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -152,6 +155,7 @@ public class SolutionManagementEngineTests
 // C. PerformanceEngineTests
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("PerformanceEngine")] // sentinel:auto-category
 public class PerformanceEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -224,6 +228,7 @@ public class Clean
 // D. StructuralRefinementEngineTests
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("StructuralRefinementEngine")] // sentinel:auto-category
 public class StructuralRefinementEngineTests
 {
     private IWorkspaceManager _workspaceManager;

@@ -23,6 +23,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 //    Verifies that the assignment-guard and name-filter edges are respected.
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class BlockingCallFalsePositiveTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -137,6 +138,7 @@ public class BlockingCallFalsePositiveTests
 //    Validates access-modifier invariance and the event-handler exception.
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("AsyncAnalysisEngine")] // sentinel:auto-category
 public class AsyncVoidGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -262,6 +264,7 @@ public class AsyncVoidGotchaTests
 //    Only flags blocking calls that appear inside async methods.
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("AsyncAnalysisEngine")] // sentinel:auto-category
 public class LockInAsyncGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -354,6 +357,7 @@ public class LockInAsyncGotchaTests
 //    MakeMethodThreadSafeAsync + ConvertLockToSemaphoreSlimAsync
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("ThreadSafetyEngine")] // sentinel:auto-category
 public class ThreadSafeLockGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -473,6 +477,7 @@ public class ThreadSafeLockGotchaTests
 //    The "immediately-next-statement await" boundary must NOT be flagged.
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("AsyncAnalysisEngine")] // sentinel:auto-category
 public class ValueTaskMisuseGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -566,6 +571,8 @@ public class ValueTaskMisuseGotchaTests
 //    The SwallowedException pattern has nuanced conditions that must be respected.
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
+[Category("ExceptionHandlingFinding")] // sentinel:auto-category
 public class ExceptionHandlingGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -688,6 +695,7 @@ public class ExceptionHandlingGotchaTests
 //    Idempotency, unknown-class fallback, and public-field handling.
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("SyntaxModernizationEngine")] // sentinel:auto-category
 public class ImmutabilityGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -779,6 +787,7 @@ public class ImmutabilityGotchaTests
 //    matches LooksLikeStringVar (ends in "str", "text", "html", …).
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class StringConcatInLoopGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -879,6 +888,8 @@ public class StringConcatInLoopGotchaTests
 //    Uses the semantic model to find callees that accept CancellationToken.
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
+[Category("MissingCancellationTokenFinding")] // sentinel:auto-category
 public class MissingCancellationTokenGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -963,6 +974,7 @@ public class MissingCancellationTokenGotchaTests
 //     Only CastExpressionSyntax is flagged -> "as" and "is" patterns are safe.
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("SecurityAndSafetyEngine")] // sentinel:auto-category
 public class UnsafeTypeCastGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -977,6 +989,7 @@ public class UnsafeTypeCastGotchaTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
     [Test]
+    [Category("SafetyIssue")] // sentinel:auto-category
     public async Task FindUnsafeCasts_DirectStringCast_IsFlagged()
     {
         const string source = """
@@ -991,6 +1004,7 @@ public class UnsafeTypeCastGotchaTests
     }
 
     [Test]
+    [Category("SafetyIssue")] // sentinel:auto-category
     public async Task FindUnsafeCasts_NumericCast_IsNotFlagged()
     {
         // FIX (BH-03): Numeric/value-type casts like (int)double are safe conversions
@@ -1062,6 +1076,7 @@ public class UnsafeTypeCastGotchaTests
 //     Bug fixed: _ = RunAsync() was silently skipped (AssignmentExpressionSyntax).
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("AsyncAnalysisEngine")] // sentinel:auto-category
 public class FireAndForgetGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -1159,6 +1174,7 @@ public class FireAndForgetGotchaTests
 //     Library code must use .ConfigureAwait(false); controller classes are excluded.
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("AsyncAnalysisEngine")] // sentinel:auto-category
 public class ConfigureAwaitInLibraryGotchaTests
 {
     private IWorkspaceManager _workspaceManager = null!;

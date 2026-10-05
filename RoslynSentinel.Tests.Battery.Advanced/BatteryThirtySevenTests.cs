@@ -16,6 +16,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 ///  5. NAME_MISMATCH / MULTI_TYPE -> skips Roslyn source-generator output (.g.cs files).
 /// </summary>
 [TestFixture]
+[Category("SolutionStructureEngine")] // sentinel:auto-category
+[Category("StructuralSmellType")] // sentinel:auto-category
 public class BatteryThirtySevenTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -71,6 +73,7 @@ public class BatteryThirtySevenTests
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task DetectAntiPatterns_SolutionWide_ExcludesTestsProject()
     {
         // An async void method in a .Tests project should NOT be reported
@@ -86,6 +89,7 @@ class FakeTest {
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task DetectAntiPatterns_SolutionWide_ExcludesBenchmarksProject()
     {
         SetProject("MyApp.Benchmarks", @"
@@ -100,6 +104,7 @@ class Bench {
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task DetectAntiPatterns_SolutionWide_StillFindsProductionCode()
     {
         // An async void method in a production project MUST still be reported
@@ -117,6 +122,7 @@ class EventHandler {
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task DetectAntiPatterns_ExplicitProjectName_StillWorksForTestProject()
     {
         // When explicitly targeting a .Tests project, the exclusion must NOT apply
@@ -138,6 +144,7 @@ class Fixture {
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindMissingCancellationTokens_SolutionWide_ExcludesTestsProject()
     {
         SetProject("MyApp.Tests", @"
@@ -152,6 +159,8 @@ class Tests {
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
+    [Category("MissingCancellationTokenFinding")] // sentinel:auto-category
     public async Task FindMissingCancellationTokens_SolutionWide_StillFindsProductionCode()
     {
         SetProject("MyApp.Service", @"

@@ -11,6 +11,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // A. ImmutabilityEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SyntaxModernizationEngine")] // sentinel:auto-category
 public class ImmutabilityEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -55,6 +56,7 @@ public class ImmutabilityEngineTests
 // B. ThreadSafetyEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("ThreadSafetyEngine")] // sentinel:auto-category
 public class ThreadSafetyEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -103,6 +105,7 @@ public class ThreadSafetyEngineTests
 // C. AsyncSafetyEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AsyncAnalysisEngine")] // sentinel:auto-category
 public class AsyncSafetyEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -171,6 +174,7 @@ public class Worker
 // D. DeadCodeEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("DeadCodeEngine")] // sentinel:auto-category
 public class DeadCodeEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;

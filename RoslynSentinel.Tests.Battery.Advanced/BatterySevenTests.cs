@@ -19,6 +19,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // A. BasicRefactoringEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("BasicRefactoringEngine")] // sentinel:auto-category
 public class BasicRefactoringEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -54,6 +55,8 @@ public class BasicRefactoringEngineTests
 // B. SemanticSearchEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("DiscoveryEngine")] // sentinel:auto-category
+[Category("SearchResult")] // sentinel:auto-category
 public class SemanticSearchEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -133,6 +136,7 @@ public class PlainDto { public int Id { get; set; } }
 // C. AdvancedTypeEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("StructuralRefactoringEngine")] // sentinel:auto-category
 public class AdvancedTypeEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -228,6 +232,7 @@ public class Factory
 // D. MemberRefactoringEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("MemberRefactoringEngine")] // sentinel:auto-category
 public class MemberRefactoringEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -295,6 +300,7 @@ public class MathHelper
 
 
     [Test]
+    [Category("ExtractMethodResult")] // sentinel:auto-category
     public async Task ExtractMethodAsync_ValidRange_ReturnsResult()
     {
         var source = @"public class Calc {
@@ -312,6 +318,7 @@ public class MathHelper
     }
 
     [Test]
+    [Category("ExtractMethodResult")] // sentinel:auto-category
     public async Task ExtractMethodAsync_UnknownFile_ReturnsFailureResult()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);

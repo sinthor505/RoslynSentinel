@@ -11,6 +11,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // A. AdvancedLogicEngine -> 4 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("LogicSimplificationEngine")] // sentinel:auto-category
 public class AdvancedLogicEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -102,6 +103,7 @@ public class Looper {
 // B. AnalysisEngine -> 9 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class AnalysisEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -125,6 +127,7 @@ public class AnalysisEngineGapTests
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUninstantiatedTypesAsync_EmptyProject_ReturnsNonNull()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Used { public void Go() {} }")]);
@@ -168,6 +171,7 @@ public class Guard {
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindInternalClassesThatCouldBePrivateAsync_SimpleProject_ReturnsNonNull()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Outer { internal class Inner {} }")]);
@@ -220,6 +224,7 @@ public class Router {
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedInterfacesAsync_WithUnimplementedInterface_ReturnsNonNull()
     {
         var source = @"
@@ -237,6 +242,7 @@ public class Bar {}
 // C. AntiPatternEngine -> 4 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class AntiPatternEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -305,6 +311,7 @@ public class Service {
 // D. CodeHealingEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("CodeHealingEngine")] // sentinel:auto-category
 public class CodeHealingEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -333,6 +340,7 @@ public class CodeHealingEngineGapTests
 // E. CodeStyleEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("CodeStyleEngine")] // sentinel:auto-category
 public class CodeStyleEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -375,6 +383,8 @@ public class Slicer {
 // F. ControlFlowEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("ControlFlowEngine")] // sentinel:auto-category
+[Category("DataFlowAnalysisResult")] // sentinel:auto-category
 public class ControlFlowEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -420,6 +430,7 @@ public class Calculator {
 // G. DeadCodeEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("DeadCodeEngine")] // sentinel:auto-category
 public class DeadCodeEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -464,6 +475,7 @@ public class Calc {
 // H. DependencyEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("DependencyEngine")] // sentinel:auto-category
 public class DependencyEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -506,6 +518,7 @@ public class DependencyEngineGapTests
 // I. DependencyInjectionEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("DependencyInjectionEngine")] // sentinel:auto-category
 public class DependencyInjectionEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -554,6 +567,7 @@ public class DependencyInjectionEngineGapTests
 // J. GranularRefactoringEngine -> 4 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("StructuralRefactoringEngine")] // sentinel:auto-category
 public class GranularRefactoringEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -652,6 +666,7 @@ public class Outer {
 // K. PerformanceEngine -> 1 untested method
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("PerformanceEngine")] // sentinel:auto-category
 public class PerformanceEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -679,6 +694,7 @@ public class PerformanceEngineGapTests
 // L. BasicRefactoringEngine -> 5 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("BasicRefactoringEngine")] // sentinel:auto-category
 public class RefactoringEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -718,6 +734,7 @@ public class Cache {
 
 
     [Test]
+    [Category("ControlFlowSummary")] // sentinel:auto-category
     public async Task AnalyzeControlFlowAsync_SimpleMethod_ReturnsSummary()
     {
         var source = @"
@@ -744,6 +761,7 @@ public class Service {
     }
 
     [Test]
+    [Category("DataFlowSummary")] // sentinel:auto-category
     public async Task AnalyzeDataFlowAsync_SimpleMethod_ReturnsSummary()
     {
         var source = @"
@@ -774,6 +792,7 @@ public class Service {
 // M. SymbolNavigationEngine -> 5 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SymbolNavigationEngine")] // sentinel:auto-category
 public class SymbolNavigationEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -788,6 +807,7 @@ public class SymbolNavigationEngineGapTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
     [Test]
+    [Category("SymbolHoverInfo")] // sentinel:auto-category
     public async Task GetSymbolInfoAsync_KnownMethodSnippet_ReturnsNonNull()
     {
         var source = @"
@@ -901,6 +921,7 @@ public static class StringExtensions {
 // N. SyntaxUpgradeEngine -> 2 untested methods
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SyntaxUpgradeEngine")] // sentinel:auto-category
 public class SyntaxUpgradeEngineGapTests
 {
     private IWorkspaceManager _workspaceManager = null!;

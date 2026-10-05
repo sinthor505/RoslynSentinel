@@ -43,6 +43,7 @@ public class B30_RegressionTests
     // Bug 1: add_validation_to_poco -> duplicate attributes
     // =========================================================================
     [Test]
+    [Category("ApiGenerationEngine")] // sentinel:auto-category
     public async Task AddValidationToPoco_WhenPropertyHasNoAttributes_AddsRequired()
     {
         const string code = @"
@@ -57,6 +58,7 @@ public class Product {
     }
 
     [Test]
+    [Category("ApiGenerationEngine")] // sentinel:auto-category
     public async Task AddValidationToPoco_WhenPropertyAlreadyHasRequired_DoesNotDuplicate()
     {
         // This is the regression test for Bug 1 -> running the tool on a class that already
@@ -76,6 +78,7 @@ public class Product {
     }
 
     [Test]
+    [Category("ApiGenerationEngine")] // sentinel:auto-category
     public async Task AddValidationToPoco_WhenPropertyAlreadyHasStringLength_DoesNotDuplicateStringLength()
     {
         const string code = @"
@@ -91,6 +94,7 @@ public class Order {
     }
 
     [Test]
+    [Category("ApiGenerationEngine")] // sentinel:auto-category
     public async Task AddValidationToPoco_WhenPropertyAlreadyHasRange_DoesNotDuplicateRange()
     {
         const string code = @"
@@ -106,6 +110,7 @@ public class Measurement {
     }
 
     [Test]
+    [Category("ApiGenerationEngine")] // sentinel:auto-category
     public async Task AddValidationToPoco_RunTwiceOnSameClass_IsIdempotent()
     {
         const string code = @"
@@ -127,6 +132,7 @@ public class Customer {
     // Bug 2: class_to_record -> positional syntax strips attributes / initializers
     // =========================================================================
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ClassToRecord_SimpleClassNoAttributes_UsesPositionalSyntax()
     {
         const string code = @"
@@ -142,6 +148,7 @@ public class Point {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ClassToRecord_WhenClassHasAnnotatedProperties_PreservesAttributes()
     {
         // Regression test for Bug 2: positional parameters would silently strip [Required].
@@ -162,6 +169,7 @@ public class Product {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ClassToRecord_WhenClassHasInitializedProperties_PreservesInitializers()
     {
         // Regression test for Bug 2: positional parameters strip initializers.
@@ -180,6 +188,7 @@ public class Config {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ClassToRecord_WhenClassHasAttributesAndInitializers_ProducesValidOutput()
     {
         const string code = @"
@@ -200,6 +209,7 @@ public class Item {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ClassToRecord_ConvertsSetToInit_OnClassBodyRecord()
     {
         const string code = @"
@@ -219,6 +229,7 @@ public class Address {
     // Bug 3: convert_lock_to_semaphore_slim -> wrong field modifier for static methods
     // =========================================================================
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task ConvertLockToSemaphoreSlim_InstanceMethod_EmitsInstanceField()
     {
         const string code = @"
@@ -236,6 +247,7 @@ public class Service {
     }
 
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task ConvertLockToSemaphoreSlim_StaticMethod_EmitsStaticField()
     {
         // Regression test for Bug 3: static method requires static semaphore field.
@@ -254,6 +266,7 @@ public class RateLimiter {
     }
 
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task ConvertLockToSemaphoreSlim_MixedStaticAndInstance_UsesInstanceField()
     {
         // If at least one method using the lock is instance, the field must be instance.
@@ -270,6 +283,7 @@ public class Cache {
     }
 
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task ConvertLockToSemaphoreSlim_StaticMethod_CompilesCorrectly()
     {
         // Static context: `await _semaphore.WaitAsync()` must compile -> field must be static.
@@ -292,6 +306,7 @@ public class Counter {
     // Bug 4: use_field_backed_properties -> inverted direction + empty-string crash
     // =========================================================================
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseFieldBackedProperties_WhenDocumentNotFound_ReturnsGracefulMessage()
     {
         // Regression test for Bug 4 crash: file not in workspace should not throw.
@@ -302,6 +317,7 @@ public class Counter {
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseFieldBackedProperties_WhenNoBackingFieldPairs_ReturnsOriginalContent()
     {
         // No pairs means source is returned unchanged.
@@ -318,6 +334,7 @@ public class Simple {
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseFieldBackedProperties_WhenBackingFieldPairExists_ConvertsToAutoProperty()
     {
         // Regression test for Bug 4: tool must collapse backing-field+property to auto-property.
@@ -338,6 +355,7 @@ public class Entity {
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseFieldBackedProperties_WhenBackingFieldHasInitializer_TransfersInitializerToAutoProp()
     {
         const string code = @"
@@ -352,6 +370,7 @@ public class Settings {
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseFieldBackedProperties_WhenInitAccessorUsed_PreservesInitOnAutoProperty()
     {
         const string code = @"
@@ -367,6 +386,7 @@ public class Dto {
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseFieldBackedProperties_DoesNotExpandAutoPropertiesToBackingFields()
     {
         // Regression test ensuring the direction is correct: the tool must NOT expand auto-props.
@@ -384,6 +404,7 @@ public class Auto {
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseFieldBackedProperties_ReadOnlyBackingField_IsNotConverted()
     {
         // readonly backing fields are not candidates (they need readonly auto-property semantics which is different)
@@ -400,6 +421,7 @@ public class Immutable {
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseFieldBackedProperties_StaticBackingField_IsNotConverted()
     {
         // static backing fields are not candidates
@@ -418,6 +440,7 @@ public class Registry {
     // Cross-cutting: the handler in ModernizationTools must not throw
     // =========================================================================
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseFieldBackedPropertiesEngine_WhenFeatureDisabled_ReturnsEmptyString()
     {
         _cfg.SetFeatureStatus("FieldBackedProperties", false);
@@ -431,6 +454,7 @@ public class Registry {
     // Additional regression: class_to_record positional record must have semicolon
     // =========================================================================
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ClassToRecord_SimpleWithNoNonPropertyMembers_ProducesSemicolonOrBraceRecord()
     {
         const string code = @"
@@ -444,6 +468,7 @@ public class Vector { public double X { get; init; } public double Y { get; init
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ClassToRecord_WithNonPropertyMembers_IncludesMethodsInRecord()
     {
         const string code = @"

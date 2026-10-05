@@ -10,6 +10,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // A. AnalysisEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class AnalysisEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -71,6 +72,8 @@ public class Calc {
 // B. CodeGenerationEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("CodeGenerationEngine")] // sentinel:auto-category
+[Category("GenerationResult")] // sentinel:auto-category
 public class CodeGenerationEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -120,6 +123,7 @@ public class CodeGenerationEngineTests
 // C. ControlFlowEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("ControlFlowEngine")] // sentinel:auto-category
 public class ControlFlowEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -163,6 +167,7 @@ public class Simple {
     }
 
     [Test]
+    [Category("ControlFlowAnalysisResult")] // sentinel:auto-category
     public async Task AnalyzeMethodControlFlow_UnknownFile_ReturnsErrorResult()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Simple.cs", "public class Simple { }")]);
@@ -177,6 +182,8 @@ public class Simple {
 // D. SymbolNavigationEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("ReadonlyFieldCandidate")] // sentinel:auto-category
+[Category("SymbolNavigationEngine")] // sentinel:auto-category
 public class SymbolNavigationEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;

@@ -24,6 +24,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 /// 15. While loop that doesn't touch params or return value -> not reported.
 /// </summary>
 [TestFixture]
+[Category("PathDrivenTestEngine")] // sentinel:auto-category
 public class BatteryThirtyEightTests
 {
     private IWorkspaceManager _workspaceManager;

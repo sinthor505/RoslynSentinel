@@ -11,6 +11,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // ────────────────────────────────────────────────────────────────────────────
 
 [TestFixture]
+[Category("LogicSimplificationEngine")] // sentinel:auto-category
 public class LogicOptimizationEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -74,6 +75,8 @@ public class Guard
 }
 
 [TestFixture]
+[Category("MsAugmentResult")] // sentinel:auto-category
+[Category("MsToolAugmentEngine")] // sentinel:auto-category
 public class MsToolAugmentEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -125,6 +128,7 @@ public class MsToolAugmentEngineTests
 }
 
 [TestFixture]
+[Category("SolutionStructureEngine")] // sentinel:auto-category
 public class SolutionStructureEngineTests2
 {
     private PersistentWorkspaceManager _mgr = null!;

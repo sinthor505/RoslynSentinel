@@ -82,6 +82,7 @@ public class BatteryThirtySixTests
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindUnawaitedFireAndForget_NullFilePath_ScansWholeSolution()
     {
         SetSingleFile(@"
@@ -97,6 +98,7 @@ class C {
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindUnawaitedFireAndForget_ProjectNameScope_FiltersCorrectly()
     {
         // Two-project setup via simple single-project workspace (projectName must match)
@@ -120,6 +122,7 @@ class C {
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task FindHardcodedPaths_NullScope_FindsPathsAcrossSolution()
     {
         SetSingleFile(@"
@@ -133,6 +136,7 @@ class C {
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task FindHardcodedPaths_FileScope_ReturnsSameAsOldBehavior()
     {
         SetSingleFile(@"
@@ -149,6 +153,7 @@ class C {
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task FindHardcodedPaths_ProjectScope_FiltersToProject()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("MyService", [("Paths.cs", @"
@@ -167,6 +172,7 @@ class C { string p = ""C:\\Logs\\app.log""; }")]);
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task CheckForSqlInjection_NullScope_FindsVulnerabilitiesAcrossSolution()
     {
         SetSingleFile(@"
@@ -182,6 +188,7 @@ class Repo {
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task CheckForSqlInjection_ProjectScope_FiltersCorrectly()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("DataProj", [("Repo.cs", @"
@@ -201,6 +208,7 @@ class Repo {
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task CheckForSqlInjection_FileScope_StillWorks()
     {
         SetSingleFile(@"
@@ -223,6 +231,7 @@ class Repo {
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindSequentialIndependentAwaits_ThreeIndependent_OneGroupedFinding()
     {
         // 3 sequential independent awaits -> must produce exactly ONE finding (not 2)
@@ -245,6 +254,7 @@ class C {
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindSequentialIndependentAwaits_FiveIndependent_OneGroupedFinding()
     {
         // 5 independent sequential awaits -> 1 finding (old code would give 4)
@@ -267,6 +277,7 @@ class C {
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindSequentialIndependentAwaits_DependentPair_NotReported()
     {
         // Second await uses result of first -> NOT parallelisable
@@ -283,6 +294,7 @@ class C {
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindSequentialIndependentAwaits_TwoBlocksSeparatedByDependent_TwoFindings()
     {
         // Block1: a,b  |  dependent c=f(b)  |  Block2: d,e
@@ -309,6 +321,8 @@ class C {
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("SolutionStructureEngine")] // sentinel:auto-category
+    [Category("StructuralSmellType")] // sentinel:auto-category
     public async Task NameMismatch_AppHostProject_Suppressed()
     {
         // File "Resources.cs" with a type named "ServiceNames" -> classic Aspire AppHost pattern
@@ -325,6 +339,8 @@ class C {
     }
 
     [Test]
+    [Category("SolutionStructureEngine")] // sentinel:auto-category
+    [Category("StructuralSmellType")] // sentinel:auto-category
     public async Task NameMismatch_NonAppHostProject_StillReported()
     {
         // File "Foo.cs" with a type named "Bar" -> genuine mismatch in a normal project
@@ -341,6 +357,8 @@ class C {
     }
 
     [Test]
+    [Category("SolutionStructureEngine")] // sentinel:auto-category
+    [Category("StructuralSmellType")] // sentinel:auto-category
     public async Task NameMismatch_AppHostDotNew_AlsoSuppressed()
     {
         // ".AppHost.New" suffix -> the ExpressRecipe pattern

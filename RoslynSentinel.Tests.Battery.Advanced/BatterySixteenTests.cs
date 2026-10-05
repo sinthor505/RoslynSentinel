@@ -9,6 +9,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 //               GranularRefactoringEngine, HealthOrchestrationEngine
 // ────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("DependencyInjectionEngine")] // sentinel:auto-category
 public class DependencyInjectionEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -56,6 +57,7 @@ public static class ServiceExtensions
 }
 
 [TestFixture]
+[Category("StructuralRefactoringEngine")] // sentinel:auto-category
 public class GranularRefactoringEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -106,6 +108,7 @@ public class Calc
 }
 
 [TestFixture]
+[Category("HealthOrchestrationEngine")] // sentinel:auto-category
 public class HealthOrchestrationEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;

@@ -119,6 +119,8 @@ public class ValidationEngineTests
 // B. MetricsEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("MetricsEngine")] // sentinel:auto-category
+[Category("SolutionMetrics")] // sentinel:auto-category
 public class MetricsEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -178,6 +180,8 @@ public class MetricsEngineTests
 // C. DiagnosticEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("DiagnosticEngine")] // sentinel:auto-category
+[Category("DiagnosticSummary")] // sentinel:auto-category
 public class DiagnosticEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -227,6 +231,7 @@ public class DiagnosticEngineTests
 // D. SecurityEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SecurityEngine")] // sentinel:auto-category
 public class SecurityEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;

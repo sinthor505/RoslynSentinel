@@ -9,6 +9,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 //               AdvancedStructuralEngine, AntiPatternEngine
 // ────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("LogicSimplificationEngine")] // sentinel:auto-category
 public class AdvancedLogicEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -58,6 +59,7 @@ public static class MyExtensions
 }
 
 [TestFixture]
+[Category("SyntaxModernizationEngine")] // sentinel:auto-category
 public class AdvancedRefactoringEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -95,6 +97,7 @@ public class Greeter
     }
 
     [Test]
+    [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
     public async Task OptimizeTaskWait_UnknownFile_ThrowsFileNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
@@ -104,6 +107,7 @@ public class Greeter
 }
 
 [TestFixture]
+[Category("StructuralRefactoringEngine")] // sentinel:auto-category
 public class AdvancedStructuralEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -161,6 +165,7 @@ public class Widget
 }
 
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class AntiPatternEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;

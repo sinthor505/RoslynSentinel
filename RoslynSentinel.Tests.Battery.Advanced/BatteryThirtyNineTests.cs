@@ -21,6 +21,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 /// 12. Inheritance property cycle: override accesses base property that calls overridden method.
 /// </summary>
 [TestFixture]
+[Category("StackOverflowEngine")] // sentinel:auto-category
 public class BatteryThirtyNineTests
 {
     private IWorkspaceManager _workspaceManager;

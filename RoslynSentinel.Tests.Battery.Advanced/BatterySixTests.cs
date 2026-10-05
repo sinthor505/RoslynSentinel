@@ -19,6 +19,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // A. DocumentationEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("DocumentationEngine")] // sentinel:auto-category
 public class DocumentationEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -97,6 +98,7 @@ public class UserDto
 // B. SolutionStructureEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SolutionStructureEngine")] // sentinel:auto-category
 public class SolutionStructureEngineTests
 {
     private IWorkspaceManager _workspaceManager;

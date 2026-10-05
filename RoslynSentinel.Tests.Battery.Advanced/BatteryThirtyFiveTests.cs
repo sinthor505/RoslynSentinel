@@ -11,6 +11,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Battery.Advanced;
 
 [TestFixture]
+[Category("SymbolNavigationEngine")] // sentinel:auto-category
 public class BatteryThirtyFiveTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -51,6 +52,7 @@ public class BatteryThirtyFiveTests
     // ======================================================================
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeToFileScopedNamespace_BlockForm_ConvertedSuccessfully()
     {
         const string src = @"namespace MyApp
@@ -73,6 +75,7 @@ public class BatteryThirtyFiveTests
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeToFileScopedNamespace_AlreadyFileScoped_ReturnsMessage()
     {
         const string src = "namespace MyApp;\npublic class Bar {}";
@@ -84,6 +87,7 @@ public class BatteryThirtyFiveTests
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeToFileScopedNamespace_NoNamespace_ReturnsMessage()
     {
         const string src = "public class Global {}";
@@ -95,6 +99,7 @@ public class BatteryThirtyFiveTests
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeToFileScopedNamespace_PreservesUsingsAndMembers()
     {
         const string src = @"using System;
@@ -248,6 +253,7 @@ public class LazyWorker : IWorker { public void Work() {} }";
     // ======================================================================
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindCancellationTokenNotForwarded_MissingForwarding_Reported()
     {
         const string src = @"
@@ -278,6 +284,7 @@ public class DataService
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindCancellationTokenNotForwarded_ForwardedCt_NoReport()
     {
         const string src = @"
@@ -305,6 +312,7 @@ public class GoodService
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindCancellationTokenNotForwarded_NonAsyncMethod_NotFlagged()
     {
         const string src = @"

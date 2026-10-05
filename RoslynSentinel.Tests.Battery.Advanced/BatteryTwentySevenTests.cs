@@ -29,6 +29,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // B08 -> DeadCodeEngine: written-but-never-read must be flagged as unused
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("DeadCodeEngine")] // sentinel:auto-category
 public class B08_DeadCode_WrittenButNeverRead
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -84,6 +85,7 @@ public class B08_DeadCode_WrittenButNeverRead
 // B02 -> ImmutabilityEngine: const fields must not receive readonly modifier
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("SyntaxModernizationEngine")] // sentinel:auto-category
 public class B02_Immutability_ConstFieldNotReadonly
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -121,6 +123,7 @@ public class B02_Immutability_ConstFieldNotReadonly
 // B01 -> InstrumentationEngine: catch block must contain a valid throw statement
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("InstrumentationEngine")] // sentinel:auto-category
 public class B01_Instrumentation_ValidThrowStatement
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -180,6 +183,7 @@ public class B01_Instrumentation_ValidThrowStatement
 //        member access, not a dotted identifier name
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("SolutionStructureEngine")] // sentinel:auto-category
 public class B03_SolutionStructureEngine_ValidMemberAccess
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -224,6 +228,7 @@ public class B03_SolutionStructureEngine_ValidMemberAccess
 //        .Wait()/.Result when semantic model is absent (prevents false positives)
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("AdvancedRefactoringEngine")] // sentinel:auto-category
 public class B09_AdvancedRefactoring_IsTaskTypeNullGuard
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -322,6 +327,7 @@ public class B18_ContextHelper_CaseSensitiveKeywords
 // B19 -> TestingEngine.GenerateTestSkeletonAsync: MSTest framework support
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("TestingEngine")] // sentinel:auto-category
 public class B19_TestingEngine_MSTestSupport
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -394,6 +400,7 @@ public class B19_TestingEngine_MSTestSupport
 // B17 -> DocumentationEngine: methods inside #region must still receive XML docs
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("DocumentationEngine")] // sentinel:auto-category
 public class B17_DocumentationEngine_RegionMethodsGetDocs
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -448,6 +455,7 @@ public class B17_DocumentationEngine_RegionMethodsGetDocs
 // B11 -> ModernizationEngine.ClassToRecordAsync: no CS0102 duplicate properties
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("SyntaxModernizationEngine")] // sentinel:auto-category
 public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -506,6 +514,7 @@ public class B11_ModernizationEngine_ClassToRecord_NoDuplicateProperties
 // B10 -> ModernizationEngine.TryConvertOrChainToPattern: full OR chain preserved
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("SyntaxModernizationEngine")] // sentinel:auto-category
 public class B10_ModernizationEngine_OrChainFullPattern
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -552,6 +561,7 @@ public class B10_ModernizationEngine_OrChainFullPattern
 // B20 -> LogicSimplificationEngine.AddGuardClausesAsync: nullable params skipped
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("LogicSimplificationEngine")] // sentinel:auto-category
 public class B20_LogicOptimization_NullableParamNoGuard
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -604,6 +614,7 @@ public class B20_LogicOptimization_NullableParamNoGuard
 // B04 -> AntiPatternEngine.DetectMissingCancellationToken: zero-param async methods
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class B04_AntiPattern_ZeroParamAsyncNeedsCancellationToken
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -662,6 +673,8 @@ public class B04_AntiPattern_ZeroParamAsyncNeedsCancellationToken
 // B16 -> SecurityAndSafetyEngine: expression-bodied methods must be checked
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("SafetyIssue")] // sentinel:auto-category
+[Category("SecurityAndSafetyEngine")] // sentinel:auto-category
 public class B16_SecuritySafety_ExpressionBodiedMethodsChecked
 {
     private IWorkspaceManager _workspaceManager = null!;

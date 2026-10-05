@@ -19,6 +19,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // B02-extra -> ImmutabilityEngine: readonly modifier spacing in more scenarios
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("SyntaxModernizationEngine")] // sentinel:auto-category
 public class B02extra_Immutability_ReadonlySpacing
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -123,6 +124,7 @@ public class B02extra_Immutability_ReadonlySpacing
 // B04-extra -> AntiPatternEngine zero-param: ValueTask, private, interface shapes
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class B04extra_AntiPattern_ZeroParamCancellationToken
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -201,6 +203,8 @@ public class B04extra_AntiPattern_ZeroParamCancellationToken
 // B16-extra -> SecurityAndSafetyEngine: chained ?., multi-param, block-body shapes
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("SafetyIssue")] // sentinel:auto-category
+[Category("SecurityAndSafetyEngine")] // sentinel:auto-category
 public class B16extra_SecuritySafety_NullConditionalGuards
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -283,6 +287,7 @@ public class B16extra_SecuritySafety_NullConditionalGuards
 // WF-extra -> AdvancedLogicEngine.ConvertWhileToForAsync: edge-case loop bodies
 // ─────────────────────────────────────────────────────────────────────────────
 [TestFixture]
+[Category("LogicSimplificationEngine")] // sentinel:auto-category
 public class WFextra_AdvancedLogic_WhileToFor
 {
     private IWorkspaceManager _workspaceManager = null!;

@@ -5,6 +5,7 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Battery.Advanced;
 
 [TestFixture]
+[Category("AsyncOptimizationEngine")] // sentinel:auto-category
 public class AsyncOptimizationEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -63,6 +64,7 @@ public class MyService
 }
 
 [TestFixture]
+[Category("LogicSimplificationEngine")] // sentinel:auto-category
 public class CodeFlowEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;
@@ -125,6 +127,7 @@ public class Logger
 }
 
 [TestFixture]
+[Category("CodeHealingEngine")] // sentinel:auto-category
 public class CodeHealingEngineTests
 {
     private PersistentWorkspaceManager _mgr = null!;

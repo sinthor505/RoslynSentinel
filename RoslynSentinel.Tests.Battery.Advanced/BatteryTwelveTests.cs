@@ -14,6 +14,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // A. CodeStyleEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("CodeStyleEngine")] // sentinel:auto-category
 public class CodeStyleEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -73,6 +74,7 @@ public class CodeStyleEngineTests
 // B. SyntaxUpgradeEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SyntaxUpgradeEngine")] // sentinel:auto-category
 public class SyntaxUpgradeEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -131,6 +133,7 @@ public class SyntaxUpgradeEngineTests
 // C. ModernizationEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SyntaxModernizationEngine")] // sentinel:auto-category
 public class ModernizationEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -189,6 +192,7 @@ public class ModernizationEngineTests
 // D. BasicRefactoringEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("BasicRefactoringEngine")] // sentinel:auto-category
 public class RefactoringEngineTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -233,6 +237,8 @@ public class RefactoringEngineTests
     }
 
     [Test]
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    [Category("ExistingParameterSpec")] // sentinel:auto-category
     public async Task ChangeSignature_TwoParameterMethod_ReordersParameters()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",

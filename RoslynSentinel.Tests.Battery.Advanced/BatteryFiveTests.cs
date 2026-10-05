@@ -17,6 +17,8 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // C. SecurityAndSafetyEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SafetyIssue")] // sentinel:auto-category
+[Category("SecurityAndSafetyEngine")] // sentinel:auto-category
 public class SecurityAndSafetyEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -262,6 +264,7 @@ public class Service
 // D. InstrumentationEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("InstrumentationEngine")] // sentinel:auto-category
 public class InstrumentationEngineTests
 {
     private IWorkspaceManager _workspaceManager;

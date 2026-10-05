@@ -19,6 +19,7 @@ namespace RoslynSentinel.Tests.Battery.Advanced;
 // A. InventoryEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("InventoryEngine")] // sentinel:auto-category
 public class InventoryEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -78,6 +79,7 @@ namespace ExpressRecipe.Services
 // B. ModernizationUpgradeEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SyntaxModernizationEngine")] // sentinel:auto-category
 public class ModernizationUpgradeEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -133,6 +135,7 @@ public class Guard
 // C. DependencyEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("DependencyEngine")] // sentinel:auto-category
 public class DependencyEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -181,6 +184,7 @@ public class DependencyEngineTests
 // D. ModernLoggingEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SyntaxModernizationEngine")] // sentinel:auto-category
 public class ModernLoggingEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -245,6 +249,7 @@ public class UserService
 // E. IDEStyleEngine
 // ════════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("IDEStyleEngine")] // sentinel:auto-category
 public class IDEStyleEngineTests
 {
     private IWorkspaceManager _workspaceManager;

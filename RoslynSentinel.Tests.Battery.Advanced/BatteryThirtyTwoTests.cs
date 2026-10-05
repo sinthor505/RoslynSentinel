@@ -27,6 +27,8 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Battery.Advanced;
 
 [TestFixture]
+[Category("CodeGenerationEngine")] // sentinel:auto-category
+[Category("FluentBuilderResult")] // sentinel:auto-category
 public class BatteryThirtyTwoTests
 {
     private IWorkspaceManager _workspaceManager;
