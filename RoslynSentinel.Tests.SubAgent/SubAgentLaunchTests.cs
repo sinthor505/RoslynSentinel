@@ -15,6 +15,7 @@ public class SubAgentLaunchTests
     // ── Run naming ──────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("SubAgentRunNaming")] // sentinel:auto-category
     public void NewRunId_CalledManyTimesAtTheSameInstant_NeverCollides()
     {
         // The same millisecond on purpose: a live server can start several calls inside one tick, and
@@ -26,6 +27,7 @@ public class SubAgentLaunchTests
     }
 
     [Test]
+    [Category("SubAgentRunNaming")] // sentinel:auto-category
     public void NewRunId_HasSortableTimestampPrefixAndShortSuffix()
     {
         var id = SubAgentRunNaming.NewRunId(new DateTimeOffset(2026, 10, 1, 13, 5, 9, 42, TimeSpan.Zero));
@@ -34,6 +36,7 @@ public class SubAgentLaunchTests
     }
 
     [Test]
+    [Category("SubAgentRunNaming")] // sentinel:auto-category
     public void RunDirectory_IsASiblingOfTheRepo_NotInsideIt()
     {
         var repo = Path.Combine(Path.GetTempPath(), "somewhere", "RoslynSentinel");
@@ -50,6 +53,7 @@ public class SubAgentLaunchTests
     }
 
     [Test]
+    [Category("SubAgentRunNaming")] // sentinel:auto-category
     public void RunDirectory_ToleratesATrailingSeparator()
     {
         var repo = Path.Combine(Path.GetTempPath(), "somewhere", "RoslynSentinel") + Path.DirectorySeparatorChar;
@@ -60,6 +64,7 @@ public class SubAgentLaunchTests
     }
 
     [Test]
+    [Category("SubAgentRunNaming")] // sentinel:auto-category
     public void BranchName_IsNamespacedUnderSubagent()
     {
         Assert.That(SubAgentRunNaming.BranchName("run-1"), Is.EqualTo("subagent/run-1"));
@@ -68,6 +73,7 @@ public class SubAgentLaunchTests
     // ── Validation ──────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("SubAgentModelRun")] // sentinel:auto-category
     public void Validate_AcceptsAWellFormedCall()
     {
         Assert.That(SubAgentModelRun.Validate("do a thing", "some-model", 4096, null, null), Is.Null);
@@ -79,6 +85,7 @@ public class SubAgentLaunchTests
     [TestCase("p", "", 1, "model")]
     [TestCase("p", "m", 0, "maxTokensPerTurn")]
     [TestCase("p", "m", -5, "maxTokensPerTurn")]
+    [Category("SubAgentModelRun")] // sentinel:auto-category
     public void Validate_RejectsBadArguments_NamingTheParameter(string? prompt, string? model, int maxTokens, string expectedParameter)
     {
         var error = SubAgentModelRun.Validate(prompt, model, maxTokens, null, null);
@@ -92,6 +99,7 @@ public class SubAgentLaunchTests
     }
 
     [Test]
+    [Category("SubAgentModelRun")] // sentinel:auto-category
     public void Validate_RejectsNonPositiveCaps()
     {
         Assert.Multiple(() =>
@@ -102,6 +110,7 @@ public class SubAgentLaunchTests
     }
 
     [Test]
+    [Category("SubAgentImpl")] // sentinel:auto-category
     public void ApplyResponseFormat_JsonAddsTheInstruction_TextLeavesThePromptAlone()
     {
         Assert.Multiple(() =>
@@ -163,6 +172,7 @@ public class SubAgentLaunchTests
     }
 
     [Test]
+    [Category("SubAgentChildServerLauncher")] // sentinel:auto-category
     public void ChildServerArguments_CarryTheModelAndRunIdentity()
     {
         var args = SubAgentChildServerLauncher.BuildServerArguments(@"C:\wt", "some-model", @"C:\logs", "run-1");
@@ -184,6 +194,7 @@ public class SubAgentLaunchTests
         new() { Content = [new TextContentBlock { Text = text }], IsError = isError };
 
     [Test]
+    [Category("ChildToolResult")] // sentinel:auto-category
     public void ChildToolResult_SuccessEnvelope_IsSuccess()
     {
         Assert.That(ChildToolResult.IsSuccess(Result("""{"isError":false,"successData":"ok"}"""), out var failure), Is.True);
@@ -191,6 +202,7 @@ public class SubAgentLaunchTests
     }
 
     [Test]
+    [Category("ChildToolResult")] // sentinel:auto-category
     public void ChildToolResult_FailureEnvelope_IsFailure_EvenWithoutTheMcpErrorFlag()
     {
         // RoslynSentinel reports failure inside the JSON envelope; MCP-level IsError is not set.
@@ -204,6 +216,7 @@ public class SubAgentLaunchTests
     }
 
     [Test]
+    [Category("ChildToolResult")] // sentinel:auto-category
     public void ChildToolResult_McpErrorFlag_IsFailure_EvenForNonJsonText()
     {
         Assert.That(ChildToolResult.IsSuccess(Result("An error occurred invoking 'LoadSolution'.", isError: true), out _), Is.False);

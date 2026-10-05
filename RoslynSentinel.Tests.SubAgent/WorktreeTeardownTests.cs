@@ -123,6 +123,7 @@ public class WorktreeTeardownTests
     }
 
     [Test]
+    [Category("SubAgentWorktreeStep")] // sentinel:auto-category
     public void TryDeleteBranch_RemovesTheRunsBranch_OnceTheWorktreeIsGone()
     {
         var (git, worktree, branch) = CreateRun();
@@ -139,6 +140,7 @@ public class WorktreeTeardownTests
     }
 
     [Test]
+    [Category("SubAgentWorktreeStep")] // sentinel:auto-category
     public void TryDeleteBranch_ReturnsAnError_InsteadOfThrowing_WhenTheBranchIsStillCheckedOut()
     {
         var (git, _, branch) = CreateRun();

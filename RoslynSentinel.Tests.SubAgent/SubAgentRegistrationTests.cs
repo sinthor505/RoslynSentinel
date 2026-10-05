@@ -18,6 +18,8 @@ namespace RoslynSentinel.Tests.SubAgent;
 /// missing one fails silently, so each is checked here.
 /// </summary>
 [TestFixture]
+[Category("SubAgentEvalTools")] // sentinel:auto-category
+[Category("SubAgentTools")] // sentinel:auto-category
 public class SubAgentRegistrationTests
 {
     private static ServiceProvider BuildProvider(params string[] modes)
@@ -71,6 +73,7 @@ public class SubAgentRegistrationTests
     }
 
     [Test]
+    [Category("ToolClassRegistry")] // sentinel:auto-category
     public void ToolClassRegistry_MapsEachModeToItsClass()
     {
         Assert.Multiple(() =>
