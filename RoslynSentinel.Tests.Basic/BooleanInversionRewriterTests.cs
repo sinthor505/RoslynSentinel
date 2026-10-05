@@ -4,6 +4,8 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Basic;
 
 [TestFixture]
+[Category("BooleanInversionRewriter")] // sentinel:auto-category
+[Category("SemanticReplaceRole")] // sentinel:auto-category
 public class BooleanInversionRewriterTests
 {
     [TestCase(SemanticReplaceRole.WriteLiteral, "true", "IsError", false, "false")]

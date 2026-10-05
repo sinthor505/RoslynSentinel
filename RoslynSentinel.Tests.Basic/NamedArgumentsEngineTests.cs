@@ -42,6 +42,7 @@ public class NamedArgumentsEngineTests
     }
 
     [Test]
+    [Category("NamedArgumentsRewriteResult")] // sentinel:auto-category
     public void Rewrite_PositionalCall_NamesAllArguments()
     {
         var result = Rewrite("class C { void M(int a, int b) { } void N() { M(1, 2); } }");
@@ -60,6 +61,7 @@ public class NamedArgumentsEngineTests
     }
 
     [Test]
+    [Category("NamedArgumentsRewriteResult")] // sentinel:auto-category
     public void Rewrite_AlreadyNamed_ReportsNoChange()
     {
         var result = Rewrite("class C { void M(int a, int b) { } void N() { M(a: 1, b: 2); } }");
@@ -68,6 +70,7 @@ public class NamedArgumentsEngineTests
     }
 
     [Test]
+    [Category("NamedArgumentsOptions")] // sentinel:auto-category
     public void Rewrite_SingleParameterMethod_SkippedByDefault()
     {
         var code = "class C { void M(int a) { } void N() { M(1); } }";
@@ -85,6 +88,7 @@ public class NamedArgumentsEngineTests
     }
 
     [Test]
+    [Category("NamedArgumentsOptions")] // sentinel:auto-category
     public void Rewrite_LiteralArgumentsOnly_NamesJustTheLiterals()
     {
         var code = "class C { void M(int a, int b, string c) { } void N(int x) { M(x, 2, \"s\"); } }";
@@ -171,6 +175,7 @@ public class NamedArgumentsEngineTests
     }
 
     [Test]
+    [Category("NamedArgumentsRewriteResult")] // sentinel:auto-category
     public void Rewrite_TargetSymbol_RewritesOnlyCallsOfThatMethod()
     {
         var code = "class C { void M(int a, int b) { } void K(int a, int b) { } void N() { M(1, 2); K(3, 4); } }";

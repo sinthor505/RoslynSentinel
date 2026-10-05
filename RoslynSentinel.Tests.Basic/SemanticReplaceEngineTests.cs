@@ -5,6 +5,7 @@ using RoslynSentinel.Tests.Fakes;
 
 namespace RoslynSentinel.Tests.Basic;
 
+[Category("SemanticReplaceEngine")] // sentinel:auto-category
 public class SemanticReplaceEngineTests
 {
     private SemanticReplaceEngine CreateEngine(Solution solution)
@@ -135,6 +136,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("DeclarationInfo")] // sentinel:auto-category
     public void DescribeDeclaration_WithAutoPropertyNoInitializer_ReturnsCorrectInfo()
     {
         var code = "namespace Test; public class C { public bool IsSuccess { get; set; } }";
@@ -156,6 +158,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("DeclarationInfo")] // sentinel:auto-category
     public void DescribeDeclaration_WithAutoPropertyWithInitializer_ReturnsCorrectInfo()
     {
         var code = "namespace Test; public class C { public bool IsSuccess { get; set; } = true; }";
@@ -177,6 +180,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("DeclarationInfo")] // sentinel:auto-category
     public void DescribeDeclaration_WithFieldNoInitializer_ReturnsCorrectInfo()
     {
         var code = "namespace Test; public class C { public bool isSuccess; }";
@@ -202,6 +206,7 @@ public class SemanticReplaceEngineTests
     [TestCase("public bool isOk = false;", "isOk", "false")]
     [TestCase("public bool a = true, isOk = false;", "isOk", "false")]
     [TestCase("public bool isOk;", "isOk", null)]
+    [Category("DeclarationInfo")] // sentinel:auto-category
     public void DescribeDeclaration_SpansPointAtIdentifierAndInitializerText(string member, string name, string? expectedInitializer)
     {
         var solution = CreateTestSolution($"namespace Test; public class C {{ {member} }}");
@@ -228,6 +233,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("DeclarationInfo")] // sentinel:auto-category
     public void DescribeDeclaration_WithFieldWithInitializer_ReturnsCorrectInfo()
     {
         var code = "namespace Test; public class C { public bool isSuccess = true; }";
@@ -320,6 +326,8 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceRole")] // sentinel:auto-category
+    [Category("SemanticReplaceSite")] // sentinel:auto-category
     public async Task CollectSitesAsync_OnlyTargetedClassIsTouched_AcrossTwoDocuments()
     {
         var types = Source(
@@ -351,6 +359,9 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("ReferenceEdit")] // sentinel:auto-category
+    [Category("SemanticReplaceRole")] // sentinel:auto-category
+    [Category("SemanticReplaceSite")] // sentinel:auto-category
     public async Task CollectSitesAsync_AllRoles_ProduceExactEditsAndSites()
     {
         var code = Source(
@@ -423,6 +434,9 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("ReferenceEdit")] // sentinel:auto-category
+    [Category("SemanticReplaceRole")] // sentinel:auto-category
+    [Category("SemanticReplaceSite")] // sentinel:auto-category
     public async Task CollectSitesAsync_NestedReferencesInsideWriteRhs_WrapInsteadOfReplace()
     {
         var code = Source(
@@ -462,6 +476,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceSite")] // sentinel:auto-category
     public async Task CollectSitesAsync_UnsupportedSites_RefuseAtomicallyAndListEveryFileAndLine()
     {
         var code = Source(
@@ -524,6 +539,8 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceRole")] // sentinel:auto-category
+    [Category("SemanticReplaceSite")] // sentinel:auto-category
     public async Task CollectSitesAsync_NonLiteralInitializer_IsFlippedAsExpression()
     {
         var code = Source(
@@ -682,6 +699,7 @@ public class SemanticReplaceEngineTests
     // ---- InvertBooleanAndRenameAsync -------------------------------------------------------------------------------------
 
     [Test]
+    [Category("SemanticReplaceOutcome")] // sentinel:auto-category
     public async Task InvertBooleanAndRenameAsync_EndToEndSingleDocument_ReturnsFullNewText()
     {
         var code = Source(
@@ -724,6 +742,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceOutcome")] // sentinel:auto-category
     public async Task InvertBooleanAndRenameAsync_UnknownDocCommentId_ReturnsNotFoundError()
     {
         var code = Source(
@@ -741,6 +760,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceOutcome")] // sentinel:auto-category
     public async Task InvertBooleanAndRenameAsync_NonBoolMember_ReturnsInvalidArgumentError()
     {
         var code = Source(
@@ -790,6 +810,7 @@ public class SemanticReplaceEngineTests
     [TestCase("var o = new C { IsSuccess = true };", "var o = new C { IsError = false };")]
     [TestCase("var o = new C { IsSuccess = a };", "var o = new C { IsError = !a };")]
     [TestCase("r.IsSuccess = !r.IsSuccess;", "r.IsError = !(r.IsError);")]
+    [Category("SemanticReplaceOutcome")] // sentinel:auto-category
     public async Task InvertBooleanAndRenameAsync_AliasRetarget_RewritesUsageAndLeavesDeclarationUntouched(string before, string after)
     {
         var code = AliasUsage(before);
@@ -804,6 +825,8 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceRole")] // sentinel:auto-category
+    [Category("SemanticReplaceSite")] // sentinel:auto-category
     public async Task CollectSitesAsync_AliasRetarget_HasNoDeclarationSiteAndReportsRolesAndLines()
     {
         var code = AliasUsage(
@@ -836,6 +859,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceOutcome")] // sentinel:auto-category
     public async Task InvertBooleanAndRenameAsync_AliasRetarget_CrossFileUsageOnlyChangesTheUsageFile()
     {
         var declaration = Source(AliasHeader);
@@ -873,6 +897,8 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceRole")] // sentinel:auto-category
+    [Category("SemanticReplaceSite")] // sentinel:auto-category
     public async Task CollectSitesAsync_AliasRetarget_ReferenceInsideTheAliasDeclarationIsNotEdited()
     {
         var code = Source(
@@ -897,6 +923,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceOutcome")] // sentinel:auto-category
     public async Task InvertBooleanAndRenameAsync_AliasRetarget_UnsupportedSiteRefusesAtomicallyWithFileAndLine()
     {
         var code = AliasUsage(
@@ -1101,6 +1128,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceSite")] // sentinel:auto-category
     public async Task CollectSitesAsync_AliasRetarget_PartialClassBothFiles_PrivateFieldRefSucceeds()
     {
         var part1 = Source(
@@ -1143,6 +1171,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceOutcome")] // sentinel:auto-category
     public async Task InvertBooleanAndRenameAsync_RecordPositionalParameter_NamedArgumentReadAndWithWriteInvertAndCompile()
     {
         var code = Source(
@@ -1174,6 +1203,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceOutcome")] // sentinel:auto-category
     public async Task InvertBooleanAndRenameAsync_RecordPositionalParameterDefault_FlipsDefaultAndInRecordInitializerRead()
     {
         var code = Source(
@@ -1209,6 +1239,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceOutcome")] // sentinel:auto-category
     public async Task InvertBooleanAndRenameAsync_RecordPositionalConstructorArguments_AreFlipped()
     {
         var code = Source(
@@ -1246,6 +1277,9 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceOutcome")] // sentinel:auto-category
+    [Category("SemanticReplaceRole")] // sentinel:auto-category
+    [Category("SemanticReplaceSite")] // sentinel:auto-category
     public async Task InvertBooleanAndRenameAsync_RecordDeconstructionAndPositionalPattern_RefuseWithFileAndLine()
     {
         var code = Source(
@@ -1295,6 +1329,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceOutcome")] // sentinel:auto-category
     public async Task InvertBooleanAndRenameAsync_RecordInReferencedProject_NamedArgsWithCollectionExpressionsAreRewritten()
     {
         var lib = Source(
@@ -1364,6 +1399,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceOutcome")] // sentinel:auto-category
     public async Task InvertBooleanAndRenameAsync_RecordSeenThroughRetargetingAssembly_ConstructorCallsAreRewritten()
     {
         var lib = Source(
@@ -1405,6 +1441,7 @@ public class SemanticReplaceEngineTests
     }
 
     [Test]
+    [Category("SemanticReplaceOutcome")] // sentinel:auto-category
     public async Task InvertBooleanAndRenameAsync_RecordSeenThroughRetargetingAssembly_DeconstructionIsRefused()
     {
         var lib = Source(

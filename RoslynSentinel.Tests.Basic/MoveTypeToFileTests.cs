@@ -9,6 +9,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Basic;
 
 [TestFixture]
+[Category("BasicRefactoringEngine")] // sentinel:auto-category
 public class MoveTypeToFileTests
 {
     private IWorkspaceManager _workspaceManager;

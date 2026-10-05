@@ -22,6 +22,7 @@ namespace RoslynSentinel.Tests.Basic;
 /// 8. Nested expressions (var x = func(y))
 /// </summary>
 [TestFixture]
+[Category("SemanticRefactoringEngine")] // sentinel:auto-category
 public class InlineVariableTests
 {
     private IWorkspaceManager _workspaceManager;

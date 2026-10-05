@@ -25,6 +25,7 @@ namespace RoslynSentinel.Tests.Basic;
 /// 10. Class-level constant placement
 /// </summary>
 [TestFixture]
+[Category("BasicRefactoringEngine")] // sentinel:auto-category
 public class ExtractConstantTests
 {
     private IWorkspaceManager _workspaceManager;

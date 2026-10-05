@@ -224,6 +224,7 @@ public class WriteChokepointGuardrailTests
     // mixed it into files that used the other style.
     [TestCase("\n", "LF")]
     [TestCase("\r\n", "CRLF")]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task AddUsingDirective_KeepsTheFilesLineEndingAsync(string eol, string expectedStyle)
     {
         var source = string.Join(eol, "namespace T;", "", "public class A", "{", "    public int X() => 1;", "}", "");
@@ -240,6 +241,7 @@ public class WriteChokepointGuardrailTests
 
     [TestCase("\n", "LF")]
     [TestCase("\r\n", "CRLF")]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task AddSummaryComment_KeepsTheFilesLineEndingAsync(string eol, string expectedStyle)
     {
         var source = string.Join(eol, "namespace T;", "", "public class A", "{", "    public int X(int a) => a;", "}", "");

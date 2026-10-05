@@ -4,6 +4,8 @@ using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tests.Basic;
 
+[Category("ReferenceRoleClassifier")] // sentinel:auto-category
+[Category("SemanticReplaceRole")] // sentinel:auto-category
 public class ReferenceRoleClassifierTests
 {
     private IdentifierNameSyntax GetIdentifier(string code, string targetName)

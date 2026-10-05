@@ -5,6 +5,10 @@ using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tests.Basic;
 
+[Category("PlannedCategoryEdit")] // sentinel:auto-category
+[Category("TestCategoryLevel")] // sentinel:auto-category
+[Category("TestCategoryPlanOptions")] // sentinel:auto-category
+[Category("TestProjectPlan")] // sentinel:auto-category
 public class TestCategoryTaggingEngineTests
 {
     private const string TargetsProjectName = "Targets";
@@ -76,6 +80,8 @@ namespace Targets.Engines
 }";
 
     [Test]
+    [Category("FixturePlan")] // sentinel:auto-category
+    [Category("TestCategoryFramework")] // sentinel:auto-category
     public async Task NUnit_JunkDrawerFixture_GetsMethodLevelMultiCategories()
     {
         var plan = await PlanAsync(BasicTargets, @"
@@ -109,6 +115,7 @@ namespace Fixtures
     }
 
     [Test]
+    [Category("UncategorizedTest")] // sentinel:auto-category
     public async Task UncategorizedTests_AreReportedByName()
     {
         var plan = await PlanAsync(BasicTargets, @"
@@ -132,6 +139,7 @@ namespace Fixtures
     }
 
     [Test]
+    [Category("FixturePlan")] // sentinel:auto-category
     public async Task ClassLevelThreshold_AssignsClassLevelOnlyAtOrAboveThreshold()
     {
         var tests = @"
@@ -163,6 +171,9 @@ namespace Fixtures
     }
 
     [Test]
+    [Category("TestCategoryParametersUsed")] // sentinel:auto-category
+    [Category("TestCategoryPlan")] // sentinel:auto-category
+    [Category("UbiquitousTypeInfo")] // sentinel:auto-category
     public async Task UbiquitousType_IsAutoExcludedAndNeverACategory()
     {
         // Ubiq is touched by all 8 tests (share 1.0 > 0.25); Alpha by 2 of 8 (0.25, not above the cap).
@@ -198,6 +209,9 @@ namespace Fixtures
     }
 
     [Test]
+    [Category("CategoryCollisionGroup")] // sentinel:auto-category
+    [Category("CategoryCollisionMember")] // sentinel:auto-category
+    [Category("TestCategoryPlan")] // sentinel:auto-category
     public async Task CollidingSimpleNames_AreQualifiedWithShortestUniqueNamespaceSuffix()
     {
         var targets = @"
@@ -230,6 +244,7 @@ namespace Fixtures
     }
 
     [Test]
+    [Category("TestCategoryEditKind")] // sentinel:auto-category
     public async Task StaleMarkedAttributes_AreDetected_HandWrittenAreNeverTouched()
     {
         var tests = @"
@@ -282,6 +297,7 @@ namespace Fixtures
     }
 
     [Test]
+    [Category("TestCategoryEditKind")] // sentinel:auto-category
     public async Task MarkedMethodAttribute_NowCoveredByClassLevel_IsKeptAsSkippedExisting()
     {
         var tests = @"
@@ -375,6 +391,8 @@ namespace Fixtures
     }
 
     [Test]
+    [Category("TestCategoryParametersUsed")] // sentinel:auto-category
+    [Category("TestCategoryPlan")] // sentinel:auto-category
     public async Task ExcludedTargets_AreNeverCategories_AndExcludedTestsAreNotScanned()
     {
         var tests = @"
@@ -400,6 +418,9 @@ namespace Fixtures.Skipped
     }
 
     [Test]
+    [Category("TestCategoryEditKind")] // sentinel:auto-category
+    [Category("TestCategoryFramework")] // sentinel:auto-category
+    [Category("TestCategoryTaggingEngine")] // sentinel:auto-category
     public async Task XUnit_IsDetectedFromReferencedTypes_AndUsesTraitAttributes()
     {
         var tests = @"
@@ -433,6 +454,7 @@ namespace Fixtures
     }
 
     [Test]
+    [Category("TestCategoryPlan")] // sentinel:auto-category
     public async Task InvalidOptions_ReturnStructuredErrors()
     {
         var empty = await PlanAsync(BasicTargets, "namespace Fixtures { }", new TestCategoryPlanOptions(" , "));

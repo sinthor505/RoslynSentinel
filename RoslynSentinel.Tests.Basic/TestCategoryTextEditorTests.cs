@@ -7,6 +7,8 @@ namespace RoslynSentinel.Tests.Basic;
 /// method level) into new file text. Placement, indentation, EOL preservation, marked-only removal and skip reasons.
 /// </summary>
 [TestFixture]
+[Category("TestCategoryTextEditResult")] // sentinel:auto-category
+[Category("TestCategoryTextEditor")] // sentinel:auto-category
 public class TestCategoryTextEditorTests
 {
     private const string Marker = "// sentinel:auto-category";
@@ -189,6 +191,7 @@ public class TestCategoryTextEditorTests
 
     [Test]
     [Description("A stale marked attribute's whole line is removed, leaving no blank line, and the other attributes are untouched")]
+    [Category("TestCategoryLevel")] // sentinel:auto-category
     public void RemoveStale_DeletesWholeMarkedLineOnly()
     {
         var source = Lines("\n",
@@ -216,6 +219,8 @@ public class TestCategoryTextEditorTests
 
     [Test]
     [Description("A hand-written (unmarked) attribute is never removed: a removal pointing at it is skipped with a reason")]
+    [Category("TestCategoryEditSkip")] // sentinel:auto-category
+    [Category("TestCategoryLevel")] // sentinel:auto-category
     public void RemoveStale_OnUnmarkedAttribute_IsSkippedAndTextUnchanged()
     {
         var source = Lines("\n",
@@ -237,6 +242,8 @@ public class TestCategoryTextEditorTests
 
     [Test]
     [Description("A marked list that also holds other attributes is not rewritten: it is skipped with a reason and the text is unchanged")]
+    [Category("TestCategoryEditSkip")] // sentinel:auto-category
+    [Category("TestCategoryLevel")] // sentinel:auto-category
     public void RemoveStale_MarkedListSharedWithOtherAttributes_IsSkippedWithReason()
     {
         var source = Lines("\n",
@@ -257,6 +264,8 @@ public class TestCategoryTextEditorTests
 
     [Test]
     [Description("A marked list sharing its line with another attribute list is skipped, never half-deleted")]
+    [Category("TestCategoryEditSkip")] // sentinel:auto-category
+    [Category("TestCategoryLevel")] // sentinel:auto-category
     public void RemoveStale_MarkedListSharingLineWithCode_IsSkippedWithReason()
     {
         var source = Lines("\n",
@@ -276,6 +285,7 @@ public class TestCategoryTextEditorTests
 
     [Test]
     [Description("A plan that no longer matches the file (drift) is skipped with a re-run hint instead of mis-applied")]
+    [Category("TestCategoryEditSkip")] // sentinel:auto-category
     public void StalePlan_NoDeclarationAtLine_IsSkipped()
     {
         var result = TestCategoryTextEditor.Apply(BasicSource(), [AddMethod(99, "T1", "Alpha")]);
@@ -286,6 +296,7 @@ public class TestCategoryTextEditorTests
 
     [Test]
     [Description("Removal and add in one file land together: line numbers of the plan stay valid because edits apply in one pass")]
+    [Category("TestCategoryLevel")] // sentinel:auto-category
     public void MixedRemoveAndAdd_AppliesInOnePass()
     {
         var source = Lines("\n",
@@ -325,6 +336,8 @@ public class TestCategoryTextEditorTests
 
     [Test]
     [Description("The editor's own output carries marked attributes the planner treats as existing, so a re-plan yields no Add (idempotency)")]
+    [Category("TestCategoryFramework")] // sentinel:auto-category
+    [Category("TestCategoryTaggingEngine")] // sentinel:auto-category
     public void AddedAttribute_UsesTheEngineFormat()
     {
         var result = TestCategoryTextEditor.Apply(BasicSource(), [AddMethod(8, "T1", "Alpha")]);

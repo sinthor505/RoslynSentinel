@@ -9,6 +9,8 @@ namespace RoslynSentinel.Tests.Basic;
 /// in-memory Solution handed straight to the engine under test.
 /// </summary>
 [TestFixture]
+[Category("DiagnosticEngine")] // sentinel:auto-category
+[Category("DiagnosticSummary")] // sentinel:auto-category
 public class DiagnosticEngineTests
 {
     [Test]

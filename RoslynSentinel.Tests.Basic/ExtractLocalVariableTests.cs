@@ -22,6 +22,7 @@ namespace RoslynSentinel.Tests.Basic;
 /// 8. Type inference and unique naming
 /// </summary>
 [TestFixture]
+[Category("BasicRefactoringEngine")] // sentinel:auto-category
 public class ExtractLocalVariableTests
 {
     private IWorkspaceManager _workspaceManager;

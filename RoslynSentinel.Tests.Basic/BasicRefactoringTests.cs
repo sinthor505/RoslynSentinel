@@ -14,6 +14,7 @@ namespace RoslynSentinel.Tests.Basic;
 /// InsertMemberAfterAsync, InsertMemberBeforeAsync, AddAttributeAsync, AddBaseTypeAsync.
 /// </summary>
 [TestFixture]
+[Category("BasicRefactoringEngine")] // sentinel:auto-category
 public class BasicRefactoringTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -56,6 +57,7 @@ public enum ToolScope
 ";
 
     [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task IsEnumContainer_OnEnum_ReturnsTrue()
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");
@@ -63,6 +65,7 @@ public enum ToolScope
     }
 
     [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task IsEnumContainer_OnClass_ReturnsFalse()
     {
         SetSource("public class Widget { }", "Widget.cs");
@@ -70,6 +73,7 @@ public enum ToolScope
     }
 
     [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task IsEnumContainer_NotFound_ReturnsFalse()
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");
@@ -77,6 +81,8 @@ public enum ToolScope
     }
 
     [Test]
+    [Category("ContainerMemberInfo")] // sentinel:auto-category
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task GetContainerMembers_OnEnum_ReturnsEnumMembers()
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");
@@ -89,6 +95,7 @@ public enum ToolScope
     }
 
     [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task TryGetEnumMemberContainerName_OnEnumMember_ReturnsEnumName()
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");
@@ -99,6 +106,7 @@ public enum ToolScope
     }
 
     [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task TryGetEnumMemberContainerName_OnRegularMember_ReturnsNull()
     {
         SetSource(@"
@@ -114,6 +122,7 @@ public class Animal
     }
 
     [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task TryGetEnumMemberContainerName_NotFound_ReturnsNull()
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");
