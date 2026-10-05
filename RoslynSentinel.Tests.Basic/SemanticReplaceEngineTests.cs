@@ -558,4 +558,124 @@ public class SemanticReplaceEngineTests
         Assert.That(error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         Assert.That(error.Message, Does.Contain("collides"));
     }
+
+    // ---- PlanInvertBooleanAsync ---------------------------------------------------------------------------------
+
+    [Test]
+    public async Task PlanInvertBooleanAsync_TwoClassFixtureTargetingOne_ReturnsChangesForTwoFiles()
+    {
+        var types = Source(
+            "namespace Test;",
+            "public class A { public bool IsSuccess { get; set; } }",
+            "public class B { public bool IsSuccess { get; set; } }");
+        var usage = Source(
+            "namespace Test;",
+            "public class U",
+            "{",
+            "    public void M(A a, B b)",
+            "    {",
+            "        var x = a.IsSuccess;",
+            "        var y = b.IsSuccess;",
+            "    }",
+            "}");
+        var solution = CreateMultiDocumentSolution(types, usage);
+        var engine = CreateEngine(solution);
+        var symbol = await GetMemberSymbolAsync(solution, "A", "IsSuccess");
+
+        var (sites, changes, error) = await engine.PlanInvertBooleanAsync(symbol, "IsError");
+
+        Assert.That(error, Is.Null);
+        Assert.That(sites, Is.Not.Empty);
+        Assert.That(changes.Count, Is.EqualTo(2));
+        var test0 = changes.First(c => c.Key.Absolute.EndsWith("Test0.cs")).Value;
+        Assert.That(test0, Is.EqualTo(Source(
+            "namespace Test;",
+            "public class A { public bool IsError { get; set; } }",
+            "public class B { public bool IsSuccess { get; set; } }")));
+        var test1 = changes.First(c => c.Key.Absolute.EndsWith("Test1.cs")).Value;
+        Assert.That(test1, Is.EqualTo(Source(
+            "namespace Test;",
+            "public class U",
+            "{",
+            "    public void M(A a, B b)",
+            "    {",
+            "        var x = !a.IsError;",
+            "        var y = b.IsSuccess;",
+            "    }",
+            "}")));
+    }
+
+    [Test]
+    public async Task PlanInvertBooleanAsync_FourSitesOneDocument_AppliesDescendingOrder()
+    {
+        var code = Source(
+            "namespace Test;",
+            "public class A { public bool IsSuccess { get; set; } }",
+            "public class U",
+            "{",
+            "    public void M(A x)",
+            "    {",
+            "        x.IsSuccess = true;",
+            "        x.IsSuccess = false;",
+            "        x.IsSuccess = !x.IsSuccess;",
+            "        x.IsSuccess = !(x.IsSuccess || false);",
+            "    }",
+            "}");
+        var solution = CreateMultiDocumentSolution(code);
+        var engine = CreateEngine(solution);
+        var symbol = await GetMemberSymbolAsync(solution, "A", "IsSuccess");
+
+        var (sites, changes, error) = await engine.PlanInvertBooleanAsync(symbol, "IsError");
+
+        Assert.That(error, Is.Null);
+        Assert.That(changes.Values.Single(), Is.EqualTo(Source(
+            "namespace Test;",
+            "public class A { public bool IsError { get; set; } }",
+            "public class U",
+            "{",
+            "    public void M(A x)",
+            "    {",
+            "        x.IsError = false;",
+            "        x.IsError = true;",
+            "        x.IsError = !(x.IsError);",
+            "        x.IsError = !(!(!x.IsError || false));",
+            "    }",
+            "}")));
+    }
+
+    [Test]
+    public async Task PlanInvertBooleanAsync_UnsupportedSite_ReturnsError()
+    {
+        var code = Source(
+            "namespace Test;",
+            "public class A { public bool IsSuccess { get; set; } }",
+            "public class U { public void M(A x) { x.IsSuccess |= true; } }");
+        var solution = CreateMultiDocumentSolution(code);
+        var engine = CreateEngine(solution);
+        var symbol = await GetMemberSymbolAsync(solution, "A", "IsSuccess");
+
+        var (sites, changes, error) = await engine.PlanInvertBooleanAsync(symbol, "IsError");
+
+        Assert.That(error, Is.Not.Null);
+        Assert.That(error!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(changes, Is.Empty);
+    }
+
+    [Test]
+    public async Task PlanInvertBooleanAsync_CollidingNewName_ReturnsError()
+    {
+        var code = Source(
+            "namespace Test;",
+            "public class A { public bool IsSuccess { get; set; } public bool IsError { get; set; } }",
+            "public class U { public bool M(A x) { return x.IsSuccess; } }");
+        var solution = CreateMultiDocumentSolution(code);
+        var engine = CreateEngine(solution);
+        var symbol = await GetMemberSymbolAsync(solution, "A", "IsSuccess");
+
+        var (sites, changes, error) = await engine.PlanInvertBooleanAsync(symbol, "IsError");
+
+        Assert.That(error, Is.Not.Null);
+        Assert.That(error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(changes, Is.Empty);
+    }
 }

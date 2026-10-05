@@ -690,4 +690,71 @@ public class SemanticReplaceEngine
             .Select(e => e.Edit);
         return new SemanticReplaceSite(site.FilePath, site.Line, site.Role, site.Before, ApplyToFragment(site.Before, site.Span.Start, relevant), null);
     }
+
+    /// <summary>
+    /// Orchestrates the planning phase: calls CollectSitesAsync, groups edits by file, retrieves original document text,
+    /// applies edits in correct order (descending by span), and returns a dictionary of file changes.
+    /// </summary>
+    /// <remarks>
+    /// Errors from CollectSitesAsync are returned unchanged. If a document for an edit's FilePath cannot be found,
+    /// returns a TargetIneligible error.
+    /// </remarks>
+    /// <returns>(Sites, Changes dictionary mapping each changed file to its full new text, error or null)</returns>
+    public async Task<(List<SemanticReplaceSite> Sites, Dictionary<FilePathWrapper, string> Changes, ResultError? Error)> PlanInvertBooleanAsync(ISymbol symbol, string newName, CancellationToken cancellationToken = default)
+    {
+        // Step 1: Call CollectSitesAsync
+        var (sites, edits, error) = await CollectSitesAsync(symbol, newName, cancellationToken);
+        if (error is not null)
+        {
+            return (sites, new Dictionary<FilePathWrapper, string>(), error);
+        }
+
+        // Step 2: Group edits by FilePath and build changes dictionary
+        var changes = new Dictionary<FilePathWrapper, string>();
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+
+        foreach (var fileGroup in edits.GroupBy(e => e.FilePath))
+        {
+            var filePath = fileGroup.Key;
+
+            // Find the document for this file path
+            Document? document = null;
+            foreach (var project in solution.Projects)
+            {
+                foreach (var doc in project.Documents)
+                {
+                    if (doc.FilePath == filePath || doc.Name == filePath)
+                    {
+                        document = doc;
+                        break;
+                    }
+                }
+                if (document is not null)
+                {
+                    break;
+                }
+            }
+
+            if (document is null)
+            {
+                return (sites, new Dictionary<FilePathWrapper, string>(), new ResultError(
+                    ToolErrorCode.TargetIneligible,
+                    $"Document not found for file '{filePath}'."));
+            }
+
+            // Get the original text
+            var originalText = await document.GetTextAsync(cancellationToken);
+            var resultText = originalText.ToString();
+
+            // Apply all edits for this file in one pass, in the order they already come (sorted by ReferenceEdit.ApplicationOrder)
+            foreach (var edit in fileGroup.OrderByDescending(e => e.Span.Start).ThenByDescending(e => e.Span.End))
+            {
+                resultText = resultText.Remove(edit.Span.Start, edit.Span.Length).Insert(edit.Span.Start, edit.NewText);
+            }
+
+            changes[filePath] = resultText;
+        }
+
+        return (sites, changes, null);
+    }
 }
