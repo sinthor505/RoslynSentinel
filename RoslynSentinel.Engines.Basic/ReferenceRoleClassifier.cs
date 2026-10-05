@@ -94,6 +94,19 @@ public static class ReferenceRoleClassifier
             return SemanticReplaceRole.Unsupported;
         }
 
+        // Deconstruction assignment target: (x.IsSuccess, y) = t is a write, not a read
+        var reference = parent is MemberAccessExpressionSyntax targetAccess && targetAccess.Name == identifier
+            ? (ExpressionSyntax)targetAccess
+            : identifier;
+        if (reference.Parent is ArgumentSyntax tupleArgument &&
+            tupleArgument.Parent is TupleExpressionSyntax tuple &&
+            tuple.Parent is AssignmentExpressionSyntax deconstruction &&
+            deconstruction.Left == tuple)
+        {
+            unsupportedReason = "Deconstruction assignment targets are not supported";
+            return SemanticReplaceRole.Unsupported;
+        }
+
         // Check for is patterns on a bare identifier (IsSuccess is true)
         if (parent is IsPatternExpressionSyntax barePattern && barePattern.Expression == identifier)
         {

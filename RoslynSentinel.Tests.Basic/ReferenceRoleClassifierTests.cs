@@ -140,6 +140,27 @@ public class ReferenceRoleClassifierTests
         Assert.That(reason, Is.Not.Null.And.Not.Empty);
     }
 
+    [TestCase("class C { void M() { (x.IsSuccess, y) = t; } }")]
+    [TestCase("class C { void M() { (IsSuccess, y) = t; } }")]
+    public void Classify_DeconstructionTarget_ReturnsUnsupported(string code)
+    {
+        var identifier = GetIdentifier(code, "IsSuccess");
+
+        var role = ReferenceRoleClassifier.Classify(identifier, out var reason);
+
+        Assert.That(role, Is.EqualTo(SemanticReplaceRole.Unsupported));
+        Assert.That(reason, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
+    public void Classify_TupleExpressionOnRightSide_ReturnsRead()
+    {
+        var code = "class C { void M() { t = (x.IsSuccess, y); } }";
+        var identifier = GetIdentifier(code, "IsSuccess");
+
+        Assert.That(ReferenceRoleClassifier.Classify(identifier), Is.EqualTo(SemanticReplaceRole.Read));
+    }
+
     [Test]
     public void Classify_Read_ReturnsRead()
     {
