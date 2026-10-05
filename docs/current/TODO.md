@@ -557,7 +557,7 @@ return result; }))`, with `context.Params?.Name` for the tool name and `context.
 
 **Placement matters**: a metrics filter should be registered *after* the "domain-failure →
 protocol-error sync" filter (ends ~line 245) — that's the one that sets `result.IsError = true`
-for tools that catch their own exceptions and return `Success=false` instead of throwing (see
+for tools that catch their own exceptions and return `isError: true` instead of throwing (see
 `feedback_agent_friendly_error_messages`), so counting before it would undercount real failures
 the same way raw exception-based `IsError` detection already does. It should also count the
 orientation breaker's own pre-check short-circuit (~line 342-350, which returns before ever
