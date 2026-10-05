@@ -39,6 +39,10 @@ public class SemanticFindReplaceTools
         "operation: invertBoolean renames the symbol and flips its logic (true<->false, Read gets !, NegatedRead loses !). " +
         "mode: preview lists the sites (before/after text) without writing anything; apply performs the changes. " +
         "Mode is mandatory - use preview first to review. " +
+        "Alias retarget: a computed inverse alias (a bool property with getter `!X` and setter/init `X = !value`, e.g. SentinelCallToolResult.IsSuccess over IsError) " +
+        "cannot be renamed in place; instead pass newName = the existing sibling member (X, or the public property that wraps X). " +
+        "Every reference to the alias is then rewritten to the sibling with inverted logic (r.IsSuccess -> !r.IsError, IsSuccess = true -> IsError = false) " +
+        "while the alias declaration itself is left untouched, so you can delete it afterwards. " +
         "If any reference is unsupported (e.g. compound assignment |=, ++, ref argument, property pattern, == true), " +
         "the entire operation is refused and the message lists each file:line so you can fix those by hand. " +
         "Returns sites and changeId on success, or a structured error naming the parameter and a correct value.")]
@@ -46,7 +50,7 @@ public class SemanticFindReplaceTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("The operation to perform.")] SemanticReplaceOperation operation,
         [Description("A docCommentId identifying the bool property or field to rename and invert.")] string symbol,
-        [Description("The new name for the symbol. Must be a valid C# identifier and not collide with other members.")] string newName,
+        [Description("The new name for the symbol. Must be a valid C# identifier and not collide with other members, except for an alias retarget where it must be the existing sibling member the computed inverse alias negates.")] string newName,
         [Description("preview: list the sites (before/after text) without writing. apply: perform the changes.")] SemanticReplaceMode mode,
         CancellationToken cancellationToken = default)
     {

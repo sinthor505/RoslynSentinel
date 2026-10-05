@@ -23,7 +23,17 @@ public class SemanticReplaceEngine
 
     /// <summary>Resolves a docCommentId to a bool property or field symbol.</summary>
     /// <returns>A tuple of (ISymbol, ResultError); exactly one is non-null. Error cases: NotFound if the id does not resolve, InvalidArgument if the symbol is not a bool property/field, TargetIneligible if it is virtual/override/abstract or has a custom accessor.</returns>
-    public async Task<(ISymbol? Symbol, ResultError? Error)> ResolveBoolMemberAsync(string docCommentId, CancellationToken ct = default)
+    public Task<(ISymbol? Symbol, ResultError? Error)> ResolveBoolMemberAsync(string docCommentId, CancellationToken ct = default)
+        => ResolveBoolMemberAsync(docCommentId, null, ct);
+
+    /// <summary>
+    /// Like <see cref="ResolveBoolMemberAsync(string, CancellationToken)"/>, but newName lets a computed inverse alias through:
+    /// a bool property whose getter is exactly <c>!X</c> (and whose setter/init, if any, is <c>X = !value</c>) is accepted when newName
+    /// is an existing sibling that holds the same state (X itself, or a property that passes straight through to X). That is the
+    /// "alias retarget" form: callers are migrated to the sibling and the alias declaration is left untouched.
+    /// </summary>
+    /// <returns>A tuple of (ISymbol, ResultError); exactly one is non-null. A computed inverse alias with any other newName is refused with the names that would work.</returns>
+    public async Task<(ISymbol? Symbol, ResultError? Error)> ResolveBoolMemberAsync(string docCommentId, string? newName, CancellationToken ct = default)
     {
         if (string.IsNullOrEmpty(docCommentId))
         {
@@ -89,13 +99,29 @@ public class SemanticReplaceEngine
                 return (null, new ResultError(ToolErrorCode.TargetIneligible, "Property is virtual, override, or abstract; coordinated edits would be needed."));
             }
 
+            // A computed inverse alias (get => !X; set => X = !value) is only eligible as an alias retarget: newName must be the sibling.
+            var aliasTargets = GetInverseAliasTargets(propSymbol);
+            if (aliasTargets is not null)
+            {
+                if (newName is not null && aliasTargets.Contains(newName))
+                {
+                    return (symbol, null);
+                }
+
+                var names = string.Join(" or ", aliasTargets.Select(n => $"'{n}'"));
+                return (null, new ResultError(
+                    ToolErrorCode.TargetIneligible,
+                    $"Property '{propSymbol.Name}' is a computed inverse alias of an existing member; renaming it in place is not meaningful. " +
+                    $"To migrate its callers instead (alias retarget), pass newName = {names}; the alias declaration itself is left untouched."));
+            }
+
             // Check for expression-bodied properties (public bool X => ...)
             if (propSymbol.DeclaringSyntaxReferences.Length > 0)
             {
                 var propSyntax = await propSymbol.DeclaringSyntaxReferences[0].GetSyntaxAsync(ct);
                 if (propSyntax is Microsoft.CodeAnalysis.CSharp.Syntax.PropertyDeclarationSyntax propDecl && propDecl.ExpressionBody != null)
                 {
-                    return (null, new ResultError(ToolErrorCode.TargetIneligible, "Property is expression-bodied; inverting a computed property is not meaningful."));
+                    return (null, new ResultError(ToolErrorCode.TargetIneligible, "Property is expression-bodied; inverting a computed property is not meaningful. " + AliasRetargetHint));
                 }
             }
 
@@ -106,7 +132,7 @@ public class SemanticReplaceEngine
                 if (getSyntax is Microsoft.CodeAnalysis.CSharp.Syntax.AccessorDeclarationSyntax accessor &&
                     (accessor.Body != null || accessor.ExpressionBody != null))
                 {
-                    return (null, new ResultError(ToolErrorCode.TargetIneligible, "Property has a custom getter body; inverting a computed property is not meaningful."));
+                    return (null, new ResultError(ToolErrorCode.TargetIneligible, "Property has a custom getter body; inverting a computed property is not meaningful. " + AliasRetargetHint));
                 }
             }
 
@@ -116,12 +142,177 @@ public class SemanticReplaceEngine
                 if (setSyntax is Microsoft.CodeAnalysis.CSharp.Syntax.AccessorDeclarationSyntax accessor &&
                     (accessor.Body != null || accessor.ExpressionBody != null))
                 {
-                    return (null, new ResultError(ToolErrorCode.TargetIneligible, "Property has a custom setter body; inverting a computed property is not meaningful."));
+                    return (null, new ResultError(ToolErrorCode.TargetIneligible, "Property has a custom setter body; inverting a computed property is not meaningful. " + AliasRetargetHint));
                 }
             }
         }
 
         return (symbol, null);
+    }
+
+    private const string AliasRetargetHint =
+        "If it is a computed inverse alias (get => !X; set => X = !value), pass newName = the existing sibling member X to migrate its callers (alias retarget).";
+
+    /// <summary>True when property is an exact inverse alias and newName is one of the sibling names an alias retarget accepts.</summary>
+    private static bool IsAliasRetarget(IPropertySymbol property, string newName)
+    {
+        return GetInverseAliasTargets(property)?.Contains(newName) == true;
+    }
+
+    /// <summary>
+    /// When property is an exact inverse alias - getter <c>!X</c> (expression body or a single return) and setter/init, if present,
+    /// <c>X = !value</c>, with X a bool field/property of the same type - returns the names an alias retarget accepts: X itself, then any
+    /// sibling property that passes straight through to X (getter <c>X</c>, setter <c>X = value</c>), because callers should be migrated to the
+    /// public member rather than to a private backing field. Returns null for anything else.
+    /// </summary>
+    private static IReadOnlyList<string>? GetInverseAliasTargets(IPropertySymbol property)
+    {
+        if (property.IsIndexer
+            || property.ContainingType is null
+            || property.DeclaringSyntaxReferences.Length != 1
+            || property.DeclaringSyntaxReferences[0].GetSyntax() is not PropertyDeclarationSyntax declaration)
+        {
+            return null;
+        }
+
+        if (GetAccessorExpression(declaration, SyntaxKind.GetAccessorDeclaration) is not PrefixUnaryExpressionSyntax negation
+            || !negation.IsKind(SyntaxKind.LogicalNotExpression))
+        {
+            return null;
+        }
+
+        var negated = FindBoolSibling(property, SiblingName(negation.Operand));
+        if (negated is null || !SetterAssigns(declaration, negated.Name, negated: true))
+        {
+            return null;
+        }
+
+        var targets = new List<string> { negated.Name };
+        foreach (var candidate in property.ContainingType.GetMembers().OfType<IPropertySymbol>())
+        {
+            if (!SymbolEqualityComparer.Default.Equals(candidate, property)
+                && !SymbolEqualityComparer.Default.Equals(candidate, negated)
+                && IsPassThrough(candidate, negated.Name))
+            {
+                targets.Add(candidate.Name);
+            }
+        }
+
+        return targets;
+    }
+
+    /// <summary>True when candidate is a bool property whose getter is exactly <c>target</c> and whose setter/init, if present, is <c>target = value</c>.</summary>
+    private static bool IsPassThrough(IPropertySymbol candidate, string targetName)
+    {
+        if (candidate.IsIndexer
+            || candidate.Type.SpecialType != SpecialType.System_Boolean
+            || candidate.DeclaringSyntaxReferences.Length != 1
+            || candidate.DeclaringSyntaxReferences[0].GetSyntax() is not PropertyDeclarationSyntax declaration)
+        {
+            return false;
+        }
+
+        var getter = GetAccessorExpression(declaration, SyntaxKind.GetAccessorDeclaration);
+        return getter is not null && SiblingName(getter) == targetName && SetterAssigns(declaration, targetName, negated: false);
+    }
+
+    /// <summary>True when the property has no setter/init, or its setter/init is <c>target = value</c> (or <c>target = !value</c> when negated).</summary>
+    private static bool SetterAssigns(PropertyDeclarationSyntax declaration, string targetName, bool negated)
+    {
+        var hasSetter = declaration.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.SetAccessorDeclaration) || a.IsKind(SyntaxKind.InitAccessorDeclaration)) == true;
+        if (!hasSetter)
+        {
+            return true;
+        }
+
+        if (GetAccessorExpression(declaration, SyntaxKind.SetAccessorDeclaration, SyntaxKind.InitAccessorDeclaration) is not AssignmentExpressionSyntax assignment
+            || !assignment.IsKind(SyntaxKind.SimpleAssignmentExpression)
+            || SiblingName(assignment.Left) != targetName)
+        {
+            return false;
+        }
+
+        var right = assignment.Right;
+        if (negated)
+        {
+            if (right is not PrefixUnaryExpressionSyntax inverted || !inverted.IsKind(SyntaxKind.LogicalNotExpression))
+            {
+                return false;
+            }
+
+            right = inverted.Operand;
+        }
+
+        return right is IdentifierNameSyntax { Identifier.ValueText: "value" };
+    }
+
+    /// <summary>The expression of an accessor (or of an expression-bodied property, for a getter): an expression body, or the sole statement of a block body.</summary>
+    private static ExpressionSyntax? GetAccessorExpression(PropertyDeclarationSyntax declaration, params SyntaxKind[] accessorKinds)
+    {
+        if (declaration.ExpressionBody is { } propertyBody && accessorKinds.Contains(SyntaxKind.GetAccessorDeclaration))
+        {
+            return propertyBody.Expression;
+        }
+
+        var accessor = declaration.AccessorList?.Accessors.FirstOrDefault(a => accessorKinds.Contains(a.Kind()));
+        if (accessor is null)
+        {
+            return null;
+        }
+
+        if (accessor.ExpressionBody is { } body)
+        {
+            return body.Expression;
+        }
+
+        if (accessor.Body is { Statements: { Count: 1 } statements })
+        {
+            return statements[0] switch
+            {
+                ReturnStatementSyntax returned => returned.Expression,
+                ExpressionStatementSyntax statement => statement.Expression,
+                _ => null
+            };
+        }
+
+        return null;
+    }
+
+    /// <summary>The member name for <c>X</c> or <c>this.X</c>, else null.</summary>
+    private static string? SiblingName(ExpressionSyntax expression)
+    {
+        return expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax, Name: IdentifierNameSyntax name } => name.Identifier.ValueText,
+            _ => null
+        };
+    }
+
+    /// <summary>Finds a bool field or (non-indexer) property named name in the property's containing type, other than the property itself.</summary>
+    private static ISymbol? FindBoolSibling(IPropertySymbol property, string? name)
+    {
+        if (name is null || name == property.Name)
+        {
+            return null;
+        }
+
+        foreach (var member in property.ContainingType.GetMembers(name))
+        {
+            if (property.IsStatic && !member.IsStatic)
+            {
+                continue;
+            }
+
+            switch (member)
+            {
+                case IFieldSymbol { Type.SpecialType: SpecialType.System_Boolean }:
+                case IPropertySymbol { IsIndexer: false, Type.SpecialType: SpecialType.System_Boolean }:
+                    return member;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Describes a symbol's declaration, including identifier and initializer spans.</summary>
@@ -228,7 +419,9 @@ public class SemanticReplaceEngine
         if (symbol.ContainingType != null)
         {
             var collidingMembers = symbol.ContainingType.GetMembers(newName);
-            if (collidingMembers.Length > 0)
+            // The one sanctioned collision: an inverse alias retargeted at the sibling that holds its state.
+            var isAliasRetarget = symbol is IPropertySymbol aliasProperty && IsAliasRetarget(aliasProperty, newName);
+            if (collidingMembers.Length > 0 && !isAliasRetarget)
             {
                 var collidingMember = collidingMembers[0];
                 return new ResultError(ToolErrorCode.InvalidArgument, 
@@ -272,20 +465,28 @@ public class SemanticReplaceEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var collection = new SiteCollection();
 
+        // Alias retarget: a computed inverse alias (get => !X) whose newName is the sibling X. Its references are migrated to X, but the
+        // alias declaration is left untouched (a later step deletes it), so the declaration site and anything inside its accessors are skipped.
+        var aliasRetarget = symbol is IPropertySymbol aliasProperty && IsAliasRetarget(aliasProperty, newName);
+        var aliasDeclaration = symbol.DeclaringSyntaxReferences[0];
+
         // The declaration: rename the identifier, and flip the initializer if there is one.
-        var declarationTree = symbol.DeclaringSyntaxReferences[0].SyntaxTree;
-        var declarationText = await declarationTree.GetTextAsync(cancellationToken);
-        var declarationDocument = solution.GetDocument(declarationTree);
-        var declarationPath = declarationDocument is null ? declaration.FilePath : declarationDocument.FilePath ?? declarationDocument.Name;
-        var declarationLine = declarationText.Lines.GetLinePosition(declaration.IdentifierSpan.Start).Line + 1;
-        var declarationSpan = declaration.InitializerValueSpan is { } initializerSpan
-            ? TextSpan.FromBounds(declaration.IdentifierSpan.Start, initializerSpan.End)
-            : declaration.IdentifierSpan;
-        var declarationSite = collection.AddSite(declarationPath, declarationLine, declarationSpan, SemanticReplaceRole.DeclarationInitializer, declarationText);
-        collection.AddEdit(declarationSite, declarationPath, declaration.IdentifierSpan, newName, declarationLine);
-        if (declaration.InitializerValueSpan is { } valueSpan)
+        if (!aliasRetarget)
         {
-            collection.Writes.Add(new PendingWrite(declarationSite, valueSpan, declarationText.ToString(valueSpan), declarationLine));
+            var declarationTree = aliasDeclaration.SyntaxTree;
+            var declarationText = await declarationTree.GetTextAsync(cancellationToken);
+            var declarationDocument = solution.GetDocument(declarationTree);
+            var declarationPath = declarationDocument is null ? declaration.FilePath : declarationDocument.FilePath ?? declarationDocument.Name;
+            var declarationLine = declarationText.Lines.GetLinePosition(declaration.IdentifierSpan.Start).Line + 1;
+            var declarationSpan = declaration.InitializerValueSpan is { } initializerSpan
+                ? TextSpan.FromBounds(declaration.IdentifierSpan.Start, initializerSpan.End)
+                : declaration.IdentifierSpan;
+            var declarationSite = collection.AddSite(declarationPath, declarationLine, declarationSpan, SemanticReplaceRole.DeclarationInitializer, declarationText);
+            collection.AddEdit(declarationSite, declarationPath, declaration.IdentifierSpan, newName, declarationLine);
+            if (declaration.InitializerValueSpan is { } valueSpan)
+            {
+                collection.Writes.Add(new PendingWrite(declarationSite, valueSpan, declarationText.ToString(valueSpan), declarationLine));
+            }
         }
 
         // The references. Only the ReferencedSymbol for this symbol itself is used: FindReferences also cascades to
@@ -310,6 +511,13 @@ public class SemanticReplaceEngine
                 if (location.IsImplicit || location.IsCandidateLocation || !location.Location.IsInSource)
                 {
                     continue;
+                }
+
+                if (aliasRetarget
+                    && location.Location.SourceTree == aliasDeclaration.SyntaxTree
+                    && aliasDeclaration.Span.Contains(location.Location.SourceSpan))
+                {
+                    continue; // inside the alias's own declaration: it stays as written
                 }
 
                 var document = location.Document;
@@ -769,7 +977,7 @@ public class SemanticReplaceEngine
     public async Task<SemanticReplaceOutcome> InvertBooleanAndRenameAsync(string docCommentId, string newName, CancellationToken cancellationToken = default)
     {
         // Step 1: Resolve the docCommentId to a symbol
-        var (symbol, resolveError) = await ResolveBoolMemberAsync(docCommentId, cancellationToken);
+        var (symbol, resolveError) = await ResolveBoolMemberAsync(docCommentId, newName, cancellationToken);
         if (resolveError is not null)
         {
             return new SemanticReplaceOutcome(new List<SemanticReplaceSite>(), new Dictionary<FilePathWrapper, string>(), resolveError);

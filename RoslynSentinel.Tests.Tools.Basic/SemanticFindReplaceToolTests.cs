@@ -220,4 +220,72 @@ public class Usage
         var diskContent = File.ReadAllText(targetFile);
         Assert.That(diskContent, Is.EqualTo(originalContent), "File should be unchanged after error");
     }
+
+    [Test]
+    [Description("Alias retarget: newName = the sibling of a computed inverse alias previews, then applies, leaving the alias declaration untouched")]
+    public async Task SemanticFindReplace_AliasRetarget_PreviewThenApplyRewritesUsagesAndKeepsAliasDeclaration()
+    {
+        using var fixture = new TestSolutionFixture();
+        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var targetFile = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First();
+        var originalContent = @"public class C
+{
+    private bool _isError;
+    public bool IsError { get => _isError; set => _isError = value; }
+    public bool IsSuccess { get => !_isError; set => _isError = !value; }
+}
+
+public class Usage
+{
+    private C _c = new();
+    private void Test()
+    {
+        if (_c.IsSuccess)
+        {
+            var x = !_c.IsSuccess;
+            _c.IsSuccess = false;
+        }
+    }
+}";
+        File.WriteAllText(targetFile, originalContent, System.Text.Encoding.UTF8);
+        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var docCommentId = "P:C.IsSuccess";
+
+        // Renaming in place stays refused, and the message teaches the alias-retarget form.
+        var refused = await _tool.SemanticFindReplace(
+            new ToolCallReason("testing alias in-place refusal"),
+            SemanticReplaceOperation.invertBoolean,
+            docCommentId,
+            "HasSucceeded",
+            SemanticReplaceMode.preview);
+        Assert.That(refused.IsSuccess, Is.False);
+        Assert.That(refused.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(refused.ErrorData.Message, Does.Contain("alias retarget"));
+        Assert.That(refused.ErrorData.Message, Does.Contain("'IsError'"));
+
+        var preview = await _tool.SemanticFindReplace(
+            new ToolCallReason("testing alias retarget preview"),
+            SemanticReplaceOperation.invertBoolean,
+            docCommentId,
+            "IsError",
+            SemanticReplaceMode.preview);
+        Assert.That(preview.IsSuccess, Is.True, preview.ErrorData?.Message);
+        Assert.That(File.ReadAllText(targetFile), Is.EqualTo(originalContent), "File should be unchanged after preview");
+
+        var apply = await _tool.SemanticFindReplace(
+            new ToolCallReason("testing alias retarget apply"),
+            SemanticReplaceOperation.invertBoolean,
+            docCommentId,
+            "IsError",
+            SemanticReplaceMode.apply);
+        Assert.That(apply.IsSuccess, Is.True, apply.ErrorData?.Message);
+
+        var expected = originalContent
+            .Replace("if (_c.IsSuccess)", "if (!_c.IsError)")
+            .Replace("var x = !_c.IsSuccess;", "var x = _c.IsError;")
+            .Replace("_c.IsSuccess = false;", "_c.IsError = true;");
+        Assert.That(File.ReadAllText(targetFile), Is.EqualTo(expected));
+    }
 }

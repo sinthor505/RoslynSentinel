@@ -757,4 +757,277 @@ public class SemanticReplaceEngineTests
         Assert.That(outcome.Sites, Is.Empty);
         Assert.That(outcome.Changes, Is.Empty);
     }
+
+    // ---- Alias retarget: a computed inverse alias (get => !X) with newName = the sibling X -------------------------------
+
+    private static readonly string[] AliasHeader =
+    {
+        "namespace Test;",
+        "public class C",
+        "{",
+        "    private bool _isError;",
+        "    public bool IsError { get => _isError; set => _isError = value; }",
+        "    public bool IsSuccess { get => !_isError; set => _isError = !value; }",
+        "}",
+    };
+
+    /// <summary>The alias type plus a usage class whose method M(C r, bool a, bool b) contains the given statements.</summary>
+    private static string AliasUsage(params string[] statements)
+    {
+        var lines = AliasHeader
+            .Concat(new[] { "public class U", "{", "    public void M(C r, bool a, bool b)", "    {" })
+            .Concat(statements.Select(s => "        " + s))
+            .Concat(new[] { "    }", "}" });
+        return Source(lines.ToArray());
+    }
+
+    [TestCase("var x = r.IsSuccess;", "var x = !r.IsError;")]
+    [TestCase("if (!r.IsSuccess) { }", "if (r.IsError) { }")]
+    [TestCase("r.IsSuccess = true;", "r.IsError = false;")]
+    [TestCase("r.IsSuccess = false;", "r.IsError = true;")]
+    [TestCase("r.IsSuccess = a;", "r.IsError = !a;")]
+    [TestCase("r.IsSuccess = a && b;", "r.IsError = !(a && b);")]
+    [TestCase("var o = new C { IsSuccess = true };", "var o = new C { IsError = false };")]
+    [TestCase("var o = new C { IsSuccess = a };", "var o = new C { IsError = !a };")]
+    [TestCase("r.IsSuccess = !r.IsSuccess;", "r.IsError = !(r.IsError);")]
+    public async Task InvertBooleanAndRenameAsync_AliasRetarget_RewritesUsageAndLeavesDeclarationUntouched(string before, string after)
+    {
+        var code = AliasUsage(before);
+        var solution = CreateMultiDocumentSolution(code);
+        var engine = CreateEngine(solution);
+        var docCommentId = await GetDocCommentId(solution, "IsSuccess");
+
+        var outcome = await engine.InvertBooleanAndRenameAsync(docCommentId!, "IsError");
+
+        Assert.That(outcome.Error, Is.Null, outcome.Error?.Message);
+        Assert.That(outcome.Changes.Values.Single(), Is.EqualTo(AliasUsage(after)));
+    }
+
+    [Test]
+    public async Task CollectSitesAsync_AliasRetarget_HasNoDeclarationSiteAndReportsRolesAndLines()
+    {
+        var code = AliasUsage(
+            "var x = r.IsSuccess;",
+            "if (!r.IsSuccess) { }",
+            "r.IsSuccess = true;",
+            "r.IsSuccess = a;");
+        var solution = CreateMultiDocumentSolution(code);
+        var engine = CreateEngine(solution);
+        var symbol = await GetMemberSymbolAsync(solution, "C", "IsSuccess");
+
+        var (sites, edits, error) = await engine.CollectSitesAsync(symbol, "IsError");
+
+        Assert.That(error, Is.Null, error?.Message);
+        Assert.That(sites.Select(s => s.Role), Is.EqualTo(new[]
+        {
+            SemanticReplaceRole.Read,
+            SemanticReplaceRole.NegatedRead,
+            SemanticReplaceRole.WriteLiteral,
+            SemanticReplaceRole.WriteExpression,
+        }));
+        Assert.That(sites.Select(s => s.Line), Is.EqualTo(new[] { 12, 13, 14, 15 }));
+        Assert.That(sites[0].Before, Is.EqualTo("r.IsSuccess"));
+        Assert.That(sites[0].After, Is.EqualTo("!r.IsError"));
+        Assert.That(ApplyEdits(code, "Test0.cs", edits), Is.EqualTo(AliasUsage(
+            "var x = !r.IsError;",
+            "if (r.IsError) { }",
+            "r.IsError = false;",
+            "r.IsError = !a;")));
+    }
+
+    [Test]
+    public async Task InvertBooleanAndRenameAsync_AliasRetarget_CrossFileUsageOnlyChangesTheUsageFile()
+    {
+        var declaration = Source(AliasHeader);
+        var usage = Source(
+            "namespace Test;",
+            "public class U",
+            "{",
+            "    public bool M(C r)",
+            "    {",
+            "        if (r.IsSuccess) { return !r.IsSuccess; }",
+            "        r.IsSuccess = false;",
+            "        return r.IsError;",
+            "    }",
+            "}");
+        var solution = CreateMultiDocumentSolution(declaration, usage);
+        var engine = CreateEngine(solution);
+        var docCommentId = await GetDocCommentId(solution, "IsSuccess");
+
+        var outcome = await engine.InvertBooleanAndRenameAsync(docCommentId!, "IsError");
+
+        Assert.That(outcome.Error, Is.Null, outcome.Error?.Message);
+        Assert.That(outcome.Changes.Count, Is.EqualTo(1), "the alias declaration file must not be rewritten");
+        Assert.That(outcome.Changes.Keys.Single().ToString(), Does.EndWith("Test1.cs"));
+        Assert.That(outcome.Changes.Values.Single(), Is.EqualTo(Source(
+            "namespace Test;",
+            "public class U",
+            "{",
+            "    public bool M(C r)",
+            "    {",
+            "        if (!r.IsError) { return r.IsError; }",
+            "        r.IsError = true;",
+            "        return r.IsError;",
+            "    }",
+            "}")));
+    }
+
+    [Test]
+    public async Task CollectSitesAsync_AliasRetarget_ReferenceInsideTheAliasDeclarationIsNotEdited()
+    {
+        var code = Source(
+            "namespace Test;",
+            "public class C",
+            "{",
+            "    private bool _isError;",
+            "    public bool IsError { get => _isError; set => _isError = value; }",
+            "    [System.Obsolete(nameof(IsSuccess))]",
+            "    public bool IsSuccess { get => !_isError; set => _isError = !value; }",
+            "}",
+            "public class U { public bool M(C r) { return r.IsSuccess; } }");
+        var solution = CreateMultiDocumentSolution(code);
+        var engine = CreateEngine(solution);
+        var symbol = await GetMemberSymbolAsync(solution, "C", "IsSuccess");
+
+        var (sites, edits, error) = await engine.CollectSitesAsync(symbol, "IsError");
+
+        Assert.That(error, Is.Null, error?.Message);
+        Assert.That(sites.Select(s => s.Role), Is.EqualTo(new[] { SemanticReplaceRole.Read }));
+        Assert.That(ApplyEdits(code, "Test0.cs", edits), Is.EqualTo(code.Replace("return r.IsSuccess;", "return !r.IsError;")));
+    }
+
+    [Test]
+    public async Task InvertBooleanAndRenameAsync_AliasRetarget_UnsupportedSiteRefusesAtomicallyWithFileAndLine()
+    {
+        var code = AliasUsage(
+            "var x = r.IsSuccess;",
+            "r.IsSuccess |= a;");
+        var solution = CreateMultiDocumentSolution(code);
+        var engine = CreateEngine(solution);
+        var docCommentId = await GetDocCommentId(solution, "IsSuccess");
+
+        var outcome = await engine.InvertBooleanAndRenameAsync(docCommentId!, "IsError");
+
+        Assert.That(outcome.Error, Is.Not.Null);
+        Assert.That(outcome.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(outcome.Error.Message, Does.Contain("Test0.cs:13 - "));
+        Assert.That(outcome.Changes, Is.Empty);
+    }
+
+    [Test]
+    public async Task ResolveBoolMemberAsync_InverseAlias_PrivateBackingFieldNameIsAlsoAccepted()
+    {
+        var solution = CreateMultiDocumentSolution(Source(AliasHeader));
+        var engine = CreateEngine(solution);
+        var docCommentId = await GetDocCommentId(solution, "IsSuccess");
+
+        var (symbol, error) = await engine.ResolveBoolMemberAsync(docCommentId!, "_isError");
+
+        Assert.That(error, Is.Null, error?.Message);
+        Assert.That(symbol, Is.Not.Null);
+    }
+
+    [TestCase("public bool IsSuccess { get { return !_isError; } set { _isError = !value; } }")]
+    [TestCase("public bool IsSuccess { get => !this._isError; init => this._isError = !value; }")]
+    [TestCase("public bool IsSuccess => !_isError;")]
+    public async Task ResolveBoolMemberAsync_InverseAliasShapes_AreAcceptedForTheSiblingName(string aliasDeclaration)
+    {
+        var code = $"namespace Test; public class C {{ private bool _isError; {aliasDeclaration} }}";
+        var solution = CreateMultiDocumentSolution(code);
+        var engine = CreateEngine(solution);
+        var docCommentId = await GetDocCommentId(solution, "IsSuccess");
+
+        var (symbol, error) = await engine.ResolveBoolMemberAsync(docCommentId!, "_isError");
+
+        Assert.That(error, Is.Null, error?.Message);
+        Assert.That(symbol, Is.Not.Null);
+    }
+
+    [Test]
+    public async Task ResolveBoolMemberAsync_InverseAliasWithoutNewName_IsRefusedAndNamesTheRetargetForm()
+    {
+        var solution = CreateMultiDocumentSolution(Source(AliasHeader));
+        var engine = CreateEngine(solution);
+        var docCommentId = await GetDocCommentId(solution, "IsSuccess");
+
+        var (symbol, error) = await engine.ResolveBoolMemberAsync(docCommentId!);
+
+        Assert.That(symbol, Is.Null);
+        Assert.That(error!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(error.Message, Does.Contain("alias retarget"));
+        Assert.That(error.Message, Does.Contain("'IsError'"));
+    }
+
+    [TestCase("public bool IsSuccess { get => _other; set => _other = value; }", "_other", "custom getter body")]
+    [TestCase("public bool IsSuccess { get => !_other; set => _other = value; }", "_other", "custom getter body")]
+    [TestCase("public bool IsSuccess { get => !_other && _third; set => _other = !value; }", "_other", "custom getter body")]
+    [TestCase("public bool IsSuccess => _other;", "_other", "expression-bodied")]
+    public async Task ResolveBoolMemberAsync_ComputedPropertyThatIsNotAnExactNegation_IsStillRefused(string aliasDeclaration, string newName, string expectedFragment)
+    {
+        var code = $"namespace Test; public class C {{ private bool _other; private bool _third; {aliasDeclaration} }}";
+        var solution = CreateMultiDocumentSolution(code);
+        var engine = CreateEngine(solution);
+        var docCommentId = await GetDocCommentId(solution, "IsSuccess");
+
+        var (symbol, error) = await engine.ResolveBoolMemberAsync(docCommentId!, newName);
+
+        Assert.That(symbol, Is.Null);
+        Assert.That(error!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(error.Message, Does.Contain(expectedFragment));
+        Assert.That(error.Message, Does.Contain("alias retarget"));
+    }
+
+    private static readonly string[] AliasWithUnrelatedMember =
+    {
+        "namespace Test;",
+        "public class C",
+        "{",
+        "    private bool _isError;",
+        "    public bool IsError { get => _isError; set => _isError = value; }",
+        "    public bool Other { get; set; }",
+        "    public bool IsSuccess { get => !_isError; set => _isError = !value; }",
+        "}",
+        "public class U { public bool M(C r) { return r.IsSuccess; } }",
+    };
+
+    [Test]
+    public async Task ResolveBoolMemberAsync_InverseAliasWithUnrelatedNewName_IsRefusedWithTheRealSiblingNames()
+    {
+        var solution = CreateMultiDocumentSolution(Source(AliasWithUnrelatedMember));
+        var engine = CreateEngine(solution);
+        var docCommentId = await GetDocCommentId(solution, "IsSuccess");
+
+        var (symbol, error) = await engine.ResolveBoolMemberAsync(docCommentId!, "Other");
+
+        Assert.That(symbol, Is.Null);
+        Assert.That(error!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(error.Message, Does.Contain("'_isError'"));
+        Assert.That(error.Message, Does.Contain("'IsError'"));
+    }
+
+    [Test]
+    public async Task CollectSitesAsync_AliasRetarget_CollisionWithUnrelatedExistingMemberIsStillRejected()
+    {
+        var solution = CreateMultiDocumentSolution(Source(AliasWithUnrelatedMember));
+        var engine = CreateEngine(solution);
+        var symbol = await GetMemberSymbolAsync(solution, "C", "IsSuccess");
+
+        var (sites, edits, error) = await engine.CollectSitesAsync(symbol, "Other");
+
+        Assert.That(sites, Is.Empty);
+        Assert.That(edits, Is.Empty);
+        Assert.That(error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(error.Message, Does.Contain("collides"));
+    }
+
+    [Test]
+    public async Task ValidateNewName_InverseAlias_AcceptsTheSiblingsAndStillRejectsTheAliasOwnName()
+    {
+        var solution = CreateMultiDocumentSolution(Source(AliasHeader));
+        var symbol = await GetMemberSymbolAsync(solution, "C", "IsSuccess");
+
+        Assert.That(SemanticReplaceEngine.ValidateNewName(symbol, "IsError"), Is.Null);
+        Assert.That(SemanticReplaceEngine.ValidateNewName(symbol, "_isError"), Is.Null);
+        Assert.That(SemanticReplaceEngine.ValidateNewName(symbol, "IsSuccess")!.Message, Does.Contain("identical"));
+    }
 }
