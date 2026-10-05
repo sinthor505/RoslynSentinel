@@ -176,7 +176,15 @@ public class WorkspaceBuildTestImpl
             var buildToolResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                 WithoutTailsWhenClean(buildResult), _workspaceManager.GetSolutionRoot(), "BuildResult", ResultWrapperType.Raw,
                 workspaceVersion: _workspaceManager.WorkspaceVersion, cancellationToken: cancellationToken);
-            return buildToolResult with { Findings = result.Findings, StatusMessage = SummarizeBuild(buildResult) };
+            var buildSummary = SummarizeBuild(buildResult);
+            if (buildResult.Outcome == BuildOutcome.Failed)
+            {
+                // The build ran and failed: report isError:true like RunTest does for an incomplete run, but keep the
+                // BuildResult payload (inline or offloaded) so the caller still gets the error details.
+                return buildToolResult with { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, buildSummary), Findings = result.Findings, StatusMessage = buildSummary };
+            }
+
+            return buildToolResult with { Findings = result.Findings, StatusMessage = buildSummary };
         }
         catch (Exception ex)
         {

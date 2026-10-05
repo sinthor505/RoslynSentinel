@@ -794,7 +794,7 @@ public class Order
         SetSource("namespace TestProj; public class Order { this is not valid C# }", "Test.cs");
         var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
-        Assert.That(!result.IsError, Is.True, "The tool call itself succeeds; the build outcome is carried in Data.Outcome.");
+        Assert.That(result.IsError, Is.True, "A failed build is reported as isError:true; the BuildResult is still carried in SuccessData.");
         var data = (BuildResult)result.SuccessData!;
         Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Failed));
         Assert.That(data.ErrorCount, Is.GreaterThan(0));
@@ -814,7 +814,7 @@ public class Order
 
         var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
-        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.IsError, Is.True);
         var data = (BuildResult)result.SuccessData!;
         Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Failed));
         Assert.That(data.ErrorCount, Is.EqualTo(3), "one CS0246 (undeclared type) per file.");
@@ -890,7 +890,7 @@ public class Order
         SetSource("namespace TestProj; public class Order { this is not valid C# }", "Test.cs");
         var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
-        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.IsError, Is.True);
         Assert.That(result.StatusMessage, Does.Contain("Build Failed"));
     }
 
@@ -900,7 +900,7 @@ public class Order
         SetSource("namespace TestProj; public class Order { this is not valid C# }", "Test.cs");
         var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
 
-        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.IsError, Is.True);
         var data = (BuildResult)result.SuccessData!;
         Assert.That(data.Outcome, Is.EqualTo(BuildOutcome.Failed));
         Assert.That(data.ErrorCount, Is.GreaterThan(0));
