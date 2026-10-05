@@ -4974,7 +4974,7 @@ public class MemberRefactoringEngine
             {
                 if (container.BaseList?.Types.Any(t => t.ToString().Contains(edit.BaseTypeName)) == true)
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TypeName}): base type already exists.");
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TypeName}): base type already exists.");
                     continue;
                 }
                 textEdits.Add(BaseTypeTextEditBuilder.BuildAddEdit(edit.Index, container, edit.BaseTypeName));
@@ -4985,7 +4985,7 @@ public class MemberRefactoringEngine
                 var removeEdit = BaseTypeTextEditBuilder.BuildRemoveEdit(edit.Index, container, edit.BaseTypeName);
                 if (removeEdit is null)
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TypeName}): base type '{edit.BaseTypeName}' not found.");
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TypeName}): base type '{edit.BaseTypeName}' not found.");
                     continue;
                 }
                 textEdits.Add(removeEdit.Value);
