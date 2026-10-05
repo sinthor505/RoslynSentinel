@@ -108,7 +108,7 @@ public static class AttributeTextEditBuilder
         {
             if (edit.Start < maxEnd && edit.EditIndex != maxEndOwner)
             {
-                error = $"edits[{maxEndOwner}] and edits[{edit.EditIndex}] change overlapping source text. Split these into separate calls.";
+                error = $"batchEdits[{maxEndOwner}] and batchEdits[{edit.EditIndex}] change overlapping source text. Split these into separate calls.";
                 return null;
             }
 
