@@ -143,6 +143,11 @@ These apply to every slice. The implementer reads this section once, then only i
   initializer, field without.
 
 ### Step 7 - Site collection and per-document edits
+Split 2026-10-04 into 7a/7b/7c for the Haiku implementer (one new algorithm is too much for one slice):
+- 7a: `ValidateNewName(ISymbol symbol, string newName)` -> `ResultError?` (valid identifier, no collision with a member of the containing type). Tests.
+- 7b: `CollectSitesAsync(ISymbol symbol, string newName, ct)` -> `(List<SemanticReplaceSite> Sites, List<ReferenceEdit> Edits, ResultError? Error)`: FindReferences -> identifier node -> `Classify` -> per-site replace span + `Rewrite` text (Read gets `parenthesize` when the reference is the receiver of a member/element access; NegatedRead span includes the `!`; Write roles span the whole right-hand side), plus the declaration edits (Step 6). Any `Unsupported` site -> error listing every `file:line` + reason. No text is applied here.
+- 7c: `PlanInvertBooleanAsync` = 7a + 7b + apply the edits per document in DESCENDING span order into new file text, returning `Changes` (`Dictionary<FilePathWrapper,string>`, full new text per file, the shape `ValidateAndApplyHelper` takes). Tests per the "Done when" below.
+Original single-slice description (kept for the contract):
 - Files: `RoslynSentinel.Engines.Basic/SemanticReplaceEngine.cs` (add one method); extend its tests.
 - Change: `Task<(List<SemanticReplaceSite> Sites, Dictionary<FilePathWrapper,string> Changes, ResultError? Error)> PlanInvertBooleanAsync(ISymbol symbol, string newName, CancellationToken ct = default)`.
   Use `SymbolFinder.FindReferencesAsync(symbol, solution, ct)`; for every location map to the identifier node,

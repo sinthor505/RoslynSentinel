@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Common;
@@ -188,6 +189,49 @@ public class SemanticReplaceEngine
                 }
 
                 return new DeclarationInfo(filePath, identifierSpan, initializerValueSpan, initializerText);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Validates that newName is a valid C# identifier and not already in use.</summary>
+    /// <returns>null if valid; ResultError with InvalidArgument code if invalid.</returns>
+    public static ResultError? ValidateNewName(ISymbol symbol, string newName)
+    {
+        // Check if newName is null, empty, or whitespace
+        if (string.IsNullOrWhiteSpace(newName))
+        {
+            return new ResultError(ToolErrorCode.InvalidArgument, "newName must be a valid C# identifier. Example: 'IsError'.");
+        }
+
+        // Check if it's a valid identifier
+        if (!SyntaxFacts.IsValidIdentifier(newName))
+        {
+            return new ResultError(ToolErrorCode.InvalidArgument, "newName must be a valid C# identifier. Example: 'IsError'.");
+        }
+
+        // Check if it's a keyword
+        if (SyntaxFacts.GetKeywordKind(newName) != SyntaxKind.None)
+        {
+            return new ResultError(ToolErrorCode.InvalidArgument, "newName must be a valid C# identifier. Example: 'IsError'.");
+        }
+
+        // Check if it's identical to the current name
+        if (newName == symbol.Name)
+        {
+            return new ResultError(ToolErrorCode.InvalidArgument, $"newName '{newName}' is identical to the current name; nothing to do.");
+        }
+
+        // Check if it collides with another member in the containing type
+        if (symbol.ContainingType != null)
+        {
+            var collidingMembers = symbol.ContainingType.GetMembers(newName);
+            if (collidingMembers.Length > 0)
+            {
+                var collidingMember = collidingMembers[0];
+                return new ResultError(ToolErrorCode.InvalidArgument, 
+                    $"newName '{newName}' collides with existing member '{collidingMember.Name}' in type '{symbol.ContainingType.Name}'.");
             }
         }
 

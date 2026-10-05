@@ -247,4 +247,35 @@ public class SemanticReplaceEngineTests
         Assert.That(info.InitializerValueSpan, Is.Not.Null);
         Assert.That(info.InitializerText, Is.EqualTo("true"));
     }
+
+    [TestCase("IsError", null)]
+    [TestCase("", "must be a valid")]
+    [TestCase("1abc", "must be a valid")]
+    [TestCase("class", "must be a valid")]
+    [TestCase("IsSuccess", "identical")]
+    [TestCase("IsError2", "IsError2")]
+    public void ValidateNewName_WithVariousInputs_ReturnsExpectedError(string newName, string? expectedErrorContent)
+    {
+        var code = "namespace Test; public class C { public bool IsSuccess { get; set; } public bool IsError2; }";
+        var solution = CreateTestSolution(code);
+        var project = solution.Projects.First();
+        var compilation = project.GetCompilationAsync().Result;
+        var symbol = compilation!.GlobalNamespace
+            .GetNamespaceMembers().First(n => n.Name == "Test")
+            .GetTypeMembers().First(t => t.Name == "C")
+            .GetMembers("IsSuccess").First();
+
+        var error = SemanticReplaceEngine.ValidateNewName(symbol, newName);
+
+        if (expectedErrorContent == null)
+        {
+            Assert.That(error, Is.Null);
+        }
+        else
+        {
+            Assert.That(error, Is.Not.Null);
+            Assert.That(error!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+            Assert.That(error.Message, Does.Contain(expectedErrorContent));
+        }
+    }
 }
