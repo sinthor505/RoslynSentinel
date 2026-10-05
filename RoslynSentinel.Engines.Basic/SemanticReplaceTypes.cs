@@ -34,3 +34,28 @@ public record SemanticReplaceSite(
     string After,
     string? UnsupportedReason
 );
+/// <summary>
+/// One text edit produced while collecting sites: replace <paramref name="Span"/> (offsets in the ORIGINAL text of the
+/// file) with <paramref name="NewText"/>. A zero-length span is a pure insertion at that position.
+/// </summary>
+/// <remarks>
+/// Apply order for one file is "start descending, then end descending" (see <see cref="ApplicationOrder"/>), so earlier
+/// edits never shift the spans of later ones. The end-descending tie-break matters only for a zero-length insertion that
+/// shares a start with a non-empty edit: the non-empty edit is applied first, then the insertion lands in front of its text.
+/// An insertion at the END of another edit's span has the larger start, so it is applied first and lands after that edit's text.
+/// </remarks>
+public sealed record ReferenceEdit(string FilePath, Microsoft.CodeAnalysis.Text.TextSpan Span, string NewText)
+{
+    /// <summary>Total order for applying edits: file path (ordinal) ascending, then span start descending, then span end descending.</summary>
+    public static int ApplicationOrder(ReferenceEdit left, ReferenceEdit right)
+    {
+        var byFile = string.CompareOrdinal(left.FilePath, right.FilePath);
+        if (byFile != 0)
+        {
+            return byFile;
+        }
+
+        var byStart = right.Span.Start.CompareTo(left.Span.Start);
+        return byStart != 0 ? byStart : right.Span.End.CompareTo(left.Span.End);
+    }
+}
