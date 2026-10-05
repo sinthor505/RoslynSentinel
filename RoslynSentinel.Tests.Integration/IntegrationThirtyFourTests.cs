@@ -92,6 +92,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 1 -> PerformanceEngine
     // =========================================================================
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task PerformanceEngine_AnalyzePerformance_DoesNotThrow()
     {
         var engine = new PerformanceEngine(_workspaceManager);
@@ -101,6 +102,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task PerformanceEngine_OptimizeResourceDisposal_DoesNotThrow()
     {
         var engine = new PerformanceEngine(_workspaceManager);
@@ -110,6 +112,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task PerformanceEngine_DetectStringComparisons_DoesNotThrow()
     {
         var engine = new PerformanceEngine(_workspaceManager);
@@ -122,6 +125,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 2 -> SecurityEngine
     // =========================================================================
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task SecurityEngine_AnalyzeSecurity_DoesNotThrow()
     {
         var engine = new SecurityEngine(_workspaceManager);
@@ -131,6 +135,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task SecurityEngine_FindHardcodedPaths_DoesNotThrow()
     {
         var engine = new SecurityEngine(_workspaceManager);
@@ -143,6 +148,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 3 -> AsyncSafetyEngine
     // =========================================================================
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task AsyncSafetyEngine_DetectAsyncVoid_DoesNotThrow()
     {
         var engine = new AsyncAnalysisEngine(_workspaceManager);
@@ -153,6 +159,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task AsyncSafetyEngine_FindTaskYieldUsage_DoesNotThrow()
     {
         var engine = new AsyncAnalysisEngine(_workspaceManager);
@@ -165,6 +172,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 4 -> AsyncOptimizationEngine
     // =========================================================================
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task AsyncOptimizationEngine_OptimizeIndependentAwaits_DoesNotThrow()
     {
         var engine = new AsyncOptimizationEngine(_workspaceManager);
@@ -176,6 +184,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task AsyncOptimizationEngine_GenerateAsyncOverload_DoesNotThrow()
     {
         var engine = new AsyncOptimizationEngine(_workspaceManager);
@@ -188,6 +197,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 5 -> ThreadSafetyEngine
     // =========================================================================
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task ThreadSafetyEngine_MakeMethodThreadSafe_DoesNotThrow()
     {
         var engine = new ThreadSafetyEngine(_workspaceManager);
@@ -202,6 +212,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 6 -> ControlFlowEngine
     // =========================================================================
     [Test]
+    [Category("ControlFlowEngine")] // sentinel:auto-category
     public async Task ControlFlowEngine_AnalyzePathCoverage_DoesNotThrow()
     {
         var engine = new ControlFlowEngine(_workspaceManager);
@@ -214,6 +225,8 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 7 -> DiagnosticEngine
     // =========================================================================
     [Test]
+    [Category("DiagnosticEngine")] // sentinel:auto-category
+    [Category("DiagnosticSummary")] // sentinel:auto-category
     public async Task DiagnosticEngine_GetFileDiagnostics_DoesNotThrow()
     {
         var engine = new DiagnosticEngine(_workspaceManager);
@@ -223,6 +236,8 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("DiagnosticEngine")] // sentinel:auto-category
+    [Category("DiagnosticSummary")] // sentinel:auto-category
     public async Task DiagnosticEngine_GetSolutionDiagnostics_DoesNotThrow()
     {
         var engine = new DiagnosticEngine(_workspaceManager);
@@ -235,6 +250,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 8 -> ModernizationEngine (ClassToRecord -> staged, not applied)
     // =========================================================================
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ModernizationEngine_ClassToRecord_DoesNotThrow()
     {
         var config = new SentinelConfiguration();
@@ -249,6 +265,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 9 -> SyntaxUpgradeEngine
     // =========================================================================
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task SyntaxUpgradeEngine_AddBraces_DoesNotThrow()
     {
         var config = new SentinelConfiguration();
@@ -259,6 +276,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task SyntaxUpgradeEngine_UpgradeToModernGuards_DoesNotThrow()
     {
         var config = new SentinelConfiguration();
@@ -272,6 +290,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 10 -> CodeGenerationEngine
     // =========================================================================
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task CodeGenerationEngine_GenerateConstructor_DoesNotThrow()
     {
         var engine = new CodeGenerationEngine(_workspaceManager);
@@ -282,6 +301,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task CodeGenerationEngine_GenerateToString_DoesNotThrow()
     {
         var engine = new CodeGenerationEngine(_workspaceManager);
@@ -295,6 +315,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 11 -> AnalysisEngine (solution-wide + file-level)
     // =========================================================================
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task AnalysisEngine_FindLargeTypes_DoesNotThrow()
     {
         var config = new SentinelConfiguration();
@@ -305,6 +326,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task AnalysisEngine_GenerateCallTree_DoesNotThrow()
     {
         var config = new SentinelConfiguration();
@@ -319,6 +341,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 12 -> BasicRefactoringEngine
     // =========================================================================
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task RefactoringEngine_MoveAllTypesToFiles_DoesNotThrow()
     {
         var config = new SentinelConfiguration();
@@ -330,6 +353,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task RefactoringEngine_WrapInTryCatch_DoesNotThrow()
     {
         var config = new SentinelConfiguration();
@@ -345,6 +369,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 13 -> GranularRefactoringEngine
     // =========================================================================
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task GranularRefactoringEngine_ExtractMembersToPartial_DoesNotThrow()
     {
         Dictionary<FilePathWrapper, string>? result = null;
@@ -353,6 +378,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task ModernizationUpgradeEngine_UpgradeToPrimaryConstructor_DoesNotThrow()
     {
         var config = new SentinelConfiguration();
@@ -366,6 +392,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     // 15 -> SuccessDetails quality invariants across all new engines
     // =========================================================================
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task PerformanceEngine_AllIssues_HaveNonNullFilePaths()
     {
         var engine = new PerformanceEngine(_workspaceManager);
@@ -378,6 +405,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task SecurityEngine_AllIssues_HaveNonNullSeverity()
     {
         var engine = new SecurityEngine(_workspaceManager);
@@ -390,6 +418,8 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("DiagnosticEngine")] // sentinel:auto-category
+    [Category("DiagnosticSummary")] // sentinel:auto-category
     public async Task DiagnosticEngine_FileSummary_HasValidCounts()
     {
         var engine = new DiagnosticEngine(_workspaceManager);
@@ -400,6 +430,7 @@ public class RealSolution_EngineSmoke_Battery34Tests
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task AnalysisEngine_CallTree_IsNonEmpty()
     {
         var config = new SentinelConfiguration();

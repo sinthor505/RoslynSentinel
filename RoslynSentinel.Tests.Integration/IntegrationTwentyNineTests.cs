@@ -78,6 +78,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // 1. AsyncSafetyEngine (6 tests)
     // ══════════════════════════════════════════════════════════════════════════
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task AsyncSafetyEngine_DetectAsyncVoidMethods_DoesNotThrow()
     {
         var engine = new AsyncAnalysisEngine(_workspaceManager);
@@ -87,6 +88,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task AsyncSafetyEngine_FindConfigureAwaitMissing_DoesNotThrow()
     {
         var engine = new AsyncAnalysisEngine(_workspaceManager);
@@ -96,6 +98,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task AsyncSafetyEngine_FindBlockingCallsInAsync_DoesNotThrow()
     {
         var engine = new AsyncAnalysisEngine(_workspaceManager);
@@ -105,6 +108,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task AsyncSafetyEngine_FindUnsafeLazyInit_DoesNotThrow()
     {
         var engine = new AsyncAnalysisEngine(_workspaceManager);
@@ -114,6 +118,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task AsyncSafetyEngine_DetectValueTaskMisuse_DoesNotThrow()
     {
         var engine = new AsyncAnalysisEngine(_workspaceManager);
@@ -123,6 +128,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task AsyncSafetyEngine_FindUnawaitedFireAndForget_DoesNotThrow()
     {
         var engine = new AsyncAnalysisEngine(_workspaceManager);
@@ -135,6 +141,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // 3. SyntaxUpgradeEngine (5 tests) -> all features enabled by default config
     // ══════════════════════════════════════════════════════════════════════════
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task SyntaxUpgradeEngine_UpgradeToModernGuards_DoesNotThrow()
     {
         var engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
@@ -144,6 +151,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task SyntaxUpgradeEngine_AddBraces_DoesNotThrow()
     {
         var engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
@@ -153,6 +161,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task SyntaxUpgradeEngine_UpgradePatternMatching_DoesNotThrow()
     {
         var engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
@@ -162,6 +171,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task SyntaxUpgradeEngine_UseFieldBackedProperties_DoesNotThrow()
     {
         var engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
@@ -171,6 +181,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task SyntaxUpgradeEngine_CleanupImplicitSpans_DoesNotThrow()
     {
         var engine = new SyntaxUpgradeEngine(_workspaceManager, _config);
@@ -183,6 +194,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // 4. CodeHealingEngine (2 tests)
     // ══════════════════════════════════════════════════════════════════════════
     [Test]
+    [Category("CodeHealingEngine")] // sentinel:auto-category
     public async Task CodeHealingEngine_FixThreadSleep_DoesNotThrow()
     {
         var engine = new CodeHealingEngine(_workspaceManager, _config);
@@ -192,6 +204,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("CodeHealingEngine")] // sentinel:auto-category
     public async Task CodeHealingEngine_AddRetryPolicy_DoesNotThrow()
     {
         // sl=0, el=0 causes AddRetryPolicyAsync to fall back to the first method in the file
@@ -206,6 +219,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // ══════════════════════════════════════════════════════════════════════════
     [Test]
     [Ignore("API changed: InvertBooleanLogicAsync now returns EngineResultWrapper<List<DocumentEditResult>>")]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task AdvancedLogicEngine_InvertBooleanLogic_NonExistentBool_ReturnsEmptyDict()
     {
         var engine = new LogicSimplificationEngine(_workspaceManager);
@@ -215,6 +229,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task AdvancedLogicEngine_ConvertForEachToFor_DoesNotThrow()
     {
         var engine = new LogicSimplificationEngine(_workspaceManager);
@@ -225,6 +240,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task AdvancedLogicEngine_ConvertWhileToFor_DoesNotThrow()
     {
         var engine = new LogicSimplificationEngine(_workspaceManager);
@@ -237,6 +253,8 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // 6. AdvancedRefactoringEngine (2 tests)
     // ══════════════════════════════════════════════════════════════════════════
     [Test]
+    [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task AdvancedRefactoringEngine_ReplaceStringConcatWithInterpolation_DoesNotThrow()
     {
         var engine = new AdvancedRefactoringEngine(_workspaceManager);
@@ -247,6 +265,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
     public async Task AdvancedRefactoringEngine_OptimizeTaskWait_DoesNotThrow()
     {
         var engine = new AdvancedRefactoringEngine(_workspaceManager);
@@ -259,6 +278,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // 7. ModernizationEngine (3 tests)
     // ══════════════════════════════════════════════════════════════════════════
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ModernizationEngine_ClassToRecord_DoesNotThrow()
     {
         var engine = new SyntaxModernizationEngine(_workspaceManager, _config);
@@ -268,6 +288,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ModernizationEngine_ConvertMethodToExpressionBody_DoesNotThrow()
     {
         var engine = new SyntaxModernizationEngine(_workspaceManager, _config);
@@ -277,6 +298,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ModernizationEngine_ConvertToPattern_DoesNotThrow()
     {
         var engine = new SyntaxModernizationEngine(_workspaceManager, _config);
@@ -289,6 +311,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // 8. GranularRefactoringEngine (3 tests)
     // ══════════════════════════════════════════════════════════════════════════
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task GranularRefactoringEngine_RunMicroRefactoring_DoesNotThrow()
     {
         string? result = null;
@@ -298,6 +321,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task GranularRefactoringEngine_InlineField_NonExistentField_ReturnsErrorString()
     {
         string? result = null;
@@ -308,6 +332,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task GranularRefactoringEngine_MoveTypeToOuterScope_DoesNotThrow()
     {
         string? result = null;
@@ -320,6 +345,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // 9. ControlFlowEngine (3 tests)
     // ══════════════════════════════════════════════════════════════════════════
     [Test]
+    [Category("ControlFlowEngine")] // sentinel:auto-category
     public async Task ControlFlowEngine_AnalyzePathCoverage_DoesNotThrow()
     {
         var engine = new ControlFlowEngine(_workspaceManager);
@@ -330,6 +356,8 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("ControlFlowAnalysisResult")] // sentinel:auto-category
+    [Category("ControlFlowEngine")] // sentinel:auto-category
     public async Task ControlFlowEngine_AnalyzeMethodControlFlow_DoesNotThrow()
     {
         var engine = new ControlFlowEngine(_workspaceManager);
@@ -340,6 +368,8 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("ControlFlowEngine")] // sentinel:auto-category
+    [Category("DataFlowAnalysisResult")] // sentinel:auto-category
     public async Task ControlFlowEngine_AnalyzeMethodDataFlow_DoesNotThrow()
     {
         var engine = new ControlFlowEngine(_workspaceManager);
@@ -353,6 +383,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // 10. CodeStyleEngine (4 tests)
     // ══════════════════════════════════════════════════════════════════════════
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task CodeStyleEngine_FixDangerousLock_DoesNotThrow()
     {
         var engine = new CodeStyleEngine(_workspaceManager, _config);
@@ -362,6 +393,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task CodeStyleEngine_SimplifyVerbosity_DoesNotThrow()
     {
         var engine = new CodeStyleEngine(_workspaceManager, _config);
@@ -371,6 +403,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task CodeStyleEngine_UseCollectionExpressions_DoesNotThrow()
     {
         var engine = new CodeStyleEngine(_workspaceManager, _config);
@@ -380,6 +413,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task CodeStyleEngine_UseIndexFromEnd_DoesNotThrow()
     {
         var engine = new CodeStyleEngine(_workspaceManager, _config);
@@ -392,6 +426,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // 11. PerformanceEngine (4 tests)
     // ══════════════════════════════════════════════════════════════════════════
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task PerformanceEngine_AnalyzePerformance_DoesNotThrow()
     {
         var engine = new PerformanceEngine(_workspaceManager);
@@ -401,6 +436,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task PerformanceEngine_OptimizeResourceDisposal_DoesNotThrow()
     {
         var engine = new PerformanceEngine(_workspaceManager);
@@ -410,6 +446,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task PerformanceEngine_DetectInefficientStringComparisons_DoesNotThrow()
     {
         var engine = new PerformanceEngine(_workspaceManager);
@@ -419,6 +456,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task PerformanceEngine_FindBoxingAllocations_DoesNotThrow()
     {
         var engine = new PerformanceEngine(_workspaceManager);
@@ -431,6 +469,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // 12. DependencyEngine (2 tests)
     // ══════════════════════════════════════════════════════════════════════════
     [Test]
+    [Category("DependencyEngine")] // sentinel:auto-category
     public async Task DependencyEngine_GetProjectDependencies_DoesNotThrow()
     {
         var engine = new DependencyEngine(_workspaceManager);
@@ -443,6 +482,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("DependencyEngine")] // sentinel:auto-category
     public async Task DependencyEngine_FindUnusedReferences_DoesNotThrow()
     {
         var engine = new DependencyEngine(_workspaceManager);
@@ -455,6 +495,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // 13. ThreadSafetyEngine (2 tests)
     // ══════════════════════════════════════════════════════════════════════════
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task ThreadSafetyEngine_MakeMethodThreadSafe_NonExistentMethod_GracefulError()
     {
         var engine = new ThreadSafetyEngine(_workspaceManager);
@@ -466,6 +507,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public async Task ThreadSafetyEngine_ConvertLockToSemaphoreSlim_DoesNotThrow()
     {
         var engine = new ThreadSafetyEngine(_workspaceManager);
@@ -479,6 +521,8 @@ public class B29_AllEngines_RealSolution_SmokeTests
     // 14. MsToolAugmentEngine (5 tests)
     // ══════════════════════════════════════════════════════════════════════════
     [Test]
+    [Category("MsToolAugmentEngine")] // sentinel:auto-category
+    [Category("UsingsCleanupResult")] // sentinel:auto-category
     public async Task MsToolAugmentEngine_SortAndDeduplicateUsings_DoesNotThrow()
     {
         var engine = new MsToolAugmentEngine(_workspaceManager);
@@ -490,6 +534,8 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
+    [Category("MsToolAugmentEngine")] // sentinel:auto-category
     public async Task MsToolAugmentEngine_FormatDocumentSafe_DoesNotThrow()
     {
         var engine = new MsToolAugmentEngine(_workspaceManager);
@@ -502,6 +548,8 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
+    [Category("MsToolAugmentEngine")] // sentinel:auto-category
     public async Task MsToolAugmentEngine_GenerateToStringSafe_DoesNotThrow()
     {
         var engine = new MsToolAugmentEngine(_workspaceManager);
@@ -516,6 +564,8 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("MsAugmentResult")] // sentinel:auto-category
+    [Category("MsToolAugmentEngine")] // sentinel:auto-category
     public async Task MsToolAugmentEngine_EncapsulateFieldSafe_NonExistentField_ReturnsFailGracefully()
     {
         var engine = new MsToolAugmentEngine(_workspaceManager);
@@ -527,6 +577,7 @@ public class B29_AllEngines_RealSolution_SmokeTests
     }
 
     [Test]
+    [Category("MsToolAugmentEngine")] // sentinel:auto-category
     public async Task MsToolAugmentEngine_PreviewAddMissingUsings_DoesNotThrow()
     {
         var engine = new MsToolAugmentEngine(_workspaceManager);
@@ -588,6 +639,7 @@ public class RealSolution_SmokeTests_Battery28
     public void TearDown() => _workspaceManager?.Dispose();
     // ── Solution-wide engines (no required args) ────────────────────────────
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task AntiPatternEngine_ScanAll_DoesNotThrow()
     {
         var engine = new AntiPatternEngine(_workspaceManager);
@@ -597,6 +649,8 @@ public class RealSolution_SmokeTests_Battery28
     }
 
     [Test]
+    [Category("SafetyIssue")] // sentinel:auto-category
+    [Category("SecurityAndSafetyEngine")] // sentinel:auto-category
     public async Task SecurityAndSafetyEngine_ScanAll_DoesNotThrow()
     {
         var engine = new SecurityAndSafetyEngine(_workspaceManager);
@@ -606,6 +660,7 @@ public class RealSolution_SmokeTests_Battery28
     }
 
     [Test]
+    [Category("SolutionStructureEngine")] // sentinel:auto-category
     public async Task SolutionStructureEngine_FindCircularDeps_DoesNotThrow()
     {
         var engine = new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration());
@@ -616,6 +671,7 @@ public class RealSolution_SmokeTests_Battery28
 
     // ── Per-file engines (use discovered real file) ─────────────────────────
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task DeadCodeEngine_PerFile_DoesNotThrow()
     {
         var engine = new DeadCodeEngine(_workspaceManager);
@@ -625,6 +681,7 @@ public class RealSolution_SmokeTests_Battery28
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task DeadCodeEngine_UnusedPrivateFields_DoesNotThrow()
     {
         var engine = new DeadCodeEngine(_workspaceManager);
@@ -634,6 +691,7 @@ public class RealSolution_SmokeTests_Battery28
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ImmutabilityEngine_MakeClassImmutable_DoesNotThrow()
     {
         DocumentEditResult? result = null;
@@ -642,6 +700,7 @@ public class RealSolution_SmokeTests_Battery28
     }
 
     [Test]
+    [Category("DocumentationEngine")] // sentinel:auto-category
     public async Task DocumentationEngine_GenerateStubs_DoesNotThrow()
     {
         var engine = new DocumentationEngine(_workspaceManager);
@@ -651,6 +710,7 @@ public class RealSolution_SmokeTests_Battery28
     }
 
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task LogicOptimizationEngine_SimplifyBooleans_DoesNotThrow()
     {
         var engine = new LogicSimplificationEngine(_workspaceManager);
@@ -660,6 +720,7 @@ public class RealSolution_SmokeTests_Battery28
     }
 
     [Test]
+    [Category("TestingEngine")] // sentinel:auto-category
     public async Task TestingEngine_GenerateSkeleton_DoesNotThrow()
     {
         var engine = new TestingEngine(_workspaceManager);
@@ -670,6 +731,8 @@ public class RealSolution_SmokeTests_Battery28
 
     // ── SuccessDetails quality invariants ─────────────────────────────────────────────
     [Test]
+    [Category("SafetyIssue")] // sentinel:auto-category
+    [Category("SecurityAndSafetyEngine")] // sentinel:auto-category
     public async Task SecurityAndSafetyEngine_NoFindings_HaveNullFields()
     {
         var engine = new SecurityAndSafetyEngine(_workspaceManager);
@@ -683,6 +746,7 @@ public class RealSolution_SmokeTests_Battery28
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ImmutabilityEngine_ReadonlyOutput_NoFusedTokens()
     {
         // B02 regression on real code: 'readonly' must always be followed by a space
