@@ -582,7 +582,7 @@ public class SemanticReplaceEngine
                 {
                     // Named arguments of primary constructor calls were handled above; any other one is a shape this pass cannot rewrite.
                     var namedLine = parsed.Text.Lines.GetLinePosition(span.Start).Line + 1;
-                    collection.AddSite(filePath, namedLine, span, SemanticReplaceRole.Unsupported, parsed.Text, "named argument outside a primary constructor call is not supported");
+                    collection.AddSite(filePath, namedLine, span, SemanticReplaceRole.Unsupported, parsed.Text, UnattributedNamedArgumentReason(identifier, symbol));
                     continue;
                 }
 
@@ -981,8 +981,7 @@ public class SemanticReplaceEngine
 
     private static bool IsRecordDeconstruct(IMethodSymbol method, INamedTypeSymbol recordType)
     {
-        return method.Name == WellKnownMemberNames.DeconstructMethodName
-            && SymbolEqualityComparer.Default.Equals(method.ContainingType?.OriginalDefinition, recordType.OriginalDefinition);
+        return method.Name == WellKnownMemberNames.DeconstructMethodName && IsSameDeclaration(method.ContainingType, recordType);
     }
 
     private static bool UsesRecordDeconstruct(DeconstructionInfo info, INamedTypeSymbol recordType)
@@ -1099,9 +1098,12 @@ public class SemanticReplaceEngine
             var filePath = document.FilePath ?? document.Name;
             foreach (var (call, list, argument) in calls)
             {
-                var bound = model.GetSymbolInfo(call, cancellationToken).Symbol;
-                if (SymbolEqualityComparer.Default.Equals(bound?.OriginalDefinition, constructor.OriginalDefinition)
-                    && seen.Add((filePath, list.SpanStart))) // the same file reached through a second project is skipped
+                // A dependent project can see the record through a retargeting wrapper (its own view of the referenced assembly), so the bound
+                // constructor is a different instance than the target's: compare by declaration, and accept an overload-resolution candidate.
+                var info = model.GetSymbolInfo(call, cancellationToken);
+                var isPrimaryConstructorCall = IsSameDeclaration(info.Symbol, constructor)
+                    || (info.Symbol is null && info.CandidateSymbols.Any(candidate => IsSameDeclaration(candidate, constructor)));
+                if (isPrimaryConstructorCall && seen.Add((filePath, list.SpanStart))) // the same file reached through a second project is skipped
                 {
                     CollectConstructorArgument(collection, seen, filePath, parsed.Text, argument, newName);
                 }
@@ -1117,6 +1119,44 @@ public class SemanticReplaceEngine
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// True when a and b are the same declaration, even when they are different symbol instances: the target symbol can come from a
+    /// different compilation of the record's project than the one a dependent project's semantic model binds against.
+    /// </summary>
+    private static bool IsSameDeclaration(ISymbol? a, ISymbol? b)
+    {
+        if (a is null || b is null)
+        {
+            return false;
+        }
+
+        a = a.OriginalDefinition;
+        b = b.OriginalDefinition;
+        if (SymbolEqualityComparer.Default.Equals(a, b))
+        {
+            return true;
+        }
+
+        var id = a.GetDocumentationCommentId();
+        return id is not null && id == b.GetDocumentationCommentId() && a.ContainingAssembly?.Name == b.ContainingAssembly?.Name;
+    }
+
+    /// <summary>Unsupported reason for a named argument the primary constructor scan did not attribute, naming the call it sits in.</summary>
+    private static string UnattributedNamedArgumentReason(IdentifierNameSyntax identifier, ISymbol target)
+    {
+        var call = identifier.Parent?.Parent?.Parent?.Parent; // NameColon -> Argument -> ArgumentList -> call
+        var callee = call switch
+        {
+            ObjectCreationExpressionSyntax creation => $"new {creation.Type}(...)",
+            ImplicitObjectCreationExpressionSyntax => "target-typed new(...)",
+            InvocationExpressionSyntax invocation => $"{invocation.Expression}(...)",
+            ConstructorInitializerSyntax initializer => $"{initializer.ThisOrBaseKeyword.Text}(...)",
+            PrimaryConstructorBaseTypeSyntax baseType => $"{baseType.Type}(...)",
+            _ => call?.Kind().ToString() ?? "an unrecognised call"
+        };
+        return $"named argument '{identifier.Identifier.ValueText}:' in {callee} could not be matched to the primary constructor of '{target.ContainingType?.Name}'; rewrite it by hand";
     }
 
     /// <summary>Returns the first edit that conflicts with another in the same file: overlapping non-empty spans, or an insertion strictly inside another edit's span.</summary>

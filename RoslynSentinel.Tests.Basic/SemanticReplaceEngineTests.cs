@@ -1272,4 +1272,159 @@ public class SemanticReplaceEngineTests
         var unsupported = outcome.Sites.Where(s => s.Role == SemanticReplaceRole.Unsupported).Select(s => s.Line).ToList();
         Assert.That(unsupported, Is.EqualTo(new[] { 6, 7 }));
     }
+
+    /// <summary>
+    /// Two projects: App (listed FIRST, so ResolveBoolMemberAsync resolves the id through App's compilation) referencing Lib, which
+    /// declares the record. Mirrors RoslynSentinel.Tests -> RoslynSentinel.Common. Documents get absolute paths C:\fixture\{Lib,App}.cs.
+    /// </summary>
+    private static Solution CreateLibAndAppSolution(string libSource, string appSource)
+    {
+        var workspace = new AdhocWorkspace();
+        var libId = ProjectId.CreateNewId();
+        var appId = ProjectId.CreateNewId();
+        var corlib = MetadataReference.CreateFromFile(typeof(object).Assembly.Location);
+        var library = new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable);
+        return workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(appId, VersionStamp.Create(), "App", "App", LanguageNames.CSharp, compilationOptions: library))
+            .AddProject(ProjectInfo.Create(libId, VersionStamp.Create(), "Lib", "Lib", LanguageNames.CSharp, compilationOptions: library))
+            .AddMetadataReference(appId, corlib)
+            .AddMetadataReference(libId, corlib)
+            .AddProjectReference(appId, new ProjectReference(libId))
+            .AddDocument(DocumentId.CreateNewId(libId), "Lib.cs", libSource, filePath: @"C:\fixture\Lib.cs")
+            .AddDocument(DocumentId.CreateNewId(appId), "App.cs", appSource, filePath: @"C:\fixture\App.cs");
+    }
+
+    [Test]
+    public async Task InvertBooleanAndRenameAsync_RecordInReferencedProject_NamedArgsWithCollectionExpressionsAreRewritten()
+    {
+        var lib = Source(
+            "using System.Collections.Generic;",
+            "namespace Lib;",
+            "public record R(bool Success, List<string> Files, Dictionary<string, string> Failed, string Summary, bool InSync = false, string? Extra = null);");
+        var app = Source(
+            "using System.Collections.Generic;",
+            "using System.Threading.Tasks;",
+            "namespace App;",
+            "public class U",
+            "{",
+            "    public async Task<Lib.R> MakeAsync(bool flag, string target)",
+            "    {",
+            "        await Task.Yield();",
+            "        if (flag)",
+            "        {",
+            "            return new Lib.R(",
+            "                Success: false,",
+            "                Files: [],",
+            "                Failed: new Dictionary<string, string> { [target] = \"blocked\" },",
+            "                Summary: $\"Refused - {target}\");",
+            "        }",
+            "",
+            "        return new Lib.R(Success: true, Files: [], Failed: [], Summary: \"ok\", Extra: target);",
+            "    }",
+            "",
+            "    public bool Read(Lib.R r) => r.Success;",
+            "}");
+        var solution = CreateLibAndAppSolution(lib, app);
+        foreach (var project in solution.Projects)
+        {
+            var errors = (await project.GetCompilationAsync())!.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error);
+            Assert.That(errors, Is.Empty, project.Name);
+        }
+
+        var outcome = await CreateEngine(solution).InvertBooleanAndRenameAsync("P:Lib.R.Success", "IsError");
+
+        Assert.That(outcome.Error, Is.Null, outcome.Error?.Message);
+        var changes = outcome.Changes.ToDictionary(kv => Path.GetFileName((string)kv.Key), kv => kv.Value);
+        Assert.That(changes["Lib.cs"], Is.EqualTo(lib.Replace("record R(bool Success,", "record R(bool IsError,")));
+        Assert.That(changes["App.cs"], Is.EqualTo(app
+            .Replace("Success: false,", "IsError: true,")
+            .Replace("Success: true,", "IsError: false,")
+            .Replace("r.Success;", "!r.IsError;")));
+    }
+
+    /// <summary>
+    /// Like <see cref="CreateLibAndAppSolution"/>, but Lib is listed FIRST (so the target symbol is Lib's own source symbol) and each project
+    /// gets its own corlib MetadataReference instance, so App binds Lib through a retargeting assembly whose symbols are different instances.
+    /// That is the shape of a real solution where a dependent project resolves a different reference set than the declaring one.
+    /// </summary>
+    private static Solution CreateRetargetedLibAndAppSolution(string libSource, string appSource)
+    {
+        var workspace = new AdhocWorkspace();
+        var libId = ProjectId.CreateNewId();
+        var appId = ProjectId.CreateNewId();
+        var library = new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable);
+        return workspace.CurrentSolution
+            .AddProject(ProjectInfo.Create(libId, VersionStamp.Create(), "Lib", "Lib", LanguageNames.CSharp, compilationOptions: library))
+            .AddProject(ProjectInfo.Create(appId, VersionStamp.Create(), "App", "App", LanguageNames.CSharp, compilationOptions: library))
+            .AddMetadataReference(libId, MetadataReference.CreateFromFile(typeof(object).Assembly.Location))
+            .AddMetadataReference(appId, MetadataReference.CreateFromFile(typeof(object).Assembly.Location))
+            .AddProjectReference(appId, new ProjectReference(libId))
+            .AddDocument(DocumentId.CreateNewId(libId), "Lib.cs", libSource, filePath: @"C:\fixture\Lib.cs")
+            .AddDocument(DocumentId.CreateNewId(appId), "App.cs", appSource, filePath: @"C:\fixture\App.cs");
+    }
+
+    [Test]
+    public async Task InvertBooleanAndRenameAsync_RecordSeenThroughRetargetingAssembly_ConstructorCallsAreRewritten()
+    {
+        var lib = Source(
+            "using System.Collections.Generic;",
+            "namespace Lib;",
+            "public record R(bool Success, List<string> Files, string Summary, bool InSync = false);");
+        var app = Source(
+            "using System.Collections.Generic;",
+            "namespace App;",
+            "public class U",
+            "{",
+            "    public Lib.R Named() => new Lib.R(Success: true, Files: [], Summary: \"ok\", InSync: true);",
+            "    public Lib.R Positional(bool ok) => new Lib.R(ok, [], \"p\");",
+            "    public Lib.R Typed() => new(false, new List<string>(), \"t\");",
+            "    public bool Read(Lib.R r) => r.Success;",
+            "}");
+        var solution = CreateRetargetedLibAndAppSolution(lib, app);
+        foreach (var project in solution.Projects)
+        {
+            var errors = (await project.GetCompilationAsync())!.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error);
+            Assert.That(errors, Is.Empty, project.Name);
+        }
+
+        // Precondition: App binds Lib's record through a different symbol instance than Lib's own (the live-solution shape).
+        var libType = (await solution.Projects.Single(p => p.Name == "Lib").GetCompilationAsync())!.GetTypeByMetadataName("Lib.R");
+        var appType = (await solution.Projects.Single(p => p.Name == "App").GetCompilationAsync())!.GetTypeByMetadataName("Lib.R");
+        Assert.That(SymbolEqualityComparer.Default.Equals(libType, appType), Is.False, "fixture did not produce a retargeted view of Lib");
+
+        var outcome = await CreateEngine(solution).InvertBooleanAndRenameAsync("P:Lib.R.Success", "IsError");
+
+        Assert.That(outcome.Error, Is.Null, outcome.Error?.Message);
+        var changes = outcome.Changes.ToDictionary(kv => Path.GetFileName((string)kv.Key), kv => kv.Value);
+        Assert.That(changes["Lib.cs"], Is.EqualTo(lib.Replace("record R(bool Success,", "record R(bool IsError,")));
+        Assert.That(changes["App.cs"], Is.EqualTo(app
+            .Replace("new Lib.R(Success: true,", "new Lib.R(IsError: false,")
+            .Replace("new Lib.R(ok,", "new Lib.R(!ok,")
+            .Replace("new(false,", "new(true,")
+            .Replace("r.Success;", "!r.IsError;")));
+    }
+
+    [Test]
+    public async Task InvertBooleanAndRenameAsync_RecordSeenThroughRetargetingAssembly_DeconstructionIsRefused()
+    {
+        var lib = Source(
+            "namespace Lib;",
+            "public record R(bool Success, int Count);");
+        var app = Source(
+            "namespace App;",
+            "public class U",
+            "{",
+            "    public bool M(Lib.R r)",
+            "    {",
+            "        var (ok, _) = r;",
+            "        return ok;",
+            "    }",
+            "}");
+        var solution = CreateRetargetedLibAndAppSolution(lib, app);
+
+        var outcome = await CreateEngine(solution).InvertBooleanAndRenameAsync("P:Lib.R.Success", "IsError");
+
+        Assert.That(outcome.Error, Is.Not.Null);
+        Assert.That(outcome.Error!.Message, Does.Contain("App.cs:6 - deconstruction of 'R'"));
+    }
 }
