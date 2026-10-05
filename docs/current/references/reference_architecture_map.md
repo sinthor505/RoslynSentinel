@@ -76,7 +76,7 @@ First added is outermost. In registration order:
 2. `AddArgumentValidationFilter` (`Server.Basic/ToolArgumentValidator.cs`): repairs parameter-name case,
    rejects unknown/missing parameters before the SDK binder runs.
 3. Exception catch-all: `SolutionNotLoadedException` -> message with `IsError=false`; any other escape -> `IsError=true`.
-4. Domain-failure sync: response JSON with top-level `isSuccess:false` -> `IsError=true`.
+4. Domain-failure sync: response JSON with top-level `isError:true` -> protocol-level `CallToolResult.IsError=true` (same name and polarity).
 5. Post-call drift diagnostic (`GetContentExternalFileChangesAsync`, log only).
 6. Large-result offload (`Common/LargeResultHelper.cs`): over `OffloadThresholdBytes` the body goes to disk and the
    caller gets a `resultId` for `GetLargeResult` (which is exempt, to avoid a re-offload loop).
@@ -87,7 +87,7 @@ First added is outermost. In registration order:
    `GetFileOutline`, `GetOperationDetail`, `GetWorkspaceHealth`, `IsSessionHalted`, `Git`. A tool name declared by
    both a facade (`WorkspaceTools`) and its own class needs the attribute on both.
 
-Tools themselves return `SentinelCallToolResult<T>` (`Common/SentinelCallToolResult.cs`) with `IsSuccess=false`
+Tools themselves return `SentinelCallToolResult<T>` (`Common/SentinelCallToolResult.cs`) with `IsError=true`
 instead of throwing; see the CLAUDE.md rule on `ResultError`.
 
 ### Workspace manager (`Common/PersistentWorkspaceManager.cs`)

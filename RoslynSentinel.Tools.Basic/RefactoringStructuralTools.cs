@@ -35,7 +35,7 @@ public sealed record RenameSymbolData(
 /// <summary>
 /// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
 /// <see cref="RefactoringTools.RenameSymbol"/>'s primary success path, which sets only
-/// <c>IsSuccess</c> and <c>Data</c> (not TotalRecords/WorkspaceVersion/etc). Primary path only -
+/// <c>IsError</c> and <c>Data</c> (not TotalRecords/WorkspaceVersion/etc). Primary path only -
 /// see proposal_structuredcontent_rollout.md.
 /// </summary>
 public sealed record RenameSymbolResultEnvelope(
@@ -45,7 +45,7 @@ public sealed record RenameSymbolResultEnvelope(
 /// <summary>
 /// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
 /// <see cref="RefactoringTools.ModifyModifier"/>'s primary (autoStage=true, singular-edit,
-/// non-batch) success path, which sets only <c>IsSuccess</c> and <c>Data</c>. Deliberately does not
+/// non-batch) success path, which sets only <c>IsError</c> and <c>Data</c>. Deliberately does not
 /// cover the batch (batchEdits != null), autoStage=false, or error branches - see
 /// proposal_structuredcontent_rollout.md. AppliedChangeSummary lives in RoslynSentinel.Common and
 /// is reused by several other tools (e.g. ChangeAccessibility); it is intentionally left
@@ -78,7 +78,7 @@ public sealed record MethodSignatureViewData(
 /// <summary>
 /// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
 /// <see cref="RefactoringTools.MethodSignature"/>'s "view" branch only (operation=view),
-/// which sets only <c>IsSuccess</c> and <c>Data = new { Parameters }</c>. The add/remove branches
+/// which sets only <c>IsError</c> and <c>Data = new { Parameters }</c>. The add/remove branches
 /// (both the non-autoStage ToJsonSummary shape and the autoStage applied-with-offload
 /// MemberChangedContentResult/AppliedChangeSummary shape) are intentionally NOT covered by this
 /// POC - see proposal_structuredcontent_rollout.md.

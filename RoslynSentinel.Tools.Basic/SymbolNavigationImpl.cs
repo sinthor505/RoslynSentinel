@@ -163,7 +163,7 @@ public class SymbolNavigationImpl
                 {
                     // GetTypeMembersDetailAsync silently returns an empty list for the same
                     // "type not found" condition, so surface the hierarchy lookup's explicit
-                    // error here rather than letting either include mode return a bare IsSuccess=true.
+                    // error here rather than letting either include mode return a bare IsError=false.
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,
