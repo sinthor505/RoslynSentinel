@@ -563,6 +563,56 @@ public class SemanticReplaceEngine
             .ToList();
         var siteRecords = sites.Select(s => ToSite(s, collection.Edits)).ToList();
 
+        // Check accessibility of newName when retargeting to an alias: if newName is a private member,
+        // it must not be referenced from outside its containing type (would cause CS0122).
+        if (symbol is IPropertySymbol propSymbol && IsAliasRetarget(propSymbol, newName))
+        {
+            var containingType = propSymbol.ContainingType!;
+            var newNameSymbol = containingType.GetMembers(newName).FirstOrDefault();
+            if (newNameSymbol is not null && newNameSymbol.DeclaredAccessibility == Accessibility.Private)
+            {
+                // Use SemanticModel.IsAccessible to check if newNameSymbol is accessible from each site location.
+                PendingSite? inaccessibleSite = null;
+                foreach (var site in sites)
+                {
+                    if (site.UnsupportedReason is not null)
+                    {
+                        continue; // skip unsupported sites
+                    }
+
+                    // Find the document for this site
+                    var doc = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.FilePath == site.FilePath || d.Name == site.FilePath);
+                    if (doc is null)
+                    {
+                        inaccessibleSite = site; // conservative: if we can't find the document, treat as inaccessible
+                        break;
+                    }
+
+                    var semanticModel = await doc.GetSemanticModelAsync(cancellationToken);
+                    if (semanticModel is null)
+                    {
+                        inaccessibleSite = site; // conservative: if we can't get the semantic model, treat as inaccessible
+                        break;
+                    }
+
+                    // Check accessibility at the site's position
+                    if (!semanticModel.IsAccessible(site.Span.Start, newNameSymbol))
+                    {
+                        inaccessibleSite = site;
+                        break;
+                    }
+                }
+
+                if (inaccessibleSite is not null)
+                {
+                    var refusal = new ResultError(
+                        ToolErrorCode.TargetIneligible,
+                        $"Cannot retarget to '{newName}': it is not accessible from {inaccessibleSite.FilePath}:{inaccessibleSite.Line}. Choose a public or internal sibling property as newName instead.");
+                    return (siteRecords, new List<ReferenceEdit>(), refusal);
+                }
+            }
+        }
+
         var unsupported = sites.Where(s => s.UnsupportedReason is not null).ToList();
         if (unsupported.Count > 0)
         {

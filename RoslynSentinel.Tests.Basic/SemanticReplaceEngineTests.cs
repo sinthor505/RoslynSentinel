@@ -1030,4 +1030,105 @@ public class SemanticReplaceEngineTests
         Assert.That(SemanticReplaceEngine.ValidateNewName(symbol, "_isError"), Is.Null);
         Assert.That(SemanticReplaceEngine.ValidateNewName(symbol, "IsSuccess")!.Message, Does.Contain("identical"));
     }
+
+    [Test]
+    public async Task CollectSitesAsync_AliasRetarget_PrivateFieldUsedFromOutsideContainingType_RefusesWithTargetIneligible()
+    {
+        var code = Source(
+            "namespace Test;",
+            "public class C",
+            "{",
+            "    private bool _isError;",
+            "    public bool IsError { get => _isError; set => _isError = value; }",
+            "    public bool IsSuccess { get => !_isError; set => _isError = !value; }",
+            "}",
+            "public class User",
+            "{",
+            "    public void M(C c)",
+            "    {",
+            "        if (c.IsSuccess) { }",
+            "    }",
+            "}");
+        var solution = CreateMultiDocumentSolution(code);
+        var engine = CreateEngine(solution);
+        var symbol = await GetMemberSymbolAsync(solution, "C", "IsSuccess");
+
+        var (sites, edits, error) = await engine.CollectSitesAsync(symbol, "_isError");
+
+        Assert.That(sites, Is.Not.Empty);
+        Assert.That(edits, Is.Empty);
+        Assert.That(error, Is.Not.Null);
+        Assert.That(error!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(error.Message, Does.Contain("Cannot retarget"));
+        Assert.That(error.Message, Does.Contain("_isError"));
+        Assert.That(error.Message, Does.Contain("not accessible"));
+    }
+
+    [Test]
+    public async Task CollectSitesAsync_AliasRetarget_PrivateFieldFromDifferentFile_RefusesWithTargetIneligible()
+    {
+        var declaration = Source(
+            "namespace Test;",
+            "public class C",
+            "{",
+            "    private bool _isError;",
+            "    public bool IsError { get => _isError; set => _isError = value; }",
+            "    public bool IsSuccess { get => !_isError; set => _isError = !value; }",
+            "}");
+        var usage = Source(
+            "namespace Test;",
+            "public class User",
+            "{",
+            "    public void M(C c)",
+            "    {",
+            "        if (c.IsSuccess) { }",
+            "    }",
+            "}");
+        var solution = CreateMultiDocumentSolution(declaration, usage);
+        var engine = CreateEngine(solution);
+        var symbol = await GetMemberSymbolAsync(solution, "C", "IsSuccess");
+
+        var (sites, edits, error) = await engine.CollectSitesAsync(symbol, "_isError");
+
+        Assert.That(sites, Is.Not.Empty);
+        Assert.That(edits, Is.Empty);
+        Assert.That(error, Is.Not.Null);
+        Assert.That(error!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(error.Message, Does.Contain("Cannot retarget"));
+        Assert.That(error.Message, Does.Contain("_isError"));
+        Assert.That(error.Message, Does.Contain("not accessible"));
+        Assert.That(error.Message, Does.Contain("Test1.cs"));
+    }
+
+    [Test]
+    public async Task CollectSitesAsync_AliasRetarget_PartialClassBothFiles_PrivateFieldRefSucceeds()
+    {
+        var part1 = Source(
+            "namespace Test;",
+            "public partial class C",
+            "{",
+            "    private bool _isError;",
+            "    public bool IsError { get => _isError; set => _isError = value; }",
+            "    public bool IsSuccess { get => !_isError; set => _isError = !value; }",
+            "}");
+        var part2 = Source(
+            "namespace Test;",
+            "public partial class C",
+            "{",
+            "    public void M()",
+            "    {",
+            "        if (IsSuccess) { }",
+            "    }",
+            "}");
+        var solution = CreateMultiDocumentSolution(part1, part2);
+        var engine = CreateEngine(solution);
+        var symbol = await GetMemberSymbolAsync(solution, "C", "IsSuccess");
+
+        var (sites, edits, error) = await engine.CollectSitesAsync(symbol, "_isError");
+
+        Assert.That(error, Is.Null, error?.Message);
+        Assert.That(edits, Is.Not.Empty);
+        Assert.That(sites, Is.Not.Empty);
+        Assert.That(sites.All(s => s.UnsupportedReason is null), Is.True);
+    }
 }
