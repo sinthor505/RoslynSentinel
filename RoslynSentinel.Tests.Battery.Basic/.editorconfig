@@ -1,5 +1,5 @@
 # Remove the line below if you want to inherit .editorconfig settings from higher directories
-root = true
+# root = true
 
 # C# files
 [*.cs]
@@ -19,6 +19,7 @@ dotnet_diagnostic.IDE0059.severity = none
 dotnet_diagnostic.IDE0300.severity = none
 dotnet_diagnostic.IDE0301.severity = none
 dotnet_diagnostic.IDE0305.severity = none
+dotnet_diagnostic.UseNamedArgs.severity = none
 
 #### Core EditorConfig Options ####
 
