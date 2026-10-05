@@ -141,7 +141,7 @@ public class AsyncifyTools
             try
             {
                 summaryFindings = await _asyncOptimizationEngine
-                    .FindMigrationCandidatesAsync(scopedFilePath, scopedProjectName, pattern?.ToString(), cancellationToken: cancellationToken);
+                    .FindMigrationCandidatesAsync(filePath, scopedProjectName, pattern?.ToString(), cancellationToken: cancellationToken);
             }
             catch (ArgumentException ex)
             {
@@ -246,7 +246,7 @@ public class AsyncifyTools
             try
             {
                 allFindings = await _asyncOptimizationEngine
-                    .FindMigrationCandidatesAsync(scopedFilePath, scopedProjectName, pattern?.ToString(), cancellationToken: cancellationToken);
+                    .FindMigrationCandidatesAsync(filePath, scopedProjectName, pattern?.ToString(), cancellationToken: cancellationToken);
             }
             catch (ArgumentException ex)
             {
