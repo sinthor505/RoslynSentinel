@@ -13,7 +13,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
 /// Tests for TestCategoryTaggingTools (TagTestCategories): the dry-run summary, the reportProject paging,
-/// and the structured errors (missing targets, unknown project, apply not implemented yet, bad framework).
+/// the dryRun: false apply summary, and the structured errors (missing targets, unknown project, bad share).
 /// </summary>
 [TestFixture]
 public class TestCategoryTaggingToolTests
@@ -66,6 +66,8 @@ namespace Fixtures
         _tool = new TestCategoryTaggingTools(
             new TestCategoryTaggingImpl(
                 new TestCategoryTaggingEngine(_workspaceManager),
+                new TestCategoryApplyEngine(_workspaceManager, new ValidationEngine(_workspaceManager)),
+                _workspaceManager,
                 NullLogger.Instance));
     }
 
@@ -95,7 +97,7 @@ namespace Fixtures
 
     private Task<SentinelCallToolResult<object>> CallAsync(
         string targets = "Targets",
-        string? framework = null,
+        TestCategoryFramework framework = TestCategoryFramework.Auto,
         bool dryRun = true,
         string? reportProject = null,
         double maxTestShare = 1.0)
@@ -116,7 +118,7 @@ namespace Fixtures
     private static JsonElement ToJson(SentinelCallToolResult<object> result)
     {
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
-        return JsonDocument.Parse(JsonSerializer.Serialize(result.SuccessData)).RootElement;
+        return JsonDocument.Parse(JsonSerializer.Serialize(result.SuccessData, new JsonSerializerOptions(JsonSerializerDefaults.Web))).RootElement;
     }
 
     [Test]
@@ -201,15 +203,41 @@ namespace Fixtures
     }
 
     [Test]
-    [Description("dryRun: false returns a NotImplemented error that points back to dryRun: true")]
-    public async Task DryRunFalse_ReturnsNotImplementedError()
+    [Description("dryRun: false applies the plan and returns the applied-change summary with per-project counts")]
+    public async Task DryRunFalse_AppliesAndReturnsAppliedSummary()
     {
-        var result = await CallAsync(dryRun: false);
+        var json = ToJson(await CallAsync(dryRun: false));
 
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented));
-        Assert.That(result.ErrorData.Message, Does.Contain("dryRun"));
-        Assert.That(result.ErrorData.Message, Does.Contain("not implemented"));
+        Assert.That(json.GetProperty("status").GetString(), Is.EqualTo("applied"));
+        Assert.That(json.GetProperty("dryRun").GetBoolean(), Is.False);
+        Assert.That(json.GetProperty("validated").GetBoolean(), Is.True);
+        Assert.That(json.GetProperty("methodLevelAdded").GetInt32(), Is.EqualTo(5));
+        Assert.That(json.GetProperty("classLevelAdded").GetInt32(), Is.EqualTo(0));
+        Assert.That(json.GetProperty("removedStale").GetInt32(), Is.EqualTo(0));
+        Assert.That(json.GetProperty("failed").GetInt32(), Is.EqualTo(0));
+        Assert.That(json.GetProperty("affectedFiles").GetArrayLength(), Is.EqualTo(1));
+        Assert.That(json.GetProperty("changeIds").GetArrayLength(), Is.EqualTo(1));
+
+        var project = json.GetProperty("projects").EnumerateArray().Single();
+        Assert.That(project.GetProperty("project").GetString(), Is.EqualTo("Fixtures"));
+        Assert.That(project.GetProperty("status").GetString(), Is.EqualTo("applied"));
+        Assert.That(project.GetProperty("methodLevelAdded").GetInt32(), Is.EqualTo(5));
+
+        var written = await _workspaceManager.GetDocumentTextAsync(@"C:\fake\Fixtures\Tests.cs", ReadSource.Committed, CancellationToken.None);
+        Assert.That(written, Does.Contain("[Category(\"Alpha\")] // sentinel:auto-category"));
+    }
+
+    [Test]
+    [Description("A second apply after a successful apply writes nothing: the plan has no edits left")]
+    public async Task DryRunFalse_SecondRun_ReportsNoChanges()
+    {
+        await CallAsync(dryRun: false);
+
+        var json = ToJson(await CallAsync(dryRun: false));
+
+        Assert.That(json.GetProperty("status").GetString(), Is.EqualTo("no_changes"));
+        Assert.That(json.GetProperty("methodLevelAdded").GetInt32(), Is.EqualTo(0));
+        Assert.That(json.GetProperty("changeIds").GetArrayLength(), Is.EqualTo(0));
     }
 
     [TestCase("")]
@@ -225,16 +253,32 @@ namespace Fixtures
     }
 
     [Test]
-    [Description("An unrecognized framework returns InvalidArgument listing the valid values")]
-    public async Task UnknownFramework_ReturnsInvalidArgumentListingValidValues()
+    [Description("framework is the closed TestCategoryFramework enum (default Auto) serialized by name, so the schema lists the valid values")]
+    public void FrameworkParameter_IsAStringNamedEnumDefaultingToAuto()
     {
-        var result = await CallAsync(framework: "junit");
+        var parameter = typeof(TestCategoryTaggingTools).GetMethod(nameof(TestCategoryTaggingTools.TagTestCategories))!
+            .GetParameters().Single(p => p.Name == "framework");
 
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-        Assert.That(result.ErrorData.Message, Does.Contain("nunit"));
-        Assert.That(result.ErrorData.Message, Does.Contain("xunit"));
-        Assert.That(result.ErrorData.Message, Does.Contain("mstest"));
+        Assert.That(parameter.ParameterType, Is.EqualTo(typeof(TestCategoryFramework)));
+        Assert.That(parameter.HasDefaultValue, Is.True);
+        Assert.That(parameter.DefaultValue, Is.EqualTo(TestCategoryFramework.Auto));
+        Assert.That(
+            Enum.GetNames<TestCategoryFramework>(),
+            Is.EqualTo(new[] { "Auto", "NUnit", "XUnit", "MSTest" }));
+        Assert.That(JsonSerializer.Serialize(TestCategoryFramework.NUnit), Is.EqualTo("\"NUnit\""));
+        Assert.That(JsonSerializer.Deserialize<TestCategoryFramework>("\"xunit\""), Is.EqualTo(TestCategoryFramework.XUnit),
+            "the converter binds names case-insensitively once an argument reaches it");
+    }
+
+    [TestCase(TestCategoryFramework.NUnit)]
+    [TestCase(TestCategoryFramework.Auto)]
+    [Description("An explicit framework that matches the project drives the plan like Auto does")]
+    public async Task Framework_Explicit_PlansForMatchingProject(TestCategoryFramework framework)
+    {
+        var json = ToJson(await CallAsync(framework: framework));
+
+        var row = json.GetProperty("projects").EnumerateArray().Single();
+        Assert.That(row.GetProperty("framework").GetString(), Is.EqualTo("NUnit"));
     }
 
     [Test]

@@ -6,8 +6,9 @@ namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
 /// Backs <see cref="TestCategoryTaggingTools"/>: validates the tool arguments, runs the read-only
-/// <see cref="TestCategoryTaggingEngine"/> planner and shapes its plan into a paged report (solution-wide
-/// summary, or one test project's detail). Never throws; every failure is a structured
+/// <see cref="TestCategoryTaggingEngine"/> planner and either shapes its plan into a paged report (dryRun: solution-wide
+/// summary, or one test project's detail) or applies it through <see cref="TestCategoryApplyEngine"/> (one validated
+/// write batch per test project). Never throws; every failure is a structured
 /// <see cref="SentinelCallToolResult{T}"/> error that names the parameter and a correct value.
 /// </summary>
 public class TestCategoryTaggingImpl
@@ -15,15 +16,26 @@ public class TestCategoryTaggingImpl
     private const string ToolName = "TagTestCategories";
 
     private readonly TestCategoryTaggingEngine _engine;
+    private readonly TestCategoryApplyEngine _applyEngine;
+    private readonly IWorkspaceManager _workspaceManager;
     private readonly ILogger _logger;
 
-    public TestCategoryTaggingImpl(TestCategoryTaggingEngine engine, ILogger logger)
+    public TestCategoryTaggingImpl(
+        TestCategoryTaggingEngine engine,
+        TestCategoryApplyEngine applyEngine,
+        IWorkspaceManager workspaceManager,
+        ILogger logger)
     {
         _engine = engine;
+        _applyEngine = applyEngine;
+        _workspaceManager = workspaceManager;
         _logger = logger;
     }
 
-    /// <summary>Plans (dry run only for now) and returns the summary or, when <paramref name="reportProject"/> is set, that project's detail.</summary>
+    /// <summary>
+    /// Plans, then (dryRun) returns the summary or, when <paramref name="reportProject"/> is set, that project's detail, or
+    /// (dryRun: false) applies the plan and returns the applied-change summary with per-project counts.
+    /// </summary>
     public async Task<SentinelCallToolResult<object>> TagAsync(
         string? targets,
         string? testScope,
@@ -31,7 +43,7 @@ public class TestCategoryTaggingImpl
         string? excludedTests,
         double maxTestShare,
         double classLevelThreshold,
-        string? framework,
+        TestCategoryFramework framework,
         bool dryRun,
         string? reportProject,
         CancellationToken cancellationToken)
@@ -40,12 +52,6 @@ public class TestCategoryTaggingImpl
         {
             return Error(ToolErrorCode.InvalidArgument,
                 "targets is required. Pass a comma-separated list of project names or namespace prefixes whose types become categories, e.g. \"RoslynSentinel.Engines.Basic,RoslynSentinel.Common\".");
-        }
-
-        if (!TryParseFramework(framework, out var parsedFramework))
-        {
-            return Error(ToolErrorCode.InvalidArgument,
-                $"framework '{framework}' is not recognized. Valid values: auto, nunit, xunit, mstest (omit for auto).");
         }
 
         if (double.IsNaN(maxTestShare) || maxTestShare < 0 || maxTestShare > 1)
@@ -60,13 +66,6 @@ public class TestCategoryTaggingImpl
                 $"classLevelThreshold must be between 0 and 1 (a fraction of a fixture's tests); got {classLevelThreshold}. Omit it for the default 0.5.");
         }
 
-        if (!dryRun)
-        {
-            return Error(ToolErrorCode.NotImplemented,
-                "dryRun: false (applying the category attributes) is not implemented yet. Call with dryRun: true (the default) to get the plan; " +
-                "applying edits and removing stale attributes arrive in a later release.");
-        }
-
         try
         {
             var plan = await _engine.PlanAsync(
@@ -77,12 +76,17 @@ public class TestCategoryTaggingImpl
                     NullIfBlank(excludedTests),
                     maxTestShare,
                     classLevelThreshold,
-                    parsedFramework),
+                    framework),
                 cancellationToken);
 
             if (plan.Error is not null)
             {
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = plan.Error };
+            }
+
+            if (!dryRun)
+            {
+                return await ApplyPlanAsync(plan, cancellationToken);
             }
 
             if (string.IsNullOrWhiteSpace(reportProject))
@@ -108,10 +112,33 @@ public class TestCategoryTaggingImpl
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "{Tool} failed while planning test categories", ToolName);
+            _logger.LogError(ex, "{Tool} failed while planning or applying test categories", ToolName);
             return Error(ToolErrorCode.Exception,
-                "Planning test categories failed unexpectedly. Check that the solution is loaded and compiles (Build), then retry; the server log has the details.");
+                "Planning or applying test categories failed unexpectedly. Check that the solution is loaded and compiles (Build), then retry; the server log has the details.");
         }
+    }
+
+    private async Task<SentinelCallToolResult<object>> ApplyPlanAsync(TestCategoryPlan plan, CancellationToken cancellationToken)
+    {
+        var result = await _applyEngine.ApplyAsync(plan, _logger, cancellationToken);
+        var summary = TestCategoryApplyReport.Build(plan, result, _workspaceManager.WorkspaceVersion);
+
+        if (TestCategoryApplyReport.AllFailed(result))
+        {
+            var failures = summary.Projects.Where(p => p.Status == "failed").ToList();
+            var message = "No test project's batch could be applied; every file is unchanged. " +
+                string.Join(" ", failures.Select(f => $"{f.Project}: {f.Error}"));
+            return new SentinelCallToolResult<object>
+            {
+                IsError = true,
+                ErrorData = new ResultError(
+                    failures[0].ErrorCode ?? ToolErrorCode.Exception,
+                    $"{ToolName}: {message}",
+                    StructuredDetail: failures.Cast<object>().ToList()),
+            };
+        }
+
+        return Success(summary);
     }
 
     private static object BuildSummary(TestCategoryPlan plan) => new
@@ -217,32 +244,6 @@ public class TestCategoryTaggingImpl
             classLevelThreshold = p.ClassLevelThreshold,
             framework = p.Framework.ToString(),
         };
-
-    private static bool TryParseFramework(string? value, out TestCategoryFramework framework)
-    {
-        framework = TestCategoryFramework.Auto;
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return true;
-        }
-
-        switch (value.Trim().ToLowerInvariant())
-        {
-            case "auto":
-                return true;
-            case "nunit":
-                framework = TestCategoryFramework.NUnit;
-                return true;
-            case "xunit":
-                framework = TestCategoryFramework.XUnit;
-                return true;
-            case "mstest":
-                framework = TestCategoryFramework.MSTest;
-                return true;
-            default:
-                return false;
-        }
-    }
 
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
 

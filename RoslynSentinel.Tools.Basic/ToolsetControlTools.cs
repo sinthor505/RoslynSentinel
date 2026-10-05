@@ -25,7 +25,7 @@ public class ToolsetControlTools
         "declarations = Declaration (modifier, accessibility, attribute, baseType), ParameterEdit (method, constructor), ModifyEnum, ChangeSignature, SyncTypeAndFilename. " +
         "moveExtract = MoveMember, MoveType, MoveAllTypesToFiles, Extract*, Inline*, Introduce*, WrapRange, InvertAssignments, ConvertAnonymousToNamed, SyncInterface, SummaryComment, SafeDeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments. " +
         "projectAdmin = CreateProject, SplitProjectByFolder, ListSolutionItems, ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth, GetOperationDetail, RetryFailedChanges, IsSessionHalted, GetTypeInfo, QuerySymbolRelationships, GetBestInsertionPoint. " +
-        "testCategories = TagTestCategories (plan test-category attributes from the production types each test references; dry run only).")]
+        "testCategories = TagTestCategories (plan test-category attributes from the production types each test references; dry run by default, dryRun: false applies).")]
     public SentinelCallToolResult<object> McpToolsetControl(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("The toolset to switch.")] ToolSetName toolSet,

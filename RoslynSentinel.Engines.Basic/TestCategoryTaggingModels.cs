@@ -1,6 +1,9 @@
+using System.Text.Json.Serialization;
+
 namespace RoslynSentinel.Engines.Basic;
 
 /// <summary>Test framework a test project uses; selects the category attribute shape and the test-method markers.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
 public enum TestCategoryFramework
 {
     /// <summary>Resolve per test project from the test framework types its compilation can see.</summary>
