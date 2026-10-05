@@ -27,6 +27,7 @@ public class ServerStatusTools
     [Description("Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, serverBinaryPath, serverPid, binaryStaleness = loaded assemblies with a newer build on disk), session-halt state, circuit breaker, loaded workspace (isFreshStartup = this server process has not loaded a solution yet, e.g. just restarted), active tool-mode resolution. " +
         "Tools are gated per mode: before concluding a tool does not exist, call with toolListing=inactive.")]
     public object McpServerStatus(
+        [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("inactive: declared tools not active in this mode, with an enabledBy hint. all: every declared tool.")]
         McpServerStatusToolListing toolListing = McpServerStatusToolListing.none,
         [Description("Case-insensitive substring of tool/class name; narrows toolListing.")]

@@ -29,7 +29,7 @@ public class McpServerStatusToolListingTests
             new ActiveToolSurface("test", none, none, new HashSet<string>(excluded ?? []), active, classModes),
             new StoppedByScriptMarker(WasFound: false, Details: null));
 
-        var result = (SentinelCallToolResult<McpServerStatusResult>)tools.McpServerStatus(listing, filter);
+        var result = (SentinelCallToolResult<McpServerStatusResult>)tools.McpServerStatus("test reason", listing, filter);
         return result.SuccessData!;
     }
 
@@ -139,7 +139,7 @@ public class McpServerStatusToolListingTests
                 allowedToolNames: new HashSet<string> { "Build", "Git" }),
             new StoppedByScriptMarker(WasFound: false, Details: null));
 
-        var status = ((SentinelCallToolResult<McpServerStatusResult>)tools.McpServerStatus(McpServerStatusToolListing.all, null)).SuccessData!;
+        var status = ((SentinelCallToolResult<McpServerStatusResult>)tools.McpServerStatus("test reason", McpServerStatusToolListing.all, null)).SuccessData!;
         McpServerStatusDeclaredTool Tool(string name) => status.AllDeclaredTools.Single(t => t.Name == name);
 
         Assert.That(Tool("Build").ActiveForThisMode, Is.True);
@@ -177,7 +177,7 @@ public class McpServerStatusToolListingTests
                 modes),
             new StoppedByScriptMarker(WasFound: false, Details: null));
 
-        var status = ((SentinelCallToolResult<McpServerStatusResult>)tools.McpServerStatus(McpServerStatusToolListing.all, null)).SuccessData!;
+        var status = ((SentinelCallToolResult<McpServerStatusResult>)tools.McpServerStatus("test reason", McpServerStatusToolListing.all, null)).SuccessData!;
 
         Assert.That(
             status.AllDeclaredTools.Single(t => t.Name == "ProjectDoc").EnabledBy,
