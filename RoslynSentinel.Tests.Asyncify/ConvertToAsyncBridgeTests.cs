@@ -14,6 +14,7 @@ namespace RoslynSentinel.Tests.Asyncify;
 ///   3. [Obsolete("Asyncify-bridge: call XxxAsync instead.", false)] added to original
 /// </summary>
 [TestFixture]
+[Category("AsyncOptimizationEngine")] // sentinel:auto-category
 public class ConvertToAsyncBridgeTests
 {
     private IWorkspaceManager _workspaceManager;

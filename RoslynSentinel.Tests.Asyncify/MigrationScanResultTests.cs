@@ -24,6 +24,7 @@ namespace RoslynSentinel.Tests.Asyncify;
 ///   T9  – get_async_migration_progress, forced exception -> ErrorCode="Exception", Detail non-empty.
 /// </summary>
 [TestFixture]
+[Category("AsyncifyTools")] // sentinel:auto-category
 public class MigrationScanResultTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -339,6 +340,7 @@ public class Svc
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(60000)]
+    [Category("WorkspaceTools")] // sentinel:auto-category
     public async Task T5_GetLargeResult_ReadsFile_PagingWorks_TotalRecordsMatchesT4()
     {
         var reason = new string('x', 300);
@@ -557,6 +559,7 @@ public class Svc
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
+    [Category("WorkspaceHealthMiscImpl")] // sentinel:auto-category
     public async Task T12_GetWorkspaceHealth_AfterLoadSolution_LoadedSolutionPathNonNull()
     {
         // SolutionPath is set in SetUp -> a fake .sln path inside _tempDir.
@@ -621,6 +624,8 @@ public class Svc
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
+    [Category("DocReadResult")] // sentinel:auto-category
+    [Category("DocumentationTools")] // sentinel:auto-category
     public void T15_ProjectDoc_Read_NoSolutionLoaded_Succeeds()
     {
         // SolutionPath is set in SetUp (_tempDir/Test.sln). CurrentSolution is null here.

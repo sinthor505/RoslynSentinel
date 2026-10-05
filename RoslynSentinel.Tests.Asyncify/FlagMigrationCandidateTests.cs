@@ -22,6 +22,8 @@ namespace RoslynSentinel.Tests.Asyncify;
 ///   - ErrorDetails cases: file not found, method not found.
 /// </summary>
 [TestFixture]
+[Category("AsyncOptimizationEngine")] // sentinel:auto-category
+[Category("FlagMigrationCandidateEngineResult")] // sentinel:auto-category
 public class FlagMigrationCandidateTests
 {
     private IWorkspaceManager _workspaceManager;

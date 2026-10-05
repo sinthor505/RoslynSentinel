@@ -30,6 +30,7 @@ namespace RoslynSentinel.Tests.Asyncify;
 ///   T20 – Asyncify macro, default params, Score=70 candidate with caller -> bridges AND uplifts (Phase 2 + 3)
 /// </summary>
 [TestFixture]
+[Category("AsyncifyTools")] // sentinel:auto-category
 public class AsyncifyToolsTests
 {
     private IWorkspaceManager _workspaceManager;
