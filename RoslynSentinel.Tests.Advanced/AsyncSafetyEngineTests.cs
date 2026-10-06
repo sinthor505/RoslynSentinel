@@ -6,6 +6,7 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("AsyncAnalysisEngine")] // sentinel:auto-category
 internal class AsyncSafetyEngineTests
 {
     private IWorkspaceManager _workspaceManager;

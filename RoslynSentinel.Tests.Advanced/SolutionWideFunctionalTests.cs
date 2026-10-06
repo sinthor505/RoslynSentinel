@@ -8,6 +8,7 @@ using RoslynSentinel.Tests.Fakes;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("HealthOrchestrationEngine")] // sentinel:auto-category
 public class SolutionWideFunctionalTests
 {
     private IWorkspaceManager _workspaceManager;

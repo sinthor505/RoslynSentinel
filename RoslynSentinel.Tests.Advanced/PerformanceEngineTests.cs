@@ -8,6 +8,7 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("PerformanceEngine")] // sentinel:auto-category
 public class PerformanceEngineTests
 {
     private IWorkspaceManager _workspaceManager;

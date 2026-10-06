@@ -18,6 +18,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("SyntaxTargetResolver")] // sentinel:auto-category
 public class GenericContainerNameTests
 {
     private PersistentWorkspaceManager _workspaceManager = null!;
@@ -77,6 +78,7 @@ public class GenericContainerNameTests
 }
 
 [TestFixture]
+[Category("SyntaxTargetResolver")] // sentinel:auto-category
 public class SyntaxTargetResolverTests
 {
     private const string TestSource = """
@@ -112,6 +114,8 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
+    [Category("CandidateKind")] // sentinel:auto-category
+    [Category("SyntaxNodeCandidate")] // sentinel:auto-category
     public void PreferConstructorOverType_PicksConstructor()
     {
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", TestSource)]);
@@ -127,6 +131,8 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
+    [Category("CandidateKind")] // sentinel:auto-category
+    [Category("SyntaxNodeCandidate")] // sentinel:auto-category
     public void ResolveCandidates_EnumMemberFound()
     {
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", TestSource)]);
@@ -141,6 +147,8 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
+    [Category("CandidateKind")] // sentinel:auto-category
+    [Category("SyntaxNodeCandidate")] // sentinel:auto-category
     public void ResolveCandidates_ClassFound()
     {
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", TestSource)]);
@@ -155,6 +163,8 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
+    [Category("CandidateKind")] // sentinel:auto-category
+    [Category("SyntaxNodeCandidate")] // sentinel:auto-category
     public void ResolveCandidates_InterfaceAndImplementerShareName_ReturnsBothAndPreferNonInterfaceMemberPicksImplementer()
     {
         const string source = """
@@ -232,6 +242,7 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
+    [Category("SyntaxNodeCandidate")] // sentinel:auto-category
     public void BuildHintForCandidates_TypeLookup_Ambiguous_ReturnsExpectedMessage()
     {
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", TestSource)]);
@@ -249,6 +260,7 @@ public class SyntaxTargetResolverTests
     }
 
     [Test]
+    [Category("SyntaxNodeCandidate")] // sentinel:auto-category
     public void BuildHintForCandidates_TypeLookup_SnippetNoMatch_WithCandidatesPresent()
     {
         var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", TestSource)]);

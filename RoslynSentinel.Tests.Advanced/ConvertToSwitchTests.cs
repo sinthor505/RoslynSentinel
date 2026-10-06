@@ -13,6 +13,7 @@ namespace RoslynSentinel.Tests.Advanced;
 /// Covers conversion of if-else chains to switch statements for modernization
 /// </summary>
 [TestFixture]
+[Category("LogicSimplificationEngine")] // sentinel:auto-category
 public class ConvertToSwitchTests
 {
     private IWorkspaceManager _workspaceManager;

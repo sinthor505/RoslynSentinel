@@ -15,6 +15,7 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class BugHuntTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -55,6 +56,7 @@ public class BugHuntTests
     // ==========================================================================
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task BUG1_FindBlockingCallsInAsync_ResultPropertySet_ShouldNotFlag()
     {
         var engine = new AsyncAnalysisEngine(_workspaceManager);
@@ -86,6 +88,7 @@ public class BugHuntTests
 
     // Confirm the true positive still fires (reading Task.Result in async method)
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task BUG1_FindBlockingCallsInAsync_TaskResultRead_ShouldFlag()
     {
         var engine = new AsyncAnalysisEngine(_workspaceManager);
@@ -320,6 +323,7 @@ public class BugHuntTests
     // ==========================================================================
 
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task BUG4_PerformanceEngine_StringConcatBinaryInDoWhile_ShouldFlag()
     {
         var engine = new PerformanceEngine(_workspaceManager);
@@ -353,6 +357,7 @@ public class BugHuntTests
     }
 
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task BUG4_PerformanceEngine_StringConcatPlusAssignInDoWhile_ShouldFlag()
     {
         var engine = new PerformanceEngine(_workspaceManager);
@@ -386,6 +391,7 @@ public class BugHuntTests
 
     // Control: same += inside a foreach IS detected (regression guard)
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task BUG4_Control_PerformanceEngine_StringConcatInForeach_ShouldFlag()
     {
         var engine = new PerformanceEngine(_workspaceManager);

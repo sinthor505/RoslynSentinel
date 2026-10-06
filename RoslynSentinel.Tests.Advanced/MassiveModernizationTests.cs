@@ -8,6 +8,7 @@ using RoslynSentinel.Tools.Advanced;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("SyntaxUpgradeEngine")] // sentinel:auto-category
 public class MassiveModernizationTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -88,6 +89,7 @@ public class MassiveModernizationTests
     [TestCase(3)]
     [TestCase(4)]
     [TestCase(5)]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ClassToRecord_ShouldModernize(int id)
     {
         SetSource($@"public class C{id} {{ public int Id {{ get; set; }} }}", $"C{id}.cs");

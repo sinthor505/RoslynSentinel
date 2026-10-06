@@ -10,6 +10,7 @@ namespace RoslynSentinel.Tests.Advanced;
 /// Covers conversion of null checks to null coalescing operators (?? and ??=)
 /// </summary>
 [TestFixture]
+[Category("CodeGenerationEngine")] // sentinel:auto-category
 public class CodeGenerationTests
 
 {
@@ -209,6 +210,7 @@ public class Empty { }", "Empty.cs");
     // ══════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("RepositoryInterfaceResult")] // sentinel:auto-category
     public async Task GenerateRepositoryInterface_CrudClass_GeneratesInterface()
     {
         SetSource(@"
@@ -238,6 +240,7 @@ public class UserRepository
     }
 
     [Test]
+    [Category("RepositoryInterfaceResult")] // sentinel:auto-category
     public async Task GenerateRepositoryInterface_IncludesMockSetupSnippet()
     {
         SetSource(@"
@@ -254,6 +257,7 @@ public class ProductRepo
     }
 
     [Test]
+    [Category("RepositoryInterfaceResult")] // sentinel:auto-category
     public async Task GenerateRepositoryInterface_StaticMethodsExcluded()
     {
         SetSource(@"
@@ -276,6 +280,7 @@ public class HelperRepo
     // ══════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("FluentBuilderResult")] // sentinel:auto-category
     public async Task GenerateFluentBuilder_ClassWithProperties_GeneratesBuilderClass()
     {
         SetSource(@"
@@ -301,6 +306,7 @@ public class Order
     }
 
     [Test]
+    [Category("FluentBuilderResult")] // sentinel:auto-category
     public async Task GenerateFluentBuilder_BuildMethodReturnsTargetType()
     {
         SetSource(@"
@@ -319,6 +325,7 @@ public class Customer
     }
 
     [Test]
+    [Category("FluentBuilderResult")] // sentinel:auto-category
     public async Task GenerateFluentBuilder_UsageExampleChains()
     {
         SetSource(@"
@@ -341,6 +348,7 @@ public class Item
     // ══════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("DecoratorResult")] // sentinel:auto-category
     public async Task GenerateDecorator_InterfaceWithTwoMethods_GeneratesDecoratorClass()
     {
         SetSource(@"
@@ -366,6 +374,7 @@ public interface INotifier
     }
 
     [Test]
+    [Category("DecoratorResult")] // sentinel:auto-category
     public async Task GenerateDecorator_PrefixAppearsInClassName()
     {
         SetSource(@"

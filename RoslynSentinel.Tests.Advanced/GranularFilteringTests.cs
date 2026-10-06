@@ -9,6 +9,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("SolutionStructureEngine")] // sentinel:auto-category
 public class GranularFilteringTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -56,6 +57,7 @@ public class GranularFilteringTests
     }
 
     [Test]
+    [Category("StructuralSmellType")] // sentinel:auto-category
     public async Task FindStructuralSmells_WithTypeFilter_ShouldOnlyReturnSpecificType()
     {
         // Act
@@ -71,6 +73,9 @@ public class GranularFilteringTests
     }
 
     [Test]
+    [Category("MetricsEngine")] // sentinel:auto-category
+    [Category("ProjectMetric")] // sentinel:auto-category
+    [Category("SolutionMetrics")] // sentinel:auto-category
     public async Task GetSolutionMetrics_WithProjectFilter_ShouldOnlyReturnOneProject()
     {
         // Act

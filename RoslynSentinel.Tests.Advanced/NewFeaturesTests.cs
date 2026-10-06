@@ -47,6 +47,8 @@ public class NewFeaturesTests
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
+    [Category("DuplicateBlockGroup")] // sentinel:auto-category
     public async Task CloneInClass_DetectsDuplicateBlocks_AcrossMethodsInSameClass()
     {
         // Two methods with the same 4-statement body shape -> should detect one group with 2 occurrences.
@@ -79,6 +81,7 @@ public class MyService
     }
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
     public async Task CloneInClass_NoDuplicates_WhenMethodBodiesDiffer()
     {
         SetSource(@"
@@ -105,6 +108,7 @@ public class MyService
     }
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
     public async Task CloneInClass_RespectsMinStatements_DoesNotFlagSmallerBlocks()
     {
         // Two methods with 2 identical statements -> below the threshold of 4.
@@ -130,6 +134,7 @@ public class MyService
     }
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
     public async Task CloneInClass_RespectsMinStatements_FlagsBlocksAtThreshold()
     {
         SetSource(@"
@@ -154,6 +159,8 @@ public class MyService
     }
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
+    [Category("DuplicateBlockGroup")] // sentinel:auto-category
     public async Task CloneInClass_HasControlFlowExit_TrueWhenReturnInBlock()
     {
         SetSource(@"
@@ -184,6 +191,8 @@ public class MyService
     }
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
+    [Category("DuplicateBlockGroup")] // sentinel:auto-category
     public async Task CloneInClass_HasControlFlowExit_FalseWhenNoReturn()
     {
         SetSource(@"
@@ -213,6 +222,7 @@ public class MyService
     }
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
     public async Task CloneInClass_ReturnsEmpty_WhenFileNotFound()
     {
         SetSource("public class C { public void M() { int x = 1; } }", "C.cs");
@@ -223,6 +233,7 @@ public class MyService
     }
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
     public async Task CloneInClass_ReturnsEmpty_WhenClassNotFound()
     {
         SetSource("public class C { public void M() { int x = 1; } }", "C.cs");
@@ -233,6 +244,9 @@ public class MyService
     }
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
+    [Category("DuplicateBlockGroup")] // sentinel:auto-category
+    [Category("DuplicateBlockLocation")] // sentinel:auto-category
     public async Task CloneInClass_OccurrencesHaveCorrectMethodNames()
     {
         SetSource(@"
@@ -264,6 +278,9 @@ public class MyService
     }
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
+    [Category("DuplicateBlockGroup")] // sentinel:auto-category
+    [Category("DuplicateBlockLocation")] // sentinel:auto-category
     public async Task CloneInClass_OccurrencesHaveValidLineNumbers()
     {
         SetSource(@"
@@ -297,6 +314,8 @@ public class MyService
     }
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
+    [Category("DuplicateBlockGroup")] // sentinel:auto-category
     public async Task CloneInClass_SnippetPreview_IsPopulated()
     {
         SetSource(@"
@@ -330,6 +349,9 @@ public class MyService
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
+    [Category("DuplicateBlockGroup")] // sentinel:auto-category
+    [Category("DuplicateBlockLocation")] // sentinel:auto-category
     public async Task CloneInHierarchy_DetectsClones_AcrossDerivedClasses()
     {
         SetMultipleFiles(
@@ -369,6 +391,7 @@ public class Child2 : Base
     }
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
     public async Task CloneInHierarchy_ReturnsEmpty_WhenTypeNotFound()
     {
         SetSource("public class C { public void M() { int x = 1; } }", "C.cs");
@@ -379,6 +402,7 @@ public class Child2 : Base
     }
 
     [Test]
+    [Category("CloneDetectionEngine")] // sentinel:auto-category
     public async Task CloneInHierarchy_NoDuplicates_WhenDerivedMethodsDiffer()
     {
         SetMultipleFiles(
@@ -414,6 +438,8 @@ public class Child2 : Base
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
+    [Category("OutParamMethodFinding")] // sentinel:auto-category
     public async Task FindMultipleOutParams_DetectsMethodWithTwoOutParams()
     {
         SetSource(@"
@@ -434,6 +460,7 @@ public class MyParser
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindMultipleOutParams_DoesNotFlag_MethodWithOnlyOneOutParam()
     {
         SetSource(@"
@@ -452,6 +479,7 @@ public class MyService
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindMultipleOutParams_DoesNotFlag_MethodWithNoOutParams()
     {
         SetSource(@"
@@ -466,6 +494,8 @@ public class MyService
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
+    [Category("OutParamMethodFinding")] // sentinel:auto-category
     public async Task FindMultipleOutParams_SuggestsCorrectTuple_ForVoidReturn()
     {
         SetSource(@"
@@ -487,6 +517,8 @@ public class Parser
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
+    [Category("OutParamMethodFinding")] // sentinel:auto-category
     public async Task FindMultipleOutParams_SuggestsCorrectTuple_ForNonVoidReturn()
     {
         SetSource(@"
@@ -511,6 +543,8 @@ public class Parser
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
+    [Category("OutParamMethodFinding")] // sentinel:auto-category
     public async Task FindMultipleOutParams_DetectsThreeOutParams()
     {
         SetSource(@"
@@ -529,6 +563,8 @@ public class MultiOut
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
+    [Category("OutParamMethodFinding")] // sentinel:auto-category
     public async Task FindMultipleOutParams_PopulatesContainingType()
     {
         SetSource(@"
@@ -544,6 +580,7 @@ public class MyClass
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindMultipleOutParams_ScansWholeProject_WhenNoFileSpecified()
     {
         SetMultipleFiles(
@@ -560,6 +597,7 @@ public class MyClass
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task ValueTypeMutation_Flags_IntParamReassignedNotReturned()
     {
         SetSource(@"
@@ -579,6 +617,7 @@ public class Calculator
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task ValueTypeMutation_Flags_BoolParamReassignedNotReturned()
     {
         SetSource(@"
@@ -597,6 +636,7 @@ public class MyService
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task ValueTypeMutation_DoesNotFlag_WhenValueTypeIsReturned()
     {
         SetSource(@"
@@ -615,6 +655,7 @@ public class Calculator
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task ValueTypeMutation_DoesNotFlag_RefParam()
     {
         SetSource(@"
@@ -632,6 +673,7 @@ public class MyService
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task ValueTypeMutation_DoesNotFlag_OutParam()
     {
         SetSource(@"
@@ -650,6 +692,7 @@ public class MyService
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task ValueTypeMutation_DoesNotFlag_MemberAccessAssignment()
     {
         // param.Property = value -> this IS visible to the caller (mutating the object's state)
@@ -674,6 +717,7 @@ public class MyService
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task ValueTypeMutation_Flags_ReferenceTypeParamReplacedWithNew()
     {
         SetSource(@"
@@ -693,6 +737,7 @@ public class MyService
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task ValueTypeMutation_DoesNotFlag_ReferenceTypeSimpleAssignment_NonNew()
     {
         // Assigning from another variable, not a 'new' expression -> ambiguous intent, don't flag
@@ -715,6 +760,7 @@ public class MyService
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task ValueTypeMutation_SeverityIsWarning()
     {
         SetSource(@"
@@ -730,6 +776,7 @@ public class C
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task ValueTypeMutation_ScansWholeProject_WhenNoFileSpecified()
     {
         SetMultipleFiles(
@@ -742,6 +789,7 @@ public class C
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task ValueTypeMutation_ReturnsEmpty_WhenNoIssues()
     {
         SetSource(@"
@@ -761,6 +809,8 @@ public class Clean
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("OutParamConversionResult")] // sentinel:auto-category
+    [Category("OutParamRefactoringEngine")] // sentinel:auto-category
     public async Task ConvertOutParams_ReturnsFailure_WhenFileNotFound()
     {
         SetSource("public class C { public void M(out int x, out int y) { x=1; y=2; } }", "C.cs");
@@ -772,6 +822,8 @@ public class Clean
     }
 
     [Test]
+    [Category("OutParamConversionResult")] // sentinel:auto-category
+    [Category("OutParamRefactoringEngine")] // sentinel:auto-category
     public async Task ConvertOutParams_ReturnsFailure_WhenMethodNotFound()
     {
         SetSource("public class C { public void M(out int x, out int y) { x=1; y=2; } }", "C.cs");
@@ -783,6 +835,8 @@ public class Clean
     }
 
     [Test]
+    [Category("OutParamConversionResult")] // sentinel:auto-category
+    [Category("OutParamRefactoringEngine")] // sentinel:auto-category
     public async Task ConvertOutParams_ReturnsFailure_WhenFewerThanTwoOutParams()
     {
         SetSource(@"
@@ -802,6 +856,8 @@ public class C
     }
 
     [Test]
+    [Category("OutParamConversionResult")] // sentinel:auto-category
+    [Category("OutParamRefactoringEngine")] // sentinel:auto-category
     public async Task ConvertOutParams_Succeeds_VoidMethodWithTwoOutParams()
     {
         SetSource(@"
@@ -822,6 +878,8 @@ public class MyParser
     }
 
     [Test]
+    [Category("OutParamConversionResult")] // sentinel:auto-category
+    [Category("OutParamRefactoringEngine")] // sentinel:auto-category
     public async Task ConvertOutParams_Succeeds_NonVoidMethodWithTwoOutParams()
     {
         SetSource(@"
@@ -847,6 +905,8 @@ public class MyParser
     }
 
     [Test]
+    [Category("OutParamConversionResult")] // sentinel:auto-category
+    [Category("OutParamRefactoringEngine")] // sentinel:auto-category
     public async Task ConvertOutParams_PopulatesOriginalSignature()
     {
         SetSource(@"
@@ -862,6 +922,8 @@ public class C
     }
 
     [Test]
+    [Category("OutParamConversionResult")] // sentinel:auto-category
+    [Category("OutParamRefactoringEngine")] // sentinel:auto-category
     public async Task ConvertOutParams_ZeroCallSitesRewritten_WhenNoCallers()
     {
         // Method exists but nothing calls it -> call sites = 0 is expected
@@ -878,6 +940,8 @@ public class C
     }
 
     [Test]
+    [Category("OutParamConversionResult")] // sentinel:auto-category
+    [Category("OutParamRefactoringEngine")] // sentinel:auto-category
     public async Task ConvertOutParams_CallSiteWarnings_InitiallyEmpty_WhenNoCallers()
     {
         SetSource(@"
@@ -897,6 +961,10 @@ public class C
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
+    [Category("OutParamConversionResult")] // sentinel:auto-category
+    [Category("OutParamMethodFinding")] // sentinel:auto-category
+    [Category("OutParamRefactoringEngine")] // sentinel:auto-category
     public async Task Workflow_DetectThenConvert_Roundtrip()
     {
         // Detect with FindMultipleOutParameterMethodsAsync, then convert using the result.

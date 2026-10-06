@@ -6,6 +6,7 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("SecurityEngine")] // sentinel:auto-category
 public class MassiveQualityTests
 {
     private IWorkspaceManager _workspaceManager;

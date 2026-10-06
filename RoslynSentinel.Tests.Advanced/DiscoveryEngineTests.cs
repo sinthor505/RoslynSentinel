@@ -8,6 +8,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("DiscoveryEngine")] // sentinel:auto-category
 public class DiscoveryEngineTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -44,6 +45,7 @@ public class DiscoveryEngineTests
     // ══════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("ThrowSiteInfo")] // sentinel:auto-category
     public async Task FindAllThrowSites_DetectsThrowStatement()
     {
         SetSource(@"
@@ -66,6 +68,7 @@ public class MyService
     }
 
     [Test]
+    [Category("ThrowSiteInfo")] // sentinel:auto-category
     public async Task FindAllThrowSites_FiltersByExceptionType()
     {
         SetSource(@"
@@ -82,6 +85,7 @@ public class MyService
     }
 
     [Test]
+    [Category("ThrowSiteInfo")] // sentinel:auto-category
     public async Task FindAllThrowSites_ExtractsMessageLiteral()
     {
         SetSource(@"
@@ -100,6 +104,7 @@ public class MyService
     }
 
     [Test]
+    [Category("ThrowSiteInfo")] // sentinel:auto-category
     public async Task FindAllThrowSites_DetectsThrowInsideCatch()
     {
         SetSource(@"
@@ -162,6 +167,7 @@ public class MyService
     // ══════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("ObjectCreationSite")] // sentinel:auto-category
     public async Task FindObjectCreationSites_FindsExplicitCreation()
     {
         SetSource(@"
@@ -199,6 +205,7 @@ public class Service
     }
 
     [Test]
+    [Category("ObjectCreationSite")] // sentinel:auto-category
     public async Task FindObjectCreationSites_CountsArguments()
     {
         SetSource(@"
@@ -234,6 +241,7 @@ public class Service
     // ══════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("ApiSurfaceEntry")] // sentinel:auto-category
     public async Task GetPublicApiSurface_ReturnsPublicClass()
     {
         SetSource(@"
@@ -253,6 +261,7 @@ public class WidgetService
     }
 
     [Test]
+    [Category("ApiSurfaceEntry")] // sentinel:auto-category
     public async Task GetPublicApiSurface_IncludesPublicMethods()
     {
         SetSource(@"
@@ -270,6 +279,7 @@ public class Calculator
     }
 
     [Test]
+    [Category("ApiSurfaceEntry")] // sentinel:auto-category
     public async Task GetPublicApiSurface_IncludesProperties()
     {
         SetSource(@"
@@ -296,6 +306,7 @@ public class Model
     }
 
     [Test]
+    [Category("ApiSurfaceEntry")] // sentinel:auto-category
     public async Task GetPublicApiSurface_DetectsInterface()
     {
         SetSource(@"
@@ -316,6 +327,8 @@ public interface IMyService
     // ══════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("DependencyInjectionEngine")] // sentinel:auto-category
+    [Category("UnregisteredServiceFinding")] // sentinel:auto-category
     public async Task FindServicesNotRegistered_DetectsUnregisteredInterface()
     {
         SetMultipleFiles(
@@ -339,6 +352,8 @@ public class MyController
     }
 
     [Test]
+    [Category("DependencyInjectionEngine")] // sentinel:auto-category
+    [Category("UnregisteredServiceFinding")] // sentinel:auto-category
     public async Task FindServicesNotRegistered_DoesNotFlagRegisteredServices()
     {
         SetMultipleFiles(
@@ -362,6 +377,8 @@ public class MyController
     }
 
     [Test]
+    [Category("DependencyInjectionEngine")] // sentinel:auto-category
+    [Category("UnregisteredServiceFinding")] // sentinel:auto-category
     public async Task FindServicesNotRegistered_DoesNotFlagFrameworkTypes()
     {
         SetSource(@"
@@ -384,6 +401,7 @@ public class MyService
     // ══════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("RenameImpactPreview")] // sentinel:auto-category
     public async Task PreviewRenameImpact_DefinitionOnly_ReportsOneReference()
     {
         // Source: single file, MyMethod is declared but never called
@@ -403,6 +421,7 @@ public class MyService
     }
 
     [Test]
+    [Category("RenameImpactPreview")] // sentinel:auto-category
     public async Task PreviewRenameImpact_MethodCalledInTwoFiles_ShowsTwoFilesAffected()
     {
         // File 1: defines MyHelper with a public method called Execute
@@ -433,6 +452,7 @@ public class MyService
     }
 
     [Test]
+    [Category("RenameImpactPreview")] // sentinel:auto-category
     public async Task PreviewRenameImpact_UnusedPrivateMethod_ZeroOrOneReference()
     {
         // A private method that is never called anywhere -> should have 0 references (no callers)
@@ -449,6 +469,7 @@ public class MyService
     }
 
     [Test]
+    [Category("RenameImpactPreview")] // sentinel:auto-category
     public async Task PreviewRenameImpact_SymbolNameOnly_LineBeforeDisambiguates()
     {
         // Regression test: PreviewRenameImpactAsync used to fall back to a bare symbolName
@@ -475,6 +496,9 @@ public class MyService
     }
 
     [Test]
+    [Category("RenameImpactPreview")] // sentinel:auto-category
+    [Category("SymbolLocation")] // sentinel:auto-category
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task PreviewRenameImpact_DocCommentIdAndProjectName_ResolvesWithoutFileOrSnippet()
     {
         // The preferred resolution path: a caller that already has a docCommentId + projectName

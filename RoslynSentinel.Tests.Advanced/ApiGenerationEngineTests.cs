@@ -8,6 +8,7 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("ApiGenerationEngine")] // sentinel:auto-category
 public class ApiGenerationEngineTests
 {
     private IWorkspaceManager _workspaceManager;

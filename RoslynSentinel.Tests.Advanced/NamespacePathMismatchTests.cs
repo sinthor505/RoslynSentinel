@@ -10,6 +10,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("SolutionStructureEngine")] // sentinel:auto-category
 public class NamespacePathMismatchTests
 {
     private IWorkspaceManager _workspaceManager = null!;

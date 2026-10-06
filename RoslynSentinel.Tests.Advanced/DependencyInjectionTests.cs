@@ -13,6 +13,8 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("RefactoringStructuralTools")] // sentinel:auto-category
+[Category("WorkspaceTools")] // sentinel:auto-category
 public class DependencyInjectionTests
 {
     private IServiceProvider _serviceProvider = null!;

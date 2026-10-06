@@ -77,6 +77,7 @@ public class BugFixTests
     // Bug 2: ExtractInterface -> generated file must have namespace + usings
     // ──────────────────────────────────────────────────────────────────────────
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task ExtractInterface_GeneratedFile_ContainsNamespaceAndUsings()
     {
         const string source = @"using System;
@@ -101,6 +102,7 @@ public class OrderService
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task ExtractInterface_OriginalClass_GetsInterfaceInBaseList()
     {
         const string source = @"namespace App;
@@ -114,6 +116,9 @@ public class Svc { public void Foo() {} }";
     // Bug 3: ChangeSignatureAsync -> was a stub; now reorders params & call sites
     // ──────────────────────────────────────────────────────────────────────────
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    [Category("ExistingParameterSpec")] // sentinel:auto-category
     public async Task ChangeSignature_ReordersParameters_InDeclaration()
     {
         const string source = @"public class Calculator
@@ -135,6 +140,9 @@ public class Svc { public void Foo() {} }";
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    [Category("ExistingParameterSpec")] // sentinel:auto-category
     public async Task ChangeSignature_WithInvalidOrder_ReturnsEmpty()
     {
         const string source = "public class C { public void M(int a, int b) {} }";
@@ -145,6 +153,9 @@ public class Svc { public void Foo() {} }";
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    [Category("ExistingParameterSpec")] // sentinel:auto-category
     public async Task ChangeSignature_CallSiteWithNamedArgument_IsHandledCorrectly()
     {
         SetMultipleFiles(("Calculator.cs", "public class Calculator { public int Add(int a, int b, int c) => a + b + c; }"), ("Caller.cs", "public class Caller { public int Run(Calculator calc) => calc.Add(1, c: 3, b: 2); }"));
@@ -158,6 +169,9 @@ public class Svc { public void Foo() {} }";
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    [Category("ExistingParameterSpec")] // sentinel:auto-category
     public async Task ChangeSignature_CallSiteWithFewerArgsThanParameters_IsHandledCorrectly()
     {
         SetMultipleFiles(("Calculator.cs", "public class Calculator { public int Add(int a, int b, int c = 0) => a + b + c; }"), ("Caller.cs", "public class Caller { public int Run(Calculator calc) => calc.Add(1, 2); }"));
@@ -177,6 +191,7 @@ public class Svc { public void Foo() {} }";
     // Bug 4: ImplementInterfaceAsync -> stubs must NOT have 'override' keyword
     // ──────────────────────────────────────────────────────────────────────────
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task ImplementInterface_GeneratedStubs_DoNotHaveOverrideKeyword()
     {
         const string ifaceSource = @"namespace App;
@@ -197,6 +212,7 @@ public class Greeter : IGreeter
     }
 
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task ImplementInterface_WhenAllMembersImplemented_ReturnsAlreadyImplementedMessage()
     {
         const string source = @"namespace App;
@@ -212,6 +228,7 @@ public class Foo : IFoo
 
     // ── Bug 45: GenerateMapping -> Cross-Project Type Resolution ───────────────
     [Test]
+    [Category("MappingEngine")] // sentinel:auto-category
     public async Task BUG_45_GenerateMapping_CrossProjectTypes_ResolvesCorrectly()
     {
         const string code = @"
@@ -236,6 +253,8 @@ public class Destination
 
     // ── Bug 48: FindTodoFixmeComments -> Exact Word Boundary Matching ──────────────
     [Test]
+    [Category("DiscoveryEngine")] // sentinel:auto-category
+    [Category("TodoCommentFinding")] // sentinel:auto-category
     public async Task BUG_48_FindTodoComments_ExactMatchOnly_NoSubstringMatching()
     {
         const string code = @"
@@ -257,6 +276,7 @@ public class Validator
 
     // ── Bug 49: AnalyzePathCoverage -> Empty Branches on Overloads ──────────────
     [Test]
+    [Category("ControlFlowEngine")] // sentinel:auto-category
     public async Task BUG_49_AnalyzePathCoverage_Overloads_AnalyzesAll()
     {
         const string code = @"
@@ -274,6 +294,7 @@ public class Calculator
 
     // ── Bug 50: GenerateCallTree -> Picks Implementation, Not Interface ──────────────
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task BUG_50_GenerateCallTree_ShowsImplementation_NotInterface()
     {
         const string code = @"
@@ -297,6 +318,7 @@ public class Processor : IProcessor
 
     // ── Bug 51: UseTimeProvider -> Updates Constructor and Assignments ──────────────
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task BUG_51_UseTimeProvider_UpdatesConstructor_AndAssigns()
     {
         const string code = @"
@@ -318,6 +340,7 @@ public class Logger
 
     // ── Bug 54: AddGuardClauses -> Includes String Parameters ──────────────
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task BUG_54_AddGuardClauses_IncludesStringParameters()
     {
         const string code = @"
@@ -341,6 +364,7 @@ public class User { }";
 
     // ── Bug 59: UpdateXmlDocsFromSignature -> Generates if Missing ──────────────
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task BUG_59_UpdateXmlDocsFromSignature_GeneratesIfMissing()
     {
         const string code = @"
@@ -362,6 +386,7 @@ public class Calculator
 
     // ── Bug 61: SyncTypeAndFilename -> Picks Primary Type, Uses Staging ──────────────
     [Test]
+    [Category("StructuralRefinementEngine")] // sentinel:auto-category
     public async Task BUG_61_SyncTypeAndFilename_PicksPrimaryType_UsesStaging()
     {
         const string code = @"
@@ -383,6 +408,7 @@ namespace MyApp
     // Regression Tests -> 12 Critical Tool Capabilities
     // ──────────────────────────────────────────────────────────────────────────
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task REG_InterpolateStringSafe_ConstFormatString_CorrectlyInterpolates()
     {
         const string code = @"
@@ -404,6 +430,7 @@ public class Logger
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task REG_MoveTypeToFile_SingleTypeFile_ReturnsEmpty()
     {
         const string code = @"
@@ -417,6 +444,7 @@ namespace MyApp
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task REG_MoveTypeToFile_InterfaceType_CreatesNewFile()
     {
         const string code = @"
@@ -433,6 +461,7 @@ namespace MyApp
     }
 
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task REG_ImplementInterface_PropertyOnlyInterface_GeneratesPropertyStubs()
     {
         const string code = @"
@@ -453,6 +482,7 @@ public class Data : IData
     }
 
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task REG_ImplementInterface_PartialImplementation_OnlyGeneratesMissing()
     {
         const string code = @"
@@ -476,6 +506,7 @@ public class Service : IService
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task REG_ExtractInterface_BlockStyleNamespace_Works()
     {
         const string code = @"
@@ -497,6 +528,8 @@ namespace MyApp
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("FormatPreviewResult")] // sentinel:auto-category
     public async Task REG_FormatDocumentPreview_HunkFormat_ContainsLineMarkers()
     {
         const string code = @"
@@ -512,6 +545,9 @@ public class BadFormat {
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    [Category("ExistingParameterSpec")] // sentinel:auto-category
     public async Task REG_ChangeSignature_UpdatesCallSiteArguments()
     {
         const string code = @"
@@ -538,6 +574,7 @@ public class Service
     }
 
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task REG_ConvertPropertySafe_VirtualProperty_PreservesModifier()
     {
         const string code = @"
@@ -557,6 +594,7 @@ public class Base
     }
 
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task REG_ConvertPropertySafe_MultipleProperties_ContextDisambiguates()
     {
         const string code = @"
@@ -578,6 +616,7 @@ public class Derived : Base
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task REG_GenerateCallTree_ComplexInvocations_MapsCallHierarchy()
     {
         const string code = @"
@@ -598,6 +637,7 @@ public class Calculator
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task REG_FindDuplicateMethods_IdentifiesSimilarLogic()
     {
         const string code = @"
@@ -665,6 +705,7 @@ public class Service
 
         // ── Bug 1: DetectMismatchedAwait -> discard and WhenAll patterns ───────────
         [Test]
+        [Category("AntiPatternEngine")] // sentinel:auto-category
         public async Task DetectMismatchedAwait_DiscardAssignment_IsNotFlagged()
         {
             const string src = @"using System.Threading.Tasks;
@@ -682,6 +723,7 @@ public class Svc
         }
 
         [Test]
+        [Category("AntiPatternEngine")] // sentinel:auto-category
         public async Task DetectMismatchedAwait_TaskWhenAllPattern_IsNotFlagged()
         {
             const string src = @"using System.Threading.Tasks;
@@ -703,6 +745,7 @@ public class Svc
 
         // ── Bug 2: ExtractInterface -> no duplicate base type ─────────────────────
         [Test]
+        [Category("BasicRefactoringEngine")] // sentinel:auto-category
         public async Task ExtractInterface_WhenClassAlreadyImplementsInterface_NoDuplicateAdded()
         {
             const string src = @"namespace App;
@@ -724,6 +767,8 @@ public class Svc : ISvc { public void Foo() {} }";
 
         // ── Bug 3: GenerateTestScaffold -> async Task for async methods ────────────
         [Test]
+        [Category("TestScaffoldResult")] // sentinel:auto-category
+        [Category("TestingEngine")] // sentinel:auto-category
         public async Task GenerateTestScaffold_AsyncMethod_EmitsAsyncTask()
         {
             const string src = @"public class UserService
@@ -736,6 +781,7 @@ public class Svc : ISvc { public void Foo() {} }";
         }
 
         [Test]
+        [Category("TestingEngine")] // sentinel:auto-category
         public async Task GenerateTestSkeleton_AsyncMethod_EmitsAsyncTask()
         {
             const string src = @"public class DataService
@@ -750,6 +796,8 @@ public class Svc : ISvc { public void Foo() {} }";
 
         // ── Bug 4: GenerateFluentBuilder -> DI class error (returns error result, does NOT throw) ──
         [Test]
+        [Category("CodeGenerationEngine")] // sentinel:auto-category
+        [Category("FluentBuilderResult")] // sentinel:auto-category
         public async Task GenerateFluentBuilder_DiClass_ReturnsErrorResult_NotException()
         {
             // Regression: previously threw InvalidOperationException; now returns FluentBuilderResult with ErrorDetails.
@@ -777,6 +825,8 @@ public class Svc : ISvc { public void Foo() {} }";
         }
 
         [Test]
+        [Category("CodeGenerationEngine")] // sentinel:auto-category
+        [Category("FluentBuilderResult")] // sentinel:auto-category
         public async Task GenerateFluentBuilder_PocoClass_GeneratesWithMethods()
         {
             const string src = @"public class Product
@@ -792,6 +842,7 @@ public class Svc : ISvc { public void Foo() {} }";
 
         // ── Bug 5: CheckForSqlInjection -> const interpolation is safe ─────────────
         [Test]
+        [Category("SecurityEngine")] // sentinel:auto-category
         public async Task CheckForSqlInjection_ConstInterpolation_IsNotFlagged()
         {
             const string src = @"using Microsoft.SuccessData.SqlClient;
@@ -812,6 +863,7 @@ public class Repo
         }
 
         [Test]
+        [Category("SecurityEngine")] // sentinel:auto-category
         public async Task CheckForSqlInjection_RuntimeInterpolation_IsFlagged()
         {
             // Use a Dapper-style Execute invocation so the engine (which scans method
@@ -864,6 +916,7 @@ public class Repo
 
         // ── Bug 7: GenerateEqualityOverrides -> List<T> uses SequenceEqual ─────────
         [Test]
+        [Category("AntiPatternEngine")] // sentinel:auto-category
         public async Task GenerateEqualityOverrides_ListProperty_UsesSequenceEqual()
         {
             const string src = @"using System.Collections.Generic;
@@ -879,6 +932,7 @@ public class Product
         }
 
         [Test]
+        [Category("AntiPatternEngine")] // sentinel:auto-category
         public async Task GenerateEqualityOverrides_ScalarProperty_UsesEqualsExpression()
         {
             const string src = @"public class Point { public int X { get; set; } public int Y { get; set; } }";
@@ -895,6 +949,9 @@ public class Product
     /// Bug 8b: DetectMismatchedAwait -> false positives on Moq lambda setup chains
     /// </summary>
     [TestFixture]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
+    [Category("MagicValueFinding")] // sentinel:auto-category
+    [Category("MagicValueLocation")] // sentinel:auto-category
     public class Bug8BatchRegressionTests
     {
         private IWorkspaceManager _workspaceManager;
@@ -1013,6 +1070,7 @@ public class MyTests
     /// 9g: FindStringMagicValues -> SQL @param tokens must not be flagged as magic values
     /// </summary>
     [TestFixture]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public class Bug9BatchRegressionTests
     {
         private IWorkspaceManager _workspaceManager;
@@ -1050,6 +1108,7 @@ public class MyTests
 
         // ── 9a: ExtractInterface formatting -> members on separate lines ───────────
         [Test]
+        [Category("BasicRefactoringEngine")] // sentinel:auto-category
         public async Task ExtractInterface_GeneratedInterface_HasMembersOnSeparateLines()
         {
             const string src = @"using System.Threading.Tasks;
@@ -1072,6 +1131,7 @@ public class OrderService
         }
 
         [Test]
+        [Category("BasicRefactoringEngine")] // sentinel:auto-category
         public async Task ExtractInterface_GeneratedInterface_HasInterfaceDeclaration()
         {
             const string src = @"public class Calculator
@@ -1253,6 +1313,8 @@ public class Second { public void Run() { } }";
 
         // ── 9e: FindServicesNotRegistered -> IWebHostEnvironment etc. not flagged ──
         [Test]
+        [Category("DependencyInjectionEngine")] // sentinel:auto-category
+        [Category("UnregisteredServiceFinding")] // sentinel:auto-category
         public async Task FindServicesNotRegistered_IWebHostEnvironment_NotFlagged()
         {
             const string src = @"using Microsoft.AspNetCore.Hosting;
@@ -1275,6 +1337,8 @@ public class Startup
         }
 
         [Test]
+        [Category("DependencyInjectionEngine")] // sentinel:auto-category
+        [Category("UnregisteredServiceFinding")] // sentinel:auto-category
         public async Task FindServicesNotRegistered_IServiceScopeFactory_NotFlagged()
         {
             const string src = @"using Microsoft.Extensions.DependencyInjection;
@@ -1297,6 +1361,8 @@ public class Startup
         }
 
         [Test]
+        [Category("DependencyInjectionEngine")] // sentinel:auto-category
+        [Category("UnregisteredServiceFinding")] // sentinel:auto-category
         public async Task FindServicesNotRegistered_IHttpContextAccessor_NotFlagged()
         {
             const string src = @"using Microsoft.AspNetCore.Http;
@@ -1320,6 +1386,7 @@ public class Startup
 
         // ── 9f: UpgradeToModernGuards -> no-op message when nothing to upgrade ─────
         [Test]
+        [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
         public async Task UpgradeToModernGuards_NoPatterns_ReturnsNoOpMessage()
         {
             const string src = @"public class Service
@@ -1337,6 +1404,7 @@ public class Startup
         }
 
         [Test]
+        [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
         public async Task UpgradeToModernGuards_WithNullCheck_ReturnsModifiedFile()
         {
             const string src = @"public class Service
@@ -1356,6 +1424,8 @@ public class Startup
 
         // ── 9g: FindStringMagicValues -> SQL @params not flagged ──────────────────
         [Test]
+        [Category("AntiPatternEngine")] // sentinel:auto-category
+        [Category("MagicValueFinding")] // sentinel:auto-category
         public async Task FindStringMagicValues_SqlParamTokens_AreNotFlagged()
         {
             // ADO.NET parameterized query pattern: @UserId appears many times but is NOT a magic value
@@ -1373,6 +1443,8 @@ public class Startup
         }
 
         [Test]
+        [Category("AntiPatternEngine")] // sentinel:auto-category
+        [Category("MagicValueFinding")] // sentinel:auto-category
         public async Task FindStringMagicValues_RegularRepeatedStrings_AreStillFlagged()
         {
             // Regular magic values should still be detected
@@ -1413,6 +1485,7 @@ public class Startup
 
         // --- Bug: introduce_variable duplicates the var when expression is already an initializer ---
         [Test]
+        [Category("StructuralRefactoringEngine")] // sentinel:auto-category
         public async Task IntroduceVariable_WhenExpressionIsAlreadyInitializer_ReturnsNoOpMessage()
         {
             const string src = @"public class OrderService
@@ -1434,6 +1507,7 @@ public class Startup
         }
 
         [Test]
+        [Category("StructuralRefactoringEngine")] // sentinel:auto-category
         public async Task IntroduceVariable_WhenExpressionIsSubExpression_ExtractsCorrectly()
         {
             const string src = @"public class Calculator
@@ -1451,6 +1525,7 @@ public class Startup
 
         // --- Bug: generate_mapping throws on unqualified type names ---
         [Test]
+        [Category("MappingEngine")] // sentinel:auto-category
         public async Task GenerateMapping_WithSimpleTypeNames_ResolvesAndGeneratesMapping()
         {
             const string src = @"public class SourceDto
@@ -1473,6 +1548,7 @@ public class TargetDto
         }
 
         [Test]
+        [Category("MappingEngine")] // sentinel:auto-category
         public async Task GenerateMapping_WithUnknownType_ReturnsHelpfulMessage()
         {
             const string src = @"public class Foo { public int X { get; set; } }";
@@ -1484,6 +1560,7 @@ public class TargetDto
 
         // --- Bug: optimize_independent_awaits throws when method not found instead of returning message ---
         [Test]
+        [Category("AsyncOptimizationEngine")] // sentinel:auto-category
         public async Task OptimizeIndependentAwaits_WhenMethodNotFound_ReturnsErrorMessage()
         {
             const string src = @"public class MyService
@@ -1499,6 +1576,7 @@ public class TargetDto
         }
 
         [Test]
+        [Category("AsyncOptimizationEngine")] // sentinel:auto-category
         public async Task OptimizeIndependentAwaits_WithSequentialAwaits_BatchesIntoWhenAll()
         {
             const string src = @"public class ReportService
@@ -1518,6 +1596,7 @@ public class TargetDto
 
         // --- Bug: add_cancellation_token throws when method not found, and has trailing space ---
         [Test]
+        [Category("AsyncOptimizationEngine")] // sentinel:auto-category
         public async Task AddCancellationToken_WhenMethodNotFound_ReturnsErrorMessage()
         {
             const string src = @"public class Loader
@@ -1530,6 +1609,7 @@ public class TargetDto
         }
 
         [Test]
+        [Category("AsyncOptimizationEngine")] // sentinel:auto-category
         public async Task AddCancellationToken_WhenAdded_HasNoTrailingSpaceInTypeName()
         {
             const string src = @"public class DataService
@@ -1549,6 +1629,7 @@ public class TargetDto
 
         // --- BUG-67: add_validation_to_poco must add actual annotations, not just using ---
         [Test]
+        [Category("ApiGenerationEngine")] // sentinel:auto-category
         public async Task BUG_67_AddValidationToPoco_AddsAnnotations_NotJustUsing()
         {
             const string code = @"public class User
@@ -1571,6 +1652,7 @@ public class TargetDto
         }
 
         [Test]
+        [Category("ApiGenerationEngine")] // sentinel:auto-category
         public async Task BUG_67_AddValidationToPoco_StringProperty_Gets_RequiredAndStringLength()
         {
             const string code = @"public class Product
@@ -1585,6 +1667,7 @@ public class TargetDto
         }
 
         [Test]
+        [Category("ApiGenerationEngine")] // sentinel:auto-category
         public async Task BUG_67_AddValidationToPoco_IntProperty_Gets_Range()
         {
             const string code = @"public class Widget
@@ -1599,6 +1682,7 @@ public class TargetDto
 
         // --- Bug: inline_field -> must error when field has no initializer ---
         [Test]
+        [Category("StructuralRefactoringEngine")] // sentinel:auto-category
         public async Task InlineField_NoInitializer_ReturnsError()
         {
             const string code = @"public class Service
@@ -1618,6 +1702,7 @@ public class TargetDto
         }
 
         [Test]
+        [Category("StructuralRefactoringEngine")] // sentinel:auto-category
         public async Task InlineField_WithInitializer_InlinesSuccessfully()
         {
             const string code = @"public class Service
@@ -1638,6 +1723,7 @@ public class TargetDto
         }
 
         [Test]
+        [Category("StructuralRefactoringEngine")] // sentinel:auto-category
         public async Task InlineField_FieldNotFound_ReturnsError()
         {
             const string code = @"public class Service { }";
@@ -1649,6 +1735,7 @@ public class TargetDto
     }
 
     [TestFixture]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public class Bug11RegressionTests
     {
         private IWorkspaceManager _workspaceManager = null!;
@@ -1684,6 +1771,7 @@ public class TargetDto
         // ConvertExpressionBodyAsync's, see docs/current/TODO.md). Fixed 2026-08-27: an
         // unambiguous property now resolves by name alone regardless of contextSnippet.
         [Test]
+        [Category("CodeGenerationEngine")] // sentinel:auto-category
         public async Task ConvertPropertySafe_UnambiguousPropertyWithBadContextSnippet_StillSucceeds()
         {
             const string src = @"public class MyClass
@@ -1699,6 +1787,7 @@ public class TargetDto
         // contextSnippet is actually needed to disambiguate -> a snippet that matches neither
         // should still fail with a clear error.
         [Test]
+        [Category("CodeGenerationEngine")] // sentinel:auto-category
         public async Task ConvertPropertySafe_AmbiguousPropertyWithBadContextSnippet_ReturnsErrorString()
         {
             const string src = @"public class MyClass
@@ -1828,6 +1917,7 @@ public class OtherClass
             // BUG-70: MoveFileToNamespaceFolderAsync -> Wrong Path Computation
             // ──────────────────────────────────────────────────────────────────────────
             [Test]
+            [Category("SolutionStructureEngine")] // sentinel:auto-category
             public async Task BUG_70_MoveFileToNamespaceFolder_ComputesProjectRelativePath()
             {
                 const string source = @"namespace TestProj.Controllers;
@@ -1861,6 +1951,7 @@ public class ProductsController
             // BUG-71: InterpolateStringSafe -> Server Crash on Named Const Format Strings
             // ──────────────────────────────────────────────────────────────────────────
             [Test]
+            [Category("CodeGenerationEngine")] // sentinel:auto-category
             public async Task BUG_71_InterpolateStringSafe_NamedConstFormatString_NoServerCrash()
             {
                 const string source = @"namespace App;
@@ -1895,6 +1986,7 @@ public class MyClass
             // BUG-72: IntroduceField -> Field Initialized with Local Parameter (Uncompilable)
             // ──────────────────────────────────────────────────────────────────────────
             [Test]
+            [Category("StructuralRefactoringEngine")] // sentinel:auto-category
             public async Task BUG_72_IntroduceField_ExpressionWithLocalVariable_NoInitializer()
             {
                 const string source = @"namespace App;
@@ -1928,6 +2020,7 @@ public class Item { public int Id { get; set; } }";
             // BUG-73: SafeDeleteSymbol -> Returns ChangeId for Empty Staged Changes
             // ──────────────────────────────────────────────────────────────────────────
             [Test]
+            [Category("StructuralRefinementEngine")] // sentinel:auto-category
             public async Task BUG_73_SafeDeleteSymbol_SymbolIsUsed_ReturnsErrorNotChangeId()
             {
                 SetMultipleFiles("TestProj", ("ImportHistoryDto.cs", @"namespace App;
@@ -1954,6 +2047,7 @@ public class MyService
             // BUG-52: ReduceBlockDepth -> Server ErrorDetails Crash (null root reference)
             // ──────────────────────────────────────────────────────────────────────────
             [TestFixture]
+            [Category("LogicSimplificationEngine")] // sentinel:auto-category
             public class Bug52ReduceBlockDepthRegressionTests
             {
                 private IWorkspaceManager _workspaceManager;
@@ -2008,6 +2102,7 @@ public class Processor
             // BUG-53: MakeMethodThreadSafe -> Server ErrorDetails Crash (null root reference)
             // ──────────────────────────────────────────────────────────────────────────
             [TestFixture]
+            [Category("ThreadSafetyEngine")] // sentinel:auto-category
             public class Bug53MakeMethodThreadSafeRegressionTests
             {
                 private IWorkspaceManager _workspaceManager;
@@ -2059,6 +2154,7 @@ public class Counter
             // BUG-58: ConvertToAsyncEnumerable -> Server Crash (null root reference)
             // ──────────────────────────────────────────────────────────────────────────
             [TestFixture]
+            [Category("AsyncOptimizationEngine")] // sentinel:auto-category
             public class Bug58ConvertToAsyncEnumerableRegressionTests
             {
                 private IWorkspaceManager _workspaceManager;
@@ -2114,6 +2210,7 @@ public class ItemProvider
             // BUG-69: InlineMethod -> Server Crash (null root reference)
             // ──────────────────────────────────────────────────────────────────────────
             [TestFixture]
+            [Category("StructuralRefactoringEngine")] // sentinel:auto-category
             public class Bug69InlineMethodRegressionTests
             {
                 private IWorkspaceManager _workspaceManager;
@@ -2179,6 +2276,7 @@ public class Math
             // BUG-77: IntroduceParameter -> Server Crash (null GetCurrentNode reference)
             // ──────────────────────────────────────────────────────────────────────────
             [TestFixture]
+            [Category("StructuralRefactoringEngine")] // sentinel:auto-category
             public class Bug77IntroduceParameterRegressionTests
             {
                 private IWorkspaceManager _workspaceManager;
@@ -2251,6 +2349,7 @@ public class Processor
         /// Each test is designed to fail if its corresponding bug regresses.
         /// </summary>
         [TestFixture]
+        [Category("BasicRefactoringEngine")] // sentinel:auto-category
         public class Remaining22BugsRegressionTests
         {
             private IWorkspaceManager _workspaceManager;
@@ -2336,6 +2435,7 @@ public class Processor
             // Priority 2 Tests: Uncompilable Output (generated code must compile)
             // ──────────────────────────────────────────────────────────────────────────
             [Test]
+            [Category("CodeGenerationEngine")] // sentinel:auto-category
             public async Task BUG_55_GeneratedEqualsCompiles()
             {
                 // BUG-55: Generated equals method has syntax errors
@@ -2346,6 +2446,7 @@ public class Processor
             }
 
             [Test]
+            [Category("CodeGenerationEngine")] // sentinel:auto-category
             public async Task BUG_56_GeneratedConstructorComplete()
             {
                 // BUG-56: Generated constructor drops fields
@@ -2355,6 +2456,7 @@ public class Processor
             }
 
             [Test]
+            [Category("CodeGenerationEngine")] // sentinel:auto-category
             public async Task BUG_57_GeneratedBuilderCompiles()
             {
                 // BUG-57: Generated fluent builder has syntax errors
@@ -2457,6 +2559,7 @@ public class Processor
 
             // ── Bug 55: OptimizeToValueTask -> Interface/Implementation Mismatch ───────
             [Test]
+            [Category("AsyncOptimizationEngine")] // sentinel:auto-category
             public async Task BUG_55_OptimizeToValueTask_InterfaceMethod_BothUpdated()
             {
                 const string code = @"
@@ -2482,6 +2585,7 @@ public class DataService : IDataService
 
             // ── Bug 56: ConvertStaticToExtension -> Missing static on Extension Class ──
             [Test]
+            [Category("LogicSimplificationEngine")] // sentinel:auto-category
             public async Task BUG_56_ConvertStaticToExtension_EnsuresClassIsStatic()
             {
                 const string code = @"
@@ -2501,6 +2605,7 @@ public class StringExtensions
 
             // ── Bug 57: IntroduceParameterObject -> Interface + All Implementations ────
             [Test]
+            [Category("StructuralRefactoringEngine")] // sentinel:auto-category
             public async Task BUG_57_IntroduceParameterObject_UpdatesInterfaceAndAllImplementations()
             {
                 const string code = @"
@@ -2531,6 +2636,7 @@ public class Processor2 : IProcessor
 
             // ── Bug 64: ConvertLockToSemaphoreSlim -> Doesn't Update Call Sites ────────
             [Test]
+            [Category("ThreadSafetyEngine")] // sentinel:auto-category
             public async Task BUG_64_ConvertLockToSemaphoreSlim_UpdatesAllLockStatements()
             {
                 const string code = @"
@@ -2564,6 +2670,7 @@ public class ThreadSafeCounter
 
             // ── Bug 75: ExtractSuperclass -> Empty Base Class ───────────────────────────
             [Test]
+            [Category("StructuralRefactoringEngine")] // sentinel:auto-category
             public async Task BUG_75_ExtractSuperclass_IncludesCommonMembers()
             {
                 const string code = @"
@@ -2589,6 +2696,7 @@ public class Cat
 
             // ── Bug 78: GenerateAsyncOverload -> Uncompilable Async Stub ───────────────
             [Test]
+            [Category("AsyncOptimizationEngine")] // sentinel:auto-category
             public async Task BUG_78_GenerateAsyncOverload_CompilesAndMatches()
             {
                 const string code = @"
@@ -2621,6 +2729,7 @@ public class Processor
         /// extract_class bug: other extract_class issues
         /// </summary>
         [TestFixture]
+        [Category("StructuralRefactoringEngine")] // sentinel:auto-category
         public class CriticalBugRegressionTests
         {
             private IWorkspaceManager _workspaceManager;
@@ -2704,6 +2813,7 @@ public class MyClass
 
             // ── BUG-73: SafeDeleteSymbol -> refuses when symbol IS used ──────────
             [Test]
+            [Category("StructuralRefinementEngine")] // sentinel:auto-category
             public async Task BUG_73_SafeDelete_WithUsedSymbol_ReturnsError()
             {
                 // BUG-73 documents that SafeDeleteSymbolAsync may fail to detect when a symbol
@@ -2728,6 +2838,7 @@ public class Service
             }
 
             [Test]
+            [Category("StructuralRefinementEngine")] // sentinel:auto-category
             public async Task BUG_73_SafeDelete_WithUnusedSymbol_SucceedsQuietly()
             {
                 const string code = @"
@@ -2797,6 +2908,7 @@ public class Service
         /// actionable guidance.
         /// </summary>
         [TestFixture]
+        [Category("SymbolNavigationEngine")] // sentinel:auto-category
         public class CallGraphNullReturnRegressionTests
         {
             private IWorkspaceManager _workspaceManager;
@@ -2872,6 +2984,7 @@ public class Svc
         /// now throws InvalidOperationException with an actionable message instead.
         /// </summary>
         [TestFixture]
+        [Category("CodeGenerationEngine")] // sentinel:auto-category
         public class GenerateDecoratorClassNullReturnRegressionTests
         {
             private IWorkspaceManager _workspaceManager;
@@ -2910,6 +3023,7 @@ public class Svc
             }
 
             [Test]
+            [Category("DecoratorResult")] // sentinel:auto-category
             public async Task GenerateDecoratorClass_ValidInterface_ReturnsResult()
             {
                 const string code = @"
@@ -2939,6 +3053,7 @@ namespace MyApp
     /// an actionable message instead of silently returning empty output.
     /// </summary>
     [TestFixture]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public class AddGuardClausesNullReturnRegressionTests
     {
         private IWorkspaceManager _workspaceManager;
@@ -2997,6 +3112,7 @@ namespace MyApp
     /// which the tool layer now converts to an InvalidOperationException.
     /// </summary>
     [TestFixture]
+    [Category("TestingEngine")] // sentinel:auto-category
     public class AddBenchmarkStubNullReturnRegressionTests
     {
         private IWorkspaceManager _workspaceManager;
@@ -3054,6 +3170,7 @@ namespace MyApp
     /// which the tool layer now converts to an InvalidOperationException.
     /// </summary>
     [TestFixture]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public class AddBracesNullReturnRegressionTests
     {
         private IWorkspaceManager _workspaceManager;
@@ -3107,6 +3224,7 @@ namespace MyApp
     /// which the tool layer now converts to an InvalidOperationException.
     /// </summary>
     [TestFixture]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public class MakeClassImmutableNullReturnRegressionTests
     {
         private IWorkspaceManager _workspaceManager;
@@ -3162,6 +3280,7 @@ namespace MyApp
     /// which the tool layer now converts to an InvalidOperationException.
     /// </summary>
     [TestFixture]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public class SyncInterfaceToImplementationNullReturnRegressionTests
     {
         private IWorkspaceManager _workspaceManager;
@@ -3184,6 +3303,7 @@ namespace MyApp
         // SyncInterface moved to AdvancedRefactoringTools in the Basic/Advanced server split.
         private AdvancedRefactoringTools CreateAdvancedTools() => new AdvancedRefactoringTools(_workspaceManager);
         [Test]
+        [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
         public async Task SyncInterfaceToImplementationAsync_FileNotInWorkspace_ReturnsContent()
         {
             // SyncInterfaceToImplementationAsync applies interface sync across the whole solution
@@ -3196,6 +3316,7 @@ namespace MyApp
         }
 
         [Test]
+        [Category("AdvancedRefactoringTools")] // sentinel:auto-category
         public async Task SyncInterfaceToImplementation_Tool_FileNotInWorkspace_DoesNotThrow()
         {
             // Because the engine returns non-empty content, the tool's file-not-found IOE guard

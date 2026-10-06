@@ -25,6 +25,7 @@ namespace RoslynSentinel.Tests.Advanced
     // BH-01: DetectMissingCancellationToken -> wrong parameter-count threshold
     // ─────────────────────────────────────────────────────────────────────────────
     [TestFixture]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public class BH01_MissingCancellationTokenThresholdTests
     {
         private IWorkspaceManager _workspaceManager = null!;
@@ -154,6 +155,7 @@ namespace RoslynSentinel.Tests.Advanced
     // BH-02: DetectStringConcatInLoop -> misses str = str + value (non-compound)
     // ─────────────────────────────────────────────────────────────────────────────
     [TestFixture]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public class BH02_StringConcatInLoopNonCompoundTests
     {
         private IWorkspaceManager _workspaceManager = null!;
@@ -280,6 +282,7 @@ namespace RoslynSentinel.Tests.Advanced
     // BH-03: FindUnsafeTypeCastsAsync -> flags safe numeric conversions (false positive)
     // ─────────────────────────────────────────────────────────────────────────────
     [TestFixture]
+    [Category("SecurityAndSafetyEngine")] // sentinel:auto-category
     public class BH03_UnsafeCastFalsePositiveTests
     {
         private IWorkspaceManager _workspaceManager = null!;
@@ -319,6 +322,7 @@ namespace RoslynSentinel.Tests.Advanced
         }
 
         [Test]
+        [Category("SafetyIssue")] // sentinel:auto-category
         public async Task FindUnsafeTypeCasts_ObjectToConcreteType_IsFlagged()
         {
             // (MyClass)obj -> this CAN throw InvalidCastException. Must be flagged.
@@ -384,6 +388,8 @@ namespace RoslynSentinel.Tests.Advanced
     // Tests verify the real detection logic works correctly.
     // ─────────────────────────────────────────────────────────────────────────────
     [TestFixture]
+    [Category("SafetyIssue")] // sentinel:auto-category
+    [Category("SecurityAndSafetyEngine")] // sentinel:auto-category
     public class BH04_MissingNullCheckTests
     {
         private IWorkspaceManager _workspaceManager = null!;
@@ -486,6 +492,7 @@ namespace RoslynSentinel.Tests.Advanced
     // BH-05: ConvertLockToSemaphoreSlimAsync -> makes ALL overloads async (wrong)
     // ─────────────────────────────────────────────────────────────────────────────
     [TestFixture]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
     public class BH05_ConvertLockOverloadBugTests
     {
         private IWorkspaceManager _workspaceManager = null!;
@@ -594,6 +601,7 @@ namespace RoslynSentinel.Tests.Advanced
     // Additional regressions: existing patterns that should still work after fixes
     // ─────────────────────────────────────────────────────────────────────────────
     [TestFixture]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public class BH_RegressionGuardTests
     {
         private IWorkspaceManager _workspaceManager = null!;

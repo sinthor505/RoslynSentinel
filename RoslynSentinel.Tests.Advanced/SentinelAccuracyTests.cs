@@ -11,6 +11,7 @@ namespace RoslynSentinel.Tests.Advanced;
 // 1. FindUnawaitedFireAndForgetAsync -> null-conditional + chained patterns
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AsyncAnalysisEngine")] // sentinel:auto-category
 public class FireAndForgetAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -257,6 +258,7 @@ public class C {
 // 2. AnalyzeSemaphoreUsageAsync -> pool pattern vs genuine leak
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class SemaphoreAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -428,6 +430,7 @@ public class C {
 // 3. DetectMismatchedAwaitAsync -> false positive reduction
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class MismatchedAwaitAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -748,6 +751,7 @@ public class C {
 // 4. AnalyzePerformanceAsync -> new checks + .Result precision fix
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("PerformanceEngine")] // sentinel:auto-category
 public class PerformanceAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -1456,6 +1460,8 @@ public class C {
 // 5. AnalyzeExceptionHandlingAsync -> checks 5-7 + CatchAll suggestion
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
+[Category("ExceptionHandlingFinding")] // sentinel:auto-category
 public class ExceptionHandlingAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -1683,6 +1689,7 @@ public class C : IDisposable {
 // 6. FireAndForgetTask -> Task.Run / Task.Factory.StartNew not awaited
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class FireAndForgetTaskAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -1778,6 +1785,7 @@ public class C {
 // 7. SecurityEngine -> hardcoded secret values, secrets in comments, SQL Dapper
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SecurityEngine")] // sentinel:auto-category
 public class SecurityEngineAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -1922,6 +1930,7 @@ public class C {
 // 8. MissingDispose -> IDisposable allocation without using/try-finally
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class MissingDisposeAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -2017,6 +2026,7 @@ public class C {
 // 9. EnumSwitchExhaustiveness -> missing enum members without default case
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("ControlFlowEngine")] // sentinel:auto-category
 public class EnumSwitchExhaustivenessTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -2032,6 +2042,7 @@ public class EnumSwitchExhaustivenessTests
     public void TearDown() => _workspaceManager?.Dispose();
     private void SetSource(string source) => _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", source)]));
     [Test]
+    [Category("EnumSwitchGap")] // sentinel:auto-category
     public async Task Flags_Switch_MissingEnumMember()
     {
         SetSource(@"
@@ -2104,6 +2115,7 @@ public class C {
 // 10. ReflectionInLoop + CollectionWithoutCapacity (PerformanceEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("PerformanceEngine")] // sentinel:auto-category
 public class PerformanceEngine2AccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -2220,6 +2232,8 @@ public class C {
 // 11. CaptiveDependency -> Singleton depending on Scoped/Transient
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("CaptiveDependencyFinding")] // sentinel:auto-category
+[Category("DependencyInjectionEngine")] // sentinel:auto-category
 public class CaptiveDependencyAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -2293,6 +2307,8 @@ public class Startup {
 // 12. NullDereferenceChain + ArithmeticOverflow (SecurityAndSafetyEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SafetyIssue")] // sentinel:auto-category
+[Category("SecurityAndSafetyEngine")] // sentinel:auto-category
 public class SafetyEngineExtendedAccuracyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -2383,6 +2399,7 @@ public class C {
 // 13. CircularTypeReferences (AnalysisEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SolutionStructureEngine")] // sentinel:auto-category
 public class CircularTypeReferenceTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -2436,6 +2453,7 @@ public class Z { public Z(X x) { } }
 // 14. DisposedAfterUsing + SyncCallInAsyncContext (AntiPatternEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class AntiPatternExtendedTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -2550,6 +2568,7 @@ public class C {
 // 15. MissingGenericConstraints (AnalysisEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class MissingGenericConstraintTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -2623,6 +2642,7 @@ public class C {
 // 16. JsonAntiPatterns (SecurityEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SecurityEngine")] // sentinel:auto-category
 public class JsonAntiPatternTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -2716,6 +2736,7 @@ public class C {
 // 17. LinqN1 + StringFormatInLoop + MultipleEnumeration (PerformanceEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("PerformanceEngine")] // sentinel:auto-category
 public class PerformanceEngineExtendedTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -2846,6 +2867,7 @@ public class C {
 //     (AnalysisEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class AnalysisEngineExtended2Tests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -2861,6 +2883,7 @@ public class AnalysisEngineExtended2Tests
     private void SetSource(string source) => _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", source)]));
     // ── FinalizerOnDisposable ──────────────────────────────────────────────
     [Test]
+    [Category("ResourceSafetyEngine")] // sentinel:auto-category
     public async Task Flags_Finalizer_Without_DisposedGuard()
     {
         SetSource(@"
@@ -2873,6 +2896,7 @@ public class C : System.IDisposable {
     }
 
     [Test]
+    [Category("ResourceSafetyEngine")] // sentinel:auto-category
     public async Task DoesNotFlag_Finalizer_With_DisposedGuard()
     {
         SetSource(@"
@@ -2950,6 +2974,7 @@ public class Node { public Node Child { get; set; } = null!; }");
 // 19. TaskRunBlocking + NamedHandlerLeak (AntiPatternEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class AntiPatternEngine2Tests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -3010,6 +3035,7 @@ public class Subscriber {
 // 20. UnsafeLazyInit + CasLoopWithoutBackoff (ThreadSafetyEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("ThreadSafetyEngine")] // sentinel:auto-category
 public class ThreadSafetyEngineExtendedTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -3100,6 +3126,7 @@ public class C {
 // 21. ReDoS (SecurityEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SecurityEngine")] // sentinel:auto-category
 public class ReDoSDetectionTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -3143,6 +3170,7 @@ public class C {
 // 22. SequentialAwaits + AsyncVoidWithoutTryCatch (AsyncSafetyEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AsyncAnalysisEngine")] // sentinel:auto-category
 public class AsyncSafetyEngineExtendedTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -3224,6 +3252,7 @@ public class C {
 // 23. MutablePublicCollectionProperty (CodeStyleAnalysisEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("CodeStyleAnalysisEngine")] // sentinel:auto-category
 public class MutableCollectionPropertyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -3279,6 +3308,7 @@ public class C {
 // 24. ThrowInFinally (AntiPatternEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class ThrowInFinallyTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -3327,6 +3357,7 @@ public class C {
 // 25. LinqRedundantWhere (PerformanceEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("PerformanceEngine")] // sentinel:auto-category
 public class LinqRedundantWhereTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -3391,6 +3422,7 @@ public class C {
 // 26. DoubleCheckedLockingWithoutVolatile (ThreadSafetyEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("ThreadSafetyEngine")] // sentinel:auto-category
 public class DoubleCheckedLockingTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -3458,6 +3490,7 @@ public class Singleton {
 // 27. StaticEventSubscription (AntiPatternEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class StaticEventSubscriptionTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -3508,6 +3541,7 @@ public class Subscriber : System.IDisposable {
 // 28. UnvalidatedRegexSource (SecurityEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SecurityEngine")] // sentinel:auto-category
 public class UnvalidatedRegexSourceTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -3555,6 +3589,7 @@ public class C {
 // 29. CheckThenActOnDictionary (ThreadSafetyEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("ThreadSafetyEngine")] // sentinel:auto-category
 public class CheckThenActOnDictionaryTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -3609,6 +3644,7 @@ public class C {
 // 30. UnawakedDisposeAsync (AsyncSafetyEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("AsyncAnalysisEngine")] // sentinel:auto-category
 public class UnawakedDisposeAsyncTests
 {
     private IWorkspaceManager _workspaceManager = null!;
@@ -3660,6 +3696,7 @@ public class C : IAsyncDisposable {
 // 31. RegexNewInLoop (SecurityEngine)
 // ════════════════════════════════════════════════════════════════════════════
 [TestFixture]
+[Category("SecurityEngine")] // sentinel:auto-category
 public class RegexNewInLoopTests
 {
     private IWorkspaceManager _workspaceManager = null!;

@@ -8,6 +8,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("CodeStyleEngine")] // sentinel:auto-category
 public class ModernizationIntegrationTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -38,6 +39,7 @@ public class ModernizationIntegrationTests
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeToModernGuards_ShouldConvertAllPatterns()
     {
         // Arrange
@@ -122,6 +124,7 @@ public class C {
     }
 
     [Test]
+    [Category("SolutionStructureEngine")] // sentinel:auto-category
     public async Task FindStructuralSmells_ShouldDetectNewCategories()
     {
         // Arrange

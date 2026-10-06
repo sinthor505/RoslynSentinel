@@ -7,6 +7,7 @@ using RoslynSentinel.Engines.Basic;
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
 
+[Category("SolutionStructureEngine")] // sentinel:auto-category
 public class IntelligenceTests
 {
     private IWorkspaceManager _workspaceManager;

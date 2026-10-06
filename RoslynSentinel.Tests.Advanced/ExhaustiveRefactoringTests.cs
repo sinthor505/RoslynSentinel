@@ -8,6 +8,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("CodeStyleEngine")] // sentinel:auto-category
 public class ExhaustiveRefactoringTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -33,6 +34,7 @@ public class ExhaustiveRefactoringTests
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeGuards_ShouldHandleAllRangeVariants()
     {
         SetSource(@"
@@ -84,6 +86,7 @@ public class C {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ClassToRecord_ShouldHandleAttributesAndMethods()
     {
         var config = new SentinelConfiguration();

@@ -32,6 +32,7 @@ public class FeatureToggleTests
     }
 
     [Test]
+    [Category("SolutionStructureEngine")] // sentinel:auto-category
     public async Task FindStructuralSmells_ShouldRespectDisabledToggle()
     {
         // Arrange - File with MultiType smell
@@ -50,6 +51,7 @@ public class FeatureToggleTests
     }
 
     [Test]
+    [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task FindBoxingAllocations_ShouldRespectDisabledToggle()
     {
         // Arrange - Boxing allocation

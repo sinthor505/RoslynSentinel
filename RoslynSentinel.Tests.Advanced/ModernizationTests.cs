@@ -8,6 +8,7 @@ using RoslynSentinel.Engines.Basic;
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
 
+[Category("SyntaxModernizationEngine")] // sentinel:auto-category
 public class ModernizationTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -49,6 +50,7 @@ public class ModernizationTests
     }
 
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task UseCollectionExpressions_Should_Modernize_ArrayCreation()
     {
         var source = "public class C { int[] x = new int[] { 1, 2, 3 }; }";
@@ -123,6 +125,7 @@ public class C
     // ══════════════════════════════════════════════════════════════
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task AddBraces_IfWithoutBraces_AddsBraces()
     {
         var source = @"public class C
@@ -144,6 +147,7 @@ public class C
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task AddBraces_AlreadyHasBraces_IsIdempotent()
     {
         var source = @"public class C
@@ -170,6 +174,7 @@ public class C
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task AddBraces_ElseWithoutBraces_AddsBraces()
     {
         var source = @"public class C
@@ -395,6 +400,7 @@ public class C
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task ConvertSwitchToExpression_Should_Upgrade_Statements()
     {
         var source = @"public class C { 
@@ -413,6 +419,7 @@ public class C
     }
 
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task SimplifyAllNames_Should_Remove_Global_Alias()
     {
         var source = "public class C { global::System.String s; }";

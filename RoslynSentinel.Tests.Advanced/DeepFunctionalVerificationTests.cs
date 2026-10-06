@@ -45,6 +45,8 @@ public class DeepFunctionalVerificationTests
     }
 
     [Test]
+    [Category("CodeHealingEngine")] // sentinel:auto-category
+    [Category("ExceptionTarget")] // sentinel:auto-category
     public async Task ModernizeExceptions_ShouldReplaceAndGenerateClasses()
     {
         // Arrange
@@ -73,6 +75,7 @@ public class Service {
     }
 
     [Test]
+    [Category("StructuralRefinementEngine")] // sentinel:auto-category
     public async Task SafeDelete_ShouldBlockOnReflectionRisk()
     {
         // Arrange
@@ -93,6 +96,7 @@ public class Service {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task RecordToClass_ShouldPreserveImmutability()
     {
         // Arrange
@@ -108,6 +112,7 @@ public class Service {
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseNameofExpression_ShouldReplaceExactMatches()
     {
         // Arrange
@@ -126,6 +131,8 @@ public class MyType {
     }
 
     [Test]
+    [Category("SolutionStructureEngine")] // sentinel:auto-category
+    [Category("StructuralSmellType")] // sentinel:auto-category
     public async Task FindStructuralSmells_ShouldIdentifyThreadSafetyIssues()
     {
         // Arrange
@@ -151,6 +158,7 @@ public class C {
     }
 
     [Test]
+    [Category("DependencyEngine")] // sentinel:auto-category
     public async Task GetProjectDependencies_ShouldExtractFromCsproj()
     {
         // Arrange
@@ -181,6 +189,7 @@ public class C {
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task RemoveUsingDirective_RemovesDirective_PreservesOthersAndTrivia()
     {
         SetSource(@"
@@ -221,6 +230,7 @@ public class Order
 
 
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task FixDangerousLock_ShouldInjectLockObject()
     {
         // Arrange
@@ -236,6 +246,7 @@ public class Order
     }
 
     [Test]
+    [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task ConvertPropertyToMethods_ShouldCreateGetSet()
     {
         // Arrange
@@ -251,6 +262,7 @@ public class Order
     }
 
     [Test]
+    [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task CleanupImplicitSpans_ShouldRemoveAsSpan()
     {
         // Arrange

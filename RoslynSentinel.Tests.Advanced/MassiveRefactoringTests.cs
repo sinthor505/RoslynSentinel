@@ -9,6 +9,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("AdvancedRefactoringTools")] // sentinel:auto-category
 public class MassiveRefactoringTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -91,6 +92,7 @@ public class MassiveRefactoringTests
 
     // ── Bug 62: ExtractMembersToPartial -> Missing Namespace + Usings ─────────
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task BUG_62_ExtractMembersToPartial_IncludesNamespaceAndUsings()
     {
         const string code = @"using System;
@@ -125,6 +127,9 @@ namespace MyApp.Services
     [TestCase(3)]
     [TestCase(4)]
     [TestCase(5)]
+    [Category("RefactoringSignatureTools")] // sentinel:auto-category
+    [Category("SymbolLocation")] // sentinel:auto-category
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task RenameSymbol_ShouldUpdateReferences(int id)
     {
         var source = $"public class C{id} {{ public void OldM{id}() {{}} public void U() {{ OldM{id}(); }} }}";

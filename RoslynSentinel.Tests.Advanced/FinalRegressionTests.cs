@@ -43,6 +43,7 @@ public class FinalRegressionTests
     // BUG-61: SyncTypeAndFilename -> Uses Staging Instead of Direct Write
     // ────────────────────────────────────────────────────────────────────────────
     [Test]
+    [Category("StructuralRefinementEngine")] // sentinel:auto-category
     public async Task BUG_61_SyncTypeAndFilename_UsesStagingMechanism()
     {
         const string code = @"
@@ -64,6 +65,7 @@ public class FinalRegressionTests
     // BUG-57: IntroduceParameterObject -> Warns About Interface Methods
     // ────────────────────────────────────────────────────────────────────────────
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task BUG_57_IntroduceParameterObject_WarnsAboutInterfaceImplementation()
     {
         const string code = @"
@@ -89,6 +91,7 @@ public class FinalRegressionTests
     // BUG-55: OptimizeToValueTask -> Warns About Interface Signature Changes
     // ────────────────────────────────────────────────────────────────────────────
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task BUG_55_OptimizeToValueTask_WarnsAboutInterfaceUpdate()
     {
         const string code = @"

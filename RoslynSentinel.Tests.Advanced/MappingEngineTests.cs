@@ -8,6 +8,7 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("MappingEngine")] // sentinel:auto-category
 public class MappingEngineTests
 {
     private IWorkspaceManager _workspaceManager;

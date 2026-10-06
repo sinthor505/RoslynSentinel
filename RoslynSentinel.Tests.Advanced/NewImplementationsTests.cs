@@ -48,6 +48,7 @@ public class NewImplementationsTests
     // DeadCodeEngine.FindUnusedPrivateMembersAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedPrivateMembers_ReturnsReport_ForUnreferencedPrivateMethod()
     {
         SetSource(@"
@@ -63,6 +64,7 @@ public class MyClass
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedPrivateMembers_NoReport_ForCalledPrivateMethod()
     {
         SetSource(@"
@@ -76,6 +78,7 @@ public class Calculator
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedPrivateMembers_ReturnsReport_ForUnusedPrivateProperty()
     {
         SetSource(@"
@@ -89,6 +92,7 @@ public class Config
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedPrivateMembers_ReturnsEmptyList_ForClassWithNoPrivateMembers()
     {
         SetSource(@"
@@ -101,6 +105,7 @@ public class Empty
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedPrivateMembers_IncludesLineAndColumn()
     {
         SetSource(@"
@@ -120,6 +125,7 @@ public class LineChecker
     // DeadCodeEngine.FindUnusedConstructorsAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedConstructors_SkipsSingleConstructorClass()
     {
         SetSource(@"
@@ -133,6 +139,7 @@ public class Service
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedConstructors_ReportsUnreferencedOverload_WhenMultipleExist()
     {
         SetSource(@"
@@ -149,6 +156,7 @@ public class Widget
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedConstructors_ReturnsEmpty_WhenAllOverloadsAreReferenced()
     {
         SetSource(@"
@@ -170,6 +178,7 @@ public class Pair
     // DeadCodeEngine.CheckForUnusedEventSubscriptionsAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task CheckForUnusedEventSubscriptions_Reports_SubscriptionWithoutUnsubscribe()
     {
         SetSource(@"
@@ -190,6 +199,7 @@ public class Subscriber
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task CheckForUnusedEventSubscriptions_Accepts_MatchingUnsubscribe()
     {
         SetSource(@"
@@ -206,6 +216,7 @@ public class Listener : System.IDisposable
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task CheckForUnusedEventSubscriptions_ReturnsEmpty_WhenNoSubscriptions()
     {
         SetSource(@"
@@ -218,6 +229,7 @@ public class Clean
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task CheckForUnusedEventSubscriptions_Reports_MultipleSubscriptionsWithoutUnsubscribe()
     {
         SetSource(@"
@@ -244,6 +256,7 @@ public class Fan
     // AnalysisEngine.DetectMemoryLeaksAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("ResourceSafetyEngine")] // sentinel:auto-category
     public async Task DetectMemoryLeaks_ReturnsEmpty_WhenFeatureDisabled()
     {
         _config.SetFeatureStatus("MemoryLeaks", false);
@@ -255,6 +268,7 @@ public class Sub { public Sub(Pub p) { p.Tick += Handle; } private void Handle(o
     }
 
     [Test]
+    [Category("ResourceSafetyEngine")] // sentinel:auto-category
     public async Task DetectMemoryLeaks_Flags_ExternalSubscriptionWithoutIDisposable()
     {
         _config.SetFeatureStatus("MemoryLeaks", true);
@@ -275,6 +289,7 @@ public class Dashboard
     }
 
     [Test]
+    [Category("ResourceSafetyEngine")] // sentinel:auto-category
     public async Task DetectMemoryLeaks_NoFlag_WhenClassImplementsIDisposableWithUnsubscribe()
     {
         _config.SetFeatureStatus("MemoryLeaks", true);
@@ -295,6 +310,7 @@ public class Form : System.IDisposable
     // AnalysisEngine.FindPossibleInfiniteLoopsAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindPossibleInfiniteLoops_Detects_WhileTrueWithoutExit()
     {
         SetSource(@"
@@ -314,6 +330,7 @@ public class Pump
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindPossibleInfiniteLoops_DoesNotFlag_WhileTrueWithBreak()
     {
         SetSource(@"
@@ -333,6 +350,7 @@ public class Poller
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindPossibleInfiniteLoops_DoesNotFlag_WhileTrueWithReturn()
     {
         SetSource(@"
@@ -351,6 +369,7 @@ public class RetryLoop
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindPossibleInfiniteLoops_Detects_ForeverForLoop()
     {
         SetSource(@"
@@ -363,6 +382,7 @@ public class Spin
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindPossibleInfiniteLoops_DoesNotFlag_ConditionalWhileLoop()
     {
         SetSource(@"
@@ -382,6 +402,7 @@ public class Reader
     // AnalysisEngine.GenerateCallTreeAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task GenerateCallTree_ListsRootMethodAndDirectCallee()
     {
         SetSource(@"
@@ -397,6 +418,7 @@ public class Math
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task GenerateCallTree_ReturnsNotFound_ForMissingFile()
     {
         SetSource("public class C { }", "C.cs");
@@ -405,6 +427,7 @@ public class Math
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task GenerateCallTree_RespectsDepthLimit()
     {
         SetSource(@"
@@ -425,6 +448,7 @@ public class Chain
     // AnalysisEngine.GenerateEqualityOverridesAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task GenerateEqualityOverrides_AddsEqualsAndGetHashCode_ForFields()
     {
         SetSource(@"
@@ -441,6 +465,7 @@ public class Point
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task GenerateEqualityOverrides_FallsBackToProperties_WhenNoFields()
     {
         SetSource(@"
@@ -456,6 +481,7 @@ public class Person
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task GenerateEqualityOverrides_UsesHashCodeBuilder_ForManyFields()
     {
         // More than 8 fields triggers the HashCode builder pattern
@@ -471,6 +497,7 @@ public class Big
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task GenerateEqualityOverrides_ThrowsForClassWithNoFieldsOrProperties()
     {
         SetSource(@"
@@ -483,6 +510,7 @@ public class Marker { }", "Marker.cs");
     // SecurityEngine.AnalyzeSecurityAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task AnalyzeSecurity_Detects_HardcodedPassword()
     {
         SetSource(@"
@@ -496,6 +524,7 @@ public class Config
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task AnalyzeSecurity_Detects_HardcodedApiKey()
     {
         SetSource(@"
@@ -508,6 +537,7 @@ public class Client
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task AnalyzeSecurity_Detects_WeakHashMd5()
     {
         SetSource(@"
@@ -521,6 +551,7 @@ public class Hasher
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task AnalyzeSecurity_Detects_WeakHashSha1()
     {
         SetSource(@"
@@ -534,6 +565,7 @@ public class Verifier
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task AnalyzeSecurity_Detects_InsecureRandomInSecurityContext()
     {
         // The engine matches the CLOSEST ancestor: VariableDeclaratorSyntax > MethodDeclarationSyntax.
@@ -555,6 +587,7 @@ public class TokenFactory
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task AnalyzeSecurity_ReturnsEmpty_ForCleanCode()
     {
         SetSource(@"
@@ -571,6 +604,7 @@ public class Clean
     // SecurityEngine.CheckForSqlInjectionAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task CheckForSqlInjection_Detects_InterpolatedStringPassedToSqlMethod()
     {
         // The engine checks *arguments* passed directly to named SQL methods (ExecuteNonQuery, Query, etc.)
@@ -600,6 +634,7 @@ public class Repo2
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task CheckForSqlInjection_Detects_DynamicConcatPassedToSqlMethod()
     {
         SetSource(@"
@@ -615,6 +650,7 @@ public class Repo
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task CheckForSqlInjection_ReturnsEmpty_ForLiteralSqlOnly()
     {
         SetSource(@"
@@ -629,6 +665,7 @@ public class SafeRepo
     }
 
     [Test]
+    [Category("SecurityEngine")] // sentinel:auto-category
     public async Task CheckForSqlInjection_ReturnsEmpty_ForNonSqlMethods()
     {
         SetSource(@"
@@ -648,6 +685,7 @@ public class Logger
     // AsyncSafetyEngine.FindTaskYieldUsageAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskYieldUsage_Detects_TaskYieldCall()
     {
         SetSource(@"
@@ -665,6 +703,7 @@ public class Worker
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskYieldUsage_ReturnsEmpty_WhenNoYieldCall()
     {
         SetSource(@"
@@ -681,6 +720,7 @@ public class Quiet
     // AsyncSafetyEngine.FindTaskDelayUsageAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskDelayUsage_Detects_TaskDelayCall()
     {
         SetSource(@"
@@ -695,6 +735,7 @@ public class Sleeper
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskDelayUsage_ReturnsEmpty_ForNoDelay()
     {
         SetSource(@"
@@ -711,6 +752,7 @@ public class Busy
     // AsyncSafetyEngine.FindTaskDelayZeroUsageAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskDelayZeroUsage_Detects_TaskDelayZero()
     {
         SetSource(@"
@@ -725,6 +767,7 @@ public class Yielder
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskDelayZeroUsage_DoesNotFlag_NonZeroDelay()
     {
         SetSource(@"
@@ -738,6 +781,7 @@ public class Waiter
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskDelayZeroUsage_DoesNotFlag_TaskDelayWithNegativeOrNull()
     {
         SetSource(@"
@@ -754,6 +798,7 @@ public class Edge
     // AsyncSafetyEngine.FindTaskWhenAllUsageAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskWhenAllUsage_Detects_MultipleSequentialAwaits()
     {
         SetSource(@"
@@ -775,6 +820,7 @@ public class Loader
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskWhenAllUsage_DoesNotFlag_SingleAwait()
     {
         SetSource(@"
@@ -788,6 +834,7 @@ public class Simple
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskWhenAllUsage_DoesNotFlag_EmptyAsyncMethod()
     {
         SetSource(@"
@@ -804,6 +851,7 @@ public class Shell
     // AdvancedRefactoringEngine.ReplaceStringConcatWithInterpolationAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ReplaceStringConcat_Converts_LiteralPlusVariableToInterpolation()
     {
         SetSource(@"
@@ -818,6 +866,7 @@ public class Greeter
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ReplaceStringConcat_DoesNotChange_PureLiteralConcat()
     {
         // Two string literals concatenated -> Roslyn folds these at compile time; no variable to interpolate
@@ -829,6 +878,7 @@ public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ReplaceStringConcat_DoesNotChange_FileWithNoStringConcat()
     {
         SetSource(@"public class C { public string Hello() => ""Hi""; }", "C.cs");
@@ -840,6 +890,7 @@ public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ReplaceStringConcat_HandlesMultipleConcatExpressions()
     {
         SetSource(@"
@@ -856,6 +907,7 @@ public class Reporter
     // AdvancedRefactoringEngine.OptimizeTaskWaitAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
     public async Task OptimizeTaskWait_Replaces_ResultPropertyWithAwait()
     {
         SetSource(@"
@@ -875,6 +927,7 @@ public class C
     }
 
     [Test]
+    [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
     public async Task OptimizeTaskWait_Replaces_WaitMethodWithAwait()
     {
         SetSource(@"
@@ -892,6 +945,7 @@ public class C
     }
 
     [Test]
+    [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
     public async Task OptimizeTaskWait_Replaces_GetAwaiterGetResult()
     {
         SetSource(@"
@@ -909,6 +963,7 @@ public class C
     }
 
     [Test]
+    [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
     public async Task OptimizeTaskWait_DoesNotChange_AlreadyAsyncMethod()
     {
         SetSource(@"
@@ -930,6 +985,7 @@ public class C
     // GranularRefactoringEngine.IntroduceFieldAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task IntroduceField_ExtractsLiteralToPrivateReadonlyField()
     {
         // "42" is at line 5, column 17 in this exact source layout
@@ -951,6 +1007,7 @@ public class C
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task IntroduceField_ReturnsOriginal_WhenColumnPointsToNonExpression()
     {
         const string source = "public class C { public void M() { } }";
@@ -965,6 +1022,7 @@ public class C
     // GranularRefactoringEngine.IntroduceParameterAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task IntroduceParameter_AddsParameterToContainingMethod()
     {
         const string source = @"public class C
@@ -987,6 +1045,7 @@ public class C
     // GranularRefactoringEngine.IntroduceVariableAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task IntroduceVariable_ExtractsExpressionToLocalVar()
     {
         const string source = @"public class C

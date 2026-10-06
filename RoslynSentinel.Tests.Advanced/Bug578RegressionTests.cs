@@ -12,6 +12,7 @@ namespace RoslynSentinel.Tests.Advanced;
 /// and Bug 8 (generate_fluent_builder record support).
 /// </summary>
 [TestFixture]
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class Bug578RegressionTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -130,6 +131,8 @@ public class Bug578RegressionTests
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
+    [Category("FluentBuilderResult")] // sentinel:auto-category
     public async Task GenerateFluentBuilder_ForRecordWithPrimaryConstructor_GeneratesBuilder()
     {
         const string source = """
@@ -154,6 +157,8 @@ public class Bug578RegressionTests
     }
 
     [Test]
+    [Category("CodeGenerationEngine")] // sentinel:auto-category
+    [Category("FluentBuilderResult")] // sentinel:auto-category
     public async Task GenerateFluentBuilder_ForRegularClass_StillWorks()
     {
         const string source = """

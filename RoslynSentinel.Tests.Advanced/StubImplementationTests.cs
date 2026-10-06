@@ -36,6 +36,7 @@ public class StubImplementationTests
     // IDEStyleEngine.UseNullPropagationAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("IDEStyleEngine")] // sentinel:auto-category
     public async Task UseNullPropagation_ConvertsIfNotNullInvocation_ToConditionalAccess()
     {
         SetSource(@"
@@ -52,6 +53,7 @@ class Foo { public void Bar() {} }
     }
 
     [Test]
+    [Category("IDEStyleEngine")] // sentinel:auto-category
     public async Task UseNullPropagation_WithBlock_ConvertsToConditionalAccess()
     {
         SetSource(@"
@@ -68,6 +70,7 @@ class Foo { public void Process() {} }
     }
 
     [Test]
+    [Category("IDEStyleEngine")] // sentinel:auto-category
     public async Task UseNullPropagation_WithArgs_PreservesArguments()
     {
         SetSource(@"
@@ -83,6 +86,7 @@ class Foo { public void DoWork(int n, string s) {} }
     }
 
     [Test]
+    [Category("IDEStyleEngine")] // sentinel:auto-category
     public async Task UseNullPropagation_NullOnLeft_AlsoConverts()
     {
         SetSource(@"
@@ -98,6 +102,7 @@ class Foo { public void Run() {} }
     }
 
     [Test]
+    [Category("IDEStyleEngine")] // sentinel:auto-category
     public async Task UseNullPropagation_WithElse_LeavesUntouched()
     {
         const string source = @"
@@ -116,6 +121,7 @@ class Foo { public void Go() {} }
     }
 
     [Test]
+    [Category("IDEStyleEngine")] // sentinel:auto-category
     public async Task UseNullPropagation_NoNullChecks_ReturnsUnchanged()
     {
         const string source = @"
@@ -131,6 +137,7 @@ class C {
     }
 
     [Test]
+    [Category("IDEStyleEngine")] // sentinel:auto-category
     public async Task UseNullPropagation_UnknownFile_ReturnsEmpty()
     {
         SetSource("class C {}");
@@ -142,6 +149,7 @@ class C {
     // ModernizationUpgradeEngine.UseSpanForParsingAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task UseSpanForParsing_ReplacesSubstring_WithAsSpanToString()
     {
         SetSource(@"
@@ -157,6 +165,7 @@ class C {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task UseSpanForParsing_SingleArgSubstring_IsConverted()
     {
         SetSource(@"
@@ -172,6 +181,7 @@ class C {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task UseSpanForParsing_MultipleOccurrences_AllConverted()
     {
         SetSource(@"
@@ -189,6 +199,7 @@ class C {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task UseSpanForParsing_ScopedToMethod_DoesNotTouchOtherMethods()
     {
         SetSource(@"
@@ -204,6 +215,7 @@ class C {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task UseSpanForParsing_NoMethodName_ConvertsEntireFile()
     {
         SetSource(@"
@@ -217,6 +229,7 @@ class C {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task UseSpanForParsing_MethodNotFound_ReturnsOriginal()
     {
         const string source = "class C { void M() {} }";
@@ -229,6 +242,7 @@ class C {
     // ModernizationUpgradeEngine.UseThrowExpressionsAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task UseThrowExpressions_ConvertsVarPlusNullCheck_ToCoalesceThrow()
     {
         SetSource(@"
@@ -247,6 +261,7 @@ class C {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task UseThrowExpressions_PreservesSubsequentStatements()
     {
         SetSource(@"
@@ -265,6 +280,7 @@ class C {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task UseThrowExpressions_IfWithElse_LeavesUntouched()
     {
         const string source = @"
@@ -284,6 +300,7 @@ class C {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task UseThrowExpressions_NoNullChecks_ReturnsUnchanged()
     {
         const string source = "class C { void M() { int x = 1; } }";
@@ -293,6 +310,7 @@ class C {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task UseThrowExpressions_UnknownFile_ReturnsEmpty()
     {
         SetSource("class C {}");
@@ -304,6 +322,7 @@ class C {
     // GranularRefactoringEngine.RunMicroRefactoringAsync
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task RunMicroRefactoring_TypeToVar_ConvertsExplicitType()
     {
         SetSource(@"
@@ -318,6 +337,7 @@ class C {
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task RunMicroRefactoring_TypeToVar_LeavesConst_Unchanged()
     {
         const string source = @"
@@ -333,6 +353,7 @@ class C {
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task RunMicroRefactoring_RemoveUnusedLocal_RemovesStatement()
     {
         SetSource(@"
@@ -349,6 +370,7 @@ class C {
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task RunMicroRefactoring_AddBraces_AddsBlockToSingleLinedIf()
     {
         SetSource(@"
@@ -365,6 +387,7 @@ class C {
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task RunMicroRefactoring_RemoveBraces_RemovesSingleStatementBlock()
     {
         SetSource(@"
@@ -383,6 +406,7 @@ class C {
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task RunMicroRefactoring_ExtractConstant_ReplacesLiteralWithConst()
     {
         SetSource(@"
@@ -398,6 +422,7 @@ class C {
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task RunMicroRefactoring_UnknownId_ThrowsArgumentException()
     {
         SetSource("class C { void M() {} }");
@@ -405,6 +430,7 @@ class C {
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task RunMicroRefactoring_UnknownFile_ReturnsEmpty()
     {
         SetSource("class C { void M() {} }");
@@ -416,6 +442,7 @@ class C {
     // Regression: previously-documented stubs now return non-empty results
     // ══════════════════════════════════════════════════════════════
     [Test]
+    [Category("IDEStyleEngine")] // sentinel:auto-category
     public async Task UseNullPropagation_IsNoLongerAStub_ReturnsTransformedCode()
     {
         SetSource(@"
@@ -429,6 +456,7 @@ class Foo { public void Go() {} }
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task UseSpanForParsing_IsNoLongerANoOp_ChangesMadeWhenSubstringPresent()
     {
         SetSource(@"
@@ -442,6 +470,7 @@ class C {
     }
 
     [Test]
+    [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task UseThrowExpressions_IsNoLongerAStub_PerformsCoalesceConversion()
     {
         SetSource(@"
@@ -458,6 +487,7 @@ class C {
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task RunMicroRefactoring_IsNoLongerSimulationMode_DoesNotReturnSimulationString()
     {
         SetSource(@"

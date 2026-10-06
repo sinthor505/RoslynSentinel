@@ -7,6 +7,7 @@ using RoslynSentinel.Engines.Advanced;
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Advanced;
 
+[Category("AntiPatternEngine")] // sentinel:auto-category
 public class QualityTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -36,6 +37,7 @@ public class QualityTests
     }
 
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task AddGuardClauses_Should_Inject_NullChecks()
     {
         var source = "public class S { public void M(string input) { var x = input.Length; } }";
@@ -55,6 +57,7 @@ public class QualityTests
     }
 
     [Test]
+    [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskVoidUsage_Should_Flag_Async_Void()
     {
         var source = "public class C { public async void M() { } }";

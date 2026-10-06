@@ -118,6 +118,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task MoveTypeToFile_Should_ExtractClass_And_RemoveFromOriginal()
     {
         using var adhocWorkspace = new AdhocWorkspace();
@@ -137,6 +138,10 @@ public class OrderService : IOrderService
 
     //[Ignore("API changed: RenameSymbolAsync now requires SymbolHandle and ISymbol")]
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("RenameSymbolResult")] // sentinel:auto-category
+    [Category("SymbolLocation")] // sentinel:auto-category
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task RenameSymbol_Should_UpdateAllReferences()
     {
         //Assert.Ignore("API changed: RenameSymbolAsync now requires SymbolHandle and ISymbol");
@@ -156,6 +161,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task InlineMethod_Should_ReplaceCallSites_With_Expression()
     {
         var source = "public class C { public int GetTen() { return 10; } public void M() { var x = GetTen(); } }";
@@ -167,6 +173,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task ExtensionToStatic_Should_Remove_This_Modifier()
     {
         var source = "public static class Ext { public static void M(this string s) { } }";
@@ -177,6 +184,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task ConvertStaticToExtension_Should_Add_This_Modifier()
     {
         var source = "public static class Ext { public static void M(string s) { } }";
@@ -186,6 +194,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task InlineField_Should_Replace_Field_With_Value()
     {
         var source = "public class C { private const int X = 42; public int M() => X; }";
@@ -196,6 +205,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task ExtractMembersToPartial_Should_Split_Class()
     {
         var source = "public class C { public void M1() {} public void M2() {} }";

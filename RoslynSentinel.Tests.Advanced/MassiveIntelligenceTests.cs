@@ -41,6 +41,8 @@ public class MassiveIntelligenceTests
     [TestCase(3)]
     [TestCase(4)]
     [TestCase(5)]
+    [Category("DiscoveryEngine")] // sentinel:auto-category
+    [Category("SearchResult")] // sentinel:auto-category
     public async Task Search_ShouldFindMethodsByReturnType(int id)
     {
         SetSource($"public class C{id} {{ public int M{id}() => {id}; }}", $"C{id}.cs");
@@ -54,6 +56,8 @@ public class MassiveIntelligenceTests
     [TestCase(3)]
     [TestCase(4)]
     [TestCase(5)]
+    [Category("DiscoveryEngine")] // sentinel:auto-category
+    [Category("SearchResult")] // sentinel:auto-category
     public async Task Search_ShouldFindTypesByAttribute(int id)
     {
         // FindTypesByAttributeAsync resolves the attribute via the compilation's semantic
@@ -67,6 +71,7 @@ public class MassiveIntelligenceTests
     [Test]
     [TestCase("public class A {}", "A")]
     [TestCase("public interface IA {}", "IA")]
+    [Category("InventoryEngine")] // sentinel:auto-category
     public async Task Inventory_ShouldGetCodeInventory(string src, string expectedType)
     {
         SetSource(src, "Test.cs");
@@ -82,6 +87,7 @@ public class MassiveIntelligenceTests
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task DeadCode_ShouldFindUnusedPrivateFields()
     {
         SetSource("public class C { private int _unused; }", "C.cs");
@@ -91,6 +97,7 @@ public class MassiveIntelligenceTests
     }
 
     [Test]
+    [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task DeadCode_ShouldIgnoreUsedPrivateFields()
     {
         SetSource("public class C { private int _used; public int Get() => _used; }", "C.cs");
@@ -99,6 +106,8 @@ public class MassiveIntelligenceTests
     }
 
     [Test]
+    [Category("MetricsEngine")] // sentinel:auto-category
+    [Category("SolutionMetrics")] // sentinel:auto-category
     public async Task Metrics_ShouldComputeSolutionMetrics()
     {
         SetSource("public class C { public void M() { } }", "C.cs");
@@ -108,6 +117,7 @@ public class MassiveIntelligenceTests
     }
 
     [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task Analysis_ShouldDetectLongParameterLists()
     {
         SetSource("public class C { public void M(int a, int b, int c, int d, int e, int f) {} }", "C.cs");

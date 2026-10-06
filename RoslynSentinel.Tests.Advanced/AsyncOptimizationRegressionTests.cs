@@ -7,6 +7,7 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Advanced;
 
 [TestFixture]
+[Category("AsyncOptimizationEngine")] // sentinel:auto-category
 public class AsyncOptimizationRegressionTests
 {
     private IWorkspaceManager _workspaceManager;

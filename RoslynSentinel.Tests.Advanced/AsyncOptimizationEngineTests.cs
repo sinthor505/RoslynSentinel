@@ -4,6 +4,7 @@ using RoslynSentinel.Engines.Advanced;
 
 namespace RoslynSentinel.Tests.Advanced;
 
+[Category("AsyncOptimizationEngine")] // sentinel:auto-category
 internal class AsyncOptimizationEngineTests
 {
     private IWorkspaceManager _workspaceManager;

@@ -13,6 +13,7 @@ namespace RoslynSentinel.Tests.Advanced;
 /// Covers conversion of null checks to null coalescing operators (?? and ??=)
 /// </summary>
 [TestFixture]
+[Category("LogicSimplificationEngine")] // sentinel:auto-category
 public class ConvertToNullCoalescingTests
 {
     private IWorkspaceManager _workspaceManager;
