@@ -191,7 +191,7 @@ public class QualityClass
     public async Task AddConfigureAwaitFalse_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("NonExistent.cs"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("NonExistent.cs"));
     }
 
     // --- RemoveConfigureAwaitFalse ---
@@ -210,7 +210,7 @@ public class QualityClass
     public async Task RemoveConfigureAwaitFalse_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(() => _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync("NonExistent.cs"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync("NonExistent.cs"));
     }
 
     // --- ConvertLockToSemaphoreSlim ---

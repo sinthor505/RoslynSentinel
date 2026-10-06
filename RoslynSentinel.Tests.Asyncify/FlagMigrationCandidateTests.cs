@@ -413,7 +413,7 @@ public class Svc { public int GetCount() => 0; }", "Svc.cs");
     {
         SetSource(@"public class Svc {}", "Svc.cs");
 
-        Assert.ThrowsAsync<System.InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<System.InvalidOperationException>(async () =>
             await _engine.FlagMigrationCandidateAsync("Missing.cs", "Foo", "AsyncBridge"),
             "Should throw when the file is not in the loaded solution.");
     }
@@ -423,7 +423,7 @@ public class Svc { public int GetCount() => 0; }", "Svc.cs");
     {
         SetSource(@"public class Svc { public int GetCount() => 0; }", "Svc.cs");
 
-        Assert.ThrowsAsync<System.InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<System.InvalidOperationException>(async () =>
             await _engine.FlagMigrationCandidateAsync("Svc.cs", "NonExistent", "AsyncBridge"),
             "Should throw when the named method does not exist.");
     }

@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Logging.Abstractions;
+
 using NUnit.Framework;
+
 using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
@@ -99,24 +101,24 @@ public class MakeStaticRewritesCallersTests
     }
 
     [Test]
-    public void AddStatic_RefusesMemberUsingInstanceField_NamingTheField()
+    public async Task AddStatic_RefusesMemberUsingInstanceField_NamingTheField()
     {
         const string eol = "\n";
         var source = Lines(eol, "namespace Example;", "", "public class Counter", "{", "    private int _count;", "", "    public int Next() => _count + 1;", "}");
         var (workspace, engine) = CreateInMemoryTestFixture(("Counter.cs", source));
 
-        var ex = Assert.ThrowsAsync<ToolTargetIneligibleException>(() => engine.ConvertMembersToStaticAsync([Request(workspace, 0, "Counter.cs", "Next")], CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => engine.ConvertMembersToStaticAsync([Request(workspace, 0, "Counter.cs", "Next")], CancellationToken.None));
 
         Assert.That(ex!.Message, Does.Contain("instance field '_count'").And.Contain("Counter.cs:7"));
     }
 
     [Test]
-    public void AddStatic_RefusesMemberCallingAnotherInstanceMemberThroughImplicitThis()
+    public async Task AddStatic_RefusesMemberCallingAnotherInstanceMemberThroughImplicitThis()
     {
         const string eol = "\n";
         var (workspace, engine) = CreateInMemoryTestFixture(("Helper.cs", Lines(eol, HelperLines())));
 
-        var ex = Assert.ThrowsAsync<ToolTargetIneligibleException>(() => engine.ConvertMembersToStaticAsync([Request(workspace, 0, "Helper.cs", "Describe")], CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => engine.ConvertMembersToStaticAsync([Request(workspace, 0, "Helper.cs", "Describe")], CancellationToken.None));
 
         Assert.That(ex!.Message, Does.Contain("instance method (implicit this) 'Normalize'").And.Contain("Helper.cs:7"));
     }
@@ -155,7 +157,7 @@ public class MakeStaticRewritesCallersTests
     }
 
     [Test]
-    public void AddStatic_NullConditionalOnComplexReceiver_IsRefused()
+    public async Task AddStatic_NullConditionalOnComplexReceiver_IsRefused()
     {
         const string eol = "\n";
         var consumer = Lines(eol, ConsumerLines(
@@ -164,7 +166,7 @@ public class MakeStaticRewritesCallersTests
             "    public string? Run(string x) => GetHelper()?.Normalize(x);"));
         var (workspace, engine) = CreateInMemoryTestFixture(("Helper.cs", Lines(eol, HelperLines())), ("Consumer.cs", consumer));
 
-        var ex = Assert.ThrowsAsync<ToolTargetIneligibleException>(() => engine.ConvertMembersToStaticAsync([Request(workspace, 0, "Helper.cs", "Normalize")], CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => engine.ConvertMembersToStaticAsync([Request(workspace, 0, "Helper.cs", "Normalize")], CancellationToken.None));
 
         Assert.That(ex!.Message, Does.Contain("null-conditional receiver").And.Contain("Consumer.cs:"));
     }
@@ -208,14 +210,14 @@ public class MakeStaticRewritesCallersTests
     }
 
     [Test]
-    public void MoveInstanceMemberIntoStaticClass_UsingInstanceState_IsRefusedNamingTheState()
+    public async Task MoveInstanceMemberIntoStaticClass_UsingInstanceState_IsRefusedNamingTheState()
     {
         const string eol = "\n";
         var source = Lines(eol, "namespace Example;", "", "public class Counter", "{", "    private int _count;", "", "    public int Next() => _count + 1;", "}");
         var target = Lines(eol, "namespace Example;", "", "public static class Utils", "{", "    public static int Count() => 0;", "}");
         var (workspace, engine) = CreateInMemoryTestFixture(("Source.cs", source), ("Target.cs", target));
 
-        var ex = Assert.ThrowsAsync<ToolTargetIneligibleException>(() => engine.MoveMemberAsync(workspace.PathOf("Source.cs"), "Counter", ["Next"], "Utils", workspace.PathOf("Target.cs"), CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(() => engine.MoveMemberAsync(workspace.PathOf("Source.cs"), "Counter", ["Next"], "Utils", workspace.PathOf("Target.cs"), CancellationToken.None));
 
         Assert.That(ex!.Message, Does.Contain("static class 'Utils'").And.Contain("instance field '_count'"));
     }

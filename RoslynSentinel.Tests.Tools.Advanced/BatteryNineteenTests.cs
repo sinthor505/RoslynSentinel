@@ -223,7 +223,7 @@ public interface IOrderRepository
     public async Task GenerateAsyncOverload_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<ToolNotFoundException>(() => _asyncOptimizationEngine.GenerateAsyncOverloadAsync("NonExistent.cs", "GetData"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(() => _asyncOptimizationEngine.GenerateAsyncOverloadAsync("NonExistent.cs", "GetData"));
     }
 
     // --- AddValidationToPoco ---

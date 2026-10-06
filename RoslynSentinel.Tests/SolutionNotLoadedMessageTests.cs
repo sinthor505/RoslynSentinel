@@ -78,24 +78,24 @@ public class SolutionNotLoadedMessageTests
     }
 
     [Test]
-    public void GetCurrentSolutionAsync_WithNoSolution_ThrowsFreshStartMessage()
+    public async Task GetCurrentSolutionAsync_WithNoSolution_ThrowsFreshStartMessage()
     {
         using var manager = new FakeWorkspaceManager();
 
-        var ex = Assert.ThrowsAsync<SolutionNotLoadedException>(() => manager.GetCurrentSolutionAsync(CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<SolutionNotLoadedException>(async () => await manager.GetCurrentSolutionAsync(CancellationToken.None));
 
         Assert.That(ex!.Message, Does.Contain("freshly (re)started"));
     }
 
     [Test]
-    public void GetCurrentSolutionAsync_AfterLoadStateMarkedLoaded_ThrowsPlainMessage()
+    public async Task GetCurrentSolutionAsync_AfterLoadStateMarkedLoaded_ThrowsPlainMessage()
     {
         using var manager = new FakeWorkspaceManager
         {
             LoadState = new SolutionLoadState(Started, Started.AddMinutes(1)),
         };
 
-        var ex = Assert.ThrowsAsync<SolutionNotLoadedException>(() => manager.GetCurrentSolutionAsync(CancellationToken.None));
+        var ex = await Assert.ThrowsAsync<SolutionNotLoadedException>(async () => await manager.GetCurrentSolutionAsync(CancellationToken.None));
 
         Assert.That(ex!.Message, Is.EqualTo(SolutionNotLoadedMessage.Plain));
     }

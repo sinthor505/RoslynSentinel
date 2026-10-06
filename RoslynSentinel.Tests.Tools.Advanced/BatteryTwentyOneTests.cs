@@ -167,7 +167,7 @@ public class Worker
     public async Task FixThreadSleep_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _codeHealingEngine.FixThreadSleepAsync("NonExistent.cs"));
+        await Assert.DoesNotThrowAsync(async () => await _codeHealingEngine.FixThreadSleepAsync("NonExistent.cs"));
     }
 
     // --- AddBraces (via SyntaxUpgradeEngine) ---
@@ -187,7 +187,7 @@ public class Worker
     {
         SetSource("public class C {}", "Test.cs");
         // Engine returns null/empty for missing file (tool layer throws)
-        Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.AddBracesAsync("NonExistent.cs"));
+        await Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.AddBracesAsync("NonExistent.cs"));
     }
 
     // --- UpgradePatternMatching (via SyntaxUpgradeEngine) ---
@@ -205,7 +205,7 @@ public class Worker
     public async Task UpgradePatternMatching_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.UpgradePatternMatchingAsync("NonExistent.cs"));
+        await Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.UpgradePatternMatchingAsync("NonExistent.cs"));
     }
 
     // --- UseIndexFromEnd (via CodeStyleEngine) ---
@@ -223,7 +223,7 @@ public class Worker
     public async Task UseIndexFromEnd_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _codeStyleEngine.UseIndexFromEndAsync("NonExistent.cs"));
+        await Assert.DoesNotThrowAsync(async () => await _codeStyleEngine.UseIndexFromEndAsync("NonExistent.cs"));
     }
 
     // --- UseFieldBackedProperties (via SyntaxUpgradeEngine) ---
@@ -241,7 +241,7 @@ public class Worker
     public async Task UseFieldBackedProperties_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync("NonExistent.cs"));
+        await Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync("NonExistent.cs"));
     }
 
     // --- ClassToRecord (via ModernizationEngine) ---
@@ -260,7 +260,7 @@ public class Worker
     public async Task ClassToRecord_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _modernizationEngine.ClassToRecordAsync("NonExistent.cs", "Point"));
+        await Assert.DoesNotThrowAsync(async () => await _modernizationEngine.ClassToRecordAsync("NonExistent.cs", "Point"));
     }
 
     // --- RecordToClass (via ModernizationEngine) ---
@@ -279,7 +279,7 @@ public class Worker
     public async Task RecordToClass_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _modernizationEngine.RecordToClassAsync("NonExistent.cs", "Point"));
+        await Assert.DoesNotThrowAsync(async () => await _modernizationEngine.RecordToClassAsync("NonExistent.cs", "Point"));
     }
 
     // --- SimplifyVerbosity (via CodeStyleEngine) ---
@@ -297,7 +297,7 @@ public class Worker
     public async Task SimplifyVerbosity_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _codeStyleEngine.SimplifyVerbosityAsync("NonExistent.cs"));
+        await Assert.DoesNotThrowAsync(async () => await _codeStyleEngine.SimplifyVerbosityAsync("NonExistent.cs"));
     }
 
     // --- UpgradeThreadSafety (via CodeStyleEngine) ---
@@ -315,7 +315,7 @@ public class Worker
     public async Task UpgradeThreadSafety_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _codeStyleEngine.FixDangerousLockAsync("NonExistent.cs"));
+        await Assert.DoesNotThrowAsync(async () => await _codeStyleEngine.FixDangerousLockAsync("NonExistent.cs"));
     }
 
     // --- UseTimeProvider (via CodeStyleEngine) ---
@@ -333,7 +333,7 @@ public class Worker
     public async Task UseTimeProvider_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _codeStyleEngine.UseTimeProviderAsync("NonExistent.cs"));
+        await Assert.DoesNotThrowAsync(async () => await _codeStyleEngine.UseTimeProviderAsync("NonExistent.cs"));
     }
 
     // --- UpgradeToModernGuards (via SyntaxUpgradeEngine) ---
@@ -353,7 +353,7 @@ public class Worker
     public async Task UpgradeToModernGuards_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("NonExistent.cs"));
+        await Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("NonExistent.cs"));
     }
 
     // --- ConvertSwitchToExpression (via SyntaxUpgradeEngine) ---
@@ -371,7 +371,7 @@ public class Worker
     public async Task ConvertSwitchToExpression_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync("NonExistent.cs", "M"));
+        await Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync("NonExistent.cs", "M"));
     }
 
     // --- CleanupImplicitSpans (via SyntaxUpgradeEngine) ---
@@ -389,7 +389,7 @@ public class Worker
     public async Task CleanupImplicitSpans_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.CleanupImplicitSpansAsync("NonExistent.cs"));
+        await Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.CleanupImplicitSpansAsync("NonExistent.cs"));
     }
 
     // --- ConvertToSourceGeneratedLogging (via ModernLoggingEngine) ---
@@ -407,7 +407,7 @@ public class Worker
     public async Task ConvertToSourceGeneratedLogging_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _modernizationEngine.ConvertToSourceGeneratedLoggingAsync("NonExistent.cs", "OrderService"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _modernizationEngine.ConvertToSourceGeneratedLoggingAsync("NonExistent.cs", "OrderService"));
     }
 
     // --- SimplifyBooleanExpressions (via LogicSimplificationEngine) ---
@@ -425,7 +425,7 @@ public class Worker
     public async Task SimplifyBooleanExpressions_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _logicOptimizationEngine.SimplifyBooleanExpressionsAsync("NonExistent.cs"));
+        await Assert.DoesNotThrowAsync(async () => await _logicOptimizationEngine.SimplifyBooleanExpressionsAsync("NonExistent.cs"));
     }
 
     // --- SimplifyMemberAccess (via IDEStyleEngine) ---
@@ -443,7 +443,7 @@ public class Worker
     public async Task SimplifyMemberAccess_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _ideStyleEngine.SimplifyMemberAccessAsync("NonExistent.cs"));
+        await Assert.DoesNotThrowAsync(async () => await _ideStyleEngine.SimplifyMemberAccessAsync("NonExistent.cs"));
     }
 
     // --- MakeClassImmutable (via ImmutabilityEngine) ---
@@ -462,7 +462,7 @@ public class Worker
     public async Task MakeClassImmutable_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _modernizationEngine.MakeClassImmutableAsync("NonExistent.cs", "Config"));
+        await Assert.DoesNotThrowAsync(async () => await _modernizationEngine.MakeClassImmutableAsync("NonExistent.cs", "Config"));
     }
 
     // --- ConvertStaticToExtension (via AdvancedLogicEngine) ---
@@ -481,7 +481,7 @@ public class Worker
     public async Task ConvertStaticToExtension_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _logicOptimizationEngine.ConvertStaticToExtensionAsync("NonExistent.cs", "Format"));
+        await Assert.DoesNotThrowAsync(async () => await _logicOptimizationEngine.ConvertStaticToExtensionAsync("NonExistent.cs", "Format"));
     }
 
     // --- InvertBooleanLogic ---
@@ -510,7 +510,7 @@ public class Worker
     public async Task OptimizeToValueTask_NonExistentFile_Throws()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _asyncOptimizationEngine.OptimizeToValueTaskAsync("NonExistent.cs", "M"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _asyncOptimizationEngine.OptimizeToValueTaskAsync("NonExistent.cs", "M"));
     }
 
     // --- OptimizeIndependentAwaits (via AsyncOptimizationEngine) ---
@@ -591,6 +591,6 @@ public class Validator
     public async Task UseExceptionExpressions_NonExistentFile_ReturnsNullOrEmpty()
     {
         SetSource("public class C {}", "Test.cs");
-        Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.UseExceptionExpressionsAsync("NonExistent.cs", "M"));
+        await Assert.DoesNotThrowAsync(async () => await _syntaxUpgradeEngine.UseExceptionExpressionsAsync("NonExistent.cs", "M"));
     }
 }

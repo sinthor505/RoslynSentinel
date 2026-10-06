@@ -74,7 +74,7 @@ public class Auditor
     public async Task GenerateXmlDocStubs_FileNotFound_ThrowsFileNotFound()
     {
         SetSource("public class C { }", "Test.cs");
-        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.GenerateXmlDocumentationStubsAsync("Missing.cs"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.GenerateXmlDocumentationStubsAsync("Missing.cs"));
     }
 
     [Test]
@@ -152,7 +152,7 @@ public class CacheWarmupWorker { public void Initialize() { } }");
     public async Task ConvertToBackgroundService_ClassNotFound_ThrowsException()
     {
         SetSource("public class Foo { }", "Test.cs");
-        Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "NonExistentClass"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "NonExistentClass"));
     }
 
     [Test]

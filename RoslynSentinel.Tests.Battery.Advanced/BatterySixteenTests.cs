@@ -27,7 +27,7 @@ public class DependencyInjectionEngineTests
     [Test]
     public async Task AnalyzeDependencies_UnknownFile_ThrowsFileNotFound()
     {
-        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AnalyzeDependenciesAsync("NoSuchFile.cs", "MyClass"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AnalyzeDependenciesAsync("NoSuchFile.cs", "MyClass"));
     }
 
     [Test]

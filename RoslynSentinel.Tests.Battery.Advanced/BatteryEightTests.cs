@@ -71,7 +71,7 @@ namespace ExpressRecipe.Services
     public async Task GetCodeInventory_UnknownFile_ThrowsFileNotFound()
     {
         SetSource("public class Foo { }");
-        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.GetCodeInventoryAsync("NonExistent.cs"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.GetCodeInventoryAsync("NonExistent.cs"));
     }
 }
 
@@ -165,7 +165,7 @@ public class DependencyEngineTests
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", "public class Foo { }")]);
         _workspaceManager.SetTestSolution(solution);
-        Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.GetProjectDependenciesAsync("NonExistent", CancellationToken.None));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.GetProjectDependenciesAsync("NonExistent", CancellationToken.None));
     }
 
     [Test]
@@ -241,7 +241,7 @@ public class UserService
     public async Task ConvertToSourceGeneratedLogging_UnknownClass_ThrowsInvalidOperation()
     {
         SetSource(@"public class Foo { }", "Foo.cs");
-        Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).ConvertToSourceGeneratedLoggingAsync("Foo.cs", "NonExistentClass"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).ConvertToSourceGeneratedLoggingAsync("Foo.cs", "NonExistentClass"));
     }
 }
 

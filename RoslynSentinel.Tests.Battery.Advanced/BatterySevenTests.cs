@@ -181,7 +181,7 @@ public class Processor
 {
     public int Calculate(int x) { return x * 2; }
 }");
-        Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertTupleToClassAsync("Test.cs", "Calculate", "Result"));
+        await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertTupleToClassAsync("Test.cs", "Calculate", "Result"));
     }
 
     [Test]
@@ -204,7 +204,7 @@ public class Product
     public async Task ChangePropertyType_PropertyNotFound_Throws()
     {
         SetSource(@"public class Foo { public int Bar { get; set; } }");
-        Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ChangePropertyTypeAsync("Test.cs", "Foo", "NonExistent", "string"));
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ChangePropertyTypeAsync("Test.cs", "Foo", "NonExistent", "string"));
     }
 
     [Test]

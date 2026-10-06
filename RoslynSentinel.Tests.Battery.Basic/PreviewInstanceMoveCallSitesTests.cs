@@ -506,7 +506,7 @@ public class PreviewInstanceMoveCallSitesTests
                 }
                 """));
 
-        var ex = Assert.ThrowsAsync<ToolInvalidArgumentException>(async () =>
+        var ex = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () =>
             await engine.MoveMemberAsync(
                 workspace.PathOf("ContosoOrders.Core/IncompatibleFieldSourceClass.cs"),
                 "IncompatibleFieldSourceClass", ["ReadShared"], "IncompatibleFieldTargetClass"));
@@ -701,7 +701,7 @@ public class PreviewInstanceMoveCallSitesTests
         Assume.That(row.Status, Is.EqualTo(CallSiteStatus.NoCandidateIntroducible));
         var key = $"{row.FilePath}:{row.Line}";
 
-        var ex = Assert.ThrowsAsync<ToolInvalidArgumentException>(() =>
+        var ex = await Assert.ThrowsAsync<ToolInvalidArgumentException>(() =>
             engine.MoveMemberAsync(
                 workspace.PathOf("ContosoOrders.Core/MoveNewSourceA.cs"),
                 "MoveNewSourceA", ["Foo"], "MoveNewTargetB", null, default, true,

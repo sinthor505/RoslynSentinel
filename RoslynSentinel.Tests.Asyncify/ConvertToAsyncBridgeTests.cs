@@ -267,7 +267,7 @@ public class Service
         return await Task.FromResult(1);
     }
 }", "Service.cs");
-        Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "GetValue"),
             "Should throw when method is already async.");
     }
@@ -286,7 +286,7 @@ public class Service
     }
 }", "Service.cs");
 
-        Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "GetTripsAsync"),
             "Should throw when method name already ends with 'Async'.");
     }
@@ -301,7 +301,7 @@ public abstract class BaseService
     public abstract DataTable GetTrips(int companyId);
 }", "BaseService.cs");
 
-        Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => _engine.ConvertToAsyncBridgeAsync("BaseService.cs", "GetTrips"),
             "Should throw for abstract methods (no body to copy).");
     }
@@ -319,7 +319,7 @@ public class Form1
     }
 }", "Form1.cs");
 
-        Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => _engine.ConvertToAsyncBridgeAsync("Form1.cs", "Button_Click"),
             "Should throw for event handler methods (fixed delegate signature).");
     }
@@ -337,7 +337,7 @@ public class Service
     }
 }", "Service.cs");
 
-        Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "ComputeRef"),
             "Should throw when method has ref parameters.");
     }
@@ -355,7 +355,7 @@ public class Service
     }
 }", "Service.cs");
 
-        Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "TryGet"),
             "Should throw when method has out parameters.");
     }
@@ -380,7 +380,7 @@ public class TripService
     }
 }", "TripService.cs");
 
-        Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips"),
             "Should throw when GetTripsAsync already exists in the class.");
     }
@@ -394,7 +394,7 @@ public class Service
     public int GetValue() => 42;
 }", "Service.cs");
 
-        Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
         () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "NonExistentMethod"),
         "Should throw when the named method does not exist in the file.");
     }
@@ -404,7 +404,7 @@ public class Service
     {
         SetSource(@"public class Dummy {}", "Dummy.cs");
 
-        Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => _engine.ConvertToAsyncBridgeAsync("DoesNotExist.cs", "SomeMethod"),
             "Should throw when the file is not found in the loaded solution.");
     }
@@ -456,7 +456,7 @@ public abstract class Base
     public abstract void DoWork(string arg);
 }", "Base.cs");
 
-        Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<InvalidOperationException>(
             async () => await _engine.ConvertToAsyncBridgeAsync("Base.cs", "DoWork"));
     }
 

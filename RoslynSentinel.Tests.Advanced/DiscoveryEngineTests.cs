@@ -301,7 +301,7 @@ public class Model
     {
         SetSource(@"public class A { }");
 
-        Assert.ThrowsAsync<ToolNotFoundException>(
+        await Assert.ThrowsAsync<ToolNotFoundException>(
             async () => await _discoveryEngine.GetPublicApiSurfaceAsync("NonExistentProject"));
     }
 
