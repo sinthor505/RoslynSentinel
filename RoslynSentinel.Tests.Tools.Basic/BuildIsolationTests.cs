@@ -39,6 +39,7 @@ public class BuildIsolationTests
     }
 
     [Test]
+    [NonParallelizable]
     [Category("BuildEngine")] // sentinel:auto-category
     [Category("DiagnosticEngine")] // sentinel:auto-category
     public async Task RunFullBuildAsync_WithScratchDir_WritesOutputUnderScratchNotProjectBinAsync()

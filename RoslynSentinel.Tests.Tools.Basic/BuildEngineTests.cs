@@ -53,6 +53,7 @@ public class BuildEngineTests
     // RunFullBuildAsync twice back-to-back against the same on-disk Obsolete call site reproduces
     // the regression shape directly: the first call always saw the warning; the second call is the
     // one that silently lost it before BuildEngine.cs's "--no-incremental" fix.
+    [NonParallelizable]
     [Test]
     public async Task RunFullBuildAsync_CalledTwiceWithObsoleteCallSite_BothCallsReportTheWarningAsync()
     {
