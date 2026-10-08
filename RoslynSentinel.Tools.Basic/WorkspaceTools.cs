@@ -134,19 +134,6 @@ public class WorkspaceTools
     // gated behind the "Admin" mode -> see docs/current/ideas/external-drift-hard-blocker.md.
     // Not model-visible by default anymore; reconciliation is an out-of-band operator action now.
 
-    private static string PreviewFileContent(string content)
-    {
-        var lines = content.Split('\n');
-        if (lines.Length <= 20)
-        {
-            return content;
-        }
-
-        var head = lines.Take(10);
-        var tail = lines.TakeLast(10);
-        return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
-    }
-
     // ApplyUnifiedDiff moved to WholeFileWriteTools.cs (gated off the default MCP surface,
     // alongside ApplyDiff) -> see docs/current/design_applyunifieddiff_replace_snippet_v1.md.
     // ReplaceSnippet (below, on this default surface) replaces it for small, exact-text batchEdits.

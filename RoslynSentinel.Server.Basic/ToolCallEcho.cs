@@ -106,6 +106,23 @@ public static class ToolCallEcho
                 if (JsonNode.Parse(text) is JsonObject body && !body.ContainsKey("toolCall"))
                 {
                     body.Insert(0, "toolCall", echo.DeepClone());
+
+                    if (Program.isFreshStartup)
+                    {
+                        var replaceSnippetLimits = new JsonObject
+                        {
+                            ["ReplaceSnippetMaxOldContentChars"] = ReplaceSnippetOptions.MaxOldContentChars,
+                            ["ReplaceSnippetMaxOldContentLines"] = ReplaceSnippetOptions.MaxOldContentLines,
+                            ["ReplaceSnippetMaxNewContentChars"] = ReplaceSnippetOptions.MaxNewContentChars,
+                            ["ReplaceSnippetMaxNewContentLines"] = ReplaceSnippetOptions.MaxNewContentLines
+
+                        };
+
+                        body.Insert(1, "ReplaceSnippetLimits", replaceSnippetLimits);
+
+                        Program.isFreshStartup = false;
+                    }
+
                     return body.ToJsonString(SharedJsonOptions.Compact);
                 }
             }

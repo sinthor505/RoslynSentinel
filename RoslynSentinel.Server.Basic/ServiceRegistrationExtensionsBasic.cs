@@ -80,6 +80,7 @@ public static class RoslynSentinelServiceExtensionsBasic
 
         return services;
     }
+
     /// <summary>
     /// Registers all MCP tool classes (mode-conditional, with optional per-class
     /// <paramref name="includeTools"/>/<paramref name="excludeTools"/> overrides -> see
@@ -91,6 +92,26 @@ public static class RoslynSentinelServiceExtensionsBasic
         HashSet<string> activeModes,
         HashSet<string>? includeTools = null,
         HashSet<string>? excludeTools = null)
+    {
+        RegisterRoslynSentinelToolsBasic(services, mcpBuilder, activeModes, includeTools, excludeTools);
+
+        // Add centralized error filters
+        mcpBuilder.WithRequestFilters(filters =>
+        {
+            AddToolCallEchoFilter(filters);
+            AddArgumentValidationFilter(filters);
+            AddToolErrorFilter(filters);
+            AddWorkspaceNotLoadedFilter(filters);
+            AddDriftFilter(filters);
+            AddLargeResultOffloadFilter(filters);
+            AddOrientationBreakerFilter(filters);
+            AddUnrecoverableBreakerFilter(filters);
+        });
+
+        return mcpBuilder;
+    }
+
+    private static void RegisterRoslynSentinelToolsBasic(IServiceCollection services, IMcpServerBuilder mcpBuilder, HashSet<string> activeModes, HashSet<string>? includeTools = null, HashSet<string>? excludeTools = null)
     {
         var resolvedIncludeTools = includeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var resolvedExcludeTools = excludeTools ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -344,59 +365,88 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<RefactoringExtractionDocsTools>();
             mcpBuilder.WithSentinelTools<RefactoringExtractionDocsTools>();
         }
+    }
 
-        // Centralized SolutionNotLoadedException filter: converts the exception into a CallToolResult
-        // carrying the helpful message rather than a generic "tool call failed" text. It is still an
-        // error (IsError = true), matching the typed SolutionNotLoaded result path.
-        mcpBuilder.WithRequestFilters(filters =>
+    /// <summary>
+    /// Pre-warms MSBuildLocator (which takes ~5–8 s on first call) and optionally auto-loads a solution.
+    /// Should be called after <see cref="Microsoft.Extensions.Hosting.IHost.Build"/> / <see cref="Microsoft.AspNetCore.Builder.WebApplication.Build"/>.
+    /// </summary>
+    public static void WarmupAndAutoLoadBasic(this IServiceProvider services, string? solutionPath, ILogger? logger = null, string? baseRepoDirectory = null)
+    {
+        logger?.LogInformation("Pre-warming MSBuildLocator and workspace manager...");
+        var warmupStart = System.Diagnostics.Stopwatch.StartNew();
+        var workspaceManager = services.GetRequiredService<PersistentWorkspaceManager>();
+        warmupStart.Stop();
+        logger?.LogInformation("MSBuildLocator pre-warm complete in {Ms}ms", warmupStart.ElapsedMilliseconds);
+
+        if (!string.IsNullOrEmpty(baseRepoDirectory))
         {
-            AddToolCallEchoFilter(filters);
-            AddArgumentValidationFilter(filters);
+            workspaceManager.BaseRepoDirectory = baseRepoDirectory;
+        }
 
-            filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
-                ModelContextProtocol.Protocol.CallToolRequestParams,
-                ModelContextProtocol.Protocol.CallToolResult>(
-                async (context, cancellationToken) =>
+        if (!string.IsNullOrEmpty(solutionPath))
+        {
+            logger?.LogInformation("Auto-loading solution: {Path}", solutionPath);
+            _ = workspaceManager.LoadSolutionAsync(solutionPath)
+                .ContinueWith(
+                    t => logger?.LogError(t.Exception!.GetBaseException(), "Auto-load solution failed: {Path}", solutionPath),
+                    TaskContinuationOptions.OnlyOnFaulted);
+        }
+    }
+
+    // Centralized SolutionNotLoadedException filter: converts the exception into a CallToolResult
+    // carrying the helpful message rather than a generic "tool call failed" text. It is still an
+    // error (IsError = true), matching the typed SolutionNotLoaded result path.
+    private static void AddWorkspaceNotLoadedFilter(IMcpRequestFilterBuilder filters)
+    {
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                try
                 {
-                    try
+                    return await next(context, cancellationToken);
+                }
+                catch (SolutionNotLoadedException ex)
+                {
+                    return new ModelContextProtocol.Protocol.CallToolResult
                     {
-                        return await next(context, cancellationToken);
-                    }
-                    catch (SolutionNotLoadedException ex)
-                    {
-                        return new ModelContextProtocol.Protocol.CallToolResult
-                        {
-                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = ex.Message }],
-                            IsError = true,
-                        };
-                    }
-                    catch (Exception ex)
-                    {
-                        // Every tool in this codebase catches its own exceptions and returns a
-                        // SentinelCallToolResult with IsError=true instead of throwing (see
-                        // docs/current/feedback_agent_friendly_error_messages.md), so reaching here
-                        // means an exception escaped that path entirely -> e.g. the MCP SDK's own
-                        // argument-binding failure (a required parameter missing from the call), or
-                        // a genuine bug. Either way it's a real failure, so it must surface as
-                        // IsError=true rather than silently reporting success.
-                        Debug.WriteLine($"Unexpected error in CallTool filter: {ex}");
+                        Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = ex.Message }],
+                        IsError = true,
+                    };
+                }
+                catch (Exception ex)
+                {
+                    // Every tool in this codebase catches its own exceptions and returns a
+                    // SentinelCallToolResult with IsError=true instead of throwing (see
+                    // docs/current/feedback_agent_friendly_error_messages.md), so reaching here
+                    // means an exception escaped that path entirely -> e.g. the MCP SDK's own
+                    // argument-binding failure (a required parameter missing from the call), or
+                    // a genuine bug. Either way it's a real failure, so it must surface as
+                    // IsError=true rather than silently reporting success.
+                    Debug.WriteLine($"Unexpected error in CallTool filter: {ex}");
 
-                        return new ModelContextProtocol.Protocol.CallToolResult
-                        {
-                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = $"Tool call failed unexpectedly ({ex.GetType().Name}): {ex.Message}" }],
-                            IsError = true,
-                        };
-                    }
-                }));
+                    return new ModelContextProtocol.Protocol.CallToolResult
+                    {
+                        Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = $"Tool call failed unexpectedly ({ex.GetType().Name}): {ex.Message}" }],
+                        IsError = true,
+                    };
+                }
+            }));
+    }
 
-            // Domain-failure -> protocol-error sync: every tool in this codebase (by design, see
-            // docs/current/feedback_agent_friendly_error_messages.md) catches its own exceptions
-            // and returns a SentinelCallToolResult<T>/ApplyChangesResult/etc. with IsError=true instead of
-            // throwing, so the MCP SDK's own exception-based IsError detection never fires for a
-            // domain-level failure. Copy the serialized response body's top-level "isError" field onto
-            // CallToolResult.IsError (same name and polarity, so no inversion), so a client relying on the
-            // protocol-level flag (rather than parsing the JSON body) sees an accurate signal.
-            filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+    private static void AddToolErrorFilter(IMcpRequestFilterBuilder filters)
+    {
+
+        // Domain-failure -> protocol-error sync: every tool in this codebase (by design, see
+        // docs/current/feedback_agent_friendly_error_messages.md) catches its own exceptions
+        // and returns a SentinelCallToolResult<T>/ApplyChangesResult/etc. with IsError=true instead of
+        // throwing, so the MCP SDK's own exception-based IsError detection never fires for a
+        // domain-level failure. Copy the serialized response body's top-level "isError" field onto
+        // CallToolResult.IsError (same name and polarity, so no inversion), so a client relying on the
+        // protocol-level flag (rather than parsing the JSON body) sees an accurate signal.
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
                 ModelContextProtocol.Protocol.CallToolRequestParams,
                 ModelContextProtocol.Protocol.CallToolResult>(
                 async (context, cancellationToken) =>
@@ -437,184 +487,192 @@ public static class RoslynSentinelServiceExtensionsBasic
 
                     return result;
                 }));
+    }
 
-            // Diagnostic drift check: after every tool call, compare each tracked document's
-            // in-memory text against the bytes on disk and log any mismatch. This is a content-level
-            // check (unlike GetExternalFileChanges, which depends on the FileSystemWatcher and can miss
-            // events under overflow), so it also catches drift the watcher never reported.
-            filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
-                ModelContextProtocol.Protocol.CallToolRequestParams,
-                ModelContextProtocol.Protocol.CallToolResult>(
-                async (context, cancellationToken) =>
+    private static void AddDriftFilter(IMcpRequestFilterBuilder filters)
+    {
+
+        // Diagnostic drift check: after every tool call, compare each tracked document's
+        // in-memory text against the bytes on disk and log any mismatch. This is a content-level
+        // check (unlike GetExternalFileChanges, which depends on the FileSystemWatcher and can miss
+        // events under overflow), so it also catches drift the watcher never reported.
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                var result = await next(context, cancellationToken);
+
+                try
                 {
-                    var result = await next(context, cancellationToken);
-
-                    try
+                    var workspaceManager = context.Server.Services?.GetService<PersistentWorkspaceManager>();
+                    if (workspaceManager is not null)
                     {
-                        var workspaceManager = context.Server.Services?.GetService<PersistentWorkspaceManager>();
-                        if (workspaceManager is not null)
+                        var drift = await workspaceManager.GetContentExternalFileChangesAsync(cancellationToken);
+                        if (drift.Count > 0)
                         {
-                            var drift = await workspaceManager.GetContentExternalFileChangesAsync(cancellationToken);
-                            if (drift.Count > 0)
-                            {
-                                var logger = context.Server.Services?.GetService<ILogger<PersistentWorkspaceManager>>();
-                                logger?.LogWarning(
-                                    "External file changes detected after tool '{Tool}': {Count} file(s) differ from in-memory workspace state: {Files}",
-                                    context.Params?.Name, drift.Count, string.Join(", ", drift));
-                            }
+                            var logger = context.Server.Services?.GetService<ILogger<PersistentWorkspaceManager>>();
+                            logger?.LogWarning(
+                                "External file changes detected after tool '{Tool}': {Count} file(s) differ from in-memory workspace state: {Files}",
+                                context.Params?.Name, drift.Count, string.Join(", ", drift));
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"External file changes drift check filter failed: {ex}");
-                    }
-
-                    return result;
-                }));
-
-            // Generic large-result offload backstop (see
-            // docs/current/proposal_centralized_large_result_filter.md): sums the length of text
-            // content blocks in the response (no JSON re-serialization) and, above
-            // LargeResultHelper.OffloadThresholdBytes, writes the raw response text verbatim to disk
-            // via LargeResultHelper.StoreRawJsonAsync and replaces the response with a small pointer
-            // (resultId) instead of just logging. This is deliberately shape-agnostic -> it exists
-            // because most tool result types aren't individually wired into the typed
-            // ForPossiblyLargeDataAsync/LargeResultInfo path, so this is the only offload available
-            // for those tools. It coexists with, and does not replace, that typed per-caller path:
-            // a tool already offloaded via ForPossiblyLargeDataAsync has a small response by the
-            // time it reaches here and this filter is a no-op for it. Grep the log for "Large tool
-            // result" to review offenders without parsing full payloads.
-            filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
-                ModelContextProtocol.Protocol.CallToolRequestParams,
-                ModelContextProtocol.Protocol.CallToolResult>(
-                async (context, cancellationToken) =>
+                }
+                catch (Exception ex)
                 {
-                    var result = await next(context, cancellationToken);
+                    Debug.WriteLine($"External file changes drift check filter failed: {ex}");
+                }
 
-                    // GetLargeResult's own switch branches (WorkspaceReadNavigationImpl.cs) already
-                    // shrink-and-verify every list-shaped page against this exact threshold before
-                    // returning, specifically so this filter could never re-catch that response. If
-                    // one still slips past that (e.g. a single oversized record a page of 1 can't
-                    // shrink below), re-wrapping it under a brand-new resultId here would silently
-                    // hand the caller another offload envelope pointing at itself - an
-                    // unterminating fetch/still-too-big/re-offload loop with no visible way out. Skip
-                    // re-offload for this tool specifically and let its own oversized response pass
-                    // through as-is: a legible "still too big" is better than an invisible loop. See
-                    // docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md.
-                    if (context.Params?.Name == "GetLargeResult")
+                return result;
+            }));
+    }
+
+    private static void AddLargeResultOffloadFilter(IMcpRequestFilterBuilder filters)
+    {
+
+        // Generic large-result offload backstop (see
+        // docs/current/proposal_centralized_large_result_filter.md): sums the length of text
+        // content blocks in the response (no JSON re-serialization) and, above
+        // LargeResultHelper.OffloadThresholdBytes, writes the raw response text verbatim to disk
+        // via LargeResultHelper.StoreRawJsonAsync and replaces the response with a small pointer
+        // (resultId) instead of just logging. This is deliberately shape-agnostic -> it exists
+        // because most tool result types aren't individually wired into the typed
+        // ForPossiblyLargeDataAsync/LargeResultInfo path, so this is the only offload available
+        // for those tools. It coexists with, and does not replace, that typed per-caller path:
+        // a tool already offloaded via ForPossiblyLargeDataAsync has a small response by the
+        // time it reaches here and this filter is a no-op for it. Grep the log for "Large tool
+        // result" to review offenders without parsing full payloads.
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                var result = await next(context, cancellationToken);
+
+                // GetLargeResult's own switch branches (WorkspaceReadNavigationImpl.cs) already
+                // shrink-and-verify every list-shaped page against this exact threshold before
+                // returning, specifically so this filter could never re-catch that response. If
+                // one still slips past that (e.g. a single oversized record a page of 1 can't
+                // shrink below), re-wrapping it under a brand-new resultId here would silently
+                // hand the caller another offload envelope pointing at itself - an
+                // unterminating fetch/still-too-big/re-offload loop with no visible way out. Skip
+                // re-offload for this tool specifically and let its own oversized response pass
+                // through as-is: a legible "still too big" is better than an invisible loop. See
+                // docs/current/blockers/blocking_error_getlargeresult_typed_branch_reoffload_loop.md.
+                if (context.Params?.Name == "GetLargeResult")
+                {
+                    return result;
+                }
+
+                try
+                {
+                    if (result.Content is null)
                     {
                         return result;
                     }
 
-                    try
+                    foreach (var block in result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().ToList())
                     {
-                        if (result.Content is null)
+                        var text = block.Text;
+                        if (string.IsNullOrEmpty(text) ||
+                            text.Length <= LargeResultHelper.OffloadThresholdBytes)
                         {
-                            return result;
+                            continue;
                         }
 
-                        foreach (var block in result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().ToList())
+                        var logger = context.Server.Services?.GetService<ILogger<PersistentWorkspaceManager>>();
+                        logger?.LogWarning(
+                            "Large tool result: tool '{Tool}' returned {SizeChars} chars (threshold: {OffloadThresholdBytes})",
+                            context.Params?.Name, text.Length, LargeResultHelper.OffloadThresholdBytes);
+
+                        var workspaceManager = context.Server.Services?.GetService<PersistentWorkspaceManager>();
+                        var solutionRoot = workspaceManager?.GetSolutionRoot();
+                        var stored = await LargeResultHelper.StoreRawJsonAsync(text, solutionRoot, cancellationToken);
+                        if (!stored.offloaded)
                         {
-                            var text = block.Text;
-                            if (string.IsNullOrEmpty(text) ||
-                                text.Length <= LargeResultHelper.OffloadThresholdBytes)
-                            {
-                                continue;
-                            }
+                            // No solution loaded, or the write failed to qualify -> fail closed to
+                            // pass-through rather than blocking the call on a guardrail defect.
+                            continue;
+                        }
 
-                            var logger = context.Server.Services?.GetService<ILogger<PersistentWorkspaceManager>>();
-                            logger?.LogWarning(
-                                "Large tool result: tool '{Tool}' returned {SizeChars} chars (threshold: {OffloadThresholdBytes})",
-                                context.Params?.Name, text.Length, LargeResultHelper.OffloadThresholdBytes);
-
-                            var workspaceManager = context.Server.Services?.GetService<PersistentWorkspaceManager>();
-                            var solutionRoot = workspaceManager?.GetSolutionRoot();
-                            var stored = await LargeResultHelper.StoreRawJsonAsync(text, solutionRoot, cancellationToken);
-                            if (!stored.offloaded)
+                        // Best-effort size hint so the pointer alone tells the model whether this
+                        // is 1 big hit or 300 small ones, instead of forcing a GetLargeResult round
+                        // trip just to find out. Shape-agnostic by design (this filter runs for
+                        // every tool, typed and untyped alike) -> parsed straight from the raw JSON
+                        // rather than any tool-specific DTO. itemCount looks for the envelope's own
+                        // totalRecords first (set by ForPossiblyLargeDataAsync callers), then falls
+                        // back to LargeResultHelper.CountResultItems, which sums every array found
+                        // under successData (recursing through nested objects) - covers untyped
+                        // tools like FindReferences that set SuccessData directly.
+                        // statusMessage is relayed whenever the tool already populated one (e.g.
+                        // FindReferences/SearchSolutionText's SummarizeListResult-based summary) so
+                        // that hint survives the offload instead of being silently dropped.
+                        int? itemCount = null;
+                        string? statusMessage = null;
+                        System.Text.Json.Nodes.JsonNode? listSummary = null;
+                        bool? isError = null;
+                        try
+                        {
+                            var root = System.Text.Json.Nodes.JsonNode.Parse(text)?.AsObject();
+                            if (root != null)
                             {
-                                // No solution loaded, or the write failed to qualify -> fail closed to
-                                // pass-through rather than blocking the call on a guardrail defect.
-                                continue;
-                            }
-
-                            // Best-effort size hint so the pointer alone tells the model whether this
-                            // is 1 big hit or 300 small ones, instead of forcing a GetLargeResult round
-                            // trip just to find out. Shape-agnostic by design (this filter runs for
-                            // every tool, typed and untyped alike) -> parsed straight from the raw JSON
-                            // rather than any tool-specific DTO. itemCount looks for the envelope's own
-                            // totalRecords first (set by ForPossiblyLargeDataAsync callers), then falls
-                            // back to LargeResultHelper.CountResultItems, which sums every array found
-                            // under successData (recursing through nested objects) - covers untyped
-                            // tools like FindReferences that set SuccessData directly.
-                            // statusMessage is relayed whenever the tool already populated one (e.g.
-                            // FindReferences/SearchSolutionText's SummarizeListResult-based summary) so
-                            // that hint survives the offload instead of being silently dropped.
-                            int? itemCount = null;
-                            string? statusMessage = null;
-                            System.Text.Json.Nodes.JsonNode? listSummary = null;
-                            bool? isError = null;
-                            try
-                            {
-                                var root = System.Text.Json.Nodes.JsonNode.Parse(text)?.AsObject();
-                                if (root != null)
+                                if (root.TryGetPropertyValue("isError", out var isErrorNode) &&
+                                    isErrorNode != null &&
+                                    (isErrorNode.GetValueKind() == System.Text.Json.JsonValueKind.True ||
+                                     isErrorNode.GetValueKind() == System.Text.Json.JsonValueKind.False))
                                 {
-                                    if (root.TryGetPropertyValue("isError", out var isErrorNode) &&
-                                        isErrorNode != null &&
-                                        (isErrorNode.GetValueKind() == System.Text.Json.JsonValueKind.True ||
-                                         isErrorNode.GetValueKind() == System.Text.Json.JsonValueKind.False))
-                                    {
-                                        isError = isErrorNode.GetValue<bool>();
-                                    }
+                                    isError = isErrorNode.GetValue<bool>();
+                                }
 
-                                    // listSummary (per-file counts, already capped by SummarizeListResult) is
-                                    // the only per-file hint once a list tool's statusMessage stops repeating
-                                    // the file paths, and a raw offload drops it unless it is relayed here.
-                                    if (root.TryGetPropertyValue("listSummary", out var listSummaryNode) &&
-                                        listSummaryNode is System.Text.Json.Nodes.JsonObject)
-                                    {
-                                        listSummary = listSummaryNode;
-                                    }
+                                // listSummary (per-file counts, already capped by SummarizeListResult) is
+                                // the only per-file hint once a list tool's statusMessage stops repeating
+                                // the file paths, and a raw offload drops it unless it is relayed here.
+                                if (root.TryGetPropertyValue("listSummary", out var listSummaryNode) &&
+                                    listSummaryNode is System.Text.Json.Nodes.JsonObject)
+                                {
+                                    listSummary = listSummaryNode;
+                                }
 
-                                    if (root.TryGetPropertyValue("totalRecords", out var totalRecordsNode) &&
-                                        totalRecordsNode != null &&
-                                        totalRecordsNode.GetValueKind() == System.Text.Json.JsonValueKind.Number)
-                                    {
-                                        itemCount = totalRecordsNode.GetValue<int>();
-                                    }
-                                    else if (root.TryGetPropertyValue("successData", out var successDataNode) && successDataNode != null)
-                                    {
-                                        itemCount = LargeResultHelper.CountResultItems(successDataNode);
-                                    }
+                                if (root.TryGetPropertyValue("totalRecords", out var totalRecordsNode) &&
+                                    totalRecordsNode != null &&
+                                    totalRecordsNode.GetValueKind() == System.Text.Json.JsonValueKind.Number)
+                                {
+                                    itemCount = totalRecordsNode.GetValue<int>();
+                                }
+                                else if (root.TryGetPropertyValue("successData", out var successDataNode) && successDataNode != null)
+                                {
+                                    itemCount = LargeResultHelper.CountResultItems(successDataNode);
+                                }
 
-                                    if (root.TryGetPropertyValue("statusMessage", out var statusMessageNode) &&
-                                        statusMessageNode != null &&
-                                        statusMessageNode.GetValueKind() == System.Text.Json.JsonValueKind.String)
-                                    {
-                                        statusMessage = statusMessageNode.GetValue<string>();
-                                    }
+                                if (root.TryGetPropertyValue("statusMessage", out var statusMessageNode) &&
+                                    statusMessageNode != null &&
+                                    statusMessageNode.GetValueKind() == System.Text.Json.JsonValueKind.String)
+                                {
+                                    statusMessage = statusMessageNode.GetValue<string>();
                                 }
                             }
-                            catch (Exception parseEx)
-                            {
-                                // Best-effort only - never let a parse quirk in some other tool's shape
-                                // block the offload itself, just fall back to no hint.
-                                Debug.WriteLine($"Large result offload size-hint parse failed: {parseEx}");
-                            }
+                        }
+                        catch (Exception parseEx)
+                        {
+                            // Best-effort only - never let a parse quirk in some other tool's shape
+                            // block the offload itself, just fall back to no hint.
+                            Debug.WriteLine($"Large result offload size-hint parse failed: {parseEx}");
+                        }
 
-                            var hint = itemCount is int n ? $" Result contains {n} item(s)." : "";
+                        var hint = itemCount is int n ? $" Result contains {n} item(s)." : "";
 
-                            // Preserve the original body's isError onto the protocol-level IsError
-                            // flag: this filter overwrites result.Content below, so the IsError-sync
-                            // filter (which wraps this one and runs after it returns) would otherwise
-                            // inspect this offload envelope instead of the real body and find no
-                            // "isError" key, silently leaving IsError at its prior (successful)
-                            // value even when the original tool call failed.
-                            if (isError == true)
-                            {
-                                result.IsError = true;
-                            }
+                        // Preserve the original body's isError onto the protocol-level IsError
+                        // flag: this filter overwrites result.Content below, so the IsError-sync
+                        // filter (which wraps this one and runs after it returns) would otherwise
+                        // inspect this offload envelope instead of the real body and find no
+                        // "isError" key, silently leaving IsError at its prior (successful)
+                        // value even when the original tool call failed.
+                        if (isError == true)
+                        {
+                            result.IsError = true;
+                        }
 
-                            result.Content = [new ModelContextProtocol.Protocol.TextContentBlock
+                        result.Content = [new ModelContextProtocol.Protocol.TextContentBlock
                             {
                                 Text = System.Text.Json.JsonSerializer.Serialize(new
                                 {
@@ -628,162 +686,140 @@ public static class RoslynSentinelServiceExtensionsBasic
                                     message = $"Result is {text.Length} bytes (threshold: {LargeResultHelper.OffloadThresholdBytes}).{hint} Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results."
                                 }, RoslynSentinel.Common.SharedJsonOptions.Compact)
                             }];
-                            break;
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Large result offload filter failed: {ex}");
+                }
+
+                return result;
+            }));
+    }
+
+    private static void AddOrientationBreakerFilter(IMcpRequestFilterBuilder filters)
+    {
+
+        // Orientation breaker: after OrientationBreakerTripThreshold consecutive zero-match
+        // Search(mode: text) calls (see PersistentWorkspaceManager.RecordSearchOutcome), restrict
+        // tool calls to a small orienting allowlist until one of them succeeds. Exists because
+        // agents repeatedly retry text search with reworded guesses instead of switching to
+        // ListAll/GetFileOutline, even though both the system prompt and Search(mode: text)'s own
+        // zero-match response already say to do so -> see docs/current/plan-orientation-breaker.md.
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                IAutomaticCircuitBreaker? automaticBreaker = null;
+                var toolName = context.Params?.Name;
+
+                try
+                {
+                    automaticBreaker = context.Server.Services?.GetService<PersistentWorkspaceManager>();
+
+                    if (automaticBreaker is not null && automaticBreaker.IsTripped() &&
+                        toolName is not ("ListAll" or "ListSolutionItems" or "GetFileOutline" or "ReadFile"))
+                    {
+                        return new ModelContextProtocol.Protocol.CallToolResult
+                        {
+                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = automaticBreaker.StateMessage() ?? "Search(mode: text) is DISABLED. You MUST call ListAll(kind: all) or ListSolutionItems(kind: all) now." }],
+                            IsError = true,
+                        };
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Orientation breaker pre-check failed: {ex}");
+                }
+
+                var result = await next(context, cancellationToken);
+
+                try
+                {
+                    if (automaticBreaker is not null)
+                    {
+                        // Search(mode: text)'s own outcome is now recorded inline, from inside
+                        // WorkspaceReadNavigationImpl.SearchSolutionText itself, immediately after
+                        // the match count is known -> not here. Recording it a second time here
+                        // would double-count every call against the trip threshold. Every other
+                        // Search mode (symbol/references/declaration-kind listings) never reaches
+                        // that inline recording path, so only mode: text is excluded here - a
+                        // successful Search(mode: symbol) etc. must still reset the breaker like
+                        // any other tool.
+                        var isTextSearch = toolName == "Search" &&
+                            context.Params?.Arguments is { } args &&
+                            args.TryGetValue("mode", out var modeArg) &&
+                            modeArg.ValueKind == System.Text.Json.JsonValueKind.String &&
+                            modeArg.GetString() == "text";
+
+                        if (!isTextSearch && automaticBreaker.IsTripped() && result.IsError != true)
+                        {
+                            automaticBreaker.Reset();
                         }
                     }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Large result offload filter failed: {ex}");
-                    }
-
-                    return result;
-                }));
-
-            // Orientation breaker: after OrientationBreakerTripThreshold consecutive zero-match
-            // Search(mode: text) calls (see PersistentWorkspaceManager.RecordSearchOutcome), restrict
-            // tool calls to a small orienting allowlist until one of them succeeds. Exists because
-            // agents repeatedly retry text search with reworded guesses instead of switching to
-            // ListAll/GetFileOutline, even though both the system prompt and Search(mode: text)'s own
-            // zero-match response already say to do so -> see docs/current/plan-orientation-breaker.md.
-            filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
-                ModelContextProtocol.Protocol.CallToolRequestParams,
-                ModelContextProtocol.Protocol.CallToolResult>(
-                async (context, cancellationToken) =>
+                }
+                catch (Exception ex)
                 {
-                    IAutomaticCircuitBreaker? automaticBreaker = null;
+                    Debug.WriteLine($"Orientation breaker post-check failed: {ex}");
+                }
+
+                return result;
+            }));
+    }
+
+    private static void AddUnrecoverableBreakerFilter(IMcpRequestFilterBuilder filters)
+    {
+
+        // Unrecoverable breaker: a server-integrity fault (currently a failed operation-blob
+        // write, meaning a change landed on disk with no undo record) halts the session for
+        // good. See IUnrecoverableBreaker for why this is not IManualCircuitBreaker and has no
+        // reset. Registered as its own filter rather than folded into the orientation-breaker
+        // one above so neither can mask the other's message.
+        //
+        // The authoritative enforcement is in PersistentWorkspaceManager.ApplyProposedChangesAsync
+        // -> the write chokepoint, which no mutating tool can bypass. This filter exists so the
+        // refusal also arrives as a protocol-level IsError carrying the specific diagnostic,
+        // rather than only as a per-tool error, and so tools that would do expensive analysis
+        // before their first write fail fast.
+        //
+        // Allowlist rather than a list of mutating tools: a deny-list would silently omit any
+        // tool added later, which is the same forgotten-call-site mode that produced this
+        // defect. Anything not in the allow-list is refused, so the safe default is "refused".
+        // The allow-list is defined by [UnrecoverableBreaker(Allowed)] attributes on tool methods.
+        // These are the tools an operator or agent needs to read the state and stop cleanly.
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                try
+                {
+                    IUnrecoverableBreaker? breaker = context.Server.Services?.GetService<PersistentWorkspaceManager>();
                     var toolName = context.Params?.Name;
 
-                    try
+                    if (breaker is not null && breaker.IsTripped() &&
+                        !UnrecoverableBreakerPolicy.IsAllowed(toolName))
                     {
-                        automaticBreaker = context.Server.Services?.GetService<PersistentWorkspaceManager>();
-
-                        if (automaticBreaker is not null && automaticBreaker.IsTripped() &&
-                            toolName is not ("ListAll" or "ListSolutionItems" or "GetFileOutline" or "ReadFile"))
+                        return new ModelContextProtocol.Protocol.CallToolResult
                         {
-                            return new ModelContextProtocol.Protocol.CallToolResult
-                            {
-                                Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = automaticBreaker.StateMessage() ?? "Search(mode: text) is DISABLED. You MUST call ListAll(kind: all) or ListSolutionItems(kind: all) now." }],
-                                IsError = true,
-                            };
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Orientation breaker pre-check failed: {ex}");
-                    }
-
-                    var result = await next(context, cancellationToken);
-
-                    try
-                    {
-                        if (automaticBreaker is not null)
-                        {
-                            // Search(mode: text)'s own outcome is now recorded inline, from inside
-                            // WorkspaceReadNavigationImpl.SearchSolutionText itself, immediately after
-                            // the match count is known -> not here. Recording it a second time here
-                            // would double-count every call against the trip threshold. Every other
-                            // Search mode (symbol/references/declaration-kind listings) never reaches
-                            // that inline recording path, so only mode: text is excluded here - a
-                            // successful Search(mode: symbol) etc. must still reset the breaker like
-                            // any other tool.
-                            var isTextSearch = toolName == "Search" &&
-                                context.Params?.Arguments is { } args &&
-                                args.TryGetValue("mode", out var modeArg) &&
-                                modeArg.ValueKind == System.Text.Json.JsonValueKind.String &&
-                                modeArg.GetString() == "text";
-
-                            if (!isTextSearch && automaticBreaker.IsTripped() && result.IsError != true)
-                            {
-                                automaticBreaker.Reset();
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Orientation breaker post-check failed: {ex}");
-                    }
-
-                    return result;
-                }));
-
-            // Unrecoverable breaker: a server-integrity fault (currently a failed operation-blob
-            // write, meaning a change landed on disk with no undo record) halts the session for
-            // good. See IUnrecoverableBreaker for why this is not IManualCircuitBreaker and has no
-            // reset. Registered as its own filter rather than folded into the orientation-breaker
-            // one above so neither can mask the other's message.
-            //
-            // The authoritative enforcement is in PersistentWorkspaceManager.ApplyProposedChangesAsync
-            // -> the write chokepoint, which no mutating tool can bypass. This filter exists so the
-            // refusal also arrives as a protocol-level IsError carrying the specific diagnostic,
-            // rather than only as a per-tool error, and so tools that would do expensive analysis
-            // before their first write fail fast.
-            //
-            // Allowlist rather than a list of mutating tools: a deny-list would silently omit any
-            // tool added later, which is the same forgotten-call-site mode that produced this
-            // defect. Anything not in the allow-list is refused, so the safe default is "refused".
-            // The allow-list is defined by [UnrecoverableBreaker(Allowed)] attributes on tool methods.
-            // These are the tools an operator or agent needs to read the state and stop cleanly.
-            filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
-                ModelContextProtocol.Protocol.CallToolRequestParams,
-                ModelContextProtocol.Protocol.CallToolResult>(
-                async (context, cancellationToken) =>
-                {
-                    try
-                    {
-                        IUnrecoverableBreaker? breaker = context.Server.Services?.GetService<PersistentWorkspaceManager>();
-                        var toolName = context.Params?.Name;
-
-                        if (breaker is not null && breaker.IsTripped() &&
-                            !UnrecoverableBreakerPolicy.IsAllowed(toolName))
-                        {
-                            return new ModelContextProtocol.Protocol.CallToolResult
-                            {
-                                Content = [new ModelContextProtocol.Protocol.TextContentBlock
+                            Content = [new ModelContextProtocol.Protocol.TextContentBlock
                                 {
                                     Text = breaker.StateMessage()
                                         ?? "The server recorded an unrecoverable integrity failure. This session cannot continue. Stop and report to the user/operator."
                                 }],
-                                IsError = true,
-                            };
-                        }
+                            IsError = true,
+                        };
                     }
-                    catch (Exception ex)
-                    {
-                        Debug.WriteLine($"Unrecoverable breaker pre-check failed: {ex}");
-                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Unrecoverable breaker pre-check failed: {ex}");
+                }
 
-                    return await next(context, cancellationToken);
-                }));
-        });
-
-        return mcpBuilder;
-    }
-
-    /// <summary>
-    /// Pre-warms MSBuildLocator (which takes ~5–8 s on first call) and optionally auto-loads a solution.
-    /// Should be called after <see cref="Microsoft.Extensions.Hosting.IHost.Build"/> / <see cref="Microsoft.AspNetCore.Builder.WebApplication.Build"/>.
-    /// </summary>
-    public static void WarmupAndAutoLoadBasic(this IServiceProvider services, string? solutionPath, ILogger? logger = null, string? baseRepoDirectory = null)
-    {
-        logger?.LogInformation("Pre-warming MSBuildLocator and workspace manager...");
-        var warmupStart = System.Diagnostics.Stopwatch.StartNew();
-        var workspaceManager = services.GetRequiredService<PersistentWorkspaceManager>();
-        warmupStart.Stop();
-        logger?.LogInformation("MSBuildLocator pre-warm complete in {Ms}ms", warmupStart.ElapsedMilliseconds);
-
-        if (!string.IsNullOrEmpty(baseRepoDirectory))
-        {
-            workspaceManager.BaseRepoDirectory = baseRepoDirectory;
-        }
-
-        if (!string.IsNullOrEmpty(solutionPath))
-        {
-            logger?.LogInformation("Auto-loading solution: {Path}", solutionPath);
-            _ = workspaceManager.LoadSolutionAsync(solutionPath)
-                .ContinueWith(
-                    t => logger?.LogError(t.Exception!.GetBaseException(), "Auto-load solution failed: {Path}", solutionPath),
-                    TaskContinuationOptions.OnlyOnFaulted);
-        }
+                return await next(context, cancellationToken);
+            }));
     }
 
     /// <summary>
@@ -927,5 +963,9 @@ public static class RoslynSentinelServiceExtensionsBasic
                 AppendAliasNotes(result, aliasNotes);
                 return result;
             }));
+    }
+
+    private static void CreateFreshServerMessage()
+    {
     }
 }

@@ -68,19 +68,6 @@ public class AdvancedRefactoringTools
         _logger = logger;
     }
 
-    private static string PreviewFileContent(string content)
-    {
-        var lines = content.Split('\n');
-        if (lines.Length <= 20)
-        {
-            return content;
-        }
-
-        var head = lines.Take(10);
-        var tail = lines.TakeLast(10);
-        return string.Join("\n", head) + "\n// ... (truncated)\n" + string.Join("\n", tail);
-    }
-
     private async Task<string?> GetFileNotInSolutionError(FilePathWrapper filePath, CancellationToken cancellationToken)
     {
         System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DocumentId>? ids;
@@ -370,7 +357,7 @@ public class AdvancedRefactoringTools
                     Diff = apply.Diff,
                     Description = apply.ChangeId is not null ? $"{description}. Call UndoLastApply(changeId=\"{apply.ChangeId}\") to revert if needed." : description,
                     AffectedFiles = changes.Keys.Select(kvp => Path.GetFileName(kvp)).ToList(),
-                    ContentPreviews = changes.ToDictionary(kvp => Path.GetFileName(kvp.Key)!, kvp => PreviewFileContent(kvp.Value))
+                    ContentPreviews = changes.ToDictionary(kvp => Path.GetFileName(kvp.Key)!, kvp => RefactoringToolHelpers.PreviewFileContent(kvp.Value))
                 }
             };
         }

@@ -23,4 +23,23 @@ public class TestServiceProviderBuilderTests
         var reader = provider!.GetRequiredService<IWorkspaceReader>();
         Assert.That(reader, Is.Not.Null);
     }
+
+    [Test]
+    public void Build_ResolvesFullBasicEngineGraph_WithCustomConfiguration()
+    {
+        // ValidateOnBuild=true means BuildServiceProvider itself throws AggregateException if any
+        // registered service's dependency graph doesn't resolve - this is the same check that
+        // caught the IWorkspaceReader gap at real server startup (see
+        // docs/current/blockers/resolved/blocking_error_iworkspacereader_never_registered_server_wont_start.md).
+        IServiceProvider? provider = null;
+        Assert.DoesNotThrow(() => provider = TestServiceProviderBuilder.Build(services =>
+        {
+            // Add a dummy singleton to confirm that custom configuration is applied.
+            services.AddSingleton(new object());
+        }));
+        Assert.That(provider, Is.Not.Null);
+        // Confirm that the dummy singleton is present.
+        var dummy = provider!.GetRequiredService<object>();
+        Assert.That(dummy, Is.Not.Null);
+    }
 }
