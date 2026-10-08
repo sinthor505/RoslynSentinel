@@ -47,6 +47,25 @@ public class DiagnosticEngineTests
     }
 
     [Test]
+    public async Task GetFileDiagnostics_FileWithOneKnownError_ReportsExactlyOneErrorAndNoWarnings()
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            [("Test.cs", "public class Foo { void Bar() { NoSuchMethod(); } }")]);
+
+        var fake = new FakeWorkspaceManager();
+        fake.SetTestSolution(solution);
+        var engine = new DiagnosticEngine(fake);
+
+        var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
+
+        Assert.That(result.Data.Errors, Is.EqualTo(1));
+        Assert.That(result.Data.Warnings, Is.Zero);
+        Assert.That(result.Data.Details, Has.Count.EqualTo(1));
+        Assert.That(result.Data.Details[0].Severity, Is.EqualTo("Error"));
+    }
+
+    [Test]
     public async Task GetFileDiagnostics_WithNoSolutionLoaded_ThrowsSolutionNotLoaded()
     {
         var fake = new FakeWorkspaceManager();

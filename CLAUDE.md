@@ -243,6 +243,9 @@ Check the literal error's named identifier against the actual source before theo
 ## Working conventions
 
 - Build (0 errors) before committing.
+- Tests use **NUnit 5.0, not 4.6**: `Assert.ThrowsAsync`/`CatchAsync`/`DoesNotThrowAsync` must be
+  `await`ed (an un-awaited one silently asserts nothing), and `TestDelegate`/`AsyncTestDelegate` are
+  gone. Details: memory `reference_nunit5_test_conventions.md`.
 - Never leak raw exceptions, stack traces, or internal paths into a tool's `ResultError` - catch at the
   tool boundary and return a structured, actionable error.
 - Any unhandled `CS####` surfacing during automated work gets a writeup in `docs/current/blockers/`

@@ -24,7 +24,7 @@ pointers: open the cited file for detail, and trust the source over this doc if 
 Sibling projects cannot see each other (`Tools.Advanced` cannot reach `Tools.Basic`; `Engines.Basic`
 cannot reach `Engines.Advanced`): shared helpers go one layer down. Advanced builds on Basic, it is
 not a fork. Tests: `Tests`, `Tests.Basic/Advanced`, `Tests.Tools.Basic/Advanced`, `Tests.Server`,
-`Tests.Integration`, `Tests.Battery.Basic/Advanced`, `Tests.ModelEval`, `Tests.PlanStepRunner`,
+`Tests.Battery.Basic/Advanced`, `Tests.ModelEval`, `Tests.PlanStepRunner`,
 `Tests.SubAgent`, `Tests.Asyncify`.
 
 Tool-class shapes vary: some Basic tools are a thin class over an `*Impl` (e.g. `WorkspaceTools` ->
