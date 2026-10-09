@@ -5,9 +5,9 @@
     exact flags.
 
 .DESCRIPTION
-    build.ps1 refreshes the HTTP fallback copy as a side effect of a successful solution build, but
-    that means the only documented way to check or recover it is to run a full build. This script is
-    a single, verb-based front door for that:
+    build.ps1 does not touch any HTTP server. This script is the verb-based front door for checking,
+    (re)building and recovering the shared HTTP fallback copy (bin-vscode\Advanced.Http). For a
+    throwaway HTTP instance with its own mode/tools/port, use Launch-RoslynSentinelHttpServer.ps1.
 
       status  - Is the HTTP copy's process running, AND is it actually answering on the port?
                 (These can disagree - a running process that isn't listening, or that's listening
@@ -19,8 +19,10 @@
                 mtime and whether its process is currently running.
       start   - Start the HTTP copy if it isn't already running. Leaves an already-running copy
                 alone. Reuses the existing binary as-is; does not rebuild it.
-      restart - Stop the HTTP copy (if running) and start it again. Reuses the existing binary.
-      build   - Rebuild the HTTP copy from current source (delegates to build.ps1), then restart it.
+      restart - Stop the HTTP copy (if running), rebuild it from current source (Build-HttpCopy), then start it. The
+                copy stays stopped if the build fails (the running exe locks its DLLs, so the stop
+                must come first).
+      build   - Solution build via build.ps1, then `restart` (so the HTTP copy is rebuilt and started).
                 Use this after pulling new commits. Per-window stdio instances are unaffected - each
                 rebuilds itself on its own next launch via roslynsentinel-mcp-launch.ps1.
       stopallstdio  - Stop every currently-running per-window stdio instance. Before killing each
@@ -46,7 +48,7 @@
     Must match the "url" in .vscode/mcp.json - if you change one, change the other.
 
 .PARAMETER Force
-    For build: passed through to build.ps1 to stop locking processes without prompting.
+    For build: passed through to build.ps1's solution build to stop locking processes without prompting.
 
 .EXAMPLE
     .\roslynsentinel-vscode-control.ps1 status
@@ -54,12 +56,12 @@
 
 .EXAMPLE
     .\roslynsentinel-vscode-control.ps1 restart
-    Stop and restart the HTTP copy using the binary already on disk.
+    Stop the HTTP copy, rebuild it from current source, and start it again.
 
 .EXAMPLE
     .\roslynsentinel-vscode-control.ps1 build -Force
-    Rebuild the HTTP fallback copy from source, then restart it. Per-window stdio instances rebuild
-    themselves independently on their own next launch.
+    Run the solution build via build.ps1, then restart (rebuild + start) the HTTP fallback copy.
+    Per-window stdio instances rebuild themselves independently on their own next launch.
 #>
 [CmdletBinding()]
 param(
@@ -162,6 +164,26 @@ function Wait-HttpCopyReachable {
     return $false, $detail
 }
 
+# Builds the Advanced server into the shared HTTP copy folder (same recipe as
+# roslynsentinel-mcp-launch.ps1). The copy must be stopped first: a running exe locks its DLLs.
+function Build-HttpCopy {
+    $project = Join-Path $repoRoot 'RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj'
+    Write-Host "Building HTTP copy into $httpOutDir ..." -ForegroundColor Cyan
+    $previousEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $buildOutput = & dotnet build $project -c Debug -o $httpOutDir --nologo -v quiet 2>&1
+    $buildExit = $LASTEXITCODE
+    $ErrorActionPreference = $previousEap
+
+    if ($buildExit -ne 0) {
+        Write-Warning "HTTP copy build failed (exit $buildExit); the copy was NOT started. Last 30 lines of output:"
+        $buildOutput | Select-Object -Last 30 | ForEach-Object { Write-Host "  $_" }
+        return $false
+    }
+    Write-Host "HTTP copy built." -ForegroundColor Green
+    return $true
+}
+
 function Show-Status {
     Write-Host ""
     Write-Host "=== VS Code Advanced (stdio) per-window instances ===" -ForegroundColor Cyan
@@ -187,7 +209,7 @@ function Show-Status {
     Write-Host ""
     Write-Host "=== VS Code Advanced.Http copy (port $VSCodePort) ===" -ForegroundColor Cyan
     if (-not (Test-Path $httpExe)) {
-        Write-Warning "$httpExe does not exist. Run '.\roslynsentinel-vscode-control.ps1 build' first."
+        Write-Warning "$httpExe does not exist. Run '.\roslynsentinel-vscode-control.ps1 restart' (it builds the copy first)."
         return $false
     }
 
@@ -217,7 +239,7 @@ function Start-HttpCopy {
     param([switch]$AssumeStopped)
 
     if (-not (Test-Path $httpExe)) {
-        Write-Warning "$httpExe does not exist. Run '.\roslynsentinel-vscode-control.ps1 build' first."
+        Write-Warning "$httpExe does not exist. Run '.\roslynsentinel-vscode-control.ps1 restart' (it builds the copy first)."
         return $false
     }
 
@@ -291,6 +313,8 @@ function Restart-HttpCopy {
         $existing | Stop-Process -Force
         foreach ($proc in $existing) { Wait-ProcessExited -Process $proc }
     }
+    # Stop must come first: the running exe locks the output DLLs.
+    if (-not (Build-HttpCopy)) { return $false }
     return Start-HttpCopy -AssumeStopped
 }
 
@@ -374,9 +398,11 @@ switch ($Action) {
         exit ([int](-not $ok))
     }
     'build' {
-        Write-Host "=== Rebuilding VS Code HTTP-fallback copy from source (delegates to build.ps1) ===" -ForegroundColor Cyan
+        Write-Host "=== Solution build (build.ps1), then rebuild + restart the VS Code HTTP-fallback copy ===" -ForegroundColor Cyan
         & (Join-Path $PSScriptRoot 'build.ps1') -Flavor Solution -Mode Build -Force:$Force
-        exit $LASTEXITCODE
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        $ok = Restart-HttpCopy
+        exit ([int](-not $ok))
     }
     'stopallstdio' {
         Write-Host ""
