@@ -111,30 +111,6 @@ public sealed class DiffApplyException : ToolException
     }
 }
 
-/// <summary>
-/// A search ran to completion but matched zero results. Distinct from
-/// <see cref="ToolNotFoundException"/>: the search itself is valid and did run -> it just found
-/// nothing, and the caller (an agent guessing at names/patterns) should treat that as a signal to
-/// browse instead of retrying near-identical guesses. Maps to <see cref="ToolErrorCode.NoMatches"/>.
-/// </summary>
-public sealed class NoSearchMatchesException : ToolException
-{
-    public override string ErrorCode => ToolErrorCode.NoMatches;
-
-    /// <summary>
-    /// True when this exact call's RecordSearchOutcome invocation is what flipped the
-    /// orientation breaker open -> lets the catch site attach a one-time Finding to the
-    /// triggering call's own result instead of only a pre-check on the next call.
-    /// </summary>
-    public bool JustTrippedBreaker
-    {
-        get; init;
-    }
-
-    public NoSearchMatchesException(string message) : base(message)
-    {
-    }
-}
 
 /// <summary>
 /// The requested operation has no real implementation behind it -> the engine method is a
@@ -222,8 +198,8 @@ public static class ToolErrorMapper
 /// <summary>
 /// A <c>fileGlob</c> argument used a construct <c>GlobToRegex</c> doesn't support, or used a
 /// supported construct with malformed syntax (e.g. an unterminated <c>{</c> or <c>[</c>). Distinct
-/// from <see cref="NoSearchMatchesException"/>: the glob itself is rejected before it's ever matched
-/// against any file, rather than silently compiling to a pattern that matches nothing. Maps to
+/// from a search that matches nothing (which is a successful, empty result): the glob itself is rejected
+/// before it's ever matched against any file, rather than silently compiling to a pattern that matches nothing. Maps to
 /// <see cref="ToolErrorCode.InvalidArgument"/>.
 /// </summary>
 public sealed class GlobSyntaxException : ToolException

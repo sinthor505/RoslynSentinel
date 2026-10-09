@@ -754,6 +754,36 @@ public static class RoslynSentinelServiceExtensionsBasic
             }));
     }
 
+    private static bool IsEmptyListAllResult(string? toolName, ModelContextProtocol.Protocol.CallToolResult result)
+    {
+        if (toolName != "ListAll")
+        {
+            return false;
+        }
+
+        foreach (var block in result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>())
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(block.Text);
+                var root = doc.RootElement;
+                if (root.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                    root.TryGetProperty("totalRecords", out var prop) &&
+                    prop.ValueKind == System.Text.Json.JsonValueKind.Number &&
+                    prop.GetInt32() == 0)
+                {
+                    return true;
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Continue if parse fails
+            }
+        }
+
+        return false;
+    }
+
     private static void AddOrientationBreakerFilter(IMcpRequestFilterBuilder filters)
     {
 
@@ -810,7 +840,8 @@ public static class RoslynSentinelServiceExtensionsBasic
                             modeArg.ValueKind == System.Text.Json.JsonValueKind.String &&
                             modeArg.GetString() == "text";
 
-                        if (!isTextSearch && automaticBreaker.IsTripped() && result.IsError != true)
+                        // An empty ListAll (nothing listed) is not orientation: it must not lift the breaker.
+                        if (!isTextSearch && automaticBreaker.IsTripped() && result.IsError != true && !IsEmptyListAllResult(toolName, result))
                         {
                             automaticBreaker.Reset();
                         }

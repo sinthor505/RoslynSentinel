@@ -401,15 +401,6 @@ public class WorkspaceReadNavigationImpl
                 }
             }
 
-            if (!string.IsNullOrEmpty(nameFilter) && totalMatches == 0)
-            {
-                return new SentinelCallToolResult<object>
-                {
-                    IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.NoMatches, $"No {(kindFilter ?? "declaration")} named '{nameFilter}' found ({(exactMatch ? "exact" : "substring")} match). Use mode: symbol to search every kind at once" + (exactMatch ? ", or pass exactMatch: false for a substring match." : "."))
-                };
-            }
-
             var result = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                 entries,
                 solutionRoot,
@@ -427,6 +418,15 @@ public class WorkspaceReadNavigationImpl
                     HasMoreData = true,
                     ListSummary = summary,
                     WarningDetails = $"Truncated: showing the first {entries.Count} of {totalMatches} matching declarations (cap {maxItems}), spread over {summary.FileCount} files and {summary.ByProject!.Count} projects - listSummary.byProject and listSummary.byFile (top {summary.ByFile.Count} files, {summary.TruncatedFileCount} more files not shown) count ALL matches, use them to pick where to look. Narrow with query (name filter) or projectName, or use mode: symbol. For all callers/implementations of a symbol use FindReferences or QuerySymbolRelationships; for orientation use ListAll or GetFileOutline."
+                };
+            }
+
+            if (totalMatches == 0 && !string.IsNullOrEmpty(nameFilter))
+            {
+                return result with
+                {
+                    TotalRecords = 0,
+                    StatusMessage = $"No {(kindFilter ?? "declaration")} named '{nameFilter}' found ({(exactMatch ? "exact" : "substring")} match). Use mode: symbol to search every kind at once" + (exactMatch ? ", or pass exactMatch: false for a substring match." : ".")
                 };
             }
 
@@ -595,7 +595,16 @@ public class WorkspaceReadNavigationImpl
                     "Use ListAll to browse the solution's structure, ProjectDoc to read plan/handoff/documentation files directly, or " +
                     "GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
                 var justTripped = _workspaceManager.RecordSearchOutcome(0);
-                throw new NoSearchMatchesException(string.Join(" ", warnings)) { JustTrippedBreaker = justTripped };
+                var emptyResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
+                    new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid),
+                    _workspaceManager.GetSolutionRoot(),
+                    typeof(TextSearchMatch).Name,
+                    ResultWrapperType.TextSearchMatchList,
+                    totalRecords: 0,
+                    workspaceVersion: _workspaceManager.WorkspaceVersion,
+                    statusMessage: string.Join(" ", warnings),
+                    cancellationToken: cancellationToken);
+                return emptyResult with { IsError = false, Findings = justTripped ? new[] { new Finding("OrientationBreaker", string.Join(" ", warnings), FindingSeverity.Warning) } : Array.Empty<Finding>() };
             }
             else if (totalResultCount >= maxResults)
             {
@@ -619,18 +628,6 @@ public class WorkspaceReadNavigationImpl
                 listSummary: matchSummary,
                 cancellationToken: cancellationToken);
             return searchResult with { WarningDetails = warning };
-        }
-        catch (NoSearchMatchesException ex)
-        {
-            var findings = ex.JustTrippedBreaker
-                ? new[] { new Finding("OrientationBreaker", ex.Message, FindingSeverity.Warning) }
-                : Array.Empty<Finding>();
-            return new SentinelCallToolResult<object>()
-            {
-                IsError = true,
-                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Search (mode: text)"),
-                Findings = findings
-            };
         }
         catch (Exception ex)
         {

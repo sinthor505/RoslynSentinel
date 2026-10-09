@@ -238,14 +238,15 @@ public class BatteryTwentyTests
     }
 
     [Test]
-    public async Task SearchSolutionText_NoMatches_ReturnsNoMatchesError()
+    public async Task SearchSolutionText_NoMatches_ReturnsEmptySuccess()
     {
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "ThisPatternDoesNotAppearAnywhere");
 
-        Assert.That(!result.IsError, Is.False, "Zero matches in both modes should surface as a failure so the protocol-level IsError filter picks it up.");
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
-        Assert.That(result.ErrorData?.Message, Does.Contain("ProjectDoc"));
+        Assert.That(result.IsError, Is.False, "zero matches is a valid empty answer, not a failure");
+        Assert.That(result.TotalRecords, Is.EqualTo(0));
+        Assert.That(result.StatusMessage, Does.Contain("No matches were found"));
+        Assert.That(result.StatusMessage, Does.Contain("ProjectDoc"));
     }
 
     [Test]
@@ -291,23 +292,25 @@ public class BatteryTwentyTests
         Assert.That(entries, Has.Count.EqualTo(2));
         Assert.That(entries, Has.All.Property("Name").Contains("Order"));
 
-        // Now verify that exact match with default (exactMatch=true) returns NoMatches for "Order"
+        // exact match with default (exactMatch=true) finds nothing for "Order": a valid empty answer, not an error
         var resultExact = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.method, query: "Order");
-        Assert.That(resultExact.IsError, Is.True);
-        Assert.That(resultExact.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
+        Assert.That(!resultExact.IsError, Is.True);
+        Assert.That(resultExact.TotalRecords, Is.EqualTo(0));
+        Assert.That(resultExact.StatusMessage, Does.Contain("Order"));
     }
 
 
     [Test]
-    public async Task SearchKindMode_QueryMatchesNothing_ReturnsNoMatchesNamingTheKindAsync()
+    public async Task SearchKindMode_QueryMatchesNothing_ReturnsEmptySuccessNamingTheKindAsync()
     {
         SetSource("namespace TestProj; public class Order { }", "Test.cs");
         var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.@class, query: "Nope");
 
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
-        Assert.That(result.ErrorData.Message, Does.Contain("class"));
-        Assert.That(result.ErrorData.Message, Does.Contain("mode: symbol"));
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.TotalRecords, Is.EqualTo(0));
+        Assert.That(result.StatusMessage, Does.Contain("class"));
+        Assert.That(result.StatusMessage, Does.Contain("Nope"));
+        Assert.That(result.StatusMessage, Does.Contain("mode: symbol"));
     }
 
 

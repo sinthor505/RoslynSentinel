@@ -109,7 +109,7 @@ public class OrientationBreakerFilterTests
         for (int i = 0; i < 3; i++)
         {
             var result = await SearchForGuaranteedNoMatchAsync($"ZzzNoSuchTokenAnywhereInTheSolution{i}Zzz");
-            Assert.That(result.IsError, Is.True, "Zero matches should surface as a protocol-level error so the agent treats it as a signal to change approach.");
+            Assert.That(result.IsError, Is.Not.True, "a zero-match search is a valid empty answer; only the breaker's refusal is an error");
         }
 
         // ListWorkspaceSolutions is not on the allowlist (ListAll, ListSolutionItems, GetFileOutline, ReadFile).
@@ -132,7 +132,7 @@ public class OrientationBreakerFilterTests
         }
 
         Assert.That(thirdResult, Is.Not.Null);
-        Assert.That(thirdResult!.IsError, Is.True, "The 3rd consecutive zero-match call should itself surface as an error.");
+        Assert.That(thirdResult!.IsError, Is.Not.True, "The 3rd zero-match call is a valid empty answer; the trip is reported via findings, not isError.");
 
         var text = string.Join(" ", thirdResult.Content.OfType<TextContentBlock>().Select(b => b.Text));
         using var doc = JsonDocument.Parse(text);
@@ -145,6 +145,23 @@ public class OrientationBreakerFilterTests
         Assert.That(firstFinding.GetProperty("source").GetString(), Is.EqualTo("OrientationBreaker"));
         Assert.That(firstFinding.GetProperty("message").GetString(), Does.Contain("ListAll"));
     }
+
+    [Test]
+    public async Task TrippedBreaker_StaysTrippedAfterSuccessfulZeroMatchSearch()
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            var result = await SearchForGuaranteedNoMatchAsync($"ZzzNoSuchTokenAnywhereInTheSolution{i}Zzz");
+            Assert.That(result.IsError, Is.Not.True, "zero-match searches are valid empty answers");
+        }
+
+        // The breaker should be tripped now. Make another zero-match search to confirm it is still tripped.
+        var fourthResult = await SearchForGuaranteedNoMatchAsync("ZzzNoSuchTokenAnywhereInTheSolution3Zzz");
+        Assert.That(fourthResult.IsError, Is.True, "Once tripped, a zero-match search should be refusal, not a success");
+        var text = string.Join(" ", fourthResult.Content.OfType<TextContentBlock>().Select(b => b.Text));
+        Assert.That(text, Does.Contain("DISABLED"), "the trip is in effect, so this search is now disabled");
+    }
+
     [Test]
     public async Task TrippedBreaker_AllowlistedToolStillReachesRealTool_AndResetsBreaker()
     {
@@ -166,6 +183,42 @@ public class OrientationBreakerFilterTests
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
         Assert.That(afterReset.IsError, Is.Not.True, "A successful allowlisted call while tripped should auto-reset the breaker.");
+    }
+
+    [Test]
+    public async Task TrippedBreaker_EmptyListAll_DoesNotResetBreaker()
+    {
+        for (int i = 0; i < 3; i++)
+        {
+            await SearchForGuaranteedNoMatchAsync($"ZzzNoSuchTokenAnywhereInTheSolution{i}Zzz");
+        }
+
+        // Call ListAll with a non-existent project name so it returns totalRecords: 0
+        var emptyListAllResult = await _client.CallToolAsync(
+            "ListAll",
+            new Dictionary<string, object?> { ["reason"] = "test message", ["projectName"] = "NoSuchProjectZzz" }!,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        // Verify that the result itself shows totalRecords: 0
+        var listAllText = string.Join(" ", emptyListAllResult.Content.OfType<TextContentBlock>().Select(b => b.Text));
+        using (var doc = JsonDocument.Parse(listAllText))
+        {
+            Assert.That(doc.RootElement.TryGetProperty("totalRecords", out var prop), Is.True,
+                "ListAll result must have totalRecords property");
+            Assert.That(prop.GetInt32(), Is.EqualTo(0),
+                "ListAll with non-existent project must return totalRecords: 0");
+        }
+
+        // Now try a previously-blocked non-allowlisted tool. It should still be blocked
+        // because ListAll with empty result should NOT reset the breaker.
+        var blocked = await _client.CallToolAsync(
+            "ListWorkspaceSolutions",
+            new Dictionary<string, object?> { ["reason"] = "test message", ["workspacePath"] = _fixture.SolutionDirectory }!,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(blocked.IsError, Is.True, "An empty ListAll should not reset the breaker.");
+        var blockedText = string.Join(" ", blocked.Content.OfType<TextContentBlock>().Select(b => b.Text));
+        Assert.That(blockedText, Does.Contain("Search(mode: text) is DISABLED"));
     }
 
     [Test]

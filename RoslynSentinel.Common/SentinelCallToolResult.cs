@@ -54,10 +54,7 @@ public static class ToolErrorCode
     public const string SessionHalted = "SessionHalted";
 
     /// <summary>
-    /// A search ran successfully but matched zero results. Distinct from <see cref="NotFound"/>
-    /// (a named lookup whose input didn't resolve) -> the search itself is valid, it just found
-    /// nothing. Surfaced as an error (rather than a quiet success with a warning) so a client
-    /// relying on the protocol-level IsError flag sees it as a signal to change approach.
+    /// Legacy code: a search that matches nothing is now a successful, empty result (isError false, totalRecords 0, a statusMessage with guidance). Kept for compatibility; no tool returns it.
     /// </summary>
     public const string NoMatches = "NoMatches";
 
