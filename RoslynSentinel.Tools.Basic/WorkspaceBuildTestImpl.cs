@@ -203,9 +203,12 @@ public class WorkspaceBuildTestImpl
             var buildSummary = SummarizeBuild(buildResult);
             if (buildResult.Outcome == BuildOutcome.Failed)
             {
+                // Surface external drift: a failed build may be caused by a file changed on disk under us.
+                var driftHint = DriftMessages.BuildHint(_workspaceManager.GetExternalFileChanges());
+                var failureMessage = driftHint is not null ? buildSummary + " " + driftHint : buildSummary;
                 // The build ran and failed: report isError:true like RunTest does for an incomplete run, but keep the
                 // BuildResult payload (inline or offloaded) so the caller still gets the error details.
-                return buildToolResult with { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, buildSummary), Findings = result.Findings, StatusMessage = buildSummary };
+                return buildToolResult with { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, failureMessage), Findings = result.Findings, StatusMessage = failureMessage };
             }
 
             return buildToolResult with { Findings = result.Findings, StatusMessage = buildSummary };
