@@ -99,6 +99,37 @@ public static class LargeResultHelper
         await File.WriteAllTextAsync(filePathString, JsonSerializer.Serialize(wrapper, JsonOptions), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken);
         return (true, new FilePathWrapper(filePathString, validated: true), resultId);
     }
+
+    public const int RetentionDays = 7;
+
+
+    /// <summary>
+    /// Deletes largeresult_*.json files directly inside &lt;solutionRoot&gt;/.roslynsentinel/largeresults whose
+    /// LastWriteTimeUtc is older than maxAge. Non-recursive. Never throws; a file held by another session is skipped.
+    /// Returns the number of files deleted.
+    /// </summary>
+    public static int SweepExpired(string solutionRoot, TimeSpan maxAge, DateTime? utcNow = null)
+    {
+        var count = 0;
+        try
+        {
+            var dir = Path.Combine(solutionRoot, ".roslynsentinel", "largeresults");
+            if (!Directory.Exists(dir)) { return 0; }
+            var cutoff = (utcNow ?? DateTime.UtcNow) - maxAge;
+            foreach (var file in Directory.EnumerateFiles(dir, "largeresult_*.json", SearchOption.TopDirectoryOnly))
+            {
+                try
+                {
+                    if (File.GetLastWriteTimeUtc(file) < cutoff) { File.Delete(file); count++; }
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return count;
+    }
 }
 
 public record ResultWrapper
