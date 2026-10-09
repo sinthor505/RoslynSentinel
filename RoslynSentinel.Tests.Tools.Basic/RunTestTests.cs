@@ -55,23 +55,31 @@ public class RunTestTests
         """;
 
     private const string FailingTestWithOutputSource = """
-        using System;
         using Xunit;
+        using Xunit.Abstractions;
 
         namespace ContosoOrders.Tests;
 
         public class FailingOutputTests
         {
+            private readonly ITestOutputHelper _output;
+
+            public FailingOutputTests(ITestOutputHelper output)
+            {
+                _output = output;
+            }
+
             [Fact]
             public void WritesOutputThenFails()
             {
-                Console.WriteLine("marker-4f2a");
+                _output.WriteLine("RSMARKER-FAILED-OUTPUT-42");
                 Assert.Fail("boom");
             }
 
             [Fact]
             public void Passes()
             {
+                _output.WriteLine("RSMARKER-PASSED");
                 Assert.True(true);
             }
         }
@@ -94,13 +102,8 @@ public class RunTestTests
         Assert.That(data.RunSucceeded, Is.False);
         Assert.That(data.FailedCount, Is.EqualTo(1));
         
-        // Verify that the TestCaseResult record has the Output property, and that failed tests can carry it.
-        // (Note: whether the xUnit adapter populates StdOut in the TRX file for Console.WriteLine is orthogonal
-        // to the Output field's existence and transmission - the test here verifies the field is there, not that
-        // it is populated for all output sources.)
         var failedTest = data.Results.Single(r => r.Outcome == TestOutcome.Failed);
-        // Output property exists (could be null if xUnit doesn't capture console output in TRX).
-        Assert.That(failedTest, Has.Property("Output"), "TestCaseResult should have Output property");
+        Assert.That(failedTest.Output, Is.Not.Null.And.Contains("RSMARKER-FAILED-OUTPUT-42"), "Failed test should have captured output with the marker");
         
         var passedTests = data.Results.Where(r => r.Outcome == TestOutcome.Passed).ToList();
         Assert.That(passedTests, Is.Not.Empty, "Should have at least one passed test");
