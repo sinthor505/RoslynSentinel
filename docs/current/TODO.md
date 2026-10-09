@@ -333,21 +333,6 @@ in `SymbolNavigationEngine.cs`/`ImpactAnalyzer.cs`/`BasicRefactoringEngine.cs`/`
 distinct sites). Explicitly lower priority per the plan; deferred as its own follow-up sweep — see
 the finding doc's raw audit findings for the full site inventory.
 
-## Mutating tools don't return the resulting content, forcing a separate `ReadFile` to see the outcome
-
-**Found:** 2026-08-19/20, raised by Andrew while reviewing the `Build` tool implementation session.
-
-**What:** per Andrew, mutating tools originally returned the entire new file content on every write,
-which bloated agent context (especially on large files) — this was since changed so mutating tools
-return only a `changeId`/success flag, not the resulting text. The consequence: an agent that wants
-to confirm what its edit actually produced (e.g. see the replaced member's new text, confirm a
-generated signature looks right) must make a *second* tool call (`ReadFile`/`GetMethodSource`) to see
-it — which defeats the original goal of reducing tool-call count and context bloat, just shifts the
-cost from "one bloated response" to "two calls, one of which re-fetches what was just written."
-`docs/plan-symbol-tool-hardening-v1.md`'s own review guidance ("flag it if the agent never re-reads
-the file/method afterward to confirm... actually look correct") implicitly assumes agents *should* be
-re-reading after every write, which is exactly the extra round-trip this behavior forces.
-
 ## `RoslynSentinel.Advanced`'s NormalizeWhitespace occurrences never got a follow-up sweep — Basic side now fully closed 2026-08-27; Advanced still open
 
 **Correction 2026-10-03:** the "Basic side fully closed" claim was wrong. `MemberRefactoringEngine.cs` (the former `RefactoringEngine`) still had about 20 whole-root `NormalizeWholeSubtreeWhitespace` sites in every `MoveMember` path. Those were fixed in 4dedc78, a23c581 and 4aa2dc2; see `blockers/resolved/blocking_error_movemember_reformats_entire_source_and_caller_files.md`. Two calls remain in `ExtractMethodAsync` and have not been classified. `MethodSignature`'s call-site rewrite still re-serializes whole caller files. `finding_normalizewhitespace_container_reformat_risk_inventory.md` lists neither file and still names the deleted `AdvancedStructuralEngine`. Re-grep for whole-root calls in both Engines projects before scoping this sweep.

@@ -1,6 +1,6 @@
 # Plan: cut result noise and misleading wording in Member and RunTest
 
-**Status:** DRAFT 2026-10-08 (amended same day for user decision A: compact result by default; revised again: changed content offloaded to a large-result file, inline only by opt-in, see `plan_mutating_tools_compact_result_default.md`). Priority P2. Source: journal digest `.claude/journal/digest_20261008-1509.md` (window 2026-10-02..08), clusters "Member", "Member addMember", and "RunTest".
+**Status:** IMPLEMENTED 2026-10-08 (commits 8c987c9, e198987, cd281bb, 2247d17; deviations in the Implementation notes section at the end). Was: DRAFT 2026-10-08 (amended same day for user decision A: compact result by default; revised again: changed content offloaded to a large-result file, inline only by opt-in, see `plan_mutating_tools_compact_result_default.md`). Priority P2. Source: journal digest `.claude/journal/digest_20261008-1509.md` (window 2026-10-02..08), clusters "Member", "Member addMember", and "RunTest".
 
 ## Problem
 
@@ -126,3 +126,15 @@ Hypothesis to prove first (see step 3): existing tests assert `Does.Contain("bat
 - Step 3 is deliberately test-first because the journal may reflect an old binary or a different code path than the engine strings; do not edit steps 4-6 for a method whose test already passes.
 - Step 7's first test needs a fixture solution containing a test project that fails to compile; confirm `dotnet test` on it yields no TRX (`TestRunEngine.RunOneProjectAsync` returns the "No TRX result file was produced" detail) before relying on the assertion text.
 - Whether the cause of `[ebd9923b:L9]` (exit 1 with 1 passed, 0 failed) is another project's non-zero exit is a hypothesis (the entry says "likely"); step 7's wording names the projects precisely so the next occurrence is diagnosable rather than guessed.
+
+
+## Implementation notes (2026-10-08)
+
+Commits: 8c987c9 (Steps 1-2 sites), e198987 (Step 2 tests in MemberAddResultSizeTests), cd281bb (Steps 3-6), 2247d17 (Steps 7-9). Full solution RunTest: 3405 tests, 0 failed, 26 skipped.
+
+Deviations:
+- Steps 3-6: all three batch methods (ApplyModifierBatchAsync 6 literals, ApplyAttributeBatchAsync 8, ApplyBaseTypeBatchAsync 3) failed their test-first tests and were fixed. Tests live in RoslynSentinel.Tests.Tools.Basic/MemberBatchErrorWordingTests.cs (6 tests, collision plus target-not-found).
+- Not fixed, found adjacent: the same _symbolNavigationEngine. Resolve corruption remains in MemberRefactoringEngine.cs doc comments (~1046, 1051, 1651, 2993) and in a runtime exception message in AddMemberAsync (~2952).
+- Step 7: the fixture test uses ToolScope.project with the ContosoOrders.Tests project and a non-compiling file added via TestSolutionFixture.AddFileToSolution.
+- Step 8: the two lock tests named ...Async are synchronous void methods (CS1998 otherwise).
+- Step 9: docs/generated/architecture_tools.md was regenerated because descriptions are embedded in it.

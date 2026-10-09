@@ -1,6 +1,6 @@
 # Plan: mutating tools return a compact result by default; changed content is offloaded, inline only by opt-in
 
-**Status:** DRAFT 2026-10-08 (revised same day for the user decision: content OFFLOADED by default, inline echo OPT-IN pending an impact review). Priority P1 (do first; `plan_mutating_and_test_tool_result_noise.md` Steps 1-2 depend on Steps 1-2 here). Source: journal digest `.claude/journal/digest_20261008-1509.md` (window 2026-10-02..08), clusters "Member", "Member addMember"; user decision A.
+**Status:** IMPLEMENTED 2026-10-08 (commits 8c987c9, 2ac8461, e198987; deviations in the Implementation notes section at the end). Was: DRAFT 2026-10-08 (revised same day for the user decision: content OFFLOADED by default, inline echo OPT-IN pending an impact review). Priority P1 (do first; `plan_mutating_and_test_tool_result_noise.md` Steps 1-2 depend on Steps 1-2 here). Source: journal digest `.claude/journal/digest_20261008-1509.md` (window 2026-10-02..08), clusters "Member", "Member addMember"; user decision A.
 
 ## Problem
 
@@ -146,3 +146,18 @@ Default for a real apply (`Validated == true && DryRun == false`):
 - Gate rule `Validated && !DryRun` relies on every echo site setting `Validated: true`; a future tool that forgets it leaks the echo again (fails open, the safer direction for a first rollout).
 - JSON clients that read `changedContent` after a real apply break by design; the env var restores it. No in-repo reader exists beyond the two no-stage tests above; external readers are unknown.
 - Step 9's discriminator relies on no-stage sites passing a non-null `ChangedContent`; verified for the sites listed in Problem by their first lines only, so the implementer must open each before trusting it.
+
+
+## Implementation notes (2026-10-08)
+
+Commits: 8c987c9 (central gate, offload, wiring in Advanced/Generation/Structural, tests), 2ac8461 (Extraction/Signature wiring), e198987 (Step 9 not_written plus tool-level tests). Full solution RunTest after all work: 3405 tests, 0 failed, 26 skipped.
+
+Deviations:
+- ChangedContent keeps [JsonIgnore(WhenWritingNull)] (not an unconditional ignore) so dry-run and no-stage JSON still emits changedContent; serialization tests added.
+- ChangedContentResultId and LineChanges were wired into ALL real-apply sites (Advanced 27 sites, not the 14 listed; Structural 17; ExtractionDocs; Signature; GenerationTools.GenerateMapping). Not wired: WorkspaceProjectManagementImpl.SafeDeleteUnusedSymbol (calls ApplyProposedChangesAsync directly with a local changeId; no content file is written).
+- NotEchoedHint shows the GetLargeResult hint whenever a result id exists, even when Validated is false, because the non-echo real-apply sites expose an id without Validated: true. The Note names GetLargeResult first, then ReadFile (plan said ReadFile first).
+- Step 9 (not_written) was folded in with the plan's discriminator.
+- ChangedContentOptions.cs was created with LF line endings (repo uses CRLF).
+- Retention/cleanup of .roslynsentinel/largeresults is untouched: 1112 files / 128.9 MB at completion.
+- StructuredContentDataTagTests is skipped in the current environment (4 skipped); it was not exercised.
+- Live verification (Step 8 server restart) is left to the parent; the running server was stale throughout.

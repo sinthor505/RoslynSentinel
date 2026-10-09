@@ -5,6 +5,12 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Mutating tools don't return the resulting content, forcing a separate ReadFile - resolved by design decision 2026-10-08
+
+**Found:** 2026-08-19/20. **Resolved 2026-10-08.** Mutating tools do not echo content on a real apply: the result carries lineChanges, a changedContentResultId for the stored content (fetch with GetLargeResult) and a Note naming the read-back tools (ReadFile, GetMethodSource, Member(view)). Dry runs and autoStage:false results keep the inline changedContent. Inline echo on a real apply is a server-wide opt-in (env var ROSLYNSENTINEL_INLINE_CHANGED_CONTENT, ChangedContentOptions.InlineOnApply), pending an impact review. See plan_mutating_tools_compact_result_default.md; commits 8c987c9, 2ac8461, e198987.
+
+Original report (trimmed): an agent wanting to confirm what its edit produced had to make a second call to ReadFile/GetMethodSource, shifting cost from one bloated response to two calls.
+
 ## Move syntax-side target resolution out of `SymbolNavigationEngine`, then unify hint formatters - implemented 2026-10-03
 
 This was found on 2026-10-02 while reviewing the refactoring-engine reorg (72a327e).
