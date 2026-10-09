@@ -235,6 +235,35 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    public async Task Git_Diff_UnstagedAlias_MatchesWorkingAsync()
+    {
+        File.WriteAllText(Path.Combine(_repoDir, "README.md"), "hello again");
+
+        var unstagedResult = await _gitTools.Git(reason: "test message", GitOperation.diff, target: "unstaged");
+        var workingResult = await _gitTools.Git(reason: "test message", GitOperation.diff, target: "working");
+
+        Assert.That(!unstagedResult.IsError, Is.True);
+        var unstagedDiff = (GitDiffResult)unstagedResult.SuccessData!;
+        Assert.That(!unstagedDiff.IsError, Is.True, unstagedDiff.Error);
+
+        Assert.That(!workingResult.IsError, Is.True);
+        var workingDiff = (GitDiffResult)workingResult.SuccessData!;
+        Assert.That(!workingDiff.IsError, Is.True, workingDiff.Error);
+
+        Assert.That(unstagedDiff.Diff, Is.EqualTo(workingDiff.Diff), "unstaged and working should produce identical diffs");
+        Assert.That(unstagedDiff.Diff, Does.Contain("README.md"), "diff should contain the modified file name");
+    }
+
+    [Test]
+    public async Task Git_Diff_UnknownRef_ListsValidTargetsAsync()
+    {
+        var result = await _gitTools.Git(reason: "test message", GitOperation.diff, target: "nosuchref");
+
+        Assert.That(result.IsError, Is.True, "diff with unknown ref should be an error");
+        Assert.That(result.ErrorData?.Message, Does.Contain("Valid diff targets"), "error message should list valid diff targets");
+    }
+
+    [Test]
     [Category("GitCommitEntry")] // sentinel:auto-category
     [Category("GitLogResult")] // sentinel:auto-category
     [Category("GitResult")] // sentinel:auto-category

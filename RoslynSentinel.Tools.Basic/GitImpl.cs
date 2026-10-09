@@ -960,6 +960,10 @@ public class GitImpl : IGitOperations
             else if (stat)
                 args.Add("--stat=200");
 
+            // unstaged is an alias of working (uncommitted changes vs the index)
+            if (string.Equals(target, "unstaged", StringComparison.OrdinalIgnoreCase))
+                target = "working";
+
             if (target == "staged")
             {
                 args.Add("--cached");
@@ -994,7 +998,16 @@ public class GitImpl : IGitOperations
             var diffRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);
 
             if (diffRaw.ExitCode != 0)
-                return new GitDiffResult { IsError = true, Error = CleanGitStderr(diffRaw.Stderr) };
+            {
+                var cleaned = CleanGitStderr(diffRaw.Stderr);
+                if (diffRaw.Stderr.Contains("bad revision", StringComparison.OrdinalIgnoreCase) ||
+                    diffRaw.Stderr.Contains("unknown revision", StringComparison.OrdinalIgnoreCase) ||
+                    diffRaw.Stderr.Contains("ambiguous argument", StringComparison.OrdinalIgnoreCase))
+                {
+                    cleaned += " Valid diff targets: working (alias: unstaged) = uncommitted changes vs the index; staged = index vs HEAD; a commit, branch or tag = working tree vs that ref; refA..refB or refA...refB = a range.";
+                }
+                return new GitDiffResult { IsError = true, Error = cleaned };
+            }
 
             var filesChanged = CountChangedFiles(diffRaw.Stdout, nameOnly, stat);
             var diff = CapToUtf8Bytes(diffRaw.Stdout, maxBytes);

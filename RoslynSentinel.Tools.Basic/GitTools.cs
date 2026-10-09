@@ -31,7 +31,7 @@ public class GitTools
         GitOperation operation,
         [Description("log: number of commits (max 100).")]
         int count = 20,
-        [Description("diff: \"working\", \"staged\", a commit hash, or a range. show: a commit hash/ref. Prefer 'ref'.")]
+        [Description("diff: \"working\" (alias \"unstaged\"), \"staged\", a commit hash, branch or tag, or a range refA..refB. show: a commit hash/ref. Prefer 'ref'.")]
         string target = "working",
         [Description("diff/show/log: paths to restrict to (CSV string or JSON array).")]
         string? paths = null,
