@@ -531,12 +531,40 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             }
 
             _lastSuccessfulLoadUtc = DateTime.UtcNow;
+            SweepLargeResultsInBackground(GetSolutionRoot());
         }
         finally
         {
             Interlocked.Decrement(ref _loadsInProgress);
             _solutionLock.Release();
         }
+    }
+
+    private void SweepLargeResultsInBackground(string? solutionRoot)
+    {
+        if (string.IsNullOrWhiteSpace(solutionRoot))
+        {
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var deleted = LargeResultHelper.SweepExpired(solutionRoot, TimeSpan.FromDays(LargeResultHelper.RetentionDays));
+                if (deleted > 0)
+                {
+                    if (_logger.IsEnabled(LogLevel.Information))
+                    {
+                        _logger.LogInformation("Swept {DeletedCount} expired large result files from {SolutionRoot}", deleted, solutionRoot);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Large-result sweep failed under {Root}", solutionRoot);
+            }
+        });
     }
 
     private void SetupWatcher(string directory)
