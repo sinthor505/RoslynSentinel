@@ -46,7 +46,7 @@ public static class DriftMessages
         var count = externalChanges.Count;
         var summary = SummarizeFiles(externalChanges);
         return $"{count} file(s) changed on disk outside this server ({summary}). " +
-               "If these errors do not match your edits, run ListExternalDiskChanges and " +
+               "If these errors do not match your edits, run ExternalFileDrift(operation: List) and " +
                "Git(operation: status) before changing code.";
     }
 

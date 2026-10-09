@@ -154,11 +154,11 @@ public class DriftMessagesTests
     }
 
     [Test]
-    public void BuildHint_NonEmpty_ContainsListExternalDiskChanges()
+    public void BuildHint_NonEmpty_NamesExternalFileDrift()
     {
         var changes = new List<string> { @"C:\path\file.cs" };
         var result = DriftMessages.BuildHint(changes);
-        Assert.That(result, Does.Contain("ListExternalDiskChanges"));
+        Assert.That(result, Does.Contain("ExternalFileDrift"));
     }
 
     [Test]
