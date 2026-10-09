@@ -42,6 +42,7 @@ public static class ServerBuildInfo
 public static class ToolErrorCode
 {
     public const string SolutionNotLoaded = "SolutionNotLoaded";
+    public const string SolutionLoadTimeout = "SolutionLoadTimeout";
     public const string FeatureDisabled = "FeatureDisabled";
     public const string InvalidArgument = "InvalidArgument";
     public const string BuildFailed = "BuildFailed";

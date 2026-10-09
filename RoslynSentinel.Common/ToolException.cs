@@ -37,6 +37,21 @@ public sealed class SolutionNotLoadedException : ToolException
 }
 
 /// <summary>
+/// A call to <see cref="ISolutionProvider.WaitForLoadAsync"/> or
+/// <see cref="GetCurrentSolutionAsync"/> waited for the solution to load but exceeded the
+/// timeout limit before it completed. The load is still running on the server and may succeed;
+/// the caller should retry after a delay. Maps to <see cref="ToolErrorCode.SolutionLoadTimeout"/>.
+/// </summary>
+public sealed class SolutionLoadTimeoutException : ToolException
+{
+    public override string ErrorCode => ToolErrorCode.SolutionLoadTimeout;
+
+    public SolutionLoadTimeoutException(string message) : base(message)
+    {
+    }
+}
+
+/// <summary>
 /// A named file, symbol, type, member, project, or context snippet does not exist where the
 /// caller said it would. Distinct from a confirmed "zero results" answer -> the lookup never ran
 /// because its input didn't resolve. Maps to <see cref="ToolErrorCode.NotFound"/>.
