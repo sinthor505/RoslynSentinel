@@ -1,3 +1,5 @@
+> **Superseded 2026-10-09 by plan_external_file_drift_tool_and_halt_stamping.md; the Admin-mode gating described here was retired and the recovery tools merged into ExternalFileDrift**
+
 # Idea: Remove external-drift reconciliation tools; make drift a hard blocker
 
 Status: **finalized, ready to implement**. Filed 2026-09-01, finalized 2026-08-31.

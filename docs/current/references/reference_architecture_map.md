@@ -1,6 +1,6 @@
 # Reference: RoslynSentinel architecture map (where things live, how a call flows)
 
-**Status:** CURRENT 2026-10-04. Verified against source on this date; cites symbols, not line numbers (lines drift). Sections marked "not re-verified" were carried from older docs.
+**Status:** CURRENT 2026-10-09. Verified against source on this date; cites symbols, not line numbers (lines drift). Sections marked "not re-verified" were carried from older docs.
 
 ## Purpose
 
@@ -75,16 +75,36 @@ First added is outermost. In registration order:
 1. `AddToolCallEchoFilter`: stamps call id/tool/args onto the first text block (outermost, sees final content).
 2. `AddArgumentValidationFilter` (`Server.Basic/ToolArgumentValidator.cs`): repairs parameter-name case,
    rejects unknown/missing parameters before the SDK binder runs.
-3. Exception catch-all: `SolutionNotLoadedException` -> message with `IsError=false`; any other escape -> `IsError=true`.
-4. Domain-failure sync: response JSON with top-level `isError:true` -> protocol-level `CallToolResult.IsError=true` (same name and polarity).
-5. Post-call drift diagnostic (`GetContentExternalFileChangesAsync`, log only).
-6. Large-result offload (`Common/LargeResultHelper.cs`): over `OffloadThresholdBytes` the body goes to disk and the
+3. `AddHaltStampFilter` (`Server.Basic/HaltStamp.cs`): while any breaker is tripped or the drift latch is set, inserts
+   four top-level properties into the first text block of the response: `isSessionHalted`, `sessionHaltKind`,
+   `sessionHaltReason`, `sessionHaltRecovery`, so the model learns the recovery call without a discovery call. The
+   single source of truth is `HaltInfo.From(...)` in `Common/HaltInfo.cs`. Four kinds, first match wins (the others
+   show once it clears): `unrecoverable`, `externalDrift`, `orientation`, `mutation`. The property is named
+   `isSessionHalted` for all four kinds, which overstates it for `orientation` and `mutation` (other tools still
+   run); `sessionHaltKind` and the reason text carry the precision. State is read after `next` returns (so a breaker an
+   inner filter just reset is not stamped). Skipped for a call to `ExternalFileDrift` when the active kind is
+   `externalDrift` (its own reply carries the state), and for any body that already contains an `isSessionHalted`
+   key. For `mutation`, the recovery text names `ResetMutationBreaker` only if that tool is live right now: the
+   filter asks the server's tool collection (`IOptions<McpServerOptions>` -> `ToolCollection.TryGetPrimitive`, the
+   same collection `ToolsetService` mutates), which is correct for static modes, claude-lean and tools switched on
+   by `McpToolsetControl`; failure to resolve counts as "not active" (recovery says to stop and report). A body that
+   is not a JSON object (for example the plain-text refusal from the breaker filters) is wrapped as
+   `{"isSessionHalted":...,"message":"<original text>"}`. Any failure is swallowed (a diagnostic aid never breaks a
+   call); nothing is stamped when nothing is tripped.
+4. `AddToolErrorFilter` domain-failure sync: response JSON with top-level `isError:true` -> protocol-level
+   `CallToolResult.IsError=true` (same name and polarity).
+5. `AddWorkspaceNotLoadedFilter` exception catch-all: `SolutionNotLoadedException` -> its message with
+   `IsError=true`; any other escaped exception -> a "Tool call failed unexpectedly" message with `IsError=true`.
+6. Post-call drift diagnostic (`AddDriftFilter`, `GetContentExternalFileChangesAsync`, log only).
+7. Large-result offload (`Common/LargeResultHelper.cs`): over `OffloadThresholdBytes` the body goes to disk and the
    caller gets a `resultId` for `GetLargeResult` (which is exempt, to avoid a re-offload loop).
-7. Orientation (automatic) breaker, then the unrecoverable breaker. The latter refuses every tool that is not
+8. `AddWirePathRelativizeFilter`: when `WirePathOptions.Enabled`, rewrites solution-root absolute paths in JSON
+   text bodies to relative ones (`WirePathRewriter.RewriteJsonText`).
+9. Orientation (automatic) breaker, then the unrecoverable breaker. The latter refuses every tool that is not
    marked `[UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]` on its method
    (`Common/UnrecoverableBreakerAttribute.cs`, resolved by `UnrecoverableBreakerPolicy.IsAllowed` via reflection).
    Absent attribute = refused. Currently 8 names are allowed: `ReadFile`, `ListAll`, `ListSolutionItems`,
-   `GetFileOutline`, `GetOperationDetail`, `GetWorkspaceHealth`, `IsSessionHalted`, `Git`. A tool name declared by
+   `GetFileOutline`, `GetOperationDetail`, `GetWorkspaceHealth`, `ExternalFileDrift`, `Git`. A tool name declared by
    both a facade (`WorkspaceTools`) and its own class needs the attribute on both.
 
 Tools themselves return `SentinelCallToolResult<T>` (`Common/SentinelCallToolResult.cs`) with `IsError=true`
@@ -114,6 +134,14 @@ Most tools reach it through `Common/ValidateAndApplyHelper.ValidateAndApplyAsync
 `FindReferences(symbolName: ApplyProposedChangesAsync, kind: callers)`.
 Nothing compiler-enforced stops a new `File.WriteAllText`; `Tests.Basic/WriteChokepointGuardrailTests.cs`
 covers EOL/line-count behaviour of the shared path, not "no bypass".
+
+**Session halt and acknowledge.** The drift latch is `_sessionHalted` in `PersistentWorkspaceManager`; the halt-stamp
+filter (pipeline item 3) shows it, and any tripped breaker, on every response. `ExternalFileDrift(operation:
+Acknowledge)` (`Tools.Basic/AdminTools.cs`) clears the latch even when only some files are named. Files not named stay
+in `_externalChanges` and re-trip the halt on the next write that touches them; clearing everything needs
+`acknowledgeScope: ConfirmAll`. `LoadSolution(forceReload)` does not drain `_externalChanges` (see the comment in
+`PersistentWorkspaceManager`). The unrecoverable halt has no reset, but `ExternalFileDrift` is allowed during it; it
+clears only drift state and the chokepoint still refuses every write.
 
 ### Read chokepoint (partly built)
 

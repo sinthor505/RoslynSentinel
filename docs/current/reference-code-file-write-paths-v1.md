@@ -26,7 +26,7 @@ In order, the method:
 3. Refuses any target covered by an open scoped operation ledger entry (`_ledger.IsBlocked`), returning a failed `ApplyChangesResult`.
 4. Refuses a path given as both a write and a delete target.
 5. Checks external drift: if a target is in `GetExternalFileChanges()`, sets `_sessionHalted` and throws `SessionHaltedException`.
-   Recovery is `ListExternalDiskChanges` then `AcknowledgeExternalFileChanges` (`ClearSessionHalt`).
+   Recovery is `ExternalFileDrift(operation: List)` then `ExternalFileDrift(operation: Acknowledge)` (`ClearSessionHalt`).
 6. Optionally compile-validates the whole batch (`validateChanges`, via `ValidationEngine`) before taking the lock.
 7. Takes `_solutionLock`, then captures a **pre-image** of every target (null = file did not exist), used for
    `OperationItemRecord.BeforeSource` and `UndoLastApply`.
