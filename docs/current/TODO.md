@@ -605,6 +605,10 @@ this session updated file mtimes without changing content, and the drift detecto
 timestamp-only touch the same as real content drift. Cleared via `AcknowledgeExternalFileChanges`
 once confirmed false-positive; not yet fixed at the detector level.
 
+Update 2026-10-09 (`plans/plan_session_halt_recovery_and_git_gaps.md`): `AcknowledgeExternalFileChanges` now takes optional `files`
+and names what it cleared, and a failed `Build` appends a drift note. The first gap below (halt message wording) is still open,
+deferred as a wording judgement call (plan Step 2).
+
 Three concrete gaps, all still open:
 
 - The `SessionHalted` error message names only the one file the blocked call touched — it doesn't

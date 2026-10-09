@@ -1,6 +1,27 @@
 # Plan: make SessionHalted recoverable in one step, and close the small Git diff-target gap
 
-**Status:** DRAFT 2026-10-08. Priority P2. Seven steps (six work steps plus verification), small recovery and message fixes; hunk-level staging, a discard operation, worktree/stash/tag and halt granularity are recorded as needs-design, not planned here.
+**Status:** PARTIALLY IMPLEMENTED 2026-10-09. Priority P2. Seven steps (six work steps plus verification), small recovery and message fixes; hunk-level staging, a discard operation, worktree/stash/tag and halt granularity are recorded as needs-design, not planned here.
+
+## Implementation notes (2026-10-09)
+
+Landed: Step 1 and Step 3 in `6b4dd6ec4f9686865968d67a2b422d3762c85761`, Step 4 in `652d34cbf22fdfb6fdb89752020bd0760f6d42dd`,
+Step 5 in `a747ccdb5e84189aa51f16aa4697a9ba56037331`, Step 6 in `504ced2142673205e64a717e16c141dbd580752b`.
+Step 7: `Build` 0 errors; full `RunTest` 3508 tests, 3481 passed, 26 skipped, 1 failed
+(`T19_LargeResult_Message_ContainsGetLargeResult_AndOperationId`, NullReferenceException in `Tests.Asyncify`; passes
+when rerun alone, so order/parallelism-dependent and unrelated to these changes). Baseline was 3473 tests, 0 failed, 26 skipped;
+the +35 are the new tests. The live-server part of Step 7 (stop/reload and the two live calls) was left to the parent session.
+
+DEFERRED (user judgement calls, not implemented):
+- **Step 2 (halt wording, Risks 2).** Neither throw site in `PersistentWorkspaceManager.ApplyProposedChangesAsync` was changed and
+  `DriftMessages.HaltMessage` was NOT added in Step 1 (it is the wording itself). The old "Stop and report" text is still emitted.
+- **Partial-acknowledge latch policy (Risks 1).** `AcknowledgeExternalFileChanges(files: ...)` clears the latch only when no drift
+  entry remains flagged (the one case both candidate policies agree on); while other entries remain flagged the latch stays set and
+  the result says so. The code carries a `DEFERRED DECISION` comment. Picking the plan's recommended "always clear" is a one-line change.
+
+Deviations: the Step 4 messages match the plan except the still-flagged case described above; Step 4 also guards a `files` list that
+resolves to nothing ("Nothing cleared: files named no entries"). `BuildHint` counts entries as given (the manager's list is already
+distinct). Tests added: `DriftMessagesTests` (30), three `AdminToolsTests`, two `GitToolsSmokeTests`; no test covers a non-empty
+drift list through `AcknowledgeExternalFileChanges` because `_externalChanges` is private and a real drift needs a tracked file.
 
 ## Problem
 
