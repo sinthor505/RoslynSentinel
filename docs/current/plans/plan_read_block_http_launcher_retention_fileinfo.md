@@ -1,6 +1,6 @@
 # Plan: block built-in Read on in-repo C#, replace the dead HTTP copy with a launcher, make the control script rebuild on restart, and sweep stale large results
 
-**Status:** READY 2026-10-09 (amended per round-3 decisions). Owner-decided items from `docs/current/proposals/proposal_journal_digest_followup_decisions.md` (decisions #3, #5, #6, #10 and round-3 D-10 .. D-14). Three slices of the original plan are already built (see "Already built"); the ReadFile `lineEndings`/`hasBom` work is dropped (D-13/14). The rest is not built yet.
+**Status:** IMPLEMENTED 2026-10-09 (steps 1-14 done; step 14 live checks 4, 5a, 5b and 5d are pending because they need a server restart or the new binary, 5c passed: launcher started a throwaway server on 5199, the probe initialize succeeded, then it was stopped and its folder deleted). Full suite 3557 total, 3531 passed, 0 failed, 26 skipped (baseline 3522/0/26, +9 new tests). Previously: READY 2026-10-09 (amended per round-3 decisions). Owner-decided items from `docs/current/proposals/proposal_journal_digest_followup_decisions.md` (decisions #3, #5, #6, #10 and round-3 D-10 .. D-14). Three slices of the original plan are already built (see "Already built"); the ReadFile `lineEndings`/`hasBom` work is dropped (D-13/14). The rest is not built yet.
 
 ## Already built (verified against source and git on 2026-10-09; do not redo)
 
