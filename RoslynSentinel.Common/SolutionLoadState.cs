@@ -1,7 +1,36 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json.Serialization;
 
 namespace RoslynSentinel.Common;
+
+/// <summary>
+/// The status of the solution load.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum SolutionLoadStatus
+{
+    /// <summary>No solution has been loaded.</summary>
+    NotLoaded,
+
+    /// <summary>A solution load is in progress.</summary>
+    Loading,
+
+    /// <summary>A solution was successfully loaded.</summary>
+    Loaded,
+
+    /// <summary>The last load attempt failed.</summary>
+    Failed,
+}
+
+/// <summary>
+/// Static class holding timeout constants for solution loads.
+/// </summary>
+public static class SolutionLoadWait
+{
+    /// <summary>Default timeout for waiting on a solution to load (30 seconds).</summary>
+    public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+}
 
 /// <summary>
 /// Whether this server process has ever loaded a solution. The state is per process, so a server
@@ -11,7 +40,7 @@ namespace RoslynSentinel.Common;
 /// <param name="ServerStartedUtc">When this server process started.</param>
 /// <param name="LastLoadedUtc">When a solution last loaded successfully in this process, or null if none has.</param>
 /// <param name="LoadInProgress">True while a LoadSolution call holds the workspace lock (typically the start-time auto-load); lets callers say "retry shortly" instead of "call LoadSolution".</param>
-public sealed record SolutionLoadState(DateTime ServerStartedUtc, DateTime? LastLoadedUtc, bool LoadInProgress = false)
+public sealed record SolutionLoadState(DateTime ServerStartedUtc, DateTime? LastLoadedUtc, bool LoadInProgress = false, string? LastLoadFailure = null)
 {
     /// <summary>True once any solution has loaded successfully in this process.</summary>
     public bool HasLoadedSolutionSinceStart => LastLoadedUtc is not null;
@@ -68,9 +97,30 @@ public static class SolutionNotLoadedMessage
 
         var age = FormatAge((nowUtc ?? DateTime.UtcNow) - state.ServerStartedUtc);
         var started = state.ServerStartedUtc.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-        return $"No solution is loaded. This server process was freshly (re)started at {started} UTC ({age} ago) "
+        var message = $"No solution is loaded. This server process was freshly (re)started at {started} UTC ({age} ago) "
             + "and no solution has been loaded since, so a solution loaded earlier in this chat was lost with the previous process. "
             + "Files on disk are unaffected. Call LoadSolution with a .sln, .slnx, or .csproj path.";
+
+        if (state.LastLoadFailure is not null)
+        {
+            message += " The last load attempt failed: " + state.LastLoadFailure;
+        }
+
+        return message;
+    }
+
+    /// <summary>The message for a load that exceeded its timeout.</summary>
+    public static string LoadWaitTimedOut(TimeSpan waited)
+    {
+        var seconds = (int)Math.Ceiling(waited.TotalSeconds);
+        return $"The solution is still loading after waiting {seconds} s, so this call did not run. The load is continuing and has its own time limit. Retry in a few seconds, or call McpServerStatus and wait until solutionLoadStatus is Loaded.";
+    }
+
+    /// <summary>The message for a load that was cancelled due to timeout.</summary>
+    public static string LoadCancelledAfterTimeout(TimeSpan limit)
+    {
+        var seconds = (int)Math.Ceiling(limit.TotalSeconds);
+        return $"The solution load did not finish within {seconds} s and was cancelled; no solution was loaded. Retry LoadSolution with a larger timeoutSeconds (for example {seconds * 2}), or check the server log for MSBuild errors.";
     }
 
     /// <summary>The message for a tool whose <c>filePath</c> could not be resolved because no solution is loaded.</summary>

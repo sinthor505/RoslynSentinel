@@ -127,4 +127,42 @@ public class SolutionNotLoadedMessageTests
 
         Assert.That(ex!.Message, Is.EqualTo(SolutionNotLoadedMessage.Plain));
     }
+
+    [Test]
+    public void Build_WithLastLoadFailureAndNothingLoaded_AppendsFailure()
+    {
+        var failure = "timeout after 30 s";
+        var message = SolutionNotLoadedMessage.Build(new SolutionLoadState(Started, null, LastLoadFailure: failure), Started.AddMinutes(1));
+
+        Assert.That(message, Does.Contain("The last load attempt failed: timeout after 30 s"));
+    }
+
+    [Test]
+    public void Build_LoadInProgress_IgnoresLastLoadFailure()
+    {
+        var failure = "timeout after 30 s";
+        var message = SolutionNotLoadedMessage.Build(new SolutionLoadState(Started, null, LoadInProgress: true, LastLoadFailure: failure));
+
+        Assert.That(message, Does.Not.Contain("load attempt failed"));
+        Assert.That(message, Does.Contain("still in progress"));
+    }
+
+    [Test]
+    public void LoadWaitTimedOut_NamesSolutionLoadStatusAndThatCallDidNotRun()
+    {
+        var message = SolutionNotLoadedMessage.LoadWaitTimedOut(TimeSpan.FromSeconds(30));
+
+        Assert.That(message, Does.Contain("30 s"));
+        Assert.That(message, Does.Contain("solutionLoadStatus"));
+        Assert.That(message, Does.Contain("call did not run"));
+    }
+
+    [Test]
+    public void LoadCancelledAfterTimeout_NamesTimeoutSecondsAndAValue()
+    {
+        var message = SolutionNotLoadedMessage.LoadCancelledAfterTimeout(TimeSpan.FromSeconds(60));
+
+        Assert.That(message, Does.Contain("timeoutSeconds"));
+        Assert.That(message, Does.Contain("60"));
+    }
 }
