@@ -152,6 +152,47 @@ $cases = @(
     @{ n = 'grep .cs inside Worktree/'; want = 'allow'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'grep -n Foo C:/runs/x/Worktree/Foo.cs' } } }
 
+    # --- here-string / heredoc bodies are prose, not commands (Step 1) ---
+    @{ n = 'PS here-string doc append naming .cs, (more, git log'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Add-Content docs/x.md @'`nThe fix touches Foo.cs (more detail below). See also git log for history.`n'@" } } }
+    @{ n = 'PS here-string plus a real Get-Content .cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Add-Content docs/x.md @'`nThe fix touches Foo.cs (more detail below). See also git log for history.`n'@`nGet-Content C:\runs\RoslynSentinel\Foo.cs" } } }
+    @{ n = 'Bash heredoc doc append naming .cs and git commit'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "cat >> docs/x.md <<'EOF'`nSee Bar.cs and run git commit afterwards.`nEOF" } } }
+    @{ n = 'PS here-string plus a real git status'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Add-Content docs/x.md @'`nprose`n'@`ngit status" } } }
+    @{ n = 'Grep negated glob !*.cs, docs path'; want = 'allow'
+       p = @{ tool_name = 'Grep'; tool_input = @{ pattern = 'foo bar'; glob = '!*.cs'; path = "$repo\docs" } } }
+
+    # --- shell writes/moves of C# (Step 2) ---
+    @{ n = 'PS Set-Content to in-repo .cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Set-Content -Path $repo\Foo.cs -Value x" } } }
+    @{ n = 'PS [IO.File]::WriteAllText to .cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "[IO.File]::WriteAllText('$repo\Foo.cs', `$c)" } } }
+    @{ n = 'PS pipe to Out-File .cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "x | Out-File $repo\Foo.cs" } } }
+    @{ n = 'Bash echo redirect to .cs'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'echo x > Foo.cs' } } }
+    @{ n = 'Bash cp onto .cs'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'cp /tmp/new.txt RoslynSentinel.Common/Foo.cs' } } }
+    @{ n = 'PS Move-Item of .cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Move-Item RoslynSentinel.Common\A.cs RoslynSentinel.Common\B.cs' } } }
+    @{ n = 'PS here-string C# body written via Set-Content'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "`$content = @'`nnamespace X { class Y {} }`n'@`nSet-Content -Path $repo\Y.cs -Value `$content" } } }
+    @{ n = 'PS Set-Content .cs under Worktree/'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Set-Content -Path C:\runs\x\Worktree\Foo.cs -Value x' } } }
+    # Known false positive of the writer rule (.cs named only as text); the bypass keyword is the escape.
+    @{ n = 'PS Set-Content notes.md naming Foo.cs (known FP)'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Set-Content notes.md 'Foo.cs'" } } }
+    @{ n = 'PS Set-Content notes.md naming Foo.cs + bypass'; want = 'allow'; fx = 'tok'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Set-Content notes.md 'Foo.cs' # DeliberateHookBypass: prose mentions a file name" } } }
+    @{ n = 'PS Set-Content x.csproj (not .cs)'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Set-Content x.csproj -Value y' } } }
+    @{ n = 'PS Set-Content .cs + bypass keyword'; want = 'allow'; fx = 'tok'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Set-Content Foo.cs -Value x # DeliberateHookBypass: raw bytes repro' } } }
+    @{ n = 'journal write naming .cs and Set-Content'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Add-Content -LiteralPath '.claude/journal/2026-10-01_aaaabbbb.md' -Value '- 18:41 - hook: Set-Content to Foo.cs was blocked'" } } }
+
     # --- non-C# and harness clones: allow ---
     @{ n = 'Edit .md'; want = 'allow'
        p = @{ tool_name = 'Edit'; tool_input = @{ file_path = "$repo\CLAUDE.md" } } }
@@ -234,21 +275,25 @@ $cases = @(
 
     # --- implementer dispatch: slice contract ---
     @{ n = 'implementer brief, all fields, 2 files, haiku'; want = 'allow'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: RoslynSentinel.Common/A.cs, RoslynSentinel.Common/B.cs`nSymbols: A.Foo`nCall sites: none`nAcceptance: clean Build`nOut of scope: do not commit" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: RoslynSentinel.Common/A.cs, RoslynSentinel.Common/B.cs`nSymbols: A.Foo`nCall sites: none`nAcceptance: clean Build`nOut of scope: do not commit; no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'implementer brief, markdown-bold labels'; want = 'allow'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "- **Files:** RoslynSentinel.Common/A.cs`n- **Symbols:** A.Foo`n- **Call sites:** none`n- **Acceptance check:** clean Build`n- **Out of scope:** do not commit" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "- **Files:** RoslynSentinel.Common/A.cs`n- **Symbols:** A.Foo`n- **Call sites:** none`n- **Acceptance check:** clean Build`n- **Out of scope:** do not commit; no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'implementer brief, model omitted'; want = 'DENY'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: none" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'implementer brief, model sonnet'; want = 'DENY'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'sonnet'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: none" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'sonnet'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'implementer brief, missing Acceptance'; want = 'DENY'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nOut of scope: none" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'implementer brief, free-form prose'; want = 'DENY'
        p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = 'Please refactor the Git tool to use the new result type everywhere.' } } }
     @{ n = 'implementer brief, 4 files in Files section'; want = 'DENY'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs, P/B.cs, P/C.cs, P/D.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: none" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs, P/B.cs, P/C.cs, P/D.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'implementer brief, call-site files do not count toward the 3'; want = 'allow'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: P/B.cs:1, P/C.cs:2, P/D.cs:3, P/E.cs:4`nAcceptance: Build`nOut of scope: none" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: P/B.cs:1, P/C.cs:2, P/D.cs:3, P/E.cs:4`nAcceptance: Build`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
+    @{ n = 'implementer brief, Out of scope without RESCOPE'; want = 'DENY'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: do not commit; no Write/Edit/shell writes on .cs files" } } }
+    @{ n = 'implementer brief, RESCOPE but no Write/Edit/shell (warn only)'; want = 'allow'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: do not commit; reply RESCOPE: if more is needed" } } }
     @{ n = 'other subagent type: not checked'; want = 'allow'
        p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'Explore'; prompt = 'where is X' } } }
 

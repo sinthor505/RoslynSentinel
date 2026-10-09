@@ -19,16 +19,21 @@
 # FAIL-OPEN BY DESIGN: if this hook itself errors, it must never block the session.
 # A broken guardrail that halts all work is worse than no guardrail.
 #
-# KNOWN LIMITATION: git detection is a regex over the whole command line, so a script
-# that merely *contains* a covered git command as text (a test fixture, a heredoc, an
-# echo) is blocked too. Put such content in a file rather than on the command line -
-# see enforce-dogfood.Tests.ps1, which exists in file form for exactly this reason.
+# KNOWN LIMITATION: git and .cs detection is a regex over the command line, so a script
+# that merely *contains* a covered git command as text (a test fixture, an echo, a quoted
+# single-line literal) is blocked too. PowerShell here-string and bash heredoc BODIES are
+# stripped before scanning (Remove-HereStrings), so prose appended to a doc that way is fine.
+# Put other such content in a file rather than on the command line - see
+# enforce-dogfood.Tests.ps1, which exists in file form for exactly this reason.
 #
 # Also covers, per the same policy:
 #   - Grep on a .cs path/glob or an obviously C#-symbol-shaped pattern -> Search/FindReferences.
 #   - Bash/PowerShell text search, read or stream edit (grep/rg/Select-String/cat/Get-Content/
 #     sed...) naming a .cs file or glob -> Search/ReadFile/GetMethodSource. Same whole-command
 #     regex limitation as git detection above.
+#   - Bash/PowerShell WRITES to a .cs file (Set-Content/Out-File/Copy-Item/Move-Item/tee/cp/mv,
+#     [IO.File]::WriteAll*, or a > redirect to a .cs target) -> Member/ReplaceSnippet/WriteFile/...
+#   - Agent dispatch of `implementer`: slice-contract fields, 3-file limit, RESCOPE in Out of scope.
 #   - ReplaceSnippet called with filePath and batchEdits together (rejected server-side anyway,
 #     but the server's InvalidArgument error doesn't name a corrected example call the way this
 #     hook's message does), and a soft warning (not a block - this is a heuristic, not a real
@@ -90,6 +95,19 @@ function Test-PathOutsideRepo([string]$p) {
     }
     catch { return $false }
     return -not ($full -eq $repoRoot -or $full.StartsWith("$repoRoot\", [StringComparison]::OrdinalIgnoreCase) -or $full.StartsWith("$repoRoot/", [StringComparison]::OrdinalIgnoreCase))
+}
+
+# Returns $cmd with here-string / heredoc BODIES removed, so prose appended to a doc (which may
+# name C# files or git commands as text) is not mistaken for a command. Quoted single-line
+# literals are deliberately NOT stripped, so `bash -c "git add ."` is still seen.
+#   PowerShell @'...'@ -> ''     PowerShell @"..."@ -> ""     bash <<[-]'TAG' ... TAG -> (removed)
+function Remove-HereStrings([string]$cmd) {
+    if (-not $cmd) { return $cmd }
+    $o = [System.Text.RegularExpressions.RegexOptions]::Singleline
+    $cmd = [regex]::Replace($cmd, "@'[ \t]*\r?\n.*?\r?\n'@", "''", $o)
+    $cmd = [regex]::Replace($cmd, '@"[ \t]*\r?\n.*?\r?\n"@', '""', $o)
+    $cmd = [regex]::Replace($cmd, '<<-?\s*[''"]?(\w+)[''"]?[^\r\n]*\r?\n.*?\r?\n\s*\1\b', '', $o)
+    return $cmd
 }
 
 function Get-InlineBypassReason([string]$text) {
@@ -209,7 +227,8 @@ and end the turn. Do not route around this hook.
         $glob    = [string]$toolInput.glob
 
         $targetsCs = $false
-        if ($glob -and $glob -match '\.cs["'']?$') { $targetsCs = $true }
+        # A negated glob (!*.cs) EXCLUDES C#; it does not target it.
+        if ($glob -and $glob -notmatch '^\s*!' -and $glob -match '\.cs["'']?$') { $targetsCs = $true }
         if ($path -and $path.TrimEnd().EndsWith('.cs', [StringComparison]::OrdinalIgnoreCase)) { $targetsCs = $true }
 
         # No path/glob at all means a repo-wide search. A pattern shaped like a C# identifier
@@ -295,6 +314,19 @@ docs/current/blockers/blocking_error_<slug>.md, and end the turn.
             $csFiles = @([regex]::Matches($filesText, '[\w.\\/\-]+\.cs\b') | ForEach-Object { $_.Value.ToLowerInvariant() } | Select-Object -Unique)
             if ($csFiles.Count -gt 3) {
                 $problems.Add("  Files lists $($csFiles.Count) distinct .cs files; a slice is at most 3. Split it into compile-green slices (CLAUDE.md), or send it to implementer-senior if it cannot be split.")
+            }
+        }
+
+        # Out of scope section = text from the label to the end of the brief. CLAUDE.md requires it to
+        # tell the implementer to reply RESCOPE: instead of editing outside the named symbols
+        # (db2b9846:L8 - an implementer edited an out-of-brief branch to make a test pass).
+        if ($found.ContainsKey('Out of scope')) {
+            $oosText = $brief.Substring($found['Out of scope'].Index)
+            if ($oosText -notmatch 'RESCOPE') {
+                $problems.Add("  Out of scope must tell the implementer to reply RESCOPE: instead of editing anything outside the named symbols (CLAUDE.md slice contract).")
+            }
+            if ($oosText -notmatch '(?i)\b(Write|Edit|shell)\b') {
+                [Console]::Error.WriteLine("WARNING (not blocking) from dispatch policy: Out of scope names none of Write/Edit/shell. Consider adding 'no Write/Edit/shell writes on .cs files' so the implementer does not bypass the MCP tools.")
             }
         }
 
@@ -394,6 +426,10 @@ positive if the referenced name already exists elsewhere in the file. Proceeding
         # appears at a command position, which would be a real call riding along.
         if ($command -match '\.claude[\\/]+journal[\\/]' -and $command -notmatch '(^|[;&|(]\s*)git\s') { exit 0 }
 
+        # Rules below scan a copy with here-string/heredoc bodies removed (prose is not a command).
+        # $command stays the original for block messages, out-of-repo git checks and bypass lookup.
+        $scan = Remove-HereStrings $command
+
         # --- shell text search/read of C# ---------------------------------------------
         # The Grep-tool rule above is trivially sidestepped by running grep/rg/Select-String/
         # cat through the shell (seen 2026-10-01: a subagent ran `grep -rn "public X(" --include=*.cs`).
@@ -402,8 +438,8 @@ positive if the referenced name already exists elsewhere in the file. Proceeding
         # .csproj/.cshtml. Listing alone (Get-ChildItem *.cs for mtimes) is left alone: there is
         # no MCP equivalent and it reads no content. Harness worktrees stay exempt.
         $csReaders = 'grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls|cat|type|Get-Content|gc|head|tail|less|more|sed|awk'
-        if ($command -match '\.cs\b' -and $command -notmatch '[\\/]Worktree[\\/]' -and
-            $command -match "(^|[;&|(]\s*|\bxargs\s+)($csReaders)(\s|$)") {
+        if ($scan -match '\.cs\b' -and $command -notmatch '[\\/]Worktree[\\/]' -and
+            $scan -match "(^|[;&|(\r\n]\s*|\bxargs\s+)($csReaders)(\s|$)") {
             $which = $Matches[2]
             Exit-IfBypassed "$command`n$([string]$toolInput.description)" $null
             DenyBypassable @"
@@ -421,6 +457,39 @@ Shell text tools only see raw text. Use the RoslynSentinel tools instead:
 If no MCP tool covers what you need, or the right one is broken, that is a
 BLOCKING finding: stop, write docs/current/blockers/blocking_error_<slug>.md,
 and end the turn. Do not reword the command to get past this hook.
+"@
+        }
+
+        # --- shell writes/moves of C# ----------------------------------------------------
+        # The Edit/Write rule above covers only the built-in tools; a shell writer is the same
+        # policy violation by another route (implementers wrote C# via Set-Content / here-strings).
+        # Deny, on the here-string-stripped $scan, when the command names a .cs file AND has a
+        # writer verb at a command position, a .NET file-write call, or a redirection to a .cs
+        # target. Known false positive: a writer verb with a .cs name mentioned only as text
+        # (e.g. `Set-Content notes.md 'Foo.cs'`) - use the DeliberateHookBypass keyword for that.
+        # \.cs\b does not match .csproj/.cshtml. Harness worktrees stay exempt.
+        $csWriters = 'Set-Content|Add-Content|Out-File|Copy-Item|Move-Item|Rename-Item|New-Item|tee|cp|mv|copy|move|ren|sc|ac'
+        $csWriteApis = '\b(WriteAllText|WriteAllLines|WriteAllBytes|AppendAllText|AppendAllLines)\b'
+        $csRedirect = '>{1,2}\s*["'']?[^\s"''|;&]*\.cs\b'
+        if ($scan -match '\.cs\b' -and $command -notmatch '[\\/]Worktree[\\/]' -and
+            ($scan -match "(^|[;&|(\r\n]\s*)($csWriters)(\s|$)" -or $scan -match $csWriteApis -or $scan -match $csRedirect)) {
+            Exit-IfBypassed "$command`n$([string]$toolInput.description)" $null
+            DenyBypassable @"
+BLOCKED by dog-fooding policy: shell write/move/copy of a C# file.
+
+  $command
+
+C# writes go through the RoslynSentinel MCP tools, not the shell. Use the one that matches:
+
+  Member / ReplaceSnippet / ApplyDiff                      - edit existing code
+  WriteFile (operation: CreateFile or ReplaceFile)         - whole-file content
+  CreateFile                                               - new empty file, then Member(add)
+  MoveMember                                               - move code between files/types
+  DeleteFile                                               - delete (never rm / Remove-Item)
+
+If the right tool has no equivalent operation (for example repairing line endings or a BOM),
+that is a finding to report - stop, write docs/current/blockers/blocking_error_<slug>.md, and
+end the turn. It is not something to do by shell. Do not reword the command to get past this hook.
 "@
         }
 
@@ -475,9 +544,9 @@ and end the turn. Do not reword the command to get past this hook.
         # with no MCP route. `reset` is the live example - Git can stage but not unstage,
         # so blocking a `git reset && git status` traps a mis-stage with no way back.
         $uncovered = 'reset|restore|rm|mv|branch|checkout|switch|push|pull|fetch|clone|worktree|rebase|merge|stash|tag|cherry-pick|bisect|reflog|clean|apply|show|update-index|ls-files|check-ignore|rev-parse|config|remote|blame'
-        if ($command -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?($uncovered)\b") { exit 0 }
+        if ($scan -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?($uncovered)\b") { exit 0 }
 
-        if ($command -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?($covered)\b") {
+        if ($scan -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?($covered)\b") {
             Exit-IfBypassed "$command`n$([string]$toolInput.description)" $null
 
             DenyBypassable @"

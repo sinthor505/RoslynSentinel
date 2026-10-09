@@ -37,13 +37,23 @@ try {
     $toolName = [string]$payload.tool_name
     if ($toolName -ne 'Build' -and $toolName -notmatch '__Build$') { exit 0 }
 
-    $response = $payload.tool_response
-    # Some hosts hand the MCP result over as a JSON string rather than an object.
-    if ($response -is [string]) {
-        try { $response = $response | ConvertFrom-Json } catch { exit 0 }
+    # The MCP result arrives in one of several shapes (same extraction as journal-log-call.ps1):
+    #   - a JSON string                              -> searched as text
+    #   - an array of {type:"text", text:"<json>"}   -> the text members are joined and searched
+    #   - an object with a `content` array of those  -> same, over `content`
+    #   - a plain object carrying isServerBinaryStale -> honoured directly
+    $resp = $payload.tool_response
+    $stale = $false
+    if ($resp -is [string]) {
+        $text = $resp
+    }
+    else {
+        if ($null -ne $resp -and $resp.PSObject.Properties['isServerBinaryStale'] -and $resp.isServerBinaryStale -eq $true) { $stale = $true }
+        $blocks = if ($null -ne $resp -and $resp.PSObject.Properties['content']) { @($resp.content) } else { @($resp) }
+        $text = (@($blocks | ForEach-Object { if ($_ -is [string]) { $_ } else { [string]$_.text } }) -join "`n")
     }
 
-    if ($response.isServerBinaryStale -ne $true) { exit 0 }
+    if (-not $stale -and $text -notmatch '\\?"isServerBinaryStale\\?"\s*:\s*true') { exit 0 }
 
     [Console]::Error.WriteLine(@"
 NOTE (not blocking): the connected MCP server is running binaries older than the

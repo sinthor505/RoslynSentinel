@@ -136,6 +136,37 @@ $cases += [pscustomobject]@{
     MustNotContainInStderr = @('older than the')
 }
 
+# Real MCP results arrive as content blocks, not a bare object: the flag lives inside the JSON text.
+$staleText = '{"isError":false,"isServerBinaryStale":true}'
+$cases += [pscustomobject]@{
+    N = 'FC7c: Build response as an array of text blocks carrying the flag'
+    Kind = 'buildstale'
+    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Build'; tool_input = @{}; tool_response = @(@{ type = 'text'; text = $staleText }) }
+    Want = 'allow'
+    MustContainInStderr = @('older than the')
+}
+$cases += [pscustomobject]@{
+    N = 'FC7d: Build response as { content: [text block] } carrying the flag'
+    Kind = 'buildstale'
+    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Build'; tool_input = @{}; tool_response = @{ content = @(@{ type = 'text'; text = $staleText }) } }
+    Want = 'allow'
+    MustContainInStderr = @('older than the')
+}
+$cases += [pscustomobject]@{
+    N = 'FC7e: Build response text block without the flag stays silent'
+    Kind = 'buildstale'
+    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Build'; tool_input = @{}; tool_response = @(@{ type = 'text'; text = '{"isError":false}' }) }
+    Want = 'allow'
+    MustNotContainInStderr = @('older than the')
+}
+$cases += [pscustomobject]@{
+    N = 'FC7f: Build response as a JSON string carrying the flag'
+    Kind = 'buildstale'
+    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Build'; tool_input = @{}; tool_response = $staleText }
+    Want = 'allow'
+    MustContainInStderr = @('older than the')
+}
+
 # --- Category 5: commit missing Co-Authored-By / scope creep -----------------------------
 # Real case: transcript 59a28fea... - 6 of 11 committed files were never edited in that
 # session's transcript; commit had no scope=listed/explicit files, just a bare commit call.

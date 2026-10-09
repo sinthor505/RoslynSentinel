@@ -398,6 +398,9 @@ if ($SkipVSCodeRestart) {
     Write-Host ""
     Write-Host "Skipping VS Code Advanced HTTP-copy refresh (-SkipVSCodeRestart). It may now be running stale code." -ForegroundColor Yellow
 } else {
+    Write-Host ""
+    Write-Host "VS Code Advanced.Http copy was NOT refreshed (auto-refresh is disabled in this script); rebuild by hand if you use it: dotnet build -c Release -o bin-vscode\Advanced.Http" -ForegroundColor Yellow
+
     # Gated on its own dotnet build of the Advanced project specifically, not on whatever
     # flavor/mode this run targeted - a Basic build succeeding (or a Test-only run with no build
     # at all) says nothing about whether Advanced itself currently compiles.
