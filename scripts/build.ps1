@@ -10,18 +10,11 @@
     Stops every running RoslynSentinel* process before building (any of them can transitively
     lock a build via project references or shared projects - see the Lock check region).
 
-    On a successful build (of any flavor - not just Advanced itself), also refreshes the dedicated
-    VS Code HTTP-fallback copy of the Advanced binary, separate from the flavor/config combo the
-    rest of the script builds/tests so a routine baseline check never locks or interrupts VS Code's
-    own connection:
-      - bin-vscode\Advanced.Http (--transport=http): rebuilt AND restarted as a standalone
-        process on $VSCodePort, since HTTP has no external spawner to do that for it.
-    See -SkipVSCodeRestart to disable this.
-
-    The stdio copy VS Code actually connects to is no longer managed here - each VS Code window now
-    builds and launches its own isolated instance via scripts/roslynsentinel-mcp-launch.ps1 (see
-    docs/current/proposal_per_session_mcp_server.md), so there's no single shared stdio path left
-    for this script to rebuild.
+    This script does not touch any running server. The stdio copy VS Code connects to is not
+    managed here - each VS Code window builds and launches its own isolated instance via
+    scripts/roslynsentinel-mcp-launch.ps1 (see docs/current/proposal_per_session_mcp_server.md).
+    The HTTP fallback server is not refreshed here either; see scripts/Launch-RoslynSentinelHttpServer.ps1
+    (throwaway instance) or scripts/roslynsentinel-vscode-control.ps1 restart (shared copy).
 
 .PARAMETER Flavor
     Basic | Advanced | Solution
@@ -48,25 +41,9 @@
 .PARAMETER Force
     Stop a locking process without prompting. Without this flag, the script asks first.
 
-.PARAMETER SkipVSCodeRestart
-    Don't refresh the dedicated VS Code HTTP-fallback copy (bin-vscode\Advanced.Http
-    rebuild+restart on port $VSCodePort) after a successful build. Use this if you're actively
-    attached to that copy for something a restart would disrupt. Refresh is otherwise automatic -
-    the copy is stateless (reloads from disk, no valuable in-memory session state), so refreshing
-    it after every successful build costs a few seconds and avoids working against stale tools.
-    The stdio copy VS Code actually connects to is unaffected either way - see
-    scripts/roslynsentinel-mcp-launch.ps1.
-
-.PARAMETER VSCodePort
-    Port for the dedicated VS Code Advanced binary's HTTP-transport instance. Default: 5150.
-    Kept distinct from 5100 (used by any manually-launched --transport=http instance) so the
-    two never collide.
-
 .EXAMPLE
     .\build.ps1 -Flavor Advanced -Config Debug
-    Build + test the Advanced flavor's Debug config; report only new warnings/failures; on a
-    successful build, also refresh the dedicated VS Code HTTP-fallback copy (rebuild+restart on
-    port 5150 in bin-vscode\Advanced.Http).
+    Build + test the Advanced flavor's Debug config; report only new warnings/failures.
 
 .EXAMPLE
     .\build.ps1 -Flavor Solution -Mode Build -UpdateBaseline
@@ -87,11 +64,7 @@ param(
 
     [switch]$UpdateBaseline,
 
-    [switch]$Force,
-
-    [switch]$SkipVSCodeRestart,
-
-    [int]$VSCodePort = 5150
+    [switch]$Force
 )
 
 $ErrorActionPreference = 'Stop'
@@ -303,83 +276,6 @@ function Invoke-TestMode {
 }
 #endregion
 
-#region VS Code server restart
-# Dedicated Advanced binary copy running in HTTP mode, for anything still using HTTP (manual
-# testing, curl, etc.): separate output dir and port from whatever this run just built/tested, so
-# the two never lock each other and this copy's connection doesn't drop just because a routine
-# baseline check is in progress elsewhere. It's stateless (reloads the workspace from disk on
-# start), so refreshing it after every successful build is cheap and keeps it from silently
-# serving a stale tool list.
-function Invoke-VSCodeServerRestart {
-    $vscodeOutDir = Join-Path $repoRoot 'bin-vscode\Advanced.Http'
-    $vscodeProject = Join-Path $repoRoot $flavorToProject['Advanced']
-    $vscodeExe = Join-Path $vscodeOutDir 'RoslynSentinel.Server.Advanced.exe'
-
-    #Write-Host ""
-    #Write-Host "=== Rebuilding VS Code Advanced.Http copy (bin-vscode, port $VSCodePort) ===" -ForegroundColor Cyan
-
-    $existing = Get-Process | Where-Object { $_.ProcessName -eq 'RoslynSentinel.Server.Advanced' -and $_.Path -eq $vscodeExe }
-    if ($existing) {
-        #Write-Host "Stopping existing VS Code copy (PID $($existing.Id))..." -ForegroundColor Yellow
-        #$existing | Stop-Process -Force
-        # Stop-Process -Force returns as soon as termination is requested, not once the process
-        # (and its listening socket) is actually gone - WaitForExit blocks until it really is, so
-        # the new instance started below doesn't race the old one for the port.
-        foreach ($proc in $existing) { $proc.WaitForExit(10000) | Out-Null }
-    }
-
-    $previousEap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    & dotnet build $vscodeProject -c Release -o $vscodeOutDir --nologo -v quiet 2>&1 | Out-Null
-    $buildExit = $LASTEXITCODE
-    $ErrorActionPreference = $previousEap
-
-    if ($buildExit -ne 0) {
-        Write-Warning "VS Code copy build failed (exit $buildExit) - leaving it stopped rather than running stale code. Investigate, then re-run."
-        return
-    }
-
-    # Mirrors C:\Users\Administrator\.mcp.json's stdio launch mode, so this fallback serves the
-    # same tool surface rather than drifting into a second, unsynced set. --mode=all derives its
-    # class list from ToolClassRegistry.AdvancedModeToToolClasses.Keys at build time (see
-    # ServerStdio.cs), so unlike a hand-maintained --include-tools literal it cannot drift on a
-    # future tool-class rename. stdio is primary; this copy only exists in case stdio flakes.
-
-    # -WindowStyle Hidden means an unredirected child's console output is simply gone - the server's
-    # own graceful "no tools active" style errors were invisible here for the three days the
-    # include-tools line above was missing, and only a manual repro with explicit redirection
-    # surfaced the real message. Route stdout/stderr to logs\ (already used by the app's own
-    # http-host-*.log) so a future startup failure is self-diagnosing instead of requiring that
-    # again.
-    $launchLogDir = Join-Path $vscodeOutDir 'logs'
-    New-Item -ItemType Directory -Path $launchLogDir -Force | Out-Null
-    $launchStamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-    $launchStdout = Join-Path $launchLogDir "launch-stdout-$launchStamp.log"
-    $launchStderr = Join-Path $launchLogDir "launch-stderr-$launchStamp.log"
-    #Start-Process -FilePath $vscodeExe -ArgumentList "--transport=http", "--port=$VSCodePort", "--mode=all" -WindowStyle Hidden -RedirectStandardOutput $launchStdout -RedirectStandardError $launchStderr
-
-    $started = $null
-    $sw = [System.Diagnostics.Stopwatch]::StartNew()
-    while (-not $started -and $sw.ElapsedMilliseconds -lt 5000) {
-        Start-Sleep -Milliseconds 100
-        $started = Get-Process -Name 'RoslynSentinel.Server.Advanced' -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $vscodeExe }
-    }
-
-    if ($started) {
-        Write-Host "VS Code Advanced.Http copy restarted on port $VSCodePort (PID $($started.Id))." -ForegroundColor Green
-    }
-    else {
-        $exitStderr = Get-Content -Path $launchStderr -Raw -ErrorAction SilentlyContinue
-        if ($exitStderr) {
-            Write-Warning "VS Code Advanced.Http copy did not stay running - it exited immediately. Its stderr:`n$exitStderr"
-        }
-        else {
-            #Write-Warning "VS Code Advanced.Http copy did not stay running - no matching process was found after starting it. (stderr log was empty: $launchStderr)"
-        }
-    }
-}
-#endregion
-
 #region Run
 $ok = $true
 if ($Mode -in @('Build', 'Both')) { $ok = (Invoke-BuildMode) -and $ok }
@@ -394,25 +290,8 @@ if (-not $UpdateBaseline) {
     }
 }
 
-if ($SkipVSCodeRestart) {
-    Write-Host ""
-    Write-Host "Skipping VS Code Advanced HTTP-copy refresh (-SkipVSCodeRestart). It may now be running stale code." -ForegroundColor Yellow
-} else {
-    Write-Host ""
-    Write-Host "VS Code Advanced.Http copy was NOT refreshed (auto-refresh is disabled in this script); rebuild by hand if you use it: dotnet build -c Release -o bin-vscode\Advanced.Http" -ForegroundColor Yellow
-
-    # Gated on its own dotnet build of the Advanced project specifically, not on whatever
-    # flavor/mode this run targeted - a Basic build succeeding (or a Test-only run with no build
-    # at all) says nothing about whether Advanced itself currently compiles.
-    # Invoke-VSCodeServerRestart
-
-    # Invoke-VSCodeServerRestart only confirms the process launched (PID exists after a fixed
-    # 1s sleep) - not that it's actually answering requests. Delegate to the control script's
-    # `status` verb for a real JSON-RPC round-trip (see its Test-HttpCopyReachable), so a restart
-    # that started a process which then failed during startup is caught here instead of only
-    # surfacing later as a confusing ConnectionRefused from whatever tool call happens to run next.
-    # & (Join-Path $PSScriptRoot 'roslynsentinel-vscode-control.ps1') status -VSCodePort $VSCodePort
-}
+# The HTTP fallback server is no longer refreshed here; use scripts/Launch-RoslynSentinelHttpServer.ps1,
+# or roslynsentinel-vscode-control.ps1 restart for the shared copy.
 
 exit ([int](-not $ok))
 #endregion

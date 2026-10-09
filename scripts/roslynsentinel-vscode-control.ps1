@@ -375,7 +375,7 @@ switch ($Action) {
     }
     'build' {
         Write-Host "=== Rebuilding VS Code HTTP-fallback copy from source (delegates to build.ps1) ===" -ForegroundColor Cyan
-        & (Join-Path $PSScriptRoot 'build.ps1') -Flavor Solution -Mode Build -Force:$Force -VSCodePort $VSCodePort
+        & (Join-Path $PSScriptRoot 'build.ps1') -Flavor Solution -Mode Build -Force:$Force
         exit $LASTEXITCODE
     }
     'stopallstdio' {
