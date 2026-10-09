@@ -141,7 +141,7 @@
 | WorkspaceTools | ReadFile | Claude, claude-lean, Workspace | Allowed | Returns a file's raw text verbatim, or a 1-based line-range slice via startLine/endLine. |
 | WorkspaceTools | ReplaceSnippet | Claude, claude-lean, Workspace | - | Replaces one exact text block with another in a file, for small localized edits. |
 | WorkspaceTools | RetryFailedChanges | Claude, claude-lean, Workspace | - | Retries failed file writes using server-cached content. |
-| WorkspaceTools | RunTest | Claude, claude-lean, Workspace | - | Runs dotnet test and reports structured pass/fail results with failure grouping. |
+| WorkspaceTools | RunTest | Claude, claude-lean, Workspace | - | Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. |
 | WorkspaceTools | SafeDeleteUnusedSymbol | Claude, claude-lean, Workspace | - | Deletes a symbol only if it has zero usages anywhere in the codebase. |
 | WorkspaceTools | Search | Claude, claude-lean, Workspace | - | Unified search. mode selects what's searched: text (free-text/regex scan), symbol (declaration lookup by name),... |
 | WorkspaceTools | SplitProjectByFolder | Claude, claude-lean, Workspace | - | Moves all files under a folder from one project to a new target project, preserving structure. |

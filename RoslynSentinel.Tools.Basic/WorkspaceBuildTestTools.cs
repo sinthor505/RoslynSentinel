@@ -47,12 +47,12 @@ public class WorkspaceBuildTestTools
 
     [McpServerTool(Name = "RunTest")]
     [Produces(DataTag.Report)]
-    [Description("Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by message signature (e.g. \"45 of 50 failures share one cause\") so an agent doesn't have to paginate to notice a pattern, and a capped Results list (filtered by resultsType, then capped by maxDetails). resultsType defaults to \"failed\" so a clean run stays a short summary with no per-test list; pass \"all\" to see every test's outcome. Set summary=true to omit the Results list entirely (just counts + FailureSummary), regardless of resultsType. filter is passed through to `dotnet test --filter` - an unresolvable filter expression is a distinct error from a filter that resolves but matches zero tests.")]
+    [Description("Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by message signature (e.g. \"45 of 50 failures share one cause\") so an agent doesn't have to paginate to notice a pattern, and a capped Results list (filtered by resultsType, then capped by maxDetails). resultsType defaults to \"failed\" so a clean run stays a short summary with no per-test list; pass \"all\" to see every test's outcome. Set summary=true to omit the Results list entirely (just counts + FailureSummary), regardless of resultsType. filter is passed through to `dotnet test --filter` - an unresolvable filter expression is a distinct error from a filter that resolves but matches zero tests. With scope=solution a filter still builds and probes every test project (about 1.5 minutes for 13 projects); pass scope=project and scopeName to run one project in seconds.")]
     public Task<SentinelCallToolResult<object>> RunTest(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        ToolScope scope = ToolScope.solution,
-        string? scopeName = null,
-        string? filter = null,
+        [Description("solution (default) runs every test project one after another; project runs only the project named in scopeName; file is not supported.")] ToolScope scope = ToolScope.solution,
+        [Description("Project name (for example RoslynSentinel.Tests.Basic) when scope=project; not a parameter called projectName.")] string? scopeName = null,
+        [Description("Passed through to `dotnet test --filter`. With scope=solution a filter still builds and probes every test project (about 1.5 minutes for 13 projects); pass scope=project and scopeName to run one project in seconds.")] string? filter = null,
         TestResultsFilter resultsType = TestResultsFilter.failed,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
         int timeoutSeconds = 600,

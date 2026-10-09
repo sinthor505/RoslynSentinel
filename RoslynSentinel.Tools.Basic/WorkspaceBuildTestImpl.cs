@@ -144,10 +144,23 @@ public class WorkspaceBuildTestImpl
     // Short inline headline. The generic offload filter relays StatusMessage into its pointer
     // envelope, so even a response too large to inline (hundreds of failures) still carries the
     // totals without a GetLargeResult round trip.
-    private static string SummarizeTestRun(TestRunResult run) =>
-        $"{(run.RunSucceeded ? "Tests passed" : "Tests FAILED")}: {run.TotalCount} tests, {run.PassedCount} passed, " +
-        $"{run.FailedCount} failed, {run.SkippedCount} skipped in {FormatDuration(run.Duration)} " +
-        $"across {run.ProjectSummaries?.Count ?? 1} project(s).";
+    public static string SummarizeTestRun(TestRunResult run)
+    {
+        var headline =
+            $"{(run.RunSucceeded ? "Tests passed" : "Tests FAILED")}: {run.TotalCount} tests, {run.PassedCount} passed, " +
+            $"{run.FailedCount} failed, {run.SkippedCount} skipped in {FormatDuration(run.Duration)} " +
+            $"across {run.ProjectSummaries?.Count ?? 1} project(s).";
+
+        // A project can exit non-zero (build or adapter error) without any failed test; name it so the
+        // caller does not have to open the large result to find out which project broke.
+        if (!run.RunSucceeded && run.FailedCount == 0 && run.ProjectSummaries is { } projects)
+        {
+            headline += " No test failed, but " + string.Join(", ", projects.Where(p => !p.RunSucceeded).Select(p => p.ProjectName)) +
+                " exited non-zero (build or adapter error); see StdoutTail.";
+        }
+
+        return headline;
+    }
 
     private static string SummarizeBuild(BuildResult build) =>
         $"Build {build.Outcome}: {build.ErrorCount} error(s), {build.WarningCount} warning(s) in {FormatDuration(build.Duration)}.";
@@ -215,7 +228,7 @@ public class WorkspaceBuildTestImpl
 
             if (!testRunResult.RunCompleted)
             {
-                return new SentinelCallToolResult<object>() { IsError = true, SuccessData = testRunResult, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, testRunResult.Detail ?? "Test run did not complete."), WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
+                return new SentinelCallToolResult<object>() { IsError = true, SuccessData = testRunResult, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, testRunResult.Detail ?? "Test run did not complete."), StatusMessage = testRunResult.Detail ?? "Test run did not complete.", WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
             }
 
             return new SentinelCallToolResult<object>() { IsError = false, SuccessData = WithoutTailsWhenClean(testRunResult), StatusMessage = SummarizeTestRun(testRunResult), WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };

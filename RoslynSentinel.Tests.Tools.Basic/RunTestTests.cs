@@ -311,4 +311,37 @@ public class RunTestTests
         var newLeftovers = after.Where(f => !before.Contains(f)).ToList();
         Assert.That(newLeftovers, Is.Empty, "no new roslynsentinel_runtest_*.trx file should remain after RunTest completes.");
     }
+
+    // When a test project does not compile, `dotnet test` produces no TRX. The failing project and the
+    // cause must be in StatusMessage (which the large-result offload envelope relays), not only in the
+    // payload's Detail, so a caller can see what broke without a GetLargeResult round trip.
+    [Test]
+    public async Task RunTest_ProjectFailsToBuild_StatusMessageNamesProjectAndCauseAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "BrokenTests.cs"),
+            "namespace ContosoOrders.Tests; public class BrokenTests { this does not compile }");
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.project, scopeName: "ContosoOrders.Tests", timeoutSeconds: 120);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.StatusMessage, Does.Contain("ContosoOrders.Tests").And.Contain("TRX"));
+    }
+
+    // A project can exit non-zero (build or adapter error) with zero failed tests; the headline must name it.
+    [Test]
+    public void SummarizeTestRun_NonZeroExitWithNoFailedTests_NamesTheProject()
+    {
+        var run = new TestRunResult(
+            RunSucceeded: false, ExitCode: 1, TotalCount: 0, PassedCount: 0, FailedCount: 0, SkippedCount: 0,
+            FailureSummary: [], Results: [], StdoutTail: null, StderrTail: null, Duration: TimeSpan.FromSeconds(1),
+            ProjectSummaries: [new ProjectTestSummary("Some.Tests", RunSucceeded: false, TotalCount: 0, PassedCount: 0, FailedCount: 0, SkippedCount: 0, Detail: null)]);
+
+        var text = WorkspaceBuildTestImpl.SummarizeTestRun(run);
+
+        Assert.That(text, Does.Contain("Some.Tests").And.Contain("exited non-zero"));
+    }
 }

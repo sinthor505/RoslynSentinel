@@ -252,6 +252,21 @@ public class TestRunEngine
         project.FilePath is not null && File.Exists(project.FilePath) &&
         File.ReadAllText(project.FilePath).Contains("Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>Detects a build-output file lock (MSB3021/MSB3026/MSB3027) in `dotnet test` output.
+    /// Returns an actionable detail message, or null when no lock error is present.</summary>
+    public static string? DetectFileLock(string stdout, string stderr)
+    {
+        foreach (var code in new[] { "MSB3021", "MSB3026", "MSB3027" })
+        {
+            if (stdout.Contains(code, StringComparison.Ordinal) || stderr.Contains(code, StringComparison.Ordinal))
+            {
+                return "Build failed to copy the output file - it is likely locked by a running process (e.g. this MCP server or an IDE holding the binary). Close the process holding the file and retry. A running Visual Studio Test Explorer testhost is a common holder.";
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>Runs `dotnet test` against a single project with its own dedicated TRX file, and
     /// parses the result. Never throws -> timeouts, missing TRX, and process failures are all
     /// reported via <see cref="TestRunResult.RunCompleted"/> and <see cref="TestRunResult.Detail"/>
@@ -332,12 +347,7 @@ public class TestRunEngine
             var stdoutText = stdout.ToString();
             var stderrText = stderr.ToString();
 
-            string? lockDetail = null;
-            if (stderrText.Contains("MSB3027") || stdoutText.Contains("MSB3027") ||
-                stderrText.Contains("MSB3021") || stdoutText.Contains("MSB3021"))
-            {
-                lockDetail = "Build failed to copy the output file - it is likely locked by a running process (e.g. this MCP server or an IDE holding the binary). Close the process holding the file and retry.";
-            }
+            var lockDetail = DetectFileLock(stdoutText, stderrText);
 
             if (timeoutDetail is not null)
             {
