@@ -24,8 +24,7 @@ try {
 
     $dir = if ($env:ROSLYNSENTINEL_USAGE_DIR) { $env:ROSLYNSENTINEL_USAGE_DIR } else { Join-Path (Split-Path $PSScriptRoot -Parent) 'usage' }
     $snapFile = Join-Path $dir 'usage.json'
-    if (-not (Test-Path -LiteralPath $snapFile)) { exit 0 }
-    $snap = Get-Content -LiteralPath $snapFile -Raw | ConvertFrom-Json
+    $snap = if (Test-Path -LiteralPath $snapFile) { Get-Content -LiteralPath $snapFile -Raw | ConvertFrom-Json } else { $null }
 
     $nudgePct = 85; $urgentPct = 95
     if ($env:ROSLYNSENTINEL_USAGE_NUDGE_PCT  -match '^\d+$') { $nudgePct  = [int]$env:ROSLYNSENTINEL_USAGE_NUDGE_PCT }
@@ -42,7 +41,23 @@ try {
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $messages = @()
 
+    # Stale-data notice. usage.json is written only by the statusLine command, which the Claude Code CLI runs
+    # but the VS Code extension does not, so in the extension the snapshot never refreshes and every limit
+    # warning below silently never fires. Say so once per session instead of letting silence read as "safe".
+    $staleAfterSeconds = 1800
+    if ($env:ROSLYNSENTINEL_USAGE_STALE_SECONDS -match '^\d+$') { $staleAfterSeconds = [int]$env:ROSLYNSENTINEL_USAGE_STALE_SECONDS }
+    $updated = if ($null -ne $snap -and $null -ne $snap.updated) { [long]$snap.updated } else { 0 }
+    if ($null -eq $snap -or ($now - $updated) -gt $staleAfterSeconds) {
+        $staleKey = 'stale-usage-data'
+        if ($done -notcontains $staleKey) {
+            $done += $staleKey
+            $age = if ($updated -gt 0) { 'last refreshed {0:0.#} h ago' -f (($now - $updated) / 3600.0) } else { 'never refreshed' }
+            $messages += "Usage-limit warnings are INACTIVE in this session: the usage snapshot is stale ($age). The usage-statusline hook only runs in the Claude Code CLI, not the VS Code extension, so 85%/95% notices cannot fire here. Do not treat silence as headroom: commit small steps often, keep the progress log current, and ask the user for the current 5-hour percentage if a long autonomous run is planned."
+        }
+    }
+
     foreach ($pair in @(@('five_hour', '5-hour session'), @('seven_day', 'weekly'))) {
+        if ($null -eq $snap) { break }
         $w = $snap.($pair[0])
         if ($null -eq $w -or $null -eq $w.used_percentage -or $null -eq $w.resets_at) { continue }
         $resets = [long]$w.resets_at

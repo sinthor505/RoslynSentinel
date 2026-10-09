@@ -75,6 +75,7 @@ Call sites: pre-measured list (file:line), or "none"
 Acceptance: ONE check - a clean Build, or one named test/diagnostic
 Out of scope: what not to touch (e.g. "do not commit", "items 5-7") - always include "edit nothing
   outside the named symbols/branches; if a test seems to need another change, reply RESCOPE:"
+  and "no Write/Edit/shell writes on .cs files"
 ```
 
 Dispatch with `model: "haiku"` pinned explicitly.

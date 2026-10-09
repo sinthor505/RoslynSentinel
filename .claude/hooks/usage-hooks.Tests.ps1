@@ -70,6 +70,23 @@ try {
 
     Assert ((Invoke-Hook $nudge '') -eq '') 'nudge: empty stdin is silent'
     Assert ((Invoke-Hook $nudge '{garbage') -eq '') 'nudge: bad json is silent'
+
+    # --- stale snapshot notice ---
+    Remove-Item (Join-Path $dir '*.nudged') -ErrorAction SilentlyContinue
+    $oldSnap = @{ updated = ($now - 7200); five_hour = @{ used_percentage = 10; resets_at = $future } }
+    [IO.File]::WriteAllText((Join-Path $dir 'usage.json'), ($oldSnap | ConvertTo-Json -Depth 4))
+    $ctx = ((Invoke-Hook $nudge $post) | ConvertFrom-Json).hookSpecificOutput.additionalContext
+    Assert ($ctx -match 'INACTIVE' -and $ctx -match 'stale') 'nudge: stale snapshot says warnings are inactive'
+    Assert ((Invoke-Hook $nudge $post) -eq '') 'nudge: stale notice fires once per session'
+
+    Remove-Item (Join-Path $dir '*.nudged') -ErrorAction SilentlyContinue
+    Remove-Item (Join-Path $dir 'usage.json')
+    $ctx = ((Invoke-Hook $nudge $post) | ConvertFrom-Json).hookSpecificOutput.additionalContext
+    Assert ($ctx -match 'INACTIVE' -and $ctx -match 'never refreshed') 'nudge: missing snapshot says warnings are inactive'
+
+    Remove-Item (Join-Path $dir '*.nudged') -ErrorAction SilentlyContinue
+    Write-Snap 50 $future
+    Assert ((Invoke-Hook $nudge $post) -eq '') 'nudge: fresh snapshot below threshold stays silent'
 }
 finally {
     Remove-Item Env:\ROSLYNSENTINEL_USAGE_DIR -ErrorAction SilentlyContinue
