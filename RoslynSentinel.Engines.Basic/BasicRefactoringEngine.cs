@@ -201,11 +201,15 @@ public class BasicRefactoringEngine
 
         var newParameterList = methodDecl.ParameterList.WithParameters(SyntaxFactory.SeparatedList(newParameterSyntaxes));
 
-        var declarationEditor = await DocumentEditor.CreateAsync(document, cancellationToken);
-        declarationEditor.ReplaceNode(methodDecl.ParameterList, newParameterList);
-        var updatedDeclarationDoc = declarationEditor.GetChangedDocument();
-
-        var pendingDocs = new Dictionary<FilePathWrapper, Document> { [filePath] = updatedDeclarationDoc };
+        // Single pass: every edit in a file (the declaration's parameter list and all call sites) is planned against
+        // ONE original root per file path and applied with one ReplaceNodes, so no edit can shift the span of another
+        // (re-locating a call site by span after an earlier edit missed the second site in the same document).
+        // The declaration's file is keyed by the document's own FilePath (not the caller-supplied filePath, which may be
+        // a bare file name) so call sites in the same file land on the same entry.
+        FilePathWrapper declPath = document.FilePath ?? filePath;
+        var rootByPath = new Dictionary<FilePathWrapper, SyntaxNode> { [declPath] = root };
+        var documentByPath = new Dictionary<FilePathWrapper, Document> { [declPath] = document };
+        var callSitePlansByPath = new Dictionary<FilePathWrapper, Dictionary<SyntaxNode, List<(int SrcIndex, ExpressionSyntax? Literal)>>> { [declPath] = new() };
         var skippedCallSites = new List<SkippedCallSite>();
 
         if (declaredSymbol != null)
@@ -222,9 +226,22 @@ public class BasicRefactoringEngine
 
                     var refDoc = location.Document;
                     var refDocPath = (FilePathWrapper)refDoc.FilePath!;
-                    var refRoot = await refDoc.GetSyntaxRootAsync(cancellationToken);
+                    if (!rootByPath.TryGetValue(refDocPath, out var refRoot))
+                    {
+                        var loadedRoot = await refDoc.GetSyntaxRootAsync(cancellationToken);
+                        if (loadedRoot == null)
+                        {
+                            continue;
+                        }
+
+                        refRoot = loadedRoot;
+                        rootByPath[refDocPath] = refRoot;
+                        documentByPath[refDocPath] = refDoc;
+                        callSitePlansByPath[refDocPath] = new();
+                    }
+
                     var refSemanticModel = await refDoc.GetSemanticModelAsync(cancellationToken);
-                    if (refRoot == null || refSemanticModel == null)
+                    if (refSemanticModel == null)
                     {
                         continue;
                     }
@@ -353,37 +370,30 @@ public class BasicRefactoringEngine
                         continue;
                     }
 
-                    var newArguments = SyntaxFactory.SeparatedList(slotArgExpr.Where(a => a != null).Select(a => a!));
-
-                    if (!pendingDocs.TryGetValue(refDocPath, out var pendingRefDoc))
+                    // Record the new argument list as a plan over the ORIGINAL node: each slot either carries over the
+                    // argument at a given index of the (possibly already-rewritten) current argument list, or inserts a
+                    // literal expression. Resolving carried arguments from the rewritten node at apply time keeps edits to
+                    // call sites nested inside an argument (e.g. Process(Process(...), ...)).
+                    var slotPlan = new List<(int SrcIndex, ExpressionSyntax? Literal)>();
+                    for (int slot = 0; slot < parameters.Count; slot++)
                     {
-                        pendingRefDoc = refDoc;
+                        var slotArg = slotArgExpr[slot];
+                        if (slotArg == null)
+                        {
+                            continue;
+                        }
+
+                        if (parameters[slot] is ExistingParameterSpec boundSpec && argsByOriginalIndex[boundSpec.OriginalIndex] is { } boundSrc)
+                        {
+                            slotPlan.Add((arguments.IndexOf(boundSrc), null));
+                        }
+                        else
+                        {
+                            slotPlan.Add((-1, slotArg.Expression));
+                        }
                     }
 
-                    var pendingRoot = await pendingRefDoc.GetSyntaxRootAsync(cancellationToken);
-                    // Re-locate by span in whichever node kind the original call site was; an earlier
-                    // edit to this same document may have shifted spans, so this can legitimately miss.
-                    ExpressionSyntax? targetInvocation = invocation switch
-                    {
-                        InvocationExpressionSyntax => pendingRoot?.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(inv => inv.Span == invocation.Span),
-                        BaseObjectCreationExpressionSyntax => pendingRoot?.DescendantNodes().OfType<BaseObjectCreationExpressionSyntax>().FirstOrDefault(obj => obj.Span == invocation.Span),
-                        _ => null
-                    };
-                    if (targetInvocation == null)
-                    {
-                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Could not re-locate this call site in the pending document after an earlier edit."));
-                        continue;
-                    }
-
-                    var callSiteEditor = await DocumentEditor.CreateAsync(pendingRefDoc, cancellationToken);
-                    ExpressionSyntax rewrittenSite = targetInvocation switch
-                    {
-                        InvocationExpressionSyntax inv => inv.WithArgumentList(inv.ArgumentList.WithArguments(newArguments)),
-                        BaseObjectCreationExpressionSyntax obj => obj.WithArgumentList(obj.ArgumentList!.WithArguments(newArguments)),
-                        _ => throw new NotSupportedException($"ChangeSignatureAsync: unhandled call-site expression type {targetInvocation.GetType().Name}.")
-                    };
-                    callSiteEditor.ReplaceNode(targetInvocation, rewrittenSite);
-                    pendingDocs[refDocPath] = callSiteEditor.GetChangedDocument();
+                    callSitePlansByPath[refDocPath].TryAdd(invocation, slotPlan);
                 }
             }
         }
@@ -414,12 +424,31 @@ public class BasicRefactoringEngine
             return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), skippedCallSites, errorMessage);
         }
 
-        // Format all changed documents.
-        var result = new Dictionary<FilePathWrapper, string>();
-        foreach (var kvp in pendingDocs)
+        static SeparatedSyntaxList<ArgumentSyntax> RebuildArguments(SeparatedSyntaxList<ArgumentSyntax> current, List<(int SrcIndex, ExpressionSyntax? Literal)> plan)
         {
-            var formatted = await Formatter.FormatAsync(kvp.Value, null, cancellationToken);
-            result[kvp.Key] = (await formatted.GetTextAsync(cancellationToken)).ToString();
+            return SyntaxFactory.SeparatedList(plan.Select(p => SyntaxFactory.Argument(p.Literal ?? current[p.SrcIndex].Expression)));
+        }
+
+        // Apply every planned edit per document in one ReplaceNodes pass, then format.
+        var result = new Dictionary<FilePathWrapper, string>();
+        foreach (var (path, plans) in callSitePlansByPath)
+        {
+            var nodes = new List<SyntaxNode>(plans.Keys);
+            if (path.Equals(declPath))
+            {
+                nodes.Add(methodDecl.ParameterList);
+            }
+
+            var newRoot = rootByPath[path].ReplaceNodes(nodes, (original, rewritten) => rewritten switch
+            {
+                ParameterListSyntax => newParameterList,
+                InvocationExpressionSyntax inv => inv.WithArgumentList(inv.ArgumentList.WithArguments(RebuildArguments(inv.ArgumentList.Arguments, plans[original]))),
+                BaseObjectCreationExpressionSyntax obj => obj.WithArgumentList(obj.ArgumentList!.WithArguments(RebuildArguments(obj.ArgumentList.Arguments, plans[original]))),
+                _ => rewritten
+            });
+            var changedDoc = documentByPath[path].WithSyntaxRoot(newRoot);
+            var formatted = await Formatter.FormatAsync(changedDoc, null, cancellationToken);
+            result[path.Equals(declPath) ? filePath : path] = (await formatted.GetTextAsync(cancellationToken)).ToString();
         }
 
         return new ChangeSignatureResult(result, skippedCallSites);

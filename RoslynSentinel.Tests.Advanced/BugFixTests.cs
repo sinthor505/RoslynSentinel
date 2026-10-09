@@ -605,6 +605,51 @@ public class Service
     }
 
     [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    [Category("ExistingParameterSpec")] // sentinel:auto-category
+    public async Task REG_ChangeSignature_MultipleCallSitesPerDocument_AllRewrittenInOnePass()
+    {
+        const string service = @"
+public class Service
+{
+    public void Process(string name, int age, bool active)
+    {
+        var x = 1;
+    }
+
+    public void Caller()
+    {
+        Process(""A"", 1, true);
+        Process(""B"", 2, false);
+        Process(""C"", 3, true);
+    }
+}";
+        const string other = @"
+public class Other
+{
+    public void Run(Service s)
+    {
+        s.Process(""D"", 4, false);
+        s.Process(""E"", 5, true);
+    }
+}";
+        SetMultipleFiles(("Service.cs", service), ("Other.cs", other));
+        // Reorder: [name, age, active] -> [active, name, age]
+        var result = await _refactoringEngine.ChangeSignatureAsync("Service.cs", "Process", new SignatureParameterSpec[] { new ExistingParameterSpec(2), new ExistingParameterSpec(0), new ExistingParameterSpec(1) });
+        Assert.That(result.SkippedCallSites, Is.Empty, "No call site should be skipped");
+        Assert.That(result.Changes.Count, Is.EqualTo(2), "Both files should be changed");
+        var serviceText = result.Changes.Single(kv => kv.Key.ToString().Contains("Service.cs")).Value;
+        var otherText = result.Changes.Single(kv => kv.Key.ToString().Contains("Other.cs")).Value;
+        Assert.That(serviceText, Does.Contain("Process(bool active, string name, int age)"));
+        Assert.That(serviceText, Does.Contain("Process(true, \"A\", 1);"));
+        Assert.That(serviceText, Does.Contain("Process(false, \"B\", 2);"));
+        Assert.That(serviceText, Does.Contain("Process(true, \"C\", 3);"));
+        Assert.That(otherText, Does.Contain("s.Process(false, \"D\", 4);"));
+        Assert.That(otherText, Does.Contain("s.Process(true, \"E\", 5);"));
+    }
+
+    [Test]
     [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task REG_ConvertPropertySafe_VirtualProperty_PreservesModifier()
     {
