@@ -138,15 +138,13 @@ public class TestCategoryToolSchemaTests
     }
 
     [Test]
-    [Description("A wrong-case name is not silently repaired: the validation filter rejects it, names the closest valid value and lists them all")]
-    public async Task Call_WithWrongCaseName_IsRejectedWithClosestSuggestion()
+    [Description("A wrong-case enum value with exactly one case-insensitive match is repaired and the repair is reported")]
+    public async Task Call_WithWrongCaseName_IsRepairedAndReported()
     {
         var (isError, text) = await CallWithFrameworkAsync("nunit");
 
-        Assert.That(isError, Is.True, text);
-        Assert.That(text, Does.Contain("'nunit' is not a valid value for parameter 'framework'"));
-        Assert.That(text, Does.Contain("Did you mean 'NUnit'?"));
-        Assert.That(text, Does.Contain("Auto, NUnit, XUnit, MSTest"));
+        Assert.That(text, Does.Contain("'nunit' -> 'NUnit'"));
+        Assert.That(text, Does.Contain("it was treated as 'NUnit'"));
     }
 
     [Test]

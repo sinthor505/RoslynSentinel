@@ -387,6 +387,93 @@ public static class ToolArgumentValidator
         };
 
     /// <summary>
+    /// Repairs enum parameter values when the caller-provided string value is not an exact
+    /// ordinal match but exactly one enum member matches under case-insensitive comparison,
+    /// and returns one short note per repair (or <see langword="null"/> when nothing changed).
+    /// When zero or two-or-more members match case-insensitively, the value is left unchanged
+    /// for <see cref="Validate"/> to reject in step 3b.
+    /// <para>
+    /// Run before <see cref="ApplyParameterAliases"/>.
+    /// </para>
+    /// </summary>
+    public static System.Collections.Generic.IReadOnlyList<string>? NormalizeEnumCase(
+        ModelContextProtocol.Server.McpServer? server,
+        string? toolName,
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments)
+    {
+        if (arguments is null || arguments.Count == 0 || string.IsNullOrEmpty(toolName))
+            return null;
+
+        var schema = TryGetSchemaParameters(server, toolName);
+        if (schema is null)
+            return null;
+
+        var (declared, required, propertySchemas, _) = schema.Value;
+
+        // Collect repairs first rather than mutating while enumerating arguments.Keys.
+        System.Collections.Generic.List<(string Key, string Member)>? repairs = null;
+        foreach (var argument in arguments)
+        {
+            if (argument.Value.ValueKind != System.Text.Json.JsonValueKind.String)
+                continue;
+
+            if (!propertySchemas.TryGetValue(argument.Key, out var propertySchema))
+                continue;
+
+            if (!propertySchema.TryGetProperty("enum", out var enumNode) ||
+                enumNode.ValueKind != System.Text.Json.JsonValueKind.Array)
+                continue;
+
+            var actualValue = argument.Value.GetString() ?? "";
+            var members = new System.Collections.Generic.List<string>();
+            var ordinalMatch = false;
+
+            foreach (var entry in enumNode.EnumerateArray())
+            {
+                if (entry.ValueKind != System.Text.Json.JsonValueKind.String)
+                    continue;
+                var member = entry.GetString();
+                if (member is null)
+                    continue;
+                members.Add(member);
+                if (string.Equals(member, actualValue, StringComparison.Ordinal))
+                    ordinalMatch = true;
+            }
+
+            if (ordinalMatch || members.Count == 0)
+                continue;
+
+            // Count case-insensitive matches.
+            var caseInsensitiveMatches = new System.Collections.Generic.List<string>();
+            foreach (var member in members)
+            {
+                if (string.Equals(member, actualValue, StringComparison.OrdinalIgnoreCase))
+                    caseInsensitiveMatches.Add(member);
+            }
+
+            // Repair only when exactly one match exists.
+            if (caseInsensitiveMatches.Count == 1)
+            {
+                (repairs ??= new System.Collections.Generic.List<(string, string)>())
+                    .Add((argument.Key, caseInsensitiveMatches[0]));
+            }
+        }
+
+        if (repairs is null)
+            return null;
+
+        var notes = new System.Collections.Generic.List<string>(repairs.Count);
+        foreach (var (key, member) in repairs)
+        {
+            var originalValue = arguments[key].GetString() ?? "";
+            arguments[key] = System.Text.Json.JsonSerializer.SerializeToElement(member);
+            notes.Add($"Note: '{originalValue}' is not a valid value for parameter '{key}' of {toolName}; it was treated as '{member}' ('{originalValue}' -> '{member}'). Use '{member}' in future calls.");
+        }
+
+        return notes;
+    }
+
+    /// <summary>
     /// Rewrites <paramref name="arguments"/> in place, renaming each key listed in
     /// <see cref="ParameterAliases"/> for this tool to its declared parameter, and returns one
     /// short note per rename (or <see langword="null"/> when nothing changed) so the caller can tell
@@ -397,7 +484,7 @@ public static class ToolArgumentValidator
     /// alias target is not declared in the emitted schema (a stale table entry must not invent a
     /// parameter), or when the call already supplies the target (renaming would silently overwrite
     /// one of two values the caller passed, the same rule as <see cref="NormalizeParameterCase"/>).
-    /// Run after <see cref="NormalizeParameterCase"/>.
+    /// Run after <see cref="NormalizeParameterCase"/> and <see cref="NormalizeEnumCase"/>.
     /// </para>
     /// </summary>
     public static System.Collections.Generic.IReadOnlyList<string>? ApplyParameterAliases(
@@ -720,7 +807,8 @@ public static class ToolArgumentValidator
                     }
                 }
 
-                // 3b. Declared enum but the caller's string value isn't one of the members.
+                // 3b. Declared enum but the caller's string value isn't one of the members. A
+                //     single case-insensitive match is repaired earlier by NormalizeEnumCase.
                 if (actualKind == System.Text.Json.JsonValueKind.String &&
                     propertySchema.TryGetProperty("enum", out var enumNode) &&
                     enumNode.ValueKind == System.Text.Json.JsonValueKind.Array)

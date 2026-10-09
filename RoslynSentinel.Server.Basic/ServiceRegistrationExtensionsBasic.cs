@@ -1015,8 +1015,15 @@ public static class RoslynSentinelServiceExtensionsBasic
                     ToolArgumentValidator.NormalizeParameterCase(
                         context.Server, context.Params?.Name, context.Params?.Arguments);
 
-                    aliasNotes = ToolArgumentValidator.ApplyParameterAliases(
+                    var enumNotes = ToolArgumentValidator.NormalizeEnumCase(
                         context.Server, context.Params?.Name, context.Params?.Arguments);
+                    if (enumNotes is not null)
+                        aliasNotes = enumNotes;
+
+                    var aliasRenameNotes = ToolArgumentValidator.ApplyParameterAliases(
+                        context.Server, context.Params?.Name, context.Params?.Arguments);
+                    if (aliasRenameNotes is not null)
+                        aliasNotes = enumNotes is null ? aliasRenameNotes : [.. (enumNotes ?? System.Array.Empty<string>()), .. aliasRenameNotes];
 
                     var wrapNotes = ToolArgumentValidator.WrapFlatBatchParameters(
                         context.Server, context.Params?.Name, context.Params?.Arguments);
