@@ -382,6 +382,7 @@ public static class ToolArgumentValidator
             ["ChangeAccessibility"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["newAccessibility"] = "accessibility",
+                ["symbolName"] = "targetName",
             },
         };
 

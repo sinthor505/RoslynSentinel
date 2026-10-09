@@ -1,6 +1,6 @@
 # Finding: The dog-fooding hook blocks scratchpad PowerShell that merely mentions ".cs", pushing agents to reword commands
 
-**Status:** OPEN 2026-10-02. Fix not decided; the limitation is already documented in the hook as known.
+**Status:** PARTIALLY ADDRESSED 2026-10-09. The here-string / heredoc case (prose written into a `.md` via `@'...'@` or `<<'EOF'`) is fixed by `Remove-HereStrings` in the hook (plan_agent_tooling_hooks_and_small_ergonomics.md, Step 1; commit 347e0da). The residual limitation remains for a quoted single-line literal that mentions `.cs` (for example `Set-Content notes.md 'Foo.cs'`, now also denied by the shell-write rule; use the bypass keyword) and for recommendations 1-3 below, which are not implemented.
 
 ## Context
 During the 2026-10-02 type-inventory and anonymous-shape audits (session cc715aa0), Sonnet agents wrote

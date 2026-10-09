@@ -1,6 +1,6 @@
 # Plan: harden the dog-food hooks, fix stale script signals, and close small tool-ergonomics gaps
 
-**Status:** DRAFT 2026-10-08. Priority P3. Ten steps (eight independent work steps, two conditional on a human decision, then verification); anything feature-sized is listed under Risks as needs-design.
+**Status:** PARTIALLY IMPLEMENTED 2026-10-09. Steps 1-7 shipped; Steps 8 and 9 are DEFERRED pending human decisions (see Implementation notes at the end); Step 10 verification was run by the orchestrator (results in the notes). Priority P3. Ten steps (eight independent work steps, two conditional on a human decision, then verification); anything feature-sized is listed under Risks as needs-design.
 
 ## Problem
 
@@ -274,3 +274,21 @@ are impressions; every claim below cites source read on 2026-10-08, and untraced
 12. Noise or one-off, not planned: `47b2c93d:L25` (SDK list_changed), `630f0332:L7` (Connection closed after stop is
     client-side), `ebd9923b:L14` (client caches schema across a restart; client behaviour), `RunTest` project-scope
     probing time (`a08be84f:L15`, `L25`; a perf item, deferred).
+
+## Implementation notes (2026-10-09)
+
+- Steps 1-5 (commit 347e0da5153e18daaacd816958c0d46c892fadf5): hook and script changes. `enforce-dogfood.Tests.ps1` 116/116,
+  `friction-cases.Tests.ps1` 17/17. Deviations: the reader/writer rules treat a newline as a command position (the plan's
+  "real read after a here-string" case needed it); the hook header comment was updated; extra cases added (FC7f JSON string
+  payload, here-string plus real git, RESCOPE present but no Write/Edit/shell warning). Which Build payload shape the host
+  really sends is still unconfirmed; all four shapes are handled and tested.
+- Step 6 (commit ec31e84f9264b4c5b2060c7f140a175dba2379c0): checklist comment on `ToolSetName`. The guard test
+  `Catalog_EverySetIsRegisteredAndDescribed` reads the private `ToolsBySet` and `Summaries` fields by reflection and names
+  the missing place. The description check in the plan was already covered by the existing
+  `Catalog_EveryToolIsDeclared_AndTheDescriptionNamesEverySetAndTool`, so it was not duplicated.
+- Step 7: `ChangeAccessibility` alias `symbolName -> targetName`; `CreateFile` descriptions (both copies) point at
+  `WriteFile(operation: CreateFile, content: ...)`. `ArchitectureDocFreshnessTests` passes, so no docs/generated change.
+- DEFERRED (judgement calls left to the human): Step 9 (block built-in `Read` of in-repo `.cs`; a restricted subagent loses
+  its only C# read); Step 8 (enum case repair; conflicts with the pinned test `Call_WithWrongCaseName_IsRejectedWithClosestSuggestion`);
+  the CLAUDE.md "Out of scope" wording edit (Risks item 10; Step 3 warns on its absence in the meantime).
+- Decision 3 (HTTP copy in `scripts/build.ps1`) unchanged: Step 5 only made the state visible.
