@@ -24,9 +24,24 @@ public static class SummarizeListResult
         var shown = byFile.Take(maxFilesShown).ToList();
         return new ListSummary(items.Count, byFile.Count, shown, byFile.Count - shown.Count);
     }
+    /// <summary>
+    /// Like <see cref="Build{T}"/> but also fills <see cref="ListSummary.ByProject"/> from <paramref name="projectSelector"/>.
+    /// </summary>
+    public static ListSummary BuildWithProjects<T>(IReadOnlyCollection<T> items, Func<T, string> filePathSelector, Func<T, string> projectSelector, int maxFilesShown = 20)
+    {
+        var byProject = items
+            .GroupBy(projectSelector)
+            .Select(g => new ProjectHitCount(g.Key, g.Count()))
+            .OrderByDescending(p => p.Count)
+            .ThenBy(p => p.ProjectName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        return Build(items, filePathSelector, maxFilesShown) with { ByProject = byProject };
+    }
 }
 /// <summary>One file's hit count within a <see cref="ListSummary"/>.</summary>
 public record FileHitCount(string FilePath, int Count);
+/// <summary>One project's hit count within a <see cref="ListSummary"/>.</summary>
+public record ProjectHitCount(string ProjectName, int Count);
 /// <summary>
 /// Per-file breakdown of a list-shaped tool result, built by <see cref="SummarizeListResult"/>.
 /// <see cref="ByFile"/> is sorted by <see cref="FileHitCount.Count"/> descending and capped at the
@@ -35,6 +50,13 @@ public record FileHitCount(string FilePath, int Count);
 /// </summary>
 public record ListSummary(int TotalCount, int FileCount, IReadOnlyList<FileHitCount> ByFile, int TruncatedFileCount)
 {
+    /// <summary>
+    /// Optional per-project hit counts (descending by count, then name). Null unless the producing tool
+    /// asked for it via <see cref="SummarizeListResult.BuildWithProjects{T}"/>; omitted from the JSON when null.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<ProjectHitCount>? ByProject { get; init; }
+
     /// <summary>
     /// Renders a single human-readable line of counts only, e.g. "12 hits across 5 files.". Meant for a
     /// tool's top-level StatusMessage so a caller sees the shape of the result (1 big hit vs. many small

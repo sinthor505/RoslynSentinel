@@ -345,6 +345,64 @@ public class BatteryTwentyTests
         // Returned row count: check both in-memory and offloaded cases
         var returnedCount = (result.SuccessData as List<SolutionSymbolEntry>)?.Count ?? result.LargeResult!.TotalRecords;
         Assert.That(returnedCount, Is.EqualTo(WorkspaceTools.KindListingMaxItems));
+
+        // Truncated results carry a summary over ALL matches, not just the returned rows.
+        var summary = result.ListSummary;
+        Assert.That(summary, Is.Not.Null);
+        Assert.That(summary!.TotalCount, Is.EqualTo(WorkspaceTools.KindListingMaxItems + 5));
+        Assert.That(summary.FileCount, Is.EqualTo(1));
+        Assert.That(summary.ByFile, Has.Count.EqualTo(1));
+        Assert.That(summary.ByFile[0].Count, Is.EqualTo(WorkspaceTools.KindListingMaxItems + 5));
+        Assert.That(summary.TruncatedFileCount, Is.EqualTo(0));
+        Assert.That(summary.ByProject, Is.Not.Null);
+        Assert.That(summary.ByProject, Has.Count.EqualTo(1));
+        Assert.That(summary.ByProject![0].ProjectName, Is.EqualTo("TestProj"));
+        Assert.That(summary.ByProject[0].Count, Is.EqualTo(WorkspaceTools.KindListingMaxItems + 5));
+        Assert.That(result.WarningDetails, Does.Contain("FindReferences"));
+        Assert.That(result.WarningDetails, Does.Contain("GetFileOutline"));
+        Assert.That(result.WarningDetails, Does.Contain("mode: symbol"));
+    }
+
+
+    [Test]
+    public async Task SearchKindMode_TruncatedAcrossManyFiles_ListsTopTenFilesAndCountsTheRestAsync()
+    {
+        // 12 files x 3 classes = 36 classes, above the cap.
+        var files = new List<(string fileName, string source)>();
+        for (int f = 0; f < 12; f++)
+        {
+            var sb = new StringBuilder("namespace TestProj;\r\n");
+            for (int c = 0; c < 3; c++)
+            {
+                sb.AppendLine($"public class F{f}C{c} {{ }}");
+            }
+            files.Add(($"F{f}.cs", sb.ToString()));
+        }
+        SetSources(files.ToArray());
+
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.@class, query: "");
+
+        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.HasMoreData, Is.True);
+        var summary = result.ListSummary;
+        Assert.That(summary, Is.Not.Null);
+        Assert.That(summary!.TotalCount, Is.EqualTo(36));
+        Assert.That(summary.FileCount, Is.EqualTo(12));
+        Assert.That(summary.ByFile, Has.Count.EqualTo(10));
+        Assert.That(summary.TruncatedFileCount, Is.EqualTo(2));
+    }
+
+
+    [Test]
+    public async Task SearchKindMode_NotTruncated_HasNoListSummaryAsync()
+    {
+        SetSource("namespace TestProj; public class Order { } public class Customer { }", "Test.cs");
+
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.@class, query: "");
+
+        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.HasMoreData, Is.False);
+        Assert.That(result.ListSummary, Is.Null);
     }
 
 
@@ -361,7 +419,7 @@ public class BatteryTwentyTests
 
         var result = await _workspaceTools.ListAll(reason: "test message", kind: ListAllKind.@class);
 
-        Assert.That(result.TotalRecords, Is.EqualTo(105));
+        Assert.That(result.TotalRecords, Is.EqualTo(WorkspaceTools.KindListingMaxItems + 5));
         Assert.That(result.HasMoreData, Is.False);
     }
 
@@ -369,7 +427,7 @@ public class BatteryTwentyTests
     [Test]
     public void SearchTool_DescriptionStatesTheKindListingCap()
     {
-        // Verify that the hardcoded number 100 in the description matches KindListingMaxItems constant.
+        // Verify that the cap number is hard-coded in the description strings.
         // This test will fail if someone changes the constant without updating the description text.
 
         // Get the SearchSolution method from WorkspaceTools

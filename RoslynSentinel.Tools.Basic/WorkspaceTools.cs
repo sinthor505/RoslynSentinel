@@ -611,11 +611,11 @@ public class WorkspaceTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.ProjectName)]
-    [Description("Unified search. mode selects what's searched: text (free-text/regex scan), symbol (declaration lookup by name), references (callers/implementations of a symbol), or a declaration-kind listing (all, namespace, class, interface, method, property, struct, record, enum, enum member, constructor, field). query: mode text = pattern matched as both a literal and a regex (use fileGlob, not a path parameter, to restrict files); symbol/references = symbol name; declaration-kind modes = optional case-insensitive name filter (exact name unless exactMatch is false). Declaration-kind listings return at most 100 rows: when more match, totalRecords holds the full match count, hasMoreData is true and warningDetails says the list was truncated - narrow with query or projectName, or use mode: symbol. Zero matches returns a NoMatches error.")]
+    [Description("Unified search. mode selects what's searched: text (free-text/regex scan), symbol (declaration lookup by name), references (callers/implementations of a symbol), or a declaration-kind listing (all, namespace, class, interface, method, property, struct, record, enum, enum member, constructor, field). query: mode text = pattern matched as both a literal and a regex (use fileGlob, not a path parameter, to restrict files); symbol/references = symbol name; declaration-kind modes = optional case-insensitive name filter (exact name unless exactMatch is false). Declaration-kind listings return at most 30 rows: when more match, totalRecords holds the full match count, hasMoreData is true, listSummary gives per-project (byProject) and top-10 per-file (byFile, truncatedFileCount) match counts over ALL matches, and warningDetails says the list was truncated - narrow with query or projectName, or use mode: symbol. Zero matches returns a NoMatches error.")]
     public Task<SentinelCallToolResult<object>> SearchSolution(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     SearchMode mode,
-    [Description("mode: text = pattern matched as both a literal and a regex; symbol/references = symbol name; declaration-kind modes = optional case-insensitive name filter (see exactMatch). Omit in declaration-kind modes only if you want up to 100 rows of that kind.")]
+    [Description("mode: text = pattern matched as both a literal and a regex; symbol/references = symbol name; declaration-kind modes = optional case-insensitive name filter (see exactMatch). Omit in declaration-kind modes only if you want up to 30 rows of that kind.")]
         string? query = null,
     [Description("mode: text only. Glob restricting file paths (omit for all files). " +
         "Supports '*' (within one path segment), '**' (any depth), '?' (one char), " +
@@ -649,7 +649,7 @@ public class WorkspaceTools
     /// <summary>
     /// Hard cap on rows returned by Search in declaration-kind modes; extra matches are counted in totalRecords and flagged via hasMoreData/warningDetails.
     /// </summary>
-    public const int KindListingMaxItems = 100;
+    public const int KindListingMaxItems = 30;
 
     private static ListAllKind SearchModeToListAllKind(SearchMode mode) => mode switch
     {

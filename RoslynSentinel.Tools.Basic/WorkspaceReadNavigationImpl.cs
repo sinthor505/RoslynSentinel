@@ -356,6 +356,7 @@ public class WorkspaceReadNavigationImpl
             };
             var entries = new List<SolutionSymbolEntry>();
             var totalMatches = 0;
+            var allMatches = maxItems is null ? null : new List<(string FilePath, string ProjectName)>();
             foreach (var project in projects)
             {
                 foreach (var document in project.Documents)
@@ -391,6 +392,7 @@ public class WorkspaceReadNavigationImpl
                         }
 
                         totalMatches++;
+                        allMatches?.Add((document.FilePath, project.Name));
                         if (maxItems is null || entries.Count < maxItems.Value)
                         {
                             entries.Add(new SolutionSymbolEntry(filePath, item.Kind, item.Name, item.Container, item.StartLine, item.EndLine));
@@ -418,7 +420,14 @@ public class WorkspaceReadNavigationImpl
 
             if (totalMatches > entries.Count)
             {
-                return result with { TotalRecords = totalMatches, HasMoreData = true, WarningDetails = $"Truncated: showing the first {entries.Count} of {totalMatches} matching declarations (cap {maxItems}). Narrow with query (name filter), projectName, or use mode: symbol." };
+                var summary = SummarizeListResult.BuildWithProjects(allMatches!, m => m.FilePath, m => m.ProjectName, maxFilesShown: 10);
+                return result with
+                {
+                    TotalRecords = totalMatches,
+                    HasMoreData = true,
+                    ListSummary = summary,
+                    WarningDetails = $"Truncated: showing the first {entries.Count} of {totalMatches} matching declarations (cap {maxItems}), spread over {summary.FileCount} files and {summary.ByProject!.Count} projects - listSummary.byProject and listSummary.byFile (top {summary.ByFile.Count} files, {summary.TruncatedFileCount} more files not shown) count ALL matches, use them to pick where to look. Narrow with query (name filter) or projectName, or use mode: symbol. For all callers/implementations of a symbol use FindReferences or QuerySymbolRelationships; for orientation use ListAll or GetFileOutline."
+                };
             }
 
             return result with { TotalRecords = totalMatches };
