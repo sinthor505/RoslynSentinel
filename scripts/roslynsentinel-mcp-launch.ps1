@@ -35,8 +35,10 @@
          no mtime/staleness check. MSBuild's own incremental up-to-date check already makes a no-op
          rebuild cheap.
       4. Launches the built exe with --transport=stdio plus whatever args this script itself was
-         given (typically --include-tools=...), so C:\Users\Administrator\.mcp.json's command line
-         stays the one place that list is kept, not duplicated here.
+         given (typically --include-tools=...); when no --solution arg was passed, the cwd is inside
+         the repo, and RoslynSentinel.slnx exists, automatically appends --solution=<repoRoot>\RoslynSentinel.slnx.
+         C:\Users\Administrator\.mcp.json's command line stays the one place the arg list is kept,
+         not duplicated here.
 
     Full design rationale: docs/current/proposal_per_session_mcp_server.md.
     bin-vscode\Advanced.Http\ (the separate, still-shared standalone HTTP fallback copy managed by
@@ -310,7 +312,27 @@ if (-not (Test-Path -LiteralPath $exePath)) {
     exit 1
 }
 
-Write-LaunchLog "Launching: $exePath --transport=stdio $($ServerArgs -join ' ')"
+$hasSolutionArg = $false
+foreach ($serverArg in $ServerArgs) {
+    if ($serverArg -match '^--solution(=|$)') { $hasSolutionArg = $true }
+}
+$defaultSolution = Join-Path $repoRoot 'RoslynSentinel.slnx'
+$cwd = (Get-Location).Path
+$repoRootNormalized = $repoRoot.TrimEnd('\')
+$cwdInRepo = ($cwd.TrimEnd('\') -ieq $repoRootNormalized) -or $cwd.StartsWith($repoRootNormalized + '\', [StringComparison]::OrdinalIgnoreCase)
+$launchArgs = @()
+foreach ($serverArg in $ServerArgs) {
+    $launchArgs += $serverArg
+}
+if (-not $hasSolutionArg -and $cwdInRepo -and (Test-Path -LiteralPath $defaultSolution)) {
+    $launchArgs += "--solution=$defaultSolution"
+    Write-LaunchLog "Auto-load: no --solution passed and cwd '$cwd' is inside the repo; adding --solution=$defaultSolution"
+}
+else {
+    Write-LaunchLog "Auto-load: not adding --solution (passed=$hasSolutionArg, cwd='$cwd', cwdInRepo=$cwdInRepo, slnxExists=$(Test-Path -LiteralPath $defaultSolution))."
+}
+
+Write-LaunchLog "Launching: $exePath --transport=stdio $($launchArgs -join ' ')"
 Write-StartupLog "Handing off to $exePath (instance '$instanceId') - further activity is in that instance's own launch.log, not here."
 
 # `&` (not Start-Process) is required here: this script IS the stdio JSON-RPC transport process VS
@@ -325,7 +347,7 @@ Write-StartupLog "Handing off to $exePath (instance '$instanceId') - further act
 # reverts to the previously-working mechanism rather than risk it - the sweep's liveness check (see
 # above) instead scans for any process whose own module path is under a candidate instance folder,
 # which needs no cooperation from this launch step at all.
-& $exePath --transport=stdio @ServerArgs
+& $exePath --transport=stdio @launchArgs
 $serverExitCode = $LASTEXITCODE
 Write-LaunchLog "Server process exited with code $serverExitCode."
 exit $serverExitCode
