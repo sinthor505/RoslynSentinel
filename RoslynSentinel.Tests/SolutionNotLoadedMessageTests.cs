@@ -36,6 +36,34 @@ public class SolutionNotLoadedMessageTests
         Assert.That(SolutionNotLoadedMessage.Build(null), Is.EqualTo(SolutionNotLoadedMessage.Plain));
     }
 
+    [Test]
+    public void Build_LoadInProgressOnFreshStart_SaysRetryNotLoadSolution()
+    {
+        var message = SolutionNotLoadedMessage.Build(new SolutionLoadState(Started, null, LoadInProgress: true), Started.AddSeconds(5));
+
+        Assert.That(message, Does.Contain("still in progress"));
+        Assert.That(message, Does.Not.Contain("Call LoadSolution"));
+        Assert.That(message, Does.Not.Contain("freshly (re)started"));
+    }
+
+    [Test]
+    public void Build_LoadInProgressAfterEarlierLoad_IsStillPlain()
+    {
+        var message = SolutionNotLoadedMessage.Build(new SolutionLoadState(Started, Started.AddMinutes(1), LoadInProgress: true));
+
+        Assert.That(message, Is.EqualTo(SolutionNotLoadedMessage.Plain));
+    }
+
+    [Test]
+    public void ForFilePath_LoadInProgress_ComposesRetryMessage()
+    {
+        var message = SolutionNotLoadedMessage.ForFilePath("ReplaceSnippet", new SolutionLoadState(Started, null, LoadInProgress: true));
+
+        Assert.That(message, Does.StartWith("ReplaceSnippet: 'filePath' could not be resolved."));
+        Assert.That(message, Does.Contain("still in progress"));
+        Assert.That(message, Does.EndWith("Then retry with the same filePath."));
+    }
+
     [TestCase(5, "5s")]
     [TestCase(59, "59s")]
     [TestCase(60, "1 min")]

@@ -146,9 +146,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // load is detected), this is set only when LoadSolutionAsync finishes successfully -> it backs
     // LoadState, i.e. "has this process ever had a solution".
     private DateTime? _lastSuccessfulLoadUtc;
+    // Counts LoadSolutionAsync calls currently holding _solutionLock and backs LoadState.LoadInProgress.
+    private int _loadsInProgress;
     private readonly Timer _debounceTimer;
 
-    public SolutionLoadState LoadState => new(SolutionLoadState.ProcessStartedUtc, _lastSuccessfulLoadUtc);
+    public SolutionLoadState LoadState => new(SolutionLoadState.ProcessStartedUtc, _lastSuccessfulLoadUtc, Volatile.Read(ref _loadsInProgress) > 0);
 
     /// <summary>
     /// Base repository directory used to resolve relative solution paths passed to <see cref="LoadSolutionAsync"/>.
@@ -425,6 +427,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         await _solutionLock.WaitAsync(cancellationToken);
         try
         {
+            Interlocked.Increment(ref _loadsInProgress);
             if (_logger.IsEnabled(LogLevel.Information))
             {
                 _logger.LogInformation("Loading solution: {SolutionPath}", solutionPath);
@@ -510,6 +513,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         }
         finally
         {
+            Interlocked.Decrement(ref _loadsInProgress);
             _solutionLock.Release();
         }
     }

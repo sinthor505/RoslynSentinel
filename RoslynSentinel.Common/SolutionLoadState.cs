@@ -10,7 +10,8 @@ namespace RoslynSentinel.Common;
 /// </summary>
 /// <param name="ServerStartedUtc">When this server process started.</param>
 /// <param name="LastLoadedUtc">When a solution last loaded successfully in this process, or null if none has.</param>
-public sealed record SolutionLoadState(DateTime ServerStartedUtc, DateTime? LastLoadedUtc)
+/// <param name="LoadInProgress">True while a LoadSolution call holds the workspace lock (typically the start-time auto-load); lets callers say "retry shortly" instead of "call LoadSolution".</param>
+public sealed record SolutionLoadState(DateTime ServerStartedUtc, DateTime? LastLoadedUtc, bool LoadInProgress = false)
 {
     /// <summary>True once any solution has loaded successfully in this process.</summary>
     public bool HasLoadedSolutionSinceStart => LastLoadedUtc is not null;
@@ -50,7 +51,17 @@ public static class SolutionNotLoadedMessage
     /// <summary>Builds the message for the given state; adds the fresh-start explanation when nothing has loaded yet.</summary>
     public static string Build(SolutionLoadState? state, DateTime? nowUtc = null)
     {
-        if (state is null || !state.IsFreshStartup)
+        if (state is null)
+        {
+            return Plain;
+        }
+
+        if (state.LoadInProgress && !state.HasLoadedSolutionSinceStart)
+        {
+            return "No solution is loaded yet: a solution load started when this server (re)started and is still in progress. Retry this call in a few seconds; calling LoadSolution is not needed.";
+        }
+
+        if (!state.IsFreshStartup)
         {
             return Plain;
         }

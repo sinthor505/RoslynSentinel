@@ -1,6 +1,6 @@
 # Finding: the loaded solution path is lost across a server restart, and nothing hands it back
 
-**Status:** OPEN 2026-10-01. Fix not decided; the user proposed recommendation 1.
+**Status:** RESOLVED 2026-10-08 by `docs/current/plans/plan_launcher_autoload_solution.md` (launcher appends `--solution=<repoRoot>\RoslynSentinel.slnx`; "load in progress" wording). Pending live verification after a server restart. Previously: OPEN 2026-10-01, the user proposed recommendation 1.
 
 ## Context
 Reported in session `cc715aa0`'s tool-experience journal (`.claude/journal/`, 2026-10-01):

@@ -1,6 +1,13 @@
 # Plan: Auto-load RoslynSentinel.slnx at server start and say "load in progress" while it runs
 
-**Status:** DRAFT 2026-10-08. Two small steps plus verification; nothing implemented.
+**Status:** IMPLEMENTED 2026-10-09 (launcher a48bf633, Step 2 in the commit after it). Build 0 errors; full suite 3473 tests, 3447 passed, 0 failed, 26 skipped (baseline 3470 + 3 new tests). Live restart check (Step 3, last bullet) is still to be done by the session that restarts the server.
+
+## Implementation notes (2026-10-09)
+
+- Step 1 deviations: `$launchArgs` is built with a `foreach` (not `@($ServerArgs)`, which yields a 1-element array holding `$null` when no args are passed); `$cwdInRepo` compares against `$repoRoot + '\'` so a sibling folder such as `...\RoslynSentinel2` does not match; the not-adding log line also prints the cwd. The extracted block was run in isolation for 6 cases (no args, extra args, `--solution=x`, `--solution x`, cwd outside, sibling prefix) and the file parses with 0 errors under both pwsh 7 and Windows PowerShell 5.1. The script was not executed end to end.
+- Step 2 as planned, plus a third test (`ForFilePath_LoadInProgress_ComposesRetryMessage`).
+- Premise correction: `GetCurrentSolutionAsync` takes `_solutionLock` (about line 1086), and `LoadSolutionAsync` takes it synchronously at startup, so tools that go through `GetCurrentSolutionAsync` do not fail mid-load; they queue behind the load (and may hit a client timeout) and only throw the message if the load failed. The "load in progress" wording therefore helps the lock-free paths that read `LoadState` while `CurrentSolution` is null (filePath resolution in ReplaceSnippet/CreateFile/ApplyDiff, `BuildEngine`, `McpServerStatus`, `GetLargeResult`). `WorkspaceFileEditImpl.ReadFileWithoutSolutionAsync` still says "freshly (re)started" while a load is running (it tests `IsFreshStartup` directly); not changed here.
+- Unverified: whether the MCP client launches the script with cwd inside the repo (see Risks). The `Auto-load:` line in `bin-vscode/<instance-id>/launch.log` shows the cwd and the decision.
 
 ## Problem
 
