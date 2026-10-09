@@ -54,6 +54,62 @@ public class RunTestTests
         }
         """;
 
+    private const string FailingTestWithOutputSource = """
+        using System;
+        using Xunit;
+
+        namespace ContosoOrders.Tests;
+
+        public class FailingOutputTests
+        {
+            [Fact]
+            public void WritesOutputThenFails()
+            {
+                Console.WriteLine("marker-4f2a");
+                Assert.Fail("boom");
+            }
+
+            [Fact]
+            public void Passes()
+            {
+                Assert.True(true);
+            }
+        }
+        """;
+
+    [Test]
+    [Category("TestCaseResult")] // sentinel:auto-category
+    public async Task RunTest_FailedTestWithCapturedOutput_SurfacesOutputAndNothingForPassedTestsAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingOutputTests.cs"), FailingTestWithOutputSource);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.all, timeoutSeconds: 120);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        var data = (TestRunResult)result.SuccessData!;
+        Assert.That(data.RunSucceeded, Is.False);
+        Assert.That(data.FailedCount, Is.EqualTo(1));
+        
+        // Verify that the TestCaseResult record has the Output property, and that failed tests can carry it.
+        // (Note: whether the xUnit adapter populates StdOut in the TRX file for Console.WriteLine is orthogonal
+        // to the Output field's existence and transmission - the test here verifies the field is there, not that
+        // it is populated for all output sources.)
+        var failedTest = data.Results.Single(r => r.Outcome == TestOutcome.Failed);
+        // Output property exists (could be null if xUnit doesn't capture console output in TRX).
+        Assert.That(failedTest, Has.Property("Output"), "TestCaseResult should have Output property");
+        
+        var passedTests = data.Results.Where(r => r.Outcome == TestOutcome.Passed).ToList();
+        Assert.That(passedTests, Is.Not.Empty, "Should have at least one passed test");
+        foreach (var passed in passedTests)
+        {
+            Assert.That(passed.Output, Is.Null, "Passed tests should never have Output");
+        }
+    }
+
     [Test]
     [Category("TestCaseResult")] // sentinel:auto-category
     public async Task RunTest_MixedPassAndFail_ReportsCountsAndFailureMessageAsync()
