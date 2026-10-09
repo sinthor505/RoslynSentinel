@@ -9,7 +9,8 @@ public record TestCaseResult(
     TestOutcome Outcome,
     TimeSpan Duration,
     string? ErrorMessage,
-    string? ErrorStackTrace
+    string? ErrorStackTrace,
+    string? Output = null
 );
 
 public record ProjectTestSummary(
@@ -42,6 +43,7 @@ public record TestRunResult(
 public class TestRunEngine
 {
     private readonly IWorkspaceManager _workspaceManager;
+    private const int MaxTestOutputChars = 2000;
 
     public TestRunEngine(IWorkspaceManager workspaceManager)
     {
@@ -454,7 +456,7 @@ public class TestRunEngine
         return firstLine.Length > 120 ? firstLine[..120] : firstLine;
     }
 
-    private static List<TestCaseResult> ParseTrx(string trxPath)
+    public static List<TestCaseResult> ParseTrx(string trxPath)
     {
         var doc = XDocument.Load(trxPath);
         XNamespace ns = doc.Root?.Name.Namespace ?? "http://microsoft.com/schemas/VisualStudio/TeamTest/2010";
@@ -475,19 +477,35 @@ public class TestRunEngine
             var durationText = unitTestResult.Attribute("duration")?.Value;
             var duration = TimeSpan.TryParse(durationText, out var d) ? d : TimeSpan.Zero;
 
-            var errorInfo = unitTestResult.Element(ns + "Output")?.Element(ns + "ErrorInfo");
+            var output = unitTestResult.Element(ns + "Output");
+            var errorInfo = output?.Element(ns + "ErrorInfo");
             var message = errorInfo?.Element(ns + "Message")?.Value;
             var stackTrace = errorInfo?.Element(ns + "StackTrace")?.Value;
+
+            var stdOut = output?.Element(ns + "StdOut")?.Value;
+            var testOutput = outcome == TestOutcome.Failed && !string.IsNullOrWhiteSpace(stdOut) ? CapOutput(stdOut) : null;
 
             results.Add(new TestCaseResult(
                 TestName: testName,
                 Outcome: outcome,
                 Duration: duration,
                 ErrorMessage: message,
-                ErrorStackTrace: stackTrace
+                ErrorStackTrace: stackTrace,
+                Output: testOutput
             ));
         }
 
         return results;
+    }
+
+    private static string CapOutput(string text)
+    {
+        var trimmed = text.TrimEnd();
+        if (trimmed.Length <= MaxTestOutputChars)
+        {
+            return trimmed;
+        }
+
+        return "[truncated] " + trimmed[^MaxTestOutputChars..];
     }
 }
