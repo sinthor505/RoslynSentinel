@@ -191,6 +191,40 @@ public class Svc { public void Foo() {} }";
     [Category("BasicRefactoringEngine")] // sentinel:auto-category
     [Category("ChangeSignatureResult")] // sentinel:auto-category
     [Category("ExistingParameterSpec")] // sentinel:auto-category
+    public async Task ChangeSignature_PreservesEolInCrlfFile()
+    {
+        const string source = "public class C { public void M(int a, int b) {} public void Test() { M(1, 2); } }";
+        var crlfContent = source.Replace("\n", "\r\n");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", crlfContent)]);
+        _workspaceManager.SetTestSolution(solution);
+        var result = await _refactoringEngine.ChangeSignatureAsync("Test.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(1), new ExistingParameterSpec(0) });
+        Assert.That(result.Changes, Is.Not.Empty, "Should return changed files");
+        var content = result.Changes["Test.cs"];
+        // Verify no bare LF: every LF must be preceded by CR
+        Assert.That(content, Does.Not.Match(@"[^\r]\n"), "CRLF file output must have no bare LF (every LF preceded by CR)");
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    [Category("ExistingParameterSpec")] // sentinel:auto-category
+    public async Task ChangeSignature_PreservesEolInLfFile()
+    {
+        const string source = "public class C { public void M(int a, int b) {} public void Test() { M(1, 2); } }";
+        var lfContent = source.Replace("\r\n", "\n");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", lfContent)]);
+        _workspaceManager.SetTestSolution(solution);
+        var result = await _refactoringEngine.ChangeSignatureAsync("Test.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(1), new ExistingParameterSpec(0) });
+        Assert.That(result.Changes, Is.Not.Empty, "Should return changed files");
+        var content = result.Changes["Test.cs"];
+        // Verify no CR: must not contain carriage return
+        Assert.That(content, Does.Not.Contain("\r"), "LF file output must not contain CR");
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    [Category("ExistingParameterSpec")] // sentinel:auto-category
     public async Task ChangeSignature_WithSkippedCallSite_RefusesWithError()
     {
         // Test that ChangeSignature refuses when call sites cannot be rewritten, rather than

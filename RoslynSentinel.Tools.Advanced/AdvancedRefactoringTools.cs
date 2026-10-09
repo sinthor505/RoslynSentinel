@@ -136,8 +136,6 @@ public class AdvancedRefactoringTools
             if (!autoStage)
             {
                 var noStageSummaryNote = $"Reorders parameters of '{methodName}' in {Path.GetFileName(resolvedFilePath)}.";
-                if (result.SkippedCallSites.Count > 0)
-                    noStageSummaryNote += $" WARNING: {result.SkippedCallSites.Count} call site(s) could not be automatically reordered and must be fixed manually: " + string.Join("; ", result.SkippedCallSites.Select(s => $"{Path.GetFileName(s.FilePath)}:{s.LineNumber} ({s.Reason})"));
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = false,
@@ -152,13 +150,7 @@ public class AdvancedRefactoringTools
                     IsError = true,
                     ErrorData = apply.Error
                 };
-            // Not wired into MemberChangedContentResult: this already has bespoke handling
-            // (SkippedCallSites folded into the summary note below) that the generic offload
-            // mechanism doesn't add value over -> there's no separate "new content" fragment,
-            // just the reordered declaration text a caller can already see via ReturnDiff.
             var summaryNote = $"Reorders parameters of '{methodName}' in {Path.GetFileName(resolvedFilePath)}.";
-            if (result.SkippedCallSites.Count > 0)
-                summaryNote += $" WARNING: {result.SkippedCallSites.Count} call site(s) could not be automatically reordered and must be fixed manually: " + string.Join("; ", result.SkippedCallSites.Select(s => $"{Path.GetFileName(s.FilePath)}:{s.LineNumber} ({s.Reason})"));
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = false,

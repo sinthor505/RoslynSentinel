@@ -448,7 +448,11 @@ public class BasicRefactoringEngine
             });
             var changedDoc = documentByPath[path].WithSyntaxRoot(newRoot);
             var formatted = await Formatter.FormatAsync(changedDoc, null, cancellationToken);
-            result[path.Equals(declPath) ? filePath : path] = (await formatted.GetTextAsync(cancellationToken)).ToString();
+            var originalText = await documentByPath[path].GetTextAsync(cancellationToken);
+            var formattedText = (await formatted.GetTextAsync(cancellationToken)).ToString();
+            // Formatter output uses the platform EOL; restore the file's own dominant EOL so an LF file stays LF.
+            var normalizedText = EolUtilities.NormalizeEol(formattedText, EolUtilities.DetectDominantEol(originalText));
+            result[path.Equals(declPath) ? filePath : path] = normalizedText;
         }
 
         return new ChangeSignatureResult(result, skippedCallSites);

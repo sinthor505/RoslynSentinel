@@ -32,6 +32,34 @@ implementers do not re-ask. Plans for the build work live in `docs/current/plans
 | 11-16 | Larger items | Each gets a plan under `docs/current/plans/`; ship order comes from the plans. |
 | 14 | Build result shape | Redesign what `Build` returns (owner questions in "Open questions"); no unconditional stdout/full-output offload. |
 
+### Decided in round 3 (2026-10-09, owner answers to the plan questions)
+
+| # | Item | Decision |
+| --- | --- | --- |
+| D-1 | Acknowledge during an unrecoverable halt | Accept: `ExternalFileDrift` is allowed during that halt (it clears only drift state; the write chokepoint still refuses writes). |
+| D-2 | `acknowledge` confirmation | `ExternalFileDrift` gets a second enum parameter (name chosen by the planner, for example `scope`) with values `ConfirmWithListedFiles` (default) and `ConfirmAll`. `acknowledge` with `files` clears those files; clearing everything requires `ConfirmAll` explicitly. Improve the descriptions. |
+| D-3 | Stamping the mutation and orientation breakers | The mutation breaker (`MutationCircuitBreaker`) trips only from batch-outcome recording (Asyncify batch tools: 8 consecutive zero-success batches, >30% failures over >=20 attempts, or weighted rollback score >20) and is reset by `ResetMutationBreaker`, which lives in `AsyncifyTools` (not in claude-lean). The stamp names that tool if active, else says to stop and report. The orientation breaker reuses its existing text. |
+| D-4 | Solution load wait | Amend plan steps A1, A2, A4, A6 to the owner's design: enum `SolutionLoadStatus {NotLoaded, Loading, Loaded, Failed}`, a lock-safe `SolutionLoadStatus` property, and the wait inside `GetCurrentSolutionAsync` (poll or await) while `Loading`. The 30 s timeout applies BOTH to waiting on a running load and to a load this call starts itself, so a stuck load cannot deadlock callers. |
+| D-5 | Timeout behaviour | On timeout CANCEL the load and throw/return a clear error (replaces the earlier wait-only recommendation). Add a `timeoutSeconds` parameter, default 30, to `LoadSolution`; internal callers stay on the 30 s default (no wiring if blast radius is high). |
+| D-6 | Launcher auto-load | Keep as is. |
+| D-7 | `Build` `maxDetails` | Default 50 -> 20. |
+| D-8 | `BuildResult` | Extend additively; no new response type. |
+| D-9 | Project-by-project re-run | Not planned. |
+| D-10 | `model-eval-log-analyst` tools | Add `ReadFile`, `GetFileOutline`, `GetMethodSource`, `Search`. |
+| D-11 | Control-script HTTP verbs | Keep, and make `restart` also perform a build. |
+| D-12 | Large-results sweep hook | Inside `PersistentWorkspaceManager.LoadSolutionAsync`. |
+| D-13/14 | ReadFile `lineEndings` / `hasBom` | DROPPED. Models should not deal with BOM or line endings at all: `WriteFile`, `ReplaceSnippet`, `ReplaceSnippetBatch` and `ApplyDiff` already normalise model-supplied text to the file's dominant EOL, and `EolChangeGuard` is only a tripwire for tool bugs. The one gap found is `ChangeSignatureAsync` (no normalisation; fixed in a separate slice). Remove steps 14-15 and the `FileFormatProbe` idea from the read plan. If an enum is ever needed, avoid nullable fields. |
+| D-15 | Git tool shape | One shared `action` parameter. |
+| D-16 | Tag push | Out of scope. |
+| D-17 | `stash drop` | Do not ship. |
+| D-18 | Conflicted `stash pop/apply` | `git reset --merge`, keep the stash entry, return `GitStashConflict`. |
+| D-19 | Shell-git hook | Fix the stale wording; move only tag/stash/worktree to covered. |
+| D-20 | Worktree remove on a dirty tree | Allowed with an explicit flag. |
+| D-21 | Halt wording | Lands after the `ExternalFileDrift` merge. |
+| D-22 | `ChangeAccessibility(symbolName)` alias live check | Skip, or check via the new HTTP launcher; not a blocker. |
+| D-23 | `permissions.allow` retired `SearchSolutionText` | Removed from `.claude/settings.json` (note: `Search` itself is not in the allow list). |
+| D-24 | `ChangeSignature` cleanup | Remove the unreachable "could not be reordered" notes; add EOL normalisation in `ChangeSignatureAsync`. |
+
 ### Still open
 
 - **#8 Solution auto-load.** The launcher appends `--solution=<repoRoot>\RoslynSentinel.slnx` when the cwd is
