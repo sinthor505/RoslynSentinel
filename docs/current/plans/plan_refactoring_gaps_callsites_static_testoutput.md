@@ -1,6 +1,6 @@
 # Plan: single-pass call-site edits for parameter removal, RunTest failed-test output, and a RenameSymbol refusal comment
 
-**Status:** DRAFT 2026-10-09. Four deferred journal-digest items traced to source: (a) and (c) get implementation steps, (b) is already shipped (no steps), (d) is a one-comment slice. Nothing is built.
+**Status:** IMPLEMENTED 2026-10-09 (steps 1-5, 5b; commits d89cc95, 2e77dc3, e63a942, 92921f0, 12b556b; full suite 3499 passed / 0 failed). Original status: DRAFT. Four deferred journal-digest items traced to source: (a) and (c) get implementation steps, (b) is already shipped (no steps), (d) is a one-comment slice. Nothing is built.
 
 ## Problem
 
