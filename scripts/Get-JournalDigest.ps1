@@ -20,6 +20,9 @@
 
 .PARAMETER All
   Ignore the watermark and digest every session (the watermark is still updated).
+.PARAMETER Days
+  Only digest sessions dated within the last N days (by the session file's date, inclusive of today).
+  Implies -All (the watermark is ignored for the sessions in the window).
 .PARAMETER NoMark
   Do not advance the watermark (dry run / re-run).
 .PARAMETER OutFile
@@ -34,6 +37,7 @@
 [CmdletBinding()]
 param(
     [switch]$All,
+    [ValidateRange(1, 3650)][int]$Days,
     [switch]$NoMark,
     [string]$OutFile,
     [int]$MaxHits = 3
@@ -55,10 +59,13 @@ if (Test-Path -LiteralPath $wmPath) {
 }
 
 # --- discover sessions -------------------------------------------------------------------
+$cutoff = $null
+if ($PSBoundParameters.ContainsKey('Days')) { $cutoff = (Get-Date).Date.AddDays(1 - $Days).ToString('yyyy-MM-dd'); $All = [switch]$true }
 $sessions = @{}
 foreach ($f in Get-ChildItem -LiteralPath $dir -File) {
     if ($f.Name -notmatch '^(\d{4}-\d{2}-\d{2})_([A-Za-z0-9]+)\.(md|calls\.jsonl)$') { continue }
     $date = $Matches[1]; $sid = $Matches[2]; $kind = $Matches[3]
+    if ($cutoff -and $date -lt $cutoff) { continue }
     if (-not $sessions.ContainsKey($sid)) { $sessions[$sid] = [pscustomobject]@{ sid = $sid; date = $date; md = $null; calls = $null } }
     if ($kind -eq 'md') { $sessions[$sid].md = $f.FullName } else { $sessions[$sid].calls = $f.FullName }
 }
