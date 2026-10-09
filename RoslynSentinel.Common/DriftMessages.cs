@@ -3,6 +3,22 @@ namespace RoslynSentinel.Common;
 /// <summary>Helper methods for generating human-readable messages about external file drift.</summary>
 public static class DriftMessages
 {
+    /// <summary>Why the session is halted by external file drift, and what still works (first part of <see cref="DriftHaltMessage"/>).</summary>
+    public const string DriftHaltReason =
+        "Session halted: a write was refused because a file changed on disk outside this server " +
+        "(external file drift). Read-only tools (ReadFile, GetFileOutline, Search, GetMethodSource, " +
+        "Git status/log/diff) still work.";
+
+    /// <summary>How to clear the external-drift halt (second part of <see cref="DriftHaltMessage"/>).</summary>
+    public const string DriftHaltRecovery =
+        "To resume writing: call ExternalFileDrift(operation: List) to see the files, review them, then " +
+        "ExternalFileDrift(operation: Acknowledge, files: <the files you reviewed>). To clear every tracked " +
+        "change at once pass acknowledgeScope: ConfirmAll instead of files. Files you do not acknowledge stay " +
+        "flagged and halt the session again if a write touches them.";
+
+    /// <summary>The full external-drift halt message: <see cref="DriftHaltReason"/> then <see cref="DriftHaltRecovery"/>.</summary>
+    public const string DriftHaltMessage = DriftHaltReason + " " + DriftHaltRecovery;
+
     /// <summary>
     /// Summarizes file paths as a comma-separated list of distinct file names, with an overflow suffix.
     /// </summary>
