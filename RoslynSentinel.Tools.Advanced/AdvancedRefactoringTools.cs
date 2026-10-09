@@ -162,7 +162,7 @@ public class AdvancedRefactoringTools
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = false,
-                SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true)
+                SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId)
             };
         }
         catch (Exception ex)
@@ -207,7 +207,7 @@ public class AdvancedRefactoringTools
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Converted anonymous object to named class '{newClassName}' in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff)
+                SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Converted anonymous object to named class '{newClassName}' in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId)
             };
         }
         catch (Exception ex)
@@ -248,7 +248,7 @@ public class AdvancedRefactoringTools
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Inlined '{className}' members into target class across {changes.Count} file(s).", apply.DryRun, apply.Diff)
+                SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Inlined '{className}' members into target class across {changes.Count} file(s).", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId)
             };
         }
         catch (Exception ex)
@@ -365,7 +365,7 @@ public class AdvancedRefactoringTools
         return new SentinelCallToolResult<object>()
         {
             IsError = false,
-            SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true)
+            SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId)
         };
     }
 
@@ -403,7 +403,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Inverted assignments in snippet of {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff)
+                    SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Inverted assignments in snippet of {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId)
                 };
             }
             else if (startLine > 0 && endLine > 0)
@@ -429,7 +429,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Inverted assignments in lines {startLine}-{endLine} of {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff)
+                    SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Inverted assignments in lines {startLine}-{endLine} of {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId)
                 };
             }
             else
@@ -543,7 +543,7 @@ public class AdvancedRefactoringTools
             {
                 IsError = false,
                 Findings = conversionFindings,
-                SuccessData = new AppliedChangeSummary(apply.ChangeId, result.Changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff, ChangedContent: result.Changes, Validated: true, LineChanges: apply.LineChanges)
+                SuccessData = new AppliedChangeSummary(apply.ChangeId, result.Changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff, ChangedContent: result.Changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId)
             };
         }
         catch (Exception ex)
@@ -677,7 +677,7 @@ public class AdvancedRefactoringTools
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Introduced parameter object for '{methodName}' in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff)
+                SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Introduced parameter object for '{methodName}' in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId)
             };
         }
         catch (Exception ex)
@@ -740,7 +740,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(constApply.ChangeId, [resolvedFilePath], $"Introduced '{newName}' as a constant in {Path.GetFileName(resolvedFilePath)}.", constApply.DryRun, constApply.Diff)
+                    SuccessData = new AppliedChangeSummary(constApply.ChangeId, [resolvedFilePath], $"Introduced '{newName}' as a constant in {Path.GetFileName(resolvedFilePath)}.", constApply.DryRun, constApply.Diff, ChangedContentResultId: constApply.ChangedContentResultId)
                 };
             }
             else
@@ -777,7 +777,7 @@ public class AdvancedRefactoringTools
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Introduced '{newName}' as {(newType == IntroduceAsType.localVariable ? "a local variable" : newType)} in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff)
+                SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Introduced '{newName}' as {(newType == IntroduceAsType.localVariable ? "a local variable" : newType)} in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId)
             };
         }
         catch (Exception ex)
@@ -853,7 +853,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
                         IsError = false,
-                        SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Extracted interface '{newTypeName}' from '{className}'.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true)
+                        SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Extracted interface '{newTypeName}' from '{className}'.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId)
                     };
                 }
                 catch (Exception ex)
@@ -898,7 +898,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<AppliedChangeSummary>()
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(partialApply.ChangeId, partialChanges.Keys.ToList(), $"Extracted members of '{className}' to a new partial file.", partialApply.DryRun, partialApply.Diff, ChangedContent: partialChanges, Validated: true)
+                    SuccessData = new AppliedChangeSummary(partialApply.ChangeId, partialChanges.Keys.ToList(), $"Extracted members of '{className}' to a new partial file.", partialApply.DryRun, partialApply.Diff, ChangedContent: partialChanges, Validated: true, LineChanges: partialApply.LineChanges, ChangedContentResultId: partialApply.ChangedContentResultId)
                 };
             }
 
@@ -939,7 +939,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
                         IsError = false,
-                        SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Extracted superclass '{newTypeName}' from {actualClassNames.Length} class(es).", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true)
+                        SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Extracted superclass '{newTypeName}' from {actualClassNames.Length} class(es).", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId)
                     };
                 }
                 catch (Exception ex)
@@ -1016,7 +1016,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(implApply.ChangeId, [resolvedFilePath], $"Implemented '{interfaceName}' on '{className}' in {Path.GetFileName(resolvedFilePath)}.", implApply.DryRun, implApply.Diff)
+                    SuccessData = new AppliedChangeSummary(implApply.ChangeId, [resolvedFilePath], $"Implemented '{interfaceName}' on '{className}' in {Path.GetFileName(resolvedFilePath)}.", implApply.DryRun, implApply.Diff, ChangedContentResultId: implApply.ChangedContentResultId)
                 };
             }
 
@@ -1056,7 +1056,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(syncApply.ChangeId, [resolvedFilePath], $"Synced '{interfaceName}' to '{className}' implementation in {Path.GetFileName(resolvedFilePath)}.", syncApply.DryRun, syncApply.Diff)
+                    SuccessData = new AppliedChangeSummary(syncApply.ChangeId, [resolvedFilePath], $"Synced '{interfaceName}' to '{className}' implementation in {Path.GetFileName(resolvedFilePath)}.", syncApply.DryRun, syncApply.Diff, ChangedContentResultId: syncApply.ChangedContentResultId)
                 };
             }
 
@@ -1112,7 +1112,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = false,
-                        SuccessData = new AppliedChangeSummary(methodApply.ChangeId, methodChanges.Keys.ToList(), $"Inlined '{targetName}' at all call sites across {methodChanges.Count} file(s).", methodApply.DryRun, methodApply.Diff)
+                        SuccessData = new AppliedChangeSummary(methodApply.ChangeId, methodChanges.Keys.ToList(), $"Inlined '{targetName}' at all call sites across {methodChanges.Count} file(s).", methodApply.DryRun, methodApply.Diff, ChangedContentResultId: methodApply.ChangedContentResultId)
                     };
                 }
                 catch (Exception ex)
@@ -1149,7 +1149,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(varApply.ChangeId, [resolvedFilePath], $"Inlined variable '{targetName}' into its usages in {Path.GetFileName(resolvedFilePath)}.", varApply.DryRun, varApply.Diff)
+                    SuccessData = new AppliedChangeSummary(varApply.ChangeId, [resolvedFilePath], $"Inlined variable '{targetName}' into its usages in {Path.GetFileName(resolvedFilePath)}.", varApply.DryRun, varApply.Diff, ChangedContentResultId: varApply.ChangedContentResultId)
                 };
             }
 
@@ -1176,7 +1176,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(fieldApply.ChangeId, [resolvedFilePath], $"Inlined field '{targetName}' into its usages in {Path.GetFileName(resolvedFilePath)}.", fieldApply.DryRun, fieldApply.Diff)
+                    SuccessData = new AppliedChangeSummary(fieldApply.ChangeId, [resolvedFilePath], $"Inlined field '{targetName}' into its usages in {Path.GetFileName(resolvedFilePath)}.", fieldApply.DryRun, fieldApply.Diff, ChangedContentResultId: fieldApply.ChangedContentResultId)
                 };
             }
 
@@ -1209,7 +1209,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(paramApply.ChangeId, [resolvedFilePath], $"Inlined parameter '{targetName}' into '{methodName}' body in {Path.GetFileName(resolvedFilePath)}.", paramApply.DryRun, paramApply.Diff)
+                    SuccessData = new AppliedChangeSummary(paramApply.ChangeId, [resolvedFilePath], $"Inlined parameter '{targetName}' into '{methodName}' body in {Path.GetFileName(resolvedFilePath)}.", paramApply.DryRun, paramApply.Diff, ChangedContentResultId: paramApply.ChangedContentResultId)
                 };
             }
 
@@ -1273,7 +1273,7 @@ public class AdvancedRefactoringTools
                             IsError = true,
                             ErrorData = apply.Error
                         };
-                    var summary = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Wrapped snippet in a try/{exceptionType} block in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true);
+                    var summary = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Wrapped snippet in a try/{exceptionType} block in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
                         IsError = false,
@@ -1317,7 +1317,7 @@ public class AdvancedRefactoringTools
                             IsError = true,
                             ErrorData = usingApply.Error
                         };
-                    var usingSummary = new AppliedChangeSummary(usingApply.ChangeId, [resolvedFilePath], $"Wrapped snippet in a using ({name}) block in {Path.GetFileName(resolvedFilePath)}.", usingApply.DryRun, usingApply.Diff, ChangedContent: usingChanges, Validated: true);
+                    var usingSummary = new AppliedChangeSummary(usingApply.ChangeId, [resolvedFilePath], $"Wrapped snippet in a using ({name}) block in {Path.GetFileName(resolvedFilePath)}.", usingApply.DryRun, usingApply.Diff, ChangedContent: usingChanges, Validated: true, LineChanges: usingApply.LineChanges, ChangedContentResultId: usingApply.ChangedContentResultId);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
                         IsError = false,
@@ -1361,7 +1361,7 @@ public class AdvancedRefactoringTools
                             IsError = true,
                             ErrorData = apply.Error
                         };
-                    var summary = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Wrapped snippet in #region '{name}' in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true);
+                    var summary = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Wrapped snippet in #region '{name}' in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
                         IsError = false,
@@ -1406,7 +1406,7 @@ public class AdvancedRefactoringTools
                             IsError = true,
                             ErrorData = apply.Error
                         };
-                    var summary = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Wrapped lines {startLine}-{endLine} in a try/{exceptionType} block in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true);
+                    var summary = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Wrapped lines {startLine}-{endLine} in a try/{exceptionType} block in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
                         IsError = false,
@@ -1450,7 +1450,7 @@ public class AdvancedRefactoringTools
                             IsError = true,
                             ErrorData = usingApply.Error
                         };
-                    var usingSummary = new AppliedChangeSummary(usingApply.ChangeId, [resolvedFilePath], $"Wrapped lines {startLine}-{endLine} in a using ({name}) block in {Path.GetFileName(resolvedFilePath)}.", usingApply.DryRun, usingApply.Diff, ChangedContent: usingChanges, Validated: true);
+                    var usingSummary = new AppliedChangeSummary(usingApply.ChangeId, [resolvedFilePath], $"Wrapped lines {startLine}-{endLine} in a using ({name}) block in {Path.GetFileName(resolvedFilePath)}.", usingApply.DryRun, usingApply.Diff, ChangedContent: usingChanges, Validated: true, LineChanges: usingApply.LineChanges, ChangedContentResultId: usingApply.ChangedContentResultId);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
                         IsError = false,
@@ -1494,7 +1494,7 @@ public class AdvancedRefactoringTools
                             IsError = true,
                             ErrorData = apply.Error
                         };
-                    var summary = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Wrapped lines {startLine}-{endLine} in #region '{name}' in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true);
+                    var summary = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Wrapped lines {startLine}-{endLine} in #region '{name}' in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId);
                     return new SentinelCallToolResult<AppliedChangeSummary>()
                     {
                         IsError = false,
@@ -1560,7 +1560,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), ownFileDescription, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true)
+                    SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), ownFileDescription, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId)
                 };
             }
 
@@ -1600,7 +1600,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(outerApply.ChangeId, [resolvedFilePath], $"Moved '{typeName}' to outer namespace scope in {Path.GetFileName(resolvedFilePath)}.", outerApply.DryRun, outerApply.Diff, ChangedContent: outerChanges, Validated: true)
+                    SuccessData = new AppliedChangeSummary(outerApply.ChangeId, [resolvedFilePath], $"Moved '{typeName}' to outer namespace scope in {Path.GetFileName(resolvedFilePath)}.", outerApply.DryRun, outerApply.Diff, ChangedContent: outerChanges, Validated: true, LineChanges: outerApply.LineChanges, ChangedContentResultId: outerApply.ChangedContentResultId)
                 };
             }
 

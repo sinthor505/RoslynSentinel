@@ -29,6 +29,9 @@ namespace RoslynSentinel.Common;
 /// dry runs and successful applies. Null on error. A tiny edit reporting hundreds of changed lines
 /// is the visible signature of a whole-file reformat.
 /// </param>
+/// <param name="ChangedContentResultId">
+/// Id of the large-result file holding the updated text of every written file (fetch with GetLargeResult); null on dry runs, errors, no-write results, when ChangedContentOptions.InlineOnApply is on, or when the store failed (fail-closed).
+/// </param>
 public record ApplyOutcome(
     string? ChangeId,
     ResultError? Error,
@@ -36,5 +39,6 @@ public record ApplyOutcome(
     string? Diff = null,
     string? NotReversibleReason = null,
     DiagnosticReport? Validation = null,
-    List<FileLineChange>? LineChanges = null
+    List<FileLineChange>? LineChanges = null,
+    string? ChangedContentResultId = null
 );

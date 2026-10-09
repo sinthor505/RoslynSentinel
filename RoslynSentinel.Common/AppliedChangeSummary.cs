@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace RoslynSentinel.Common;
 
 /// <summary>
@@ -14,7 +16,8 @@ public record AppliedChangeSummary(
     int? WorkspaceVersion = null,
     Dictionary<FilePathWrapper, string>? ChangedContent = null,
     bool Validated = false,
-    List<FileLineChange>? LineChanges = null
+    List<FileLineChange>? LineChanges = null,
+    string? ChangedContentResultId = null
 )
 {
     /// <summary>
@@ -30,6 +33,10 @@ public record AppliedChangeSummary(
     public string Status => DryRun
         ? "dry_run_ok"
         : AffectedFiles.Count == 0 ? "no_changes" : "applied";
+
+    /// <summary>Inline only for dry runs, no-stage results (Validated false) and when ChangedContentOptions.InlineOnApply is on; otherwise null for a real apply - see ChangedContentResultId.</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<FilePathWrapper, string>? ChangedContent { get; init; } = Validated && !DryRun && !ChangedContentOptions.InlineOnApply ? null : ChangedContent;
 
     public string Note
     {
@@ -48,12 +55,27 @@ public record AppliedChangeSummary(
             // ApplyOutcome.NotReversibleReason for callers that surface it.
             if (!string.IsNullOrEmpty(ChangeId))
             {
-                return $"Written to disk. Call UndoLastApply(changeId: \"{ChangeId}\") to revert if needed.";
+                return $"Written to disk. Call UndoLastApply(changeId: \"{ChangeId}\") to revert if needed." + NotEchoedHint();
             }
 
             return AffectedFiles.Count == 0
                 ? "No changes were produced, so nothing was written and there is nothing to undo. If you expected a change, the operation matched no target - or its refactoring feature is disabled on this server (check the Features tool)."
-                : "Written to disk, but NOT reversible: the server could not record an undo entry for this change, so UndoLastApply cannot revert it. Revert manually (e.g. via version control) if needed.";
+                : "Written to disk, but NOT reversible: the server could not record an undo entry for this change, so UndoLastApply cannot revert it. Revert manually (e.g. via version control) if needed." + NotEchoedHint();
         }
+    }
+
+    private string NotEchoedHint()
+    {
+        if (!Validated || ChangedContent != null)
+        {
+            return "";
+        }
+
+        if (!string.IsNullOrEmpty(ChangedContentResultId))
+        {
+            return $" The updated content is not echoed; fetch it with GetLargeResult(resultId: \"{ChangedContentResultId}\"), or read the file with ReadFile, GetMethodSource or Member(operation: view).";
+        }
+
+        return " The updated content is not echoed; read it with ReadFile, GetMethodSource or Member(operation: view).";
     }
 }

@@ -112,6 +112,7 @@ public static class ValidateAndApplyHelper
         var blob = await OperationBlobWriter.WriteApplyBlobAsync(
             operationName, changeId, applyResult, workspaceManager.GetSolutionRoot(), logger);
 
+        var contentResultId = ChangedContentOptions.InlineOnApply || applyResult.SucceededFiles.Count == 0 ? null : await StoreChangedContentAsync(changes, workspaceManager.GetSolutionRoot(), logger, cancellationToken);
         var appliedDiff = returnDiff ? BuildDiffFromPreImages(changes, applyResult.PreImages) : null;
         var lineChanges = ComputeLineChanges(changes, deletePaths, p =>
             applyResult.PreImages != null && applyResult.PreImages.TryGetValue(p, out var pre) ? pre : beforeTexts.GetValueOrDefault(p));
@@ -131,7 +132,7 @@ public static class ValidateAndApplyHelper
             ((IUnrecoverableBreaker)workspaceManager).Trip(operationName, changeId, reason);
 
             // No changeId: one UndoLastApply cannot resolve is worse than none.
-            return new ApplyOutcome(null, null, false, appliedDiff, reason, LineChanges: lineChanges);
+            return new ApplyOutcome(null, null, false, appliedDiff, reason, LineChanges: lineChanges, ChangedContentResultId: contentResultId);
         }
 
         // Nothing was written, so no changeId should be issued either. Previously one was minted
@@ -153,7 +154,33 @@ public static class ValidateAndApplyHelper
                 LineChanges: lineChanges);
         }
 
-        return new ApplyOutcome(changeId, null, false, appliedDiff, LineChanges: lineChanges);
+        return new ApplyOutcome(changeId, null, false, appliedDiff, LineChanges: lineChanges, ChangedContentResultId: contentResultId);
+    }
+
+    public static async Task<string?> StoreChangedContentAsync(IReadOnlyDictionary<FilePathWrapper, string> changes, string? solutionRoot, ILogger logger, CancellationToken cancellationToken)
+    {
+        if (changes.Count == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            var dict = new Dictionary<string, string>();
+            foreach (var (key, value) in changes)
+            {
+                dict[(string)key] = value;
+            }
+
+            var json = System.Text.Json.JsonSerializer.Serialize(dict, SharedJsonOptions.Compact);
+            var (offloaded, filePath, resultId) = await LargeResultHelper.StoreRawJsonAsync(json, solutionRoot, cancellationToken);
+            return offloaded ? resultId : null;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to store changed content for large-result offload");
+            return null;
+        }
     }
 
     /// <summary>
