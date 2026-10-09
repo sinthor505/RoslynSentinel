@@ -241,6 +241,7 @@ are impressions; every claim below cites source read on 2026-10-08, and untraced
    `a08be84f:L54` drove moveExtract tools through an HTTP script. Either re-enable `Invoke-VSCodeServerRestart`
    and the status check (restores auto-refresh, costs build time and a port-5150 process) or delete the dead block and
    the `-SkipVSCodeRestart`/`-VSCodePort` parameters. Step 5 only makes the current state visible.
+   Resolved 2026-10-09: build.ps1 path deleted; control-script restart builds the copy; see plan_read_block_http_launcher_retention_fileinfo.md steps 5-8.
 4. *Needs design* - **MethodSignature/ParameterEdit `remove` with a call site in the edited file**
    (`47b2c93d:L39`). Traced: `MemberRefactoringEngine.cs:1603` (`RemoveMethodParameterAsync`) refuses with "call site
    at ... could not be re-located after an earlier edit to the same file"; `ParameterEditToolTests.cs:90` records it

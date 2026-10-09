@@ -1,6 +1,6 @@
 # Reference: VS Code Control Script
 
-**Status:** Living reference — update if the script's commands or the port/path it manages change.
+**Status:** Living reference — update if the script's commands or the port/path it manages change. Updated 2026-10-09 (restart now rebuilds the copy; build.ps1 no longer touches HTTP servers).
 **Scope:** `roslynsentinel-vscode-control.ps1` (repo root, added 2026-08-27, commit `1eefb87`) — the
 fast path for recovering the VS Code HTTP MCP connection without a full solution build.
 
@@ -9,7 +9,14 @@ fast path for recovering the VS Code HTTP MCP connection without a full solution
 The dedicated VS Code copy of `RoslynSentinel.Server.Advanced` runs from `bin-vscode\Advanced.Http`
 on port 5150 (must match the `url` in `.vscode/mcp.json`). Before this script existed, the only
 known recovery from that connection being down was running `build.ps1` — a full solution
-build/test pass just to restart one process. This script manages that copy directly.
+build/test pass just to restart one process. This script manages that copy directly. `build.ps1`
+does not touch any HTTP server (its old refresh path was deleted 2026-10-09).
+
+For a throwaway HTTP instance with its own mode, tools and port, use
+`scripts/Launch-RoslynSentinelHttpServer.ps1` (parameters `-Mode`, `-Tools`, `-ExcludeTools`,
+`-Port`, `-Solution`, `-Configuration`, `-DryRun`). It builds the current source into
+`bin-vscode\http-<port>-<timestamp>`, which does not match the stdio instance-folder pattern, and it
+never stops or deletes anything (stop it with `Stop-Process -Id <pid>`).
 
 ## Usage
 
@@ -26,10 +33,12 @@ build/test pass just to restart one process. This script manages that copy direc
   `reference-roslynsentinel-mcp-launch-v1.md`), reporting each instance's exe build time and
   whether its process is currently running.
 - **`start`** — starts the HTTP copy only if not already running (checks port-owner conflicts too).
-- **`restart`** — stop + start, reusing the binary already on disk (no rebuild).
-- **`build`** — delegates to `build.ps1 -Flavor Solution -Mode Build`, i.e. the heavyweight path
-  this script exists to make optional. Use after pulling new commits, not for routine connection
-  drops.
+- **`restart`** — stops the copy, rebuilds it from current source (`Build-HttpCopy`, Debug, into
+  `bin-vscode\Advanced.Http`), then starts it. The stop comes first because the running exe locks
+  its DLLs; if the build fails the copy stays stopped and a warning says so.
+- **`build`** — runs `build.ps1 -Flavor Solution -Mode Build` (the heavyweight solution build) and,
+  if that succeeds, calls `restart` (so the copy is rebuilt and started). Use after pulling new
+  commits, not for routine connection drops.
 
 ## When to use
 

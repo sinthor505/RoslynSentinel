@@ -1,7 +1,7 @@
 # Reference: RoslynSentinel MCP Launch Wrapper
 
 **Status:** Living reference — update if the wrapper's instance-ID derivation, sweep, or build
-invocation change.
+invocation change. Updated 2026-10-09 (HTTP copy management moved fully to the control script).
 **Scope:** `scripts/roslynsentinel-mcp-launch.ps1` (repo root `scripts\`, added 2026-09-14) — the
 per-VS-Code-window launcher for the `RoslynSentinel.Server.Advanced` stdio MCP server, invoked by
 `C:\Users\Administrator\.mcp.json` in place of the `.exe` directly.
@@ -33,8 +33,10 @@ Code window's process ID, stable for that window's life, distinct across windows
    window's still-running process would abort or partially corrupt a single bulk recursive delete;
    per-folder calls just silently fail closed on whichever folder is still in use, and get retried on
    a future launch. `bin-vscode\Advanced.Http\` (the separate, shared HTTP fallback copy managed by
-   `build.ps1`/`roslynsentinel-vscode-control.ps1`) never matches the instance-ID shape, so the
-   sweep leaves it untouched without needing an explicit exclusion.
+   `roslynsentinel-vscode-control.ps1`, whose `restart` rebuilds it; `build.ps1` does not touch it) and
+   `bin-vscode\http-<port>-<timestamp>\` (throwaway instances from
+   `scripts/Launch-RoslynSentinelHttpServer.ps1`) never match the instance-ID shape, so the
+   sweep leaves them untouched without needing an explicit exclusion.
 3. **Builds** `RoslynSentinel.Server.Advanced.csproj` directly (not the `.slnx` — already skips all
    `Tests*` projects) into `bin-vscode\<instance-id>\Advanced\`, every launch, unconditionally — no
    mtime/staleness check. MSBuild's own incremental up-to-date check already makes a no-op rebuild

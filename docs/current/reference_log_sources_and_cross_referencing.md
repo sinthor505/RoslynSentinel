@@ -1,6 +1,11 @@
 # Reference — log sources and how to cross-reference them
 
 Verified 2026-09-12 against the live repo and `PlanStepRunner-archive\20260910-083738-402`.
+Updated 2026-10-09: `build.ps1` does not touch HTTP servers; `roslynsentinel-vscode-control.ps1 restart`
+rebuilds the shared HTTP copy, and `scripts/Launch-RoslynSentinelHttpServer.ps1` starts throwaway ones
+(logs in `bin-vscode\http-<port>-<timestamp>\server.out.log`/`server.err.log` plus the server's own
+`logs\`). Large-result files under `.roslynsentinel/largeresults` older than 7 days are swept on every
+solution load.
 
 There are **two independent sides** to every model-driven run, and most analysis mistakes come from
 only reading one of them:
