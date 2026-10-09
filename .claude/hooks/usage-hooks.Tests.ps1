@@ -17,6 +17,9 @@ function Invoke-Hook([string]$script, [string]$json) {
 
 $dir = Join-Path ([IO.Path]::GetTempPath()) ("usage-tests-" + [guid]::NewGuid().ToString('N'))
 $env:ROSLYNSENTINEL_USAGE_DIR = $dir
+# Never let the nudge's OAuth refresh reach the real credentials/endpoint: no credentials file = no refresh.
+$env:ROSLYNSENTINEL_USAGE_CREDENTIALS = Join-Path $dir 'no-such-credentials.json'
+$listener = $null; $psListener = $null
 try {
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $future = $now + 3600
@@ -87,8 +90,102 @@ try {
     Remove-Item (Join-Path $dir '*.nudged') -ErrorAction SilentlyContinue
     Write-Snap 50 $future
     Assert ((Invoke-Hook $nudge $post) -eq '') 'nudge: fresh snapshot below threshold stays silent'
+
+    # --- OAuth refresh (usage-refresh.ps1) against a local fake endpoint ---
+    $tcp = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0); $tcp.Start()
+    $port = $tcp.LocalEndpoint.Port; $tcp.Stop()
+    $state = [hashtable]::Synchronized(@{ status = 200; body = ''; retryAfter = $null; count = 0; auth = @() })
+    $listener = New-Object Net.HttpListener
+    $listener.Prefixes.Add("http://127.0.0.1:$port/"); $listener.Start()
+    $psListener = [powershell]::Create()
+    [void]$psListener.AddScript({
+        param($l, $s)
+        while ($l.IsListening) {
+            try { $c = $l.GetContext() } catch { break }
+            $s.count++; $s.auth += $c.Request.Headers['Authorization']
+            $c.Response.StatusCode = $s.status
+            if ($s.retryAfter) { $c.Response.Headers['Retry-After'] = [string]$s.retryAfter }
+            $b = [Text.Encoding]::UTF8.GetBytes([string]$s.body)
+            $c.Response.OutputStream.Write($b, 0, $b.Length); $c.Response.Close()
+        }
+    }).AddArgument($listener).AddArgument($state)
+    [void]$psListener.BeginInvoke()
+
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    $credFile = Join-Path $dir 'credentials.json'
+    function Set-Token([string]$t) { [IO.File]::WriteAllText($credFile, ('{"claudeAiOauth":{"accessToken":"' + $t + '"}}')) }
+    Set-Token 'tok-1'
+    $env:ROSLYNSENTINEL_USAGE_CREDENTIALS = $credFile
+    $env:ROSLYNSENTINEL_USAGE_ENDPOINT = "http://127.0.0.1:$port/api/oauth/usage"
+    $env:ROSLYNSENTINEL_USAGE_TIMEOUT_SECONDS = '5'
+    $snapFile = Join-Path $dir 'usage.json'; $blockFile = Join-Path $dir 'usage.blockedUntil'
+    $okBody = '{"five_hour":{"utilization":87.5,"resets_at":"2030-01-01T10:00:00.5+00:00"},"seven_day":{"utilization":40,"resets_at":"2030-01-05T10:00:00+00:00"},"seven_day_opus":null}'
+    $expectFive = [DateTimeOffset]::Parse('2030-01-01T10:00:00+00:00').ToUnixTimeSeconds()
+    function Reset-Refresh { Remove-Item $snapFile, $blockFile, (Join-Path $dir '*.nudged'), (Join-Path $dir '*.tiptoe') -ErrorAction SilentlyContinue }
+
+    # 200: stale snapshot is replaced from the endpoint, and the 85% tier fires from the fresh data
+    Reset-Refresh
+    $state.status = 200; $state.body = $okBody; $state.count = 0; $state.auth = @()
+    [IO.File]::WriteAllText($snapFile, (@{ updated = ($now - 7200); five_hour = @{ used_percentage = 1; resets_at = $future } } | ConvertTo-Json -Depth 4))
+    $ctx = ((Invoke-Hook $nudge $post) | ConvertFrom-Json).hookSpecificOutput.additionalContext
+    $snap = Get-Content $snapFile -Raw | ConvertFrom-Json
+    Assert ($snap.five_hour.used_percentage -eq 87.5 -and $snap.five_hour.resets_at -eq $expectFive -and $snap.seven_day.used_percentage -eq 40) 'refresh: 200 writes snapshot in statusline shape (epoch resets_at)'
+    Assert ($snap.source -eq 'oauth-usage' -and $state.auth[0] -eq 'Bearer tok-1') 'refresh: bearer token sent'
+    Assert ($ctx -match '87%|88%' -and $ctx -match 'wrapup' -and $ctx -notmatch 'INACTIVE') 'refresh: fresh data drives the nudge, no stale notice'
+
+    # throttle: a fresh snapshot is not refetched
+    $state.count = 0
+    [void](Invoke-Hook $nudge $post)
+    Assert ($state.count -eq 0) 'refresh: fresh snapshot is not refetched'
+
+    # 429: Retry-After is honoured as a block (minimum 60 s) and stops further calls
+    Reset-Refresh
+    $state.status = 429; $state.body = '{}'; $state.retryAfter = 120; $state.count = 0
+    [void](Invoke-Hook $nudge $post)
+    $until = [long](Get-Content $blockFile -Raw)
+    Assert ($state.count -eq 1 -and $until -ge ($now + 110) -and $until -le ($now + 140)) 'refresh: 429 writes blockedUntil from Retry-After'
+    [void](Invoke-Hook $nudge $post)
+    Assert ($state.count -eq 1) 'refresh: blocked window suppresses further calls'
+
+    # 500: short block, no snapshot written
+    Reset-Refresh
+    $state.status = 500; $state.body = 'boom'; $state.retryAfter = $null; $state.count = 0
+    [void](Invoke-Hook $nudge $post)
+    Assert ((Test-Path $blockFile) -and -not (Test-Path $snapFile)) 'refresh: server error blocks briefly and writes no snapshot'
+
+    # 401: retried once with the re-read token only if it changed
+    Reset-Refresh
+    $state.status = 401; $state.body = '{}'; $state.count = 0
+    [void](Invoke-Hook $nudge $post)
+    Assert ($state.count -eq 1) 'refresh: 401 with unchanged token is not retried'
+
+    Reset-Refresh
+    $state.count = 0; $state.auth = @()
+    # emulate Claude Code renewing the token on disk mid-call: stub the request function in-process
+    . (Join-Path $PSScriptRoot 'usage-refresh.ps1')
+    $realInvoke = ${function:Invoke-UsageRequest}
+    $script:calls = 0
+    function Invoke-UsageRequest([string]$token, [string]$url, [int]$timeout) {
+        $script:calls++
+        if ($token -eq 'tok-1') { Set-Token 'tok-2'; return @{ Status = 401; Body = '{}'; RetryAfter = $null } }
+        @{ Status = 200; Body = $okBody; RetryAfter = $null }
+    }
+    $ok = Update-UsageSnapshot $dir
+    Assert ($ok -and $script:calls -eq 2 -and (Test-Path $snapFile)) 'refresh: 401 then renewed token retries once and succeeds'
+    Set-Item function:Invoke-UsageRequest $realInvoke
+    Set-Token 'tok-1'
+
+    # no credentials file: silent, no call, no block file
+    Reset-Refresh
+    $state.count = 0
+    $env:ROSLYNSENTINEL_USAGE_CREDENTIALS = Join-Path $dir 'missing.json'
+    [void](Invoke-Hook $nudge $post)
+    Assert ($state.count -eq 0 -and -not (Test-Path $blockFile)) 'refresh: missing credentials makes no call'
 }
 finally {
+    if ($listener) { try { $listener.Stop(); $listener.Close() } catch { } }
+    if ($psListener) { try { $psListener.Stop(); $psListener.Dispose() } catch { } }
+    Remove-Item Env:\ROSLYNSENTINEL_USAGE_CREDENTIALS, Env:\ROSLYNSENTINEL_USAGE_ENDPOINT, Env:\ROSLYNSENTINEL_USAGE_TIMEOUT_SECONDS -ErrorAction SilentlyContinue
     Remove-Item Env:\ROSLYNSENTINEL_USAGE_DIR -ErrorAction SilentlyContinue
     if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
 }
