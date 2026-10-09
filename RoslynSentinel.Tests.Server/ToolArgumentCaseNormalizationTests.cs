@@ -83,6 +83,8 @@ public class ToolArgumentCaseNormalizationTests
         // shipped RoslynSentinel tool declares two parameters that collide case-insensitively, so
         // that scenario can only be exercised against a purpose-built one.
         mcpBuilder.WithTools<CaseCollisionProbeTool>();
+        // Registered to exercise enum-value repair with ambiguous case-insensitive matches.
+        mcpBuilder.WithTools<EnumCaseProbeTool>();
 
         var hostBuilder = Host.CreateApplicationBuilder();
         foreach (var descriptor in services)
@@ -218,6 +220,52 @@ public class ToolArgumentCaseNormalizationTests
         Assert.That(result.IsError, Is.Not.True, $"An already-correct call must be unaffected. Got: {text}");
         Assert.That(text, Does.Contain("Caller"));
     }
+
+    [Test]
+    public async Task EnumValue_WithTwoCaseInsensitiveMatches_IsNotRepaired_AndIsRejected()
+    {
+        // "alpha" (lowercase) matches both "Alpha" and "ALPHA" case-insensitively, but exactly
+        // neither. NormalizeEnumCase repairs only when exactly one case-insensitive match exists,
+        // so this ambiguous case must not be repaired and must fall through to Validate's
+        // rejection for an invalid enum value.
+        var result = await _client.CallToolAsync(
+            "EnumCaseProbe",
+            new Dictionary<string, object?>
+            {
+                ["choice"] = "alpha",
+            }!,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        var text = string.Join(" ", result.Content.OfType<TextContentBlock>().Select(b => b.Text));
+        Assert.That(result.IsError, Is.True,
+            $"An ambiguous case-insensitive match must be rejected, not silently repaired. Got: {text}");
+        Assert.That(RejectionMessage(text), Does.Contain("is not a valid value for parameter"),
+            $"The rejection must indicate the value is invalid. Got: {text}");
+        Assert.That(RejectionMessage(text), Does.Not.Contain("->"),
+            $"The rejection must NOT contain a repair note (no '->'). Got: {text}");
+    }
+
+    [Test]
+    public async Task EnumValue_ExactCase_IsUntouched_NoNote()
+    {
+        // "Beta" is an exact case match for one of the declared enum values. No repair is
+        // needed, and no repair note should appear in the response.
+        var result = await _client.CallToolAsync(
+            "EnumCaseProbe",
+            new Dictionary<string, object?>
+            {
+                ["choice"] = "Beta",
+            }!,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        var text = string.Join(" ", result.Content.OfType<TextContentBlock>().Select(b => b.Text));
+        Assert.That(result.IsError, Is.Not.True,
+            $"An exact case match must succeed. Got: {text}");
+        Assert.That(text, Does.Contain("choice=Beta"),
+            $"The tool must execute with the supplied exact-case value. Got: {text}");
+        Assert.That(text, Does.Not.Contain("->"),
+            $"An exact case match must not generate a repair note (no '->'). Got: {text}");
+    }
 }
 
 /// <summary>
@@ -236,5 +284,30 @@ public class CaseCollisionProbeTool
         [System.ComponentModel.Description("Uppercase-I Id parameter - a distinct parameter from 'id'.")] string? Id = null)
     {
         return $"id={id} Id={Id}";
+    }
+}
+/// <summary>
+/// Test-only enum with two case-insensitive variants of a name (Alpha and ALPHA), used to
+/// exercise the ambiguous-enum-value rejection case in enum-value repair tests.
+/// </summary>
+public enum AmbiguousChoice
+{
+    Alpha,
+    ALPHA,
+    Beta
+}
+/// <summary>
+/// Test-only tool that declares an enum parameter with two case-insensitive variants
+/// (Alpha and ALPHA), used to exercise enum-value repair behavior in case-normalization tests.
+/// </summary>
+[McpServerToolType]
+public class EnumCaseProbeTool
+{
+    [McpServerTool(Name = "EnumCaseProbe")]
+    [System.ComponentModel.Description("Test-only tool for enum-value repair normalization.")]
+    public string EnumCaseProbe(
+        [System.ComponentModel.Description("An enum parameter with ambiguous case variants.")] AmbiguousChoice choice)
+    {
+        return $"choice={choice}";
     }
 }
