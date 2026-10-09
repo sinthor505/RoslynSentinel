@@ -1,6 +1,8 @@
 // Battery #20 -> WorkspaceTools
 // Tests all 26 public methods of WorkspaceTools in-memory via TestSolutionBuilder.
 
+using System.Text;
+
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Basic;
@@ -260,6 +262,136 @@ public class BatteryTwentyTests
         Assert.That(payload.RegexPatternValid, Is.False);
         Assert.That(payload.RegexResults, Is.Empty);
         Assert.That(payload.LiteralResults, Is.Not.Empty);
+    }
+
+
+    // --- Search declaration-kind modes ---
+
+    [Test]
+    public async Task SearchKindMode_ClassWithExactQuery_ReturnsOnlyThatClassAsync()
+    {
+        SetSource("namespace TestProj; public class Order { } public class Customer { }", "Test.cs");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.@class, query: "order");
+
+        Assert.That(!result.IsError, Is.True);
+        var entries = (List<SolutionSymbolEntry>)result.SuccessData!;
+        Assert.That(entries, Has.Count.EqualTo(1));
+        Assert.That(entries[0].Name, Is.EqualTo("Order"));
+    }
+
+
+    [Test]
+    public async Task SearchKindMode_MethodWithSubstringQuery_ReturnsOnlyMatchingMethodsAsync()
+    {
+        SetSource("namespace TestProj; public class Order { public void GetOrder() { } public void SetOrder() { } public void Delete() { } }", "Test.cs");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.method, query: "Order", exactMatch: false);
+
+        Assert.That(!result.IsError, Is.True);
+        var entries = (List<SolutionSymbolEntry>)result.SuccessData!;
+        Assert.That(entries, Has.Count.EqualTo(2));
+        Assert.That(entries, Has.All.Property("Name").Contains("Order"));
+
+        // Now verify that exact match with default (exactMatch=true) returns NoMatches for "Order"
+        var resultExact = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.method, query: "Order");
+        Assert.That(resultExact.IsError, Is.True);
+        Assert.That(resultExact.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
+    }
+
+
+    [Test]
+    public async Task SearchKindMode_QueryMatchesNothing_ReturnsNoMatchesNamingTheKindAsync()
+    {
+        SetSource("namespace TestProj; public class Order { }", "Test.cs");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.@class, query: "Nope");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NoMatches));
+        Assert.That(result.ErrorData.Message, Does.Contain("class"));
+        Assert.That(result.ErrorData.Message, Does.Contain("mode: symbol"));
+    }
+
+
+    [Test]
+    public async Task SearchKindMode_NoQuery_StillListsEveryDeclarationOfTheKindAsync()
+    {
+        SetSource("namespace TestProj; public class Order { } public class Customer { }", "Test.cs");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.@class, query: "");
+
+        Assert.That(!result.IsError, Is.True);
+        var entries = (List<SolutionSymbolEntry>)result.SuccessData!;
+        Assert.That(entries, Has.Count.EqualTo(2));
+    }
+
+
+    [Test]
+    public async Task SearchKindMode_MoreMatchesThanCap_TruncatesAndSaysSoAsync()
+    {
+        // Build source with KindListingMaxItems + 5 classes (105 total)
+        var sb = new StringBuilder("namespace TestProj;\r\n");
+        for (int i = 0; i < WorkspaceTools.KindListingMaxItems + 5; i++)
+        {
+            sb.AppendLine($"public class C{i} {{ }}");
+        }
+        SetSource(sb.ToString(), "Test.cs");
+
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.@class, query: "");
+
+        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.HasMoreData, Is.True);
+        Assert.That(result.TotalRecords, Is.EqualTo(WorkspaceTools.KindListingMaxItems + 5));
+        Assert.That(result.WarningDetails, Does.Contain("mode: symbol"));
+        Assert.That(result.WarningDetails, Does.Contain((WorkspaceTools.KindListingMaxItems + 5).ToString()));
+
+        // Returned row count: check both in-memory and offloaded cases
+        var returnedCount = (result.SuccessData as List<SolutionSymbolEntry>)?.Count ?? result.LargeResult!.TotalRecords;
+        Assert.That(returnedCount, Is.EqualTo(WorkspaceTools.KindListingMaxItems));
+    }
+
+
+    [Test]
+    public async Task ListAllTool_MoreDeclarationsThanSearchCap_IsNotCappedAsync()
+    {
+        // Build source with KindListingMaxItems + 5 classes (105 total)
+        var sb = new StringBuilder("namespace TestProj;\r\n");
+        for (int i = 0; i < WorkspaceTools.KindListingMaxItems + 5; i++)
+        {
+            sb.AppendLine($"public class C{i} {{ }}");
+        }
+        SetSource(sb.ToString(), "Test.cs");
+
+        var result = await _workspaceTools.ListAll(reason: "test message", kind: ListAllKind.@class);
+
+        Assert.That(result.TotalRecords, Is.EqualTo(105));
+        Assert.That(result.HasMoreData, Is.False);
+    }
+
+
+    [Test]
+    public void SearchTool_DescriptionStatesTheKindListingCap()
+    {
+        // Verify that the hardcoded number 100 in the description matches KindListingMaxItems constant.
+        // This test will fail if someone changes the constant without updating the description text.
+
+        // Get the SearchSolution method from WorkspaceTools
+        var searchMethod = typeof(WorkspaceTools).GetMethods()
+            .First(m => m.Name == "SearchSolution");
+
+        // Get the method-level [Description] attribute
+        var methodDesc = searchMethod.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), inherit: false)
+            .OfType<System.ComponentModel.DescriptionAttribute>()
+            .First();
+
+        var capValue = WorkspaceTools.KindListingMaxItems.ToString();
+        Assert.That(methodDesc.Description, Does.Contain(capValue), "Method [Description] must contain the cap value");
+        Assert.That(methodDesc.Description, Does.Contain("name filter"), "Method [Description] must mention 'name filter'");
+
+        // Get the 'query' parameter's [Description] attribute
+        var queryParam = searchMethod.GetParameters().First(p => p.Name == "query");
+        var queryDesc = queryParam.GetCustomAttributes(typeof(System.ComponentModel.DescriptionAttribute), inherit: false)
+            .OfType<System.ComponentModel.DescriptionAttribute>()
+            .First();
+
+        Assert.That(queryDesc.Description, Does.Contain("name filter"), "query parameter [Description] must mention 'name filter'");
     }
 
     [Test]

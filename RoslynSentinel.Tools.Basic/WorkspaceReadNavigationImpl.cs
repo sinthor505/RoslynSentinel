@@ -333,6 +333,9 @@ public class WorkspaceReadNavigationImpl
         ToolCallReason reason,
         ListAllKind kind = ListAllKind.all,
         string? projectName = null,
+        string? nameFilter = null,
+        bool exactMatch = true,
+        int? maxItems = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -352,6 +355,7 @@ public class WorkspaceReadNavigationImpl
                 _ => kind.ToString()
             };
             var entries = new List<SolutionSymbolEntry>();
+            var totalMatches = 0;
             foreach (var project in projects)
             {
                 foreach (var document in project.Documents)
@@ -375,18 +379,49 @@ public class WorkspaceReadNavigationImpl
                             continue;
                         }
 
-                        entries.Add(new SolutionSymbolEntry(filePath, item.Kind, item.Name, item.Container, item.StartLine, item.EndLine));
+                        if (!string.IsNullOrEmpty(nameFilter))
+                        {
+                            var matches = exactMatch
+                                ? string.Equals(item.Name, nameFilter, StringComparison.OrdinalIgnoreCase)
+                                : item.Name.Contains(nameFilter, StringComparison.OrdinalIgnoreCase);
+                            if (!matches)
+                            {
+                                continue;
+                            }
+                        }
+
+                        totalMatches++;
+                        if (maxItems is null || entries.Count < maxItems.Value)
+                        {
+                            entries.Add(new SolutionSymbolEntry(filePath, item.Kind, item.Name, item.Container, item.StartLine, item.EndLine));
+                        }
                     }
                 }
             }
 
-            return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
+            if (!string.IsNullOrEmpty(nameFilter) && totalMatches == 0)
+            {
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.NoMatches, $"No {(kindFilter ?? "declaration")} named '{nameFilter}' found ({(exactMatch ? "exact" : "substring")} match). Use mode: symbol to search every kind at once" + (exactMatch ? ", or pass exactMatch: false for a substring match." : "."))
+                };
+            }
+
+            var result = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                 entries,
                 solutionRoot,
                 typeof(SolutionSymbolEntry).Name,
                 ResultWrapperType.SolutionSymbolEntryList,
                 totalRecords: entries.Count,
                 cancellationToken: cancellationToken);
+
+            if (totalMatches > entries.Count)
+            {
+                return result with { TotalRecords = totalMatches, HasMoreData = true, WarningDetails = $"Truncated: showing the first {entries.Count} of {totalMatches} matching declarations (cap {maxItems}). Narrow with query (name filter), projectName, or use mode: symbol." };
+            }
+
+            return result with { TotalRecords = totalMatches };
         }
         catch (Exception ex)
         {

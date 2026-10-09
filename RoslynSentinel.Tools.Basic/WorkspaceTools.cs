@@ -604,18 +604,18 @@ public class WorkspaceTools
         [Description("Restricts to one project. Omit for the whole solution.")]
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
         CancellationToken cancellationToken = default)
-        => _readNav.ListAll(reason, kind, projectName, cancellationToken);
+        => _readNav.ListAll(reason, kind, projectName, cancellationToken: cancellationToken);
 
     [McpServerTool(Name = "Search")]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
     [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.ProjectName)]
-    [Description("Unified search. mode selects what's searched: text (free-text/regex scan), symbol (declaration lookup by name), references (callers/implementations of a symbol), or a declaration-kind listing (all, class, method, ...). query is the pattern for text or the symbol name for symbol/references; it is ignored for declaration-kind modes.")]
+    [Description("Unified search. mode selects what's searched: text (free-text/regex scan), symbol (declaration lookup by name), references (callers/implementations of a symbol), or a declaration-kind listing (all, namespace, class, interface, method, property, struct, record, enum, enum member, constructor, field). query: mode text = pattern matched as both a literal and a regex (use fileGlob, not a path parameter, to restrict files); symbol/references = symbol name; declaration-kind modes = optional case-insensitive name filter (exact name unless exactMatch is false). Declaration-kind listings return at most 100 rows: when more match, totalRecords holds the full match count, hasMoreData is true and warningDetails says the list was truncated - narrow with query or projectName, or use mode: symbol. Zero matches returns a NoMatches error.")]
     public Task<SentinelCallToolResult<object>> SearchSolution(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     SearchMode mode,
-    [Description("Pattern for mode: text, or symbol name for symbol/references.")]
+    [Description("mode: text = pattern matched as both a literal and a regex; symbol/references = symbol name; declaration-kind modes = optional case-insensitive name filter (see exactMatch). Omit in declaration-kind modes only if you want up to 100 rows of that kind.")]
         string? query = null,
     [Description("mode: text only. Glob restricting file paths (omit for all files). " +
         "Supports '*' (within one path segment), '**' (any depth), '?' (one char), " +
@@ -633,11 +633,11 @@ public class WorkspaceTools
         [ExternalInputRequired(DataTag.ContainingNamespace)] string? containingNamespace = null,
     [Description("Restricts to one project (symbol/all/declaration-kind modes).")]
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
-    [Description("mode: symbol only. false = prefix/contains search instead of exact name match.")]
+    [Description("mode: symbol and declaration-kind modes. true (default) = exact name match; false = substring (contains) match.")]
         [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true,
     [Description("mode: references only (required). callers: call sites; implementations: overrides/interface implementations; all: both.")]
         [Consumes(DataTag.SymbolKind)] FindReferencesKind? referencesKind = null,
-    [Description("mode: symbol/references only. Pins resolution when the name is ambiguous across files.")]
+    [Description("mode: symbol/references only. Pins resolution when the name is ambiguous across files. Ignored in text mode - use fileGlob.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
     [Description("Required for mode: references. " + ToolParams.ContextSnippet)]
         [Consumes(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
@@ -645,6 +645,11 @@ public class WorkspaceTools
     [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
     CancellationToken cancellationToken = default)
     => DispatchSearch(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, referencesKind, filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
+
+    /// <summary>
+    /// Hard cap on rows returned by Search in declaration-kind modes; extra matches are counted in totalRecords and flagged via hasMoreData/warningDetails.
+    /// </summary>
+    public const int KindListingMaxItems = 100;
 
     private static ListAllKind SearchModeToListAllKind(SearchMode mode) => mode switch
     {
@@ -694,7 +699,7 @@ public class WorkspaceTools
                 }
                 return _symbolRelationship.FindReferences(reason, query ?? string.Empty, referencesKind.Value, filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
             default:
-                return _readNav.ListAll(reason, SearchModeToListAllKind(mode), projectName, cancellationToken);
+                return _readNav.ListAll(reason, SearchModeToListAllKind(mode), projectName, query, exactMatch, KindListingMaxItems, cancellationToken);
         }
     }
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]

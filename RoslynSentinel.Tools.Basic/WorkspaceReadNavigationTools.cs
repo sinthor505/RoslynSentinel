@@ -66,7 +66,7 @@ public class WorkspaceReadNavigationTools
         [Description("Restricts results to one project. Omit to search the whole solution.")]
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
         CancellationToken cancellationToken = default)
-        => _impl.ListAll(reason, kind, projectName, cancellationToken);
+        => _impl.ListAll(reason, kind, projectName, cancellationToken: cancellationToken);
     [McpServerTool(Name = "SearchSolutionText")]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
