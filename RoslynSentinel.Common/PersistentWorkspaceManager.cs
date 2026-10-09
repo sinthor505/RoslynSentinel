@@ -1275,10 +1275,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         // proposal item 2): once tripped by a confirmed drift hit below, every subsequent
         // mutating call fails immediately and unconditionally, regardless of which file it
         // targets -> checked first, ahead of every other validation in this method.
+        // Drift is recoverable via ExternalFileDrift(operation: Acknowledge); unrecoverable halts
+        // (see below) have no reset.
         if (_sessionHalted)
         {
-            throw new SessionHaltedException(
-                "Session halted: external file drift was detected on a tracked file. This session cannot safely continue. Stop and report to the user/operator.");
+            throw new SessionHaltedException(DriftMessages.DriftHaltMessage);
         }
 
         // Unrecoverable blob-integrity halt (see IUnrecoverableBreaker). Enforced here, at the
@@ -1327,14 +1328,13 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         // proposed content is stale and writing it would silently clobber whatever changed it
         // externally. Under the single-session/no-concurrent-actors assumption this is an
         // anomaly, not something for the in-task model to reconcile -> trip the session-wide
-        // latch and fail terminally rather than returning a soft, retryable result.
+        // latch and fail rather than returning a soft, retryable result.
         var drift = new HashSet<string>(GetExternalFileChanges(), StringComparer.OrdinalIgnoreCase);
         var driftedTargets = changes.Keys.Concat(deletePaths).Where(k => drift.Contains(k)).Distinct().ToList();
         if (driftedTargets.Count > 0)
         {
             _sessionHalted = true;
-            throw new SessionHaltedException(
-                "Session halted: external file drift was detected on a tracked file. This session cannot safely continue. Stop and report to the user/operator.");
+            throw new SessionHaltedException(DriftMessages.DriftHaltMessage);
         }
 
         // Pre-lock validation: compiles an in-memory fork without holding the write lock,

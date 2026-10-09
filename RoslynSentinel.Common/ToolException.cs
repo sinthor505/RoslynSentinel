@@ -131,13 +131,11 @@ public sealed class ToolNotImplementedException : ToolException
 /// <summary>
 /// A confirmed external content-drift hit tripped the session-wide halt latch (see
 /// docs/current/ideas/external-drift-hard-blocker.md). Once thrown, every subsequent mutating
-/// call on this <see cref="PersistentWorkspaceManager"/> instance throws this same exception ->
-/// deliberately terminal and non-actionable by the in-task model, since a genuine drift hit under
-/// the single-session/no-concurrent-actors assumption means the session's whole view of disk may
-/// be untrustworthy, not just the one file that tripped it. Maps to
-/// <see cref="ToolErrorCode.SessionHalted"/>. Clearing the latch is an out-of-band operation
-/// (<c>IWorkspaceHealthReporter.ClearSessionHalt</c>), not something reachable from this
-/// exception's own catch path.
+/// call on this <see cref="PersistentWorkspaceManager"/> instance throws this same exception.
+/// The external-drift latch is recoverable via <c>ExternalFileDrift(operation: Acknowledge)</c>,
+/// which clears it and allows subsequent mutations. The unrecoverable halt (see
+/// <see cref="IUnrecoverableBreaker"/>) has no reset. Maps to
+/// <see cref="ToolErrorCode.SessionHalted"/>.
 /// </summary>
 public sealed class SessionHaltedException : ToolException
 {

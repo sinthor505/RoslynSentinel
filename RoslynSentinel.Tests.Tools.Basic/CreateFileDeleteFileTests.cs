@@ -328,6 +328,7 @@ public class CreateFileDeleteFileTests
         var result = await wholeFileWriteTools.DeleteFile(reason: "test message", targetFile);
 
         Assert.That(!result.IsError, Is.False);
+        Assert.That(result.Message, Does.Contain("ExternalFileDrift"));
         Assert.That(File.Exists(targetFile), Is.True);
     }
 
