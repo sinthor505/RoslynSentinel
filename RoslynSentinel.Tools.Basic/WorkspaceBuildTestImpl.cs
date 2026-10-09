@@ -45,6 +45,10 @@ public class WorkspaceBuildTestImpl
                     };
                 }
 
+                // The engine takes an already-resolved path (see PathCaseLookupRegressionTests); resolve the
+                // wire form (solution-root-relative '/' or absolute) here, and reuse it for the quickBuild
+                // file scope below so both agree on the file.
+                scopeName = _workspaceManager.ResolveFromWire(scopeName).Absolute;
                 result = await _diagnosticEngine.GetFileDiagnosticsAsync(scopeName, cancellationToken: cancellationToken);
                 summary = result.Data;
             }
@@ -177,6 +181,13 @@ public class WorkspaceBuildTestImpl
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, rateLimitError) };
             }
 
+            // quickBuild file scope: the engine takes an already-resolved path, so resolve the wire form
+            // (solution-root-relative '/' or absolute) here. fullBuild ignores scope, project scope is a name.
+            if (level != BuildVerifyLevel.fullBuild && scope == ToolScope.file && !string.IsNullOrEmpty(scopeName))
+            {
+                scopeName = _workspaceManager.ResolveFromWire(scopeName).Absolute;
+            }
+
             var result = level == BuildVerifyLevel.fullBuild
                 ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails, useScratchDir)
                 : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken);
@@ -198,6 +209,10 @@ public class WorkspaceBuildTestImpl
             }
 
             return buildToolResult with { Findings = result.Findings, StatusMessage = buildSummary };
+        }
+        catch (ToolNotFoundException ex)
+        {
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Build") };
         }
         catch (Exception ex)
         {

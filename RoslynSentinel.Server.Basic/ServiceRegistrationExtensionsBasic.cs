@@ -104,6 +104,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             AddWorkspaceNotLoadedFilter(filters);
             AddDriftFilter(filters);
             AddLargeResultOffloadFilter(filters);
+            AddWirePathRelativizeFilter(filters);
             AddOrientationBreakerFilter(filters);
             AddUnrecoverableBreakerFilter(filters);
         });
@@ -692,6 +693,61 @@ public static class RoslynSentinelServiceExtensionsBasic
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"Large result offload filter failed: {ex}");
+                }
+
+                return result;
+            }));
+    }
+
+    // Wire path relativization backstop filter (see docs/current/plans/plan_wire_relative_paths_backstop_filter.md):
+    // runs inside (registered after) the offload filter so the 15KB threshold and stored raw file see the
+    // relativized text; never throws. Rewrites absolute paths in tool result JSON text blocks to be relative
+    // to the solution root, enabling agents to work with portable relative paths.
+    private static void AddWirePathRelativizeFilter(IMcpRequestFilterBuilder filters)
+    {
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                var result = await next(context, cancellationToken);
+
+                try
+                {
+                    if (!RoslynSentinel.Common.WirePathOptions.Enabled || result.Content is null)
+                    {
+                        return result;
+                    }
+
+                    var root = context.Server.Services?.GetService<PersistentWorkspaceManager>()?.GetSolutionRoot();
+                    if (string.IsNullOrEmpty(root))
+                    {
+                        return result;
+                    }
+
+                    foreach (var block in result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>())
+                    {
+                        var text = block.Text;
+                        if (string.IsNullOrEmpty(text) || !text.AsSpan().TrimStart().StartsWith("{"))
+                        {
+                            continue;
+                        }
+
+                        var rewritten = RoslynSentinel.Common.WirePathRewriter.RewriteJsonText(text, root, out var rewrites);
+                        if (rewritten is null)
+                        {
+                            continue;
+                        }
+
+                        block.Text = rewritten;
+
+                        var logger = context.Server.Services?.GetService<ILogger<PersistentWorkspaceManager>>();
+                        logger?.LogDebug("Wire path rewrite: tool '{Tool}' rewrote {Count} value(s)", context.Params?.Name, rewrites);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Wire path relativize filter failed: {ex}");
                 }
 
                 return result;

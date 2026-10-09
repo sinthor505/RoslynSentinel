@@ -1,6 +1,15 @@
 # Plan: solution-relative paths on the wire via one central response filter (stage 1 of proposal_solution_relative_paths)
 
-**Status:** DRAFT 2026-10-08. Implements only "Part 2" (the JSON-aware backstop filter) of `docs/current/proposal_solution_relative_paths.md`, with measured savings; typed retyping (Part 1) and per-file grouping are deliberately not in this plan.
+**Status:** IMPLEMENTED 2026-10-08 (Steps 1-5 landed; Step 6 live verification on the restarted server is left to the parent session). Implements only "Part 2" (the JSON-aware backstop filter) of `docs/current/proposal_solution_relative_paths.md`, with measured savings; typed retyping (Part 1) and per-file grouping are deliberately not in this plan.
+
+**Implementation notes (2026-10-08):**
+- Step 1: `RoslynSentinel.Common/WirePathOptions.cs`, `WirePathRewriter.cs`. A rewrite whose relativized object keys would collide (two keys collapsing to one relative path) aborts the whole rewrite and the response is returned unchanged (safe direction). Values or `..` segments that would need `..` are never rewritten.
+- Step 2: `RoslynSentinel.Tests/WirePathRewriterTests.cs`, 41 tests (the planned set plus edge cases).
+- Step 3: `AddWirePathRelativizeFilter` in `Server.Basic/ServiceRegistrationExtensionsBasic.cs`, registered directly after `AddLargeResultOffloadFilter`.
+- Step 4: `RoslynSentinel.Tests.Server/WirePathRelativizeFilterTests.cs`, 5 live-pipeline tests. The raw offload file check asserts a `solutionRoot` property and relative `filePath` values are present (it cannot assert the escaped root is absent from the whole file, because `solutionRoot` itself carries it).
+- Step 5: `RoslynSentinel.Tests.Server/RelativePathInputAuditTests.cs`, 11 rows. Two real defects were found and FIXED in this run rather than written up (deviation from "report, do not fix"): `GetDiagnostics(scope: file, scopeName: <relative>)` and `Build(level: quickBuild, scope: file, scopeName: <relative>)` passed the raw scopeName to the engine and failed with NotFound / "Build failed unexpectedly". Both now call `_workspaceManager.ResolveFromWire(scopeName).Absolute` at the tool boundary in `Tools.Basic/WorkspaceBuildTestImpl.cs`; `Build` also maps `ToolNotFoundException` to a structured error instead of the generic "failed unexpectedly" message.
+- Verification: full solution `RunTest` 3462 tests, 3436 passed, 0 failed, 26 skipped (baseline 3405/0/26).
+- Known gap: the offload stub (`offloaded`, `statusMessage`, `listSummary`) is built by the outer offload filter from the already-relativized text, so its `listSummary.byFile` paths are relative, but the stub itself carries no `solutionRoot` property. Candidate follow-up: stamp `solutionRoot` on the stub.
 
 ## Problem
 
