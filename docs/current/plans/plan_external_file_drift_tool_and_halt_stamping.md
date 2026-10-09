@@ -1,6 +1,7 @@
 # Plan: one ExternalFileDrift tool, reworded halt message, and halt state stamped onto responses
 
-**Status:** READY 2026-10-09 (amended per round-3 decisions). Implements owner decisions 1, 1b and 2 of `docs/current/proposals/proposal_journal_digest_followup_decisions.md` plus round-3 decisions D-1, D-2, D-3 and D-21; nothing built yet.
+**Status:** PARTIALLY IMPLEMENTED 2026-10-09: steps 1-12 done and committed (a68935f steps 1-3, 65a5e87 step 4, de6f500 step 5, 97ed3c2 step 6, 10d9ca1 step 7, 8928a03 step 8, 86af32e step 9, 2466db6 steps 10-11, d4f0669 step 12); step 13 build and full test run done (3522 passed, 0 failed, 26 skipped), but the live checks that need a server restart (13.1 to 13.3) are pending. Mark IMPLEMENTED once they pass. Implements owner decisions 1, 1b and 2 of `docs/current/proposals/proposal_journal_digest_followup_decisions.md` plus round-3 decisions D-1, D-2, D-3 and D-21.
+Implementation notes: step 3 also needed `McpToolsetControlTests.Catalog_SetsAreDisjoint_AndExcludeCoreTools` changed from 41 to 40 (not in the original step text); the step 7 test host uses modes `Workspace` and `Admin` because `ExternalFileDrift` lives in `AdminTools`.
 
 ## Problem
 
