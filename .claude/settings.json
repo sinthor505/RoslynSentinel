@@ -24,7 +24,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell|Grep|Agent|Task|.*__ReplaceSnippet|.*__Git",
+        "matcher": "Read|Edit|Write|MultiEdit|NotebookEdit|Bash|PowerShell|Grep|Agent|Task|.*__ReplaceSnippet|.*__Git",
         "hooks": [
           {
             "type": "command",

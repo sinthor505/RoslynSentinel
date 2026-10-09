@@ -11,7 +11,7 @@
 # Contract: stdin receives PreToolUse JSON; exit 2 blocks the call and feeds stderr
 # back to the model as the reason. Any other exit code lets the call proceed.
 #
-# Matcher note: settings.json's PreToolUse matcher for this hook must include Grep, and the
+# Matcher note: settings.json's PreToolUse matcher for this hook must include Read and Grep, and the
 # MCP tool names ReplaceSnippet and Git (matched here by exact name OR a "__Git"/
 # "__ReplaceSnippet" suffix, since Claude Code sends the full "mcp__<server>__ToolName" form
 # for an actual MCP call but a bare short name in this hook's own unit-test payloads).
@@ -27,6 +27,7 @@
 # enforce-dogfood.Tests.ps1, which exists in file form for exactly this reason.
 #
 # Also covers, per the same policy:
+#   - Read on an in-repo .cs path -> ReadFile / GetFileOutline / GetMethodSource / Search.
 #   - Grep on a .cs path/glob or an obviously C#-symbol-shaped pattern -> Search/FindReferences.
 #   - Bash/PowerShell text search, read or stream edit (grep/rg/Select-String/cat/Get-Content/
 #     sed...) naming a .cs file or glob -> Search/ReadFile/GetMethodSource. Same whole-command
@@ -177,6 +178,37 @@ try {
 
     $toolName  = [string]$payload.tool_name
     $toolInput = $payload.tool_input
+
+    # --- C# file reads -----------------------------------------------------------
+    # Built-in Read on an in-repo .cs: the MCP read tools (ReadFile, GetFileOutline,
+    # GetMethodSource, Search, FindReferences) cover it. Same exemptions as the edit block.
+    if ($toolName -eq 'Read') {
+        $filePath = [string]$toolInput.file_path
+        if ($filePath -and $filePath.TrimEnd().EndsWith('.cs', [StringComparison]::OrdinalIgnoreCase)) {
+            if ($filePath -match '[\\/]Worktree[\\/]') { exit 0 }
+            if (Test-PathOutsideRepo $filePath) { exit 0 }
+            Exit-IfBypassed '' $filePath
+
+            DenyBypassable @"
+BLOCKED by dog-fooding policy: Read on a .cs file.
+
+  $filePath
+
+C# is read through the RoslynSentinel MCP tools:
+
+  ReadFile         - whole file or startLine/endLine
+  GetFileOutline   - types and members with line ranges
+  GetMethodSource  - one method
+  Search / FindReferences - symbols, callers
+
+If the right MCP tool is broken, unreachable, or has no equivalent operation,
+that is a BLOCKING finding: stop, write docs/current/blockers/blocking_error_<slug>.md,
+and end the turn. If your agent has no MCP tools, report that as the finding.
+Do not route around this hook.
+"@
+        }
+        exit 0
+    }
 
     # --- C# file edits -----------------------------------------------------------
     # Scope is C# only: docs, .ps1 and .md aren't in the Roslyn workspace and have no

@@ -200,8 +200,20 @@ $cases = @(
        p = @{ tool_name = 'Edit'; tool_input = @{ file_path = "$repo\build.ps1" } } }
     @{ n = 'Edit .cs inside Worktree/'; want = 'allow'
        p = @{ tool_name = 'Edit'; tool_input = @{ file_path = 'C:\run\Worktree\src\A.cs' } } }
-    @{ n = 'Read .cs (not an edit)'; want = 'allow'
+    @{ n = 'Read .cs outside the repo'; want = 'allow'
        p = @{ tool_name = 'Read'; tool_input = @{ file_path = 'C:\repo\Foo.cs' } } }
+
+    # --- Read of C# (built-in Read is blocked for in-repo .cs) ---
+    @{ n = 'Read in-repo .cs'; want = 'DENY'
+       p = @{ tool_name = 'Read'; tool_input = @{ file_path = "$repo\RoslynSentinel.Common\Foo.cs" } } }
+    @{ n = 'Read in-repo .cs inside Worktree/'; want = 'allow'
+       p = @{ tool_name = 'Read'; tool_input = @{ file_path = 'C:\run\Worktree\src\A.cs' } } }
+    @{ n = 'Read in-repo .md'; want = 'allow'
+       p = @{ tool_name = 'Read'; tool_input = @{ file_path = "$repo\CLAUDE.md" } } }
+    @{ n = 'Read in-repo .cs + token bypass tools=Read'; want = 'allow'; fx = 'tok'; token = @{ reason = 'deliberate manual read'; tools = @('Read') }
+       p = @{ tool_name = 'Read'; tool_input = @{ file_path = '{ROOT}\Foo.cs' } } }
+    @{ n = 'Read in-repo .cs + token bypass tools=Edit only'; want = 'DENY'; fx = 'tok'; token = @{ reason = 'deliberate manual read'; tools = @('Edit') }
+       p = @{ tool_name = 'Read'; tool_input = @{ file_path = '{ROOT}\Foo.cs' } } }
 
     # --- git operations the MCP Git tool covers: deny ---
     @{ n = 'git status'; want = 'DENY'
