@@ -5,6 +5,8 @@ public interface IWorkspaceHealthReporter
 {
     /// <summary>Clears any recorded external-file-change state, acknowledging out-of-band file changes.</summary>
     void ClearExternalFileChanges();
+    /// <summary>Clears only the listed entries (matched per PathComparison); all other drift entries stay flagged.</summary>
+    void ClearExternalFileChanges(IReadOnlyCollection<string> paths);
     /// <summary>Returns files whose on-disk content diverges from the in-memory workspace.</summary>
     Task<List<string>> GetContentExternalFileChangesAsync(CancellationToken cancellationToken = default);
     /// <summary>Returns free-form diagnostic messages about the workspace's internal state.</summary>

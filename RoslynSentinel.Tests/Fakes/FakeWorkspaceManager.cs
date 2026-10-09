@@ -155,6 +155,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     // Always under limit -> tests exercising real rate-limit behavior use their own IRateLimiter (see RunTestTests).
     public string? CheckRateLimit(string toolName, int defaultLimit) => null;
     public void ClearExternalFileChanges() => throw new NotImplementedException();
+    public void ClearExternalFileChanges(IReadOnlyCollection<string> paths) => throw new NotImplementedException();
     public void ClearSessionHalt() => throw new NotImplementedException();
     public void Dispose()
     {
@@ -164,7 +165,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     public BreakerStatusReport GetBreakerStatus() => throw new NotImplementedException();
     public Task<List<string>> GetContentExternalFileChangesAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public IEnumerable<string> GetDiagnostics() => throw new NotImplementedException();
-    public List<string> GetExternalFileChanges() => throw new NotImplementedException();
+    public List<string> GetExternalFileChanges() => [];
     public HealthComponents GetHealthComponents() => throw new NotImplementedException();
     public bool IsSessionHalted() => false;
     public List<(string RelativePath, string SolutionFolder)> GetSolutionFolderItems() => throw new NotImplementedException();

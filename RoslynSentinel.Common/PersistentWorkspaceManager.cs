@@ -284,6 +284,27 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     }
 
     /// <summary>
+    /// Clears only the specified paths from the external-file-change list; other drift entries remain.
+    /// Paths are matched using PathComparison.Comparer (case-insensitive, normalized separators).
+    /// </summary>
+    public void ClearExternalFileChanges(IReadOnlyCollection<string> paths)
+    {
+        var toClear = new HashSet<string>(paths, PathComparison.Comparer);
+        var keptEntries = new List<string>();
+        while (_externalChanges.TryTake(out var entry))
+        {
+            if (!toClear.Contains(entry))
+            {
+                keptEntries.Add(entry);
+            }
+        }
+        foreach (var entry in keptEntries)
+        {
+            _externalChanges.Add(entry);
+        }
+    }
+
+    /// <summary>
     /// True once a confirmed drift hit has tripped the session-wide halt latch. See
     /// <see cref="SessionHaltedException"/> and docs/current/ideas/external-drift-hard-blocker.md.
     /// </summary>
