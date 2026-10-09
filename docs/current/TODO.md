@@ -623,3 +623,14 @@ Three concrete gaps, all still open:
   memory) is still unresolved — same open question as the prior occurrence,
   `blocking_error_session_halt_from_out_of_band_rm_mid_spike.md`.
 
+
+## Review and extend the scoped operation ledger / non-validated edits to more tools (2026-10-09) - not started
+
+**Found:** 2026-10-09, owner question in the journal-digest follow-up. The scoped operation ledger
+(`IScopedOperationLedger`, enforced in `PersistentWorkspaceManager.ApplyProposedChangesAsync`) is active, but
+only `MoveMember` opens an entry (`AdvancedRefactoringTools.cs` `MoveMember`). Other multi-step changes that can
+leave the tree intentionally non-compiling (MethodSignature/ParameterEdit remove with unrelated call sites,
+ChangeSignature, RenameSymbol conflicts) do not use it.
+
+**Not fixed:** review which tools should open ledger entries, how a model resolves one, and how the non-validated
+(compile-gate-skipping) edit path relates. Decision context: `proposals/proposal_journal_digest_followup_decisions.md`.
