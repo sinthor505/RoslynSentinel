@@ -1043,12 +1043,12 @@ public class MemberRefactoringEngine
     /// edit in <paramref name="edits"/> to <paramref name="filePath"/> against ONE original syntax root,
     /// then folds all replacements into a single <see cref="RoslynFormattingHelper.ReplaceNodesFormattedAsync"/>
     /// call. Calling the single-edit methods N times independently would be wrong for a multi-edit batch
-    /// targeting the same file: each call _symbolNavigationEngine. Resolves against its own fresh GetCurrentSolutionAsync root, so
+    /// targeting the same file: each call resolves against its own fresh GetCurrentSolutionAsync root, so
     /// the second call's UpdatedText would silently discard the first edit instead of compounding it.
     /// Returns one <see cref="DocumentEditResult"/> for the whole file: <see cref="EditOutcome.Modified"/>
     /// with UpdatedText on full success, or <see cref="EditOutcome.CannotEdit"/> with every per-index
     /// failure joined into Message (never a partial write) when any edit in this file's group fails to
-    /// _symbolNavigationEngine. Resolve or two edits collide on the same target node.
+    /// resolve, or two edits collide on the same target node.
     /// </summary>
     public async Task<DocumentEditResult> ApplyModifierBatchAsync(FilePathWrapper filePath, IReadOnlyList<(int Index, string TargetName, string Modifier, AddRemoveAction Action, string? ContextSnippet, string? LineBefore, string? LineAfter)> edits, CancellationToken cancellationToken = default)
     {
@@ -1648,7 +1648,7 @@ public class MemberRefactoringEngine
     /// <summary>
     /// Batch form of <see cref="AddAttributeAsync"/>/<see cref="ReplaceAttributeAsync"/>/
     /// <see cref="RemoveAttributeAsync"/>: same execution model as <see cref="ApplyModifierBatchAsync"/> ->
-    /// _symbolNavigationEngine. Resolve every edit's target against ONE original root, reject same-node collisions, fold all
+    /// resolve every edit's target against ONE original root, reject same-node collisions, fold all
     /// replacements into one <see cref="RoslynFormattingHelper.ReplaceNodesFormattedAsync"/> call.
     /// </summary>
     public async Task<DocumentEditResult> ApplyAttributeBatchAsync(FilePathWrapper filePath, IReadOnlyList<(int Index, string TargetName, string ExistingAttribute, AttributeModifyAction Action, string? NewAttribute, string? ContextSnippet, string? LineBefore, string? LineAfter)> edits, CancellationToken cancellationToken = default)
@@ -2949,7 +2949,7 @@ public class MemberRefactoringEngine
         {
             throw new NotSupportedException(
                 $"AddMemberAsync: unhandled container type {container.GetType().Name} for \"{containerName}\". " +
-                "This is a bug - every BaseTypeDeclarationSyntax subtype must _symbolNavigationEngine. Resolve to a TypeDeclarationSyntax here; " +
+                "This is a bug - every BaseTypeDeclarationSyntax subtype must resolve to a TypeDeclarationSyntax here; " +
                 "silently returning the container unchanged would falsely report success.");
         }
 
@@ -2990,7 +2990,7 @@ public class MemberRefactoringEngine
     /// <summary>
     /// Adds a brand-new top-level type declaration (enum/class/record/struct/interface) to a file,
     /// for the case AddMemberAsync can't handle: there is no existing BaseTypeDeclarationSyntax to
-    /// target because the type being added doesn't exist yet. _symbolNavigationEngine. Resolves to the file's namespace
+    /// target because the type being added doesn't exist yet. It resolves to the file's namespace
     /// (NamespaceDeclarationSyntax or FileScopedNamespaceDeclarationSyntax) when namespaceName is
     /// null and exactly one namespace is present, or to the CompilationUnitSyntax itself for a file
     /// with no namespace (global namespace). If the file has multiple namespaces and namespaceName
