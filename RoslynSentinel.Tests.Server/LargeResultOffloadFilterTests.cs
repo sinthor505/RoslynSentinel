@@ -167,6 +167,25 @@ public class LargeResultOffloadFilterTests
     }
 
     [Test]
+    public async Task OffloadStub_CarriesSolutionRoot()
+    {
+        var findResult = await _client.CallToolAsync(
+            "FindReferences",
+            new Dictionary<string, object?> { ["reason"] = "test message", ["symbolName"] = "Target", ["kind"] = "callers" }!,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        Assert.That(findResult.IsError, Is.Not.True);
+
+        var blocks = findResult.Content.OfType<TextContentBlock>().ToList();
+        Assert.That(blocks, Has.Count.EqualTo(1));
+
+        using var pointer = JsonDocument.Parse(blocks[0].Text);
+        var solutionRoot = pointer.RootElement.GetProperty("solutionRoot").GetString();
+        Assert.That(solutionRoot, Is.Not.Null.And.Not.Empty, "The offload stub must carry solutionRoot for relative-path resolution.");
+        Assert.That(solutionRoot, Is.EqualTo(_fixture.SolutionDirectory));
+    }
+
+    [Test]
     public async Task UnderThresholdToolResponse_PassesThroughUnchanged()
     {
         var result = await _client.CallToolAsync(

@@ -677,6 +677,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                             {
                                 Text = System.Text.Json.JsonSerializer.Serialize(new
                                 {
+                                    solutionRoot,
                                     offloaded = true,
                                     resultId = stored.resultId,
                                     sizeBytes = text.Length,
