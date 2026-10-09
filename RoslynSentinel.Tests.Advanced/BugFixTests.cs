@@ -187,6 +187,37 @@ public class Svc { public void Foo() {} }";
         Assert.That(callerContent, Does.Contain("Add(0, 1, 2)"), "Omitted 'c' must be materialized as its default (0) since it moved to a non-trailing position");
     }
 
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    [Category("ExistingParameterSpec")] // sentinel:auto-category
+    public async Task ChangeSignature_WithSkippedCallSite_RefusesWithError()
+    {
+        // Test that ChangeSignature refuses when call sites cannot be rewritten, rather than
+        // applying a partial change. The call site is in the same file and omits 'a' (a required
+        // parameter with no default); reordering places 'a' at a position where it cannot be omitted.
+        SetMultipleFiles((
+            "Calculator.cs",
+            @"public class Calculator
+{
+    public int Add(int a, int b) => a + b;
+    public void Test()
+    {
+        Add(5);
+    }
+}"
+        ));
+        // Reorder [a, b] -> [b, a]. The call site omits the argument for 'a', which is a required
+        // parameter with no default. After reordering, 'a' would move to position 1 (non-trailing),
+        // so the omitted slot cannot be filled without a default value. The entire change should
+        // be refused.
+        var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new SignatureParameterSpec[] { new ExistingParameterSpec(1), new ExistingParameterSpec(0) });
+        
+        Assert.That(result.Error, Is.Not.Null, "Should return an error because a required argument cannot be materialized");
+        Assert.That(result.Changes, Is.Empty, "Should return no changes when refusing due to skipped call sites");
+        Assert.That(result.SkippedCallSites, Is.Not.Empty, "Should populate SkippedCallSites with the problem site");
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // Bug 4: ImplementInterfaceAsync -> stubs must NOT have 'override' keyword
     // ──────────────────────────────────────────────────────────────────────────

@@ -26,6 +26,9 @@ implementers do not re-ask. Plans for the build work live in `docs/current/plans
 | 12 | Scoped operation ledger | Active but opened only by `MoveMember`; review and extend to more tools. Tracked in `TODO.md`. |
 | 13 | RenameSymbol merge | Not building. The CS0111/CS0121 refusal is correct; add a code comment at the refusal pointing here so it is not re-investigated. |
 
+| 1b | Halt stamping scope (2026-10-09) | Stamp ALL breakers (unrecoverable, mutation, orientation) and drift, not only the first two. |
+| 11b | Multi-file refactoring gaps (2026-10-09) | `ChangeSignature` with an unrelocatable call site REFUSES (no partial apply, no ledger entry); stateful members moved into a static class stay refused. Longer-term answer is `proposal_bridge_migration_workflow.md`. `RunTest` failed-test output cap stays 2000 characters. |
+| 15b | Usage warning (2026-10-09) | The usage snapshot is written only by the CLI `statusLine`, so the VS Code extension never refreshes it. `usage-nudge.ps1` now warns once per session that limit warnings are inactive (8ca5a5c). A real data source needs an approved credential use; not done. |
 | 11-16 | Larger items | Each gets a plan under `docs/current/plans/`; ship order comes from the plans. |
 | 14 | Build result shape | Redesign what `Build` returns (owner questions in "Open questions"); no unconditional stdout/full-output offload. |
 

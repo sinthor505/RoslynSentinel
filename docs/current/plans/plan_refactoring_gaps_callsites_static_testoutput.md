@@ -179,6 +179,14 @@ The live server binary is current (`McpServerStatus`: built 2026-10-09, not stal
   ```
 - Done when: `Build` 0 errors.
 
+### Step 5b - ChangeSignature refuses instead of partially applying (owner decision 2026-10-09: "refuse both")
+
+- Files: `RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs`, `RoslynSentinel.Tests.Advanced/BugFixTests.cs`.
+- In `ChangeSignatureAsync`, after the reference loop and before the "Format all changed documents" block: if `skippedCallSites.Count > 0`, return `new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), skippedCallSites, Error: ...)` with NO changes. The message names the count, up to 5 `file:line (reason)` entries, and says nothing was changed and that the call sites must be fixed first (or the change split).
+- `AdvancedRefactoringTools.ChangeSignature` already maps `result.Error` to an error result; leave it (the now-unreachable WARNING notes are cleaned up in a later slice).
+- Test: a call site that cannot be rewritten (for example a method-group reference or a skipped required argument) yields `Error != null`, empty `Changes`, non-empty `SkippedCallSites`. Existing tests asserting `SkippedCallSites` is empty must stay green.
+- Done when: `Build` 0 errors and the new test plus `BugFixTests` ChangeSignature tests pass. Longer-term answer: `proposal_bridge_migration_workflow.md`.
+
 ### Step 6 - verification (orchestrator, not an implementer)
 
 - `Build` (`level: fullBuild`): 0 errors.

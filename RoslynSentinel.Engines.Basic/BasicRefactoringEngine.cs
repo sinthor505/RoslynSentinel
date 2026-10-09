@@ -388,6 +388,32 @@ public class BasicRefactoringEngine
             }
         }
 
+        // Refuse if any call sites could not be rewritten: report them and do not apply a partial
+        // change that would leave the code not compiling. The caller must fix or remove the skipped
+        // call sites first, or split the change into smaller steps.
+        if (skippedCallSites.Count > 0)
+        {
+            var lines = new List<string> { $"Nothing was changed. Could not rewrite {skippedCallSites.Count} call site(s)" };
+            var count = 0;
+            foreach (var site in skippedCallSites)
+            {
+                if (count >= 5)
+                {
+                    break;
+                }
+                var fileName = Path.GetFileName(site.FilePath);
+                lines.Add($"{fileName}:{site.LineNumber} ({site.Reason})");
+                count++;
+            }
+            if (skippedCallSites.Count > 5)
+            {
+                lines.Add($"... and {skippedCallSites.Count - 5} more.");
+            }
+            lines.Add("Fix or remove those call sites first, or split the change.");
+            var errorMessage = string.Join("; ", lines);
+            return new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), skippedCallSites, errorMessage);
+        }
+
         // Format all changed documents.
         var result = new Dictionary<FilePathWrapper, string>();
         foreach (var kvp in pendingDocs)
