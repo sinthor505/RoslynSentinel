@@ -214,6 +214,20 @@ public class McpToolsetControlTests
 
     [Test]
     [Category("ToolsetControlTools")] // sentinel:auto-category
+    public void Catalog_EverySetIsRegisteredAndDescribed()
+    {
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+        var toolsBySet = (System.Collections.IDictionary)typeof(ToolsetCatalog).GetField("ToolsBySet", flags)!.GetValue(null)!;
+        var summaries = (System.Collections.IDictionary)typeof(ToolsetCatalog).GetField("Summaries", flags)!.GetValue(null)!;
+        foreach (var set in Enum.GetValues<ToolSetName>())
+        {
+            Assert.That(toolsBySet.Contains(set), Is.True, $"add {set} to ToolsetCatalog.ToolsBySet");
+            Assert.That(summaries.Contains(set), Is.True, $"add {set} to ToolsetCatalog.Summaries");
+        }
+    }
+
+    [Test]
+    [Category("ToolsetControlTools")] // sentinel:auto-category
     public void Catalog_EveryToolIsDeclared_AndTheDescriptionNamesEverySetAndTool()
     {
         var declared = McpToolSchemaPatcher.DiscoverToolMethods(ToolAssemblies).Select(t => t.ToolName).ToHashSet(StringComparer.Ordinal);

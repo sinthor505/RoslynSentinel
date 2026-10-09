@@ -4,6 +4,11 @@ namespace RoslynSentinel.Common;
 /// The on-demand toolsets <c>McpToolsetControl</c> can switch on and off (proposal_reduce_tool_schema_token_cost.md,
 /// Step 4b). A closed enum so the emitted schema lists every legal value. The proposal's hyphenated names map
 /// as: <c>declarations</c>, <c>moveExtract</c> (move-extract), <c>projectAdmin</c> (project-admin).
+/// Adding a toolset: (1) add the enum member here; (2) add it to <c>ToolsetCatalog.ToolsBySet</c>; (3) add it to
+/// <c>ToolsetCatalog.Summaries</c>; (4) add its name and tools to the [Description] of <c>McpToolsetControl</c> in
+/// RoslynSentinel.Tools.Basic/ToolsetControlTools.cs; (5) add a [TestCase] to
+/// <c>Enable_AddsTheWholeSet_AndAccountsForEveryName</c> in RoslynSentinel.Tests.Server/McpToolsetControlTests.cs;
+/// if the tools live in a new class, also list the class in <c>ToolClassRegistry.ClaudeLeanOnDemandToolClasses</c>.
 /// </summary>
 public enum ToolSetName
 {
