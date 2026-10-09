@@ -183,7 +183,7 @@ public class NoActiveToolsStartupTests
     [Test]
     [Category("ServerStartupHelpers")] // sentinel:auto-category
     [Category("WorkspaceTools")] // sentinel:auto-category
-    public void SmokeResolve_ActiveButUnregisteredType_NamesTheClassAndPointsAtItsDependencies()
+    public void SmokeResolve_DebugModeOnly_ActiveButUnregisteredType_NamesTheClassAndPointsAtItsDependencies()
     {
         // When a class really is active and really can't be built, the message should say so and
         // send the reader to the dependency rather than stopping at the outer type name.
