@@ -100,6 +100,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         {
             AddToolCallEchoFilter(filters);
             AddArgumentValidationFilter(filters);
+            AddHaltStampFilter(filters);
             AddToolErrorFilter(filters);
             AddWorkspaceNotLoadedFilter(filters);
             AddDriftFilter(filters);
@@ -851,6 +852,77 @@ public static class RoslynSentinelServiceExtensionsBasic
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"Orientation breaker post-check failed: {ex}");
+                }
+
+                return result;
+            }));
+    }
+
+    private static void AddHaltStampFilter(IMcpRequestFilterBuilder filters)
+    {
+        // Halt stamping: while any breaker is tripped or the external-drift latch is set, stamp
+        // isSessionHalted / sessionHaltKind / sessionHaltReason / sessionHaltRecovery onto the first
+        // text block of every response, so recovery needs no discovery call. Registered right after
+        // the argument-validation filter (outer to the breaker filters, so it sees their plain-text
+        // refusals; inner to the echo filter, which still stamps last). State is read AFTER next
+        // returns, so an orientation breaker an inner filter just reset is not stamped.
+        // See docs/current/plans/plan_external_file_drift_tool_and_halt_stamping.md (Decision 3).
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                var result = await next(context, cancellationToken);
+
+                try
+                {
+                    var services = context.Server.Services;
+                    var manager = services?.GetService<PersistentWorkspaceManager>();
+                    if (manager is null)
+                    {
+                        return result;
+                    }
+
+                    // The live tool collection is the authoritative answer to "is ResetMutationBreaker
+                    // exposed right now" (static modes, allow-lists and McpToolsetControl all land in it).
+                    // Any failure to resolve it counts as "not active": the safe recovery text is "stop and report".
+                    var resetActive = false;
+                    try
+                    {
+                        resetActive = services?
+                            .GetService<Microsoft.Extensions.Options.IOptions<ModelContextProtocol.Server.McpServerOptions>>()?
+                            .Value.ToolCollection is { } toolCollection &&
+                            toolCollection.TryGetPrimitive("ResetMutationBreaker", out _);
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Halt stamp ResetMutationBreaker lookup failed: {ex}");
+                    }
+
+                    // Explicit casts: the manager implements the breaker members explicitly.
+                    var info = HaltInfo.From(
+                        (IWorkspaceHealthReporter)manager,
+                        (IUnrecoverableBreaker)manager,
+                        (IAutomaticCircuitBreaker)manager,
+                        (IManualCircuitBreaker)manager,
+                        resetActive);
+
+                    if (info is null)
+                    {
+                        return result;
+                    }
+
+                    // The drift tool's own reply already carries the drift state.
+                    if (context.Params?.Name == "ExternalFileDrift" && info.Kind == HaltInfo.KindExternalDrift)
+                    {
+                        return result;
+                    }
+
+                    HaltStamp.Stamp(result, info);
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Halt stamp failed: {ex}");
                 }
 
                 return result;
