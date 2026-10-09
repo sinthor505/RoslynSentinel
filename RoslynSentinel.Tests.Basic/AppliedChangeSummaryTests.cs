@@ -178,4 +178,71 @@ public class AppliedChangeSummaryTests
 
         Assert.That(json, Does.Contain("changedContent"));
     }
+
+    [Test]
+    public void NoStage_StatusIsNotWrittenAndNoteNamesChangedContent()
+    {
+        var filePath = new FilePathWrapper("test.cs");
+        var summary = new AppliedChangeSummary(
+            ChangeId: null,
+            AffectedFiles: new List<FilePathWrapper> { filePath },
+            Description: "test",
+            DryRun: false,
+            ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
+            Validated: false,
+            ChangedContentResultId: null);
+
+        Assert.That(summary.Status, Is.EqualTo("not_written"));
+        Assert.That(summary.Note, Does.Contain("autoStage"));
+        Assert.That(summary.Note, Does.Contain("changedContent"));
+    }
+
+    [Test]
+    public void RealApply_ValidatedFalse_ChangedContentNull_StaysApplied()
+    {
+        var filePath = new FilePathWrapper("test.cs");
+        var summary = new AppliedChangeSummary(
+            ChangeId: "abc",
+            AffectedFiles: new List<FilePathWrapper> { filePath },
+            Description: "test",
+            DryRun: false,
+            ChangedContent: null,
+            Validated: false,
+            ChangedContentResultId: null);
+
+        Assert.That(summary.Status, Is.EqualTo("applied"));
+    }
+
+    [Test]
+    public void RealApply_StatusStaysApplied()
+    {
+        var filePath = new FilePathWrapper("test.cs");
+        var summary = new AppliedChangeSummary(
+            ChangeId: "abc",
+            AffectedFiles: new List<FilePathWrapper> { filePath },
+            Description: "test",
+            DryRun: false,
+            ChangedContent: new Dictionary<FilePathWrapper, string> { { filePath, "content" } },
+            Validated: true,
+            ChangedContentResultId: null);
+
+        Assert.That(summary.Status, Is.EqualTo("applied"));
+    }
+
+    [Test]
+    public void NonValidatedSiteWithResultId_NoteNamesGetLargeResult()
+    {
+        var filePath = new FilePathWrapper("test.cs");
+        var summary = new AppliedChangeSummary(
+            ChangeId: "abc",
+            AffectedFiles: new List<FilePathWrapper> { filePath },
+            Description: "test",
+            DryRun: false,
+            ChangedContent: null,
+            Validated: false,
+            ChangedContentResultId: "rid1");
+
+        Assert.That(summary.Note, Does.Contain("GetLargeResult"));
+        Assert.That(summary.Note, Does.Contain("rid1"));
+    }
 }
