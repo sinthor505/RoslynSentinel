@@ -153,4 +153,194 @@ public class ReadFileTests
         Assert.That(result.LargeResult, Is.Not.Null);
         Assert.That(result.LargeResult!.ResultType, Is.EqualTo("FileSource"));
     }
+
+    [Test]
+    public async Task ReadFile_RangeLargerThanInlineBudget_IsShortenedNotOffloadedAsync()
+    {
+        // Create a large document with ~800 lines of code-like content (~60 chars per line).
+        // TrimRangeToInlineBudget should shorten the requested range to stay under the inline budget.
+        var bigDocPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "BigRanged.cs");
+        var lines = new List<string>();
+        for (int i = 0; i < 820; i++)
+        {
+            // Lines with code-like content, ~60 chars each, including special chars.
+            lines.Add($"var x{i:000} = GetValue<int>(\"{i} value\") + someFunc(x < 100 && y > 50);\n");
+        }
+        var bigSource = string.Concat(lines);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
+            new[] { ("BigRanged.cs", bigSource, bigDocPath) });
+        _workspaceManager.SetTestSolution(solution);
+        _workspaceManager.SolutionPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Test.sln");
+
+        var result = await _tools.ReadFile(reason: "test message", bigDocPath, startLine: 1, endLine: 800);
+
+        Assert.That(!result.IsError, Is.True);
+        var data = result.SuccessData!;
+        var startLine = (int)GetProp(data, "startLine")!;
+        var endLine = (int)GetProp(data, "endLine")!;
+        var source = (string)GetProp(data, "source")!;
+        var statusMessage = (string?)GetProp(result, "StatusMessage");
+        var hasMoreData = (bool?)GetProp(result, "HasMoreData") ?? false;
+
+        // Should be shortened, not offloaded.
+        Assert.That(result.LargeResult, Is.Null);
+        Assert.That(endLine, Is.LessThan(800));
+        Assert.That(hasMoreData, Is.True);
+        Assert.That(statusMessage, Does.Contain("startLine:"));
+
+        // Verify the result fits under the inline budget when serialized.
+        var jsonSerialized = System.Text.Json.JsonSerializer.Serialize(result.SuccessData, RoslynSentinel.Common.SharedJsonOptions.Default);
+        Assert.That(jsonSerialized.Length, Is.LessThan(RoslynSentinel.Common.LargeResultHelper.OffloadThresholdBytes));
+    }
+
+    [Test]
+    public async Task ReadFile_RangeUnderBudget_IsReturnedUnchangedAsync()
+    {
+        // Create a document with ~820 lines, request a small range 1-20 that easily fits.
+        var bigDocPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "BigSmallRange.cs");
+        var lines = new List<string>();
+        for (int i = 0; i < 820; i++)
+        {
+            lines.Add($"var x{i:000} = GetValue<int>(\"{i} value\") + someFunc(x < 100 && y > 50);\n");
+        }
+        var bigSource = string.Concat(lines);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
+            new[] { ("BigSmallRange.cs", bigSource, bigDocPath) });
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _tools.ReadFile(reason: "test message", bigDocPath, startLine: 1, endLine: 20);
+
+        Assert.That(!result.IsError, Is.True);
+        var data = result.SuccessData!;
+        var endLine = (int)GetProp(data, "endLine")!;
+        var statusMessage = result.SuccessData?.GetType().GetProperty("StatusMessage", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)?.GetValue(result.SuccessData);
+
+        // Should not be shortened (range fits easily).
+        Assert.That(endLine, Is.EqualTo(20));
+        Assert.That(statusMessage, Is.Null);
+    }
+
+    [Test]
+    public async Task ReadFile_ShortenedRange_ContinuationCallReturnsTheNextLinesAsync()
+    {
+        // Request lines 1-800, which will be shortened. Then call again with startLine = previousEndLine + 1
+        // and verify the first line of the second call is the next sequential line after the first call's last line.
+        var bigDocPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "BigContinuation.cs");
+        var lines = new List<string>();
+        for (int i = 0; i < 820; i++)
+        {
+            lines.Add($"// Line {i:000}: x < y && z > 0 \"quoted\" test\n");
+        }
+        var bigSource = string.Concat(lines);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
+            new[] { ("BigContinuation.cs", bigSource, bigDocPath) });
+        _workspaceManager.SetTestSolution(solution);
+        _workspaceManager.SolutionPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Test.sln");
+
+        // First call: request 1-800, should be shortened.
+        var result1 = await _tools.ReadFile(reason: "test message", bigDocPath, startLine: 1, endLine: 800);
+        Assert.That(!result1.IsError, Is.True);
+        var data1 = result1.SuccessData!;
+        var firstEndLine = (int)GetProp(data1, "endLine")!;
+        var source1 = (string)GetProp(data1, "source")!;
+
+        // Extract line numbers from first result's last content line (e.g., "// Line 295: ...")
+        var lines1 = source1.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var lastLineContent = lines1.Last();
+        var lastLineMatch = System.Text.RegularExpressions.Regex.Match(lastLineContent, @"Line (\d+):");
+        Assert.That(lastLineMatch.Success, "Should extract line number from last line of first result");
+        int lastLineNumber = int.Parse(lastLineMatch.Groups[1].Value);
+
+        // Second call: request from firstEndLine + 1 onwards.
+        var result2 = await _tools.ReadFile(reason: "test message", bigDocPath, startLine: firstEndLine + 1, endLine: 820);
+        Assert.That(!result2.IsError, Is.True);
+        var data2 = result2.SuccessData!;
+        var source2 = (string)GetProp(data2, "source")!;
+
+        // Extract the first line's line number from second result.
+        var lines2 = source2.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        var firstLineContent = lines2.First();
+        var firstLineMatch = System.Text.RegularExpressions.Regex.Match(firstLineContent, @"Line (\d+):");
+        Assert.That(firstLineMatch.Success, "Should extract line number from first line of second result");
+        int firstLineNumber = int.Parse(firstLineMatch.Groups[1].Value);
+
+        // The line numbers should be consecutive (one after the other).
+        Assert.That(firstLineNumber, Is.EqualTo(lastLineNumber + 1), "Continuation should provide the next sequential line");
+    }
+
+    private WorkspaceTools BuildToolsWithoutSolution()
+    {
+        // Create tools backed by a FakeWorkspaceManager that has NOT been assigned a solution,
+        // so CurrentSolution is null and ResolveFromWire returns NoSolutionLoaded.
+        var workspaceManager = new FakeWorkspaceManager();
+        // Deliberately do NOT call SetTestSolution, leaving CurrentSolution null.
+
+        var config = new SentinelConfiguration();
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        var solutionManagementEngine = new SolutionManagementEngine(workspaceManager);
+        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
+        var dependencyEngine = new DependencyEngine(workspaceManager);
+        var projectConsistencyEngine = new ProjectConsistencyEngine(workspaceManager);
+        return new WorkspaceTools(
+            workspaceManager, validationEngine, diffEngine, diagnosticEngine,
+            solutionManagementEngine, structuralRefinementEngine, dependencyEngine,
+            projectConsistencyEngine, config, NullLogger<WorkspaceTools>.Instance,
+            new BuildEngine(workspaceManager, diagnosticEngine),
+            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            new TestRunEngine(workspaceManager),
+            new WorkspaceReadNavigationImpl(workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            WriteToolAdviceHelper.WithAllToolsExposed());
+    }
+
+    [Test]
+    public async Task ReadFile_NoSolutionLoadedAndRootedPath_ReadsFromDiskWithExplanationAsync()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), "ReadFileNoSolution_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var filePath = Path.Combine(tempDir, "TestFile.cs");
+        var content = "using System;\npublic class Foo { }\n";
+
+        try
+        {
+            await File.WriteAllTextAsync(filePath, content);
+
+            var toolsWithoutSolution = BuildToolsWithoutSolution();
+            var result = await toolsWithoutSolution.ReadFile(reason: "test message", filePath);
+
+            Assert.That(!result.IsError, Is.True);
+            var data = result.SuccessData!;
+            var source = (string)GetProp(data, "source")!;
+            var statusMessage = result.StatusMessage;
+
+            Assert.That(source, Is.EqualTo(content));
+            Assert.That(statusMessage, Does.Contain("No solution is loaded"));
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(filePath);
+                Directory.Delete(tempDir);
+            }
+            catch { }
+        }
+    }
+
+    [Test]
+    public async Task ReadFile_NoSolutionLoadedAndRelativePath_StillReportsSolutionNotLoadedAsync()
+    {
+        var toolsWithoutSolution = BuildToolsWithoutSolution();
+        var result = await toolsWithoutSolution.ReadFile(reason: "test message", "Foo.cs");
+
+        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
+    }
 }

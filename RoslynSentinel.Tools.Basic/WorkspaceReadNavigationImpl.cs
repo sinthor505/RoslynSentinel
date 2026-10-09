@@ -1013,11 +1013,26 @@ public class WorkspaceReadNavigationImpl
 
         if (resolvedPath == null)
         {
+            if (string.IsNullOrEmpty(solutionRoot))
+            {
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.SolutionNotLoaded,
+                                               SolutionNotLoadedMessage.Build(_workspaceManager.LoadState) + " Offloaded results are stored under the solution root, so they cannot be located until a solution is loaded; the file itself is still on disk under .roslynsentinel/largeresults.")
+                };
+            }
+            
+            var message = "Result file not found. Supply a valid resultId or filePath pointing to a largeresult_*.json file in the largeresults directory.";
+            if (!string.IsNullOrEmpty(resultId))
+            {
+                message += $" (resultId looked up: {resultId})";
+            }
+            
             return new SentinelCallToolResult<object>
             {
                 IsError = true,
-                ErrorData = new ResultError("Exception",
-                                           "Result file not found. Supply a valid resultId or filePath pointing to a largeresult_*.json file in the largeresults directory.")
+                ErrorData = new ResultError(ToolErrorCode.NotFound, message)
             };
         }
 

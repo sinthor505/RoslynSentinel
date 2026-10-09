@@ -188,10 +188,125 @@ public class WorkspaceFileEditImpl
             "You MUST call ListSolutionItems(kind: all) next to see every file actually in the solution before trying another path.");
     }
 
+    private const int RangedReadInlineBudgetChars = LargeResultHelper.OffloadThresholdBytes - 2048;
+
+    private async Task<SentinelCallToolResult<object>> ReadFileWithoutSolutionAsync(string absolutePath, int? startLine, int? endLine, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var diskContent = await FileIoHelper.ReadAllTextIfExistsAsync(absolutePath, cancellationToken);
+            if (diskContent == null)
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsError = true,
+                    ErrorData = new ResultError("FileNotFound", $"'{Path.GetFileName(absolutePath)}' does not exist at '{absolutePath}'. {SolutionNotLoadedMessage.Build(_workspaceManager.LoadState)}")
+                };
+            }
+
+            var sourceText = SourceText.From(diskContent);
+            var totalLines = sourceText.Lines.Count;
+            var explanation = "No solution is loaded; read directly from disk (no outline or offload available). "
+                + (_workspaceManager.LoadState is { IsFreshStartup: true } ? "This server was freshly (re)started and has not loaded a solution yet; call LoadSolution to restore full functionality. " : string.Empty);
+
+            if (startLine.HasValue || endLine.HasValue)
+            {
+                int from = Math.Max(1, startLine ?? 1);
+                int to = Math.Min(totalLines, endLine ?? totalLines);
+                if (from > totalLines || from > to)
+                {
+                    return new SentinelCallToolResult<object>()
+                    {
+                        IsError = true,
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"ReadFile: requested range {from}-{to} is out of bounds for a {totalLines}-line file.")
+                    };
+                }
+
+                int requestedTo = to;
+                to = TrimRangeToInlineBudget(sourceText, from, to);
+                var slice = sourceText.ToString(TextSpan.FromBounds(sourceText.Lines[from - 1].Start, sourceText.Lines[to - 1].EndIncludingLineBreak));
+                return new SentinelCallToolResult<object>()
+                {
+                    IsError = false,
+                    SuccessData = new { filePath = absolutePath, startLine = from, endLine = to, totalLines, source = slice },
+                    HasMoreData = to < totalLines,
+                    StatusMessage = explanation + (to < requestedTo ? $"Range shortened to lines {from}-{to} of {totalLines} to stay under the {LargeResultHelper.OffloadThresholdBytes}-byte inline limit. Call ReadFile again with startLine: {to + 1} for the rest." : string.Empty),
+                    WorkspaceVersion = _workspaceManager.WorkspaceVersion,
+                };
+            }
+
+            var textBytes = System.Text.Encoding.UTF8.GetByteCount(diskContent);
+            if (textBytes > LargeResultHelper.OffloadThresholdBytes)
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"File is {totalLines} lines; it is over the inline limit and results cannot be offloaded while no solution is loaded. Pass startLine/endLine (ranges are shortened to fit) or call LoadSolution first.")
+                };
+            }
+
+            return new SentinelCallToolResult<object>()
+            {
+                IsError = false,
+                SuccessData = new { filePath = absolutePath, startLine = 1, endLine = totalLines, totalLines, source = diskContent },
+                HasMoreData = false,
+                StatusMessage = explanation.TrimEnd(),
+                WorkspaceVersion = _workspaceManager.WorkspaceVersion,
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ReadFile (no solution) failed for '{Path}'", absolutePath);
+            return new SentinelCallToolResult<object>()
+            {
+                IsError = true,
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReadFile")
+            };
+        }
+    }
+
+    private static int TrimRangeToInlineBudget(SourceText sourceText, int from, int to)
+    {
+        bool Fits(int candidateTo)
+        {
+            var span = TextSpan.FromBounds(sourceText.Lines[from - 1].Start, sourceText.Lines[candidateTo - 1].EndIncludingLineBreak);
+            return System.Text.Json.JsonSerializer.Serialize(sourceText.ToString(span), RoslynSentinel.Common.SharedJsonOptions.Default).Length <= RangedReadInlineBudgetChars;
+        }
+
+        if (Fits(to))
+        {
+            return to;
+        }
+
+        // Binary search: lo always acceptable (a single over-long line is returned as-is), hi never fits.
+        int lo = from;
+        int hi = to;
+        while (hi - lo > 1)
+        {
+            int mid = lo + ((hi - lo) / 2);
+            if (Fits(mid))
+            {
+                lo = mid;
+            }
+            else
+            {
+                hi = mid;
+            }
+        }
+
+        return lo;
+    }
+
     public async Task<SentinelCallToolResult<object>> ReadFile(ToolCallReason reason, string filePath, int? startLine = null,
         int? endLine = null, CancellationToken cancellationToken = default)
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
+        if (filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
+            && !string.IsNullOrWhiteSpace(filePath)
+            && Path.IsPathRooted(filePath))
+        {
+            return await ReadFileWithoutSolutionAsync(filePath, startLine, endLine, cancellationToken);
+        }
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -232,6 +347,10 @@ public class WorkspaceFileEditImpl
                     };
                 }
 
+                int requestedTo = to;
+                to = TrimRangeToInlineBudget(sourceText, from, to);
+                bool shortened = to < requestedTo;
+
                 var start = sourceText.Lines[from - 1].Start;
                 var end = sourceText.Lines[to - 1].EndIncludingLineBreak;
                 var slice = sourceText.ToString(TextSpan.FromBounds(start, end));
@@ -247,6 +366,9 @@ public class WorkspaceFileEditImpl
                         source = slice
                     },
                     HasMoreData = to < totalLines,
+                    StatusMessage = shortened
+                        ? $"Range shortened to lines {from}-{to} of {totalLines} to stay under the {LargeResultHelper.OffloadThresholdBytes}-byte inline limit. Call ReadFile again with startLine: {to + 1} for the rest."
+                        : null,
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
             }

@@ -141,6 +141,64 @@ public class GetLargeResultTests
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.Contain("Result file not found"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("00000000000000000000000000000000"));
+    }
+
+    private WorkspaceTools CreateWorkspaceToolsWithoutSolution()
+    {
+        var unloadedWorkspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        // Do NOT call SetTestSolution or set SolutionPath, so solution root remains empty
+        
+        var config = new SentinelConfiguration();
+        var symbolNavEngine = new SymbolNavigationEngine(unloadedWorkspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        
+        return new WorkspaceTools(
+            unloadedWorkspaceManager,
+            new ValidationEngine(unloadedWorkspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance),
+            new DiffEngine(),
+            new DiagnosticEngine(unloadedWorkspaceManager),
+            new SolutionManagementEngine(unloadedWorkspaceManager),
+            new StructuralRefinementEngine(unloadedWorkspaceManager, config),
+            new DependencyEngine(unloadedWorkspaceManager),
+            new ProjectConsistencyEngine(unloadedWorkspaceManager),
+            config,
+            NullLogger<WorkspaceTools>.Instance,
+            new BuildEngine(unloadedWorkspaceManager, new DiagnosticEngine(unloadedWorkspaceManager)),
+            symbolNavEngine,
+            new TestRunEngine(unloadedWorkspaceManager),
+            new WorkspaceReadNavigationImpl(unloadedWorkspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance),
+            WriteToolAdviceHelper.WithAllToolsExposed());
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // T2b – No solution loaded, unknown resultId -> SolutionNotLoaded error
+    // ══════════════════════════════════════════════════════════════════════════
+
+    [Test, CancelAfter(5000)]
+    public async Task GetLargeResult_NoSolutionLoaded_ReturnsSolutionNotLoadedNotFileNotFoundAsync()
+    {
+        var workspaceTools = CreateWorkspaceToolsWithoutSolution();
+        try
+        {
+            var result = await workspaceTools.GetLargeResult(reason: "test message", resultId: "00000000000000000000000000000000");
+
+            Assert.That(result.IsError, Is.True);
+            Assert.That(result.ErrorData, Is.Not.Null);
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
+            Assert.That(result.ErrorData!.Message, Does.Contain("No solution is loaded"));
+            Assert.That(result.ErrorData!.Message, Does.Not.Contain("Result file not found"));
+        }
+        finally
+        {
+            // Dispose the unloaded workspace manager created for this test
+            var workspaceManagerField = typeof(WorkspaceTools).GetField("_workspaceManager", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (workspaceManagerField?.GetValue(workspaceTools) is IWorkspaceManager unloadedWm)
+            {
+                unloadedWm.Dispose();
+            }
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════════

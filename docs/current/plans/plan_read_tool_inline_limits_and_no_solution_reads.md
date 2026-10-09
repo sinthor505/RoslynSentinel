@@ -1,6 +1,6 @@
 # Plan: stop ranged ReadFile tipping into a large-result offload, and let reads and large-result paging explain or survive a restart that dropped the solution
 
-**Status:** DRAFT 2026-10-08. Priority P1. Source: journal digest `.claude/journal/digest_20261008-1509.md` (window 2026-10-02..08), clusters "ReadFile", "GetLargeResult", and the restart-drops-the-solution entries filed under Search/LoadSolution/GetFileOutline.
+**Status:** IMPLEMENTED 2026-10-08. Priority P1. Steps 1-5 landed (see Implementation notes at the end); step 6 live check is left to the parent after a server restart. Original status line: DRAFT 2026-10-08. Source: journal digest `.claude/journal/digest_20261008-1509.md` (window 2026-10-02..08), clusters "ReadFile", "GetLargeResult", and the restart-drops-the-solution entries filed under Search/LoadSolution/GetFileOutline.
 
 ## Problem
 
@@ -109,3 +109,12 @@ Auto-reloading the previous solution after a restart is a separate, *needs desig
 - Hypothesis (not traced): `GetLargeResult` text windows are "double-escaped" because the tool returns the stored JSON as a string inside its own JSON response (`[47b2c93d:L3]`; also visible in this planner's own reads of offloaded files). The shared `SharedJsonOptions.Default` is used everywhere (`LargeResultHelper.cs:13`), so changing its encoder is a global change and was not attempted. Possible follow-up: return `FileSource` pages as raw `source` text rather than as an escaped JSON blob.
 - The inline budget in step 1 is computed from the serialized slice plus 2 KB slack. If the outermost echo filter stamps more than that onto the first text block, a borderline range could still be offloaded; the step 2 test measures the serialized `SuccessData` only, so also run one live check (step 6).
 - Step 3 widens `ReadFile` to read any rooted path on disk while no solution is loaded. `ReadFile` already reads files outside the solution via `FileIoHelper.ReadAllTextIfExistsAsync` when a solution is loaded, so this is not a new capability, but confirm that is the intent.
+
+## Implementation notes (2026-10-08)
+
+- Step 1: `WorkspaceFileEditImpl.TrimRangeToInlineBudget` plus `RangedReadInlineBudgetChars`; the ranged branch of `ReadFile` now shortens an oversized range, sets `HasMoreData` and a `StatusMessage` with the `startLine:` continuation. Implemented as planned.
+- Step 3: `ReadFileWithoutSolutionAsync` plus a guard in `ReadFile` for `FailureReason == NoSolutionLoaded` with a rooted `filePath`. It reuses `TrimRangeToInlineBudget`; a whole file over the inline budget returns `InvalidArgument` since no offload is possible. Relative paths keep the `SolutionNotLoaded` error.
+- Step 5: the `GetLargeResult` not-found block returns `ToolErrorCode.SolutionNotLoaded` (shared message) when no solution root is known, otherwise `ToolErrorCode.NotFound` with the resultId appended. The `"Exception"` literal is gone.
+- Tests: five new tests in `RoslynSentinel.Tests.Tools.Basic/ReadFileTests.cs`, one new test in `GetLargeResultTests.cs`, and `T2_GetLargeResult_UnknownResultId_ReturnsError` now asserts the `NotFound` code, message and resultId.
+- Verification: Build 0 errors; full solution RunTest 3468 total, 3442 passed, 0 failed, 26 skipped (baseline 3462/3436/0/26, so +6 new tests, no new failures). No tool added, so no `docs/generated` regeneration was needed.
+- Not done here: step 6 live check (server restart, then `ReadFile` a 400-line range of `WorkspaceReadNavigationImpl.cs` and confirm a `startLine:` continuation instead of an offload pointer). The restart-auto-reload decision and the double-escaped `GetLargeResult` windows in Risks remain open and out of scope.
