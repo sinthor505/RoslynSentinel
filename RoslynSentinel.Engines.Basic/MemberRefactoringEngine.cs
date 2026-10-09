@@ -1079,14 +1079,14 @@ public class MemberRefactoringEngine
                     (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
                 if (target == null)
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): target not found.");
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): target not found.");
                     continue;
                 }
                 resolvedTargets[edit.Index] = target;
             }
             catch (InvalidOperationException ex)
             {
-                errors.Add($"edits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
+                errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
             }
         }
 
@@ -1102,7 +1102,7 @@ public class MemberRefactoringEngine
         {
             if (seen.TryGetValue(kvp.Value, out var firstIndex))
             {
-                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] both _symbolNavigationEngine. Resolve to the same target in '{filePath}'. Split these into separate calls.");
+                errors.Add($"batchEdits[{firstIndex}] and batchEdits[{kvp.Key}] both resolve to the same target in '{filePath}'. Split these into separate calls.");
             }
             else
             {
@@ -1129,7 +1129,7 @@ public class MemberRefactoringEngine
             {
                 if (target.Modifiers.Any(m => m.IsKind(kind)))
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): modifier already exists.");
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): modifier already exists.");
                     continue;
                 }
                 var token = SyntaxFactory.Token(kind).WithTrailingTrivia(SyntaxFactory.Space);
@@ -1139,7 +1139,7 @@ public class MemberRefactoringEngine
             {
                 if (!target.Modifiers.Any(m => m.IsKind(kind)))
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): modifier not found.");
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): modifier not found.");
                     continue;
                 }
                 replacements[target] = target.WithModifiers(SyntaxFactory.TokenList(target.Modifiers.Where(m => !m.IsKind(kind))));
@@ -1158,7 +1158,7 @@ public class MemberRefactoringEngine
             // tool reported success for an edit that was never written. Name each affected edit and refuse to write.
             var unlocated = edits
                 .Where(e => resolvedTargets.TryGetValue(e.Index, out var node) && replaced.UnlocatedNodes.Contains(node))
-                .Select(e => $"edits[{e.Index}] ({e.TargetName}): the target could not be located after other edits in this batch changed the tree (it is nested inside, or overlaps, another edit's target in '{filePath}'). Split these edits into separate calls.")
+                .Select(e => $"batchEdits[{e.Index}] ({e.TargetName}): the target could not be located after other edits in this batch changed the tree (it is nested inside, or overlaps, another edit's target in '{filePath}'). Split these edits into separate calls.")
                 .ToList();
             return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", unlocated.Count > 0 ? unlocated : [$"'{filePath}': {replaced.UnlocatedNodes.Count} edit(s) could not be applied because their targets could not be located. Split these edits into separate calls."]) };
         }
@@ -1690,14 +1690,14 @@ public class MemberRefactoringEngine
 
                 if (targetNode == null)
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): target not found.");
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): target not found.");
                     continue;
                 }
                 resolvedTargets[edit.Index] = targetNode;
             }
             catch (InvalidOperationException ex)
             {
-                errors.Add($"edits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
+                errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
             }
         }
 
@@ -1713,7 +1713,7 @@ public class MemberRefactoringEngine
         {
             if (seen.TryGetValue(kvp.Value, out var firstIndex))
             {
-                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] resolve to the same target in '{filePath}'. Split these into separate calls.");
+                errors.Add($"batchEdits[{firstIndex}] and batchEdits[{kvp.Key}] resolve to the same target in '{filePath}'. Split these into separate calls.");
             }
             else
             {
@@ -1739,7 +1739,7 @@ public class MemberRefactoringEngine
                 var attrList = AttributeTextEditBuilder.ParseAttributeList(edit.ExistingAttribute);
                 if (attrList == null)
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): invalid attribute source.");
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): invalid attribute source.");
                     continue;
                 }
                 textEdits.Add(AttributeTextEditBuilder.BuildAddEdit(edit.Index, targetNode, attrList, sourceText, eol));
@@ -1749,19 +1749,19 @@ public class MemberRefactoringEngine
             {
                 if (string.IsNullOrEmpty(edit.NewAttribute))
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): newAttribute is required for action 'replace'.");
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): newAttribute is required for action 'replace'.");
                     continue;
                 }
                 var newAttrList = AttributeTextEditBuilder.ParseAttributeList(edit.NewAttribute);
                 if (newAttrList == null)
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): invalid new attribute source.");
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): invalid new attribute source.");
                     continue;
                 }
                 var oldAttr = attrLists.SelectMany(al => al.Attributes).FirstOrDefault(a => GetAttributeName(a) == edit.ExistingAttribute);
                 if (oldAttr == null)
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): attribute '{edit.ExistingAttribute}' not found on target.");
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): attribute '{edit.ExistingAttribute}' not found on target.");
                     continue;
                 }
                 textEdits.Add(AttributeTextEditBuilder.BuildReplaceEdit(edit.Index, oldAttr, newAttrList.Attributes.First()));
@@ -1777,7 +1777,7 @@ public class MemberRefactoringEngine
                 }
                 if (targetNode is not MemberDeclarationSyntax memberTarget2)
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TargetName}): action 'remove' requires a declaration target.");
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): action 'remove' requires a declaration target.");
                     continue;
                 }
                 var removeEdits = AttributeTextEditBuilder.BuildRemoveEdits(edit.Index, memberTarget2, AttrMatches, sourceText);
@@ -4928,14 +4928,14 @@ public class MemberRefactoringEngine
                     (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
                 if (container == null)
                 {
-                    errors.Add($"edits[{edit.Index}] ({edit.TypeName}): type not found.");
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TypeName}): type not found.");
                     continue;
                 }
                 resolvedTargets[edit.Index] = container;
             }
             catch (InvalidOperationException ex)
             {
-                errors.Add($"edits[{edit.Index}] ({edit.TypeName}): {ex.Message}");
+                errors.Add($"batchEdits[{edit.Index}] ({edit.TypeName}): {ex.Message}");
             }
         }
 
@@ -4949,7 +4949,7 @@ public class MemberRefactoringEngine
         {
             if (seen.TryGetValue(kvp.Value, out var firstIndex))
             {
-                errors.Add($"edits[{firstIndex}] and edits[{kvp.Key}] both _symbolNavigationEngine. Resolve to the same target in '{filePath}'. Split these into separate calls.");
+                errors.Add($"batchEdits[{firstIndex}] and batchEdits[{kvp.Key}] both resolve to the same target in '{filePath}'. Split these into separate calls.");
             }
             else
             {
