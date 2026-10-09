@@ -41,9 +41,10 @@
          not duplicated here.
 
     Full design rationale: docs/current/proposal_per_session_mcp_server.md.
-    bin-vscode\Advanced.Http\ (the separate, still-shared standalone HTTP fallback copy managed by
-    build.ps1's Invoke-VSCodeServerRestart) is untouched by this script - it never matches the
-    <instance-id> naming shape, so the sweep skips it.
+    bin-vscode\Advanced.Http\ (the separate, still-shared standalone HTTP fallback copy, managed by
+    roslynsentinel-vscode-control.ps1; its `restart` rebuilds it) is untouched by this script - it
+    never matches the <instance-id> naming shape, so the sweep skips it. Throwaway HTTP instances come
+    from Launch-RoslynSentinelHttpServer.ps1 (bin-vscode\http-<port>-<timestamp>, also not matching).
 
     Why not key off %VSCODE_PID%: it looked window-unique but isn't - confirmed 2026-09-18 that
     VSCODE_PID (and every other VS Code-injected env var, including VSCODE_IPC_HOOK, which also
@@ -191,7 +192,8 @@ Write-StartupLog "Instance ID '$instanceId' derived OK -> per-instance log is $l
 #region Sweep stale instance folders
 Write-LaunchLog "Sweeping for stale instance folders..."
 # Matches this script's own <8-hex-char-token>-<8-hex-char-hash> shape. Advanced.Http (the shared
-# HTTP fallback copy) never matches this and is left untouched without needing an explicit exclusion.
+# HTTP fallback copy) and http-<port>-<timestamp> (throwaway HTTP instances) never match this and are
+# left untouched without needing an explicit exclusion.
 $instanceFolderPattern = '^[0-9a-f]{8}-[0-9a-f]{8}$'
 
 # Minimum folder age before it's eligible for sweeping. Without this, several VS Code windows/tabs
