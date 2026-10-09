@@ -176,7 +176,7 @@ Accepted bypasses are logged to `.claude/journal/hook-bypass.jsonl` and are jour
 **Never delete a tracked file with a shell command.** Deleting a file the server has touched via
 `rm`/`Remove-Item` trips the external-drift detector and halts every mutating tool for the session
 (`errorCode: SessionHalted`; read-only tools keep working). Use `DeleteFile`. If already halted: call
-`ListExternalDiskChanges()` then `AcknowledgeExternalFileChanges()`. This is a self-inflicted bypass
+`ExternalFileDrift(operation: List)` then `ExternalFileDrift(operation: Acknowledge, files: ...)`. This is a self-inflicted bypass
 (report and continue), not a tool defect.
 
 **Never dispatch parallel subagents for C# edits.** Subagents share the parent session's single server
