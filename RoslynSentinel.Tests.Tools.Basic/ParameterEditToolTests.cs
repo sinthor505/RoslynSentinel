@@ -86,8 +86,7 @@ public class ParameterEditToolTests
     [Test]
     public async Task ParameterEdit_MethodRemove_MatchesMethodSignatureAsync()
     {
-        // The call site lives in a second file: MethodSignature(remove) refuses a call site in the edited file itself
-        // ("could not be re-located after an earlier edit to the same file"), which is the original tool's behavior.
+        // The call site lives in a second file so this parity case does not depend on same-file handling; same-file and multi-site call sites are covered by RemoveMethodParameterSinglePassTests.
         var text = await AssertParityAsync(
             (t, ws) => t.Signature.MethodSignature(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.remove, methodName: "Compute",
                 paramName: "second", cancellationToken: default),

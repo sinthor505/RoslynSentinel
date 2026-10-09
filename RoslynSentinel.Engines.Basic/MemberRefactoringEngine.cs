@@ -1529,12 +1529,16 @@ public class MemberRefactoringEngine
         }
 
         var targetParamCount = parameters.Count;
-        var newParams = methodDecl.ParameterList.WithParameters(SyntaxFactory.SeparatedList(parameters.Take(targetParamCount - 1)));
-        var newMethodDecl = methodDecl.WithParameterList(newParams);
-        var pendingChanges = new Dictionary<FilePathWrapper, string>
-        {
-            [filePath] = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, methodDecl, newMethodDecl, cancellationToken)
-        };
+
+        // Single pass: every edit in a file (the declaration and all call sites) is collected from ONE root per file
+        // path and applied with one ReplaceNodes, so no edit can shift the span of another (the old code re-parsed the
+        // half-edited text and looked call sites up by their ORIGINAL span, which missed after the first edit).
+        // The declaration's file is keyed by the document's own FilePath (not the caller-supplied filePath, which may be
+        // a bare file name) so call sites in the same file land on the same entry.
+        FilePathWrapper declPath = document.FilePath ?? filePath;
+        var rootByPath = new Dictionary<FilePathWrapper, SyntaxNode> { [declPath] = root };
+        var documentByPath = new Dictionary<FilePathWrapper, Document> { [declPath] = document };
+        var editNodesByPath = new Dictionary<FilePathWrapper, List<SyntaxNode>> { [declPath] = [methodDecl] };
 
         var symbol = semanticModel.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
         if (symbol != null)
@@ -1550,16 +1554,27 @@ public class MemberRefactoringEngine
                     }
 
                     var refDoc = location.Document;
-                    var refRoot = await refDoc.GetSyntaxRootAsync(cancellationToken);
-                    if (refRoot == null)
+                    FilePathWrapper refPath = refDoc.FilePath!;
+                    if (!rootByPath.TryGetValue(refPath, out var refRoot))
                     {
-                        continue;
+                        var loaded = await refDoc.GetSyntaxRootAsync(cancellationToken);
+                        if (loaded == null)
+                        {
+                            continue;
+                        }
+
+                        refRoot = loaded;
+                        rootByPath[refPath] = refRoot;
+                        documentByPath[refPath] = refDoc;
+                        editNodesByPath[refPath] = [];
                     }
 
                     var span = location.Location.SourceSpan;
                     var refLineNumber = refRoot.SyntaxTree.GetLineSpan(span, cancellationToken: cancellationToken).StartLinePosition.Line + 1;
                     var token = refRoot.FindToken(span.Start);
-                    var invocation = token.Parent?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
+                    // The reference must lie inside the invocation's callee expression; otherwise `Wrap(Compute)` (a method
+                    // group argument) would match the enclosing Wrap(...) call and silently drop ITS last argument.
+                    var invocation = token.Parent?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault(i => i.Expression.Span.Contains(span));
                     if (invocation == null)
                     {
                         return new DocumentEditResult
@@ -1590,49 +1605,30 @@ public class MemberRefactoringEngine
                         continue;
                     }
 
-                    var docPath = refDoc.FilePath!;
-                    string currentContent = pendingChanges.TryGetValue(docPath, out var prev) ? prev : (await refDoc.GetTextAsync(cancellationToken)).ToString();
-                    var currentRoot = SyntaxFactory.ParseCompilationUnit(currentContent);
-                    var targetInv = currentRoot.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(inv => inv.Span == invocation.Span);
-                    if (targetInv == null)
+                    if (!editNodesByPath[refPath].Contains(invocation))
                     {
-                        return new DocumentEditResult
-                        {
-                            Outcome = EditOutcome.CannotRemove,
-                            FilePath = filePath,
-                            Message = $"// Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} could not be re-located after an earlier edit to the same file - cannot safely update it."
-                        };
+                        editNodesByPath[refPath].Add(invocation);
                     }
-
-                    var newArgList = targetInv.ArgumentList.WithArguments(SyntaxFactory.SeparatedList(targetInv.ArgumentList.Arguments.Take(targetParamCount - 1)));
-                    var updatedInv = targetInv.WithArgumentList(newArgList);
-                    pendingChanges[docPath] = currentRoot.ReplaceNode(targetInv, updatedInv).ToFullString();
                 }
             }
         }
 
-        // Format every touched file (the declaration was already formatted via
-        // ReplaceNodeFormattedAsync above; call-site files were edited via raw ReplaceNode/
-        // ToFullString and still need it).
         var result = new Dictionary<FilePathWrapper, string>();
-        foreach (var kvp in pendingChanges)
+        foreach (var (path, nodes) in editNodesByPath)
         {
-            if (kvp.Key == filePath)
+            var fileDocument = documentByPath[path];
+            var annotation = new SyntaxAnnotation();
+            var newRoot = rootByPath[path].ReplaceNodes(nodes, (original, rewritten) => (rewritten switch
             {
-                result[kvp.Key] = kvp.Value;
-                continue;
-            }
-
-            var doc = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.FilePath == kvp.Key);
-            if (doc != null)
-            {
-                var formatted = await Formatter.FormatAsync(doc.WithSyntaxRoot(SyntaxFactory.ParseCompilationUnit(kvp.Value)), null, cancellationToken);
-                result[kvp.Key] = (await formatted.GetTextAsync(cancellationToken)).ToString();
-            }
-            else
-            {
-                result[kvp.Key] = kvp.Value;
-            }
+                MethodDeclarationSyntax m => (SyntaxNode)m.WithParameterList(m.ParameterList.WithParameters(SyntaxFactory.SeparatedList(m.ParameterList.Parameters.Take(targetParamCount - 1)))),
+                InvocationExpressionSyntax i => i.WithArgumentList(i.ArgumentList.WithArguments(SyntaxFactory.SeparatedList(i.ArgumentList.Arguments.Take(targetParamCount - 1)))),
+                _ => rewritten
+            }).WithAdditionalAnnotations(annotation));
+            var formatted = await Formatter.FormatAsync(fileDocument.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+            var originalText = await fileDocument.GetTextAsync(cancellationToken);
+            // Formatter output uses the platform EOL; restore the file's own dominant EOL so an LF file stays LF.
+            var updatedText = RoslynSentinel.Common.EolUtilities.NormalizeEol((await formatted.GetTextAsync(cancellationToken)).ToString(), RoslynSentinel.Common.EolUtilities.DetectDominantEol(originalText));
+            result[path.Equals(declPath) ? filePath : path] = updatedText;
         }
 
         return new DocumentEditResult
