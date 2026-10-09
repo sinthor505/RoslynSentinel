@@ -63,9 +63,7 @@
 
 | Class | Tool name | Modes | Breaker | Summary |
 |-------|-----------|-------|---------|---------|
-| AdminTools | AcknowledgeExternalFileChanges | Admin, Claude, claude-lean | - | Clears the external-change list and fatal drift latch after disk changes are reviewed. |
-| AdminTools | IsSessionHalted | Admin, Claude, claude-lean | Allowed | Returns whether the session-wide fatal drift latch is set. |
-| AdminTools | ListExternalDiskChanges | Admin, Claude, claude-lean | - | Returns files modified on disk since the agent last synced. |
+| AdminTools | ExternalFileDrift | Admin, Claude, claude-lean | Allowed | Inspect and resolve external file drift: a tracked file that changed on disk outside this server (an editor, git, a... |
 | AdminTools | McpServerControl | Admin, Claude, claude-lean | - | Operator-only control of this server process. operation=GetServerStatus reports the running process.... |
 | DeclarationTools | Declaration | claude-lean | - | Changes a declaration's modifier, accessibility, attribute or base type. |
 | DocumentationTools | ProjectDoc | Claude, Workspace | - | Reads, writes, appends, or lists project doc files under docs/. |
