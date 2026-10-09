@@ -150,8 +150,10 @@ Do not retry speculatively and do not route around it with shell tools. Then fol
 workflow below.
 
 A `PreToolUse` hook (`.claude/hooks/enforce-dogfood.ps1`) blocks the common violations mechanically.
-It is a backstop, not the policy: it cannot see intent, and `Read` on a `.cs` still violates this
-section even though nothing stops it. If the hook blocks something genuinely necessary, say so and
+It is a backstop, not the policy: it cannot see intent. It now also blocks the built-in `Read` on an
+in-repo `.cs`, so an agent (for example a custom subagent) whose frontmatter lists `Read` but no MCP
+tools must also list `ReadFile`/`GetMethodSource`/`Search`, or it is stranded; such an agent reports
+the missing tools as a finding (`.claude/hooks/agent-mcp-tools.Tests.ps1` guards this). If the hook blocks something genuinely necessary, say so and
 stop; do not reword the command to slip past it.
 
 **Recovering from an accidental bypass.** If you used `Read`/`Edit`/`Write`/`Bash` on a `.cs` file, or
@@ -163,12 +165,12 @@ disk), treat that symptom as a tool failure, scoped to the actual anomaly.
 **Deliberate hook bypass** (legitimate: a `.cs` file outside this repo, or a manual repo edit/read/git
 call you have decided is right, e.g. raw bytes or a halted `Git` tool you already reported; never a
 failed or missing MCP tool). Routes:
-- **Outside this repo:** Edit/Write/Grep on a `.cs` path outside the repo root is exempt automatically.
+- **Outside this repo:** Edit/Write/Grep/Read on a `.cs` path outside the repo root is exempt automatically.
 - **Bash/PowerShell:** put `DeliberateHookBypass: <reason>` in the command (as a comment) or the
   `description`. A bare keyword is still blocked.
-- **Edit/Write/Grep on repo files:** write `.claude/bypass.local.json` (valid 10 minutes):
-  `{"reason": "...", "tools": ["Edit"], "paths": ["Foo.cs"]}` - `reason` required, `tools`/`paths`
-  optional narrowing; use the narrowest `paths`.
+- **Edit/Write/Grep/Read on repo files:** write `.claude/bypass.local.json` (valid 10 minutes):
+  `{"reason": "...", "tools": ["Edit"], "paths": ["Foo.cs"]}` (`tools` may be `["Read"]`) - `reason`
+  required, `tools`/`paths` optional narrowing; use the narrowest `paths`.
 
 Accepted bypasses are logged to `.claude/journal/hook-bypass.jsonl` and are journal-worthy. The
 `ReplaceSnippet` parameter check and the commit checks cannot be bypassed.
