@@ -39,6 +39,30 @@ public class AdminToolsTests
         Assert.DoesNotThrow(() => _tools.AcknowledgeExternalFileChanges(reason: "test message"));
     }
 
+    [Test]
+    public void AcknowledgeExternalFileChanges_UnknownFile_ReturnsNothingClearedNamingFile()
+    {
+        var result = _tools.AcknowledgeExternalFileChanges(reason: "test message", files: "nope.cs");
+        Assert.That(result, Does.Contain("Nothing cleared"));
+        Assert.That(result, Does.Contain("nope.cs"));
+    }
+
+    [Test]
+    public void AcknowledgeExternalFileChanges_NoFilesArgument_ReportsZeroCleared()
+    {
+        var result = _tools.AcknowledgeExternalFileChanges(reason: "test message");
+        Assert.That(result, Does.StartWith("Cleared 0"));
+    }
+
+    [Test]
+    public void AcknowledgeExternalFileChanges_MalformedJsonArray_ReturnsParserError()
+    {
+        var result = _tools.AcknowledgeExternalFileChanges(reason: "test message", files: "[\"a.cs\"");
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Is.Not.Empty);
+        Assert.That(result, Does.Not.StartWith("Cleared"));
+    }
+
     // McpServerControl: the stop path is exercised through AdminTools.ControlServer with an injected
     // exit action, so these tests never call Environment.Exit on the test host.
 

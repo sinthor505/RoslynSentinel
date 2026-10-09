@@ -48,19 +48,93 @@ public class AdminTools
 
     [McpServerTool(Name = "AcknowledgeExternalFileChanges")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Clears the external-change list and fatal drift latch after disk changes are reviewed.")]
+    [Description("Clears the external-change list and fatal drift latch after disk changes are reviewed. Optional files clears only the named entries.")]
     public string AcknowledgeExternalFileChanges(
     [Description(ToolParams.Reason)] ToolCallReason reason,
+    [Description("Optional. File names or relative paths (CSV or JSON array) to clear; omit to clear every tracked change. Use after ListExternalDiskChanges and review.")] string? files = null,
     CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
-        var count = _workspaceManager.GetExternalFileChanges().Count;
-        var wasHalted = _workspaceManager.IsSessionHalted();
-        _workspaceManager.ClearExternalFileChanges();
-        _workspaceManager.ClearSessionHalt();
-        return wasHalted
-            ? $"Cleared {count} tracked external file change(s) and the session-wide fatal drift latch."
-            : $"Cleared {count} tracked external file change(s).";
+
+        // Case A: files is null or whitespace - clear all
+        if (string.IsNullOrWhiteSpace(files))
+        {
+            var current = _workspaceManager.GetExternalFileChanges();
+            var wasHalted = _workspaceManager.IsSessionHalted();
+            _workspaceManager.ClearExternalFileChanges();
+            _workspaceManager.ClearSessionHalt();
+
+            var cleared = $"Cleared {current.Count} tracked external file change(s)";
+            if (current.Count > 0)
+            {
+                cleared += $": {DriftMessages.SummarizeFiles(current)}";
+            }
+            cleared += ".";
+            if (wasHalted)
+            {
+                cleared += " Session-wide fatal drift latch cleared.";
+            }
+            return cleared;
+        }
+
+        // Case B: files given - parse and selective clear
+        var requested = DelimitedListParser.ParseStringOrJsonArrayToList(files, out var parseError);
+        if (parseError != null)
+        {
+            return parseError;
+        }
+
+        if (requested == null)
+        {
+            return parseError ?? "Failed to parse files list.";
+        }
+
+        var current2 = _workspaceManager.GetExternalFileChanges();
+        DriftMessages.ResolveSelection(current2, requested, out var matched, out var unmatched);
+
+        // Unmatched paths - error
+        if (unmatched.Count > 0)
+        {
+            return $"Nothing cleared: '{string.Join("', '", unmatched)}' match no tracked change. Tracked changes: {DriftMessages.SummarizeFiles(current2)}. Call ListExternalDiskChanges for full paths.";
+        }
+
+        // No matches (shouldn't happen if unmatched is empty and requested is non-empty, but guard anyway)
+        if (matched.Count == 0)
+        {
+            return $"Nothing cleared: files named no entries. Tracked changes: {DriftMessages.SummarizeFiles(current2)}. Call ListExternalDiskChanges for full paths.";
+        }
+
+        // Clear the matched files
+        var wasHalted2 = _workspaceManager.IsSessionHalted();
+        _workspaceManager.ClearExternalFileChanges(matched);
+        var remaining = _workspaceManager.GetExternalFileChanges();
+
+        // DEFERRED DECISION (plan_session_halt_recovery_and_git_gaps.md, Risks 1): whether a partial acknowledge also clears the latch while other entries remain flagged. Until decided, the latch is cleared only when nothing remains flagged (both candidate policies agree on that case).
+        if (remaining.Count == 0)
+        {
+            _workspaceManager.ClearSessionHalt();
+        }
+
+        // Build return message
+        var message = $"Cleared {matched.Count}: {DriftMessages.SummarizeFiles(matched)}.";
+        if (remaining.Count > 0)
+        {
+            message += $" {remaining.Count} other change(s) remain flagged: {DriftMessages.SummarizeFiles(remaining)}.";
+        }
+
+        if (wasHalted2)
+        {
+            if (remaining.Count == 0)
+            {
+                message += " Session-wide fatal drift latch cleared.";
+            }
+            else
+            {
+                message += " Session latch still set while other changes remain flagged; acknowledge them too (or call without files) to clear it.";
+            }
+        }
+
+        return message;
     }
 
     public enum McpServerControlOperation
