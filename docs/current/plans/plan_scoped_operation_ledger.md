@@ -46,7 +46,7 @@ dispatched Explore subagent: `ValidateAndApplyHelper.ValidateAndApplyAsync` does
 field read (line 1243) -> `_unrecoverableHaltMessage` field read (line 1255-1260) -> **ledger `IsBlocked`
 check (newly added, line ~1265)** -> delete/write overlap refusal -> drift detection (may newly trip
 `_sessionHalted`) -> optional re-validation -> lock -> write. Both existing halts read their backing fields
-directly rather than through `IsSessionHalted()`/`IsTripped()`, which is why the original `SearchSolutionText`
+directly rather than through `ExternalFileDrift`'s Status operation or `IsTripped()`, which is why the original `SearchSolutionText`
 for those method names found nothing - the enforcement point never calls its own public accessors.
 Separately, the MCP request-filter layer (`ServiceRegistrationExtensionsBasic.cs:594-625`) fast-fails on
 `IUnrecoverableBreaker.IsTripped()` pre-dispatch, but has no equivalent for `_sessionHalted` or the new
@@ -100,10 +100,10 @@ this is a different symptom of adjacent machinery):
   symbol instead of naming the truncation.
 - `docs/current/blockers/blocking_error_self_inflicted_drift_halt_from_edit_tool_on_tracked_cs_file.md` -
   self-inflicted `SessionHalted` from using the generic `Edit` tool (not MCP) on a tracked test file;
-  recovered in-session via `AcknowledgeExternalFileChanges` (after `ListExternalDiskChanges` confirmed
-  the drift list matched exactly the one file involved) rather than needing an operator stop - noted
-  as a documentation gap, since neither the halt message nor `IsSessionHalted` mentions this recovery
-  path.
+  recovered in-session via `ExternalFileDrift(operation: Acknowledge)` (after `ExternalFileDrift(operation: List)`
+  confirmed the drift list matched exactly the one file involved) rather than needing an operator stop - noted
+  as a documentation gap, since neither the halt message nor `ExternalFileDrift`'s Status operation mentioned this
+  recovery path at the time.
 
 Decision 4 is DONE (commits pending this session). `AdvancedStructuralEngine.MoveInstanceMembersAsync`
 implemented as a new dedicated method (per the confirmed design choice, not a branch inside the

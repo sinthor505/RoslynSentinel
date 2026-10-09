@@ -5,6 +5,10 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## `SessionHalted` message named one file and no recovery path - resolved 2026-10-09
+
+**Found:** 2026-09-15 (a gap under the TODO.md entry "`SessionHalted` external-drift latch: false-positive from timestamp-only touch"). **Resolved 2026-10-09.** The halt message now states how many tracked files drifted, names the first few, and spells out the recovery (`ExternalFileDrift` List, then Acknowledge, then `LoadSolution(forceReload)`); the latch policy for partial acknowledge was decided and implemented. See `plans/plan_external_file_drift_tool_and_halt_stamping.md` (halt wording is its step 6) and `plans/plan_session_halt_recovery_and_git_gaps.md` (deferred Step 2). The other two gaps in that TODO entry stay open.
+
 ## Mutating tools don't return the resulting content, forcing a separate ReadFile - resolved by design decision 2026-10-08
 
 **Found:** 2026-08-19/20. **Resolved 2026-10-08.** Mutating tools do not echo content on a real apply: the result carries lineChanges, a changedContentResultId for the stored content (fetch with GetLargeResult) and a Note naming the read-back tools (ReadFile, GetMethodSource, Member(view)). Dry runs and autoStage:false results keep the inline changedContent. Inline echo on a real apply is a server-wide opt-in (env var ROSLYNSENTINEL_INLINE_CHANGED_CONTENT, ChangedContentOptions.InlineOnApply), pending an impact review. See plan_mutating_tools_compact_result_default.md; commits 8c987c9, 2ac8461, e198987.

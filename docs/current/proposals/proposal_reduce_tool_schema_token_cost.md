@@ -81,11 +81,12 @@ not measured.
   field; see the comment at `ToolParams.cs:90`), one batch-semantics sentence (edits resolve against
   the original file, apply atomically), and the "use `nullDefault`, not the string null" clause.
 - **Step 4b proposed Claude-mode toolsets** (sizes pre-diet):
-  - Core, always on, 25 tools, 35.3k chars: LoadSolution, ReadFile, GetFileOutline, GetMethodSource,
+  - Core, always on, 24 tools, 35.3k chars before the drift-tool merge (not re-measured; the merged
+    tool replaces two schemas with one, and carries one extra enum parameter, `operation`, so the
+    total should drop only slightly): LoadSolution, ReadFile, GetFileOutline, GetMethodSource,
     GetLargeResult, Search, FindReferences, InspectSymbol, LocateSymbol, GetDiagnostics, Build,
     RunTest, Git, ReplaceSnippet, Member, UsingDirective, RenameSymbol, WriteFile, CreateFile,
-    DeleteFile, UndoLastApply, McpServerControl, McpServerStatus, AcknowledgeExternalFileChanges,
-    ListExternalDiskChanges.
+    DeleteFile, UndoLastApply, McpServerControl, McpServerStatus, ExternalFileDrift.
   - Declarations (on demand): merged declaration tool, merged parameter tool, ModifyEnum,
     ChangeSignature, SyncTypeAndFilename.
   - Move/Extract (on demand): MoveMember, MoveType, MoveAllTypesToFiles, Extract*, Inline*,
@@ -93,7 +94,7 @@ not measured.
     SafeDeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff.
   - Project/Admin (on demand): CreateProject, SplitProjectByFolder, ListSolutionItems,
     ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth,
-    GetOperationDetail, RetryFailedChanges, IsSessionHalted, GetTypeInfo, QuerySymbolRelationships,
+    GetOperationDetail, RetryFailedChanges, GetTypeInfo, QuerySymbolRelationships,
     GetBestInsertionPoint.
   - Stage 1 (no new code): a static `claude` mode via the existing mode registry and
     include/exclude-tools options. Stage 2: dynamic `McpToolsetControl(toolSet, on|off)`.

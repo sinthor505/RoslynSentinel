@@ -455,7 +455,7 @@ just deferred.
 **Found:** 2026-08-24, while auditing `docs/tool-terminology-refinement-reference-v1.md` (kept in
 `docs/current/`) for the docs reorganization pass. That reference catalogs weak/ambiguous tool and
 parameter names (`GetBreakerStatus`, `GetMigrationLedger`, `ClearExternalDrift` vs. its sibling
-`ListExternalDiskChanges`'s inconsistent metaphor, the `Apply*Codemod`/`Generate`/`Introduce`/`Inline`
+list tool's inconsistent metaphor (both since merged into `ExternalFileDrift`), the `Apply*Codemod`/`Generate`/`Introduce`/`Inline`
 untyped-string-discriminator family) and recommends, in order: (1) convert small/stable discriminator
 params to real enums; (2) standardize the "call `DescribeAdvancedToolOptions` first" wording across all
 wide dispatchers; (3) only then revisit the specific rename table. None of the three steps has been
@@ -598,22 +598,22 @@ the mode that found it.
 ## `SessionHalted` external-drift latch: false-positive from timestamp-only touch, message doesn't self-report scope — not started
 
 Raised 2026-09-15 resolving `blockers/resolved/blocking_error_sessionhalted_concurrent_session_drift_mid_contexterrorbuilder_plan.md`.
-A `ReplaceSnippet(apply)` call mid-plan hit `SessionHalted`; `ListExternalDiskChanges` reported 34
+A `ReplaceSnippet(apply)` call mid-plan hit `SessionHalted`; the list tool (formerly `ListExternalDiskChanges`) reported 34
 drifted files, but `Git(operation: status)` showed only 1 file genuinely modified (plus expected
 untracked new files) — zero overlap with the 34. Most likely trigger: an earlier MCP server restart
 this session updated file mtimes without changing content, and the drift detector treats a
-timestamp-only touch the same as real content drift. Cleared via `AcknowledgeExternalFileChanges`
+timestamp-only touch the same as real content drift. Cleared via `ExternalFileDrift(operation: Acknowledge)`
 once confirmed false-positive; not yet fixed at the detector level.
 
-Update 2026-10-09 (`plans/plan_session_halt_recovery_and_git_gaps.md`): `AcknowledgeExternalFileChanges` now takes optional `files`
-and names what it cleared, and a failed `Build` appends a drift note. The first gap below (halt message wording) is still open,
-deferred as a wording judgement call (plan Step 2).
+Update 2026-10-09 (`plans/plan_session_halt_recovery_and_git_gaps.md`, then
+`plans/plan_external_file_drift_tool_and_halt_stamping.md`): the three recovery tools were merged into
+`ExternalFileDrift(operation: Status|List|Acknowledge, files, acknowledgeScope)`; the halt message now names the drifted
+files and the recovery, the latch policy was decided and implemented, and a failed `Build` appends a drift note. The
+former first gap (halt message wording) is resolved and recorded in `CLOSED.md`.
 
-Three concrete gaps, all still open:
+Remaining gaps, all still open:
 
-- The `SessionHalted` error message names only the one file the blocked call touched — it doesn't
-  say "N files drifted" or point at `ListExternalDiskChanges`/`AcknowledgeExternalFileChanges` by
-  name, forcing a blind follow-up call just to learn the blast radius and the recovery path.
+- Follow-up: Revisit partial-acknowledge policy after real use (decision 2, `proposal_journal_digest_followup_decisions.md`).
 - The detector doesn't appear to distinguish "mtime changed, content identical" from "content
   actually changed on disk" — the former should not be able to trip a fatal, session-wide latch.
   Needs source-level confirmation (not yet read this session) of where the drift check lives and

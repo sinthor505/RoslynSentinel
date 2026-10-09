@@ -1,6 +1,8 @@
 # Plan: make SessionHalted recoverable in one step, and close the small Git diff-target gap
 
-**Status:** PARTIALLY IMPLEMENTED 2026-10-09. Priority P2. Seven steps (six work steps plus verification), small recovery and message fixes; hunk-level staging, a discard operation, worktree/stash/tag and halt granularity are recorded as needs-design, not planned here.
+**Status:** PARTIALLY IMPLEMENTED 2026-10-09; the two deferred items were then decided and implemented by `plan_external_file_drift_tool_and_halt_stamping.md` (latch policy decided 2026-10-09; Step 2 halt wording is covered by its step 6). Priority P2. Seven steps (six work steps plus verification), small recovery and message fixes; hunk-level staging, a discard operation, worktree/stash/tag and halt granularity are recorded as needs-design, not planned here.
+
+**Naming note:** this plan predates the merge of the three drift tools into `ExternalFileDrift(operation: Status|List|Acknowledge, files, acknowledgeScope)`. Where it names the formerly separate tools (the list tool, the acknowledge tool and the halt-status tool), read those as the matching `ExternalFileDrift` operations; each such mention below is marked "formerly".
 
 ## Implementation notes (2026-10-09)
 
@@ -11,17 +13,17 @@ Step 7: `Build` 0 errors; full `RunTest` 3508 tests, 3481 passed, 26 skipped, 1 
 when rerun alone, so order/parallelism-dependent and unrelated to these changes). Baseline was 3473 tests, 0 failed, 26 skipped;
 the +35 are the new tests. The live-server part of Step 7 (stop/reload and the two live calls) was left to the parent session.
 
-DEFERRED (user judgement calls, not implemented):
+DEFERRED at the time (user judgement calls, not implemented here; both since decided and implemented by `plan_external_file_drift_tool_and_halt_stamping.md`):
 - **Step 2 (halt wording, Risks 2).** Neither throw site in `PersistentWorkspaceManager.ApplyProposedChangesAsync` was changed and
-  `DriftMessages.HaltMessage` was NOT added in Step 1 (it is the wording itself). The old "Stop and report" text is still emitted.
-- **Partial-acknowledge latch policy (Risks 1).** `AcknowledgeExternalFileChanges(files: ...)` clears the latch only when no drift
-  entry remains flagged (the one case both candidate policies agree on); while other entries remain flagged the latch stays set and
-  the result says so. The code carries a `DEFERRED DECISION` comment. Picking the plan's recommended "always clear" is a one-line change.
+  `DriftMessages.HaltMessage` was NOT added in Step 1 (it is the wording itself). The old "Stop and report" text was still emitted. Now covered by step 6 of the successor plan.
+- **Partial-acknowledge latch policy (Risks 1).** The formerly separate `AcknowledgeExternalFileChanges(files: ...)` tool cleared the latch only when no drift
+  entry remained flagged (the one case both candidate policies agree on); while other entries remained flagged the latch stayed set and
+  the result said so. The code carried a `DEFERRED DECISION` comment. The policy was decided 2026-10-09 and implemented by the successor plan.
 
 Deviations: the Step 4 messages match the plan except the still-flagged case described above; Step 4 also guards a `files` list that
 resolves to nothing ("Nothing cleared: files named no entries"). `BuildHint` counts entries as given (the manager's list is already
 distinct). Tests added: `DriftMessagesTests` (30), three `AdminToolsTests`, two `GitToolsSmokeTests`; no test covers a non-empty
-drift list through `AcknowledgeExternalFileChanges` because `_externalChanges` is private and a real drift needs a tracked file.
+drift list through the acknowledge tool (formerly `AcknowledgeExternalFileChanges`) because `_externalChanges` is private and a real drift needs a tracked file.
 
 ## Problem
 
@@ -32,12 +34,12 @@ traced to source on 2026-10-08. Journal entries are impressions; only the source
    Both throw sites in `RoslynSentinel.Common/PersistentWorkspaceManager.cs` (lines 1255-1256 and
    1311-1312) use the identical text: "Session halted: external file drift was detected on a tracked file.
    This session cannot safely continue. Stop and report to the user/operator." It names no file, no count,
-   and no recovery. Sessions recovered anyway with `ListExternalDiskChanges` + `AcknowledgeExternalFileChanges`
+   and no recovery. Sessions recovered anyway with the list tool (formerly `ListExternalDiskChanges`) + the acknowledge tool (formerly `AcknowledgeExternalFileChanges`)
    + `LoadSolution(forceReload)` (`a08be84f:L53`, `a08be84f:L48`, `47b2c93d:L16`), which CLAUDE.md sanctions, and
    each time it cost several calls to rediscover. The text derives from `docs/current/ideas/external-drift-hard-blocker.md`
    (a hard-blocker design); CLAUDE.md later sanctioned the List+Acknowledge route, so the message is stale.
 2. **Acknowledge is all-or-nothing and forgets unreviewed drift.**
-   `AdminTools.AcknowledgeExternalFileChanges` (`RoslynSentinel.Tools.Basic/AdminTools.cs:49-63`) calls
+   the formerly separate `AdminTools.AcknowledgeExternalFileChanges` (`RoslynSentinel.Tools.Basic/AdminTools.cs:49-63`) calls
    `ClearExternalFileChanges()` (drains the whole bag, `PersistentWorkspaceManager.cs:277-282`) and
    `ClearSessionHalt()`, and returns only a count. `96b0b939:L17` reports it "also cleared 6 unrelated entries";
    `0017ac93:L6` listed 67 files the agent never touched. Once an entry is cleared nothing re-flags the file until
@@ -61,7 +63,7 @@ Not environment-fixable by a small change (see Risks): hunk-level staging (`6e6b
 - One shared static helper in `Common` builds every drift-related sentence, so the halt message, the Acknowledge
   result and the Build hint cannot drift apart: `DriftMessages`.
 - The halt message keeps the safety statement and adds the concrete recovery, naming the first few files.
-- `AcknowledgeExternalFileChanges` gains an optional `files` parameter. With `files`, only the named entries are
+- The acknowledge tool (formerly `AcknowledgeExternalFileChanges`) gains an optional `files` parameter. With `files`, only the named entries are
   cleared and unmatched names are refused (naming the current drift list). Without it, behaviour is unchanged but
   the result lists what was cleared. The session latch is cleared in both cases (decision 1 below).
 - A failed Build appends a one-line drift note when the drift list is non-empty.
@@ -85,19 +87,19 @@ Not environment-fixable by a small change (see Risks): hunk-level staging (`6e6b
     distinct (OrdinalIgnoreCase), joined with ", ", suffixed " (+N more)" when over `max`; "no files" when empty.
   - `string HaltMessage(IReadOnlyCollection<string> driftedPaths)`: "Session halted: {n} tracked file(s) changed on
     disk outside this server ({SummarizeFiles}); writes are refused so they cannot overwrite those changes.
-    Recover: 1) ListExternalDiskChanges to see every drifted file; 2) Git(operation: status) or diff to confirm who
-    changed them; 3) if the changes are expected, AcknowledgeExternalFileChanges(files: <the names you reviewed>)
+    Recover: 1) the list tool (formerly ListExternalDiskChanges) to see every drifted file; 2) Git(operation: status) or diff to confirm who
+    changed them; 3) if the changes are expected, the acknowledge tool (formerly AcknowledgeExternalFileChanges) with files: <the names you reviewed>
     and then LoadSolution(forceReload: true) so memory matches disk; 4) if they are unexplained, stop and report
     to the user. Nothing was written." (when the list is empty use "a tracked file" and omit the count).
   - `string? BuildHint(IReadOnlyCollection<string> externalChanges)`: null when empty; else "N file(s) changed on
     disk outside this server ({SummarizeFiles}). If these errors do not match your edits, run
-    ListExternalDiskChanges and Git(operation: status) before changing code."
+    the list tool (formerly ListExternalDiskChanges) and Git(operation: status) before changing code."
   - `ResolveSelection(IReadOnlyList<string> current, IReadOnlyList<string> requested, out List<string> matched,
     out List<string> unmatched)`: a requested token matches every `current` entry that equals it
     (OrdinalIgnoreCase after replacing `/` with `\`) or ends with `\` + the token; a token matching nothing goes
     to `unmatched`. `matched` is the distinct set of full `current` entries.
   - Tests (`[TestFixture]`, category `DriftMessages`): SummarizeFiles caps and counts; HaltMessage contains
-    `ListExternalDiskChanges`, `AcknowledgeExternalFileChanges` and `LoadSolution` and the first file name;
+    the formerly separate list and acknowledge tool names and `LoadSolution` and the first file name;
     BuildHint null on empty; ResolveSelection matches by bare file name, by relative path with `/`, and reports
     an unknown token as unmatched.
 - Done when: `Build` 0 errors and `RunTest` filter `FullyQualifiedName~DriftMessagesTests` passes.
@@ -129,24 +131,24 @@ Not environment-fixable by a small change (see Risks): hunk-level staging (`6e6b
   through it); re-measure and reply `RESCOPE:` if another implementer exists.
 - Done when: `Build` 0 errors (solution scope, since the interface has other implementers).
 
-### Step 4 - AcknowledgeExternalFileChanges: optional `files`, honest result
+### Step 4 - Acknowledge tool (formerly AcknowledgeExternalFileChanges): optional `files`, honest result
 - Files: `RoslynSentinel.Tools.Basic/AdminTools.cs`, `RoslynSentinel.Tests.Tools.Basic/AdminToolsTests.cs`
-- Change: `AcknowledgeExternalFileChanges(ToolCallReason reason, string? files = null, CancellationToken cancellationToken = default)`
+- Change: the formerly separate `AcknowledgeExternalFileChanges(ToolCallReason reason, string? files = null, CancellationToken cancellationToken = default)`
   (new parameter before the token). Parameter description: "Optional. File names or relative paths (CSV or JSON
-  array) to clear; omit to clear every tracked change. Use after ListExternalDiskChanges and review."
+  array) to clear; omit to clear every tracked change. Use after the list tool (formerly ListExternalDiskChanges) and review."
   Parse with `DelimitedListParser.ParseStringOrJsonArrayToList(files, out var parseError)` (Common; same call as
   `GitImpl.DiffAsync`).
   - `files` null: unchanged clear-all, but the returned text lists the cleared files via
     `DriftMessages.SummarizeFiles` and says whether the latch was cleared.
   - `files` set: `DriftMessages.ResolveSelection(GetExternalFileChanges(), requested, ...)`. If `unmatched` is
     non-empty return "Nothing cleared: '<names>' match no tracked change. Tracked changes: <SummarizeFiles>.
-    Call ListExternalDiskChanges for full paths." Otherwise `ClearExternalFileChanges(matched)`, then
+    Call the list tool (formerly ListExternalDiskChanges) for full paths." Otherwise `ClearExternalFileChanges(matched)`, then
     `ClearSessionHalt()`, and report "Cleared N: <files>. M other change(s) remain flagged: <files>. Session latch
     cleared; a write to a still-flagged file will halt the session again."
   - Tests in `AdminToolsTests` (fixture already builds a real `PersistentWorkspaceManager`): `files: "nope.cs"` on
     an empty list returns the "Nothing cleared" text naming `nope.cs`; no-arg call still does not throw; a
     malformed `files` JSON array returns the parser's error text.
-- Call sites: `AcknowledgeExternalFileChanges` is invoked by name only in `AdminToolsTests.cs:39` (named arguments,
+- Call sites: the acknowledge tool (formerly `AcknowledgeExternalFileChanges`) is invoked by name only in `AdminToolsTests.cs:39` (named arguments,
   stays compiling); `ToolClassRegistry.cs:37` and `ClaudeLeanModeTests.cs:33,40` list the tool name only.
 - Done when: `Build` 0 errors and `RunTest` filter `FullyQualifiedName~AdminToolsTests` passes.
 
@@ -186,7 +188,7 @@ Not environment-fixable by a small change (see Risks): hunk-level staging (`6e6b
   (`reference_known_failing_tests`), reporting new failures only; then `McpServerControl(operation: StopServer,
   confirmServerStop: ConfirmServerStop)` and `LoadSolution` so the tools run the new binary.
 - Done when: no new failures versus baseline, and a live `Git(diff, target: "unstaged")` and
-  `AcknowledgeExternalFileChanges(files: "nope.cs")` return the new texts.
+  the acknowledge tool with `files: "nope.cs"` (formerly `AcknowledgeExternalFileChanges`) return the new texts.
 
 ## Out of scope
 
@@ -198,12 +200,13 @@ Not environment-fixable by a small change (see Risks): hunk-level staging (`6e6b
 
 ## Risks and open decisions
 
-1. **Decision: does clearing selected entries also clear the latch?** Recommended yes. The latch is set only when a
+1. **Decision: does clearing selected entries also clear the latch?** Decided 2026-10-09 and implemented by
+   `plan_external_file_drift_tool_and_halt_stamping.md`; the analysis below is kept as the original rationale. Recommended yes. The latch is set only when a
    write target is in the drift list (`PersistentWorkspaceManager.cs:1310`), and that per-target check keeps
    guarding every entry that remains, so keeping the latch while unrelated entries remain would force the very
    clear-all that loses information. Alternative: keep the latch until nothing is flagged (safer wording, but
    recreates the deadlock for a session sharing a worktree with another session).
-2. **Decision: halt wording.** The old text ("Stop and report") expresses the hard-blocker intent in
+2. **Decision: halt wording.** Covered by step 6 of `plan_external_file_drift_tool_and_halt_stamping.md` (this plan's deferred Step 2). The old text ("Stop and report") expresses the hard-blocker intent in
    `ideas/external-drift-hard-blocker.md`; the new text keeps "if unexplained, stop and report" but allows the
    documented recovery. Confirm the intent has changed; if the hard-blocker intent still stands, drop Step 2 and
    keep Steps 1, 3-6.
