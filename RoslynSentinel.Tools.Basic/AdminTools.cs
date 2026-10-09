@@ -4,15 +4,9 @@ using RoslynSentinel;
 
 namespace RoslynSentinel.Tools.Basic;
 
-// Restricted/operator-only tools, gated behind the "Admin" mode (deliberately excluded from
-// AllModes in ServerStdio.cs/ServerHttp.cs, so it's off by default and only reachable via an
-// explicit --mode=Admin or --mode=<...>,Admin). See
-// docs/current/ideas/external-drift-hard-blocker.md -> these two tools used to live in
-// WorkspaceTools (model-visible by default under the "Workspace" mode), but letting the
-// in-task model reconcile external drift itself only works for a genuinely concurrent-editing
-// scenario this server doesn't target; under the single-session/no-concurrent-actors assumption a
-// real drift hit should stop the session, not be something the model talks its way past. This
-// class is also the intended home for any future restricted/operator-only tool, not a one-off.
+// Operator-adjacent tools: ExternalFileDrift (status/list/acknowledge external-change state and
+// the session-halt latch) and McpServerControl (process lifecycle). Always visible in claude-lean
+// (ToolClassRegistry.ClaudeLeanToolNames).
 [McpServerToolType]
 public class AdminTools
 {
@@ -23,61 +17,82 @@ public class AdminTools
         _workspaceManager = workspaceManager;
     }
 
-    [McpServerTool(Name = "ListExternalDiskChanges")]
-    [Produces(DataTag.FileList)]
-    [Description("Returns files modified on disk since the agent last synced.")]
-    public List<string> ListExternalDiskChanges(
-    [Description(ToolParams.Reason)] ToolCallReason reason,
-    CancellationToken cancellationToken = default)
-    {
-        _ = cancellationToken;
-        return _workspaceManager.GetExternalFileChanges();
-    }
-
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
-    [McpServerTool(Name = "IsSessionHalted")]
+    [McpServerTool(Name = "ExternalFileDrift")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Returns whether the session-wide fatal drift latch is set.")]
-    public bool IsSessionHalted(
+    [Description("Inspect and resolve external file drift: a tracked file that changed on disk outside this server (an editor, git, a build step). A write that touches such a file is refused and halts the session until the drift is acknowledged; read-only tools keep working meanwhile. operation Status = is the session halted and how many external changes are tracked. operation List = full paths of the tracked changes; review these first. operation Acknowledge = declare changes reviewed and clear the session halt; it needs either files (names or relative paths from List) with acknowledgeScope ConfirmWithListedFiles (the default), or acknowledgeScope ConfirmAll with no files to clear every tracked change. Files you did not name stay flagged and halt the session again if a later write touches them.")]
+    public string ExternalFileDrift(
     [Description(ToolParams.Reason)] ToolCallReason reason,
+    [Description("Status, List or Acknowledge. After a write was refused with 'Session halted', call List first.")] ExternalFileDriftOperation operation,
+    [Description("Only for operation Acknowledge with acknowledgeScope ConfirmWithListedFiles. File names or relative paths (CSV or JSON array) taken from operation List. Leave empty when acknowledgeScope is ConfirmAll.")] string? files = null,
+    [Description("Only for operation Acknowledge. ConfirmWithListedFiles (default): clear only the files named in files; refused when files is empty. ConfirmAll: clear every tracked external change; pass no files.")] ExternalFileDriftAcknowledgeScope acknowledgeScope = ExternalFileDriftAcknowledgeScope.ConfirmWithListedFiles,
     CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
-        return _workspaceManager.IsSessionHalted();
+
+        if (operation == ExternalFileDriftOperation.Acknowledge)
+        {
+            return AcknowledgeDrift(_workspaceManager, files, acknowledgeScope);
+        }
+
+        if (!string.IsNullOrWhiteSpace(files) || acknowledgeScope == ExternalFileDriftAcknowledgeScope.ConfirmAll)
+        {
+            return "files and acknowledgeScope are only used with operation: Acknowledge; nothing changed.";
+        }
+
+        var current = _workspaceManager.GetExternalFileChanges();
+
+        if (operation == ExternalFileDriftOperation.Status)
+        {
+            var summary = current.Count > 0 ? $" ({DriftMessages.SummarizeFiles(current)})" : string.Empty;
+            return $"SessionHalted={_workspaceManager.IsSessionHalted()}; tracked external changes: {current.Count}{summary}.";
+        }
+
+        if (operation == ExternalFileDriftOperation.List)
+        {
+            return current.Count == 0
+                ? "No tracked external file changes."
+                : string.Join(Environment.NewLine, current);
+        }
+
+        return $"Unknown operation '{operation}'. Valid operations: Status, List, Acknowledge.";
     }
 
-    [McpServerTool(Name = "AcknowledgeExternalFileChanges")]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Clears the external-change list and fatal drift latch after disk changes are reviewed. Optional files clears only the named entries.")]
-    public string AcknowledgeExternalFileChanges(
-    [Description(ToolParams.Reason)] ToolCallReason reason,
-    [Description("Optional. File names or relative paths (CSV or JSON array) to clear; omit to clear every tracked change. Use after ListExternalDiskChanges and review.")] string? files = null,
-    CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Core of <c>ExternalFileDrift(operation: Acknowledge)</c>, taking the health reporter as a
+    /// parameter so tests can seed drift with a stub instead of a real file-watcher round trip.
+    /// </summary>
+    public static string AcknowledgeDrift(IWorkspaceHealthReporter health, string? files, ExternalFileDriftAcknowledgeScope scope)
     {
-        _ = cancellationToken;
+        var hasFiles = !string.IsNullOrWhiteSpace(files);
 
-        // Case A: files is null or whitespace - clear all
-        if (string.IsNullOrWhiteSpace(files))
+        if (scope == ExternalFileDriftAcknowledgeScope.ConfirmAll)
         {
-            var current = _workspaceManager.GetExternalFileChanges();
-            var wasHalted = _workspaceManager.IsSessionHalted();
-            _workspaceManager.ClearExternalFileChanges();
-            _workspaceManager.ClearSessionHalt();
+            if (hasFiles)
+            {
+                return "Nothing cleared: acknowledgeScope ConfirmAll clears every tracked external change and cannot be combined with files. Either omit files (to clear all) or pass files with acknowledgeScope ConfirmWithListedFiles (to clear only those).";
+            }
 
-            var cleared = $"Cleared {current.Count} tracked external file change(s)";
-            if (current.Count > 0)
+            var all = new List<string>(health.GetExternalFileChanges());
+            health.ClearExternalFileChanges();
+            health.ClearSessionHalt();
+
+            var cleared = $"Cleared {all.Count} tracked external file change(s)";
+            if (all.Count > 0)
             {
-                cleared += $": {DriftMessages.SummarizeFiles(current)}";
+                cleared += $": {DriftMessages.SummarizeFiles(all)}";
             }
-            cleared += ".";
-            if (wasHalted)
-            {
-                cleared += " Session-wide fatal drift latch cleared.";
-            }
+            cleared += ". Session-halt latch cleared.";
             return cleared;
         }
 
-        // Case B: files given - parse and selective clear
+        if (!hasFiles)
+        {
+            var tracked = health.GetExternalFileChanges();
+            return "Nothing cleared: operation Acknowledge needs one of two things. (1) files = the files you reviewed with ExternalFileDrift(operation: List), keeping acknowledgeScope at its default ConfirmWithListedFiles, to clear only those files; or (2) acknowledgeScope = ConfirmAll with no files, to clear every tracked change. "
+                + $"Tracked changes: {DriftMessages.SummarizeFiles(tracked)}.";
+        }
+
         var requested = DelimitedListParser.ParseStringOrJsonArrayToList(files, out var parseError);
         if (parseError != null)
         {
@@ -89,52 +104,43 @@ public class AdminTools
             return parseError ?? "Failed to parse files list.";
         }
 
-        var current2 = _workspaceManager.GetExternalFileChanges();
-        DriftMessages.ResolveSelection(current2, requested, out var matched, out var unmatched);
+        var current = health.GetExternalFileChanges();
+        DriftMessages.ResolveSelection(current, requested, out var matched, out var unmatched);
 
-        // Unmatched paths - error
         if (unmatched.Count > 0)
         {
-            return $"Nothing cleared: '{string.Join("', '", unmatched)}' match no tracked change. Tracked changes: {DriftMessages.SummarizeFiles(current2)}. Call ListExternalDiskChanges for full paths.";
+            return $"Nothing cleared: '{string.Join("', '", unmatched)}' match no tracked change. Tracked changes: {DriftMessages.SummarizeFiles(current)}. Call ExternalFileDrift(operation: List) for full paths.";
         }
 
-        // No matches (shouldn't happen if unmatched is empty and requested is non-empty, but guard anyway)
         if (matched.Count == 0)
         {
-            return $"Nothing cleared: files named no entries. Tracked changes: {DriftMessages.SummarizeFiles(current2)}. Call ListExternalDiskChanges for full paths.";
+            return $"Nothing cleared: files named no entries. Tracked changes: {DriftMessages.SummarizeFiles(current)}. Call ExternalFileDrift(operation: List) for full paths.";
         }
 
-        // Clear the matched files
-        var wasHalted2 = _workspaceManager.IsSessionHalted();
-        _workspaceManager.ClearExternalFileChanges(matched);
-        var remaining = _workspaceManager.GetExternalFileChanges();
+        health.ClearExternalFileChanges(matched);
+        health.ClearSessionHalt();
+        var remaining = health.GetExternalFileChanges();
 
-        // DEFERRED DECISION (plan_session_halt_recovery_and_git_gaps.md, Risks 1): whether a partial acknowledge also clears the latch while other entries remain flagged. Until decided, the latch is cleared only when nothing remains flagged (both candidate policies agree on that case).
-        if (remaining.Count == 0)
-        {
-            _workspaceManager.ClearSessionHalt();
-        }
-
-        // Build return message
-        var message = $"Cleared {matched.Count}: {DriftMessages.SummarizeFiles(matched)}.";
+        var message = $"Cleared {matched.Count}: {DriftMessages.SummarizeFiles(matched)}. Session-halt latch cleared.";
         if (remaining.Count > 0)
         {
-            message += $" {remaining.Count} other change(s) remain flagged: {DriftMessages.SummarizeFiles(remaining)}.";
-        }
-
-        if (wasHalted2)
-        {
-            if (remaining.Count == 0)
-            {
-                message += " Session-wide fatal drift latch cleared.";
-            }
-            else
-            {
-                message += " Session latch still set while other changes remain flagged; acknowledge them too (or call without files) to clear it.";
-            }
+            message += $" {remaining.Count} file(s) remain flagged: {DriftMessages.SummarizeFiles(remaining)}. A write that touches one of them will halt the session again; acknowledge them too once reviewed.";
         }
 
         return message;
+    }
+
+    public enum ExternalFileDriftOperation
+    {
+        Status,
+        List,
+        Acknowledge
+    }
+
+    public enum ExternalFileDriftAcknowledgeScope
+    {
+        ConfirmWithListedFiles,
+        ConfirmAll
     }
 
     public enum McpServerControlOperation

@@ -36,7 +36,7 @@ public class UnrecoverableBreakerPolicyTests
             "GetFileOutline",
             "GetOperationDetail",
             "GetWorkspaceHealth",
-            "IsSessionHalted",
+            "ExternalFileDrift",
             "Git"
         };
 
@@ -73,7 +73,7 @@ public class UnrecoverableBreakerPolicyTests
     [TestCase("GetFileOutline")]
     [TestCase("GetOperationDetail")]
     [TestCase("GetWorkspaceHealth")]
-    [TestCase("IsSessionHalted")]
+    [TestCase("ExternalFileDrift")]
     public void IsAllowed_ReturnsTrueForAllowedTools(string toolName)
     {
         Assert.That(UnrecoverableBreakerPolicy.IsAllowed(toolName), Is.True,

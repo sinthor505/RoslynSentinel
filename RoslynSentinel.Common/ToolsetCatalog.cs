@@ -49,7 +49,7 @@ public static class ToolsetCatalog
             [
                 "CreateProject", "SplitProjectByFolder", "ListSolutionItems", "ListWorkspaceSolutions",
                 "ListProjectFrameworkTargets", "Features", "ProjectDoc", "GetWorkspaceHealth", "GetOperationDetail",
-                "RetryFailedChanges", "IsSessionHalted", "GetTypeInfo", "QuerySymbolRelationships",
+                "RetryFailedChanges", "GetTypeInfo", "QuerySymbolRelationships",
                 "GetBestInsertionPoint",
             ],
             [ToolSetName.testCategories] =

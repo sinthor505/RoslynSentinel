@@ -34,7 +34,7 @@ public static class ToolClassRegistry
             "Search", "FindReferences", "InspectSymbol", "LocateSymbol", "GetDiagnostics",
             "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
             "UsingDirective", "RenameSymbol", "WriteFile", "CreateFile", "DeleteFile",
-            "UndoLastApply", "McpServerControl", "McpServerStatus", "AcknowledgeExternalFileChanges", "ListExternalDiskChanges",
+            "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift",
             ToolsetCatalog.ControlToolName,
         ],
         StringComparer.Ordinal);

@@ -209,7 +209,7 @@ public class McpToolsetControlTests
         Assert.That(all, Is.Unique);
         Assert.That(all.Intersect(ToolClassRegistry.ClaudeLeanToolNames), Is.Empty);
         Assert.That(ToolsetCatalog.AllToolNames, Has.Count.EqualTo(all.Length));
-        Assert.That(all, Has.Length.EqualTo(41));
+        Assert.That(all, Has.Length.EqualTo(40));
     }
 
     [Test]
@@ -413,7 +413,6 @@ public class McpToolsetControlTests
 
         var during = await live.ToolNamesAsync();
         Assert.That(during, Is.SupersetOf(before));
-        Assert.That(during, Does.Contain("IsSessionHalted"));
         Assert.That(during, Does.Contain("GetWorkspaceHealth"));
 
         var off = await live.ToggleAsync("projectAdmin", enabled: false);
@@ -471,12 +470,8 @@ public class McpToolsetControlTests
     {
         await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean");
 
-        // IsSessionHalted lives in AdminTools (a lean class, tool not allow-listed); GetWorkspaceHealth lives in a
-        // class whose dependencies are registered for dynamic use only. Neither was listed before the enable.
+        // GetWorkspaceHealth lives in a class whose dependencies are registered for dynamic use only. It was not listed before the enable.
         await live.ToggleAsync("projectAdmin", enabled: true);
-
-        var halted = await live.CallAsync("IsSessionHalted", new() { ["reason"] = Reason });
-        Assert.That(halted.IsError, Is.Not.True, LiveServer.Text(halted));
 
         var health = await live.CallAsync("GetWorkspaceHealth", new() { ["reason"] = Reason });
         Assert.That(LiveServer.Text(health), Does.Not.Contain("Unable to resolve"), "dependencies of on-demand classes must be registered");
@@ -490,7 +485,7 @@ public class McpToolsetControlTests
         await live.ToggleAsync("projectAdmin", enabled: true);
         await live.ToggleAsync("projectAdmin", enabled: false);
 
-        var call = await live.CallAsync("IsSessionHalted", new() { ["reason"] = Reason });
+        var call = await live.CallAsync("GetWorkspaceHealth", new() { ["reason"] = Reason });
 
         Assert.That(call.IsError, Is.True);
     }
@@ -536,7 +531,7 @@ public class McpToolsetControlTests
         using var host = BuildHost(advanced: true, "claude-lean", includeTools: null);
 
         var names = host.Services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolCollection!.PrimitiveNames;
-        Assert.That(names, Has.Count.EqualTo(26));
+        Assert.That(names, Has.Count.EqualTo(25));
         Assert.That(host.Services.GetRequiredService<ToolsetService>().DynamicToolNames, Is.Empty);
     }
 

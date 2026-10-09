@@ -30,20 +30,20 @@ public class ClaudeLeanModeTests
         "Search", "FindReferences", "InspectSymbol", "LocateSymbol", "GetDiagnostics",
         "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
         "UsingDirective", "RenameSymbol", "WriteFile", "CreateFile", "DeleteFile",
-        "UndoLastApply", "McpServerControl", "McpServerStatus", "AcknowledgeExternalFileChanges", "ListExternalDiskChanges",
+        "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift",
         "McpToolsetControl",
     ];
 
     /// <summary>The Advanced server's tool set for --mode claude, captured before claude-lean existed.</summary>
     private static readonly string[] ClaudeAdvancedBaseline =
     [
-        "AcknowledgeExternalFileChanges", "ApplyDiff", "ApplyUnifiedDiff", "Build", "ChangeAccessibility",
+        "ApplyDiff", "ApplyUnifiedDiff", "Build", "ChangeAccessibility",
         "ChangeSignature", "ConstructorParameter", "ConvertAnonymousToNamed", "CreateFile", "CreateProject",
-        "DeleteFile", "ExtractLocalVariable", "ExtractMembers", "ExtractMethodSafe", "Features",
+        "DeleteFile", "ExtractLocalVariable", "ExtractMembers", "ExtractMethodSafe", "ExternalFileDrift", "Features",
         "FindReferences", "GetBestInsertionPoint", "GetDiagnostics", "GetFileOutline", "GetLargeResult",
         "GetMethodSource", "GetOperationDetail", "GetTypeInfo", "GetWorkspaceHealth", "Git",
         "Inline", "InlineClass", "InspectSymbol", "Introduce", "IntroduceParameterObject",
-        "InvertAssignments", "IsSessionHalted", "ListAll", "ListExternalDiskChanges", "ListProjectFrameworkTargets",
+        "InvertAssignments", "ListAll", "ListProjectFrameworkTargets",
         "ListSolutionItems", "ListWorkspaceSolutions", "LoadSolution", "LocateSymbol", "McpServerControl",
         "McpServerStatus", "Member", "MethodSignature", "ModifyAttribute", "ModifyBaseType",
         "ModifyEnum", "ModifyModifier", "MoveAllTypesToFiles", "MoveMember", "MoveType",
@@ -106,11 +106,11 @@ public class ClaudeLeanModeTests
 
     [TestCase(true)]
     [TestCase(false)]
-    public async Task ClaudeLean_ExposesExactlyTheTwentySixCoreTools(bool advanced)
+    public async Task ClaudeLean_ExposesExactlyTheTwentyFiveCoreTools(bool advanced)
     {
         var names = await ListToolNamesAsync(advanced, "claude-lean");
 
-        Assert.That(names, Has.Length.EqualTo(26));
+        Assert.That(names, Has.Length.EqualTo(25));
         Assert.That(names, Is.EquivalentTo(CoreTools));
     }
 

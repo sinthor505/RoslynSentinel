@@ -27,40 +27,131 @@ public class AdminToolsTests
     public void TearDown() => _workspaceManager?.Dispose();
 
     [Test]
-    public void ListExternalDiskChanges_Always_ReturnsList()
+    public void ExternalFileDrift_Status_ReportsNotHaltedOnFreshManager()
     {
-        var result = _tools.ListExternalDiskChanges(reason: "test message");
-        Assert.That(result, Is.Not.Null);
+        var result = _tools.ExternalFileDrift(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Status);
+        Assert.That(result, Does.StartWith("SessionHalted=False"));
+        Assert.That(result, Does.Contain("tracked external changes: 0"));
     }
 
     [Test]
-    public void AcknowledgeExternalFileChanges_Always_DoesNotThrow()
+    public void ExternalFileDrift_List_OnFreshManager_SaysNoChanges()
     {
-        Assert.DoesNotThrow(() => _tools.AcknowledgeExternalFileChanges(reason: "test message"));
+        var result = _tools.ExternalFileDrift(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.List);
+        Assert.That(result, Is.EqualTo("No tracked external file changes."));
     }
 
     [Test]
-    public void AcknowledgeExternalFileChanges_UnknownFile_ReturnsNothingClearedNamingFile()
+    public void ExternalFileDrift_FilesWithStatus_IsRefused()
     {
-        var result = _tools.AcknowledgeExternalFileChanges(reason: "test message", files: "nope.cs");
+        var result = _tools.ExternalFileDrift(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Status, files: "a.cs");
+        Assert.That(result, Does.Contain("only used with operation: Acknowledge"));
+        Assert.That(result, Does.Contain("nothing changed"));
+    }
+
+    [Test]
+    public void Acknowledge_UnknownFile_ReturnsNothingClearedNamingFile()
+    {
+        var result = _tools.ExternalFileDrift(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Acknowledge, files: "nope.cs");
         Assert.That(result, Does.Contain("Nothing cleared"));
         Assert.That(result, Does.Contain("nope.cs"));
     }
 
     [Test]
-    public void AcknowledgeExternalFileChanges_NoFilesArgument_ReportsZeroCleared()
+    public void Acknowledge_MalformedJsonArray_ReturnsParserError()
     {
-        var result = _tools.AcknowledgeExternalFileChanges(reason: "test message");
-        Assert.That(result, Does.StartWith("Cleared 0"));
-    }
-
-    [Test]
-    public void AcknowledgeExternalFileChanges_MalformedJsonArray_ReturnsParserError()
-    {
-        var result = _tools.AcknowledgeExternalFileChanges(reason: "test message", files: "[\"a.cs\"");
+        var result = _tools.ExternalFileDrift(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Acknowledge, files: "[\"a.cs\"");
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.Not.Empty);
         Assert.That(result, Does.Not.StartWith("Cleared"));
+    }
+
+    [Test]
+    public void Acknowledge_Partial_ClearsLatchAndNamesRemainingFiles()
+    {
+        var health = new StubHealth("A.cs", "B.cs", "C.cs");
+
+        var result = AdminTools.AcknowledgeDrift(health, "A.cs", AdminTools.ExternalFileDriftAcknowledgeScope.ConfirmWithListedFiles);
+
+        Assert.That(health.ClearSessionHaltCalls, Is.EqualTo(1));
+        Assert.That(health.Tracked, Is.EqualTo(new[] { "B.cs", "C.cs" }));
+        Assert.That(result, Does.Contain("B.cs"));
+        Assert.That(result, Does.Contain("C.cs"));
+        Assert.That(result, Does.Contain("halt the session again"));
+    }
+
+    [Test]
+    public void Acknowledge_NoFilesDefaultScope_RefusesNamingBothOptions()
+    {
+        var health = new StubHealth("A.cs", "B.cs", "C.cs");
+
+        var result = AdminTools.AcknowledgeDrift(health, files: null, AdminTools.ExternalFileDriftAcknowledgeScope.ConfirmWithListedFiles);
+
+        Assert.That(health.ClearSessionHaltCalls, Is.EqualTo(0));
+        Assert.That(health.Tracked, Has.Count.EqualTo(3));
+        Assert.That(result, Does.StartWith("Nothing cleared"));
+        Assert.That(result, Does.Contain("files"));
+        Assert.That(result, Does.Contain("ConfirmWithListedFiles"));
+        Assert.That(result, Does.Contain("ConfirmAll"));
+    }
+
+    [Test]
+    public void Acknowledge_ConfirmAll_ClearsEverythingAndLatch()
+    {
+        var health = new StubHealth("A.cs", "B.cs", "C.cs");
+
+        var result = AdminTools.AcknowledgeDrift(health, files: null, AdminTools.ExternalFileDriftAcknowledgeScope.ConfirmAll);
+
+        Assert.That(health.ClearSessionHaltCalls, Is.EqualTo(1));
+        Assert.That(health.Tracked, Is.Empty);
+        Assert.That(result, Does.StartWith("Cleared 3"));
+        Assert.That(result, Does.Contain("Session-halt latch cleared"));
+    }
+
+    [Test]
+    public void Acknowledge_ConfirmAllWithFiles_IsRefusedAndClearsNothing()
+    {
+        var health = new StubHealth("A.cs", "B.cs", "C.cs");
+
+        var result = AdminTools.AcknowledgeDrift(health, "A.cs", AdminTools.ExternalFileDriftAcknowledgeScope.ConfirmAll);
+
+        Assert.That(health.ClearSessionHaltCalls, Is.EqualTo(0));
+        Assert.That(health.Tracked, Has.Count.EqualTo(3));
+        Assert.That(result, Does.StartWith("Nothing cleared"));
+        Assert.That(result, Does.Contain("cannot be combined with files"));
+    }
+
+    // Stub drift source: the real manager cannot be seeded with drift without a file-watcher round trip.
+    private sealed class StubHealth : IWorkspaceHealthReporter
+    {
+        public StubHealth(params string[] driftPaths)
+        {
+            Tracked = new List<string>(driftPaths);
+        }
+
+        public List<string> Tracked { get; }
+
+        public int ClearSessionHaltCalls { get; private set; }
+
+        public List<string> GetExternalFileChanges() => new(Tracked);
+
+        public void ClearExternalFileChanges() => Tracked.Clear();
+
+        public void ClearExternalFileChanges(IReadOnlyCollection<string> paths) => Tracked.RemoveAll(t => paths.Contains(t));
+
+        public void ClearSessionHalt() => ClearSessionHaltCalls++;
+
+        public bool IsSessionHalted() => ClearSessionHaltCalls == 0;
+
+        public Task<List<string>> GetContentExternalFileChangesAsync(CancellationToken cancellationToken = default) => throw new NotImplementedException();
+
+        public IEnumerable<string> GetDiagnostics() => throw new NotImplementedException();
+
+        public HealthComponents GetHealthComponents() => throw new NotImplementedException();
+
+        public List<string> GetWorkspaceLoadErrors() => throw new NotImplementedException();
+
+        public WorkspaceStatus GetWorkspaceStatus() => throw new NotImplementedException();
     }
 
     // McpServerControl: the stop path is exercised through AdminTools.ControlServer with an injected
