@@ -196,6 +196,7 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
 
     public Task LoadSolutionAsync(string solutionPath, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, TimeSpan timeout, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public void RecordBatchOutcome(int succeeded, int failed, int rolledBack, int skipped) => throw new NotImplementedException();
     public Task RemoveDocumentByPathAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     bool ICircuitBreaker.IsTripped() => throw new NotImplementedException();

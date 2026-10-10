@@ -527,9 +527,26 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     /// Optional per-call base directory used to resolve a relative <paramref name="solutionPath"/>.
     /// Takes precedence over the server-wide <see cref="BaseRepoDirectory"/>.
     /// </param>
-    public async Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, CancellationToken cancellationToken = default)
+    public Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, CancellationToken cancellationToken = default)
+        => LoadSolutionAsync(solutionPath, baseRepoDir, SolutionLoadWait.DefaultTimeout, cancellationToken);
+
+    /// <param name="baseRepoDir">
+    /// Optional per-call base directory used to resolve a relative <paramref name="solutionPath"/>.
+    /// Takes precedence over the server-wide <see cref="BaseRepoDirectory"/>.
+    /// </param>
+    /// <param name="timeout">
+    /// Covers waiting for the workspace lock and the load itself. When it expires (and the caller's own token
+    /// did not) the load is cancelled and <see cref="SolutionLoadTimeoutException"/> is thrown.
+    /// </param>
+    public async Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, TimeSpan timeout, CancellationToken cancellationToken = default)
     {
         solutionPath = ResolveSolutionPath(solutionPath, baseRepoDir);
+
+        // Created before BeginLoadTracking so a bad timeout value (CancelAfter throws) cannot leave a pending
+        // load registered. The token covers BOTH the _solutionLock wait and OpenSolutionAsync.
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+        var loadToken = timeoutCts.Token;
 
         // Register as a pending load BEFORE waiting for _solutionLock, so a request arriving while this
         // load is still queued already sees SolutionLoadStatus.Loading.
@@ -538,9 +555,10 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         string? failure = null;
         try
         {
-            await _solutionLock.WaitAsync(cancellationToken);
+            await _solutionLock.WaitAsync(loadToken);
             try
             {
+                var loadStopwatch = System.Diagnostics.Stopwatch.StartNew();
                 if (_logger.IsEnabled(LogLevel.Information))
                 {
                     _logger.LogInformation("Loading solution: {SolutionPath}", solutionPath);
@@ -570,11 +588,17 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
                 try
                 {
-                    CurrentSolution = await _workspace.OpenSolutionAsync(solutionPath, null, cancellationToken);
+                    CurrentSolution = await _workspace.OpenSolutionAsync(solutionPath, null, loadToken);
                     if (_logger.IsEnabled(LogLevel.Information))
                     {
-                        _logger.LogInformation("Solution loaded with {ProjectCount} projects.", CurrentSolution.ProjectIds.Count);
+                        _logger.LogInformation("Solution loaded with {ProjectCount} projects in {ElapsedMs} ms.", CurrentSolution.ProjectIds.Count, loadStopwatch.ElapsedMilliseconds);
                     }
+                }
+                catch (Exception) when (timeoutCts.IsCancellationRequested)
+                {
+                    // A cancelled load (timeout or caller cancel) must stop here instead of being turned into a
+                    // "partial solution" by the catch-all below.
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -630,6 +654,12 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             {
                 _solutionLock.Release();
             }
+        }
+        catch (Exception) when (timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+        {
+            // Our own timeout fired (not the caller's token): report it as a timeout with an actionable message.
+            failure = SolutionNotLoadedMessage.LoadCancelledAfterTimeout(timeout);
+            throw new SolutionLoadTimeoutException(failure);
         }
         catch (Exception ex)
         {

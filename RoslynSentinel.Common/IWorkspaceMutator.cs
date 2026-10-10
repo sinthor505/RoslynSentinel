@@ -14,6 +14,11 @@ public interface IWorkspaceMutator
     Task LoadSolutionAsync(string solutionPath, CancellationToken cancellationToken = default);
     /// <summary>Loads a solution from the given path, resolving relative paths against baseRepoDir.</summary>
     Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Loads a solution from the given path, resolving relative paths against baseRepoDir. <paramref name="timeout"/> covers waiting
+    /// for the workspace lock and the load itself; on expiry the load is cancelled and <see cref="SolutionLoadTimeoutException"/> is thrown.
+    /// </summary>
+    Task LoadSolutionAsync(string solutionPath, string? baseRepoDir, TimeSpan timeout, CancellationToken cancellationToken = default);
     /// <summary>Removes a document from the workspace and deletes its backing file.</summary>
     Task RemoveDocumentByPathAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default);
     /// <summary>Retries previously failed writes, optionally scoped to specific files.</summary>
