@@ -25,7 +25,8 @@ public enum GitOperation
     abort,
     tag,
     stash,
-    worktree
+    worktree,
+    hunks
 }
 
 /// <summary>

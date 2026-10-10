@@ -461,6 +461,37 @@ public record GitWorktreeEntry
     }
 }
 
+/// <summary>One zero-context hunk of a file's unstaged diff, as listed by operation=hunks.</summary>
+public record GitHunkEntry
+{
+    /// <summary>1-based hunk id; pass it in hunkIds when staging.</summary>
+    public int Index { get; set; }
+    public int OldStart { get; set; }
+    public int OldCount { get; set; }
+    public int NewStart { get; set; }
+    public int NewCount { get; set; }
+
+    /// <summary>Text after the second @@ in the hunk header (git's function-context hint); may be empty.</summary>
+    public string Header { get; set; } = "";
+    public int Added { get; set; }
+    public int Removed { get; set; }
+
+    /// <summary>The first few changed lines (+/-), decoded as UTF-8 and truncated.</summary>
+    public string Preview { get; set; } = "";
+}
+
+/// <summary>Result of operation=hunks: the unstaged hunks of one file. Fingerprint covers the whole file diff,
+/// not only the listed hunks, and must be passed back when staging.</summary>
+public record GitHunksResult : GitResult
+{
+    public string Path { get; set; } = "";
+    public string Fingerprint { get; set; } = "";
+    public int TotalHunks { get; set; }
+    public bool IsTruncated { get; set; }
+    public List<GitHunkEntry> Hunks { get; set; } = [];
+    public string? Note { get; set; }
+}
+
 /// <summary>Result of operation=worktree. Which fields are set depends on the action: list sets Worktrees;
 /// add sets Added, Branch and Note; remove sets Removed, Branch, Note and, when uncommitted changes were
 /// discarded, DiscardedPaths.</summary>
@@ -1664,6 +1695,131 @@ public class GitImpl : IGitOperations
         };
     }
 
+    // Byte-exact sibling of RunGitAsync, for output whose line endings must survive untouched (a diff that
+    // will be re-applied as a patch). Its process setup is DUPLICATED from RunGitAsync on purpose: RunGitAsync
+    // reads stdout through OutputDataReceived, which splits on line breaks, drops each CR/LF and re-adds
+    // Environment.NewLine via AppendLine, so every line ending in a diff would be rewritten (CRLF on Windows).
+    // Here stdout is copied raw from the pipe's BaseStream and no StandardOutputEncoding is set; callers decode
+    // with Encoding.Latin1 so one char is one byte. Duplicated rather than refactored because every Git test
+    // depends on RunGitAsync. Follow-up: extract the shared process setup into one helper used by both.
+    private async Task<(int ExitCode, byte[] Stdout, string Stderr)> RunGitBytesAsync(
+        string gitRoot, string[] args, CancellationToken cancellationToken)
+    {
+        using var process = new System.Diagnostics.Process();
+        process.StartInfo = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = GitExecutablePath,
+            WorkingDirectory = gitRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            RedirectStandardInput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            StandardErrorEncoding = Encoding.UTF8,
+        };
+        // Same non-interactive setup as RunGitAsync: fail fast instead of waiting on a credential prompt.
+        process.StartInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
+        process.StartInfo.Environment["GCM_INTERACTIVE"] = "never";
+        process.StartInfo.ArgumentList.Add("-c");
+        process.StartInfo.ArgumentList.Add("i18n.logOutputEncoding=utf-8");
+        process.StartInfo.ArgumentList.Add("-c");
+        process.StartInfo.ArgumentList.Add("i18n.commitEncoding=utf-8");
+        foreach (var arg in args)
+            process.StartInfo.ArgumentList.Add(arg);
+
+        var stderr = new StringBuilder();
+        process.ErrorDataReceived += (_, e) => { if (e.Data is not null) stderr.AppendLine(e.Data); };
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(GitProcessTimeout);
+
+        process.Start();
+        process.StandardInput.Close();
+        process.BeginErrorReadLine();
+        using var stdout = new MemoryStream();
+        var copyTask = process.StandardOutput.BaseStream.CopyToAsync(stdout, timeoutCts.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeoutCts.Token);
+            await copyTask;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            TryKillGitProcess(process);
+            try { await copyTask; } catch (Exception) { /* the copy is abandoned with the killed process */ }
+            if (_logger.IsEnabled(LogLevel.Error))
+            {
+                _logger.LogError(
+                    "git {Args} did not exit within {TimeoutSeconds}s and was killed (byte-exact runner).",
+                    string.Join(' ', args), GitProcessTimeout.TotalSeconds);
+            }
+            throw new TimeoutException($"Git operation timed out after {GitProcessTimeout.TotalSeconds:0}s and was cancelled.");
+        }
+
+        return (process.ExitCode, stdout.ToArray(), stderr.ToString());
+    }
+
+    private async Task<GitHunksResult> ListHunksAsync(
+        string gitRoot, string path, int count, CancellationToken cancellationToken)
+    {
+        // Byte-exact runner: the fingerprint and any patch later built from this text must see the file's real line endings.
+        var raw = await RunGitBytesAsync(gitRoot,
+            ["-c", "core.quotePath=false", "--literal-pathspecs", "diff", "--no-color", "--no-ext-diff", "--no-renames", "-U0", "--", path],
+            cancellationToken);
+        if (raw.ExitCode != 0)
+        {
+            return HunksFailure(path, GitErrorCodes.Fallback,
+                $"git diff failed: {CleanGitStderr(raw.Stderr)}. Nothing was changed.", "Call Git(operation: status) to check the repository state, then retry.");
+        }
+        if (raw.Stdout.Length == 0)
+            return NoUnstagedChanges(path);
+
+        var diff = GitHunkParser.Parse(Encoding.Latin1.GetString(raw.Stdout));
+        // Kind checks come before IsRenameOrModeOnly: that flag is also true for a binary or new-file diff with no @@ lines.
+        string? unsupported = diff switch
+        {
+            { IsBinary: true } => "is a binary file",
+            { IsNewFile: true } => "is a new file (added with intent-to-add)",
+            { IsDeletedFile: true } => "is deleted in the working tree",
+            { IsRenameOrModeOnly: true } => "has only a mode or rename change",
+            _ => null
+        };
+        if (unsupported is not null)
+        {
+            return HunksFailure(path, GitErrorCodes.HunkUnsupported,
+                $"'{path}' {unsupported}, so it has no text hunks to choose from. Nothing was changed.", GitErrorDetails.HunkUnsupported);
+        }
+        if (diff.Hunks.Count == 0)
+            return NoUnstagedChanges(path);
+
+        var limit = Math.Clamp(count, 1, 100);
+        return new GitHunksResult
+        {
+            Path = path,
+            Fingerprint = diff.Fingerprint,
+            TotalHunks = diff.Hunks.Count,
+            IsTruncated = diff.Hunks.Count > limit,
+            Hunks = diff.Hunks.Take(limit).Select(h => new GitHunkEntry
+            {
+                Index = h.Index,
+                OldStart = h.OldStart,
+                OldCount = h.OldCount,
+                NewStart = h.NewStart,
+                NewCount = h.NewCount,
+                Header = h.Header,
+                Added = h.NewCount,
+                Removed = h.OldCount,
+                Preview = GitHunkParser.PreviewLines(h, 6, 120)
+            }).ToList(),
+            Note = $"Pass hunkIds with this hunkFingerprint to Git(operation: stage, files: '{path}'), or lineRange. " +
+                   "Hunks are zero-context: adjacent edits are separate hunks."
+        };
+    }
+
+    private static GitHunksResult NoUnstagedChanges(string path) => HunksFailure(path, GitErrorCodes.NoChanges,
+        $"No unstaged changes in '{path}'. Already staged? Git(operation: diff, target: staged, files: ...). Nothing was changed.",
+        GitErrorDetails.NoChanges);
+
     private static string ResolveGitExecutablePath()
     {
         var pathVar = Environment.GetEnvironmentVariable("PATH") ?? "";
@@ -2262,6 +2418,71 @@ public class GitImpl : IGitOperations
         {
             _logger.LogError(ex, "Git show failed (target={Target})", target);
             return new GitShowResult { IsError = true, Error = $"Git show failed: {ex.Message}" };
+        }
+    }
+
+    private static GitHunksResult HunksFailure(string path, string kind, string error, string detail) => new()
+    {
+        Path = path,
+        IsError = true,
+        ErrorKind = kind,
+        Error = error,
+        ErrorDetail = detail
+    };
+
+    /// <summary>
+    /// Lists the unstaged hunks of exactly one tracked text file (zero-context diff), each with a 1-based id, line
+    /// numbers and a short preview, plus a fingerprint of the whole file diff. Read-only: nothing is staged.
+    /// </summary>
+    public async Task<GitHunksResult> HunksAsync(
+        string gitRoot, string? paths, int count, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var list = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var listError);
+            if (list is null)
+                return HunksFailure("", GitErrorCodes.HunkSelection, $"{listError} Nothing was changed.", GitErrorDetails.HunkSelection);
+            if (list.Length == 0)
+            {
+                return HunksFailure("", GitErrorCodes.RefRequired,
+                    "operation=hunks needs files naming exactly one file. Nothing was changed.",
+                    "Pass files: '<one repo-relative path>'");
+            }
+            if (list.Length > 1)
+            {
+                return HunksFailure("", GitErrorCodes.HunkSelection,
+                    $"hunks works on one file at a time; got {list.Length}. Nothing was changed.", GitErrorDetails.HunkSelection);
+            }
+
+            var pathError = ValidateRepoRoot(gitRoot, list[0]);
+            if (pathError is not null)
+                return HunksFailure(list[0], GitErrorCodes.PathNotFound, $"{pathError}. Nothing was changed.", GitErrorDetails.PathNotFound);
+
+            var classified = (await ClassifyPathsAsync(gitRoot, [list[0]], cancellationToken))[0];
+            var path = classified.Path;
+            switch (classified.Classification)
+            {
+                case PathClassification.Untracked:
+                    var isDirectory = Directory.Exists(Path.Combine(gitRoot, path));
+                    return HunksFailure(path, GitErrorCodes.HunkUnsupported,
+                        isDirectory
+                            ? $"'{path}' is a directory; hunks works on one tracked file at a time. Nothing was changed."
+                            : $"'{path}' is untracked: untracked files have no hunks to choose from; stage the whole file with Git(operation: stage, files: ...). Nothing was changed.",
+                        GitErrorDetails.HunkUnsupported);
+                case PathClassification.Missing:
+                    return HunksFailure(path, GitErrorCodes.PathNotFound,
+                        $"'{path}' is not tracked and does not exist on disk. Nothing was changed.", GitErrorDetails.PathNotFound);
+                case PathClassification.HeadOnly:
+                    return HunksFailure(path, GitErrorCodes.HunkUnsupported,
+                        $"'{path}' is deleted (tracked in HEAD, gone from the index), so it has no hunks to choose from. Nothing was changed.",
+                        GitErrorDetails.HunkUnsupported);
+            }
+
+            return await ListHunksAsync(gitRoot, path, count, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return UnexpectedFailure<GitHunksResult>(ex, "hunks");
         }
     }
 

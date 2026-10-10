@@ -8,6 +8,7 @@ public interface IGitOperations
     Task<GitCommitResult> CommitAsync(string gitRoot, string? message, GitStageScope? scope, string? paths, bool amend, CancellationToken cancellationToken);
     Task<GitDiffResult> DiffAsync(string gitRoot, string target, string? paths, int maxBytes, bool nameOnly, bool stat, CancellationToken cancellationToken);
     Task<GitRemoteResult> FetchAsync(string gitRoot, string remoteName, CancellationToken cancellationToken);
+    Task<GitHunksResult> HunksAsync(string gitRoot, string? paths, int count, CancellationToken cancellationToken);
     Task<GitLogResult> LogAsync(string gitRoot, int count, string? refName, string? paths, CancellationToken cancellationToken);
     Task<GitRemoteResult> PullAsync(string gitRoot, string remoteName, bool rebase, CancellationToken cancellationToken);
     Task<GitRemoteResult> PushAsync(string gitRoot, string remoteName, bool setUpstream, CancellationToken cancellationToken);
