@@ -184,6 +184,7 @@ public class SymbolNavigationEngine
         string? projectName = null,
         FilePathWrapper filePath = default,
         bool exactMatch = true,
+        bool includeTests = true,
         CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: _workspaceManager is ISolutionProvider-typed (~11 production
@@ -217,6 +218,10 @@ public class SymbolNavigationEngine
         var searchProjects = projectName != null
             ? solution.Projects.Where(p => p.Name.Equals(projectName, StringComparison.OrdinalIgnoreCase))
             : solution.Projects;
+        if (!includeTests && projectName == null && scopedFilePath == null)
+        {
+            searchProjects = solution.Projects.Where(p => !TestProjectDetector.IsTestProject(p));
+        }
 
         var filter = symbolKind.ToLowerInvariant() switch
         {

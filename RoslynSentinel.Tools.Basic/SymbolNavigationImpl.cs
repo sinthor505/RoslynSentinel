@@ -32,13 +32,30 @@ public class SymbolNavigationImpl
         string? projectName = null,
         string? filePath = null,
         bool exactMatch = true,
+        bool includeTests = true,
         CancellationToken cancellationToken = default)
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
 
         try
         {
-            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind.ToString(), containingType, containingNamespace, projectName, filePathResolved, exactMatch, cancellationToken);
+            var result = await _symbolNavigationEngine.LocateSymbolAsync(symbolName, symbolKind.ToString(), containingType, containingNamespace, projectName, filePathResolved, exactMatch, includeTests, cancellationToken);
+
+            // Count the test projects that the default search skipped, so the caller can see why a symbol is missing.
+            int excluded = 0;
+            if (!includeTests && projectName == null && string.IsNullOrEmpty(filePath))
+            {
+                // READCHOKEPOINT-CAST: same cast as SymbolNavigationEngine.LocateSymbolAsync; ISolutionProvider has no GetSolutionAsync.
+                var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+                foreach (var project in solution.Projects)
+                {
+                    if (TestProjectDetector.IsTestProject(project))
+                    {
+                        excluded++;
+                    }
+                }
+            }
+
             if (result.Count == 0)
             {
                 return new SentinelCallToolResult<object>
@@ -46,7 +63,7 @@ public class SymbolNavigationImpl
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.NotFound, $"Symbol '{symbolName}' not found in the solution" +
                         (projectName != null ? $" (project: {projectName})" : "") +
-                        ". Try exactMatch=false for a broader search, verify the symbol name and symbolKind, or call ListAll for a cheap solution-wide orientation listing if you're not sure of the exact name.")
+                        ". Try exactMatch=false for a broader search, verify the symbol name and symbolKind, or call ListAll for a cheap solution-wide orientation listing if you're not sure of the exact name." + (excluded > 0 ? $" {excluded} test project(s) were excluded because includeTests is false; pass includeTests: true if the symbol is declared in a test project." : string.Empty))
                 };
             }
 
@@ -54,6 +71,7 @@ public class SymbolNavigationImpl
             {
                 IsError = false,
                 SuccessData = result,
+                StatusMessage = excluded > 0 ? $"{excluded} test project(s) were excluded because includeTests is false; pass includeTests: true to include them." : null,
                 TotalRecords = result.Count,
                 WorkspaceVersion = _workspaceManager.WorkspaceVersion
             };

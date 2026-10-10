@@ -30,7 +30,7 @@ public class SymbolNavigationTools
         [Description("false enables a prefix/contains search instead of an exact name match.")]
         [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true,
         CancellationToken cancellationToken = default) =>
-        _impl.LocateSymbol(reason, symbolName, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch, cancellationToken);
+        _impl.LocateSymbol(reason, symbolName, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch, cancellationToken: cancellationToken);
 
     [McpServerTool(Name = "InspectSymbol")]
     [Produces(DataTag.DocCommentId)]

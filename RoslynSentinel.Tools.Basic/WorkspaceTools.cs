@@ -684,7 +684,7 @@ public class WorkspaceTools
             case SearchMode.text:
                 return _readNav.SearchSolutionText(reason, query ?? string.Empty, fileGlob, maxResults, includeTests, cancellationToken);
             case SearchMode.symbol:
-                return _symbolNavigation.LocateSymbol(reason, query ?? string.Empty, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch, cancellationToken);
+                return _symbolNavigation.LocateSymbol(reason, query ?? string.Empty, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch, includeTests: includeTests, cancellationToken: cancellationToken);
             case SearchMode.references:
                 if (string.IsNullOrEmpty(contextSnippet))
                 {
