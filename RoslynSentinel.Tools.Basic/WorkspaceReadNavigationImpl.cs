@@ -445,12 +445,16 @@ public class WorkspaceReadNavigationImpl
 
     public async Task<SentinelCallToolResult<object>> SearchSolutionText(
         ToolCallReason reason,
-        string pattern, string? fileGlob = null, int maxResults = 200,
+        string pattern, string? fileGlob = null, int maxResults = 200, bool includeTests = true,
         CancellationToken cancellationToken = default)
     {
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            var projects = includeTests ? solution.Projects.ToList() : solution.Projects.Where(p => !TestProjectDetector.IsTestProject(p)).ToList();
+            var excludedTestProjectCount = solution.Projects.Count() - projects.Count;
+            var testExclusionSentence = $"{excludedTestProjectCount} test project(s) were excluded because includeTests is false; pass includeTests: true if the target is in a test project.";
+            var testExclusionNote = excludedTestProjectCount > 0 ? " " + testExclusionSentence : string.Empty;
             var results = new ConcurrentBag<TextSearchMatch>();
             var warnings = new List<string>();
             var globMatchedPaths = new ConcurrentBag<string>();
@@ -473,7 +477,7 @@ public class WorkspaceReadNavigationImpl
 
             var options1 = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount, TaskScheduler = TaskScheduler.Default };
 
-            await Parallel.ForEachAsync(solution.Projects, options1, async (project, ct1) =>
+            await Parallel.ForEachAsync(projects, options1, async (project, ct1) =>
             {
                 var options2 = new ParallelOptions { CancellationToken = ct1, MaxDegreeOfParallelism = Environment.ProcessorCount, TaskScheduler = TaskScheduler.Default };
 
@@ -565,7 +569,7 @@ public class WorkspaceReadNavigationImpl
                     var matchedAgainstDescription = fileGlob.Replace('\\', '/').Contains('/')
                         ? "the solution-relative path"
                         : "the bare filename";
-                    var sampleRelativePaths = solution.Projects
+                    var sampleRelativePaths = projects
                         .SelectMany(p => p.Documents)
                         .Select(d =>
                         {
@@ -585,7 +589,7 @@ public class WorkspaceReadNavigationImpl
                         : "This solution has no documents to match against.";
                     throw new GlobSyntaxException(
                         $"fileGlob '{fileGlob}' matched 0 files (matched against {matchedAgainstDescription}), so the search for " +
-                        $"'{pattern}' never ran against any document. {sampleText} This is a glob problem, not a search-pattern problem - " +
+                        $"'{pattern}' never ran against any document. {sampleText}{testExclusionNote} This is a glob problem, not a search-pattern problem - " +
                         "widen or fix the fileGlob rather than changing the pattern.");
                 }
 
@@ -594,6 +598,10 @@ public class WorkspaceReadNavigationImpl
                     "If you were searching for a known symbol by name, use Search with mode: symbol instead (semantic lookup, not text matching). " +
                     "Use ListAll to browse the solution's structure, ProjectDoc to read plan/handoff/documentation files directly, or " +
                     "GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
+                if (excludedTestProjectCount > 0)
+                {
+                    warnings.Add(testExclusionSentence);
+                }
                 var justTripped = _workspaceManager.RecordSearchOutcome(0);
                 var emptyResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                     new TextSearchResult(literalResults, regexResults, regexOverlapCount, regexPatternValid),
@@ -624,7 +632,7 @@ public class WorkspaceReadNavigationImpl
                 ResultWrapperType.TextSearchMatchList,
                 totalRecords: literalResults.Count + regexResults.Count,
                 workspaceVersion: _workspaceManager.WorkspaceVersion,
-                statusMessage: matchSummary.ToSummaryMessage("match"),
+                statusMessage: matchSummary.ToSummaryMessage("match") + testExclusionNote,
                 listSummary: matchSummary,
                 cancellationToken: cancellationToken);
             return searchResult with { WarningDetails = warning };

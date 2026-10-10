@@ -82,8 +82,9 @@ public class WorkspaceReadNavigationTools
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
         [Description("Maximum number of matches to scan.")]
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,
+        [Description("false (default) = skip test projects; true = include them. Naming a test project in projectName/filePath always includes it.")] bool includeTests = false,
         CancellationToken cancellationToken = default)
-        => _impl.SearchSolutionText(reason, pattern, fileGlob, maxResults, cancellationToken);
+        => _impl.SearchSolutionText(reason, pattern, fileGlob, maxResults, includeTests, cancellationToken);
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "GetOperationDetail")]
     [Produces(DataTag.ResultOnly)]

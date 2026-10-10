@@ -646,8 +646,9 @@ public class WorkspaceTools
         [Consumes(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
     [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
     [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
+    [Description("false (default) = skip test projects; true = include them. Naming a test project in projectName/filePath always includes it.")] bool includeTests = false,
     CancellationToken cancellationToken = default)
-    => DispatchSearch(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, referencesKind, filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
+    => DispatchSearch(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, referencesKind, filePath, contextSnippet, lineBefore, lineAfter, includeTests, cancellationToken);
 
     /// <summary>
     /// Hard cap on rows returned by Search in declaration-kind modes; extra matches are counted in totalRecords and flagged via hasMoreData/warningDetails.
@@ -675,12 +676,12 @@ public class WorkspaceTools
     ToolCallReason reason, SearchMode mode, string? query, string? fileGlob, int maxResults,
     SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName,
     bool exactMatch, FindReferencesKind? referencesKind, string? filePath, string? contextSnippet,
-    string? lineBefore, string? lineAfter, CancellationToken cancellationToken)
+    string? lineBefore, string? lineAfter, bool includeTests, CancellationToken cancellationToken)
     {
         switch (mode)
         {
             case SearchMode.text:
-                return _readNav.SearchSolutionText(reason, query ?? string.Empty, fileGlob, maxResults, cancellationToken);
+                return _readNav.SearchSolutionText(reason, query ?? string.Empty, fileGlob, maxResults, includeTests, cancellationToken);
             case SearchMode.symbol:
                 return _symbolNavigation.LocateSymbol(reason, query ?? string.Empty, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch, cancellationToken);
             case SearchMode.references:
