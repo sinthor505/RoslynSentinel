@@ -49,7 +49,8 @@ public record DiagnosticInfo(
     int StartLine,
     int StartColumn,
     int EndLine,
-    int EndColumn
+    int EndColumn,
+    string? Project = null
 );
 
 public static class DiagnosticExtensions
