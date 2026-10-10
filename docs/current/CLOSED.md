@@ -1622,3 +1622,10 @@ time of this re-audit — very likely fixed piecemeal across other sessions' wor
 (this repo sometimes has more than one Claude/VS session active) rather than by a dedicated pass on this spec. No remaining risk
 identified; closing rather than re-scoping into a rename/restructure task nothing currently needs.
 
+
+## `Git` tool: tag, stash, worktree and hunk-level staging (closed 2026-10-10)
+
+Implemented by `plans/plan_git_tool_tag_stash_worktree_hunks.md` (steps 1-15): `tag`, `stash`, `worktree` (one shared `action` parameter) and
+`hunks` / `stage` with `hunkIds`+`hunkFingerprint` or `lineRange`. Commits f209e84 .. 4a9c1f9 (tool), 1f71ced (live smoke + `enforce-dogfood.ps1` now denies
+shell tag/stash/worktree). Full suite 3734 total / 0 failed / 26 skipped; the eight-call live smoke passed on two restarted servers. `stash drop`/`clear`,
+tag push and worktree prune/lock/move stay shell-only by decision (D-16, D-17).

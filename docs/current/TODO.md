@@ -185,50 +185,6 @@ were explicitly left unresolved and are carried forward here rather than lost wi
    combination is meant to be supported at all, or whether it's a genuine insertion/targeting bug
    that nests new content into the class instead of replacing it wholesale.
 
-## `Git` tool missing worktree/stash/tag — forces a shell fallback — partially started
-
-Raised 2026-09-12 while wiring the dog-fooding enforcement hook
-(`.claude/hooks/enforce-dogfood.ps1`). **Re-verified against source 2026-09-14 (Phase 5 of
-manual-selfrun-20260914-remediation-v1)** — this entry's title and body were stale: `branch`,
-`checkout`, `push`, `fetch`, `pull` were implemented in the interim without this entry being
-updated. See `CLOSED.md` for what shipped. Re-audit any TODO entry against
-`GetFileOutline`/`GetMethodSource` on the actual tool before trusting its text, per CLAUDE.md's
-root-cause discipline — this file drifted from source for at least one prior session.
-
-**2026-09-18: `show`, arbitrary-ref `diff` (`refA..refB`/`refA...refB`), `diff`/`show` against a
-commit with no parent, `log` path/ref scoping + full commit body, and `pull --rebase` all shipped —
-see `CLOSED.md`.**
-
-`Git` currently implements `status`, `log` (with optional `branchName` ref-scoping and
-`paths`/`files` path-scoping, full `%B` commit body), `diff` (`working`/`staged`/a single
-hash/`refA..refB`/`refA...refB` range, first-commit-safe via the empty-tree fallback), `show` (one
-commit's metadata + diff, same range/first-commit handling as `diff`), `stage`/`add`, `unstage`,
-`commit`, `revert`, `branch`, `checkout`, `push`, `fetch`, `pull` (plain merge or `--rebase`).
-
-**2026-09-30: the listed-scope stage/commit rewrite, read-side parity (`status` `maxEntries`, rename origin, `nameOnly`/`stat`), single `ref` param, `abort`/`InProgress`/`mainline` and specific error codes all shipped via `plan_git_tool_listed_scope_and_shell_parity.md` - see `CLOSED.md`.**
-
-**2026-10-10: `tag`, `stash`, `worktree` and hunk-level `stage` (`hunks` preview, `hunkIds`/`lineRange`) are implemented
-and committed (`plans/plan_git_tool_tag_stash_worktree_hunks.md` steps 1-12). What remains is the live smoke on a fresh
-binary (step 13, done), updating `enforce-dogfood.ps1` so the shell-git message stops listing tag/stash/worktree as uncovered
-(step 14, done), and final verification (step 15). The "Still missing" text below is the pre-implementation record.**
-
-Still missing (superseded by the note above):
-
-- **`worktree`** (add / list / remove) — PlanStepRunner drives worktrees directly, so this is the
-  gap with the most existing in-repo usage, and the one place where a wrong path silently produces
-  the `Worktree/` diff trap that CLAUDE.md warns about. **Design fork, needs human judgment before
-  implementing:** `worktree remove`/`worktree add` are comparatively hard to reverse (a bad `remove`
-  can delete uncommitted work in that worktree; a bad `add` path can collide with or shadow an
-  existing directory) and the right API shape (explicit path param? confirm flag? auto-detect
-  existing worktrees to avoid collision?) isn't specified anywhere yet — do not guess the shape.
-- **`stash`** (push / pop / list) and **`tag`** — lower priority, occasional use. Also undesigned
-  API shape (e.g. does `stash pop` need a conflict-handling story analogous to `revert`'s
-  `noCommit`?) — same "don't guess" caution as worktree, lower urgency.
-
-Why it matters beyond convenience: each uncovered operation is a permanent, sanctioned hole in the
-dog-fooding chokepoint, so those code paths never get exercised and never surface the bugs that
-dog-fooding exists to find.
-
 ## `GitImpl` generic catch blocks put `ex.Message` into `Error`
 
 **Found:** 2026-09-30, during the Git listed-scope/shell-parity plan (Phases 1-6). About 16
