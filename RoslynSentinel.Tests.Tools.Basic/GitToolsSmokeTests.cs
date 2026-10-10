@@ -51,12 +51,16 @@ public class GitToolsSmokeTests
         DeleteDirectoryTree(_repoDir);
         DeleteDirectoryTree(RemoteDir);
         DeleteDirectoryTree(CloneDir);
+        DeleteDirectoryTree(WorktreeDir);
     }
 
     // Sibling directories used by the remote-fixture tests (bare remote, second clone).
     private string RemoteDir => _repoDir + "_remote";
 
     private string CloneDir => _repoDir + "_clone";
+
+    // Sibling directory used by the worktree tests (outside the repo root, as worktree add requires).
+    private string WorktreeDir => _repoDir + "_wt";
 
     private static void DeleteDirectoryTree(string directory)
     {
@@ -2303,6 +2307,253 @@ public class GitToolsSmokeTests
         var content = ReadRepoFile("README.md");
         Assert.That(content, Does.Not.Contain("<<<<<<<"), "no conflict markers may remain.");
         Assert.That(content, Is.EqualTo("from commit"), "README.md must equal the committed content.");
+    }
+
+    [Test]
+    public async Task Git_Worktree_List_ReportsMainAndCurrentAsync()
+    {
+        var result = await _gitTools.Git(reason: "list worktrees", GitOperation.worktree, action: GitAction.list);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var worktrees = (GitWorktreeResult)result.SuccessData!;
+        Assert.That(worktrees.Worktrees, Has.Count.EqualTo(1));
+        Assert.That(worktrees.Worktrees[0].IsMain, Is.True);
+        Assert.That(worktrees.Worktrees[0].IsCurrent, Is.True);
+        Assert.That(worktrees.Worktrees[0].IsLocked, Is.False);
+        Assert.That(worktrees.Worktrees[0].Branch, Is.Not.Null.And.Not.Empty);
+    }
+
+    // Step 7 helpers (worktree).
+    private string CurrentBranch() => GitOutStrict("branch", "--show-current");
+
+    private Task<SentinelCallToolResult<object>> AddWorktreeAsync(string branch, bool createBranch = true, string? path = null)
+        => _gitTools.Git(reason: "add a worktree", GitOperation.worktree, action: GitAction.add, worktreePath: path ?? WorktreeDir, branchName: branch, createBranch: createBranch);
+
+    private Task<SentinelCallToolResult<object>> RemoveWorktreeAsync(bool discard = false, string? path = null)
+        => _gitTools.Git(reason: "remove a worktree", GitOperation.worktree, action: GitAction.remove, worktreePath: path ?? WorktreeDir, discardUncommittedChanges: discard);
+
+    // Adds WorktreeDir on a new branch, then leaves one modified tracked file and one untracked file inside it.
+    private async Task MakeDirtyWorktreeAsync()
+    {
+        var add = await AddWorktreeAsync("wt-dirty");
+        Assert.That(add.IsError, Is.False, add.ErrorData?.Message);
+        File.WriteAllText(Path.Combine(WorktreeDir, "README.md"), "edited in the worktree");
+        File.WriteAllText(Path.Combine(WorktreeDir, "scratch.txt"), "untracked");
+    }
+
+    [Test]
+    public async Task Git_Worktree_Add_NewBranchOutsideRepo_CreatesWorktreeAsync()
+    {
+        var result = await AddWorktreeAsync("wt-feature");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var added = (GitWorktreeResult)result.SuccessData!;
+        Assert.That(added.Added, Is.Not.Null.And.Not.Empty);
+        Assert.That(added.Branch, Is.EqualTo("wt-feature"));
+        Assert.That(added.Note, Does.Contain("LoadSolution"));
+        Assert.That(File.Exists(Path.Combine(WorktreeDir, "README.md")), Is.True, "the worktree must be checked out on disk.");
+        Assert.That(GitOutStrict("branch", "--list", "wt-feature"), Does.Contain("wt-feature"));
+
+        var list = await _gitTools.Git(reason: "list worktrees", GitOperation.worktree, action: GitAction.list);
+        var worktrees = ((GitWorktreeResult)list.SuccessData!).Worktrees;
+        Assert.That(worktrees, Has.Count.EqualTo(2));
+        Assert.That(worktrees.Count(w => w.IsMain), Is.EqualTo(1));
+        Assert.That(worktrees.Single(w => !w.IsMain).Branch, Is.EqualTo("wt-feature"));
+        Assert.That(worktrees.Single(w => !w.IsMain).IsCurrent, Is.False);
+    }
+
+    [Test]
+    public async Task Git_Worktree_Add_PathInsideRepo_ReportsGitRefusedAsync()
+    {
+        var inside = Path.Combine(_repoDir, "inner_wt");
+
+        var result = await AddWorktreeAsync("wt-inside", path: inside);
+
+        AssertCoded(result, "GitRefused");
+        Assert.That(Directory.Exists(inside), Is.False, "nothing may be created inside the repo.");
+        Assert.That(GitOutStrict("branch", "--list", "wt-inside"), Is.Empty, "no branch may be created by a refused add.");
+    }
+
+    [Test]
+    public async Task Git_Worktree_Add_RelativePath_ReportsGitRefusedAsync()
+    {
+        var result = await AddWorktreeAsync("wt-relative", path: Path.Combine("sub", "wt"));
+
+        AssertCoded(result, "GitRefused");
+        Assert.That(result.ErrorData?.Message, Does.Contain("absolute"));
+    }
+
+    [Test]
+    public async Task Git_Worktree_Add_NonEmptyExistingPath_ReportsGitAlreadyExistsAsync()
+    {
+        Directory.CreateDirectory(WorktreeDir);
+        File.WriteAllText(Path.Combine(WorktreeDir, "occupant.txt"), "already here");
+
+        var result = await AddWorktreeAsync("wt-occupied");
+
+        AssertCoded(result, "GitAlreadyExists");
+        Assert.That(File.Exists(Path.Combine(WorktreeDir, "occupant.txt")), Is.True);
+        Assert.That(GitOutStrict("branch", "--list", "wt-occupied"), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Worktree_Add_BranchAlreadyCheckedOutElsewhere_ReportsGitAlreadyExistsNamingThatPathAsync()
+    {
+        // The main worktree has the current branch checked out; a second checkout of it is refused.
+        var result = await AddWorktreeAsync(CurrentBranch(), createBranch: false);
+
+        AssertCoded(result, "GitAlreadyExists");
+        Assert.That(result.ErrorData?.Message, Does.Contain(Path.GetFileName(_repoDir)), "the message must name the worktree holding the branch.");
+        Assert.That(Directory.Exists(WorktreeDir), Is.False);
+    }
+
+    [Test]
+    public async Task Git_Worktree_Add_MissingBranchWithoutCreateBranch_ReportsGitTargetNotFoundAsync()
+    {
+        var result = await AddWorktreeAsync("no-such-branch", createBranch: false);
+
+        AssertCoded(result, "GitTargetNotFound");
+        Assert.That(result.ErrorData?.Detail, Does.Contain("createBranch"));
+        Assert.That(Directory.Exists(WorktreeDir), Is.False);
+    }
+
+    [Test]
+    public async Task Git_Worktree_Add_CreateBranchOnExistingBranch_ReportsGitAlreadyExistsAsync()
+    {
+        RunGit(_repoDir, "branch", "already-there");
+
+        var result = await AddWorktreeAsync("already-there", createBranch: true);
+
+        AssertCoded(result, "GitAlreadyExists");
+        Assert.That(Directory.Exists(WorktreeDir), Is.False);
+    }
+
+    [Test]
+    public async Task Git_Worktree_Remove_CleanWorktree_RemovesDirectoryAndKeepsBranchAsync()
+    {
+        var add = await AddWorktreeAsync("wt-clean");
+        Assert.That(add.IsError, Is.False, add.ErrorData?.Message);
+
+        var result = await RemoveWorktreeAsync();
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var removed = (GitWorktreeResult)result.SuccessData!;
+        Assert.That(removed.Removed, Is.Not.Null.And.Not.Empty);
+        Assert.That(removed.DiscardedPaths, Is.Null.Or.Empty);
+        Assert.That(removed.Note, Does.Contain("wt-clean"));
+        Assert.That(Directory.Exists(WorktreeDir), Is.False);
+        Assert.That(GitOutStrict("branch", "--list", "wt-clean"), Does.Contain("wt-clean"), "the branch must be kept.");
+    }
+
+    [Test]
+    public async Task Git_Worktree_Remove_MainWorktree_ReportsGitRefusedAsync()
+    {
+        var result = await RemoveWorktreeAsync(path: _repoDir);
+
+        AssertCoded(result, "GitRefused");
+        Assert.That(Directory.Exists(Path.Combine(_repoDir, ".git")), Is.True);
+        Assert.That(File.Exists(Path.Combine(_repoDir, "README.md")), Is.True);
+    }
+
+    [Test]
+    public async Task Git_Worktree_Remove_Unknown_ReportsGitTargetNotFoundAsync()
+    {
+        var result = await RemoveWorktreeAsync(path: WorktreeDir);
+
+        AssertCoded(result, "GitTargetNotFound");
+    }
+
+    [Test]
+    public async Task Git_Worktree_WithoutAction_ReportsGitActionRequiredAsync()
+    {
+        var result = await _gitTools.Git(reason: "worktree without action", GitOperation.worktree);
+
+        AssertCoded(result, "GitActionRequired");
+        Assert.That(result.ErrorData?.Message, Does.Contain("list, add, remove"));
+    }
+
+    [Test]
+    public async Task Git_Worktree_Remove_DirtyWorktree_WithoutFlag_ReportsGitWorkingTreeDirtyNamingFlagAndLeavesDirectoryAsync()
+    {
+        await MakeDirtyWorktreeAsync();
+
+        var result = await RemoveWorktreeAsync();
+
+        AssertCoded(result, "GitWorkingTreeDirty");
+        Assert.That(result.ErrorData?.Message, Does.Contain("uncommitted changes"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("Nothing was removed"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("discardUncommittedChanges: true"));
+        Assert.That(Directory.Exists(WorktreeDir), Is.True, "the directory must be left in place.");
+        Assert.That(File.ReadAllText(Path.Combine(WorktreeDir, "README.md")), Is.EqualTo("edited in the worktree"));
+        Assert.That(File.ReadAllText(Path.Combine(WorktreeDir, "scratch.txt")), Is.EqualTo("untracked"));
+    }
+
+    [Test]
+    public async Task Git_Worktree_Remove_DirtyWorktree_WithFlag_RemovesAndReportsDiscardedPathsAsync()
+    {
+        await MakeDirtyWorktreeAsync();
+
+        var result = await RemoveWorktreeAsync(discard: true);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var removed = (GitWorktreeResult)result.SuccessData!;
+        Assert.That(removed.Removed, Is.Not.Null.And.Not.Empty);
+        Assert.That(removed.DiscardedPaths, Is.Not.Null);
+        Assert.That(removed.DiscardedPaths!.Any(p => p.Contains("README.md")), Is.True, "the modified tracked file must be listed.");
+        Assert.That(removed.DiscardedPaths!.Any(p => p.Contains("scratch.txt")), Is.True, "the untracked file must be listed.");
+        Assert.That(removed.Note, Does.Contain("not recoverable"));
+        Assert.That(Directory.Exists(WorktreeDir), Is.False);
+        Assert.That(GitOutStrict("branch", "--list", "wt-dirty"), Does.Contain("wt-dirty"), "the branch must be kept.");
+    }
+
+    [Test]
+    public async Task Git_Worktree_Remove_CleanWorktree_WithFlag_RemovesWithoutDiscardedPathsAsync()
+    {
+        var add = await AddWorktreeAsync("wt-clean-flag");
+        Assert.That(add.IsError, Is.False, add.ErrorData?.Message);
+
+        var result = await RemoveWorktreeAsync(discard: true);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(((GitWorktreeResult)result.SuccessData!).DiscardedPaths, Is.Null.Or.Empty);
+        Assert.That(Directory.Exists(WorktreeDir), Is.False);
+    }
+
+    [Test]
+    public async Task Git_Worktree_Remove_LockedWorktree_WithFlag_StillReportsGitRefusedAsync()
+    {
+        var add = await AddWorktreeAsync("wt-locked");
+        Assert.That(add.IsError, Is.False, add.ErrorData?.Message);
+        RunGit(_repoDir, "worktree", "lock", WorktreeDir);
+
+        var result = await RemoveWorktreeAsync(discard: true);
+
+        AssertCoded(result, "GitRefused");
+        Assert.That(Directory.Exists(WorktreeDir), Is.True, "a locked worktree must be left in place.");
+    }
+
+    [Test]
+    public async Task Git_DiscardUncommittedChanges_OnOtherOperationOrAction_IsRefusedAsync()
+    {
+        var onStatus = await _gitTools.Git(reason: "discard flag on status", GitOperation.status, discardUncommittedChanges: true);
+        var onWorktreeList = await _gitTools.Git(reason: "discard flag on worktree list", GitOperation.worktree, action: GitAction.list, discardUncommittedChanges: true);
+
+        foreach (var result in new[] { onStatus, onWorktreeList })
+        {
+            Assert.That(result.IsError, Is.True);
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
+            Assert.That(result.ErrorData?.Message, Does.Contain("discardUncommittedChanges"));
+        }
+    }
+
+    [Test]
+    public async Task Git_WorktreePath_OnOtherOperation_IsRefusedAsync()
+    {
+        var result = await _gitTools.Git(reason: "worktreePath on status", GitOperation.status, worktreePath: WorktreeDir);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("worktreePath"));
     }
 
     [Test]

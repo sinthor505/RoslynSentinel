@@ -24,10 +24,10 @@ public class GitTools
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state. tag/stash take an action.")]
+    [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state. tag/stash/worktree take an action.")]
     public async Task<SentinelCallToolResult<object>> Git(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters). tag: needs action (list|create|delete); create needs tagName. stash: needs action (list|push|apply|pop); apply/pop need stashIndex.")]
+        [Description("abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters). tag: needs action (list|create|delete); create needs tagName. stash: needs action (list|push|apply|pop); apply/pop need stashIndex. worktree: needs action (list|add|remove); add needs worktreePath and branchName; remove needs worktreePath.")]
         GitOperation operation,
         [Description("log / tag list: number of entries (max 100).")]
         int count = 20,
@@ -51,13 +51,13 @@ public class GitTools
         [Description("revert: true stages without committing; commit separately to finalize.")]
         bool noCommit = false,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: branchName is required for operation=checkout; optional for operation=branch (omit to list).
-        [Description("branch/checkout: branch to create/delete/switch to (branch: omit to list all; checkout: required).")]
+        [Description("branch/checkout/worktree add: branch to create/delete/switch to/check out in the new worktree (branch: omit to list all; checkout and worktree add: required).")]
         string? branchName = null,
-        [Description("Base ref for a new branch (default HEAD). checkout: only with createBranch=true.")]
+        [Description("Base ref for a new branch (default HEAD). checkout and worktree add: only with createBranch=true.")]
         string? startPoint = null,
         [Description("branch: true deletes branchName instead of creating it.")]
         bool deleteBranch = false,
-        [Description("checkout: true creates branchName from startPoint if it does not exist (otherwise a plain checkout).")]
+        [Description("checkout: true creates branchName from startPoint if it does not exist (otherwise a plain checkout). worktree add: true creates branchName (it must not exist yet); false checks out an existing branchName.")]
         bool createBranch = false,
         [Description("push/fetch/pull: the remote to operate on.")]
         string remoteName = "origin",
@@ -81,8 +81,8 @@ public class GitTools
         int? mainline = null,
         [Description("log/show/diff/reset/tag: the git ref (a branch, tag, commit hash, HEAD~1, ...). log: start ref. show: the commit to show. diff: what to diff the working tree against (or a range). reset: REQUIRED, the ref to move HEAD to (e.g. \"HEAD~1\" to undo the last commit). tag create: the commit to tag (default HEAD).")]
         string? @ref = null,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: action is required when operation=tag; refused for every other operation.
-        [Description("tag/stash: REQUIRED. tag: list | create | delete. stash: list | push | apply | pop. Refused for every other operation.")]
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: action is required when operation=tag, stash or worktree; refused for every other operation.
+        [Description("tag/stash/worktree: REQUIRED. tag: list | create | delete. stash: list | push | apply | pop. worktree: list | add | remove. Refused for every other operation.")]
         GitAction? action = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: tagName is required for tag create/delete; unused otherwise.
         [Description("tag create/delete: the tag name, e.g. v1.2.0.")]
@@ -92,11 +92,16 @@ public class GitTools
         int? stashIndex = null,
         [Description("stash push: also stash untracked (not ignored) files. Default false: untracked files stay in the working tree.")]
         bool includeUntracked = false,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: worktreePath is required for worktree add/remove; unused otherwise.
+        [Description("worktree add/remove: absolute path of the worktree. For add it must be OUTSIDE the repository root.")]
+        string? worktreePath = null,
+        [Description("worktree remove only: true allows removing a worktree that has uncommitted or untracked files, permanently discarding them (git worktree remove --force). Default false: a dirty worktree is refused with the list of changed paths. The main, current and locked worktrees are refused regardless.")]
+        bool discardUncommittedChanges = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         var isReadOnlyOperation = operation is GitOperation.status or GitOperation.log or GitOperation.diff or GitOperation.show
-            || (operation is GitOperation.tag or GitOperation.stash && action == GitAction.list);
+            || (operation is GitOperation.tag or GitOperation.stash or GitOperation.worktree && action == GitAction.list);
         if (!string.IsNullOrWhiteSpace(repoPath) && !isReadOnlyOperation)
         {
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"repoPath is only supported for status/log/diff/show (and list actions) - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or switch to a read-only operation.", Detail: null) };
@@ -144,9 +149,19 @@ public class GitTools
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"mainline is only supported for revert - operation '{operation}' does not use it. Omit mainline.", Detail: null) };
         }
 
-        if (action is not null && operation is not (GitOperation.tag or GitOperation.stash))
+        if (action is not null && operation is not (GitOperation.tag or GitOperation.stash or GitOperation.worktree))
         {
-            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"action is only supported for tag/stash - operation '{operation}' does not use it. Omit action.", Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"action is only supported for tag/stash/worktree - operation '{operation}' does not use it. Omit action.", Detail: null) };
+        }
+
+        if (!string.IsNullOrWhiteSpace(worktreePath) && operation != GitOperation.worktree)
+        {
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"worktreePath is only supported for worktree (action: add or remove) - operation '{operation}' does not use it. Omit worktreePath.", Detail: null) };
+        }
+
+        if (discardUncommittedChanges && !(operation == GitOperation.worktree && action == GitAction.remove))
+        {
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: "discardUncommittedChanges is only supported for operation=worktree with action=remove. Omit it.", Detail: null) };
         }
 
         if (stashIndex is not null && operation != GitOperation.stash)
@@ -194,6 +209,7 @@ public class GitTools
             GitOperation.pull => await _gitImpl.PullAsync(gitRoot, remoteName, rebase, cancellationToken),
             GitOperation.tag => await _gitImpl.TagAsync(gitRoot, action, tagName, resolvedRef, message, count, cancellationToken),
             GitOperation.stash => await _gitImpl.StashAsync(gitRoot, action, message, includeUntracked, resolvedPaths, stashIndex, count, cancellationToken),
+            GitOperation.worktree => await _gitImpl.WorktreeAsync(gitRoot, action, worktreePath, branchName, createBranch, startPoint, discardUncommittedChanges, cancellationToken),
             _ => new GitResult { IsError = true, Error = $"Unknown operation '{operation}'." }
         };
 
