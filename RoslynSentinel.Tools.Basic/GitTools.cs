@@ -24,7 +24,7 @@ public class GitTools
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state. tag/stash/worktree take an action.")]
+    [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state. tag/stash/worktree take an action. stage accepts hunkIds+hunkFingerprint or lineRange to stage part of one file.")]
     public async Task<SentinelCallToolResult<object>> Git(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters). tag: needs action (list|create|delete); create needs tagName. stash: needs action (list|push|apply|pop); apply/pop need stashIndex. worktree: needs action (list|add|remove); add needs worktreePath and branchName; remove needs worktreePath. hunks: list the unstaged hunks of one file (files: one path) with ids and a fingerprint, to feed stage's hunkIds.")]
@@ -97,6 +97,13 @@ public class GitTools
         string? worktreePath = null,
         [Description("worktree remove only: true allows removing a worktree that has uncommitted or untracked files, permanently discarding them (git worktree remove --force). Default false: a dirty worktree is refused with the list of changed paths. The main, current and locked worktrees are refused regardless.")]
         bool discardUncommittedChanges = false,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: hunkIds needs hunkFingerprint and exactly one path in files; alternative to lineRange; refused for every operation except stage/add.
+        [Description("stage: hunk ids from Git(operation: hunks), e.g. \"1,3\". Needs files (exactly one path) and hunkFingerprint.")]
+        string? hunkIds = null,
+        [Description("stage: the fingerprint returned with the hunk list. Refuses with GitHunkStale if the file changed since.")]
+        string? hunkFingerprint = null,
+        [Description("stage: stage the hunks wholly inside these new-file lines, e.g. \"40-80\" or \"52\". Alternative to hunkIds.")]
+        string? lineRange = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -174,6 +181,22 @@ public class GitTools
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"includeUntracked is only supported for stash (action: push) - operation '{operation}' does not use it. Omit includeUntracked.", Detail: null) };
         }
 
+        var hasHunkParams = !string.IsNullOrWhiteSpace(hunkIds) || !string.IsNullOrWhiteSpace(hunkFingerprint) || !string.IsNullOrWhiteSpace(lineRange);
+        if (hasHunkParams && operation is not (GitOperation.stage or GitOperation.add))
+        {
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"hunkIds, hunkFingerprint and lineRange are only supported for stage - operation '{operation}' does not use them. Omit them.", Detail: null) };
+        }
+
+        if (!string.IsNullOrWhiteSpace(hunkFingerprint) && string.IsNullOrWhiteSpace(hunkIds))
+        {
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: "hunkFingerprint only goes with hunkIds. Pass hunkIds (from Git(operation: hunks)) with it, or use lineRange without a fingerprint.", Detail: null) };
+        }
+
+        if (hasHunkParams && scope != null && scope != GitStageScope.listed)
+        {
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"You passed hunk parameters (hunkIds/hunkFingerprint/lineRange) together with scope=\"{scope}\", which is ambiguous: hunk staging works on exactly one listed file. Drop scope, or pass scope=\"listed\" with files.", Detail: null) };
+        }
+
         // Gap A/B: when files are supplied and scope is null, infer scope=listed for stage/add/commit.
         // However, explicit scope combined with files for all/tracked is an error.
         GitStageScope? effectiveScope = scope;
@@ -196,6 +219,7 @@ public class GitTools
             GitOperation.log => await _gitImpl.LogAsync(gitRoot, count, resolvedRef, resolvedPaths, cancellationToken),
             GitOperation.diff => await _gitImpl.DiffAsync(gitRoot, resolvedRef ?? target, resolvedPaths, maxBytes, nameOnly, stat, cancellationToken),
             GitOperation.show => await _gitImpl.ShowAsync(gitRoot, resolvedRef ?? target, resolvedPaths, maxBytes, nameOnly, stat, cancellationToken),
+            GitOperation.stage or GitOperation.add when hasHunkParams => await _gitImpl.StageHunksAsync(gitRoot, resolvedPaths, hunkIds, hunkFingerprint, lineRange, cancellationToken),
             GitOperation.stage or GitOperation.add => await _gitImpl.StageAsync(gitRoot, effectiveScope ?? GitStageScope.tracked, resolvedPaths, cancellationToken),
             GitOperation.unstage => await _gitImpl.UnstageAsync(gitRoot, resolvedPaths, cancellationToken),
             GitOperation.commit => await _gitImpl.CommitAsync(gitRoot, message, effectiveScope, resolvedPaths, amend, cancellationToken),

@@ -1832,7 +1832,7 @@ public class GitImpl : IGitOperations
         if (list.Length == 0)
         {
             return new FileDiffLoad("", null, GitErrorCodes.RefRequired,
-                "operation=hunks needs files naming exactly one file. Nothing was changed.",
+                "Hunk selection needs files naming exactly one file. Nothing was changed.",
                 "Pass files: '<one repo-relative path>'");
         }
         if (list.Length > 1)

@@ -2762,4 +2762,298 @@ public class GitToolsSmokeTests
             DeleteDirectoryTree(otherRepoDir);
         }
     }
+
+    // ---- stage with hunkIds / lineRange ----
+
+    private async Task<GitHunksResult> ListHunksAsync(string relPath)
+    {
+        var result = await _gitTools.Git(reason: "list hunks", GitOperation.hunks, files: relPath);
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        return (GitHunksResult)result.SuccessData!;
+    }
+
+    private async Task<SentinelCallToolResult<object>> StageHunksAsync(string relPath, string? hunkIds = null, string? hunkFingerprint = null, string? lineRange = null)
+    {
+        return await _gitTools.Git(reason: "stage hunks", GitOperation.stage, files: relPath, hunkIds: hunkIds, hunkFingerprint: hunkFingerprint, lineRange: lineRange);
+    }
+
+    private string StagedDiff() => RunGitCapture("diff", "--cached", "--no-color");
+
+    // The staged (index) content of a file, byte-faithful for ASCII content including CR.
+    private string IndexContent(string relPath) => RunGitCapture("show", ":" + relPath);
+
+    [Test]
+    public async Task Git_Stage_HunkIds_StagesOnlyThoseHunksAsync()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        var edited = ApplyThreeDistantEdits(lines);
+        WriteLines("a.txt", edited);
+        var listing = await ListHunksAsync("a.txt");
+
+        var result = await StageHunksAsync("a.txt", hunkIds: "1,3", hunkFingerprint: listing.Fingerprint);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var staged = (GitStageHunksResult)result.SuccessData!;
+        Assert.That(staged.RemainingUnstagedHunks, Is.EqualTo(1));
+        Assert.That(staged.StagedHunks.Select(h => h.Index), Is.EqualTo(new[] { 1, 3 }));
+        Assert.That(staged.Warning, Is.Null.Or.Empty);
+        var cached = StagedDiff();
+        Assert.That(cached, Does.Contain("+line 3 changed"));
+        Assert.That(cached, Does.Contain("-line 27"));
+        Assert.That(cached, Does.Not.Contain("inserted after 15"));
+        Assert.That(File.ReadAllText(Path.Combine(_repoDir, "a.txt")), Does.Contain("inserted after 15"), "the working tree must not be touched.");
+    }
+
+    [Test]
+    public async Task Git_Stage_HunkIds_ThenCommit_CommitsOnlyStagedHunksAsync()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        WriteLines("a.txt", ApplyThreeDistantEdits(lines));
+        var listing = await ListHunksAsync("a.txt");
+        var staged = await StageHunksAsync("a.txt", hunkIds: "1,3", hunkFingerprint: listing.Fingerprint);
+        Assert.That(staged.IsError, Is.False, staged.ErrorData?.Message);
+
+        var commit = await _gitTools.Git(reason: "commit staged hunks", GitOperation.commit, message: "partial commit");
+
+        Assert.That(commit.IsError, Is.False, commit.ErrorData?.Message);
+        var committed = RunGitCapture("show", "HEAD:a.txt").Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.That(committed, Does.Contain("line 3 changed"));
+        Assert.That(committed, Does.Not.Contain("line 27"));
+        Assert.That(committed, Does.Not.Contain("inserted after 15"));
+        var remaining = await ListHunksAsync("a.txt");
+        Assert.That(remaining.TotalHunks, Is.EqualTo(1));
+        Assert.That(remaining.Hunks[0].Preview, Does.Contain("inserted after 15"));
+    }
+
+    [Test]
+    public async Task Git_Stage_HunkIds_StaleFingerprint_ReportsGitHunkStaleAndStagesNothingAsync()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        var edited = ApplyThreeDistantEdits(lines);
+        WriteLines("a.txt", edited);
+        var listing = await ListHunksAsync("a.txt");
+        edited[edited.Count - 1] = "last line changed after listing";
+        WriteLines("a.txt", edited);
+
+        var result = await StageHunksAsync("a.txt", hunkIds: "1", hunkFingerprint: listing.Fingerprint);
+
+        AssertCoded(result, "GitHunkStale");
+        Assert.That(result.ErrorData?.Message, Does.Contain("Nothing was staged"));
+        Assert.That(StagedPaths(), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Stage_HunkIds_WithoutFingerprint_ReportsGitHunkSelectionAsync()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        WriteLines("a.txt", ApplyThreeDistantEdits(lines));
+
+        var result = await StageHunksAsync("a.txt", hunkIds: "1");
+
+        AssertCoded(result, "GitHunkSelection");
+        Assert.That(result.ErrorData?.Message, Does.Contain("hunkFingerprint"));
+        Assert.That(StagedPaths(), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Stage_LineRange_StagesHunksInsideAsync()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        WriteLines("a.txt", ApplyThreeDistantEdits(lines));
+
+        var result = await StageHunksAsync("a.txt", lineRange: "1-20");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var staged = (GitStageHunksResult)result.SuccessData!;
+        Assert.That(staged.StagedHunks.Select(h => h.Index), Is.EqualTo(new[] { 1, 2 }));
+        Assert.That(staged.RemainingUnstagedHunks, Is.EqualTo(1));
+        var cached = StagedDiff();
+        Assert.That(cached, Does.Contain("+line 3 changed"));
+        Assert.That(cached, Does.Contain("+inserted after 15"));
+        Assert.That(cached, Does.Not.Contain("-line 27"));
+    }
+
+    // A five-line replacement (lines 10-14) plus a single-line edit at 25, so a range can cut the first hunk.
+    private List<string> CommitFileWithFiveLineEditAndSingleLineEdit()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        var edited = new List<string>(lines);
+        for (var i = 9; i <= 13; i++)
+        {
+            edited[i] = lines[i] + " changed";
+        }
+
+        edited[24] = "line 25 changed";
+        WriteLines("a.txt", edited);
+        return edited;
+    }
+
+    [Test]
+    public async Task Git_Stage_LineRange_StraddlingHunk_ReportsGitHunkSelectionNamingTheHunkAsync()
+    {
+        CommitFileWithFiveLineEditAndSingleLineEdit();
+
+        var result = await StageHunksAsync("a.txt", lineRange: "12-30");
+
+        AssertCoded(result, "GitHunkSelection");
+        Assert.That(result.ErrorData?.Message, Does.Contain("Hunk 1 spans lines 10-14"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("Widen the range to 10-30"));
+        Assert.That(StagedPaths(), Is.Empty, "a refused selection must stage nothing.");
+    }
+
+    [Test]
+    public async Task Git_Stage_LineRange_NoHunkInside_ListsAvailableSpansAsync()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        WriteLines("a.txt", ApplyThreeDistantEdits(lines));
+
+        var result = await StageHunksAsync("a.txt", lineRange: "5-8");
+
+        AssertCoded(result, "GitHunkSelection");
+        Assert.That(result.ErrorData?.Message, Does.Contain("1: 3; 2: 16; 3: 27"));
+        Assert.That(StagedPaths(), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Stage_Hunks_UntrackedFile_ReportsGitHunkUnsupportedAsync()
+    {
+        WriteFile("brand-new.txt", "one\ntwo\n");
+
+        var result = await StageHunksAsync("brand-new.txt", hunkIds: "1", hunkFingerprint: "000000000000");
+
+        AssertCoded(result, "GitHunkUnsupported");
+        Assert.That(result.ErrorData?.Message, Does.Contain("untracked"));
+        Assert.That(StagedPaths(), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Stage_Hunks_WithScopeAll_IsRefusedAsync()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        WriteLines("a.txt", ApplyThreeDistantEdits(lines));
+
+        var result = await _gitTools.Git(reason: "hunks with scope all", GitOperation.stage, scope: GitStageScope.all, files: "a.txt", lineRange: "1-5");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("lineRange").And.Contain("scope"));
+        Assert.That(StagedPaths(), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Stage_HunkFingerprint_WithoutHunkIds_IsRefusedAsync()
+    {
+        var result = await StageHunksAsync("README.md", hunkFingerprint: "000000000000", lineRange: "1");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("hunkIds"));
+    }
+
+    [Test]
+    public async Task Git_HunkParameters_OnOtherOperation_AreRefusedAsync()
+    {
+        var result = await _gitTools.Git(reason: "lineRange on status", GitOperation.status, lineRange: "1-5");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("only supported for stage"));
+    }
+
+    [Test]
+    public async Task Git_Stage_Hunks_LfFile_AppliesAsync()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        WriteLines("a.txt", ApplyThreeDistantEdits(lines));
+        var listing = await ListHunksAsync("a.txt");
+
+        var result = await StageHunksAsync("a.txt", hunkIds: "2", hunkFingerprint: listing.Fingerprint);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var expected = new List<string>(lines);
+        expected.Insert(15, "inserted after 15");
+        Assert.That(IndexContent("a.txt"), Is.EqualTo(string.Join("\n", expected) + "\n"));
+        Assert.That(IndexContent("a.txt"), Does.Not.Contain("\r"));
+    }
+
+    [Test]
+    public async Task Git_Stage_Hunks_CrlfFile_AppliesWithoutLineEndingChangeAsync()
+    {
+        RunGit(_repoDir, "config", "core.autocrlf", "false");
+        var lines = Enumerable.Range(1, 30).Select(n => "crlf line " + n).ToList();
+        WriteLines("crlf.txt", lines, "\r\n");
+        RunGit(_repoDir, "add", "--", "crlf.txt");
+        RunGit(_repoDir, "commit", "-m", "add crlf file");
+        var edited = new List<string>(lines);
+        edited[4] = "crlf line 5 changed";
+        edited[24] = "crlf line 25 changed";
+        WriteLines("crlf.txt", edited, "\r\n");
+        var listing = await ListHunksAsync("crlf.txt");
+
+        var result = await StageHunksAsync("crlf.txt", hunkIds: "2", hunkFingerprint: listing.Fingerprint);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var expected = new List<string>(lines);
+        expected[24] = "crlf line 25 changed";
+        Assert.That(IndexContent("crlf.txt"), Is.EqualTo(string.Join("\r\n", expected) + "\r\n"), "the staged blob must keep CRLF on every line.");
+        Assert.That(StagedDiff(), Does.Contain("\r\n"));
+        Assert.That(((GitStageHunksResult)result.SuccessData!).RemainingUnstagedHunks, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task Git_Stage_Hunks_FileWithoutTrailingNewline_AppliesAsync()
+    {
+        RunGit(_repoDir, "config", "core.autocrlf", "false");
+        var lines = Enumerable.Range(1, 12).Select(n => "row " + n).ToList();
+        File.WriteAllBytes(Path.Combine(_repoDir, "nonl.txt"), System.Text.Encoding.UTF8.GetBytes(string.Join("\n", lines)));
+        RunGit(_repoDir, "add", "--", "nonl.txt");
+        RunGit(_repoDir, "commit", "-m", "add file without trailing newline");
+        var edited = new List<string>(lines);
+        edited[1] = "row 2 changed";
+        edited[11] = "row 12 changed";
+        File.WriteAllBytes(Path.Combine(_repoDir, "nonl.txt"), System.Text.Encoding.UTF8.GetBytes(string.Join("\n", edited)));
+        var listing = await ListHunksAsync("nonl.txt");
+
+        var result = await StageHunksAsync("nonl.txt", hunkIds: "2", hunkFingerprint: listing.Fingerprint);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var expected = new List<string>(lines);
+        expected[11] = "row 12 changed";
+        Assert.That(IndexContent("nonl.txt"), Is.EqualTo(string.Join("\n", expected)), "no trailing newline must be preserved.");
+    }
+
+    [Test]
+    public async Task Git_Stage_Hunks_NonAsciiFileName_AppliesAsync()
+    {
+        var name = "héllo-ü.txt";
+        var lines = CommitNumberedFile(name, 30);
+        WriteLines(name, ApplyThreeDistantEdits(lines));
+        var listing = await ListHunksAsync(name);
+
+        var result = await StageHunksAsync(name, hunkIds: "1", hunkFingerprint: listing.Fingerprint);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(StagedPaths(), Is.EqualTo(new[] { name }));
+        Assert.That(StagedDiff(), Does.Contain("+line 3 changed"));
+    }
+
+    [Test]
+    public async Task Git_Stage_Hunks_AlreadyStagedHunkNotRestagedAsync()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        WriteLines("a.txt", ApplyThreeDistantEdits(lines));
+        var first = await ListHunksAsync("a.txt");
+        var staged = await StageHunksAsync("a.txt", hunkIds: "1", hunkFingerprint: first.Fingerprint);
+        Assert.That(staged.IsError, Is.False, staged.ErrorData?.Message);
+
+        var again = await ListHunksAsync("a.txt");
+        var stale = await StageHunksAsync("a.txt", hunkIds: "1", hunkFingerprint: first.Fingerprint);
+
+        Assert.That(again.TotalHunks, Is.EqualTo(2), "the staged hunk no longer appears in the unstaged diff.");
+        Assert.That(again.Hunks[0].Preview, Does.Contain("inserted after 15"), "ids are renumbered from 1.");
+        Assert.That(again.Fingerprint, Is.Not.EqualTo(first.Fingerprint));
+        AssertCoded(stale, "GitHunkStale");
+    }
+
+    // ---- end stage hunks ----
 }
