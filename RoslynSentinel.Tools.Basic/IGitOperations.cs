@@ -15,6 +15,7 @@ public interface IGitOperations
     Task<GitRevertResult> RevertAsync(string gitRoot, string? commitHash, bool noCommit, int? mainline, CancellationToken cancellationToken);
     Task<GitShowResult> ShowAsync(string gitRoot, string target, string? paths, int maxBytes, bool nameOnly, bool stat, CancellationToken cancellationToken);
     Task<GitStatusResult> StageAsync(string gitRoot, GitStageScope scope, string? paths, CancellationToken cancellationToken);
+    Task<GitStashResult> StashAsync(string gitRoot, GitAction? action, string? message, bool includeUntracked, string? paths, int? stashIndex, int count, CancellationToken cancellationToken);
     Task<GitStatusResult> StatusAsync(string gitRoot, int maxEntries, CancellationToken cancellationToken);
     Task<GitTagResult> TagAsync(string gitRoot, GitAction? action, string? tagName, string? refName, string? message, int count, CancellationToken cancellationToken);
     string? TryGetGitRoot(out string error, string? repoPath = null);

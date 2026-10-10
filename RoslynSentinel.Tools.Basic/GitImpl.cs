@@ -354,6 +354,68 @@ public record GitTagResult : GitResult
     }
 }
 
+/// <summary>One entry in a stash list.</summary>
+public record GitStashEntry
+{
+    /// <summary>The N of stash@{N}; 0 is the newest entry.</summary>
+    public int Index
+    {
+        get; set;
+    }
+
+    /// <summary>Abbreviated hash of the stash commit.</summary>
+    public string Hash { get; set; } = "";
+
+    /// <summary>Branch the stash was made on, when the entry's subject names one.</summary>
+    public string? Branch
+    {
+        get; set;
+    }
+
+    /// <summary>The label given at push time, or git's default "&lt;hash&gt; &lt;subject&gt;" of the commit stashed on.</summary>
+    public string Message { get; set; } = "";
+
+    /// <summary>ISO 8601 commit date of the stash.</summary>
+    public string Date { get; set; } = "";
+}
+
+/// <summary>Result of operation=stash. Which fields are set depends on the action: list sets Entries,
+/// TotalCount and IsTruncated; push sets Created, Message, Note and Status; apply and pop set
+/// AppliedIndex, Note and Status.</summary>
+public record GitStashResult : GitResult
+{
+    public string Action { get; set; } = "";
+    public List<GitStashEntry> Entries { get; set; } = [];
+    public int? TotalCount
+    {
+        get; set;
+    }
+    public bool IsTruncated
+    {
+        get; set;
+    }
+    public bool? Created
+    {
+        get; set;
+    }
+    public int? AppliedIndex
+    {
+        get; set;
+    }
+    public string? Message
+    {
+        get; set;
+    }
+    public string? Note
+    {
+        get; set;
+    }
+    public GitStatusResult? Status
+    {
+        get; set;
+    }
+}
+
 // ── Operation implementations ─────────────────────────────────────────────
 
 public class GitImpl : IGitOperations
@@ -604,6 +666,331 @@ public class GitImpl : IGitOperations
             PreviousTargetHash = previous,
             Note = note,
         };
+    }
+
+    /// <summary>
+    /// Lists, pushes, applies or pops a stash entry. Never drops, clears, uses --index, --keep-index or
+    /// --all, and never stashes patches. A conflicted apply/pop is rolled back (see StashRollbackConflictAsync).
+    /// </summary>
+    public async Task<GitStashResult> StashAsync(
+        string gitRoot, GitAction? action, string? message, bool includeUntracked, string? paths, int? stashIndex, int count, CancellationToken cancellationToken)
+    {
+        try
+        {
+            switch (action)
+            {
+                case GitAction.list:
+                    return await StashListAsync(gitRoot, count, cancellationToken);
+                case GitAction.push:
+                    return await StashPushAsync(gitRoot, message, includeUntracked, paths, cancellationToken);
+                case GitAction.apply:
+                    return await StashRestoreAsync(gitRoot, false, stashIndex, cancellationToken);
+                case GitAction.pop:
+                    return await StashRestoreAsync(gitRoot, true, stashIndex, cancellationToken);
+                default:
+                    return ActionRefused<GitStashResult>("stash", action, "list, push, apply, pop");
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return UnexpectedFailure<GitStashResult>(ex, "stash");
+        }
+    }
+
+    private static GitStashResult StashFailure(string action, string kind, string error, string detail) => new()
+    {
+        Action = action,
+        IsError = true,
+        ErrorKind = kind,
+        Error = error,
+        ErrorDetail = detail
+    };
+
+    private async Task<GitStashResult> StashRestoreAsync(
+    string gitRoot, bool pop, int? stashIndex, CancellationToken cancellationToken)
+    {
+        var action = pop ? "pop" : "apply";
+        if (stashIndex is null)
+            return StashFailure(action, GitErrorCodes.RefRequired,
+                $"Git stash {action} needs stashIndex (0 = newest). Nothing was changed.", GitErrorDetails.RefRequiredStash);
+        var index = stashIndex.Value;
+
+        var entriesBefore = await StashCountAsync(gitRoot, cancellationToken);
+        if (entriesBefore < 0)
+            return new GitStashResult { Action = action, IsError = true, Error = "Could not read the stash list. Nothing was changed." };
+        if (index < 0 || index >= entriesBefore)
+            return StashFailure(action, GitErrorCodes.TargetNotFound,
+                $"stash@{{{index}}} does not exist: the stash has {entriesBefore} {(entriesBefore == 1 ? "entry" : "entries")}. Nothing was changed.",
+                GitErrorDetails.TargetNotFound);
+
+        // Precondition: no tracked changes, staged or unstaged. The D-18 rollback below relies on it.
+        var dirty = await TrackedChangePathsAsync(gitRoot, cancellationToken);
+        if (dirty is null)
+            return new GitStashResult { Action = action, IsError = true, Error = "Could not read the working tree status. Nothing was changed." };
+        if (dirty.Count > 0)
+            return StashFailure(action, GitErrorCodes.WorkingTreeDirty,
+                $"Cannot {action} stash@{{{index}}}: the tracked tree has uncommitted changes in: {FormatPathSample(dirty)}. Nothing was changed.",
+                GitErrorDetails.WorkingTreeDirty);
+
+        // Deliberately no --index: staged state is not restored.
+        var raw = await RunGitAsync(gitRoot, ["stash", action, $"stash@{{{index}}}"], cancellationToken);
+        if (raw.ExitCode == 0)
+        {
+            var entriesAfter = await StashCountAsync(gitRoot, cancellationToken);
+            var expected = pop ? entriesBefore - 1 : entriesBefore;
+            var note = StashDiskNote + " Staged state is not restored (--index is not used).";
+            note += entriesAfter == expected
+                ? (pop ? $" stash@{{{index}}} was applied and dropped; {entriesAfter} stash {(entriesAfter == 1 ? "entry" : "entries")} left."
+                       : $" stash@{{{index}}} was applied and kept; {entriesAfter} stash {(entriesAfter == 1 ? "entry" : "entries")} total.")
+                : $" Expected {expected} stash entries afterwards but found {entriesAfter}; check Git(operation: stash, action: list).";
+            return new GitStashResult
+            {
+                Action = action,
+                IsError = false,
+                AppliedIndex = index,
+                Note = note,
+                Status = await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken),
+            };
+        }
+
+        var unmerged = await UnmergedPathsAsync(gitRoot, cancellationToken);
+        if (unmerged is { Count: > 0 })
+            return await StashRollbackConflictAsync(gitRoot, action, index, entriesBefore, unmerged, cancellationToken);
+
+        // Non-zero exit without unmerged paths (for example an untracked file in the way). git may
+        // still have applied part of the stash, so claim "Nothing was changed" only after verifying.
+        var trackedNow = await TrackedChangePathsAsync(gitRoot, cancellationToken);
+        var entriesNow = await StashCountAsync(gitRoot, cancellationToken);
+        var stderr = CleanGitStderr(raw.Stderr);
+        GitStashResult failure;
+        if (unmerged is not null && trackedNow is { Count: 0 } && entriesNow == entriesBefore)
+            failure = new GitStashResult
+            {
+                Action = action,
+                IsError = true,
+                Error = $"git stash {action} failed: {stderr}. Nothing was changed."
+            };
+        else
+            failure = new GitStashResult
+            {
+                Action = action,
+                IsError = true,
+                Error = $"git stash {action} failed: {stderr}. The tree could not be verified clean afterwards" +
+                        (trackedNow is { Count: > 0 } ? $" (tracked changes in: {FormatPathSample(trackedNow)})" : "") +
+                        $"; stash entries: {entriesNow} (was {entriesBefore}). The stash entry was kept. Run Git(operation: status) before editing."
+            };
+        return await AppendInProgressAsync(failure, gitRoot, cancellationToken);
+    }
+
+    /// <summary>
+    /// D-18: rolls back a conflicted stash apply/pop and verifies the result structurally. Reports a
+    /// clean rollback only when the tracked tree is clean, no path is unmerged and the stash entry
+    /// count is unchanged; otherwise says exactly which check failed.
+    /// </summary>
+    private async Task<GitStashResult> StashRollbackConflictAsync(
+        string gitRoot, string action, int stashIndex, int entriesBefore, List<string> conflicted, CancellationToken cancellationToken)
+    {
+        // Safe only because the precondition in the caller guarantees a clean tracked tree: reset --merge
+        // removes the conflicted stash application and nothing else. This is the only reset form the
+        // tool runs internally; it is not exposed as an operation.
+        var reset = await RunGitAsync(gitRoot, ["reset", "--merge"], cancellationToken);
+
+        var failed = new List<string>();
+        if (reset.ExitCode != 0)
+            failed.Add($"git reset --merge exited {reset.ExitCode}");
+        var trackedAfter = await TrackedChangePathsAsync(gitRoot, cancellationToken);
+        if (trackedAfter is null)
+            failed.Add("git status could not be read");
+        else if (trackedAfter.Count > 0)
+            failed.Add($"tracked changes remain in: {FormatPathSample(trackedAfter)}");
+        var unmergedAfter = await UnmergedPathsAsync(gitRoot, cancellationToken);
+        if (unmergedAfter is null)
+            failed.Add("unmerged paths could not be read");
+        else if (unmergedAfter.Count > 0)
+            failed.Add($"unmerged paths remain: {FormatPathSample(unmergedAfter)}");
+        var entriesAfter = await StashCountAsync(gitRoot, cancellationToken);
+        if (entriesAfter != entriesBefore)
+            failed.Add($"stash entry count is {entriesAfter}, expected {entriesBefore}");
+
+        if (failed.Count == 0)
+            return StashFailure(action, GitErrorCodes.StashConflict,
+                $"Applying stash@{{{stashIndex}}} conflicts with the current tree in: {FormatPathSample(conflicted)}. " +
+                $"The attempt was rolled back (git reset --merge): the tracked tree is clean again and stash@{{{stashIndex}}} was kept. Nothing was changed.",
+                GitErrorDetails.StashConflict);
+
+        return StashFailure(action, GitErrorCodes.StashConflict,
+            $"Applying stash@{{{stashIndex}}} conflicts, and the rollback could not be verified ({string.Join("; ", failed)}). " +
+            "The stash entry was kept. Run Git(operation: status) before editing.",
+            "Call Git(operation: status) to see the tree; Git(operation: stash, action: list) shows the stash entries.");
+    }
+
+    private async Task<GitStashResult> StashPushAsync(
+    string gitRoot, string? message, bool includeUntracked, string? paths, CancellationToken cancellationToken)
+    {
+        var pathList = new List<string>();
+        if (!string.IsNullOrWhiteSpace(paths))
+        {
+            var parsed = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var pathsError);
+            if (pathsError != null)
+                return new GitStashResult { Action = "push", IsError = true, Error = $"{pathsError}. Nothing was changed." };
+            foreach (var p in parsed!)
+            {
+                var pathError = ValidateRepoRoot(gitRoot, p);
+                if (pathError != null)
+                    return StashFailure("push", GitErrorCodes.PathNotFound, $"{pathError}. Nothing was changed.", GitErrorDetails.PathNotFound);
+                pathList.Add(p);
+            }
+        }
+
+        // Structural precondition. git itself exits 0 with "No local changes to save", so its exit
+        // code cannot be trusted to say whether an entry was created.
+        string[] statusArgs = pathList.Count > 0
+            ? ["--literal-pathspecs", "-c", "core.quotePath=false", "status", "--porcelain",
+               includeUntracked ? "--untracked-files=normal" : "--untracked-files=no", "--", .. pathList]
+            : ["-c", "core.quotePath=false", "status", "--porcelain",
+               includeUntracked ? "--untracked-files=normal" : "--untracked-files=no"];
+        var statusRaw = await RunGitAsync(gitRoot, statusArgs, cancellationToken);
+        if (statusRaw.ExitCode != 0)
+            return await AppendInProgressAsync(new GitStashResult
+            {
+                Action = "push",
+                IsError = true,
+                Error = $"git status failed: {CleanGitStderr(statusRaw.Stderr)}. Nothing was changed."
+            }, gitRoot, cancellationToken);
+        if (statusRaw.Stdout.Trim().Length == 0)
+            return StashFailure("push", GitErrorCodes.NoChanges,
+                $"Nothing to stash: no modified tracked files{(includeUntracked ? ", and no untracked files" : "")}{(pathList.Count > 0 ? " among the named paths" : "")}. Nothing was changed.",
+                GitErrorDetails.NoChanges);
+
+        var before = (await RunGitAsync(gitRoot, ["rev-parse", "-q", "--verify", "refs/stash"], cancellationToken)).Stdout.Trim();
+
+        var pushArgs = new List<string> { "--literal-pathspecs", "stash", "push" };
+        if (includeUntracked) pushArgs.Add("--include-untracked");
+        if (!string.IsNullOrWhiteSpace(message)) { pushArgs.Add("-m"); pushArgs.Add(message); }
+        if (pathList.Count > 0) { pushArgs.Add("--"); pushArgs.AddRange(pathList); }
+        var pushed = await RunGitAsync(gitRoot, [.. pushArgs], cancellationToken);
+        if (pushed.ExitCode != 0)
+        {
+            if (pushed.Stderr.Contains("did not match any file(s)"))
+                return StashFailure("push", GitErrorCodes.PathNotFound,
+                    $"{CleanGitStderr(pushed.Stderr)}. Nothing was changed.", GitErrorDetails.PathNotFound);
+            return await AppendInProgressAsync(new GitStashResult
+            {
+                Action = "push",
+                IsError = true,
+                Error = $"git stash push failed: {CleanGitStderr(pushed.Stderr)}. Nothing was changed."
+            }, gitRoot, cancellationToken);
+        }
+
+        var after = (await RunGitAsync(gitRoot, ["rev-parse", "-q", "--verify", "refs/stash"], cancellationToken)).Stdout.Trim();
+        if (after.Length == 0 || after == before)
+            return StashFailure("push", GitErrorCodes.NoChanges,
+                "Nothing was stashed: git reported success but no stash entry was created. Nothing was changed.",
+                GitErrorDetails.NoChanges);
+
+        var top = await StashListAsync(gitRoot, 1, cancellationToken);
+        return new GitStashResult
+        {
+            Action = "push",
+            IsError = false,
+            Created = true,
+            Message = top.Entries.FirstOrDefault()?.Message ?? message,
+            Note = StashDiskNote + " Staged changes come back unstaged on pop/apply (--index is not used).",
+            Status = await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken),
+        };
+    }
+
+    private const string StashDiskNote = "Tracked files changed on disk; call LoadSolution(forceReload: true) before editing C#.";
+
+    private async Task<GitStashResult> StashListAsync(string gitRoot, int count, CancellationToken cancellationToken)
+    {
+        // %gd = stash@{N}, %gs = reflog subject ("On <branch>: <label>" or "WIP on <branch>: <hash> <subject>").
+        var raw = await RunGitAsync(gitRoot,
+            ["stash", "list", "--format=%gd%x09%h%x09%cI%x09%gs"], cancellationToken);
+        if (raw.ExitCode != 0)
+            return new GitStashResult { Action = "list", IsError = true, Error = $"git stash list failed: {CleanGitStderr(raw.Stderr)}" };
+
+        var all = new List<GitStashEntry>();
+        foreach (var rawLine in raw.Stdout.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (line.Length == 0) continue;
+            var parts = line.Split('\t', 4);
+            if (parts.Length < 4) continue;
+            var refMatch = System.Text.RegularExpressions.Regex.Match(parts[0], @"^stash@\{(\d+)\}$");
+            if (!refMatch.Success) continue;
+
+            string? branch = null;
+            var message = parts[3];
+            var subject = System.Text.RegularExpressions.Regex.Match(message, @"^(?:WIP on|On) ([^:]+): (.*)$");
+            if (subject.Success)
+            {
+                branch = subject.Groups[1].Value;
+                message = subject.Groups[2].Value;
+            }
+            all.Add(new GitStashEntry
+            {
+                Index = int.Parse(refMatch.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture),
+                Hash = parts[1],
+                Date = parts[2],
+                Branch = branch,
+                Message = message,
+            });
+        }
+
+        var take = Math.Clamp(count, 1, 100);
+        return new GitStashResult
+        {
+            Action = "list",
+            IsError = false,
+            Entries = all.Take(take).ToList(),
+            TotalCount = all.Count,
+            IsTruncated = all.Count > take,
+        };
+    }
+
+    /// <summary>Up to 10 paths, comma-separated, with a "(+N more)" suffix when there are more.</summary>
+    private static string FormatPathSample(IReadOnlyList<string> paths)
+    {
+        var shown = string.Join(", ", paths.Take(10));
+        return paths.Count > 10 ? $"{shown} (+{paths.Count - 10} more)" : shown;
+    }
+
+    /// <summary>Paths with unresolved merge conflicts (git diff --diff-filter=U), or null when git could not be asked.</summary>
+    private async Task<List<string>?> UnmergedPathsAsync(string gitRoot, CancellationToken cancellationToken)
+    {
+        var raw = await RunGitAsync(gitRoot,
+            ["-c", "core.quotePath=false", "diff", "--name-only", "--diff-filter=U"], cancellationToken);
+        if (raw.ExitCode != 0)
+            return null;
+        return raw.Stdout.Split('\n')
+            .Select(l => l.TrimEnd('\r'))
+            .Where(l => l.Length > 0)
+            .ToList();
+    }
+
+    /// <summary>Paths with staged or unstaged changes to tracked files (untracked files ignored), or null when
+    /// git could not be asked. Empty means the tracked tree is clean.</summary>
+    private async Task<List<string>?> TrackedChangePathsAsync(string gitRoot, CancellationToken cancellationToken)
+    {
+        var raw = await RunGitAsync(gitRoot,
+            ["-c", "core.quotePath=false", "status", "--porcelain", "--untracked-files=no"], cancellationToken);
+        if (raw.ExitCode != 0)
+            return null;
+        return raw.Stdout.Split('\n')
+            .Select(l => l.TrimEnd('\r'))
+            .Where(l => l.Length > 3)
+            .Select(l => l[3..])
+            .ToList();
+    }
+
+    /// <summary>Number of stash entries, or -1 when git could not be asked.</summary>
+    private async Task<int> StashCountAsync(string gitRoot, CancellationToken cancellationToken)
+    {
+        var raw = await RunGitAsync(gitRoot, ["stash", "list", "--format=%gd"], cancellationToken);
+        if (raw.ExitCode != 0)
+            return -1;
+        return raw.Stdout.Split('\n').Count(l => l.Trim().Length > 0);
     }
 
     /// <summary>

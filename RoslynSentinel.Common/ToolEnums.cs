@@ -23,7 +23,8 @@ public enum GitOperation
     fetch,
     pull,
     abort,
-    tag
+    tag,
+    stash
 }
 
 /// <summary>
