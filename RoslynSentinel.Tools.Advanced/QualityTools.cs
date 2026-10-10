@@ -62,9 +62,9 @@ public class QualityTools
         return toolName switch
         {
             "scan" => ScanTools.ScanOptions(),
-            //"apply_file_codetransform" => CodeTransformationTools.ApplyFileCodeTransformOptions(),
-            //"apply_method_codetransform" => CodeTransformationTools.ApplyMethodCodeTransformOptions(),
-            //"apply_class_codetransform" => CodeTransformationTools.ApplyClassCodeTransformOptions(),
+            "apply_file_codetransform" => CodeTransformCatalogues.ApplyFileCodeTransformOptions(),
+            "apply_method_codetransform" => CodeTransformCatalogues.ApplyMethodCodeTransformOptions(),
+            "apply_class_codetransform" => CodeTransformCatalogues.ApplyClassCodeTransformOptions(),
             "generate" => GenerationTools.GenerateOptions(),
             "convert_switch_to_pattern_safe" => ConvertSwitchOptions(),
             "analyze_switch_for_pattern_conversion" => AnalyzeSwitchOptions(),

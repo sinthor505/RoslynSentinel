@@ -103,16 +103,14 @@ public static class ServerStartupHelpers
             : value.Split(',').Select(n => n.Trim()).Where(n => n.Length > 0).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Every tool-class name the registry knows about (both servers' mode maps plus the codetransform
-    /// class), used to resolve a user-typed --include-tools/--exclude-tools name to the exact
-    /// registered spelling.
+    /// Every tool-class name the registry knows about (both servers' mode maps), used to resolve a
+    /// user-typed --include-tools/--exclude-tools name to the exact registered spelling.
     /// </summary>
     private static readonly HashSet<string> KnownToolClassNames =
         new(
             ToolClassRegistry.BasicModeToToolClasses.Values
                 .Concat(ToolClassRegistry.AdvancedModeToToolClasses.Values)
-                .SelectMany(classes => classes)
-                .Append(ToolClassRegistry.CodeTransformToolClass),
+                .SelectMany(classes => classes),
             StringComparer.OrdinalIgnoreCase);
 
     /// <summary>

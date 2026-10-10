@@ -149,14 +149,8 @@
 
 | Class | Tool name | Modes | Breaker | Summary |
 |-------|-----------|-------|---------|---------|
-| CodeTransformTools | ApplyClassCodeTransform |  | - | Applies a class-scoped code transformation. |
-| CodeTransformTools | ApplyFileCodeTransform |  | - | Applies a file-wide code transformation. |
-| CodeTransformTools | ApplyMethodCodeTransform |  | - | Applies a method-scoped code transformation. |
-| CodeTransformTools | Generate |  | - | Generates new code for a type or method. |
-
-## Unregistered tool classes
-
-The following classes have `[McpServerToolType]` but are not registered in any mode:
-
-- CodeTransformTools
+| CodeTransformTools | ApplyClassCodeTransform | Experimental | - | Applies a class-scoped code transformation. |
+| CodeTransformTools | ApplyFileCodeTransform | Experimental | - | Applies a file-wide code transformation. |
+| CodeTransformTools | ApplyMethodCodeTransform | Experimental | - | Applies a method-scoped code transformation. |
+| CodeTransformTools | Generate | Experimental | - | Generates new code for a type or method. |
 

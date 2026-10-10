@@ -8,6 +8,7 @@ using ModelContextProtocol.Server;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tools.Advanced;
+using RoslynSentinel.Tools.Experimental;
 
 namespace RoslynSentinel.Server.Advanced;
 
@@ -224,13 +225,10 @@ public static class RoslynSentinelServiceExtensionsAdvanced
             services.AddSingleton<CommentingTools>();
             mcpBuilder.WithSentinelTools<CommentingTools>();
         }
-        var codeTransformActive = (ToolClassRegistry.CodeTransformTriggerModes.Any(activeModes.Contains) ||
-                              resolvedIncludeTools.Contains(ToolClassRegistry.CodeTransformToolClass)) &&
-                             !resolvedExcludeTools.Contains(ToolClassRegistry.CodeTransformToolClass);
-        if (codeTransformActive)
+        if (activeToolClasses.Contains("CodeTransformTools"))
         {
-            //services.AddSingleton<CodeTransformationTools>();
-            //mcpBuilder.WithSentinelTools<CodeTransformationTools>();
+            services.AddSingleton<CodeTransformTools>();
+            mcpBuilder.WithSentinelTools<CodeTransformTools>();
         }
         if (activeToolClasses.Contains("AsyncifyTools"))
         {

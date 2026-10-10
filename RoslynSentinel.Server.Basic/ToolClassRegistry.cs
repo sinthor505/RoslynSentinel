@@ -18,9 +18,19 @@ public static class ToolClassRegistry
     /// </summary>
     public const string ClaudeLeanMode = "claude-lean";
 
-    /// <summary>Modes that "--mode=all" must not expand to, because they restrict rather than add tools.</summary>
+    /// <summary>
+    /// Name of the opt-in mode that hosts <c>CodeTransformTools</c>: heuristic, single-file code transforms
+    /// that have not earned a place in the default surface (proposal_expose_dormant_codetransform_engines.md).
+    /// Advanced only. Opt-in: "all" never expands to it, so it costs no prompt tokens unless named.
+    /// </summary>
+    public const string ExperimentalMode = "Experimental";
+
+    /// <summary>
+    /// Modes that "--mode=all" must not expand to: claude-lean restricts rather than adds tools, and
+    /// Experimental is opt-in only.
+    /// </summary>
     public static readonly IReadOnlySet<string> ExclusiveModes =
-        new HashSet<string>([ClaudeLeanMode], StringComparer.OrdinalIgnoreCase);
+        new HashSet<string>([ClaudeLeanMode, ExperimentalMode], StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The 26 MCP tool names the <see cref="ClaudeLeanMode"/> mode exposes: the proposal's 25-tool Core set
@@ -135,16 +145,8 @@ public static class ToolClassRegistry
             ["TestCategories"] = ["TestCategoryTaggingTools"],
             ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
             [ClaudeLeanMode] = ClaudeLeanToolClasses,
+            [ExperimentalMode] = ["CodeTransformTools"],
         };
-
-    /// <summary>
-    /// Tool classes registered whenever any of Refactor/Modernize/Quality/Generation is active
-    /// (Advanced only -> <c>CodeTransformationTools</c> itself is Advanced-only, so this rule is a
-    /// no-op for Basic). Kept separate from the per-mode maps above because it's an "any of"
-    /// rule spanning four modes rather than a single mode's own class list.
-    /// </summary>
-    public static readonly string[] CodeTransformTriggerModes = ["Refactor", "Modernize", "Quality", "Generation"];
-    public const string CodeTransformToolClass = "CodeTransformationTools";
 
     /// <summary>
     /// Inverts both mode maps into tool class name -> the mode names that enable it (Basic modes
