@@ -492,6 +492,23 @@ public record GitHunksResult : GitResult
     public string? Note { get; set; }
 }
 
+/// <summary>Result of staging selected hunks of one file. The inherited GitStatusResult members are the
+/// repository status after the stage (copied from a StatusAsync result), so the caller sees the new index
+/// state without a second call. Only the index changes; the working tree is never touched.</summary>
+public record GitStageHunksResult : GitStatusResult
+{
+    public string Path { get; set; } = "";
+
+    /// <summary>The hunks that were staged, as numbered in the listing the selection was made from.</summary>
+    public List<GitHunkEntry> StagedHunks { get; set; } = [];
+
+    /// <summary>How many unstaged hunks the file still has after the stage.</summary>
+    public int RemainingUnstagedHunks { get; set; }
+
+    /// <summary>Set when the remaining count is not what the selection predicts; verify with a staged diff.</summary>
+    public string? Warning { get; set; }
+}
+
 /// <summary>Result of operation=worktree. Which fields are set depends on the action: list sets Worktrees;
 /// add sets Added, Branch and Note; remove sets Removed, Branch, Note and, when uncommitted changes were
 /// discarded, DiscardedPaths.</summary>
@@ -1759,8 +1776,18 @@ public class GitImpl : IGitOperations
         return (process.ExitCode, stdout.ToArray(), stderr.ToString());
     }
 
-    private async Task<GitHunksResult> ListHunksAsync(
-        string gitRoot, string path, int count, CancellationToken cancellationToken)
+    private static FileDiffLoad NoUnstagedChangesLoad(string path) => new(path, null, GitErrorCodes.NoChanges,
+    $"No unstaged changes in '{path}'. Already staged? Git(operation: diff, target: staged, files: ...). Nothing was changed.",
+    GitErrorDetails.NoChanges);
+
+    /// <summary>Outcome of loading one file's unstaged diff: Diff is set on success; otherwise ErrorKind, Error and
+    /// ErrorDetail describe the classified failure. Shared by operation=hunks and the hunk stage.</summary>
+    private sealed record FileDiffLoad(
+        string Path, GitFileDiff? Diff, string? ErrorKind = null, string? Error = null, string? ErrorDetail = null);
+
+    // Runs the zero-context unstaged diff of one already-classified tracked path through the byte-exact runner,
+    // parses it and applies the kind refusals. Success carries the parsed diff; every failure is classified.
+    private async Task<FileDiffLoad> LoadDiffForPathAsync(string gitRoot, string path, CancellationToken cancellationToken)
     {
         // Byte-exact runner: the fingerprint and any patch later built from this text must see the file's real line endings.
         var raw = await RunGitBytesAsync(gitRoot,
@@ -1768,11 +1795,11 @@ public class GitImpl : IGitOperations
             cancellationToken);
         if (raw.ExitCode != 0)
         {
-            return HunksFailure(path, GitErrorCodes.Fallback,
+            return new FileDiffLoad(path, null, GitErrorCodes.Fallback,
                 $"git diff failed: {CleanGitStderr(raw.Stderr)}. Nothing was changed.", "Call Git(operation: status) to check the repository state, then retry.");
         }
         if (raw.Stdout.Length == 0)
-            return NoUnstagedChanges(path);
+            return NoUnstagedChangesLoad(path);
 
         var diff = GitHunkParser.Parse(Encoding.Latin1.GetString(raw.Stdout));
         // Kind checks come before IsRenameOrModeOnly: that flag is also true for a binary or new-file diff with no @@ lines.
@@ -1786,12 +1813,76 @@ public class GitImpl : IGitOperations
         };
         if (unsupported is not null)
         {
-            return HunksFailure(path, GitErrorCodes.HunkUnsupported,
+            return new FileDiffLoad(path, null, GitErrorCodes.HunkUnsupported,
                 $"'{path}' {unsupported}, so it has no text hunks to choose from. Nothing was changed.", GitErrorDetails.HunkUnsupported);
         }
         if (diff.Hunks.Count == 0)
-            return NoUnstagedChanges(path);
+            return NoUnstagedChangesLoad(path);
 
+        return new FileDiffLoad(path, diff);
+    }
+
+    // Shared by operation=hunks and the hunk stage: validates that paths names exactly one tracked, existing,
+    // non-deleted file, then loads and parses its unstaged diff. Never throws for a classified refusal.
+    private async Task<FileDiffLoad> LoadFileDiffAsync(string gitRoot, string? paths, CancellationToken cancellationToken)
+    {
+        var list = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var listError);
+        if (list is null)
+            return new FileDiffLoad("", null, GitErrorCodes.HunkSelection, $"{listError} Nothing was changed.", GitErrorDetails.HunkSelection);
+        if (list.Length == 0)
+        {
+            return new FileDiffLoad("", null, GitErrorCodes.RefRequired,
+                "operation=hunks needs files naming exactly one file. Nothing was changed.",
+                "Pass files: '<one repo-relative path>'");
+        }
+        if (list.Length > 1)
+        {
+            return new FileDiffLoad("", null, GitErrorCodes.HunkSelection,
+                $"hunks works on one file at a time; got {list.Length}. Nothing was changed.", GitErrorDetails.HunkSelection);
+        }
+
+        var pathError = ValidateRepoRoot(gitRoot, list[0]);
+        if (pathError is not null)
+            return new FileDiffLoad(list[0], null, GitErrorCodes.PathNotFound, $"{pathError}. Nothing was changed.", GitErrorDetails.PathNotFound);
+
+        var classified = (await ClassifyPathsAsync(gitRoot, [list[0]], cancellationToken))[0];
+        var path = classified.Path;
+        switch (classified.Classification)
+        {
+            case PathClassification.Untracked:
+                var isDirectory = Directory.Exists(Path.Combine(gitRoot, path));
+                return new FileDiffLoad(path, null, GitErrorCodes.HunkUnsupported,
+                    isDirectory
+                        ? $"'{path}' is a directory; hunks works on one tracked file at a time. Nothing was changed."
+                        : $"'{path}' is untracked: untracked files have no hunks to choose from; stage the whole file with Git(operation: stage, files: ...). Nothing was changed.",
+                    GitErrorDetails.HunkUnsupported);
+            case PathClassification.Missing:
+                return new FileDiffLoad(path, null, GitErrorCodes.PathNotFound,
+                    $"'{path}' is not tracked and does not exist on disk. Nothing was changed.", GitErrorDetails.PathNotFound);
+            case PathClassification.HeadOnly:
+                return new FileDiffLoad(path, null, GitErrorCodes.HunkUnsupported,
+                    $"'{path}' is deleted (tracked in HEAD, gone from the index), so it has no hunks to choose from. Nothing was changed.",
+                    GitErrorDetails.HunkUnsupported);
+        }
+
+        return await LoadDiffForPathAsync(gitRoot, path, cancellationToken);
+    }
+
+    private static GitHunkEntry ToHunkEntry(GitHunk h) => new()
+    {
+        Index = h.Index,
+        OldStart = h.OldStart,
+        OldCount = h.OldCount,
+        NewStart = h.NewStart,
+        NewCount = h.NewCount,
+        Header = h.Header,
+        Added = h.NewCount,
+        Removed = h.OldCount,
+        Preview = GitHunkParser.PreviewLines(h, 6, 120)
+    };
+
+    private static GitHunksResult BuildHunksResult(string path, GitFileDiff diff, int count)
+    {
         var limit = Math.Clamp(count, 1, 100);
         return new GitHunksResult
         {
@@ -1799,26 +1890,194 @@ public class GitImpl : IGitOperations
             Fingerprint = diff.Fingerprint,
             TotalHunks = diff.Hunks.Count,
             IsTruncated = diff.Hunks.Count > limit,
-            Hunks = diff.Hunks.Take(limit).Select(h => new GitHunkEntry
-            {
-                Index = h.Index,
-                OldStart = h.OldStart,
-                OldCount = h.OldCount,
-                NewStart = h.NewStart,
-                NewCount = h.NewCount,
-                Header = h.Header,
-                Added = h.NewCount,
-                Removed = h.OldCount,
-                Preview = GitHunkParser.PreviewLines(h, 6, 120)
-            }).ToList(),
+            Hunks = diff.Hunks.Take(limit).Select(ToHunkEntry).ToList(),
             Note = $"Pass hunkIds with this hunkFingerprint to Git(operation: stage, files: '{path}'), or lineRange. " +
                    "Hunks are zero-context: adjacent edits are separate hunks."
         };
     }
 
-    private static GitHunksResult NoUnstagedChanges(string path) => HunksFailure(path, GitErrorCodes.NoChanges,
-        $"No unstaged changes in '{path}'. Already staged? Git(operation: diff, target: staged, files: ...). Nothing was changed.",
-        GitErrorDetails.NoChanges);
+    // The new-file lines a hunk occupies, using the same rule as GitHunkParser.SelectByNewLineRange.
+    private static (int Start, int End) HunkSpan(GitHunk h)
+    {
+        var start = Math.Max(h.NewStart, 1);
+        return (start, start + Math.Max(h.NewCount, 1) - 1);
+    }
+
+    private static string SpanText(int start, int end) => start == end ? start.ToString() : $"{start}-{end}";
+
+    private static string DescribeHunkSpans(GitFileDiff diff) =>
+    "Hunks (id: new-file lines): " + string.Join("; ", diff.Hunks.Select(h =>
+    {
+        var (start, end) = HunkSpan(h);
+        return $"{h.Index}: {SpanText(start, end)}";
+    })) + ".";
+
+    // Resolves hunkIds (guarded by the fingerprint) or lineRange to hunk indexes. Returns null on success with
+    // the ascending indexes in `selected`; otherwise the classified refusal. Exactly one of the two is non-blank.
+    private static (string Kind, string Error, string Detail)? SelectHunks(
+        GitFileDiff diff, string path, string? hunkIds, string? hunkFingerprint, string? lineRange, out List<int> selected)
+    {
+        selected = [];
+        if (!string.IsNullOrWhiteSpace(hunkIds))
+        {
+            if (string.IsNullOrWhiteSpace(hunkFingerprint))
+            {
+                return (GitErrorCodes.HunkSelection,
+                    "hunkIds needs the hunkFingerprint returned by Git(operation: hunks). Nothing was staged.", GitErrorDetails.HunkSelection);
+            }
+            var given = hunkFingerprint.Trim();
+            if (!string.Equals(given, diff.Fingerprint, StringComparison.OrdinalIgnoreCase))
+            {
+                return (GitErrorCodes.HunkStale,
+                    $"'{path}' changed since the hunks were listed (fingerprint {given} vs {diff.Fingerprint}). " +
+                    $"Re-run Git(operation: hunks, files: '{path}') and pick again. Nothing was staged.", GitErrorDetails.HunkStale);
+            }
+            if (!GitHunkParser.TryParseHunkIds(hunkIds, diff.Hunks.Count, out selected, out var idError))
+                return (GitErrorCodes.HunkSelection, $"{idError} {DescribeHunkSpans(diff)} Nothing was staged.", GitErrorDetails.HunkSelection);
+            return null;
+        }
+
+        if (!GitHunkParser.TryParseLineRange(lineRange, out var from, out var to, out var rangeError))
+            return (GitErrorCodes.HunkSelection, $"{rangeError} {DescribeHunkSpans(diff)} Nothing was staged.", GitErrorDetails.HunkSelection);
+
+        selected = GitHunkParser.SelectByNewLineRange(diff, from, to, out var straddling);
+        if (straddling.Count > 0)
+        {
+            var spans = straddling.Select(HunkSpan).ToList();
+            var lo = Math.Min(from, spans.Min(s => s.Start));
+            var hi = Math.Max(to, spans.Max(s => s.End));
+            var parts = straddling.Select(h =>
+            {
+                var (start, end) = HunkSpan(h);
+                return $"Hunk {h.Index} spans lines {SpanText(start, end)} but only partly lies in {SpanText(from, to)}.";
+            });
+            selected = [];
+            return (GitErrorCodes.HunkSelection,
+                $"{string.Join(' ', parts)} Widen the range to {SpanText(lo, hi)}, or use hunkIds. {DescribeHunkSpans(diff)} Nothing was staged.",
+                GitErrorDetails.HunkSelection);
+        }
+        if (selected.Count == 0)
+        {
+            return (GitErrorCodes.HunkSelection,
+                $"No hunk lies wholly inside lines {SpanText(from, to)}. {DescribeHunkSpans(diff)} Nothing was staged.",
+                GitErrorDetails.HunkSelection);
+        }
+        return null;
+    }
+
+    private static GitStageHunksResult StageHunksFailure(string path, string kind, string error, string detail) => new()
+    {
+        Path = path,
+        IsError = true,
+        ErrorKind = kind,
+        Error = error,
+        ErrorDetail = detail
+    };
+
+    // Runs after git apply succeeded: re-reads the unstaged diff to count what is left, and copies the repository
+    // status (from StatusAsync) into the inherited GitStatusResult members. Never turns a successful stage into an error.
+    private async Task<GitStageHunksResult> BuildStageHunksResultAsync(
+        string gitRoot, string? paths, string path, GitFileDiff before, List<int> selected, CancellationToken cancellationToken)
+    {
+        var expected = before.Hunks.Count - selected.Count;
+        var after = await LoadFileDiffAsync(gitRoot, paths, cancellationToken);
+        int? remaining = after.Diff is not null ? after.Diff.Hunks.Count
+            : after.ErrorKind == GitErrorCodes.NoChanges ? 0
+            : null;
+        var warnings = new List<string>();
+        if (remaining != expected)
+        {
+            warnings.Add($"Staged {selected.Count} hunk(s) but the remaining count is {remaining?.ToString() ?? "unknown"} " +
+                         $"(expected {expected}); verify with Git(operation: diff, target: staged).");
+        }
+
+        var status = await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
+        if (status.IsError)
+            warnings.Add($"The hunks were staged but the status could not be read: {status.Error}");
+
+        return new GitStageHunksResult
+        {
+            Path = path,
+            StagedHunks = selected.Select(i => ToHunkEntry(before.Hunks[i - 1])).ToList(),
+            RemainingUnstagedHunks = remaining ?? expected,
+            Warning = warnings.Count == 0 ? null : string.Join(' ', warnings),
+            Branch = status.Branch,
+            IsClean = status.IsClean,
+            Staged = status.Staged,
+            Unstaged = status.Unstaged,
+            Untracked = status.Untracked,
+            IsTruncated = status.IsTruncated,
+            TotalStagedCount = status.TotalStagedCount,
+            TotalUnstagedCount = status.TotalUnstagedCount,
+            TotalUntrackedCount = status.TotalUntrackedCount,
+            StagedByStatus = status.StagedByStatus,
+            UnstagedByStatus = status.UnstagedByStatus,
+            InProgress = status.InProgress,
+            AbortedOperation = status.AbortedOperation,
+        };
+    }
+
+    /// <summary>
+    /// Stages only the selected hunks of exactly one tracked text file into the index, by hunkIds (guarded by the
+    /// fingerprint from operation=hunks) or by a new-file lineRange. Only the index changes; the working tree is
+    /// never touched. git apply is all-or-nothing, so a rejected patch stages nothing.
+    /// </summary>
+    public async Task<GitStageHunksResult> StageHunksAsync(
+        string gitRoot, string? paths, string? hunkIds, string? hunkFingerprint, string? lineRange,
+        CancellationToken cancellationToken)
+    {
+        string? patchFile = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(hunkIds) == string.IsNullOrWhiteSpace(lineRange))
+            {
+                return StageHunksFailure("", GitErrorCodes.HunkSelection,
+                    "Pass hunkIds (with hunkFingerprint) or lineRange, not both. Nothing was staged.", GitErrorDetails.HunkSelection);
+            }
+
+            var load = await LoadFileDiffAsync(gitRoot, paths, cancellationToken);
+            if (load.Diff is null)
+                return StageHunksFailure(load.Path, load.ErrorKind ?? GitErrorCodes.Fallback, load.Error ?? "", load.ErrorDetail ?? "");
+
+            var rejection = SelectHunks(load.Diff, load.Path, hunkIds, hunkFingerprint, lineRange, out var selected);
+            if (rejection is { } refused)
+                return StageHunksFailure(load.Path, refused.Kind, refused.Error, refused.Detail);
+
+            // Outside the repo, so the workspace file watcher never sees it. Latin-1 keeps every byte of the
+            // patch (including CR) exactly as git printed it.
+            patchFile = Path.Combine(Path.GetTempPath(), "roslynsentinel-hunk-" + Guid.NewGuid().ToString("N") + ".patch");
+            await File.WriteAllBytesAsync(patchFile, Encoding.Latin1.GetBytes(GitHunkParser.BuildPatch(load.Diff, selected)), cancellationToken);
+
+            var apply = await RunGitAsync(gitRoot,
+                ["apply", "--cached", "--unidiff-zero", "--whitespace=nowarn", patchFile], cancellationToken);
+            if (apply.ExitCode != 0)
+            {
+                return StageHunksFailure(load.Path, GitErrorCodes.Fallback,
+                    $"git apply rejected the selected hunks: {CleanGitStderr(apply.Stderr)}. Nothing was staged.",
+                    "Re-run Git(operation: hunks, files: '<path>') and pick again, or stage the whole file with Git(operation: stage, files: '<path>').");
+            }
+
+            return await BuildStageHunksResultAsync(gitRoot, paths, load.Path, load.Diff, selected, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return UnexpectedFailure<GitStageHunksResult>(ex, "stage hunks");
+        }
+        finally
+        {
+            if (patchFile is not null)
+            {
+                try
+                {
+                    File.Delete(patchFile);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    _logger.LogWarning(ex, "Could not delete temporary hunk patch file {PatchFile}", patchFile);
+                }
+            }
+        }
+    }
 
     private static string ResolveGitExecutablePath()
     {
@@ -2439,46 +2698,11 @@ public class GitImpl : IGitOperations
     {
         try
         {
-            var list = DelimitedListParser.ParseStringOrJsonArrayToList(paths, out var listError);
-            if (list is null)
-                return HunksFailure("", GitErrorCodes.HunkSelection, $"{listError} Nothing was changed.", GitErrorDetails.HunkSelection);
-            if (list.Length == 0)
-            {
-                return HunksFailure("", GitErrorCodes.RefRequired,
-                    "operation=hunks needs files naming exactly one file. Nothing was changed.",
-                    "Pass files: '<one repo-relative path>'");
-            }
-            if (list.Length > 1)
-            {
-                return HunksFailure("", GitErrorCodes.HunkSelection,
-                    $"hunks works on one file at a time; got {list.Length}. Nothing was changed.", GitErrorDetails.HunkSelection);
-            }
+            var load = await LoadFileDiffAsync(gitRoot, paths, cancellationToken);
+            if (load.Diff is null)
+                return HunksFailure(load.Path, load.ErrorKind ?? GitErrorCodes.Fallback, load.Error ?? "", load.ErrorDetail ?? "");
 
-            var pathError = ValidateRepoRoot(gitRoot, list[0]);
-            if (pathError is not null)
-                return HunksFailure(list[0], GitErrorCodes.PathNotFound, $"{pathError}. Nothing was changed.", GitErrorDetails.PathNotFound);
-
-            var classified = (await ClassifyPathsAsync(gitRoot, [list[0]], cancellationToken))[0];
-            var path = classified.Path;
-            switch (classified.Classification)
-            {
-                case PathClassification.Untracked:
-                    var isDirectory = Directory.Exists(Path.Combine(gitRoot, path));
-                    return HunksFailure(path, GitErrorCodes.HunkUnsupported,
-                        isDirectory
-                            ? $"'{path}' is a directory; hunks works on one tracked file at a time. Nothing was changed."
-                            : $"'{path}' is untracked: untracked files have no hunks to choose from; stage the whole file with Git(operation: stage, files: ...). Nothing was changed.",
-                        GitErrorDetails.HunkUnsupported);
-                case PathClassification.Missing:
-                    return HunksFailure(path, GitErrorCodes.PathNotFound,
-                        $"'{path}' is not tracked and does not exist on disk. Nothing was changed.", GitErrorDetails.PathNotFound);
-                case PathClassification.HeadOnly:
-                    return HunksFailure(path, GitErrorCodes.HunkUnsupported,
-                        $"'{path}' is deleted (tracked in HEAD, gone from the index), so it has no hunks to choose from. Nothing was changed.",
-                        GitErrorDetails.HunkUnsupported);
-            }
-
-            return await ListHunksAsync(gitRoot, path, count, cancellationToken);
+            return BuildHunksResult(load.Path, load.Diff, count);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
