@@ -332,6 +332,38 @@ public enum GitResetMode
     /// <summary>Move HEAD/branch and reset the index to match, but leave the working tree untouched, so those changes reappear as unstaged modifications. (git reset --mixed)</summary>
     mixed
 }
+
+/// <summary>
+/// Action for the tag, stash and worktree operations. Required for those three operations (no default),
+/// so a destructive action can never be reached by omission. Each member lists the operation(s) that use it.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum GitAction
+{
+    /// <summary>List entries. Used by tag, stash and worktree.</summary>
+    list,
+
+    /// <summary>Create a tag. Used by tag.</summary>
+    create,
+
+    /// <summary>Delete a local tag. Used by tag.</summary>
+    delete,
+
+    /// <summary>Stash the working tree changes. Used by stash.</summary>
+    push,
+
+    /// <summary>Apply a stash entry and drop it on success. Used by stash.</summary>
+    pop,
+
+    /// <summary>Apply a stash entry and keep it. Used by stash.</summary>
+    apply,
+
+    /// <summary>Add a worktree. Used by worktree.</summary>
+    add,
+
+    /// <summary>Remove a worktree. Used by worktree.</summary>
+    remove
+}
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum SearchMode
 {

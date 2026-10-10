@@ -51,6 +51,28 @@ public static class GitErrorCodes
     public const string OperationInProgress = "GitOperationInProgress";
     /// <summary>A ref (reset ref, revert commitHash, checkout branchName) was required and not supplied.</summary>
     public const string RefRequired = "GitRefRequired";
+    /// <summary>action is missing, or not valid for this operation (tag, stash, worktree).</summary>
+    public const string ActionRequired = "GitActionRequired";
+    /// <summary>The named tag, branch, worktree or path already exists and the tool will not overwrite it.</summary>
+    public const string AlreadyExists = "GitAlreadyExists";
+    /// <summary>A tag, stash index, worktree, branch or ref does not exist.</summary>
+    public const string TargetNotFound = "GitTargetNotFound";
+    /// <summary>A tag name fails git check-ref-format.</summary>
+    public const string InvalidName = "GitInvalidName";
+    /// <summary>The operation needs a clean tracked tree (stash apply/pop) or a clean worktree (worktree remove) and the tree is dirty.</summary>
+    public const string WorkingTreeDirty = "GitWorkingTreeDirty";
+    /// <summary>Nothing to act on (stash push with no changes, hunk listing or staging with no unstaged changes).</summary>
+    public const string NoChanges = "GitNoChanges";
+    /// <summary>Applying a stash conflicted with the current tree. The attempt was rolled back and the entry kept.</summary>
+    public const string StashConflict = "GitStashConflict";
+    /// <summary>A safety rule refused the call (for example a worktree path inside the repository, or removing the main, current or locked worktree).</summary>
+    public const string Refused = "GitRefused";
+    /// <summary>The file kind is one hunk-level staging does not handle (untracked, new, deleted, binary, rename, mode-only).</summary>
+    public const string HunkUnsupported = "GitHunkUnsupported";
+    /// <summary>hunkIds or lineRange selects nothing, straddles a hunk, or is malformed.</summary>
+    public const string HunkSelection = "GitHunkSelection";
+    /// <summary>The hunkFingerprint no longer matches the file's current diff.</summary>
+    public const string HunkStale = "GitHunkStale";
 }
 
 /// <summary>Next-step text paired with <see cref="GitErrorCodes"/> in ResultError.Detail.</summary>
@@ -63,6 +85,20 @@ internal static class GitErrorDetails
     internal const string RefRequiredReset = "Pass ref, e.g. ref: \"HEAD~1\" to undo the last commit with the working tree kept, or call Git(operation: unstage) to unstage without moving HEAD.";
     internal const string RefRequiredRevert = "Pass commitHash, e.g. a hash taken from Git(operation: log).";
     internal const string RefRequiredCheckout = "Pass branchName, with createBranch=true if it does not exist yet. Git(operation: branch) lists existing branches.";
+    internal const string RefRequiredStash = "Pass stashIndex (0 = newest). Git(operation: stash, action: list) shows every entry.";
+    internal const string RefRequiredTag = "Pass tagName, e.g. Git(operation: tag, action: create, tagName: 'v1.0.0').";
+    internal const string RefRequiredWorktree = "Pass worktreePath (absolute, outside the repo) and, for add, branchName.";
+    internal const string ActionRequired = "Pass action with one of the values named in the message. Each operation documents its own actions.";
+    internal const string AlreadyExists = "Use a different name or path, or inspect the existing entry first with Git(operation: tag, action: list), Git(operation: worktree, action: list) or Git(operation: branch). This tool never overwrites an existing tag, branch or worktree.";
+    internal const string TargetNotFound = "Check the exact name with Git(operation: tag, action: list), Git(operation: stash, action: list), Git(operation: worktree, action: list) or Git(operation: branch), then retry.";
+    internal const string InvalidName = "Use a name that git accepts: no spaces, no '..', '~', '^', ':' or trailing '.lock'. Then retry.";
+    internal const string WorkingTreeDirty = "Commit them (Git(operation: commit)) or stash them (Git(operation: stash, action: push)) first; applying onto a dirty tree can mix the two sets of changes. Git(operation: status) lists the changed paths.";
+    internal const string NoChanges = "Nothing to act on. Call Git(operation: status) to see what changed, then retry with the paths that have changes.";
+    internal const string StashConflict = "Check out the commit or branch the stash was created on (Git(operation: checkout)), then apply again; Git(operation: stash, action: list) shows where each entry was made.";
+    internal const string Refused = "Take the safe alternative the message names, then retry. Nothing was changed.";
+    internal const string HunkUnsupported = "Stage the whole file with Git(operation: stage, files: '<path>') instead, or use a file kind that has text hunks.";
+    internal const string HunkSelection = "Call Git(operation: hunks, files: '<path>') and pass hunkIds or lineRange exactly as it lists them.";
+    internal const string HunkStale = "Re-run Git(operation: hunks, files: '<path>') and pick again with the new hunkFingerprint. Nothing was staged.";
 }
 
 public record GitRawResult
@@ -294,6 +330,36 @@ public class GitImpl : IGitOperations
     {
         _workspaceManager = workspaceManager;
         _logger = logger;
+    }
+
+    /// <summary>
+    /// Refusal for a tag, stash or worktree call whose action is missing or not valid for that
+    /// operation. Runs nothing, so the message says nothing was changed.
+    /// </summary>
+    internal static T ActionRefused<T>(string operation, GitAction? action, string validList) where T : GitResult, new()
+    {
+        var got = action is null ? "none" : action.Value.ToString();
+        return new T
+        {
+            IsError = true,
+            ErrorKind = GitErrorCodes.ActionRequired,
+            ErrorDetail = $"Pass action, e.g. Git(operation: {operation}, action: list).",
+            Error = $"operation={operation} needs action to be one of: {validList} (got {got}). Nothing was changed."
+        };
+    }
+
+    /// <summary>
+    /// Catch-all for an unexpected exception in a new Git operation. Logs the full exception and
+    /// returns a fixed message, so no exception text or internal path reaches the caller.
+    /// </summary>
+    internal T UnexpectedFailure<T>(Exception ex, string what) where T : GitResult, new()
+    {
+        _logger.LogError(ex, "Git {What} failed unexpectedly", what);
+        return new T
+        {
+            IsError = true,
+            Error = $"Git {what} failed unexpectedly; the server log has details. Nothing further was changed."
+        };
     }
 
     /// <summary>
