@@ -702,7 +702,7 @@ public class WorkspaceTools
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "referencesKind is required for mode: references - pass \"callers\", \"implementations\", or \"all\".")
                     });
                 }
-                return _symbolRelationship.FindReferences(reason, query ?? string.Empty, referencesKind.Value, filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                return _symbolRelationship.FindReferences(reason, query ?? string.Empty, referencesKind.Value, filePath, contextSnippet, lineBefore, lineAfter, includeTests: includeTests, cancellationToken: cancellationToken);
             default:
                 return _readNav.ListAll(reason, SearchModeToListAllKind(mode), projectName, query, exactMatch, KindListingMaxItems, includeTests: includeTests, cancellationToken: cancellationToken);
         }

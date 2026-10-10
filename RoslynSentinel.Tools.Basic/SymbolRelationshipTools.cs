@@ -69,6 +69,7 @@ public class SymbolRelationshipTools
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
+        [Description("false (default) = skip test projects; true = include them. Naming a test project in projectName/filePath always includes it. Set true for blast-radius checks.")] bool includeTests = false,
         CancellationToken cancellationToken = default) =>
-        _impl.FindReferences(reason, symbolName, kind, filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        _impl.FindReferences(reason, symbolName, kind, filePath, contextSnippet, lineBefore, lineAfter, includeTests: includeTests, cancellationToken: cancellationToken);
 }

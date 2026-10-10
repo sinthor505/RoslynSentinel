@@ -174,14 +174,74 @@ public class SymbolRelationshipImpl
         }
     }
 
-    public async Task<SentinelCallToolResult<object>> FindReferences(ToolCallReason reason, string symbolName, FindReferencesKind kind, string? filePath = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    // Maps every test-project document path (OrdinalIgnoreCase) to its project name. An explicit filePath that
+    // lives in a test project returns an empty map: naming a test project always includes it.
+    private async Task<Dictionary<string, string>> BuildTestDocumentMapAsync(string resolvedAbsolutePath, CancellationToken cancellationToken)
+    {
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        // READCHOKEPOINT-CAST: same cast as SymbolNavigationImpl.LocateSymbol; ISolutionProvider has no GetSolutionAsync.
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        foreach (var project in solution.Projects)
+        {
+            if (!TestProjectDetector.IsTestProject(project))
+            {
+                continue;
+            }
+            foreach (var document in project.Documents)
+            {
+                if (!string.IsNullOrEmpty(document.FilePath))
+                {
+                    map[document.FilePath] = project.Name;
+                }
+            }
+        }
+        if (!string.IsNullOrEmpty(resolvedAbsolutePath) && map.ContainsKey(resolvedAbsolutePath))
+        {
+            map.Clear();
+        }
+        return map;
+    }
+
+    // Drops hits whose file is a test-project document, recording the project name of each dropped hit.
+    private static List<T> ExcludeTestHits<T>(List<T> items, Func<T, string?> filePathOf, IReadOnlyDictionary<string, string> testDocProjects, List<string> droppedProjectNames)
+    {
+        var kept = new List<T>(items.Count);
+        foreach (var item in items)
+        {
+            string? path = filePathOf(item);
+            if (path != null && testDocProjects.TryGetValue(path, out var projectName))
+            {
+                droppedProjectNames.Add(projectName);
+                continue;
+            }
+            kept.Add(item);
+        }
+        return kept;
+    }
+
+    private static string DroppedTestHitsNote(List<string> droppedProjectNames)
+    {
+        if (droppedProjectNames.Count == 0)
+        {
+            return string.Empty;
+        }
+        int projects = droppedProjectNames.Distinct(StringComparer.OrdinalIgnoreCase).Count();
+        return $" {droppedProjectNames.Count} reference(s) in {projects} test project(s) excluded because includeTests is false; pass includeTests: true (needed for blast-radius checks).";
+    }
+
+    public async Task<SentinelCallToolResult<object>> FindReferences(ToolCallReason reason, string symbolName, FindReferencesKind kind, string? filePath = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, bool includeTests = true, CancellationToken cancellationToken = default)
     {
         try
         {
             FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
+            var testDocProjects = includeTests
+                ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                : await BuildTestDocumentMapAsync(filePathResolved.Absolute, cancellationToken);
+            var droppedProjectNames = new List<string>();
             if (kind == FindReferencesKind.callers)
             {
                 var result = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                result = ExcludeTestHits(result, c => c.FilePath, testDocProjects, droppedProjectNames);
                 var summary = SummarizeListResult.Build(result, c => c.FilePath);
                 return new SentinelCallToolResult<object>
                 {
@@ -191,7 +251,7 @@ public class SymbolRelationshipImpl
                         callers = result,
                         summary
                     },
-                    StatusMessage = summary.ToSummaryMessage("caller"),
+                    StatusMessage = summary.ToSummaryMessage("caller") + DroppedTestHitsNote(droppedProjectNames),
                     ListSummary = summary
                 };
             }
@@ -199,6 +259,7 @@ public class SymbolRelationshipImpl
             if (kind == FindReferencesKind.implementations)
             {
                 var result = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                result = ExcludeTestHits(result, i => i.FilePath, testDocProjects, droppedProjectNames);
                 var summary = SummarizeListResult.Build(result, i => i.FilePath ?? "(unknown)");
                 return new SentinelCallToolResult<object>
                 {
@@ -208,7 +269,7 @@ public class SymbolRelationshipImpl
                         implementations = result,
                         summary
                     },
-                    StatusMessage = summary.ToSummaryMessage("implementation"),
+                    StatusMessage = summary.ToSummaryMessage("implementation") + DroppedTestHitsNote(droppedProjectNames),
                     ListSummary = summary
                 };
             }
@@ -217,6 +278,8 @@ public class SymbolRelationshipImpl
             {
                 var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                callers = ExcludeTestHits(callers, c => c.FilePath, testDocProjects, droppedProjectNames);
+                implementations = ExcludeTestHits(implementations, i => i.FilePath, testDocProjects, droppedProjectNames);
                 var combinedPaths = callers.Select(c => c.FilePath).Concat(implementations.Select(i => i.FilePath ?? "(unknown)")).ToList();
                 var summary = SummarizeListResult.Build(combinedPaths, p => p);
                 return new SentinelCallToolResult<object>
@@ -228,7 +291,7 @@ public class SymbolRelationshipImpl
                         implementations,
                         summary
                     },
-                    StatusMessage = summary.ToSummaryMessage("hit"),
+                    StatusMessage = summary.ToSummaryMessage("hit") + DroppedTestHitsNote(droppedProjectNames),
                     ListSummary = summary
                 };
             }
