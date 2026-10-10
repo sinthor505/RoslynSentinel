@@ -51,6 +51,8 @@ PlanStepRunner/
 !.claude/settings.json
 !.claude/hooks/
 !.claude/hooks/**
+!.claude/skills/
+!.claude/skills/**
 docs/known-build-warnings.Solution.txt
 *.tmp
 /.scratch
