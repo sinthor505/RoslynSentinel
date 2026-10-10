@@ -82,7 +82,8 @@ public static class ReadEnvelopeBuilder
     /// <paramref name="memberFromLine"/>..<paramref name="memberToLine"/> (1-based, inclusive) in a file of
     /// <paramref name="fileLineCount"/> lines. The member is returned in full, so the result is always complete
     /// with no continuation offset; <see cref="ReadEnvelope.LineCount"/>/<see cref="ReadEnvelope.ByteCount"/>
-    /// describe the member (not the file), and the returned range gives its position in the file.
+    /// describe the member (not the file), <see cref="ReadEnvelope.TotalLinesInFile"/> gives the file's size, and
+    /// the returned range gives the member's position in the file.
     /// </summary>
     public static ReadEnvelope BuildForMember(int fileLineCount, int memberFromLine, int memberToLine, long memberByteCount)
     {

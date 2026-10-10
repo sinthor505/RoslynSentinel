@@ -150,6 +150,31 @@ public class Svc { public void Foo() {} }";
         // Invalid: originalIndex 5 is out of range for a 2-parameter method.
         var result = await _refactoringEngine.ChangeSignatureAsync("C.cs", "M", new SignatureParameterSpec[] { new ExistingParameterSpec(5) });
         Assert.That(result.Changes, Is.Empty, "Out-of-range originalIndex should return empty dict");
+        Assert.That(result.Error, Does.Contain("originalIndex"), "A refusal must say why, not read as a silent no-op");
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task ChangeSignature_MethodNotFound_ReturnsErrorNamingTheMethod()
+    {
+        const string source = "public class C { public void M(int a, int b) {} }";
+        SetSource(source, "C.cs");
+        var result = await _refactoringEngine.ChangeSignatureAsync("C.cs", "Missing", new SignatureParameterSpec[] { new ExistingParameterSpec(0) });
+        Assert.That(result.Changes, Is.Empty);
+        Assert.That(result.Error, Does.Contain("'Missing' was not found"));
+    }
+
+    [Test]
+    [Category("BasicRefactoringEngine")] // sentinel:auto-category
+    [Category("ChangeSignatureResult")] // sentinel:auto-category
+    public async Task ChangeSignature_ParameterlessMethod_ReturnsExplanatoryError()
+    {
+        const string source = "public class C { public void M() {} }";
+        SetSource(source, "C.cs");
+        var result = await _refactoringEngine.ChangeSignatureAsync("C.cs", "M", new SignatureParameterSpec[] { new NewParameterSpec("x", "int", "0") });
+        Assert.That(result.Changes, Is.Empty);
+        Assert.That(result.Error, Does.Contain("declares no parameters"));
     }
 
     [Test]

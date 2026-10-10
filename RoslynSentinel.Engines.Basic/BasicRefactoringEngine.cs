@@ -87,21 +87,22 @@ public class BasicRefactoringEngine
 
     public async Task<ChangeSignatureResult> ChangeSignatureAsync(FilePathWrapper filePath, string methodName, IReadOnlyList<SignatureParameterSpec> parameters, CancellationToken cancellationToken = default)
     {
-        var emptyResult = new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>());
+        // Every early exit names its reason: an empty result with no Error reads to the caller as a successful no-op.
+        static ChangeSignatureResult Refuse(string error) => new(new Dictionary<FilePathWrapper, string>(), new List<SkippedCallSite>(), error);
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return emptyResult;
+            return Refuse($"File '{filePath}' was not found in the loaded solution. Nothing was changed. Check the path or reload the solution.");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (root == null || semanticModel == null)
         {
-            return emptyResult;
+            return Refuse($"Could not load the syntax tree or semantic model for '{filePath}'. Nothing was changed.");
         }
 
         // BaseMethodDeclarationSyntax covers both ordinary methods and constructors, so a
@@ -117,7 +118,7 @@ public class BasicRefactoringEngine
             });
         if (methodDecl == null)
         {
-            return emptyResult;
+            return Refuse($"Method or constructor '{methodName}' was not found in '{filePath}' (a constructor is matched by its class name). Nothing was changed.");
         }
 
         // ChangeSignature only edits the single symbol it's invoked on - it never walks to/from
@@ -166,16 +167,21 @@ public class BasicRefactoringEngine
         }
 
         var originalParams = methodDecl.ParameterList.Parameters.ToList();
-        if (originalParams.Count == 0 || parameters.Count == 0)
+        if (originalParams.Count == 0)
         {
-            return emptyResult;
+            return Refuse($"'{methodName}' declares no parameters, and ChangeSignature cannot add a parameter to a parameterless method. Nothing was changed. Edit the declaration and its call sites directly.");
+        }
+
+        if (parameters.Count == 0)
+        {
+            return Refuse("The parameters list is empty, and ChangeSignature does not remove every parameter in one call. Nothing was changed. Edit the declaration and its call sites directly.");
         }
 
         // Validate: every ExistingParameterSpec.OriginalIndex must be in range and referenced at most once.
         var existingIndexes = parameters.OfType<ExistingParameterSpec>().Select(e => e.OriginalIndex).ToList();
         if (existingIndexes.Any(i => i < 0 || i >= originalParams.Count) || existingIndexes.Distinct().Count() != existingIndexes.Count)
         {
-            return emptyResult;
+            return Refuse($"parameters contains an originalIndex that is out of range or used more than once. '{methodName}' has {originalParams.Count} parameter(s), so valid originalIndex values are 0..{originalParams.Count - 1}, each used at most once. Nothing was changed.");
         }
 
         var generator = SyntaxGenerator.GetGenerator(document);
