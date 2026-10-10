@@ -78,8 +78,9 @@ itself" is not an exemption.
   and the other MCP tools below.
 - NEVER use shell `git add` or `git commit`. Use the `Git` tool.
 - Edit, Grep and shell are fine for Markdown, JSON, `.ps1`, `.csproj` and other non-C# files, and for
-  any file outside the repo. Git operations the `Git` tool doesn't implement (branch, push, checkout,
-  worktree, stash) legitimately use the shell - see `docs/current/TODO.md`.
+  any file outside the repo. Git operations the `Git` tool doesn't implement (rebase, merge, cherry-pick,
+  restore, clean, stash drop/clear, tag push, worktree prune/lock/move) legitimately use the shell; tag,
+  stash, worktree and hunk staging (`Git(operation: hunks)`) are covered by the tool.
 
 | Instead of | Use |
 | --- | --- |

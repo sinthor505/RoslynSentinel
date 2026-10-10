@@ -567,17 +567,21 @@ end the turn. It is not something to do by shell. Do not reword the command to g
             }
         }
 
-        # Only the operations the MCP Git tool actually implements. Everything else
-        # (branch, push, checkout, worktree, rebase, stash...) has no MCP equivalent,
-        # so denying it would strand the task with nowhere to go.
-        $covered = 'status|log|diff|add|commit|revert'
+        # Only the operations the MCP Git tool actually implements AND this hook enforces.
+        # Everything else (rebase, merge, restore...) has no MCP equivalent, so denying it
+        # would strand the task with nowhere to go. tag, stash and worktree moved here when
+        # the tool gained them (plan_git_tool_tag_stash_worktree_hunks.md step 14, D-19).
+        $covered = 'status|log|diff|add|commit|revert|tag|stash|worktree'
 
         # An uncovered git operation anywhere in the command line makes the whole line
         # un-blockable: the caller can't split it, and denying it leaves them stranded
         # with no MCP route. `reset` is the live example - Git can stage but not unstage,
         # so blocking a `git reset && git status` traps a mis-stage with no way back.
-        $uncovered = 'reset|restore|rm|mv|branch|checkout|switch|push|pull|fetch|clone|worktree|rebase|merge|stash|tag|cherry-pick|bisect|reflog|clean|apply|show|update-index|ls-files|check-ignore|rev-parse|config|remote|blame'
+        $uncovered = 'reset|restore|rm|mv|branch|checkout|switch|push|pull|fetch|clone|rebase|merge|cherry-pick|bisect|reflog|clean|apply|show|update-index|ls-files|check-ignore|rev-parse|config|remote|blame'
         if ($scan -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?($uncovered)\b") { exit 0 }
+        # Sub-actions of a covered operation that the tool deliberately does not offer
+        # (D-17 stash drop/clear, worktree prune/lock/unlock/move/repair) stay shell-only.
+        if ($scan -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?(stash\s+(drop|clear)|worktree\s+(prune|lock|unlock|move|repair))\b") { exit 0 }
 
         if ($scan -match "(^|[;&|]|\s)git\s+(-C\s+\S+\s+)?($covered)\b") {
             Exit-IfBypassed "$command`n$([string]$toolInput.description)" $null
@@ -587,19 +591,27 @@ BLOCKED by dog-fooding policy: git via shell.
 
   $($command.Trim())
 
-status, log, diff, stage/add, commit (incl. amend) and revert are covered by the MCP Git tool:
+status, log, diff, stage/add, commit (incl. amend), revert, tag, stash and worktree are covered by the MCP Git tool:
 
   Git(operation: "status")
   Git(operation: "diff",   target: "staged")
   Git(operation: "stage",  files: "a.cs,b.cs")
+  Git(operation: "hunks",  files: "a.cs")   # then stage with hunkIds + hunkFingerprint (replaces git add -p)
+  Git(operation: "stage",  files: "a.cs", hunkIds: "1,3", hunkFingerprint: "...")
   Git(operation: "commit", message: "...")
   Git(operation: "commit", amend: true)   # keeps HEAD's message (--no-edit)
   Git(operation: "commit", amend: true, message: "...")   # replaces it
+  Git(operation: "tag",      action: "list")
+  Git(operation: "stash",    action: "push", message: "...")
+  Git(operation: "worktree", action: "add", worktreePath: "<absolute, outside the repo>", branchName: "...", createBranch: true)
+  Git(operation: "worktree", action: "remove", worktreePath: "...")
+      # pass discardUncommittedChanges: true only to throw away a dirty worktree
 
 It also avoids the shell-quoting and CRLF footguns that Bash hits on Windows paths.
 
-Operations the tool does NOT cover - branch, push, checkout, worktree, rebase,
-stash, tag - are not blocked; use the shell for those.
+The tool also implements reset, branch, checkout, push, fetch, pull, show and abort; the hook does
+not block those in the shell yet, but prefer the tool. Still shell-only (not blocked): rebase, merge,
+cherry-pick, restore, rm, mv, clean, stash drop/clear, tag push, worktree prune/lock/move.
 
 If the Git tool fails or returns wrong data, that is a BLOCKING finding: stop,
 write docs/current/blockers/blocking_error_<slug>.md, and end the turn.

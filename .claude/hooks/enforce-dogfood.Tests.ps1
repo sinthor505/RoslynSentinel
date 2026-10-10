@@ -254,12 +254,36 @@ $cases = @(
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git reset -q && git status' } } }
     @{ n = 'git push'; want = 'allow'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git push origin master' } } }
-    @{ n = 'git worktree'; want = 'allow'
+    @{ n = 'git worktree remove (now covered)'; want = 'DENY'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git worktree remove foo' } } }
     @{ n = 'git checkout'; want = 'allow'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git checkout -b feat' } } }
-    @{ n = 'git stash && diff (mixed)'; want = 'allow'
+    @{ n = 'git stash && diff (mixed, both covered)'; want = 'DENY'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git stash && git diff' } } }
+    @{ n = 'git tag v1.0 (covered)'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git tag v1.0' } } }
+    @{ n = 'git tag -l (covered)'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git tag -l' } } }
+    @{ n = 'git stash list (covered)'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git stash list' } } }
+    @{ n = 'git stash pop (covered)'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git stash pop' } } }
+    @{ n = 'git worktree list (covered)'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git worktree list' } } }
+    @{ n = 'git worktree add (covered)'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git worktree add ../x br' } } }
+    @{ n = 'git worktree remove --force (covered)'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git worktree remove --force ../x' } } }
+    @{ n = 'git rebase && stash stays allowed (rebase uncovered)'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git rebase --continue && git stash' } } }
+    @{ n = 'git stash drop stays shell-only'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git stash drop stash@{0}' } } }
+    @{ n = 'git worktree prune stays shell-only'; want = 'allow'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git worktree prune' } } }
+    @{ n = 'git -C <out-of-repo temp dir> worktree remove stays covered'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = "git -C `"$env:TEMP`" worktree remove x" } } }
+    @{ n = 'git add -p (covered, hunk route)'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git add -p' } } }
     @{ n = 'git check-ignore'; want = 'allow'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git check-ignore -v x.json' } } }
 

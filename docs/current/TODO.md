@@ -209,8 +209,8 @@ commit's metadata + diff, same range/first-commit handling as `diff`), `stage`/`
 
 **2026-10-10: `tag`, `stash`, `worktree` and hunk-level `stage` (`hunks` preview, `hunkIds`/`lineRange`) are implemented
 and committed (`plans/plan_git_tool_tag_stash_worktree_hunks.md` steps 1-12). What remains is the live smoke on a fresh
-binary (step 13), updating `enforce-dogfood.ps1` so the shell-git message stops listing tag/stash/worktree as uncovered
-(step 14), and final verification (step 15). The "Still missing" text below is the pre-implementation record.**
+binary (step 13, done), updating `enforce-dogfood.ps1` so the shell-git message stops listing tag/stash/worktree as uncovered
+(step 14, done), and final verification (step 15). The "Still missing" text below is the pre-implementation record.**
 
 Still missing (superseded by the note above):
 
@@ -654,3 +654,14 @@ ChangeSignature, RenameSymbol conflicts) do not use it.
 - New files made by `CreateFile` are written with LF endings and `WriteFile(ReplaceFile)` treats an EOL-only
   rewrite as a no-op, so a new test file cannot be given the repo's CRLF endings with the MCP tools (seen with
   `BuildEngineParseTests.cs` and the B4/B7 test files).
+
+
+## Search / ListAll / FindReferences: exclude test projects by default (2026-10-10) - proposed, not started
+
+**Found:** 2026-10-10. `proposals/proposal_search_exclude_test_projects_by_default.md` (status PROPOSED). Hits from test projects bury the
+answer for names every fixture constructs (`PersistentWorkspaceManager`: 392 of 423 text hits are in test projects). No search path can
+exclude test projects today; the only detection is the private `TestRunEngine.IsTestProject`.
+
+**Not built:** needs a plan under `plans/` (parameter `includeTests`, tool default `false`, impl default `true`, shared `IsTestProject`
+helper, exclusion count in `statusMessage`). Open questions in the proposal: how `FindCallersAsync` can scope `SymbolFinder`, and measuring
+the `references` saving first.
