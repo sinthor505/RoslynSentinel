@@ -1826,6 +1826,28 @@ public class GitToolsSmokeTests
 
     private string TagNames() => RunGitCapture("tag", "-l").Trim();
 
+    // Step 5 helpers (stash). GitOutStrict fails the test on a non-zero git exit, so an "is empty"
+    // assertion cannot pass vacuously the way RunGitCapture's empty-on-failure result could.
+    private string GitOutStrict(params string[] args)
+    {
+        var (exitCode, output, error) = RunGitRaw(args);
+        Assert.That(exitCode, Is.EqualTo(0), $"git {string.Join(' ', args)} failed: {error}");
+        return output.Trim();
+    }
+
+    private int StashEntryCount() => GitOutStrict("stash", "list").Split('\n', StringSplitOptions.RemoveEmptyEntries).Length;
+
+    private string ReadRepoFile(string relPath) => File.ReadAllText(Path.Combine(_repoDir, relPath));
+
+    private bool RepoFileExists(string relPath) => File.Exists(Path.Combine(_repoDir, relPath));
+
+    // Leaves one stash entry (README.md "changed" stashed away) and a clean tree.
+    private void MakeOneStashEntry()
+    {
+        WriteFile("README.md", "changed");
+        RunGit(_repoDir, "stash", "push");
+    }
+
     private void CommitSecondChange()
     {
         WriteFile("second.txt", "second");
@@ -2019,6 +2041,268 @@ public class GitToolsSmokeTests
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
         Assert.That(result.ErrorData?.Message, Does.Contain("repoPath"));
         Assert.That(TagNames(), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Stash_List_Empty_ReturnsEmptyListAsync()
+    {
+        var result = await _gitTools.Git(reason: "list stash without entries", GitOperation.stash, action: GitAction.list);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var stash = (GitStashResult)result.SuccessData!;
+        Assert.That(stash.Entries, Is.Empty);
+        Assert.That(stash.TotalCount, Is.EqualTo(0));
+        Assert.That(stash.IsTruncated, Is.False);
+    }
+
+    [Test]
+    public async Task Git_Stash_Push_NoChanges_ReportsGitNoChangesAndCreatesNoEntryAsync()
+    {
+        var result = await _gitTools.Git(reason: "stash a clean tree", GitOperation.stash, action: GitAction.push);
+
+        AssertCoded(result, "GitNoChanges");
+        Assert.That(result.ErrorData?.Message, Does.Contain("Nothing to stash"));
+        Assert.That(StashEntryCount(), Is.EqualTo(0));
+    }
+
+    [Test]
+    public async Task Git_Stash_Push_StashesTrackedChangeAndLeavesUntrackedFileAsync()
+    {
+        WriteFile("README.md", "changed");
+        WriteFile("untracked.txt", "keep me");
+
+        var result = await _gitTools.Git(reason: "stash tracked change", GitOperation.stash, action: GitAction.push);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var stash = (GitStashResult)result.SuccessData!;
+        Assert.That(stash.Created, Is.True);
+        Assert.That(StashEntryCount(), Is.EqualTo(1));
+        Assert.That(ReadRepoFile("README.md"), Is.EqualTo("hello"), "the tracked change must be stashed away.");
+        Assert.That(RepoFileExists("untracked.txt"), Is.True, "untracked files stay put unless includeUntracked is set.");
+    }
+
+    [Test]
+    public async Task Git_Stash_Push_IncludeUntracked_StashesUntrackedFileAsync()
+    {
+        WriteFile("untracked.txt", "stash me");
+
+        var withoutFlag = await _gitTools.Git(reason: "stash only an untracked file without the flag", GitOperation.stash, action: GitAction.push);
+        AssertCoded(withoutFlag, "GitNoChanges");
+        Assert.That(RepoFileExists("untracked.txt"), Is.True);
+
+        var result = await _gitTools.Git(reason: "stash untracked file", GitOperation.stash, action: GitAction.push, includeUntracked: true);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(((GitStashResult)result.SuccessData!).Created, Is.True);
+        Assert.That(RepoFileExists("untracked.txt"), Is.False);
+        Assert.That(GitOutStrict("show", "--name-only", "--format=", "stash@{0}^3"), Does.Contain("untracked.txt"));
+    }
+
+    [Test]
+    public async Task Git_Stash_Push_WithMessageAndPaths_StashesOnlyListedPathAsync()
+    {
+        WriteFile("other.txt", "orig");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add other.txt");
+        WriteFile("README.md", "readme changed");
+        WriteFile("other.txt", "other changed");
+
+        var result = await _gitTools.Git(reason: "stash one path with a label", GitOperation.stash, action: GitAction.push, message: "only readme", paths: "README.md");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var stash = (GitStashResult)result.SuccessData!;
+        Assert.That(stash.Created, Is.True);
+        Assert.That(stash.Message, Is.EqualTo("only readme"));
+        Assert.That(ReadRepoFile("README.md"), Is.EqualTo("hello"), "the listed path must be stashed away.");
+        Assert.That(ReadRepoFile("other.txt"), Is.EqualTo("other changed"), "an unlisted path must stay modified.");
+        Assert.That(StashEntryCount(), Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task Git_Stash_List_ReportsIndexMessageAndHashAsync()
+    {
+        WriteFile("README.md", "first change");
+        var first = await _gitTools.Git(reason: "stash first", GitOperation.stash, action: GitAction.push, message: "label one");
+        Assert.That(first.IsError, Is.False, first.ErrorData?.Message);
+        WriteFile("README.md", "second change");
+        var second = await _gitTools.Git(reason: "stash second", GitOperation.stash, action: GitAction.push, message: "label two");
+        Assert.That(second.IsError, Is.False, second.ErrorData?.Message);
+
+        var list = await _gitTools.Git(reason: "list stash", GitOperation.stash, action: GitAction.list);
+
+        Assert.That(list.IsError, Is.False, list.ErrorData?.Message);
+        var stash = (GitStashResult)list.SuccessData!;
+        Assert.That(stash.TotalCount, Is.EqualTo(2));
+        Assert.That(stash.Entries.Select(e => e.Index), Is.EqualTo(new[] { 0, 1 }));
+        Assert.That(stash.Entries[0].Message, Is.EqualTo("label two"), "index 0 is the newest entry.");
+        Assert.That(stash.Entries[1].Message, Is.EqualTo("label one"));
+        Assert.That(stash.Entries[0].Hash, Is.Not.Empty);
+        Assert.That(stash.Entries[0].Branch, Is.Not.Null.And.Not.Empty);
+        Assert.That(stash.Entries[0].Date, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task Git_Stash_Pop_WithoutStashIndex_ReportsGitRefRequiredAndKeepsEntryAsync()
+    {
+        MakeOneStashEntry();
+
+        var result = await _gitTools.Git(reason: "pop without an index", GitOperation.stash, action: GitAction.pop);
+
+        AssertCoded(result, "GitRefRequired");
+        Assert.That(result.ErrorData?.Message, Does.Contain("stashIndex"));
+        Assert.That(StashEntryCount(), Is.EqualTo(1));
+        Assert.That(ReadRepoFile("README.md"), Is.EqualTo("hello"));
+    }
+
+    [Test]
+    public async Task Git_Stash_Pop_UnknownIndex_ReportsGitTargetNotFoundAsync()
+    {
+        MakeOneStashEntry();
+
+        var result = await _gitTools.Git(reason: "pop an index that does not exist", GitOperation.stash, action: GitAction.pop, stashIndex: 5);
+
+        AssertCoded(result, "GitTargetNotFound");
+        Assert.That(result.ErrorData?.Message, Does.Contain("stash@{5}"));
+        Assert.That(StashEntryCount(), Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task Git_Stash_Pop_DirtyTree_ReportsGitWorkingTreeDirtyAndKeepsEntryAsync()
+    {
+        MakeOneStashEntry();
+        WriteFile("README.md", "dirty again");
+
+        var result = await _gitTools.Git(reason: "pop onto a dirty tree", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
+
+        AssertCoded(result, "GitWorkingTreeDirty");
+        Assert.That(result.ErrorData?.Message, Does.Contain("README.md"));
+        Assert.That(StashEntryCount(), Is.EqualTo(1));
+        Assert.That(ReadRepoFile("README.md"), Is.EqualTo("dirty again"), "the refused pop must not touch the tree.");
+    }
+
+    [Test]
+    public async Task Git_Stash_Pop_RestoresChangeAndDropsEntryAsync()
+    {
+        MakeOneStashEntry();
+
+        var result = await _gitTools.Git(reason: "pop the newest entry", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(((GitStashResult)result.SuccessData!).AppliedIndex, Is.EqualTo(0));
+        Assert.That(ReadRepoFile("README.md"), Is.EqualTo("changed"));
+        Assert.That(StashEntryCount(), Is.EqualTo(0), "pop must drop the entry once it applied cleanly.");
+    }
+
+    [Test]
+    public async Task Git_Stash_Apply_RestoresChangeAndKeepsEntryAsync()
+    {
+        MakeOneStashEntry();
+
+        var result = await _gitTools.Git(reason: "apply the newest entry", GitOperation.stash, action: GitAction.apply, stashIndex: 0);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(((GitStashResult)result.SuccessData!).AppliedIndex, Is.EqualTo(0));
+        Assert.That(ReadRepoFile("README.md"), Is.EqualTo("changed"));
+        Assert.That(StashEntryCount(), Is.EqualTo(1), "apply must keep the entry.");
+    }
+
+    [Test]
+    public async Task Git_Stash_Push_Result_NoteMentionsLoadSolutionAsync()
+    {
+        WriteFile("README.md", "changed");
+
+        var result = await _gitTools.Git(reason: "stash and read the note", GitOperation.stash, action: GitAction.push);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(((GitStashResult)result.SuccessData!).Note, Does.Contain("LoadSolution(forceReload: true)"));
+    }
+
+    [Test]
+    public async Task Git_Stash_Push_WithRepoPath_IsRefusedAsync()
+    {
+        WriteFile("README.md", "changed");
+
+        var result = await _gitTools.Git(reason: "stash with repoPath", GitOperation.stash, action: GitAction.push, repoPath: _repoDir);
+
+        Assert.That(result.IsError, Is.True, "repoPath is only accepted for read-only operations and list actions.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("repoPath"));
+        Assert.That(StashEntryCount(), Is.EqualTo(0));
+        Assert.That(ReadRepoFile("README.md"), Is.EqualTo("changed"), "the refused push must not touch the tree.");
+    }
+
+    [Test]
+    public async Task Git_StashIndexAndIncludeUntracked_OnOtherOperation_AreRefusedAsync()
+    {
+        var withIndex = await _gitTools.Git(reason: "stashIndex on status", GitOperation.status, stashIndex: 0);
+        var withUntracked = await _gitTools.Git(reason: "includeUntracked on status", GitOperation.status, includeUntracked: true);
+
+        Assert.That(withIndex.IsError, Is.True);
+        Assert.That(withIndex.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
+        Assert.That(withIndex.ErrorData?.Message, Does.Contain("stashIndex"));
+        Assert.That(withUntracked.IsError, Is.True);
+        Assert.That(withUntracked.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
+        Assert.That(withUntracked.ErrorData?.Message, Does.Contain("includeUntracked"));
+    }
+
+    [Test]
+    public async Task Git_Stash_Pop_UntrackedFileInTheWay_FailsAndKeepsEntryAsync()
+    {
+        WriteFile("untracked.txt", "stashed copy");
+        RunGit(_repoDir, "stash", "push", "--include-untracked");
+        WriteFile("untracked.txt", "new file in the way");
+
+        var result = await _gitTools.Git(reason: "pop over a colliding untracked file", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(StashEntryCount(), Is.EqualTo(1), "a failed pop must keep the entry.");
+        Assert.That(ReadRepoFile("untracked.txt"), Is.EqualTo("new file in the way"), "the colliding file must not be overwritten.");
+        Assert.That(GitOutStrict("status", "--porcelain", "--untracked-files=no"), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Stash_Pop_Conflict_RollsBackToCleanTreeKeepsEntryAndReportsGitStashConflictAsync()
+    {
+        await MakeStashConflictAsync();
+
+        var result = await _gitTools.Git(reason: "pop a stash that conflicts", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
+
+        AssertStashConflictRolledBack(result);
+    }
+
+    [Test]
+    public async Task Git_Stash_Apply_Conflict_RollsBackToCleanTreeKeepsEntryAsync()
+    {
+        await MakeStashConflictAsync();
+
+        var result = await _gitTools.Git(reason: "apply a stash that conflicts", GitOperation.stash, action: GitAction.apply, stashIndex: 0);
+
+        AssertStashConflictRolledBack(result);
+    }
+
+    // D-18 setup: README.md is edited and stashed through the tool, then a different edit to the same
+    // line is committed, so applying stash@{0} must conflict.
+    private async Task MakeStashConflictAsync()
+    {
+        WriteFile("README.md", "from stash");
+        var push = await _gitTools.Git(reason: "stash the first edit", GitOperation.stash, action: GitAction.push);
+        Assert.That(push.IsError, Is.False, push.ErrorData?.Message);
+        WriteFile("README.md", "from commit");
+        RunGit(_repoDir, "commit", "-am", "conflicting change to the same line");
+    }
+
+    // The four repo assertions of D-18: clean tracked tree, no unmerged paths, entry kept, committed content intact.
+    private void AssertStashConflictRolledBack(SentinelCallToolResult<object> result)
+    {
+        AssertCoded(result, "GitStashConflict");
+        Assert.That(result.ErrorData?.Message, Does.Contain("rolled back"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("stash@{0} was kept"));
+        Assert.That(GitOutStrict("status", "--porcelain", "--untracked-files=no"), Is.Empty, "the tracked tree must be clean after the rollback.");
+        Assert.That(GitOutStrict("diff", "--name-only", "--diff-filter=U"), Is.Empty, "no path may stay unmerged.");
+        Assert.That(StashEntryCount(), Is.EqualTo(1), "the stash entry must be kept.");
+        var content = ReadRepoFile("README.md");
+        Assert.That(content, Does.Not.Contain("<<<<<<<"), "no conflict markers may remain.");
+        Assert.That(content, Is.EqualTo("from commit"), "README.md must equal the committed content.");
     }
 
     [Test]

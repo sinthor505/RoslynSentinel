@@ -24,10 +24,10 @@ public class GitTools
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state. tag takes an action.")]
+    [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state. tag/stash take an action.")]
     public async Task<SentinelCallToolResult<object>> Git(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters). tag: needs action (list|create|delete); create needs tagName.")]
+        [Description("abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters). tag: needs action (list|create|delete); create needs tagName. stash: needs action (list|push|apply|pop); apply/pop need stashIndex.")]
         GitOperation operation,
         [Description("log / tag list: number of entries (max 100).")]
         int count = 20,
@@ -38,7 +38,7 @@ public class GitTools
         [Description("diff/show: cap on returned output in UTF-8 bytes (min 1024, max 524288).")]
         int maxBytes = 65536,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit and amend=false; optional when amend=true (omit to keep HEAD's message); unused otherwise.
-        [Description("Required for operation=commit unless amend=true (then omitting keeps HEAD's message). tag create: when set makes an annotated tag.")]
+        [Description("Required for operation=commit unless amend=true (then omitting keeps HEAD's message). tag create: when set makes an annotated tag. stash push: label for the entry.")]
         string? message = null,
         [Description("stage: \"tracked\" (default) stages modified/deleted tracked files only; \"all\" also stages untracked files; \"listed\" stages exactly files/paths. commit: omit to commit exactly what's staged; pass scope only to also stage first. files implies scope=listed.")]
         GitStageScope? scope = null,
@@ -82,16 +82,21 @@ public class GitTools
         [Description("log/show/diff/reset/tag: the git ref (a branch, tag, commit hash, HEAD~1, ...). log: start ref. show: the commit to show. diff: what to diff the working tree against (or a range). reset: REQUIRED, the ref to move HEAD to (e.g. \"HEAD~1\" to undo the last commit). tag create: the commit to tag (default HEAD).")]
         string? @ref = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: action is required when operation=tag; refused for every other operation.
-        [Description("tag: REQUIRED. list | create | delete. Ignored-and-refused for every other operation.")]
+        [Description("tag/stash: REQUIRED. tag: list | create | delete. stash: list | push | apply | pop. Refused for every other operation.")]
         GitAction? action = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: tagName is required for tag create/delete; unused otherwise.
         [Description("tag create/delete: the tag name, e.g. v1.2.0.")]
         string? tagName = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: stashIndex is required for stash apply/pop (no default); unused otherwise.
+        [Description("stash apply/pop: which entry; 0 is the newest. Required, there is no default. See action: list.")]
+        int? stashIndex = null,
+        [Description("stash push: also stash untracked (not ignored) files. Default false: untracked files stay in the working tree.")]
+        bool includeUntracked = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
         var isReadOnlyOperation = operation is GitOperation.status or GitOperation.log or GitOperation.diff or GitOperation.show
-            || (operation is GitOperation.tag && action == GitAction.list);
+            || (operation is GitOperation.tag or GitOperation.stash && action == GitAction.list);
         if (!string.IsNullOrWhiteSpace(repoPath) && !isReadOnlyOperation)
         {
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"repoPath is only supported for status/log/diff/show (and list actions) - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or switch to a read-only operation.", Detail: null) };
@@ -139,9 +144,19 @@ public class GitTools
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"mainline is only supported for revert - operation '{operation}' does not use it. Omit mainline.", Detail: null) };
         }
 
-        if (action is not null && operation is not GitOperation.tag)
+        if (action is not null && operation is not (GitOperation.tag or GitOperation.stash))
         {
-            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"action is only supported for tag - operation '{operation}' does not use it. Omit action.", Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"action is only supported for tag/stash - operation '{operation}' does not use it. Omit action.", Detail: null) };
+        }
+
+        if (stashIndex is not null && operation != GitOperation.stash)
+        {
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"stashIndex is only supported for stash - operation '{operation}' does not use it. Omit stashIndex.", Detail: null) };
+        }
+
+        if (includeUntracked && operation != GitOperation.stash)
+        {
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"includeUntracked is only supported for stash (action: push) - operation '{operation}' does not use it. Omit includeUntracked.", Detail: null) };
         }
 
         // Gap A/B: when files are supplied and scope is null, infer scope=listed for stage/add/commit.
@@ -178,6 +193,7 @@ public class GitTools
             GitOperation.fetch => await _gitImpl.FetchAsync(gitRoot, remoteName, cancellationToken),
             GitOperation.pull => await _gitImpl.PullAsync(gitRoot, remoteName, rebase, cancellationToken),
             GitOperation.tag => await _gitImpl.TagAsync(gitRoot, action, tagName, resolvedRef, message, count, cancellationToken),
+            GitOperation.stash => await _gitImpl.StashAsync(gitRoot, action, message, includeUntracked, resolvedPaths, stashIndex, count, cancellationToken),
             _ => new GitResult { IsError = true, Error = $"Unknown operation '{operation}'." }
         };
 

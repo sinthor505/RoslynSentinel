@@ -864,7 +864,12 @@ public class GitImpl : IGitOperations
 
         var before = (await RunGitAsync(gitRoot, ["rev-parse", "-q", "--verify", "refs/stash"], cancellationToken)).Stdout.Trim();
 
-        var pushArgs = new List<string> { "--literal-pathspecs", "stash", "push" };
+        // --literal-pathspecs only when the caller named paths: git (2.55, verified) runs stash -u's internal
+        // clean of the untracked files with a magic pathspec of its own, and with the flag set and no caller
+        // paths that clean removes nothing, leaving the files both in the stash and in the working tree.
+        var pushArgs = pathList.Count > 0
+            ? new List<string> { "--literal-pathspecs", "stash", "push" }
+            : new List<string> { "stash", "push" };
         if (includeUntracked) pushArgs.Add("--include-untracked");
         if (!string.IsNullOrWhiteSpace(message)) { pushArgs.Add("-m"); pushArgs.Add(message); }
         if (pathList.Count > 0) { pushArgs.Add("--"); pushArgs.AddRange(pathList); }
