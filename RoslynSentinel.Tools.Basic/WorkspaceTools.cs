@@ -606,8 +606,9 @@ public class WorkspaceTools
         [Description(ToolParams.ListAllKindValues)][ExternalInputRequired(DataTag.SymbolKind, required: false)] ListAllKind kind = ListAllKind.all,
         [Description("Restricts to one project. Omit for the whole solution.")]
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
+        [Description("false (default) = skip test projects; true = include them. Naming a test project in projectName/filePath always includes it.")] bool includeTests = false,
         CancellationToken cancellationToken = default)
-        => _readNav.ListAll(reason, kind, projectName, cancellationToken: cancellationToken);
+        => _readNav.ListAll(reason, kind, projectName, includeTests: includeTests, cancellationToken: cancellationToken);
 
     [McpServerTool(Name = "Search")]
     [Produces(DataTag.Report)]
@@ -703,7 +704,7 @@ public class WorkspaceTools
                 }
                 return _symbolRelationship.FindReferences(reason, query ?? string.Empty, referencesKind.Value, filePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
             default:
-                return _readNav.ListAll(reason, SearchModeToListAllKind(mode), projectName, query, exactMatch, KindListingMaxItems, cancellationToken);
+                return _readNav.ListAll(reason, SearchModeToListAllKind(mode), projectName, query, exactMatch, KindListingMaxItems, includeTests: includeTests, cancellationToken: cancellationToken);
         }
     }
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]

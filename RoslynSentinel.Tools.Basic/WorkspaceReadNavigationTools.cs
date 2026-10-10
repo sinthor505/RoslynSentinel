@@ -65,8 +65,9 @@ public class WorkspaceReadNavigationTools
         [ExternalInputRequired(DataTag.SymbolKind, required: false)] ListAllKind kind = ListAllKind.all,
         [Description("Restricts results to one project. Omit to search the whole solution.")]
         [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
+        [Description("false (default) = skip test projects; true = include them. Naming a test project in projectName/filePath always includes it.")] bool includeTests = false,
         CancellationToken cancellationToken = default)
-        => _impl.ListAll(reason, kind, projectName, cancellationToken: cancellationToken);
+        => _impl.ListAll(reason, kind, projectName, includeTests: includeTests, cancellationToken: cancellationToken);
     [McpServerTool(Name = "SearchSolutionText")]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]

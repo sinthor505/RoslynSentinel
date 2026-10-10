@@ -336,16 +336,28 @@ public class WorkspaceReadNavigationImpl
         string? nameFilter = null,
         bool exactMatch = true,
         int? maxItems = null,
+        bool includeTests = true,
         CancellationToken cancellationToken = default)
     {
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var projects = solution.Projects.AsEnumerable();
+            var excludedTestProjectCount = 0;
             if (!string.IsNullOrEmpty(projectName))
             {
                 projects = projects.Where(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
             }
+            else if (!includeTests)
+            {
+                var allProjects = projects.ToList();
+                var keptProjects = allProjects.Where(p => !TestProjectDetector.IsTestProject(p)).ToList();
+                excludedTestProjectCount = allProjects.Count - keptProjects.Count;
+                projects = keptProjects;
+            }
+            var exclusionNote = excludedTestProjectCount > 0
+                ? $"{excludedTestProjectCount} test project(s) were excluded because includeTests is false; pass includeTests: true to include them."
+                : null;
 
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             var kindFilter = kind switch
@@ -417,6 +429,7 @@ public class WorkspaceReadNavigationImpl
                     TotalRecords = totalMatches,
                     HasMoreData = true,
                     ListSummary = summary,
+                    StatusMessage = exclusionNote,
                     WarningDetails = $"Truncated: showing the first {entries.Count} of {totalMatches} matching declarations (cap {maxItems}), spread over {summary.FileCount} files and {summary.ByProject!.Count} projects - listSummary.byProject and listSummary.byFile (top {summary.ByFile.Count} files, {summary.TruncatedFileCount} more files not shown) count ALL matches, use them to pick where to look. Narrow with query (name filter) or projectName, or use mode: symbol. For all callers/implementations of a symbol use FindReferences or QuerySymbolRelationships; for orientation use ListAll or GetFileOutline."
                 };
             }
@@ -426,11 +439,11 @@ public class WorkspaceReadNavigationImpl
                 return result with
                 {
                     TotalRecords = 0,
-                    StatusMessage = $"No {(kindFilter ?? "declaration")} named '{nameFilter}' found ({(exactMatch ? "exact" : "substring")} match). Use mode: symbol to search every kind at once" + (exactMatch ? ", or pass exactMatch: false for a substring match." : ".")
+                    StatusMessage = $"No {(kindFilter ?? "declaration")} named '{nameFilter}' found ({(exactMatch ? "exact" : "substring")} match). Use mode: symbol to search every kind at once" + (exactMatch ? ", or pass exactMatch: false for a substring match." : ".") + (exclusionNote is null ? string.Empty : " " + exclusionNote)
                 };
             }
 
-            return result with { TotalRecords = totalMatches };
+            return result with { TotalRecords = totalMatches, StatusMessage = exclusionNote };
         }
         catch (Exception ex)
         {
