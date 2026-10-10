@@ -27,9 +27,9 @@ public class GitTools
     [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state. tag/stash/worktree take an action.")]
     public async Task<SentinelCallToolResult<object>> Git(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters). tag: needs action (list|create|delete); create needs tagName. stash: needs action (list|push|apply|pop); apply/pop need stashIndex. worktree: needs action (list|add|remove); add needs worktreePath and branchName; remove needs worktreePath.")]
+        [Description("abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters). tag: needs action (list|create|delete); create needs tagName. stash: needs action (list|push|apply|pop); apply/pop need stashIndex. worktree: needs action (list|add|remove); add needs worktreePath and branchName; remove needs worktreePath. hunks: list the unstaged hunks of one file (files: one path) with ids and a fingerprint, to feed stage's hunkIds.")]
         GitOperation operation,
-        [Description("log / tag list: number of entries (max 100).")]
+        [Description("log / tag list: number of entries (max 100). hunks: max hunks listed.")]
         int count = 20,
         [Description("diff: \"working\" (alias \"unstaged\"), \"staged\", a commit hash, branch or tag, or a range refA..refB. show: a commit hash/ref. Prefer 'ref'.")]
         string target = "working",
@@ -69,7 +69,7 @@ public class GitTools
         bool amend = false,
         [Description("reset: \"soft\" moves HEAD only (changes stay staged); \"mixed\" (default) also resets the index (changes become unstaged). No \"hard\" mode.")]
         GitResetMode? mode = null,
-        [Description("status/log/diff/show only: absolute path to a different repo/worktree.")]
+        [Description("status/log/diff/show/hunks (and list actions) only: absolute path to a different repo/worktree.")]
         string? repoPath = null,
         [Description("status: most entries to list before truncating to a 10-per-list sample plus full counts (valid 1-5000). Untracked files are listed individually, so any listed path can be passed as-is to stage/commit files.")]
         int maxEntries = 50,
@@ -100,11 +100,11 @@ public class GitTools
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        var isReadOnlyOperation = operation is GitOperation.status or GitOperation.log or GitOperation.diff or GitOperation.show
+        var isReadOnlyOperation = operation is GitOperation.status or GitOperation.log or GitOperation.diff or GitOperation.show or GitOperation.hunks
             || (operation is GitOperation.tag or GitOperation.stash or GitOperation.worktree && action == GitAction.list);
         if (!string.IsNullOrWhiteSpace(repoPath) && !isReadOnlyOperation)
         {
-            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"repoPath is only supported for status/log/diff/show (and list actions) - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or switch to a read-only operation.", Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"repoPath is only supported for status/log/diff/show/hunks (and list actions) - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or switch to a read-only operation.", Detail: null) };
         }
 
         var gitRoot = _gitImpl.TryGetGitRoot(out var rootError, isReadOnlyOperation ? repoPath : null);
@@ -210,6 +210,7 @@ public class GitTools
             GitOperation.tag => await _gitImpl.TagAsync(gitRoot, action, tagName, resolvedRef, message, count, cancellationToken),
             GitOperation.stash => await _gitImpl.StashAsync(gitRoot, action, message, includeUntracked, resolvedPaths, stashIndex, count, cancellationToken),
             GitOperation.worktree => await _gitImpl.WorktreeAsync(gitRoot, action, worktreePath, branchName, createBranch, startPoint, discardUncommittedChanges, cancellationToken),
+            GitOperation.hunks => await _gitImpl.HunksAsync(gitRoot, resolvedPaths, count, cancellationToken),
             _ => new GitResult { IsError = true, Error = $"Unknown operation '{operation}'." }
         };
 

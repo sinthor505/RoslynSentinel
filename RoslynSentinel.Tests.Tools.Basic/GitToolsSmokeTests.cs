@@ -2565,4 +2565,201 @@ public class GitToolsSmokeTests
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
         Assert.That(result.ErrorData?.Message, Does.Contain("action"));
     }
+
+    // ---- operation=hunks ----
+
+    // Commits a file of "line 1".."line N" (LF endings, written as bytes so the platform and any
+    // global autocrlf setting cannot change them) and returns its lines for the caller to edit.
+    private List<string> CommitNumberedFile(string relPath, int lineCount)
+    {
+        RunGit(_repoDir, "config", "core.autocrlf", "false");
+        var lines = Enumerable.Range(1, lineCount).Select(n => "line " + n).ToList();
+        WriteLines(relPath, lines);
+        RunGit(_repoDir, "add", "--", relPath);
+        RunGit(_repoDir, "commit", "-m", "add " + relPath);
+        return lines;
+    }
+
+    private void WriteLines(string relPath, IEnumerable<string> lines, string eol = "\n")
+    {
+        File.WriteAllBytes(Path.Combine(_repoDir, relPath), System.Text.Encoding.UTF8.GetBytes(string.Join(eol, lines) + eol));
+    }
+
+    // Three distant, differently shaped edits: line 3 replaced, one line inserted after line 15,
+    // original line 27 deleted. Zero-context hunks: (-3,1 +3,1) (-15,0 +16,1) (-27,1 +27,0); the deletion's new-file
+    // position is git's "line before the deletion", shifted by the earlier insertion.
+    private static List<string> ApplyThreeDistantEdits(List<string> lines)
+    {
+        var edited = new List<string>(lines);
+        edited[2] = "line 3 changed";
+        edited.Insert(15, "inserted after 15");
+        edited.RemoveAt(27);
+        return edited;
+    }
+
+    [Test]
+    public async Task Git_Hunks_ListsSeparateHunksWithLineNumbersAsync()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        WriteLines("a.txt", ApplyThreeDistantEdits(lines));
+
+        var result = await _gitTools.Git(reason: "list hunks", GitOperation.hunks, files: "a.txt");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var hunks = (GitHunksResult)result.SuccessData!;
+        Assert.That(hunks.Path, Is.EqualTo("a.txt"));
+        Assert.That(hunks.TotalHunks, Is.EqualTo(3));
+        Assert.That(hunks.IsTruncated, Is.False);
+        Assert.That(hunks.Fingerprint, Is.Not.Null.And.Not.Empty);
+        Assert.That(hunks.Hunks.Select(h => h.Index), Is.EqualTo(new[] { 1, 2, 3 }));
+        Assert.That(hunks.Hunks.Select(h => h.NewStart), Is.EqualTo(new[] { 3, 16, 27 }));
+        Assert.That(hunks.Hunks.Select(h => h.Added), Is.EqualTo(new[] { 1, 1, 0 }));
+        Assert.That(hunks.Hunks.Select(h => h.Removed), Is.EqualTo(new[] { 1, 0, 1 }));
+        Assert.That(hunks.Hunks[0].Preview, Does.Contain("line 3 changed"));
+        Assert.That(hunks.Note, Does.Contain("hunkFingerprint"));
+    }
+
+    [Test]
+    public async Task Git_Hunks_FingerprintChangesWhenFileChangesAsync()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        var edited = ApplyThreeDistantEdits(lines);
+        WriteLines("a.txt", edited);
+
+        var first = (GitHunksResult)(await _gitTools.Git(reason: "list hunks", GitOperation.hunks, files: "a.txt")).SuccessData!;
+        var again = (GitHunksResult)(await _gitTools.Git(reason: "list hunks again", GitOperation.hunks, files: "a.txt")).SuccessData!;
+        edited[29] = "line 30 also changed";
+        WriteLines("a.txt", edited);
+        var changed = (GitHunksResult)(await _gitTools.Git(reason: "list hunks after another edit", GitOperation.hunks, files: "a.txt")).SuccessData!;
+
+        Assert.That(again.Fingerprint, Is.EqualTo(first.Fingerprint), "an unchanged file must keep its fingerprint.");
+        Assert.That(changed.Fingerprint, Is.Not.EqualTo(first.Fingerprint));
+        Assert.That(changed.TotalHunks, Is.EqualTo(4));
+    }
+
+    [Test]
+    public async Task Git_Hunks_CountCapsTheListedHunksButNotTheFingerprintAsync()
+    {
+        var lines = CommitNumberedFile("a.txt", 30);
+        WriteLines("a.txt", ApplyThreeDistantEdits(lines));
+
+        var all = (GitHunksResult)(await _gitTools.Git(reason: "list all hunks", GitOperation.hunks, files: "a.txt")).SuccessData!;
+        var capped = await _gitTools.Git(reason: "list one hunk", GitOperation.hunks, files: "a.txt", count: 1);
+
+        Assert.That(capped.IsError, Is.False, capped.ErrorData?.Message);
+        var cappedHunks = (GitHunksResult)capped.SuccessData!;
+        Assert.That(cappedHunks.Hunks, Has.Count.EqualTo(1));
+        Assert.That(cappedHunks.TotalHunks, Is.EqualTo(3));
+        Assert.That(cappedHunks.IsTruncated, Is.True);
+        Assert.That(cappedHunks.Fingerprint, Is.EqualTo(all.Fingerprint), "the fingerprint covers the whole file diff, not the listed subset.");
+    }
+
+    [Test]
+    public async Task Git_Hunks_UntrackedFile_ReportsGitHunkUnsupportedAsync()
+    {
+        WriteFile("brand-new.txt", "one\ntwo\n");
+
+        var result = await _gitTools.Git(reason: "hunks of untracked file", GitOperation.hunks, files: "brand-new.txt");
+
+        AssertCoded(result, "GitHunkUnsupported");
+        Assert.That(result.ErrorData?.Message, Does.Contain("untracked"));
+    }
+
+    [Test]
+    public async Task Git_Hunks_UnchangedFile_ReportsGitNoChangesAsync()
+    {
+        var result = await _gitTools.Git(reason: "hunks of unchanged file", GitOperation.hunks, files: "README.md");
+
+        AssertCoded(result, "GitNoChanges");
+        Assert.That(result.ErrorData?.Message, Does.Contain("README.md"));
+    }
+
+    [Test]
+    public async Task Git_Hunks_TwoPaths_ReportsGitHunkSelectionAsync()
+    {
+        CommitNumberedFile("a.txt", 5);
+
+        var result = await _gitTools.Git(reason: "hunks of two files", GitOperation.hunks, files: "README.md,a.txt");
+
+        AssertCoded(result, "GitHunkSelection");
+        Assert.That(result.ErrorData?.Message, Does.Contain("one file at a time"));
+    }
+
+    [Test]
+    public async Task Git_Hunks_WithoutFiles_ReportsGitRefRequiredAsync()
+    {
+        var result = await _gitTools.Git(reason: "hunks without files", GitOperation.hunks);
+
+        AssertCoded(result, "GitRefRequired");
+        Assert.That(result.ErrorData?.Detail, Does.Contain("files"));
+    }
+
+    [Test]
+    public async Task Git_Hunks_BinaryFile_ReportsGitHunkUnsupportedAsync()
+    {
+        RunGit(_repoDir, "config", "core.autocrlf", "false");
+        File.WriteAllBytes(Path.Combine(_repoDir, "blob.bin"), [0x00, 0x01, 0x02, 0x03]);
+        RunGit(_repoDir, "add", "--", "blob.bin");
+        RunGit(_repoDir, "commit", "-m", "add binary");
+        File.WriteAllBytes(Path.Combine(_repoDir, "blob.bin"), [0x00, 0x01, 0x09, 0x03, 0x00]);
+
+        var result = await _gitTools.Git(reason: "hunks of binary file", GitOperation.hunks, files: "blob.bin");
+
+        AssertCoded(result, "GitHunkUnsupported");
+        Assert.That(result.ErrorData?.Message, Does.Contain("binary").IgnoreCase);
+    }
+
+    [Test]
+    public async Task Git_Hunks_CrlfFile_ParsesAsync()
+    {
+        // Committed with CRLF and autocrlf off, so the diff body lines carry a literal CR.
+        RunGit(_repoDir, "config", "core.autocrlf", "false");
+        var lines = Enumerable.Range(1, 30).Select(n => "crlf line " + n).ToList();
+        WriteLines("crlf.txt", lines, "\r\n");
+        RunGit(_repoDir, "add", "--", "crlf.txt");
+        RunGit(_repoDir, "commit", "-m", "add crlf file");
+        lines[4] = "crlf line 5 changed";
+        lines[24] = "crlf line 25 changed";
+        WriteLines("crlf.txt", lines, "\r\n");
+
+        var result = await _gitTools.Git(reason: "hunks of CRLF file", GitOperation.hunks, files: "crlf.txt");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var hunks = (GitHunksResult)result.SuccessData!;
+        Assert.That(hunks.TotalHunks, Is.EqualTo(2));
+        Assert.That(hunks.Hunks.Select(h => h.NewStart), Is.EqualTo(new[] { 5, 25 }));
+        Assert.That(hunks.Hunks.Select(h => h.Added), Is.EqualTo(new[] { 1, 1 }));
+        Assert.That(hunks.Hunks.Select(h => h.Removed), Is.EqualTo(new[] { 1, 1 }));
+        Assert.That(hunks.Hunks[0].Preview, Does.Contain("crlf line 5 changed"));
+    }
+
+    [Test]
+    public async Task Git_Hunks_RepoPath_TargetsThatRepoAsync()
+    {
+        var otherRepoDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelGitSmoke_Other_" + Guid.NewGuid());
+        Directory.CreateDirectory(otherRepoDir);
+        try
+        {
+            RunGit(otherRepoDir, "init");
+            RunGit(otherRepoDir, "config", "user.email", "test@example.com");
+            RunGit(otherRepoDir, "config", "user.name", "Test");
+            RunGit(otherRepoDir, "config", "core.autocrlf", "false");
+            File.WriteAllBytes(Path.Combine(otherRepoDir, "OTHER.md"), System.Text.Encoding.UTF8.GetBytes("other repo\n"));
+            RunGit(otherRepoDir, "add", "-A");
+            RunGit(otherRepoDir, "commit", "-m", "other repo initial commit");
+            File.WriteAllBytes(Path.Combine(otherRepoDir, "OTHER.md"), System.Text.Encoding.UTF8.GetBytes("other repo changed\n"));
+
+            // OTHER.md does not exist in the loaded solution's repo (_repoDir); if repoPath were ignored this would fail.
+            var result = await _gitTools.Git(reason: "hunks in other repo", GitOperation.hunks, files: "OTHER.md", repoPath: otherRepoDir);
+
+            Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+            var hunks = (GitHunksResult)result.SuccessData!;
+            Assert.That(hunks.Path, Is.EqualTo("OTHER.md"));
+            Assert.That(hunks.TotalHunks, Is.EqualTo(1));
+        }
+        finally
+        {
+            DeleteDirectoryTree(otherRepoDir);
+        }
+    }
 }
