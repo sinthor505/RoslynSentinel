@@ -78,7 +78,7 @@ public class ReadEnvelopeBuilderTests
     {
         var envelope = ReadEnvelopeBuilder.Build(100, 2000, 1, 100);
 
-        Assert.That(envelope.SchemaVersion, Is.EqualTo(1));
+        Assert.That(envelope.SchemaVersion, Is.EqualTo(2));
     }
 
     [Test]
@@ -101,5 +101,20 @@ public class ReadEnvelopeBuilderTests
         Assert.That(envelope.ReturnedFromLine, Is.EqualTo(50));
         Assert.That(envelope.ReturnedToLine, Is.EqualTo(120));
         Assert.That(envelope.ContinuationOffset, Is.EqualTo(121));
+    }
+
+    [Test]
+    public void BuildForMember_ReturnsCompleteEnvelopeDescribingTheMember()
+    {
+        var envelope = ReadEnvelopeBuilder.BuildForMember(fileLineCount: 2452, memberFromLine: 88, memberToLine: 455, memberByteCount: 22_000);
+
+        Assert.That(envelope.IsComplete, Is.True);
+        Assert.That(envelope.ContinuationOffset, Is.Null);
+        Assert.That(envelope.LineCount, Is.EqualTo(368));
+        Assert.That(envelope.TotalLinesInFile, Is.EqualTo(2452));
+        Assert.That(envelope.ByteCount, Is.EqualTo(22_000));
+        Assert.That(envelope.ReturnedFromLine, Is.EqualTo(88));
+        Assert.That(envelope.ReturnedToLine, Is.EqualTo(455));
+        Assert.That(envelope.OutlineAvailable, Is.True);
     }
 }

@@ -144,12 +144,12 @@ public class WorkspaceReadNavigationImpl
 
             var fileText = await document.GetTextAsync(cancellationToken);
             var fileLineCount = fileText.Lines.Count;
-            var fileByteCount = System.Text.Encoding.UTF8.GetByteCount(fileText.ToString());
             var methodSpan = method.GetLocation().GetLineSpan();
-            var envelope = ReadEnvelopeBuilder.Build(
-                fileLineCount, fileByteCount,
-                returnedFromLine: methodSpan.StartLinePosition.Line + 1,
-                returnedToLine: methodSpan.EndLinePosition.Line + 1);
+            var envelope = ReadEnvelopeBuilder.BuildForMember(
+                fileLineCount,
+                memberFromLine: methodSpan.StartLinePosition.Line + 1,
+                memberToLine: methodSpan.EndLinePosition.Line + 1,
+                memberByteCount: methodBytes);
 
             if (methodBytes > thresholdBytes && !string.IsNullOrEmpty(solutionRoot))
             {

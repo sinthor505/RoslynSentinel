@@ -69,7 +69,10 @@ public class GetMethodSourceTests
         Assert.That(data.Source, Does.Contain("return x + 1;"));
         Assert.That(data.Signature, Does.Contain("Bar"));
         Assert.That(data.Envelope, Is.Not.Null);
-        Assert.That(data.Envelope.LineCount, Is.EqualTo(8));
+        Assert.That(data.Envelope.LineCount, Is.EqualTo(4));
+        Assert.That(data.Envelope.TotalLinesInFile, Is.EqualTo(8));
+        Assert.That(data.Envelope.IsComplete, Is.True);
+        Assert.That(data.Envelope.ContinuationOffset, Is.Null);
         Assert.That(data.Envelope.ReturnedFromLine, Is.EqualTo(3));
         Assert.That(data.Envelope.ReturnedToLine, Is.EqualTo(6));
     }

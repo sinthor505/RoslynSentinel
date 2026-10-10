@@ -10,13 +10,16 @@ namespace RoslynSentinel.Common;
 public record ReadEnvelope
 {
     /// <summary>Envelope shape version. Bump when fields are added/removed/repurposed.</summary>
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; init; } = 2;
 
-    /// <summary>Total lines in the file on disk (not the returned slice).</summary>
+    /// <summary>Total lines in the unit being read: the file on disk for file reads (not the returned slice), or the member itself for member reads (see <see cref="ReadEnvelopeBuilder.BuildForMember"/>).</summary>
     public int LineCount { get; init; }
 
-    /// <summary>Total bytes in the file on disk (not the returned slice).</summary>
+    /// <summary>Total bytes in the unit being read: the file on disk for file reads (not the returned slice), or the member itself for member reads.</summary>
     public long ByteCount { get; init; }
+
+    /// <summary>Total lines in the whole file on disk, always. Equals <see cref="LineCount"/> for file reads; for member reads it is the size of the file the member sits in.</summary>
+    public int TotalLinesInFile { get; init; }
 
     /// <summary>True when the full file/method was returned.</summary>
     public bool IsComplete { get; init; }
@@ -64,12 +67,35 @@ public static class ReadEnvelopeBuilder
         return new ReadEnvelope
         {
             LineCount = totalLineCount,
+            TotalLinesInFile = totalLineCount,
             ByteCount = totalByteCount,
             IsComplete = isComplete,
             ReturnedFromLine = isComplete ? Math.Min(1, totalLineCount) : returnedFromLine,
             ReturnedToLine = isComplete ? totalLineCount : returnedToLine,
             ContinuationOffset = isComplete ? null : returnedToLine + 1,
             OutlineAvailable = totalLineCount >= ReadEnvelopeThresholds.OutlineAvailableMinLines
+        };
+    }
+
+    /// <summary>
+    /// Builds the envelope for a read of one whole member (method/constructor) located at
+    /// <paramref name="memberFromLine"/>..<paramref name="memberToLine"/> (1-based, inclusive) in a file of
+    /// <paramref name="fileLineCount"/> lines. The member is returned in full, so the result is always complete
+    /// with no continuation offset; <see cref="ReadEnvelope.LineCount"/>/<see cref="ReadEnvelope.ByteCount"/>
+    /// describe the member (not the file), and the returned range gives its position in the file.
+    /// </summary>
+    public static ReadEnvelope BuildForMember(int fileLineCount, int memberFromLine, int memberToLine, long memberByteCount)
+    {
+        return new ReadEnvelope
+        {
+            LineCount = memberToLine - memberFromLine + 1,
+            TotalLinesInFile = fileLineCount,
+            ByteCount = memberByteCount,
+            IsComplete = true,
+            ReturnedFromLine = memberFromLine,
+            ReturnedToLine = memberToLine,
+            ContinuationOffset = null,
+            OutlineAvailable = fileLineCount >= ReadEnvelopeThresholds.OutlineAvailableMinLines
         };
     }
 

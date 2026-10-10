@@ -265,7 +265,7 @@ public class BasicRefactoringEngine
                     var boundMethod = refSemanticModel.GetSymbolInfo(invocation, cancellationToken).Symbol as IMethodSymbol;
                     if (boundMethod == null)
                     {
-                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Could not _symbolNavigationEngine. Resolve the bound overload for this call site via the semantic model."));
+                        skippedCallSites.Add(new SkippedCallSite(refDocPath, refLineNumber, "Could not resolve the bound overload for this call site via the semantic model."));
                         continue;
                     }
 
