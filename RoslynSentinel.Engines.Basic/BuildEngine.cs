@@ -78,7 +78,7 @@ public class BuildEngine
         }
         else
         {
-            var solutionResult = await _diagnosticEngine.GetSolutionDiagnosticsAsync(maxDetails, cancellationToken);
+            var solutionResult = await _diagnosticEngine.GetSolutionDiagnosticsAsync(int.MaxValue, cancellationToken);
             if (!solutionResult.TryGetData(out summary))
             {
                 return new EngineResultWrapper<BuildResult>(solutionResult.Outcome, error: solutionResult.Error);
@@ -104,8 +104,14 @@ public class BuildEngine
                     $"Quick build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to nothing -- no compile verdict is available. Call ListAll(kind: \"all\") to see valid project/file names."));
         }
 
-        var errors = summary!.Details.Where(d => d.Severity == "Error").ToList();
-        var warnings = summary!.Details.Where(d => d.Severity == "Warning").ToList();
+        var allErrors = summary!.Details.Where(d => d.Severity == "Error").ToList();
+        var allWarnings = summary!.Details.Where(d => d.Severity == "Warning").ToList();
+        // Solution scope fetched the uncapped list (int.MaxValue) so FullDiagnostics is complete; the
+        // lists callers see are still capped to maxDetails. File/project scopes were never capped here.
+        bool capToMaxDetails = scope is not (ToolScope.file or ToolScope.project);
+        var errors = capToMaxDetails ? allErrors.Take(maxDetails).ToList() : allErrors;
+        // Same combined cap as before: errors first, warnings only fill what is left of maxDetails.
+        var warnings = capToMaxDetails ? allWarnings.Take(Math.Max(0, maxDetails - errors.Count)).ToList() : allWarnings;
         const int SummaryTopN = 50;
 
         return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, new BuildResult(
@@ -117,6 +123,7 @@ public class BuildEngine
             WarningCount: summary.Warnings,
             Errors: errors,
             Warnings: warnings,
+            FullDiagnostics: new BuildFullDiagnostics(allErrors, allWarnings),
             ErrorSummary: errors.GroupBySeverity(SummaryTopN),
             WarningSummary: warnings.GroupBySeverity(SummaryTopN),
             StdoutTail: null,
@@ -126,8 +133,50 @@ public class BuildEngine
     }
 
     private static readonly Regex DiagnosticLineRegex = new(
-        @"^(?<path>.+?)\((?<line>\d+),(?<col>\d+)\):\s*(?<severity>error|warning)\s+(?<id>[A-Za-z0-9]+):\s*(?<message>.+?)\s*\[.+\]\r?$",
+        @"^(?<path>.+?)(?:\((?<line>\d+),(?<col>\d+)\))?\s*:\s*(?<severity>error|warning)\s+(?<id>[A-Za-z0-9]+):\s*(?<message>.+?)\s*\[(?<project>[^\]]+?\.[A-Za-z]+proj)(?:::[^\]]*)?\]\r?$",
         RegexOptions.Compiled | RegexOptions.Multiline);
+
+    /// <summary>
+    /// Parses MSBuild/dotnet build stdout into error and warning lists. Handles compiler lines
+    /// (<c>path(line,col): error CS0000: msg [proj]</c>) and project-level lines with no
+    /// position (<c>X.csproj : error NU1101: msg [X.csproj]</c>); a multi-target suffix
+    /// (<c>[X.csproj::TargetFramework=net9.0]</c>) is accepted. Line/column default to 0 when absent;
+    /// <see cref="DiagnosticInfo.Project"/> is the project file name without extension.
+    /// </summary>
+    public static (List<DiagnosticInfo> Errors, List<DiagnosticInfo> Warnings) ParseDiagnostics(string stdout)
+    {
+        var errors = new List<DiagnosticInfo>();
+        var warnings = new List<DiagnosticInfo>();
+        foreach (Match m in DiagnosticLineRegex.Matches(stdout))
+        {
+            var severity = m.Groups["severity"].Value == "error" ? "Error" : "Warning";
+            var lineNum = m.Groups["line"].Success ? int.Parse(m.Groups["line"].Value) : 0;
+            var colNum = m.Groups["col"].Success ? int.Parse(m.Groups["col"].Value) : 0;
+            var info = new DiagnosticInfo(
+                m.Groups["id"].Value,
+                severity,
+                m.Groups["message"].Value,
+                m.Groups["path"].Value,
+                lineNum,
+                colNum,
+                lineNum,
+                colNum,
+                Project: ProjectNameFromPath(m.Groups["project"].Value)
+            );
+            (severity == "Error" ? errors : warnings).Add(info);
+        }
+
+        return (errors, warnings);
+    }
+
+    // Path.GetFileNameWithoutExtension treats only the host's separators; MSBuild output may carry either.
+    private static string ProjectNameFromPath(string projectPath)
+    {
+        var fileName = projectPath[(projectPath.LastIndexOfAny(['\\', '/']) + 1)..];
+        var dot = fileName.LastIndexOf('.');
+        return dot > 0 ? fileName[..dot] : fileName;
+    }
+
     public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50, bool useScratchDir = false)
     {
         var start = DateTime.UtcNow;
@@ -238,25 +287,7 @@ public class BuildEngine
         var stdoutText = stdoutTask.Result;
         var stderrText = stderrTask.Result;
 
-        var errors = new List<DiagnosticInfo>();
-        var warnings = new List<DiagnosticInfo>();
-        foreach (Match m in DiagnosticLineRegex.Matches(stdoutText))
-        {
-            var severity = m.Groups["severity"].Value == "error" ? "Error" : "Warning";
-            var lineNum = int.Parse(m.Groups["line"].Value);
-            var colNum = int.Parse(m.Groups["col"].Value);
-            var info = new DiagnosticInfo(
-                m.Groups["id"].Value,
-                severity,
-                m.Groups["message"].Value,
-                m.Groups["path"].Value,
-                lineNum,
-                colNum,
-                lineNum,
-                colNum
-            );
-            (severity == "Error" ? errors : warnings).Add(info);
-        }
+        var (errors, warnings) = ParseDiagnostics(stdoutText);
 
         string? detail = null;
         if (stderrText.Contains("MSB3027") || stdoutText.Contains("MSB3027") ||
@@ -289,6 +320,7 @@ public class BuildEngine
             // uncapped grouped-by-Id view for spotting one cause behind many errors.
             Errors: errors.Take(maxDetails).ToList(),
             Warnings: warnings.Take(maxDetails).ToList(),
+            FullDiagnostics: new BuildFullDiagnostics(errors, warnings),
             ErrorSummary: errors.GroupBySeverity(SummaryTopN),
             WarningSummary: warnings.GroupBySeverity(SummaryTopN),
             StdoutTail: Tail(stdoutText),

@@ -104,7 +104,7 @@ public class DiagnosticEngine
                 .Where(d => d.Severity != DiagnosticSeverity.Hidden)
                 .Where(d => !(isBlazor && _blazorGeneratorFalsePositiveIds.Contains(d.Id)));
 
-            allDiagnostics.AddRange(diagnostics.Select(d => d.ToInfo().WithRelativePath(solutionDir)));
+            allDiagnostics.AddRange(diagnostics.Select(d => d.ToInfo().WithRelativePath(solutionDir) with { Project = project.Name }));
         }
 
         int totalErrors = allDiagnostics.Count(d => d.Severity == "Error");
