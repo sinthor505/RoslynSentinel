@@ -25,7 +25,12 @@ try {
     if ([string]::IsNullOrWhiteSpace($raw)) { exit 0 }
     $payload = $raw | ConvertFrom-Json
 
-    $dir = if ($env:ROSLYNSENTINEL_USAGE_DIR) { $env:ROSLYNSENTINEL_USAGE_DIR } else { Join-Path (Split-Path $PSScriptRoot -Parent) 'usage' }
+    # Subagent calls carry agent_id and share the parent's session id. The notice is once-per-session, so a
+    # subagent would consume it and then obey "run wrapup" (commit, write a handoff) mid-slice. Only the main
+    # conversation gets limit notices; it decides how to tell its agents to stop.
+    if ($payload.agent_id) { exit 0 }
+
+    $dir =if ($env:ROSLYNSENTINEL_USAGE_DIR) { $env:ROSLYNSENTINEL_USAGE_DIR } else { Join-Path (Split-Path $PSScriptRoot -Parent) 'usage' }
     $snapFile = Join-Path $dir 'usage.json'
     # Refresh usage.json from the OAuth usage endpoint when it is older than ~90 s (throttled and
     # backed off inside; see usage-refresh.ps1). Needed in the VS Code extension, which never runs
