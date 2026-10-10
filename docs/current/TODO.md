@@ -634,3 +634,18 @@ ChangeSignature, RenameSymbol conflicts) do not use it.
 
 **Not fixed:** review which tools should open ledger entries, how a model resolves one, and how the non-validated
 (compile-gate-skipping) edit path relates. Decision context: `proposals/proposal_journal_digest_followup_decisions.md`.
+
+
+## Follow-ups left open by the blocking-load and Build-result-shape plan (2026-10-09) - not started
+
+**Found:** 2026-10-09, `plans/plan_blocking_solution_load_and_build_result_shape.md` (Out of scope list).
+
+- `SubAgentImpl.cs:55` and `SubAgentEvalImpl.cs:29` read `SolutionPath` only and still say "retry" if called in
+  the first seconds after start-up; they do not wait for `SolutionLoadStatus`.
+- `GetDiagnostics` / `GetWorkspaceHealth` embedded `BuildVerification` still carry up to 50 details and are not
+  projected like `Build`.
+- `IsAlreadyLoadedPath` (`WorkspaceProjectManagementImpl.cs`) returns false for non-rooted paths, so a
+  relative-path `LoadSolution` after an auto-load still reloads.
+- New files made by `CreateFile` are written with LF endings and `WriteFile(ReplaceFile)` treats an EOL-only
+  rewrite as a no-op, so a new test file cannot be given the repo's CRLF endings with the MCP tools (seen with
+  `BuildEngineParseTests.cs` and the B4/B7 test files).

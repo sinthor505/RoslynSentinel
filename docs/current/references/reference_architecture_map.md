@@ -116,6 +116,9 @@ One singleton; `ISolutionProvider`, `IWorkspaceManager`, `IWorkspaceReader` all 
 (`AddRoslynSentinelEnginesBasic`). It holds the in-memory `Solution`, a `FileSystemWatcher`
 (`OnFileSystemChanged`, `OnDebounceTimerElapsed`), content hashes of known files (`_knownFileHashes`) for
 drift detection, the compilation cache, the scoped operation ledger, the breakers and the session-halt latch.
+`GetCurrentSolutionAsync` and `ResolveFromWire` wait up to 30 s while `SolutionLoadStatus` is `Loading`
+(`NotLoaded`, `Loading`, `Loaded`, `Failed`); a load that exceeds its timeout (`LoadSolution(timeoutSeconds)`,
+default 30) is cancelled and surfaces `SolutionLoadTimeout`.
 
 ### Write chokepoint
 

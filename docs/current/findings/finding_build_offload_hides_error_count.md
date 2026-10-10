@@ -1,6 +1,11 @@
 # Finding: an offloaded Build result keeps nothing inline, not even ErrorCount
 
-**Status:** OPEN 2026-10-01. Fix not decided; recommendation below.
+**Status:** RESOLVED 2026-10-09 by `docs/current/plans/plan_blocking_solution_load_and_build_result_shape.md`
+Part B (commits 7b01137, 9924978, 4da918c, a8c6726, c7af88b). `Build` now projects its result
+(`BuildResultProjector`): a green build returns counts and projects only, a failed build returns a
+per-project/per-file breakdown with the root-cause project first, `maxDetails` (default 20) errors and
+`FullDiagnosticsResultId` for the rest, so the verdict stays inline and the payload stays under the 15 KB
+offload threshold. Original analysis kept below.
 
 ## Context
 Reported in two separate session tool-experience journals on 2026-10-01

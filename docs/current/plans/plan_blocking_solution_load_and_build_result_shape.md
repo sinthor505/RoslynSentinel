@@ -1,7 +1,6 @@
 # Plan: Make tool calls wait for the solution load (30 s, cancel on timeout), and give Build a small, root-cause-first result
 
-**Status:** READY 2026-10-09 (amended per round-3 decisions). Addresses decisions #8 (solution auto-load) and #14 (Build result shape) in `docs/current/proposals/proposal_journal_digest_followup_decisions.md`, with the owner answers D-4 .. D-9 from "Decided in round 3". Supersedes `docs/current/findings/finding_build_offload_hides_error_count.md` (journal sessions `cc715aa0` 17:45 and 17:59, `93fd2d31`). Nothing is built yet.
-
+**Status:** PARTIALLY IMPLEMENTED 2026-10-09. Steps A1a-B8 are done and committed (A1a 0487d1f, A1b 32f5555, A2a 764edbb, A2b 29c7bb2, A3 3061374, A4 499a76e, A5 37404e2, A6 cd4d6c4, B1 599c492, B2+B3 a8c6726, B4 4da918c, B5 7b01137, B6 9924978, B7 c7af88b, B8 docs); build 0 errors, full suite 3595 total / 3569 passed / 0 failed / 26 skipped. NOT done: the live checks (a)-(e) of the Final step, which need an MCP server restart and are pending an owner or fresh-session run (amended per round-3 decisions). Addresses decisions #8 (solution auto-load) and #14 (Build result shape) in `docs/current/proposals/proposal_journal_digest_followup_decisions.md`, with the owner answers D-4 .. D-9 from "Decided in round 3". Supersedes `docs/current/findings/finding_build_offload_hides_error_count.md` (journal sessions `cc715aa0` 17:45 and 17:59, `93fd2d31`).
 ## Problem
 
 ### Part A - a call that arrives mid-load fails or hangs instead of waiting
