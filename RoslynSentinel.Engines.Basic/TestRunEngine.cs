@@ -102,7 +102,7 @@ public class TestRunEngine
             }
 
             targets = solution.Projects
-                .Where(p => p.FilePath is not null && IsTestProject(p))
+                .Where(p => p.FilePath is not null && TestProjectDetector.IsTestProject(p))
                 .Select(p => (p.Name, p.FilePath!))
                 .OrderBy(t => t.Name)
                 .ToList();
@@ -244,15 +244,6 @@ public class TestRunEngine
         ));
     }
 
-    /// <summary>"Is this a test project" -> checked via the project file referencing
-    /// Microsoft.NET.Test.Sdk (the SDK package that actually makes `dotnet test` runnable), not via
-    /// referencing nunit.framework: a project can pull in NUnit's assertion library transitively
-    /// through a ProjectReference to a real test project (e.g. a benchmark/tool project referencing
-    /// a Tests project for shared fixtures) without being a test project itself -> `dotnet test`
-    /// against such a project fails outright rather than running zero tests.</summary>
-    private static bool IsTestProject(Microsoft.CodeAnalysis.Project project) =>
-        project.FilePath is not null && File.Exists(project.FilePath) &&
-        File.ReadAllText(project.FilePath).Contains("Microsoft.NET.Test.Sdk", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Detects a build-output file lock (MSB3021/MSB3026/MSB3027) in `dotnet test` output.
     /// Returns an actionable detail message, or null when no lock error is present.</summary>
