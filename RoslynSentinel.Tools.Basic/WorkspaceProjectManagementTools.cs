@@ -42,14 +42,15 @@ public class WorkspaceProjectManagementTools
 
     [McpServerTool(Name = "LoadSolution")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\". Accepts absolute paths. For relative paths, omit baseRepoDir and let the server resolve it against its configured base directory - only pass baseRepoDir if you have independently confirmed that exact directory exists on this host; a fabricated/guessed baseRepoDir is rejected with an error rather than silently ignored. If this exact solution is already loaded, this is a no-op by default (no re-read from disk) - pass forceReload:true to discard in-memory state and re-open it from disk.")]
+    [Description("Loads a .NET solution file into memory for persistent analysis. Must be called before any operation that returns ErrorCode=\"SolutionNotLoaded\". Accepts absolute paths. For relative paths, omit baseRepoDir and let the server resolve it against its configured base directory - only pass baseRepoDir if you have independently confirmed that exact directory exists on this host; a fabricated/guessed baseRepoDir is rejected with an error rather than silently ignored. If this exact solution is already loaded, this is a no-op by default (no re-read from disk) - pass forceReload:true to discard in-memory state and re-open it from disk. If a load is already in progress (for example the start-up auto-load) this call waits for it instead of reloading; timeoutSeconds bounds that wait and any load this call starts, and on timeout that load is cancelled and the error names timeoutSeconds.")]
     public Task<SentinelCallToolResult<object>> LoadSolution(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath,
         [ToolOption(ToolOptionTag.RepoDirectory)][Description("Optional base directory used to resolve a relative solutionPath (e.g. the repo root). Overrides the server's configured base-repo-dir for this call. Must exist on this host - omit this entirely rather than guessing a value.")] string? baseRepoDir = null,
         [Description("If the given solutionPath is already loaded, false (default) returns immediately without touching the workspace. true forces a full reload from disk, discarding any in-memory state (equivalent to today's unconditional LoadSolution behavior). Has no effect when a different or no solution is currently loaded - that always loads normally regardless of this flag.")] bool forceReload = false,
+        [Description("Seconds to wait for a solution load (1-3600, default 30). Covers waiting for a load already running (for example the start-up auto-load) and a load this call starts; a load this call starts is cancelled when it expires.")] int timeoutSeconds = 30,
         CancellationToken cancellationToken = default)
-        => _impl.LoadSolution(reason, solutionPath, baseRepoDir, forceReload, cancellationToken);
+        => _impl.LoadSolution(reason, solutionPath, baseRepoDir, forceReload, timeoutSeconds, cancellationToken);
 
     [McpServerTool(Name = "CreateProject")]
     [Produces(DataTag.ResultOnly)]

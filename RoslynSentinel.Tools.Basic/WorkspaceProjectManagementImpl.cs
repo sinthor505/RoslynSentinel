@@ -318,10 +318,28 @@ public class WorkspaceProjectManagementImpl
     }
 
     public async Task<SentinelCallToolResult<object>> LoadSolution(ToolCallReason reason, string solutionPath, string? baseRepoDir = null,
-        bool forceReload = false, CancellationToken cancellationToken = default)
+        bool forceReload = false, int timeoutSeconds = 30, CancellationToken cancellationToken = default)
     {
         try
         {
+            if (timeoutSeconds < 1 || timeoutSeconds > 3600)
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"LoadSolution: timeoutSeconds must be between 1 and 3600 (default 30); got {timeoutSeconds}.")
+                };
+            }
+            var timeout = TimeSpan.FromSeconds(timeoutSeconds);
+            if (_workspaceManager.SolutionLoadStatus == SolutionLoadStatus.Loading
+                && await _workspaceManager.WaitForLoadAsync(timeout, cancellationToken) == SolutionLoadStatus.Loading)
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.SolutionLoadTimeout, "LoadSolution timed out: " + SolutionNotLoadedMessage.LoadWaitTimedOut(timeout))
+                };
+            }
             var wasAlreadyLoaded = IsAlreadyLoadedPath(solutionPath, out var currentPath);
             if (!forceReload && wasAlreadyLoaded)
             {
@@ -332,7 +350,7 @@ public class WorkspaceProjectManagementImpl
                 };
             }
 
-            await _workspaceManager.LoadSolutionAsync(solutionPath, baseRepoDir, cancellationToken: cancellationToken);
+            await _workspaceManager.LoadSolutionAsync(solutionPath, baseRepoDir, timeout, cancellationToken);
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             if (solutionRoot != null)
             {
@@ -355,6 +373,15 @@ public class WorkspaceProjectManagementImpl
                     ErrorData = new ResultError(ToolErrorCode.Exception, $"LoadSolution failed: Workspace root is null after loading '{solutionPath}'.")
                 };
             }
+        }
+        catch (SolutionLoadTimeoutException ex)
+        {
+            _logger.LogError(ex, "LoadSolution timed out for '{SolutionPath}'", solutionPath);
+            return new SentinelCallToolResult<object>()
+            {
+                IsError = true,
+                ErrorData = new ResultError(ex.ErrorCode, $"LoadSolution '{solutionPath}' timed out: {ex.Message}")
+            };
         }
         catch (Exception ex)
         {

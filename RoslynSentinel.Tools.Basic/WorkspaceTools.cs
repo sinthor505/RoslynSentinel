@@ -121,14 +121,15 @@ public class WorkspaceTools
     // current directory, --base-repo-dir (if set), or the server's install directory.
     [McpServerTool(Name = "LoadSolution")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Loads a .NET solution into memory. Required before any operation needing a loaded solution.")]
+    [Description("Loads a .NET solution into memory. Required before any operation needing a loaded solution. If a load is already in progress (for example the start-up auto-load) this call waits for it instead of reloading; timeoutSeconds bounds that wait and any load this call starts, and on timeout that load is cancelled and the error names timeoutSeconds.")]
     public Task<SentinelCallToolResult<object>> LoadSolution(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SolutionFilepath, required: true)] string solutionPath,
         [ToolOption(ToolOptionTag.RepoDirectory)][Description("Base directory for resolving a relative solutionPath. Must exist on this host - omit rather than guess.")] string? baseRepoDir = null,
         [Description("true forces a full reload from disk, discarding in-memory state, when this solution is already loaded.")] bool forceReload = false,
+        [Description("Seconds to wait for a solution load (1-3600, default 30). Covers waiting for a load already running (for example the start-up auto-load) and a load this call starts; a load this call starts is cancelled when it expires.")] int timeoutSeconds = 30,
         CancellationToken cancellationToken = default)
-        => _projectManagement.LoadSolution(reason, solutionPath, baseRepoDir, forceReload, cancellationToken);
+        => _projectManagement.LoadSolution(reason, solutionPath, baseRepoDir, forceReload, timeoutSeconds, cancellationToken);
 
     // ListExternalDiskChanges/AcknowledgeExternalFileChanges moved to AdminTools.cs,
     // gated behind the "Admin" mode -> see docs/current/ideas/external-drift-hard-blocker.md.
