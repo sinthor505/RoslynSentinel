@@ -226,7 +226,8 @@ public class SymbolNavigationEngine
         };
 
         var results = new ConcurrentBag<SymbolLocation>();
-        var seen = new HashSet<string>();
+        // Written from Parallel.ForEachAsync below, so it must be a concurrent collection.
+        var seen = new ConcurrentDictionary<string, byte>();
 
         var simpleName = symbolName.Contains('.')
             ? symbolName.Split('.').Last()
@@ -299,7 +300,7 @@ public class SymbolNavigationEngine
                     var lineSpan = location.GetLineSpan();
                     var line = lineSpan.StartLinePosition.Line + 1;
                     var dedupeKey = filePath2 + ":" + line + ":" + symbol.ToDisplayString();
-                    if (!seen.Add(dedupeKey))
+                    if (!seen.TryAdd(dedupeKey, 0))
                     {
                         continue;
                     }

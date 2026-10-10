@@ -45,7 +45,9 @@ public sealed class TestSolutionFixture : IDisposable
         // A dotnet/MSBuild worker node spawned by RunTest's real subprocess (TestRunEngine) can
         // briefly hold a file handle open inside SolutionDirectory after its parent process exits,
         // racing this delete under concurrent fixtures. Retry with backoff rather than serializing.
-        const int maxAttempts = 5;
+        // If the handle outlives every attempt, leave the temp folder behind: a leaked temp directory
+        // is not a test failure, and throwing from Dispose fails an otherwise-passing test.
+        const int maxAttempts = 8;
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try
@@ -57,13 +59,14 @@ public sealed class TestSolutionFixture : IDisposable
 
                 return;
             }
-            catch (IOException) when (attempt < maxAttempts)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                Thread.Sleep(100 * attempt);
-            }
-            catch (UnauthorizedAccessException) when (attempt < maxAttempts)
-            {
-                Thread.Sleep(100 * attempt);
+                if (attempt == maxAttempts)
+                {
+                    return;
+                }
+
+                Thread.Sleep(200 * attempt);
             }
         }
     }
