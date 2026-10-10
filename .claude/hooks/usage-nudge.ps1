@@ -25,10 +25,12 @@ try {
     if ([string]::IsNullOrWhiteSpace($raw)) { exit 0 }
     $payload = $raw | ConvertFrom-Json
 
-    # Subagent calls carry agent_id and share the parent's session id. The notice is once-per-session, so a
-    # subagent would consume it and then obey "run wrapup" (commit, write a handoff) mid-slice. Only the main
-    # conversation gets limit notices; it decides how to tell its agents to stop.
-    if ($payload.agent_id) { exit 0 }
+    # Subagent calls carry agent_id and share the parent's session id. A subagent must not receive the main
+    # conversation's "run wrapup" text (it would commit and write a handoff mid-slice), and must not consume
+    # the main conversation's once-per-session notice. So subagents get their own wording, tracked once per
+    # (agent, window, tier), and never the stale-data notice.
+    $agentId = if ($payload.agent_id) { (([string]$payload.agent_id) -replace '[^A-Za-z0-9]', '') } else { '' }
+    $isSub = $agentId.Length -gt 0
 
     $dir =if ($env:ROSLYNSENTINEL_USAGE_DIR) { $env:ROSLYNSENTINEL_USAGE_DIR } else { Join-Path (Split-Path $PSScriptRoot -Parent) 'usage' }
     $snapFile = Join-Path $dir 'usage.json'
@@ -61,7 +63,7 @@ try {
     $staleAfterSeconds = 1800
     if ($env:ROSLYNSENTINEL_USAGE_STALE_SECONDS -match '^\d+$') { $staleAfterSeconds = [int]$env:ROSLYNSENTINEL_USAGE_STALE_SECONDS }
     $updated = if ($null -ne $snap -and $null -ne $snap.updated) { [long]$snap.updated } else { 0 }
-    if ($null -eq $snap -or ($now - $updated) -gt $staleAfterSeconds) {
+    if (-not $isSub -and ($null -eq $snap -or ($now - $updated) -gt $staleAfterSeconds)) {
         $staleKey = 'stale-usage-data'
         if ($done -notcontains $staleKey) {
             $done += $staleKey
@@ -79,6 +81,7 @@ try {
         $pct = [double]$w.used_percentage
         $tier = if ($pct -ge $urgentPct) { $urgentPct } elseif ($pct -ge $nudgePct) { $nudgePct } else { continue }
         $key = '{0}:{1}:{2}' -f $pair[0], $resets, $tier
+        if ($isSub) { $key = "$key`:agent:$agentId" }
         if ($done -contains $key) { continue }
         $done += $key
 
@@ -87,7 +90,11 @@ try {
         $eta = if ($mins -ge 60) { '{0}h{1:00}m' -f [math]::Floor($mins / 60), ($mins % 60) } else { "${mins}m" }
         $head = 'Usage limit: the {0} limit is {1:0}% used and resets at {2:HH:mm} local (in {3}).' -f $pair[1], $pct, $at, $eta
 
-        if ($tiptoeing) {
+        if ($isSub) {
+            if ($tier -ge $urgentPct) { $tail = 'You are a subagent: do NOT commit, do NOT run the wrapup skill, do NOT write a handoff or progress log. Stop making edits now, leave the tree compiling (undo any half-applied change of yours), and reply to your caller with what is done and what is not.' }
+            else { $tail = 'You are a subagent: do NOT commit, do NOT run the wrapup skill, do NOT write a handoff or progress log. Finish only the slice you were given, keep the tree compiling, and report to your caller; do not start further work.' }
+        }
+        elseif ($tiptoeing) {
             if ($tier -ge $urgentPct) { $tail = 'Tiptoe mode: from now on take only steps that are safe to interrupt mid-way, and update the progress log after each one.' }
             else { $tail = 'Tiptoe mode: continue, but every step must leave the tree compiling and the progress log current; the limit may cut the session off at any point.' }
         }

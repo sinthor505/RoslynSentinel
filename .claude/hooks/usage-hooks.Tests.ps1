@@ -74,6 +74,18 @@ try {
     Assert ((Invoke-Hook $nudge '') -eq '') 'nudge: empty stdin is silent'
     Assert ((Invoke-Hook $nudge '{garbage') -eq '') 'nudge: bad json is silent'
 
+    # --- subagent wording ---
+    Remove-Item (Join-Path $dir '*.nudged'), (Join-Path $dir '*.tiptoe') -ErrorAction SilentlyContinue
+    Write-Snap 90 $future
+    $sub1 = '{"session_id":"abcdef123456","hook_event_name":"PostToolUse","agent_id":"a1","agent_type":"implementer"}'
+    $sub2 = '{"session_id":"abcdef123456","hook_event_name":"PostToolUse","agent_id":"a2","agent_type":"implementer"}'
+    $ctx = ((Invoke-Hook $nudge $sub1) | ConvertFrom-Json).hookSpecificOutput.additionalContext
+    Assert ($ctx -match 'subagent' -and $ctx -match 'do NOT commit' -and $ctx -notmatch 'Do not start any new multi-step change') 'nudge: subagent gets its own wording'
+    Assert ((Invoke-Hook $nudge $sub1) -eq '') 'nudge: subagent notice fires once per agent'
+    Assert ((Invoke-Hook $nudge $sub2) -ne '') 'nudge: a second subagent still gets its notice'
+    $ctx = ((Invoke-Hook $nudge $post) | ConvertFrom-Json).hookSpecificOutput.additionalContext
+    Assert ($ctx -match 'run the wrapup skill') 'nudge: subagent notices do not consume the main conversation notice'
+
     # --- stale snapshot notice ---
     Remove-Item (Join-Path $dir '*.nudged') -ErrorAction SilentlyContinue
     $oldSnap = @{ updated = ($now - 7200); five_hour = @{ used_percentage = 10; resets_at = $future } }
