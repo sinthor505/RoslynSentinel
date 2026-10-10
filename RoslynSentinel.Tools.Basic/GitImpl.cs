@@ -298,6 +298,62 @@ public record GitRemoteResult : GitResult
     public string Detail { get; set; } = "";
 }
 
+/// <summary>One tag in a tag list.</summary>
+public record GitTagEntry
+{
+    public string Name { get; set; } = "";
+
+    /// <summary>"lightweight" or "annotated".</summary>
+    public string Kind { get; set; } = "";
+
+    /// <summary>Abbreviated hash (7+ characters) of the commit the tag points at (peeled for annotated tags).</summary>
+    public string TargetHash { get; set; } = "";
+
+    /// <summary>Annotation subject for an annotated tag, otherwise the tagged commit's subject.</summary>
+    public string Subject { get; set; } = "";
+}
+
+/// <summary>Result of operation=tag. Which fields are set depends on the action: list sets Tags,
+/// TotalCount and IsTruncated; create sets Created, TargetHash and Annotated; delete sets Deleted,
+/// PreviousTargetHash and Note.</summary>
+public record GitTagResult : GitResult
+{
+    public string Action { get; set; } = "";
+    public List<GitTagEntry> Tags { get; set; } = [];
+    public int? TotalCount
+    {
+        get; set;
+    }
+    public bool IsTruncated
+    {
+        get; set;
+    }
+    public string? Created
+    {
+        get; set;
+    }
+    public string? Deleted
+    {
+        get; set;
+    }
+    public string? TargetHash
+    {
+        get; set;
+    }
+    public string? PreviousTargetHash
+    {
+        get; set;
+    }
+    public bool? Annotated
+    {
+        get; set;
+    }
+    public string? Note
+    {
+        get; set;
+    }
+}
+
 // ── Operation implementations ─────────────────────────────────────────────
 
 public class GitImpl : IGitOperations
@@ -359,6 +415,194 @@ public class GitImpl : IGitOperations
         {
             IsError = true,
             Error = $"Git {what} failed unexpectedly; the server log has details. Nothing further was changed."
+        };
+    }
+
+    private static GitTagResult TagFailure(string action, string kind, string error, string detail) => new()
+    {
+        Action = action,
+        IsError = true,
+        ErrorKind = kind,
+        Error = error,
+        ErrorDetail = detail
+    };
+
+    /// <summary>
+    /// Lists, creates or deletes a local tag. Never moves or overwrites an existing tag, never signs,
+    /// never pushes, and deletes exactly one named tag (no patterns, no -f).
+    /// </summary>
+    public async Task<GitTagResult> TagAsync(
+        string gitRoot, GitAction? action, string? tagName, string? refName, string? message, int count, CancellationToken cancellationToken)
+    {
+        try
+        {
+            switch (action)
+            {
+                case GitAction.list:
+                    return await TagListAsync(gitRoot, count, cancellationToken);
+                case GitAction.create:
+                    return await TagCreateAsync(gitRoot, tagName, refName, message, cancellationToken);
+                case GitAction.delete:
+                    return await TagDeleteAsync(gitRoot, tagName, cancellationToken);
+                default:
+                    return ActionRefused<GitTagResult>("tag", action, "list, create, delete");
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return UnexpectedFailure<GitTagResult>(ex, "tag");
+        }
+    }
+
+    private async Task<GitTagResult> TagListAsync(string gitRoot, int count, CancellationToken cancellationToken)
+    {
+        // Annotated tags have objecttype=tag and a peeled *objectname; lightweight tags have an empty
+        // *objectname and their objectname is the commit itself.
+        var raw = await RunGitAsync(gitRoot,
+            ["for-each-ref", "--sort=-creatordate",
+             "--format=%(refname:short)%09%(objecttype)%09%(*objectname:short)%09%(objectname:short)%09%(contents:subject)",
+             "refs/tags"], cancellationToken);
+        if (raw.ExitCode != 0)
+            return new GitTagResult { Action = "list", IsError = true, Error = $"git tag list failed: {CleanGitStderr(raw.Stderr)}" };
+
+        var all = new List<GitTagEntry>();
+        foreach (var rawLine in raw.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (line.Length == 0) continue;
+            var parts = line.Split('\t', 5);
+            if (parts.Length < 4) continue;
+            all.Add(new GitTagEntry
+            {
+                Name = parts[0],
+                Kind = parts[1] == "tag" ? "annotated" : "lightweight",
+                TargetHash = parts[2].Length > 0 ? parts[2] : parts[3],
+                Subject = parts.Length > 4 ? parts[4] : "",
+            });
+        }
+
+        var take = Math.Clamp(count, 1, 100);
+        return new GitTagResult
+        {
+            Action = "list",
+            IsError = false,
+            Tags = all.Take(take).ToList(),
+            TotalCount = all.Count,
+            IsTruncated = all.Count > take,
+        };
+    }
+
+    private async Task<GitTagResult> TagCreateAsync(
+        string gitRoot, string? tagName, string? refName, string? message, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(tagName))
+            return TagFailure("create", GitErrorCodes.RefRequired,
+                "Git tag create needs tagName. Nothing was changed.", GitErrorDetails.RefRequiredTag);
+        var name = tagName.Trim();
+
+        // A leading '-' passes check-ref-format but would be read as an option by git tag.
+        var formatOk = !name.StartsWith('-');
+        if (formatOk)
+        {
+            var fmt = await RunGitAsync(gitRoot, ["check-ref-format", $"refs/tags/{name}"], cancellationToken);
+            formatOk = fmt.ExitCode == 0;
+        }
+        if (!formatOk)
+            return TagFailure("create", GitErrorCodes.InvalidName,
+                $"'{name}' is not a valid tag name (no spaces, '..', '~', '^', ':', leading '-' or trailing '.lock'). Nothing was changed.",
+                GitErrorDetails.InvalidName);
+
+        var existing = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"refs/tags/{name}"], cancellationToken);
+        if (existing.ExitCode == 0)
+        {
+            var existingShort = await RunGitAsync(gitRoot, ["rev-parse", "--short", "--verify", "--quiet", $"refs/tags/{name}^{{commit}}"], cancellationToken);
+            var existingHash = existingShort.ExitCode == 0 ? existingShort.Stdout.Trim() : existing.Stdout.Trim();
+            return TagFailure("create", GitErrorCodes.AlreadyExists,
+                $"Tag '{name}' already exists (points at {existingHash}). This tool never overwrites or moves a tag. Use a new name, or delete it first (Git(operation: tag, action: delete, tagName: '{name}')) and recreate. Nothing was changed.",
+                GitErrorDetails.AlreadyExists);
+        }
+
+        var target = string.IsNullOrWhiteSpace(refName) ? "HEAD" : refName.Trim();
+        // A ref starting with '-' could be read as an option, so it is treated as unresolvable.
+        var resolved = target.StartsWith('-')
+            ? new GitRawResult { ExitCode = 1 }
+            : await RunGitAsync(gitRoot, ["rev-parse", "--short", "--verify", "--quiet", $"{target}^{{commit}}"], cancellationToken);
+        var targetHash = resolved.Stdout.Trim();
+        if (resolved.ExitCode != 0 || targetHash.Length == 0)
+            return TagFailure("create", GitErrorCodes.TargetNotFound,
+                $"Ref '{target}' does not resolve to a commit. Nothing was changed.",
+                GitErrorDetails.TargetNotFound);
+
+        var annotated = !string.IsNullOrWhiteSpace(message);
+        string[] createArgs = annotated
+            ? ["tag", "-a", "-m", message!, name, targetHash]
+            : ["tag", name, targetHash];
+        var created = await RunGitAsync(gitRoot, createArgs, cancellationToken);
+        if (created.ExitCode != 0)
+            return new GitTagResult
+            {
+                Action = "create",
+                IsError = true,
+                Error = $"git tag failed: {CleanGitStderr(created.Stderr)}. Nothing was changed."
+            };
+
+        return new GitTagResult
+        {
+            Action = "create",
+            IsError = false,
+            Created = name,
+            TargetHash = targetHash,
+            Annotated = annotated,
+        };
+    }
+
+    private async Task<GitTagResult> TagDeleteAsync(string gitRoot, string? tagName, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(tagName))
+            return TagFailure("delete", GitErrorCodes.RefRequired,
+                "Git tag delete needs tagName. Nothing was changed.", GitErrorDetails.RefRequiredTag);
+        var name = tagName.Trim();
+
+        var existing = await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"refs/tags/{name}"], cancellationToken);
+        if (existing.ExitCode != 0)
+        {
+            var names = await RunGitAsync(gitRoot, ["for-each-ref", "--format=%(refname:short)", "refs/tags"], cancellationToken);
+            var known = names.ExitCode == 0
+                ? names.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(n => n.TrimEnd('\r')).Where(n => n.Length > 0).ToList()
+                : [];
+            var listed = known.Count == 0
+                ? "The repository has no tags."
+                : $"Existing tags: {string.Join(", ", known.Take(10))}{(known.Count > 10 ? $" and {known.Count - 10} more" : "")}.";
+            return TagFailure("delete", GitErrorCodes.TargetNotFound,
+                $"Tag '{name}' does not exist. {listed} Nothing was changed.",
+                GitErrorDetails.TargetNotFound);
+        }
+
+        var kindRaw = await RunGitAsync(gitRoot, ["for-each-ref", "--format=%(objecttype)", $"refs/tags/{name}"], cancellationToken);
+        var wasAnnotated = kindRaw.ExitCode == 0 && kindRaw.Stdout.Trim() == "tag";
+        var prevRaw = await RunGitAsync(gitRoot, ["rev-parse", "--short", "--verify", "--quiet", $"refs/tags/{name}^{{commit}}"], cancellationToken);
+        var previous = prevRaw.ExitCode == 0 ? prevRaw.Stdout.Trim() : "";
+
+        // Exactly one literal name: never -f and never a pattern.
+        var deleted = await RunGitAsync(gitRoot, ["tag", "-d", name], cancellationToken);
+        if (deleted.ExitCode != 0)
+            return new GitTagResult
+            {
+                Action = "delete",
+                IsError = true,
+                Error = $"git tag -d failed: {CleanGitStderr(deleted.Stderr)}. Nothing was changed."
+            };
+
+        var note = $"Deleted locally only. To undo: Git(operation: tag, action: create, tagName: '{name}', ref: '{previous}').";
+        if (wasAnnotated)
+            note += " The tag was annotated; its message and tagger are not restored by that call (pass message to make the recreated tag annotated).";
+        return new GitTagResult
+        {
+            Action = "delete",
+            IsError = false,
+            Deleted = name,
+            PreviousTargetHash = previous,
+            Note = note,
         };
     }
 

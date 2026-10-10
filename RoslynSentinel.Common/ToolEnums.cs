@@ -22,7 +22,8 @@ public enum GitOperation
     push,
     fetch,
     pull,
-    abort
+    abort,
+    tag
 }
 
 /// <summary>

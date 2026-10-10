@@ -16,6 +16,7 @@ public interface IGitOperations
     Task<GitShowResult> ShowAsync(string gitRoot, string target, string? paths, int maxBytes, bool nameOnly, bool stat, CancellationToken cancellationToken);
     Task<GitStatusResult> StageAsync(string gitRoot, GitStageScope scope, string? paths, CancellationToken cancellationToken);
     Task<GitStatusResult> StatusAsync(string gitRoot, int maxEntries, CancellationToken cancellationToken);
+    Task<GitTagResult> TagAsync(string gitRoot, GitAction? action, string? tagName, string? refName, string? message, int count, CancellationToken cancellationToken);
     string? TryGetGitRoot(out string error, string? repoPath = null);
     Task<GitStatusResult> UnstageAsync(string gitRoot, string? paths, CancellationToken cancellationToken);
 }
