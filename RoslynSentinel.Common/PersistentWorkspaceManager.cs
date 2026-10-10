@@ -146,11 +146,97 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // load is detected), this is set only when LoadSolutionAsync finishes successfully -> it backs
     // LoadState, i.e. "has this process ever had a solution".
     private DateTime? _lastSuccessfulLoadUtc;
-    // Counts LoadSolutionAsync calls currently holding _solutionLock and backs LoadState.LoadInProgress.
+    // Counts LoadSolutionAsync calls that are queued for or holding _solutionLock and backs
+    // LoadState.LoadInProgress and SolutionLoadStatus. Mutated only under _loadStatusSync (never
+    // _solutionLock) via BeginLoadTracking/EndLoadTracking; read lock-free with Volatile.Read.
     private int _loadsInProgress;
+    private readonly object _loadStatusSync = new();
+    // Outcome of the last finished load (a SolutionLoadStatus value); written before _loadsInProgress falls to zero.
+    private int _terminalLoadStatus;
+    // Completed when the pending-load count returns to zero; null while no load is pending.
+    private TaskCompletionSource? _loadSignal;
+    // Failure text of the last finished load, cleared by the next successful one; backs LoadState.LastLoadFailure.
+    private string? _lastLoadFailure;
     private readonly Timer _debounceTimer;
 
-    public SolutionLoadState LoadState => new(SolutionLoadState.ProcessStartedUtc, _lastSuccessfulLoadUtc, Volatile.Read(ref _loadsInProgress) > 0);
+    public SolutionLoadState LoadState => new(SolutionLoadState.ProcessStartedUtc, _lastSuccessfulLoadUtc, Volatile.Read(ref _loadsInProgress) > 0, Volatile.Read(ref _lastLoadFailure));
+
+    public SolutionLoadStatus SolutionLoadStatus => Volatile.Read(ref _loadsInProgress) > 0 ? SolutionLoadStatus.Loading : (SolutionLoadStatus)Volatile.Read(ref _terminalLoadStatus);
+
+    public async Task<SolutionLoadStatus> WaitForLoadAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        while (SolutionLoadStatus == SolutionLoadStatus.Loading)
+        {
+            TaskCompletionSource? signal;
+            lock (_loadStatusSync)
+            {
+                signal = _loadSignal;
+            }
+
+            if (signal is null)
+            {
+                // The load finished between the status read and taking the lock; re-check the status.
+                continue;
+            }
+
+            var remaining = timeout == Timeout.InfiniteTimeSpan
+                ? Timeout.InfiniteTimeSpan
+                : timeout - System.Diagnostics.Stopwatch.GetElapsedTime(started);
+            if (remaining < TimeSpan.Zero && remaining != Timeout.InfiniteTimeSpan)
+            {
+                return SolutionLoadStatus;
+            }
+
+            try
+            {
+                await signal.Task.WaitAsync(remaining, cancellationToken);
+            }
+            catch (TimeoutException)
+            {
+                return SolutionLoadStatus;
+            }
+        }
+
+        return SolutionLoadStatus;
+    }
+
+    // Registers a pending load. Called before the _solutionLock wait so a request that arrives while the
+    // load is still queued already sees Loading.
+    private void BeginLoadTracking()
+    {
+        lock (_loadStatusSync)
+        {
+            if (_loadsInProgress == 0)
+            {
+                _loadSignal = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            }
+
+            Volatile.Write(ref _loadsInProgress, _loadsInProgress + 1);
+        }
+    }
+
+    // Records the load outcome, then lowers the pending count; the terminal status is written first so a
+    // lock-free reader that sees count 0 never sees a stale terminal status. The signal completes outside
+    // the lock, after the caller has released _solutionLock.
+    private void EndLoadTracking(SolutionLoadStatus terminal, string? failure)
+    {
+        TaskCompletionSource? toComplete = null;
+        lock (_loadStatusSync)
+        {
+            Volatile.Write(ref _terminalLoadStatus, (int)terminal);
+            Volatile.Write(ref _lastLoadFailure, failure);
+            var remaining = _loadsInProgress - 1;
+            Volatile.Write(ref _loadsInProgress, remaining);
+            if (remaining == 0)
+            {
+                toComplete = _loadSignal;
+                _loadSignal = null;
+            }
+        }
+
+        toComplete?.TrySetResult();
+    }
 
     /// <summary>
     /// Base repository directory used to resolve relative solution paths passed to <see cref="LoadSolutionAsync"/>.
@@ -445,98 +531,121 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     {
         solutionPath = ResolveSolutionPath(solutionPath, baseRepoDir);
 
-        await _solutionLock.WaitAsync(cancellationToken);
+        // Register as a pending load BEFORE waiting for _solutionLock, so a request arriving while this
+        // load is still queued already sees SolutionLoadStatus.Loading.
+        BeginLoadTracking();
+        var terminal = SolutionLoadStatus.Failed;
+        string? failure = null;
         try
         {
-            Interlocked.Increment(ref _loadsInProgress);
-            if (_logger.IsEnabled(LogLevel.Information))
-            {
-                _logger.LogInformation("Loading solution: {SolutionPath}", solutionPath);
-            }
-
-            _workspace?.Dispose();
-            // Suppress NuGet vulnerability audit during workspace load -> this is a code-analysis
-            // workspace, not a production build. Audit warnings (NU1901-NU1904) are MSBuild
-            // design-time errors that block project loading but are irrelevant for code analysis.
-            _workspace = MSBuildWorkspace.Create(new Dictionary<string, string>
-            {
-                { "NuGetAudit", "false" },
-                { "NuGetAuditLevel", "critical" }
-            });
-            // Fresh MSBuildWorkspace -> any cached Compilation from a prior load is unusable,
-            // whether this is the first load or a reload of an already-running server.
-            _compilationCache.Clear();
-            _workspaceLoadErrors.Clear();
-            _workspace.RegisterWorkspaceFailedHandler((d) =>
-            {
-                if (_logger.IsEnabled(LogLevel.Warning))
-                {
-                    _logger.LogWarning("Workspace error: {Message}", d.Diagnostic.Message);
-                }
-                _workspaceLoadErrors.Add(d.Diagnostic.Message);
-            });
-
+            await _solutionLock.WaitAsync(cancellationToken);
             try
             {
-                CurrentSolution = await _workspace.OpenSolutionAsync(solutionPath, null, cancellationToken);
                 if (_logger.IsEnabled(LogLevel.Information))
                 {
-                    _logger.LogInformation("Solution loaded with {ProjectCount} projects.", CurrentSolution.ProjectIds.Count);
+                    _logger.LogInformation("Loading solution: {SolutionPath}", solutionPath);
                 }
-            }
-            catch (Exception ex)
-            {
-                if (_logger.IsEnabled(LogLevel.Error))
+
+                _workspace?.Dispose();
+                // Suppress NuGet vulnerability audit during workspace load -> this is a code-analysis
+                // workspace, not a production build. Audit warnings (NU1901-NU1904) are MSBuild
+                // design-time errors that block project loading but are irrelevant for code analysis.
+                _workspace = MSBuildWorkspace.Create(new Dictionary<string, string>
                 {
-                    _logger.LogError(ex, "Failed to open solution '{SolutionPath}'. Some projects might not load correctly.", solutionPath);
-                }
-                _workspaceLoadErrors.Add($"Failed to open solution: {ex.Message}");
-                // Even if solution fails to open, try to get current partial solution if any
-                CurrentSolution = _workspace.CurrentSolution;
-                if (CurrentSolution?.ProjectIds.Count == 0 && _workspaceLoadErrors.Count == 0)
+                    { "NuGetAudit", "false" },
+                    { "NuGetAuditLevel", "critical" }
+                });
+                // Fresh MSBuildWorkspace -> any cached Compilation from a prior load is unusable,
+                // whether this is the first load or a reload of an already-running server.
+                _compilationCache.Clear();
+                _workspaceLoadErrors.Clear();
+                _workspace.RegisterWorkspaceFailedHandler((d) =>
                 {
-                    _workspaceLoadErrors.Add($"Solution '{solutionPath}' opened but no projects were found. This often indicates MSBuild errors. Check server logs for details.");
+                    if (_logger.IsEnabled(LogLevel.Warning))
+                    {
+                        _logger.LogWarning("Workspace error: {Message}", d.Diagnostic.Message);
+                    }
+                    _workspaceLoadErrors.Add(d.Diagnostic.Message);
+                });
+
+                try
+                {
+                    CurrentSolution = await _workspace.OpenSolutionAsync(solutionPath, null, cancellationToken);
+                    if (_logger.IsEnabled(LogLevel.Information))
+                    {
+                        _logger.LogInformation("Solution loaded with {ProjectCount} projects.", CurrentSolution.ProjectIds.Count);
+                    }
                 }
+                catch (Exception ex)
+                {
+                    if (_logger.IsEnabled(LogLevel.Error))
+                    {
+                        _logger.LogError(ex, "Failed to open solution '{SolutionPath}'. Some projects might not load correctly.", solutionPath);
+                    }
+                    _workspaceLoadErrors.Add($"Failed to open solution: {ex.Message}");
+                    // Even if solution fails to open, try to get current partial solution if any
+                    CurrentSolution = _workspace.CurrentSolution;
+                    if (CurrentSolution?.ProjectIds.Count == 0 && _workspaceLoadErrors.Count == 0)
+                    {
+                        _workspaceLoadErrors.Add($"Solution '{solutionPath}' opened but no projects were found. This often indicates MSBuild errors. Check server logs for details.");
+                    }
+                }
+
+                _lastLoadedAt = DateTime.UtcNow;
+                SolutionPath = solutionPath;
+                var solutionDirectory = Path.GetDirectoryName(solutionPath)!;
+                SetupWatcher(solutionDirectory);
+                SetupOutOfTreeWatchers(solutionDirectory);
+
+                // A full reload re-derives CurrentSolution from disk, so any drift flagged against the
+                // previous in-memory state is stale by construction -> otherwise a flag raised before
+                // the reload permanently blocks writes to that file for the rest of the session, since
+                // only ClearExternalFileChanges (not a reload) ever drains _externalChanges.
+                ClearExternalFileChanges();
+
+                // Rebuild the content-hash baseline from what was just loaded -> same "full reset, not
+                // just added-to" requirement as ClearExternalFileChanges just above, so a stale hash
+                // from a previous load never survives a reload and is compared against genuinely new
+                // content.
+                PopulateKnownFileHashes();
+
+                // OpenSolutionAsync throwing (e.g. solutionPath doesn't exist on disk) previously left
+                // _workspaceLoadErrors populated but returned normally, so a bad path silently reported
+                // success with an empty CurrentSolution. Surface it as a real failure instead -> the
+                // LoadSolution tool wrapper's catch block already turns a thrown ToolException into a
+                // correct IsError=true SentinelCallToolResult.
+                if (CurrentSolution == null || CurrentSolution.ProjectIds.Count == 0)
+                {
+                    var detail = _workspaceLoadErrors.Count > 0
+                        ? string.Join(" ", _workspaceLoadErrors)
+                        : "no projects were found.";
+                    throw new ToolNotFoundException($"Solution '{solutionPath}' failed to load: {detail}");
+                }
+
+                _lastSuccessfulLoadUtc = DateTime.UtcNow;
+                terminal = SolutionLoadStatus.Loaded;
+                SweepLargeResultsInBackground(GetSolutionRoot());
             }
-
-            _lastLoadedAt = DateTime.UtcNow;
-            SolutionPath = solutionPath;
-            var solutionDirectory = Path.GetDirectoryName(solutionPath)!;
-            SetupWatcher(solutionDirectory);
-            SetupOutOfTreeWatchers(solutionDirectory);
-
-            // A full reload re-derives CurrentSolution from disk, so any drift flagged against the
-            // previous in-memory state is stale by construction -> otherwise a flag raised before
-            // the reload permanently blocks writes to that file for the rest of the session, since
-            // only ClearExternalFileChanges (not a reload) ever drains _externalChanges.
-            ClearExternalFileChanges();
-
-            // Rebuild the content-hash baseline from what was just loaded -> same "full reset, not
-            // just added-to" requirement as ClearExternalFileChanges just above, so a stale hash
-            // from a previous load never survives a reload and is compared against genuinely new
-            // content.
-            PopulateKnownFileHashes();
-
-            // OpenSolutionAsync throwing (e.g. solutionPath doesn't exist on disk) previously left
-            // _workspaceLoadErrors populated but returned normally, so a bad path silently reported
-            // success with an empty CurrentSolution. Surface it as a real failure instead -> the
-            // LoadSolution tool wrapper's catch block already turns a thrown ToolException into a
-            // correct IsError=true SentinelCallToolResult.
-            if (CurrentSolution == null || CurrentSolution.ProjectIds.Count == 0)
+            finally
             {
-                var detail = _workspaceLoadErrors.Count > 0
-                    ? string.Join(" ", _workspaceLoadErrors)
-                    : "no projects were found.";
-                throw new ToolNotFoundException($"Solution '{solutionPath}' failed to load: {detail}");
+                _solutionLock.Release();
             }
-
-            _lastSuccessfulLoadUtc = DateTime.UtcNow;
-            SweepLargeResultsInBackground(GetSolutionRoot());
+        }
+        catch (Exception ex)
+        {
+            failure = ex.Message;
+            throw;
         }
         finally
         {
-            Interlocked.Decrement(ref _loadsInProgress);
-            _solutionLock.Release();
+            // A reload that fails or is cancelled before assigning a new snapshot leaves the earlier usable
+            // solution in place -> keep reporting Loaded for it.
+            if (terminal == SolutionLoadStatus.Failed && CurrentSolution is { ProjectIds.Count: > 0 })
+            {
+                terminal = SolutionLoadStatus.Loaded;
+            }
+
+            EndLoadTracking(terminal, failure);
         }
     }
 
@@ -1136,6 +1245,16 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
     public async Task<Solution> GetCurrentSolutionAsync(CancellationToken cancellationToken)
     {
+        // A call that arrives while a load is queued or running waits for it (bounded) instead of queueing
+        // on _solutionLock with no explanation.
+        if (SolutionLoadStatus == SolutionLoadStatus.Loading)
+        {
+            if (await WaitForLoadAsync(SolutionLoadWait.DefaultTimeout, cancellationToken) == SolutionLoadStatus.Loading)
+            {
+                throw new SolutionLoadTimeoutException(SolutionNotLoadedMessage.LoadWaitTimedOut(SolutionLoadWait.DefaultTimeout));
+            }
+        }
+
         await _solutionLock.WaitAsync(cancellationToken);
         try
         {
@@ -2088,6 +2207,19 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         // but no on-disk path, so GetSolutionRoot() returns null even though a solution genuinely
         // is loaded -> that case must fall through to normal path resolution, not be misreported as
         // "no solution loaded."
+        if (CurrentSolution is null && SolutionLoadStatus == SolutionLoadStatus.Loading)
+        {
+            // This is the only sanctioned synchronous wait on a load: every file-path tool resolves its path
+            // here before it touches the solution, and ResolveFromWire is synchronous, so waiting here covers
+            // them all with one bounded (SolutionLoadWait.DefaultTimeout) block of a pool thread. There is no
+            // SynchronizationContext on the server, so this cannot deadlock the load. After a timeout the
+            // NoSolutionLoaded result below is returned as before (ReadFile of an absolute path still falls
+            // back to the disk).
+            WaitForLoadAsync(SolutionLoadWait.DefaultTimeout, CancellationToken.None).GetAwaiter().GetResult();
+            // The root was read before the wait, when no solution was loaded yet.
+            solutionRoot = this.GetSolutionRoot();
+        }
+
         if (CurrentSolution is null)
         {
             return new FilePathWrapper(string.Empty, failureReason: FilePathFailureReason.NoSolutionLoaded);

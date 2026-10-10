@@ -72,6 +72,10 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     }
     public int WorkspaceVersion => 0;
 
+    public SolutionLoadStatus SolutionLoadStatus => CurrentSolution is null ? SolutionLoadStatus.NotLoaded : SolutionLoadStatus.Loaded;
+
+    public Task<SolutionLoadStatus> WaitForLoadAsync(TimeSpan timeout, CancellationToken cancellationToken) => Task.FromResult(SolutionLoadStatus);
+
     public async Task<ApplyChangesResult> ApplyProposedChangesAsync(Dictionary<FilePathWrapper, string> changes, int retryCount = 3, bool validateChanges = false, bool rollbackOnPartialFailure = false, IProgress<EngineProgress>? progress = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, bool exactRestore = false)
     {
         if (ApplyException is not null)

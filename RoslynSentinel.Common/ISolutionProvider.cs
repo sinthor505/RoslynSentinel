@@ -38,10 +38,17 @@ public interface ISolutionProvider
     {
         get;
     }
+    /// <summary>Lock-free status of the solution load: <see cref="SolutionLoadStatus.Loading"/> while any load is queued or running, otherwise the outcome of the last load.</summary>
+    SolutionLoadStatus SolutionLoadStatus
+    {
+        get;
+    }
 
     /// <summary>Returns the current in-memory solution. Roslyn's <see cref="Solution"/> is immutable, so callers can apply speculative edits (e.g. <c>WithDocumentText</c>) without affecting this instance or other callers.</summary>
     [Obsolete("Ambiguous once staged writes exist -- use IWorkspaceReader.GetSolutionAsync(ReadSource.Committed/.IncludeStaged) instead. See docs/current/design_read_chokepoint.md.", error: false)]
     Task<Solution> GetCurrentSolutionAsync(CancellationToken cancellationToken);
+    /// <summary>Waits up to <paramref name="timeout"/> for any queued or running solution load to finish and returns the status afterwards. <see cref="SolutionLoadStatus.Loading"/> means the wait timed out; a timeout never cancels the load. A cancelled <paramref name="cancellationToken"/> propagates.</summary>
+    Task<SolutionLoadStatus> WaitForLoadAsync(TimeSpan timeout, CancellationToken cancellationToken);
     /// <summary>Lists solution-folder items (non-project files shown in Solution Explorer).</summary>
     List<(string RelativePath, string SolutionFolder)> GetSolutionFolderItems();
     /// <summary>Directory containing the loaded solution/project, or null if none is loaded.</summary>
