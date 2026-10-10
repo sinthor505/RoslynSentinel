@@ -24,12 +24,12 @@ public class GitTools
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state.")]
+    [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state. tag takes an action.")]
     public async Task<SentinelCallToolResult<object>> Git(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters).")]
+        [Description("abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters). tag: needs action (list|create|delete); create needs tagName.")]
         GitOperation operation,
-        [Description("log: number of commits (max 100).")]
+        [Description("log / tag list: number of entries (max 100).")]
         int count = 20,
         [Description("diff: \"working\" (alias \"unstaged\"), \"staged\", a commit hash, branch or tag, or a range refA..refB. show: a commit hash/ref. Prefer 'ref'.")]
         string target = "working",
@@ -38,7 +38,7 @@ public class GitTools
         [Description("diff/show: cap on returned output in UTF-8 bytes (min 1024, max 524288).")]
         int maxBytes = 65536,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit and amend=false; optional when amend=true (omit to keep HEAD's message); unused otherwise.
-        [Description("Required for operation=commit unless amend=true (then omitting keeps HEAD's message).")]
+        [Description("Required for operation=commit unless amend=true (then omitting keeps HEAD's message). tag create: when set makes an annotated tag.")]
         string? message = null,
         [Description("stage: \"tracked\" (default) stages modified/deleted tracked files only; \"all\" also stages untracked files; \"listed\" stages exactly files/paths. commit: omit to commit exactly what's staged; pass scope only to also stage first. files implies scope=listed.")]
         GitStageScope? scope = null,
@@ -79,15 +79,22 @@ public class GitTools
         bool stat = false,
         [Description("revert: parent to keep when reverting a MERGE commit (git revert -m N): 1 = the branch merged into (almost always right), 2 = the branch merged in. Required for a merge commit.")]
         int? mainline = null,
-        [Description("log/show/diff/reset: the git ref (a branch, tag, commit hash, HEAD~1, ...). log: start ref. show: the commit to show. diff: what to diff the working tree against (or a range). reset: REQUIRED, the ref to move HEAD to (e.g. \"HEAD~1\" to undo the last commit).")]
+        [Description("log/show/diff/reset/tag: the git ref (a branch, tag, commit hash, HEAD~1, ...). log: start ref. show: the commit to show. diff: what to diff the working tree against (or a range). reset: REQUIRED, the ref to move HEAD to (e.g. \"HEAD~1\" to undo the last commit). tag create: the commit to tag (default HEAD).")]
         string? @ref = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: action is required when operation=tag; refused for every other operation.
+        [Description("tag: REQUIRED. list | create | delete. Ignored-and-refused for every other operation.")]
+        GitAction? action = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: tagName is required for tag create/delete; unused otherwise.
+        [Description("tag create/delete: the tag name, e.g. v1.2.0.")]
+        string? tagName = null,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
-        var isReadOnlyOperation = operation is GitOperation.status or GitOperation.log or GitOperation.diff or GitOperation.show;
+        var isReadOnlyOperation = operation is GitOperation.status or GitOperation.log or GitOperation.diff or GitOperation.show
+            || (operation is GitOperation.tag && action == GitAction.list);
         if (!string.IsNullOrWhiteSpace(repoPath) && !isReadOnlyOperation)
         {
-            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"repoPath is only supported for status/log/diff/show - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or switch to a read-only operation.", Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"repoPath is only supported for status/log/diff/show (and list actions) - operation '{operation}' always targets the loaded solution's repo. Omit repoPath, or switch to a read-only operation.", Detail: null) };
         }
 
         var gitRoot = _gitImpl.TryGetGitRoot(out var rootError, isReadOnlyOperation ? repoPath : null);
@@ -107,10 +114,11 @@ public class GitTools
         // per-operation aliases. Different values across them are ambiguous, so they are refused
         // rather than letting one silently win (same policy as files/paths above).
         string? resolvedRef = null;
-        if (operation is GitOperation.log or GitOperation.show or GitOperation.diff or GitOperation.reset)
+        if (operation is GitOperation.log or GitOperation.show or GitOperation.diff or GitOperation.reset or GitOperation.tag)
         {
             (string Name, string? Value)[] aliases = operation switch
             {
+                GitOperation.tag => [],
                 GitOperation.log or GitOperation.reset => [(nameof(branchName), branchName)],
                 GitOperation.show => [(nameof(commitHash), commitHash), (nameof(target), target == "working" ? null : target)],
                 _ => [(nameof(target), target == "working" ? null : target)],
@@ -123,12 +131,17 @@ public class GitTools
         }
         else if (!string.IsNullOrWhiteSpace(@ref))
         {
-            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"ref is only supported for log/show/diff/reset - operation '{operation}' takes its ref from another parameter (revert: commitHash; branch/checkout: branchName, startPoint). Omit ref.", Detail: null) };
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"ref is only supported for log/show/diff/reset/tag - operation '{operation}' takes its ref from another parameter (revert: commitHash; branch/checkout: branchName, startPoint). Omit ref.", Detail: null) };
         }
 
         if (mainline is not null && operation != GitOperation.revert)
         {
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"mainline is only supported for revert - operation '{operation}' does not use it. Omit mainline.", Detail: null) };
+        }
+
+        if (action is not null && operation is not GitOperation.tag)
+        {
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"action is only supported for tag - operation '{operation}' does not use it. Omit action.", Detail: null) };
         }
 
         // Gap A/B: when files are supplied and scope is null, infer scope=listed for stage/add/commit.
@@ -164,6 +177,7 @@ public class GitTools
             GitOperation.push => await _gitImpl.PushAsync(gitRoot, remoteName, setUpstream, cancellationToken),
             GitOperation.fetch => await _gitImpl.FetchAsync(gitRoot, remoteName, cancellationToken),
             GitOperation.pull => await _gitImpl.PullAsync(gitRoot, remoteName, rebase, cancellationToken),
+            GitOperation.tag => await _gitImpl.TagAsync(gitRoot, action, tagName, resolvedRef, message, count, cancellationToken),
             _ => new GitResult { IsError = true, Error = $"Unknown operation '{operation}'." }
         };
 

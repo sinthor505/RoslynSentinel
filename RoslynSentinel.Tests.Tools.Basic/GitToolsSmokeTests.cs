@@ -1819,4 +1819,215 @@ public class GitToolsSmokeTests
         // Verify exact count: 3 files, no directory entries.
         Assert.That(status.Untracked, Has.Count.EqualTo(3), "exactly 3 individual files, no collapsed directories");
     }
+
+    // Step 3 of plan_git_tool_tag_stash_worktree_hunks.md: Git(operation: tag, action: list|create|delete).
+
+    private string ShortHead(string rev = "HEAD") => RunGitCapture("rev-parse", "--short", rev).Trim();
+
+    private string TagNames() => RunGitCapture("tag", "-l").Trim();
+
+    private void CommitSecondChange()
+    {
+        WriteFile("second.txt", "second");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "second commit");
+    }
+
+    [Test]
+    public async Task Git_Tag_List_OnRepoWithoutTags_ReturnsEmptyListAsync()
+    {
+        var result = await _gitTools.Git(reason: "list tags in empty repo", GitOperation.tag, action: GitAction.list);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var tags = (GitTagResult)result.SuccessData!;
+        Assert.That(tags.Tags, Is.Empty);
+        Assert.That(tags.TotalCount, Is.EqualTo(0));
+        Assert.That(tags.IsTruncated, Is.False);
+    }
+
+    [Test]
+    public async Task Git_Tag_Create_Lightweight_ThenListShowsItAsync()
+    {
+        var create = await _gitTools.Git(reason: "create lightweight tag", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0");
+
+        Assert.That(create.IsError, Is.False, create.ErrorData?.Message);
+        var created = (GitTagResult)create.SuccessData!;
+        Assert.That(created.Created, Is.EqualTo("v1.0.0"));
+        Assert.That(created.Annotated, Is.False);
+        Assert.That(created.TargetHash, Is.EqualTo(ShortHead()));
+        Assert.That(TagNames(), Is.EqualTo("v1.0.0"));
+
+        var list = await _gitTools.Git(reason: "list tags", GitOperation.tag, action: GitAction.list);
+
+        Assert.That(list.IsError, Is.False, list.ErrorData?.Message);
+        var tags = (GitTagResult)list.SuccessData!;
+        Assert.That(tags.Tags, Has.Count.EqualTo(1));
+        Assert.That(tags.Tags[0].Name, Is.EqualTo("v1.0.0"));
+        Assert.That(tags.Tags[0].Kind, Is.EqualTo("lightweight"));
+        Assert.That(tags.Tags[0].TargetHash, Is.EqualTo(ShortHead()));
+        Assert.That(tags.TotalCount, Is.EqualTo(1));
+    }
+
+    [Test]
+    public async Task Git_Tag_Create_WithMessage_IsAnnotatedAsync()
+    {
+        var create = await _gitTools.Git(reason: "create annotated tag", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0", message: "release one");
+
+        Assert.That(create.IsError, Is.False, create.ErrorData?.Message);
+        Assert.That(((GitTagResult)create.SuccessData!).Annotated, Is.True);
+        Assert.That(RunGitCapture("cat-file", "-t", "refs/tags/v1.0.0").Trim(), Is.EqualTo("tag"));
+
+        var list = await _gitTools.Git(reason: "list tags", GitOperation.tag, action: GitAction.list);
+
+        var entry = ((GitTagResult)list.SuccessData!).Tags.Single();
+        Assert.That(entry.Kind, Is.EqualTo("annotated"));
+        Assert.That(entry.Subject, Is.EqualTo("release one"));
+        Assert.That(entry.TargetHash, Is.EqualTo(ShortHead()), "an annotated tag must report the peeled commit, not the tag object.");
+    }
+
+    [Test]
+    public async Task Git_Tag_Create_AtRef_TagsThatCommitAsync()
+    {
+        var firstHash = ShortHead();
+        CommitSecondChange();
+
+        var create = await _gitTools.Git(reason: "tag the previous commit", GitOperation.tag, action: GitAction.create, tagName: "old", @ref: "HEAD~1");
+
+        Assert.That(create.IsError, Is.False, create.ErrorData?.Message);
+        var created = (GitTagResult)create.SuccessData!;
+        Assert.That(created.TargetHash, Is.EqualTo(firstHash));
+        Assert.That(created.TargetHash, Is.Not.EqualTo(ShortHead()));
+        Assert.That(ShortHead("old^{commit}"), Is.EqualTo(firstHash));
+    }
+
+    [Test]
+    public async Task Git_Tag_Create_ExistingName_ReportsGitAlreadyExistsAndDoesNotMoveTagAsync()
+    {
+        var firstHash = ShortHead();
+        var first = await _gitTools.Git(reason: "create tag", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0");
+        Assert.That(first.IsError, Is.False, first.ErrorData?.Message);
+        CommitSecondChange();
+
+        var again = await _gitTools.Git(reason: "create same tag again", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0");
+
+        AssertCoded(again, "GitAlreadyExists");
+        Assert.That(again.ErrorData?.Message, Does.Contain("never overwrites"));
+        Assert.That(ShortHead("v1.0.0^{commit}"), Is.EqualTo(firstHash), "the existing tag must not move.");
+    }
+
+    [Test]
+    public async Task Git_Tag_Create_InvalidName_ReportsGitInvalidNameAsync()
+    {
+        var result = await _gitTools.Git(reason: "create tag with invalid name", GitOperation.tag, action: GitAction.create, tagName: "bad name");
+
+        AssertCoded(result, "GitInvalidName");
+        Assert.That(result.ErrorData?.Message, Does.Contain("bad name"));
+        Assert.That(TagNames(), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Tag_Create_WithoutTagName_ReportsGitRefRequiredAsync()
+    {
+        var result = await _gitTools.Git(reason: "create tag without a name", GitOperation.tag, action: GitAction.create);
+
+        AssertCoded(result, "GitRefRequired");
+        Assert.That(result.ErrorData?.Message, Does.Contain("tagName"));
+        Assert.That(TagNames(), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Tag_Create_UnknownRef_ReportsGitTargetNotFoundAsync()
+    {
+        var result = await _gitTools.Git(reason: "create tag at unknown ref", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0", @ref: "no-such-ref-anywhere");
+
+        AssertCoded(result, "GitTargetNotFound");
+        Assert.That(result.ErrorData?.Message, Does.Contain("no-such-ref-anywhere"));
+        Assert.That(TagNames(), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Tag_Delete_RemovesTagAndReportsPreviousTargetAsync()
+    {
+        var headHash = ShortHead();
+        RunGit(_repoDir, "tag", "v1.0.0");
+
+        var result = await _gitTools.Git(reason: "delete tag", GitOperation.tag, action: GitAction.delete, tagName: "v1.0.0");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var deleted = (GitTagResult)result.SuccessData!;
+        Assert.That(deleted.Deleted, Is.EqualTo("v1.0.0"));
+        Assert.That(deleted.PreviousTargetHash, Is.EqualTo(headHash));
+        Assert.That(deleted.Note, Does.Contain("Deleted locally only"));
+        Assert.That(TagNames(), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Tag_Delete_Missing_ReportsGitTargetNotFoundAsync()
+    {
+        RunGit(_repoDir, "tag", "keep-me");
+
+        var result = await _gitTools.Git(reason: "delete missing tag", GitOperation.tag, action: GitAction.delete, tagName: "nope");
+
+        AssertCoded(result, "GitTargetNotFound");
+        Assert.That(result.ErrorData?.Message, Does.Contain("keep-me"));
+        Assert.That(TagNames(), Is.EqualTo("keep-me"));
+    }
+
+    [Test]
+    public async Task Git_Tag_WithoutAction_ReportsGitActionRequiredNamingValidValuesAsync()
+    {
+        var result = await _gitTools.Git(reason: "tag without action", GitOperation.tag);
+
+        AssertCoded(result, "GitActionRequired");
+        Assert.That(result.ErrorData?.Message, Does.Contain("list, create, delete"));
+    }
+
+    [Test]
+    public async Task Git_Tag_List_WithRepoPath_TargetsThatRepoAsync()
+    {
+        var otherRepoDir = Path.Combine(Path.GetTempPath(), "RoslynSentinelGitSmoke_Other_" + Guid.NewGuid());
+        Directory.CreateDirectory(otherRepoDir);
+        try
+        {
+            RunGit(otherRepoDir, "init");
+            RunGit(otherRepoDir, "config", "user.email", "test@example.com");
+            RunGit(otherRepoDir, "config", "user.name", "Test");
+            File.WriteAllText(Path.Combine(otherRepoDir, "OTHER.md"), "other repo");
+            RunGit(otherRepoDir, "add", "-A");
+            RunGit(otherRepoDir, "commit", "-m", "other repo initial commit");
+            RunGit(otherRepoDir, "tag", "other-tag");
+
+            // The loaded solution's repo (_repoDir) has no tags; if repoPath were ignored this would be empty.
+            var result = await _gitTools.Git(reason: "list tags in other repo", GitOperation.tag, action: GitAction.list, repoPath: otherRepoDir);
+
+            Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+            var tags = (GitTagResult)result.SuccessData!;
+            Assert.That(tags.Tags.Select(t => t.Name), Is.EqualTo(new[] { "other-tag" }));
+        }
+        finally
+        {
+            DeleteDirectoryTree(otherRepoDir);
+        }
+    }
+
+    [Test]
+    public async Task Git_Tag_Create_WithRepoPath_IsRefusedAsync()
+    {
+        var result = await _gitTools.Git(reason: "create tag with repoPath", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0", repoPath: _repoDir);
+
+        Assert.That(result.IsError, Is.True, "repoPath is only accepted for read-only operations and list actions.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("repoPath"));
+        Assert.That(TagNames(), Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_ActionOnOtherOperation_IsRefusedAsync()
+    {
+        var result = await _gitTools.Git(reason: "action on status", GitOperation.status, action: GitAction.list);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
+        Assert.That(result.ErrorData?.Message, Does.Contain("action"));
+    }
 }
