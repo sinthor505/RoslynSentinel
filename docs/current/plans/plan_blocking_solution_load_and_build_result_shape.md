@@ -1,6 +1,6 @@
 # Plan: Make tool calls wait for the solution load (30 s, cancel on timeout), and give Build a small, root-cause-first result
 
-**Status:** PARTIALLY IMPLEMENTED 2026-10-09. Steps A1a-B8 are done and committed (A1a 0487d1f, A1b 32f5555, A2a 764edbb, A2b 29c7bb2, A3 3061374, A4 499a76e, A5 37404e2, A6 cd4d6c4, B1 599c492, B2+B3 a8c6726, B4 4da918c, B5 7b01137, B6 9924978, B7 c7af88b, B8 docs); build 0 errors, full suite 3595 total / 3569 passed / 0 failed / 26 skipped. NOT done: the live checks (a)-(e) of the Final step, which need an MCP server restart and are pending an owner or fresh-session run (amended per round-3 decisions). Addresses decisions #8 (solution auto-load) and #14 (Build result shape) in `docs/current/proposals/proposal_journal_digest_followup_decisions.md`, with the owner answers D-4 .. D-9 from "Decided in round 3". Supersedes `docs/current/findings/finding_build_offload_hides_error_count.md` (journal sessions `cc715aa0` 17:45 and 17:59, `93fd2d31`).
+**Status:** IMPLEMENTED 2026-10-10 (live checks (a)-(e) passed on a fresh server; see "Live check results" under the Final step). Steps A1a-B8 are done and committed (A1a 0487d1f, A1b 32f5555, A2a 764edbb, A2b 29c7bb2, A3 3061374, A4 499a76e, A5 37404e2, A6 cd4d6c4, B1 599c492, B2+B3 a8c6726, B4 4da918c, B5 7b01137, B6 9924978, B7 c7af88b, B8 docs); build 0 errors, full suite 3595 total / 3569 passed / 0 failed / 26 skipped. The live checks (a)-(e) of the Final step were run 2026-10-10 and all passed (previously pending an owner or fresh-session run). Addresses decisions #8 (solution auto-load) and #14 (Build result shape) in `docs/current/proposals/proposal_journal_digest_followup_decisions.md`, with the owner answers D-4 .. D-9 from "Decided in round 3". Supersedes `docs/current/findings/finding_build_offload_hides_error_count.md` (journal sessions `cc715aa0` 17:45 and 17:59, `93fd2d31`).
 ## Problem
 
 ### Part A - a call that arrives mid-load fails or hangs instead of waiting
@@ -210,6 +210,15 @@ Stdout is not needed when the build parsed correctly. It is the only evidence wh
 - `RunTest` at solution scope; compare with the known-failure baseline (`reference_known_failing_tests`); report only new failures. Watch specifically for new load-timeout failures in test fixtures (see Risks, item 2).
 - `McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)`, wait for the respawn, then check, in order, without calling `LoadSolution` first: (a) `McpServerStatus` shows `solutionLoadStatus` `Loading` or `Loaded` (auto-load), never a number or null; (b) immediately after restart call a read tool such as `ListAll` and see it return normally rather than "retry" (it waited for the load); (c) `LoadSolution` the repo `.slnx` returns "already loaded" without a second load; (d) `LoadSolution` with `timeoutSeconds: 1` and `forceReload: true` returns an error naming `timeoutSeconds` and `McpServerStatus` then shows the previous solution still `Loaded`; (e) `Build(level: fullBuild)` on this repo returns an inline result (no pointer) with a few hundred bytes of `projectsCompiled`, and a deliberately broken file gives a `breakdown` with the broken project flagged as root cause; read the server log's `Solution loaded ... in N ms` line to record the real load time.
 - Done when: all five hold.
+
+#### Live check results (2026-10-10, fresh server, session 1acedb4e)
+
+- (a) pass: `McpServerStatus` showed `solutionLoadStatus` `Loading` right after restart.
+- (b) pass: an immediate `Search` without `LoadSolution` waited and returned normally.
+- (c) pass: `LoadSolution` replied "already loaded - no changes made".
+- (d) pass: `forceReload: true, timeoutSeconds: 1` returned `SolutionLoadTimeout` naming `timeoutSeconds`; status stayed `Loaded` with 21 projects. Wording nit: "no solution was loaded" misleads, since the previous solution stays loaded (see Risk 4).
+- (e) pass: `Build(fullBuild)` with a deliberately broken file gave `outcome: Failed` and `breakdown.byProject` flagging `RoslynSentinel.Common` as `isRootCause`. Nit: the same CS0103 was listed twice (errorCount 2 for one location).
+- Real load time (server log): `Solution loaded with 21 projects in 7551 ms`, so Risk 1 (30 s limit) has ample margin.
 
 ## Out of scope
 

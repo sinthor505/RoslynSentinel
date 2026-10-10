@@ -1,6 +1,6 @@
 # Plan: exclude test projects by default from Search, ListAll and FindReferences
 
-**Status:** APPROVED 2026-10-10. Implements `docs/current/proposals/proposal_search_exclude_test_projects_by_default.md`; owner delegated execution ("work autonomously"), hidden-test-callers risk handled by an exclusion count in `statusMessage` plus the `FindReferences` parameter description (no extra confirmation parameter). Nothing built yet.
+**Status:** IMPLEMENTED 2026-10-10 (9eb70d8e (shared detector), 52fc2f59 (text), 8b51cf94 (ListAll/kinds), b92d1e70 (symbol), f5b9b649 (references)). Live checks recorded below. Approved 2026-10-10. Implements `docs/current/proposals/proposal_search_exclude_test_projects_by_default.md`; owner delegated execution ("work autonomously"), hidden-test-callers risk handled by an exclusion count in `statusMessage` plus the `FindReferences` parameter description (no extra confirmation parameter).
 
 ## Problem
 
@@ -127,3 +127,22 @@ Add `bool includeTests` to the `Search`, `ListAll` and `FindReferences` tools.
 - The exact hidden-match count for text search requires a second counting pass; Step 2 limits it to the empty-result
   case. Revisit if reporting only project counts proves too vague in live use.
 - `.csproj` read cost is paid once per project per file change (cached).
+
+## Outcome (2026-10-10)
+
+Deviations from the steps as written:
+
+- **References filtering is in the impl layer, not the engine.** `FindCallersAsync` / `FindImplementationsForMemberAsync` were left untouched;
+  `SymbolRelationshipImpl.FindReferences` drops hits by owning-document project and counts them (`BuildTestDocumentMapAsync`, `ExcludeTestHits<T>`,
+  `DroppedTestHitsNote`). Same results as before minus test locations. Scoping `SymbolFinder` for speed is still out of scope.
+- **Text search reports a project count only** ("N test project(s) were excluded ..."), not a hidden-match count; no second counting pass was built.
+- Gap: the `implementations` kind of `FindReferences` has no unit test (callers are covered).
+
+Live checks (fresh server, session 1acedb4e):
+
+- `Search(text, PersistentWorkspaceManager)` default: 6 hits in 5 main-project files plus "12 test project(s) were excluded ..." (before: 423 hits / 150 files).
+- `Search(references, callers)` on `IWorkspaceMutator.LoadSolutionAsync(string, string?, CancellationToken)`: 76 callers in 33 files shown, 2923 references in
+  10 test projects excluded (97.4% of all references hidden by default). This answers the proposal's size question: the saving is large.
+- NOT live-verified: `includeTests: true` restoring the old counts. The MCP client kept the pre-restart tool schema (no `includeTests`), sent the value as a
+  string and the server rejected it with a JsonException. This is a stale-client-schema effect (a fresh session sees the parameter); the true path is
+  covered by the unit tests. Re-check in the next fresh session.

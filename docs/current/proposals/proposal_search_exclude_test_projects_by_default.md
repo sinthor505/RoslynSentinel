@@ -1,6 +1,6 @@
 # Search / ListAll / FindReferences: exclude test projects by default at the tool layer
 
-**Status:** PROPOSED 2026-10-10. Awaiting review; nothing built.
+**Status:** IMPLEMENTED 2026-10-10 (9eb70d8e (shared detector), 52fc2f59 (text), 8b51cf94 (ListAll/kinds), b92d1e70 (symbol), f5b9b649 (references)). See `plans/plan_search_exclude_test_projects_by_default.md`. Size question answered: on `LoadSolutionAsync` callers the default hides 2923 of 2999 references (97.4%), 76 callers remain.
 
 ## Motivation
 

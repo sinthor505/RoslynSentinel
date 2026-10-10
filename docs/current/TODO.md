@@ -612,12 +612,3 @@ ChangeSignature, RenameSymbol conflicts) do not use it.
   `BuildEngineParseTests.cs` and the B4/B7 test files).
 
 
-## Search / ListAll / FindReferences: exclude test projects by default (2026-10-10) - proposed, not started
-
-**Found:** 2026-10-10. `proposals/proposal_search_exclude_test_projects_by_default.md` (status PROPOSED). Hits from test projects bury the
-answer for names every fixture constructs (`PersistentWorkspaceManager`: 392 of 423 text hits are in test projects). No search path can
-exclude test projects today; the only detection is the private `TestRunEngine.IsTestProject`.
-
-**Not built:** needs a plan under `plans/` (parameter `includeTests`, tool default `false`, impl default `true`, shared `IsTestProject`
-helper, exclusion count in `statusMessage`). Open questions in the proposal: how `FindCallersAsync` can scope `SymbolFinder`, and measuring
-the `references` saving first.
