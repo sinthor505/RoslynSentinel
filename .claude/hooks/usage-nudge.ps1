@@ -7,6 +7,9 @@
 # reset time, tier) fires once, tracked in .claude/usage/<sid8>.nudged. Tune with
 # ROSLYNSENTINEL_USAGE_NUDGE_PCT (default 85) and ROSLYNSENTINEL_USAGE_URGENT_PCT (default 95).
 #
+# Context size: a third check warns before auto-compaction (see context-size.ps1; tiers are token counts,
+# ROSLYNSENTINEL_CONTEXT_NUDGE_TOKENS / _URGENT_TOKENS override, default compaction point minus 32k / 12k).
+#
 # The snapshot comes from usage-statusline.ps1 (CLI) and/or usage-refresh.ps1 (OAuth usage endpoint,
 # works in the VS Code extension too); the nudge refreshes it itself when older than ~90 s.
 #
@@ -51,7 +54,9 @@ try {
     $nudged  = Join-Path $dir "$sid8.nudged"
     $tiptoeFlag = Join-Path $dir "$sid8.tiptoe"
     $tiptoeing = Test-Path -LiteralPath $tiptoeFlag
-    $done = if (Test-Path -LiteralPath $nudged) { @(Get-Content -LiteralPath $nudged) } else { @() }
+    # @(...) around the whole if: an if-expression unrolls, so an empty/one-line result would otherwise become
+    # $null / a bare string and every later `$done += key` would concatenate strings instead of appending.
+    $done = @(if (Test-Path -LiteralPath $nudged) { Get-Content -LiteralPath $nudged })
 
     $now = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
     $messages = @()
@@ -103,10 +108,44 @@ try {
         $messages += "$head $tail"
     }
 
-    if ($messages.Count -eq 0) { exit 0 }
+    # Context-size notice: warn before auto-compaction so the session can park in-flight work. Main conversation
+    # only (a subagent's context is not the parent transcript). Tiers are token counts: nudge = compaction point
+    # minus 32k, urgent = minus 12k. Each fires once per fill; the keys are cleared once the context shrinks back
+    # below the nudge tier (i.e. after a compaction) so the next fill warns again.
+    $doneDirty = $false
+    if (-not $isSub -and $payload.transcript_path) {
+        . (Join-Path $PSScriptRoot 'context-size.ps1')
+        $ctxUse = Get-ContextUsage ([string]$payload.transcript_path)
+        $point = if ($ctxUse) { Get-CompactionPoint $ctxUse.Model } else { $null }
+        if ($ctxUse -and $point) {
+            $ctxNudge = $point - 32000; $ctxUrgent = $point - 12000
+            if ($env:ROSLYNSENTINEL_CONTEXT_NUDGE_TOKENS  -match '^\d+$') { $ctxNudge  = [int]$env:ROSLYNSENTINEL_CONTEXT_NUDGE_TOKENS }
+            if ($env:ROSLYNSENTINEL_CONTEXT_URGENT_TOKENS -match '^\d+$') { $ctxUrgent = [int]$env:ROSLYNSENTINEL_CONTEXT_URGENT_TOKENS }
+            $used = [long]$ctxUse.Tokens
+            if ($used -lt $ctxNudge) {
+                $kept = @($done | Where-Object { -not ([string]$_).StartsWith('context:') })
+                if ($kept.Count -ne $done.Count) { $done = $kept; $doneDirty = $true }
+            }
+            else {
+                $ctxTier = if ($used -ge $ctxUrgent) { 'urgent' } else { 'nudge' }
+                $ctxKey = "context:$ctxTier"
+                if ($done -notcontains $ctxKey) {
+                    $done += $ctxKey
+                    if ($ctxTier -eq 'urgent') { $done += 'context:nudge' }
+                    $head = 'Context: about {0:0}k tokens used; auto-compaction fires near {1:0}k.' -f ($used / 1000.0), ($point / 1000.0)
+                    if ($ctxTier -eq 'urgent') { $tail = 'Compaction is imminent: stop starting new work, bring any in-flight edit to a compiling state, and append your current state and NEXT steps to the session journal now so they survive the compaction.' }
+                    else { $tail = 'Do not start a new multi-step change. Finish or safely park what is in flight, keep the tree compiling, and note your current state and NEXT steps in the session journal before compaction erases the details.' }
+                    $messages += "$head $tail"
+                }
+            }
+        }
+    }
+
+    if ($messages.Count -eq 0 -and -not $doneDirty) { exit 0 }
 
     if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     [System.IO.File]::WriteAllLines($nudged, [string[]]$done)
+    if ($messages.Count -eq 0) { exit 0 }
 
     $event = if ($payload.hook_event_name) { [string]$payload.hook_event_name } else { 'PostToolUse' }
     $out = @{ hookSpecificOutput = @{ hookEventName = $event; additionalContext = ($messages -join ' ') } }

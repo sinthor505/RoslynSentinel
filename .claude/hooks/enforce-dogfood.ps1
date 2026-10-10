@@ -306,7 +306,7 @@ docs/current/blockers/blocking_error_<slug>.md, and end the turn.
     }
 
     # --- Dispatching `implementer`: slice contract --------------------------------------
-    # CLAUDE.md "Dispatching `implementer`: the slice contract". implementer is Haiku-tier and
+    # Skill dispatch-implementer (CLAUDE.md "Dispatching `implementer`"). implementer is Haiku-tier and
     # stalls on briefs that are large or underspecified, and only the orchestrator's own prompt
     # used to carry that rule - a general-purpose dispatcher never saw it. This makes a
     # non-conforming brief fail at dispatch time, naming the missing field. Not bypassable:
@@ -332,7 +332,7 @@ docs/current/blockers/blocking_error_<slug>.md, and end the turn.
         $found = @{}
         foreach ($k in $labels.Keys) {
             $mm = [regex]::Match($brief, $labels[$k])
-            if ($mm.Success) { $found[$k] = $mm } else { $problems.Add("  missing field '${k}:' (use the brief template in CLAUDE.md).") }
+            if ($mm.Success) { $found[$k] = $mm } else { $problems.Add("  missing field '${k}:' (use the brief template in the dispatch-implementer skill).") }
         }
 
         # Files section = text from the Files label up to the next label; count distinct .cs paths.
@@ -371,6 +371,7 @@ $($problems -join "`n")
 implementer is Haiku-tier. A brief it can finish names, up front: Files (3 or fewer, full
 paths including the project), Symbols, Call sites (pre-measured with
 InspectSymbol(aspect: blastRadius) / FindReferences), one Acceptance check, and Out of scope.
+Load the dispatch-implementer skill for the full brief template and slice limits.
 Fix the brief and dispatch again. Nothing was dispatched.
 "@
         }

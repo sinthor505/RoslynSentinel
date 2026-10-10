@@ -1,4 +1,4 @@
-# Tests for usage-statusline.ps1 and usage-nudge.ps1.
+# Tests for usage-statusline.ps1, usage-nudge.ps1 and context-size.ps1.
 # Run: pwsh -NoProfile -File .claude/hooks/usage-hooks.Tests.ps1   (exit 1 on any failure)
 # Uses a throwaway ROSLYNSENTINEL_USAGE_DIR; never touches the real .claude/usage.
 
@@ -103,6 +103,66 @@ try {
     Write-Snap 50 $future
     Assert ((Invoke-Hook $nudge $post) -eq '') 'nudge: fresh snapshot below threshold stays silent'
 
+    # --- context-size notice (context-size.ps1) ---
+    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+    $settingsFile = Join-Path $dir 'claude-settings.json'
+    [IO.File]::WriteAllText($settingsFile, '{"autoCompactWindow":250000}')   # compaction point 217000: nudge 185000, urgent 205000
+    $env:ROSLYNSENTINEL_CLAUDE_SETTINGS = $settingsFile
+    Remove-Item Env:\ROSLYNSENTINEL_CONTEXT_WINDOW, Env:\ROSLYNSENTINEL_CONTEXT_BUFFER, Env:\ROSLYNSENTINEL_CONTEXT_NUDGE_TOKENS, Env:\ROSLYNSENTINEL_CONTEXT_URGENT_TOKENS -ErrorAction SilentlyContinue
+    $tfile = Join-Path $dir 'transcript.jsonl'
+    function Write-Transcript([long[]]$totals, [string]$extra = '') {
+        $lines = @('{"type":"user","message":{"content":"hi"}}')
+        foreach ($t in $totals) {
+            $lines += '{"type":"assistant","isSidechain":false,"message":{"model":"claude-sonnet-5-5","usage":{"input_tokens":10,"cache_read_input_tokens":' + ($t - 15) + ',"cache_creation_input_tokens":5,"output_tokens":3}}}'
+            $lines += '{"type":"user","message":{"content":"tool result"}}'
+        }
+        if ($extra) { $lines += $extra }
+        [IO.File]::WriteAllText($tfile, (($lines -join "`n") + "`n"))
+    }
+    $ctxPost = (@{ session_id = 'abcdef123456'; hook_event_name = 'PostToolUse'; transcript_path = $tfile } | ConvertTo-Json -Compress)
+    $ctxSub  = (@{ session_id = 'abcdef123456'; hook_event_name = 'PostToolUse'; transcript_path = $tfile; agent_id = 'a9'; agent_type = 'implementer' } | ConvertTo-Json -Compress)
+    Remove-Item (Join-Path $dir '*.nudged') -ErrorAction SilentlyContinue
+
+    Write-Transcript 100000
+    Assert ((Invoke-Hook $nudge $ctxPost) -eq '') 'context: well below the nudge tier is silent'
+
+    Write-Transcript 100000, 190000
+    $ctx = ((Invoke-Hook $nudge $ctxPost) | ConvertFrom-Json).hookSpecificOutput.additionalContext
+    Assert ($ctx -match 'Context: about 190k' -and $ctx -match 'near 217k' -and $ctx -match 'journal' -and $ctx -notmatch 'imminent') 'context: nudge tier names size, compaction point and the journal'
+    Assert ((Invoke-Hook $nudge $ctxPost) -eq '') 'context: nudge fires once'
+
+    Write-Transcript 207000
+    $ctx = ((Invoke-Hook $nudge $ctxPost) | ConvertFrom-Json).hookSpecificOutput.additionalContext
+    Assert ($ctx -match 'imminent' -and $ctx -match '207k') 'context: urgent tier fires separately'
+    Assert ((Invoke-Hook $nudge $ctxPost) -eq '') 'context: urgent fires once'
+
+    Write-Transcript 40000
+    Assert ((Invoke-Hook $nudge $ctxPost) -eq '') 'context: after compaction (small again) is silent'
+    Write-Transcript 190000
+    Assert ((Invoke-Hook $nudge $ctxPost) -match 'Context: about 190k') 'context: next fill after compaction warns again'
+
+    Remove-Item (Join-Path $dir '*.nudged') -ErrorAction SilentlyContinue
+    Write-Transcript 190000
+    Assert ((Invoke-Hook $nudge $ctxSub) -eq '') 'context: subagent never gets the main context notice'
+
+    Write-Transcript 100000 '{"type":"assistant","isSidechain":true,"message":{"model":"x","usage":{"input_tokens":1,"cache_read_input_tokens":300000,"cache_creation_input_tokens":1}}}'
+    Assert ((Invoke-Hook $nudge $ctxPost) -eq '') 'context: sidechain records are ignored'
+
+    [IO.File]::WriteAllText($settingsFile, '{"autoCompactWindow":250000,"modelSettings":{"claude-sonnet-5-5":{"autoCompactWindow":600000}}}')
+    Write-Transcript 190000
+    Assert ((Invoke-Hook $nudge $ctxPost) -eq '') 'context: per-model autoCompactWindow moves the tiers'
+    [IO.File]::WriteAllText($settingsFile, '{"autoCompactWindow":250000}')
+
+    $env:ROSLYNSENTINEL_CONTEXT_NUDGE_TOKENS = '150000'
+    Write-Transcript 160000
+    Assert ((Invoke-Hook $nudge $ctxPost) -match 'Context: about 160k') 'context: ROSLYNSENTINEL_CONTEXT_NUDGE_TOKENS overrides the tier'
+    Remove-Item Env:\ROSLYNSENTINEL_CONTEXT_NUDGE_TOKENS
+
+    Remove-Item $tfile
+    Assert ((Invoke-Hook $nudge $ctxPost) -eq '') 'context: missing transcript is silent'
+    Remove-Item Env:\ROSLYNSENTINEL_CLAUDE_SETTINGS
+    Remove-Item (Join-Path $dir '*.nudged') -ErrorAction SilentlyContinue
+
     # --- OAuth refresh (usage-refresh.ps1) against a local fake endpoint ---
     $tcp = New-Object Net.Sockets.TcpListener([Net.IPAddress]::Loopback, 0); $tcp.Start()
     $port = $tcp.LocalEndpoint.Port; $tcp.Stop()
@@ -198,6 +258,7 @@ finally {
     if ($listener) { try { $listener.Stop(); $listener.Close() } catch { } }
     if ($psListener) { try { $psListener.Stop(); $psListener.Dispose() } catch { } }
     Remove-Item Env:\ROSLYNSENTINEL_USAGE_CREDENTIALS, Env:\ROSLYNSENTINEL_USAGE_ENDPOINT, Env:\ROSLYNSENTINEL_USAGE_TIMEOUT_SECONDS -ErrorAction SilentlyContinue
+    Remove-Item Env:\ROSLYNSENTINEL_CLAUDE_SETTINGS, Env:\ROSLYNSENTINEL_CONTEXT_NUDGE_TOKENS -ErrorAction SilentlyContinue
     Remove-Item Env:\ROSLYNSENTINEL_USAGE_DIR -ErrorAction SilentlyContinue
     if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
 }
