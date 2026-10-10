@@ -25,6 +25,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="RoslynSentinel.Tests.Tools.Basic" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="ModelContextProtocol.Protocol" />
     <Using Include="ModelContextProtocol.Server" />
     <Using Include="RoslynSentinel.Common" />
