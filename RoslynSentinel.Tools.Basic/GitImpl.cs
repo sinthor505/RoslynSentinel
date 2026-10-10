@@ -416,6 +416,80 @@ public record GitStashResult : GitResult
     }
 }
 
+/// <summary>One worktree in a worktree list (parsed from git worktree list --porcelain).</summary>
+public record GitWorktreeEntry
+{
+    /// <summary>Absolute path of the worktree, normalized to the platform separator.</summary>
+    public string Path { get; set; } = "";
+
+    /// <summary>Abbreviated HEAD commit hash, when git reports one.</summary>
+    public string? Head
+    {
+        get; set;
+    }
+
+    /// <summary>Short name of the checked-out branch; null for a detached HEAD.</summary>
+    public string? Branch
+    {
+        get; set;
+    }
+
+    /// <summary>True for the main worktree (the first entry git lists).</summary>
+    public bool IsMain
+    {
+        get; set;
+    }
+
+    /// <summary>True when this is the worktree the Git tool is operating in (the loaded solution's repository).</summary>
+    public bool IsCurrent
+    {
+        get; set;
+    }
+    public bool IsDetached
+    {
+        get; set;
+    }
+    public bool IsLocked
+    {
+        get; set;
+    }
+
+    /// <summary>True when git reports the worktree directory as missing or stale (git worktree prune would remove it).</summary>
+    public bool IsPrunable
+    {
+        get; set;
+    }
+}
+
+/// <summary>Result of operation=worktree. Which fields are set depends on the action: list sets Worktrees;
+/// add sets Added, Branch and Note; remove sets Removed, Branch, Note and, when uncommitted changes were
+/// discarded, DiscardedPaths.</summary>
+public record GitWorktreeResult : GitResult
+{
+    public string Action { get; set; } = "";
+    public List<GitWorktreeEntry> Worktrees { get; set; } = [];
+    public string? Added
+    {
+        get; set;
+    }
+    public string? Removed
+    {
+        get; set;
+    }
+    public string? Branch
+    {
+        get; set;
+    }
+    public List<string>? DiscardedPaths
+    {
+        get; set;
+    }
+    public string? Note
+    {
+        get; set;
+    }
+}
+
 // ── Operation implementations ─────────────────────────────────────────────
 
 public class GitImpl : IGitOperations
@@ -996,6 +1070,402 @@ public class GitImpl : IGitOperations
         if (raw.ExitCode != 0)
             return -1;
         return raw.Stdout.Split('\n').Count(l => l.Trim().Length > 0);
+    }
+
+    /// <summary>
+    /// Lists, adds or removes a linked worktree. Never prunes, locks, unlocks or moves, never detaches HEAD,
+    /// and removes a dirty worktree only behind the explicit discardUncommittedChanges flag (D-20).
+    /// </summary>
+    public async Task<GitWorktreeResult> WorktreeAsync(
+        string gitRoot, GitAction? action, string? worktreePath, string? branchName, bool createBranch, string? startPoint,
+        bool discardUncommittedChanges, CancellationToken cancellationToken)
+    {
+        try
+        {
+            switch (action)
+            {
+                case GitAction.list:
+                    var (entries, listError) = await ListWorktreesAsync(gitRoot, cancellationToken);
+                    return entries is null
+                        ? new GitWorktreeResult { Action = "list", IsError = true, Error = $"git worktree list failed: {listError}" }
+                        : new GitWorktreeResult { Action = "list", IsError = false, Worktrees = entries };
+                case GitAction.add:
+                    return await WorktreeAddAsync(gitRoot, worktreePath, branchName, createBranch, startPoint, cancellationToken);
+                case GitAction.remove:
+                    return await WorktreeRemoveAsync(gitRoot, worktreePath, discardUncommittedChanges, cancellationToken);
+                default:
+                    return ActionRefused<GitWorktreeResult>("worktree", action, "list, add, remove");
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return UnexpectedFailure<GitWorktreeResult>(ex, "worktree");
+        }
+    }
+
+    private static GitWorktreeResult WorktreeFailure(string action, string kind, string error, string detail) => new()
+    {
+        Action = action,
+        IsError = true,
+        ErrorKind = kind,
+        Error = error,
+        ErrorDetail = detail
+    };
+
+    private static class WorktreeNativePaths
+    {
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, EntryPoint = "GetLongPathNameW")]
+        internal static extern uint GetLongPathName(string shortPath, StringBuilder longPath, uint bufferLength);
+    }
+
+    /// <summary>
+    /// Expands Windows 8.3 short names (for example C:\Users\ADMINI~1) in the part of the path that exists.
+    /// git reports worktree paths in long form, so a path built from a short-form temp directory would
+    /// otherwise never compare equal to git's. Returns the input unchanged off Windows or on any failure.
+    /// </summary>
+    private static string ExpandShortNames(string fullPath)
+    {
+        if (!OperatingSystem.IsWindows())
+            return fullPath;
+        try
+        {
+            var existing = fullPath;
+            var tail = "";
+            while (!string.IsNullOrEmpty(existing) && !Directory.Exists(existing) && !File.Exists(existing))
+            {
+                var parent = Path.GetDirectoryName(existing);
+                if (string.IsNullOrEmpty(parent))
+                    return fullPath;
+                tail = Path.Combine(Path.GetFileName(existing), tail);
+                existing = parent;
+            }
+            if (string.IsNullOrEmpty(existing))
+                return fullPath;
+            var buffer = new StringBuilder(1024);
+            var length = WorktreeNativePaths.GetLongPathName(existing, buffer, (uint)buffer.Capacity);
+            if (length == 0 || length >= buffer.Capacity)
+                return fullPath;
+            var expanded = buffer.ToString();
+            return tail.Length == 0 ? expanded : Path.Combine(expanded, tail);
+        }
+        catch
+        {
+            return fullPath;
+        }
+    }
+
+    /// <summary>
+    /// Canonical form used to compare worktree paths: full path, platform separator, 8.3 short names
+    /// expanded, no trailing separator. Compare results with OrdinalIgnoreCase.
+    /// </summary>
+    private static string NormalizeWorktreePath(string path)
+    {
+        var full = Path.GetFullPath(path.Trim()).Replace('/', Path.DirectorySeparatorChar);
+        full = ExpandShortNames(full);
+        var root = Path.GetPathRoot(full) ?? "";
+        return full.Length > root.Length ? full.TrimEnd(Path.DirectorySeparatorChar) : full;
+    }
+
+    /// <summary>
+    /// Parses git worktree list --porcelain: blocks separated by a blank line, each starting with
+    /// "worktree &lt;path&gt;" followed by HEAD, branch | detached, and optional locked / prunable lines.
+    /// The first block is the main worktree. Parsed structurally; git's localizable messages are never matched.
+    /// Returns (null, stderr) when git could not be asked.
+    /// </summary>
+    private async Task<(List<GitWorktreeEntry>? Entries, string? Error)> ListWorktreesAsync(
+        string gitRoot, CancellationToken cancellationToken)
+    {
+        var raw = await RunGitAsync(gitRoot, ["worktree", "list", "--porcelain"], cancellationToken);
+        if (raw.ExitCode != 0)
+            return (null, CleanGitStderr(raw.Stderr));
+
+        var current = NormalizeWorktreePath(gitRoot);
+        var entries = new List<GitWorktreeEntry>();
+        GitWorktreeEntry? block = null;
+        foreach (var rawLine in raw.Stdout.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (line.Length == 0)
+            {
+                block = null;
+                continue;
+            }
+            if (line.StartsWith("worktree ", StringComparison.Ordinal))
+            {
+                var path = NormalizeWorktreePath(line["worktree ".Length..]);
+                block = new GitWorktreeEntry
+                {
+                    Path = path,
+                    IsMain = entries.Count == 0,
+                    IsCurrent = path.Equals(current, StringComparison.OrdinalIgnoreCase),
+                };
+                entries.Add(block);
+            }
+            else if (block is null)
+            {
+                continue;
+            }
+            else if (line.StartsWith("HEAD ", StringComparison.Ordinal))
+            {
+                var head = line["HEAD ".Length..];
+                block.Head = head.Length > 8 ? head[..8] : head;
+            }
+            else if (line.StartsWith("branch ", StringComparison.Ordinal))
+            {
+                var branch = line["branch ".Length..];
+                block.Branch = branch.StartsWith("refs/heads/", StringComparison.Ordinal) ? branch["refs/heads/".Length..] : branch;
+            }
+            else if (line == "detached")
+            {
+                block.IsDetached = true;
+            }
+            else if (line == "locked" || line.StartsWith("locked ", StringComparison.Ordinal))
+            {
+                block.IsLocked = true;
+            }
+            else if (line == "prunable" || line.StartsWith("prunable ", StringComparison.Ordinal))
+            {
+                block.IsPrunable = true;
+            }
+        }
+        return (entries, null);
+    }
+
+    private async Task<GitWorktreeResult> WorktreeAddAsync(
+    string gitRoot, string? worktreePath, string? branchName, bool createBranch, string? startPoint, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(worktreePath) || string.IsNullOrWhiteSpace(branchName))
+        {
+            var missing = string.IsNullOrWhiteSpace(worktreePath) && string.IsNullOrWhiteSpace(branchName) ? "worktreePath and branchName"
+                : string.IsNullOrWhiteSpace(worktreePath) ? "worktreePath" : "branchName";
+            return WorktreeFailure("add", GitErrorCodes.RefRequired,
+                $"Git worktree add needs {missing}. Nothing was changed.", GitErrorDetails.RefRequiredWorktree);
+        }
+        var path = worktreePath.Trim();
+        var branch = branchName.Trim();
+
+        // (a) absolute path. Fully qualified, so "\foo" or "C:foo" cannot resolve against the server's cwd.
+        if (!Path.IsPathFullyQualified(path))
+            return WorktreeFailure("add", GitErrorCodes.Refused,
+                $"worktreePath must be an absolute path (got '{path}'). Nothing was changed.",
+                "Pass a full path outside the repository, for example a sibling directory of the repository root.");
+
+        var repoRoot = NormalizeWorktreePath(gitRoot);
+        var target = NormalizeWorktreePath(path);
+
+        // (b) outside the repository root. ValidateRepoRoot returns null when the path is inside (or equal to) the root.
+        if (ValidateRepoRoot(repoRoot, target) is null)
+        {
+            var parent = Path.GetDirectoryName(repoRoot);
+            var example = parent is null
+                ? ""
+                : $" e.g. '{Path.Combine(parent, $"{Path.GetFileName(repoRoot)}-{branch.Replace('/', '-')}")}'";
+            return WorktreeFailure("add", GitErrorCodes.Refused,
+                "A worktree inside the repository would be compiled into the loaded solution and shows up in this repo's diffs (the Worktree/ trap). " +
+                $"Use a sibling directory,{(example.Length > 0 ? example : " outside the repository root")}. Nothing was changed.",
+                GitErrorDetails.Refused);
+        }
+
+        // startPoint only means something when a branch is being created; dropping it silently would
+        // leave the caller believing the worktree was based on it (same rule as CheckoutAsync).
+        if (!createBranch && !string.IsNullOrWhiteSpace(startPoint))
+            return WorktreeFailure("add", GitErrorCodes.Refused,
+                $"startPoint '{startPoint}' was supplied without createBranch=true, so it would be ignored. " +
+                "Pass createBranch=true to create the branch from it, or omit startPoint to add a worktree for the existing branch. Nothing was changed.",
+                GitErrorDetails.Refused);
+
+        // A leading '-' would be read by git as an option.
+        var nameOk = !branch.StartsWith('-');
+        if (nameOk && createBranch)
+        {
+            var fmt = await RunGitAsync(gitRoot, ["check-ref-format", $"refs/heads/{branch}"], cancellationToken);
+            nameOk = fmt.ExitCode == 0;
+        }
+        if (!nameOk)
+            return WorktreeFailure("add", GitErrorCodes.InvalidName,
+                $"'{branch}' is not a valid branch name (no spaces, '..', '~', '^', ':', leading '-' or trailing '.lock'). Nothing was changed.",
+                GitErrorDetails.InvalidName);
+
+        // (c) the target path must be free: absent, or an existing empty directory.
+        if (File.Exists(target) || (Directory.Exists(target) && Directory.EnumerateFileSystemEntries(target).Any()))
+            return WorktreeFailure("add", GitErrorCodes.AlreadyExists,
+                $"Path '{path}' already exists and is not empty; a worktree cannot be added there. Nothing was changed.",
+                GitErrorDetails.AlreadyExists);
+
+        var exists = (await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"refs/heads/{branch}"], cancellationToken)).ExitCode == 0;
+        if (!createBranch && !exists)
+            return WorktreeFailure("add", GitErrorCodes.TargetNotFound,
+                $"Branch '{branch}' does not exist. Nothing was changed.",
+                "Pass createBranch=true to create it (optionally with startPoint), or list the existing branches with Git(operation: branch).");
+        if (createBranch && exists)
+            return WorktreeFailure("add", GitErrorCodes.AlreadyExists,
+                $"Branch '{branch}' already exists, and this tool does not silently reuse it for a new worktree. " +
+                "Pass createBranch=false to check the existing branch out in the new worktree, or choose a new branch name. Nothing was changed.",
+                GitErrorDetails.AlreadyExists);
+
+        string? baseRef = null;
+        if (createBranch)
+        {
+            baseRef = string.IsNullOrWhiteSpace(startPoint) ? "HEAD" : startPoint.Trim();
+            // A start point starting with '-' could be read as an option, so it is treated as unresolvable.
+            var resolved = baseRef.StartsWith('-')
+                ? new GitRawResult { ExitCode = 1 }
+                : await RunGitAsync(gitRoot, ["rev-parse", "--verify", "--quiet", $"{baseRef}^{{commit}}"], cancellationToken);
+            if (resolved.ExitCode != 0)
+                return WorktreeFailure("add", GitErrorCodes.TargetNotFound,
+                    $"startPoint '{baseRef}' does not resolve to a commit. Nothing was changed.", GitErrorDetails.TargetNotFound);
+        }
+
+        var (entries, listError) = await ListWorktreesAsync(gitRoot, cancellationToken);
+        if (entries is null)
+            return new GitWorktreeResult { Action = "add", IsError = true, Error = $"git worktree list failed: {listError}. Nothing was changed." };
+
+        // (f) git allows a branch to be checked out in one worktree only.
+        if (!createBranch)
+        {
+            var holder = entries.FirstOrDefault(e => string.Equals(e.Branch, branch, StringComparison.Ordinal));
+            if (holder is not null)
+                return WorktreeFailure("add", GitErrorCodes.AlreadyExists,
+                    $"Branch '{branch}' is already checked out in the worktree at '{holder.Path}'; a branch can be checked out in only one worktree. Nothing was changed.",
+                    GitErrorDetails.AlreadyExists);
+        }
+
+        string[] args = createBranch
+            ? ["-c", "core.longpaths=true", "worktree", "add", "-b", branch, target, baseRef!]
+            : ["-c", "core.longpaths=true", "worktree", "add", target, branch];
+        var added = await RunGitAsync(gitRoot, args, cancellationToken);
+        if (added.ExitCode != 0)
+        {
+            // Claim "Nothing was changed" only when git did not register the path.
+            var (after, _) = await ListWorktreesAsync(gitRoot, cancellationToken);
+            var registered = after is null || after.Any(e => string.Equals(e.Path, target, StringComparison.OrdinalIgnoreCase));
+            return new GitWorktreeResult
+            {
+                Action = "add",
+                IsError = true,
+                Error = $"git worktree add failed: {CleanGitStderr(added.Stderr)}. " +
+                        (registered ? "The worktree may have been partly created; check Git(operation: worktree, action: list)." : "Nothing was changed.")
+            };
+        }
+
+        return new GitWorktreeResult
+        {
+            Action = "add",
+            IsError = false,
+            Added = path,
+            Branch = branch,
+            Note = $"Use LoadSolution on a .slnx inside {path} to work in it; mutating Git operations always target the loaded solution's repo.",
+        };
+    }
+
+    /// <summary>Up to 10 paths, comma-separated, then "and N more" when there are more.</summary>
+    private static string FormatWorktreePaths(IReadOnlyList<string> paths)
+    {
+        var shown = string.Join(", ", paths.Take(10));
+        return paths.Count > 10 ? $"{shown} and {paths.Count - 10} more" : shown;
+    }
+
+    /// <summary>
+    /// D-20: removes a linked worktree. The main, current and locked worktrees are always refused. A
+    /// worktree with modified or untracked files is removed (git worktree remove --force) only when
+    /// discardUncommittedChanges is true; otherwise the changed paths are listed and nothing is removed.
+    /// --force is never used on a clean worktree.
+    /// </summary>
+    private async Task<GitWorktreeResult> WorktreeRemoveAsync(
+        string gitRoot, string? worktreePath, bool discardUncommittedChanges, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(worktreePath))
+            return WorktreeFailure("remove", GitErrorCodes.RefRequired,
+                "Git worktree remove needs worktreePath. Nothing was removed.", GitErrorDetails.RefRequiredWorktree);
+        var path = worktreePath.Trim();
+
+        var (entries, listError) = await ListWorktreesAsync(gitRoot, cancellationToken);
+        if (entries is null)
+            return new GitWorktreeResult { Action = "remove", IsError = true, Error = $"git worktree list failed: {listError}. Nothing was removed." };
+
+        // A relative path is never resolved against the server's working directory.
+        var entry = Path.IsPathFullyQualified(path)
+            ? entries.FirstOrDefault(e => string.Equals(e.Path, NormalizeWorktreePath(path), StringComparison.OrdinalIgnoreCase))
+            : null;
+        if (entry is null)
+            return WorktreeFailure("remove", GitErrorCodes.TargetNotFound,
+                $"No worktree at '{path}'. Known worktrees: {FormatWorktreePaths(entries.Select(e => e.Path).ToList())}. Nothing was removed.",
+                GitErrorDetails.TargetNotFound);
+
+        if (entry.IsMain)
+            return WorktreeFailure("remove", GitErrorCodes.Refused,
+                $"Worktree '{path}' is the main worktree; this tool never removes it. Nothing was removed.",
+                "Only linked worktrees can be removed; Git(operation: worktree, action: list) shows which entry has IsMain false.");
+        if (entry.IsCurrent)
+            return WorktreeFailure("remove", GitErrorCodes.Refused,
+                $"Worktree '{path}' is the worktree this Git tool is operating in (the loaded solution's repository); removing it would delete the directory the server is working in. Nothing was removed.",
+                "Call LoadSolution on a solution in a different worktree, then remove this one from there.");
+        if (entry.IsLocked)
+            return WorktreeFailure("remove", GitErrorCodes.Refused,
+                $"Worktree '{path}' is locked. Nothing was removed.",
+                "unlock it first with git worktree unlock in a shell; this tool does not unlock");
+
+        // Dirty check, run inside that worktree. A missing directory (prunable entry) has nothing to lose.
+        var changed = new List<string>();
+        if (Directory.Exists(entry.Path))
+        {
+            var status = await RunGitAsync(entry.Path,
+                ["-c", "core.quotePath=false", "status", "--porcelain", "--untracked-files=all"], cancellationToken);
+            if (status.ExitCode != 0)
+                return new GitWorktreeResult
+                {
+                    Action = "remove",
+                    IsError = true,
+                    Error = $"Could not read the status of worktree '{path}': {CleanGitStderr(status.Stderr)}. Nothing was removed."
+                };
+            changed = status.Stdout.Split('\n')
+                .Select(l => l.TrimEnd('\r'))
+                .Where(l => l.Length > 3)
+                .Select(l => l[3..])
+                .ToList();
+        }
+
+        if (changed.Count > 0 && !discardUncommittedChanges)
+            return WorktreeFailure("remove", GitErrorCodes.WorkingTreeDirty,
+                $"Worktree '{path}' has uncommitted changes ({changed.Count} path(s): {FormatWorktreePaths(changed)}). Nothing was removed. " +
+                $"To delete it anyway and permanently lose those changes, call Git(operation: worktree, action: remove, worktreePath: '{path}', discardUncommittedChanges: true). " +
+                "To keep them, commit or stash inside that worktree first.",
+                "discardUncommittedChanges: true deletes modified and untracked files in that worktree; they cannot be recovered. Committed work and the branch are not affected.");
+
+        // --force only for a worktree verified dirty above; a clean worktree never gets it.
+        var force = changed.Count > 0;
+        string[] removeArgs = force
+            ? ["-c", "core.longpaths=true", "worktree", "remove", "--force", entry.Path]
+            : ["-c", "core.longpaths=true", "worktree", "remove", entry.Path];
+        var removed = await RunGitAsync(gitRoot, removeArgs, cancellationToken);
+        if (removed.ExitCode != 0)
+        {
+            var (after, _) = await ListWorktreesAsync(gitRoot, cancellationToken);
+            var stillThere = after is not null && after.Any(e => string.Equals(e.Path, entry.Path, StringComparison.OrdinalIgnoreCase))
+                             && Directory.Exists(entry.Path);
+            return new GitWorktreeResult
+            {
+                Action = "remove",
+                IsError = true,
+                Error = $"git worktree remove failed: {CleanGitStderr(removed.Stderr)}. " +
+                        (stillThere ? "The worktree was not removed." : "Check its state with Git(operation: worktree, action: list).")
+            };
+        }
+
+        var kept = entry.Branch is null
+            ? "The worktree was on a detached HEAD, so there is no branch to delete."
+            : $"The branch '{entry.Branch}' was kept; delete it with Git(operation: branch, deleteBranch: true) once merged.";
+        return new GitWorktreeResult
+        {
+            Action = "remove",
+            IsError = false,
+            Removed = path,
+            Branch = entry.Branch,
+            DiscardedPaths = force ? changed : null,
+            Note = force
+                ? $"Removed '{path}' and discarded uncommitted changes in {changed.Count} path(s). They are not recoverable. {kept}"
+                : kept,
+        };
     }
 
     /// <summary>

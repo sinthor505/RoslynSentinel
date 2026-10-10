@@ -20,4 +20,5 @@ public interface IGitOperations
     Task<GitTagResult> TagAsync(string gitRoot, GitAction? action, string? tagName, string? refName, string? message, int count, CancellationToken cancellationToken);
     string? TryGetGitRoot(out string error, string? repoPath = null);
     Task<GitStatusResult> UnstageAsync(string gitRoot, string? paths, CancellationToken cancellationToken);
+    Task<GitWorktreeResult> WorktreeAsync(string gitRoot, GitAction? action, string? worktreePath, string? branchName, bool createBranch, string? startPoint, bool discardUncommittedChanges, CancellationToken cancellationToken);
 }
