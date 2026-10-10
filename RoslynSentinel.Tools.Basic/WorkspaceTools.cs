@@ -485,16 +485,18 @@ public class WorkspaceTools
         => _buildTest.GetDiagnostics(reason, scope, scopeName, summarize, maxDetails, topN, verify, cancellationToken);
     [McpServerTool(Name = "Build")]
     [Produces(DataTag.Report)]
-    [Description("Compiles the loaded solution and reports errors/warnings.")]
+    [Description("Compiles the loaded solution and reports the result. level=quickBuild uses in-memory Roslyn diagnostics (fast, same check GetDiagnostics does). level=fullBuild shells out to `dotnet build` (slower, catches MSBuild-only failures - NuGet restore, resource copy, post-build events - that quickBuild can't see). A green build returns the outcome, the projects compiled and the error/warning counts only. A failed build returns the error counts by project, by file and by diagnostic code, the first maxDetails (default 20) errors with the root-cause project's errors first, and SuppressedDownstreamErrorCount (errors in projects that failed only because a project they depend on failed). OmittedErrorCount says how many errors are not listed; FullDiagnosticsResultId holds every error and warning - read it with GetLargeResult. The stdout/stderr tails and the warnings list are left out unless you pass includeOutput / includeWarnings.")]
     public Task<SentinelCallToolResult<object>> Build(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         BuildVerifyLevel level = BuildVerifyLevel.fullBuild,
         ToolScope scope = ToolScope.solution,
         string? scopeName = null,
-        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
+        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 20,
         [Description("Only used by level=fullBuild. " + ToolParams.UseScratchDir)] bool useScratchDir = false,
+        [Description("true = also return the stdout/stderr tail of the build, even when it succeeded or its errors were parsed. Default false: counts and errors only.")] bool includeOutput = false,
+        [Description("true = also return the warnings list and warning summary, capped by maxDetails. Default false: only the warning count.")] bool includeWarnings = false,
         CancellationToken cancellationToken = default)
-        => _buildTest.Build(reason, level, scope, scopeName, maxDetails, useScratchDir, cancellationToken);
+        => _buildTest.Build(reason, level, scope, scopeName, maxDetails, useScratchDir, includeOutput, includeWarnings, cancellationToken);
 
     [McpServerTool(Name = "RunTest")]
     [Produces(DataTag.Report)]

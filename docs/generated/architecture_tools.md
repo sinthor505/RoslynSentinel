@@ -98,7 +98,7 @@
 | WholeFileWriteTools | ApplyUnifiedDiff | Claude, claude-lean, WholeFileWrite | - | Applies or validates a unified diff against a single file; mismatched hunk lines are re-anchored nearby. |
 | WholeFileWriteTools | DeleteFile | Claude, claude-lean, WholeFileWrite | - | Deletes a file from disk; fails if it doesn't exist. |
 | WholeFileWriteTools | WriteFile | Claude, claude-lean, WholeFileWrite | - | Writes a whole file to disk, creating or overwriting it. |
-| WorkspaceBuildTestTools | Build | WorkspaceBuildTest | - | Compiles the loaded solution and reports errors/warnings. level=quickBuild uses in-memory Roslyn diagnostics (fast,... |
+| WorkspaceBuildTestTools | Build | WorkspaceBuildTest | - | Compiles the loaded solution and reports the result. level=quickBuild uses in-memory Roslyn diagnostics (fast, same... |
 | WorkspaceBuildTestTools | GetDiagnostics | WorkspaceBuildTest | - | Gets compiler diagnostics for a file, project, or the whole solution. |
 | WorkspaceBuildTestTools | RunTest | WorkspaceBuildTest | - | Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. |
 | WorkspaceFileEditTools | CreateFile | WorkspaceFileContent, WorkspaceFileIO | - | Creates a new file. |
@@ -121,7 +121,7 @@
 | WorkspaceReadNavigationTools | GetOperationDetail | WorkspaceFileContent, WorkspaceReadNav | Allowed | Returns a filtered, paged slice of an operation result blob by changeId. |
 | WorkspaceReadNavigationTools | ListAll | WorkspaceFileContent, WorkspaceReadNav | Allowed | Lists every namespace/class/interface/struct/record/enum/enum member/constructor/field/method/property declared in... |
 | WorkspaceReadNavigationTools | SearchSolutionText | WorkspaceFileContent, WorkspaceReadNav | - | Searches source files in the loaded solution for a pattern, evaluated both as a literal substring and (if it... |
-| WorkspaceTools | Build | Claude, claude-lean, Workspace | - | Compiles the loaded solution and reports errors/warnings. |
+| WorkspaceTools | Build | Claude, claude-lean, Workspace | - | Compiles the loaded solution and reports the result. level=quickBuild uses in-memory Roslyn diagnostics (fast, same... |
 | WorkspaceTools | CreateFile | Claude, claude-lean, Workspace | - | Creates a new file; fails if it already exists. |
 | WorkspaceTools | CreateProject | Claude, claude-lean, Workspace | - | Creates a new project and adds it to the loaded solution. |
 | WorkspaceTools | Features | Claude, claude-lean, Workspace | - | Queries or updates feature flags. |

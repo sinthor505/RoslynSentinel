@@ -169,9 +169,64 @@ public class WorkspaceBuildTestImpl
     private static string SummarizeBuild(BuildResult build) =>
         $"Build {build.Outcome}: {build.ErrorCount} error(s), {build.WarningCount} warning(s) in {FormatDuration(build.Duration)}.";
 
+    // Transitive project-dependency names per project, so the projector can tell root-cause projects from
+    // projects that only failed because an upstream project did. Null (every project with errors then counts
+    // as a root cause) when the solution cannot be read.
+    private async Task<IReadOnlyDictionary<string, IReadOnlySet<string>>?> GetTransitiveDependenciesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            var graph = solution.GetProjectDependencyGraph();
+            var map = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+            foreach (var project in solution.Projects)
+            {
+                if (!map.TryGetValue(project.Name, out var dependencyNames))
+                {
+                    dependencyNames = new HashSet<string>(StringComparer.Ordinal);
+                    map[project.Name] = dependencyNames;
+                }
+
+                foreach (var dependencyId in graph.GetProjectsThatThisProjectTransitivelyDependsOn(project.Id))
+                {
+                    var dependencyName = solution.GetProject(dependencyId)?.Name;
+                    if (dependencyName is not null)
+                    {
+                        dependencyNames.Add(dependencyName);
+                    }
+                }
+            }
+
+            return map.ToDictionary(entry => entry.Key, entry => (IReadOnlySet<string>)entry.Value, StringComparer.Ordinal);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Build: could not read the project dependency graph; treating every project with errors as a root cause");
+            return null;
+        }
+    }
+
+    // Stores the uncapped error/warning lists for GetLargeResult. A storage failure must not turn a finished
+    // build report into a tool error, so it degrades to "no id".
+    private async Task<string?> StoreFullDiagnosticsAsync(BuildFullDiagnostics fullDiagnostics, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(fullDiagnostics, SharedJsonOptions.Compact);
+            var stored = await LargeResultHelper.StoreRawJsonAsync(json, _workspaceManager.GetSolutionRoot(), cancellationToken);
+            return stored.resultId;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Build: could not store the full diagnostics list");
+            return null;
+        }
+    }
+
     public async Task<SentinelCallToolResult<object>> Build(ToolCallReason reason, BuildVerifyLevel level = BuildVerifyLevel.fullBuild,
-        ToolScope scope = ToolScope.solution, string? scopeName = null, int maxDetails = 50,
-        bool useScratchDir = false, CancellationToken cancellationToken = default)
+        ToolScope scope = ToolScope.solution, string? scopeName = null, int maxDetails = 20,
+        bool useScratchDir = false, bool includeOutput = false, bool includeWarnings = false,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -197,8 +252,17 @@ public class WorkspaceBuildTestImpl
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, result.Error?.Message ?? "Build failed unexpectedly."), Findings = result.Findings };
             }
 
+            var transitiveDependencies = await GetTransitiveDependenciesAsync(cancellationToken);
+            var projected = BuildResultProjector.Project(
+                buildResult, new BuildProjection(maxDetails, includeOutput, includeWarnings), transitiveDependencies);
+            if ((buildResult.Outcome == BuildOutcome.Failed || projected.OmittedErrorCount > 0) && buildResult.FullDiagnostics is { } fullDiagnostics)
+            {
+                projected = projected with { FullDiagnosticsResultId = await StoreFullDiagnosticsAsync(fullDiagnostics, cancellationToken) };
+            }
+
+            // includeOutput=true asks for the tails even from a clean build, so only strip them otherwise.
             var buildToolResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                WithoutTailsWhenClean(buildResult), _workspaceManager.GetSolutionRoot(), "BuildResult", ResultWrapperType.Raw,
+                includeOutput ? projected : WithoutTailsWhenClean(projected), _workspaceManager.GetSolutionRoot(), "BuildResult", ResultWrapperType.Raw,
                 workspaceVersion: _workspaceManager.WorkspaceVersion, cancellationToken: cancellationToken);
             var buildSummary = SummarizeBuild(buildResult);
             if (buildResult.Outcome == BuildOutcome.Failed)
