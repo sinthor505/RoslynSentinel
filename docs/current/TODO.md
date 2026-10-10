@@ -207,7 +207,12 @@ commit's metadata + diff, same range/first-commit handling as `diff`), `stage`/`
 
 **2026-09-30: the listed-scope stage/commit rewrite, read-side parity (`status` `maxEntries`, rename origin, `nameOnly`/`stat`), single `ref` param, `abort`/`InProgress`/`mainline` and specific error codes all shipped via `plan_git_tool_listed_scope_and_shell_parity.md` - see `CLOSED.md`.**
 
-Still missing:
+**2026-10-10: `tag`, `stash`, `worktree` and hunk-level `stage` (`hunks` preview, `hunkIds`/`lineRange`) are implemented
+and committed (`plans/plan_git_tool_tag_stash_worktree_hunks.md` steps 1-12). What remains is the live smoke on a fresh
+binary (step 13), updating `enforce-dogfood.ps1` so the shell-git message stops listing tag/stash/worktree as uncovered
+(step 14), and final verification (step 15). The "Still missing" text below is the pre-implementation record.**
+
+Still missing (superseded by the note above):
 
 - **`worktree`** (add / list / remove) — PlanStepRunner drives worktrees directly, so this is the
   gap with the most existing in-repo usage, and the one place where a wrong path silently produces
