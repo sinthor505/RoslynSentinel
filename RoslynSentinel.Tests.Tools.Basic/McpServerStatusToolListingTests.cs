@@ -1,3 +1,5 @@
+using System.Text.Json;
+using RoslynSentinel.Common;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Tools.Basic;
@@ -55,6 +57,25 @@ public class McpServerStatusToolListingTests
         Assert.That(status.ServerBuildTimeUtc, Is.EqualTo(ServerBuildInfo.BuildTimeUtc));
         Assert.That(status.ServerBinaryPath, Is.EqualTo(ServerBuildInfo.BinaryPath));
         Assert.That(status.ServerPid, Is.EqualTo(Environment.ProcessId));
+    }
+
+    [Test]
+    public void McpServerStatus_ReportsSolutionLoadStatusAsString()
+    {
+        var status = Call([], McpServerStatusToolListing.none);
+
+        Assert.That(status.SolutionLoadStatus, Is.EqualTo(SolutionLoadStatus.NotLoaded));
+
+        var json = JsonSerializer.Serialize(status, SharedJsonOptions.Default);
+        using var doc = JsonDocument.Parse(json);
+        // SharedJsonOptions.Default has no naming policy (PascalCase on the wire from this serializer),
+        // so match the name case-insensitively; the assertion is that the enum is a string, not a number.
+        var property = doc.RootElement.EnumerateObject()
+            .Single(p => string.Equals(p.Name, "solutionLoadStatus", StringComparison.OrdinalIgnoreCase))
+            .Value;
+
+        Assert.That(property.ValueKind, Is.EqualTo(JsonValueKind.String));
+        Assert.That(property.GetString(), Is.EqualTo("NotLoaded"));
     }
 
     [Test]
