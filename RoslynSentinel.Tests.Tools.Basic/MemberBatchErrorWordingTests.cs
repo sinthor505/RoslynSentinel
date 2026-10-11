@@ -163,6 +163,112 @@ public class MemberBatchErrorWordingTests
         AssertBatchWording(result.ErrorData?.Message, "batchEdits[1]");
     }
 
+    private const string OverloadedFixtureSource = """
+    namespace ContosoOrders.Core;
+
+    public class OverloadHolder
+    {
+        public void Run(int x) { }
+        public void Run(string s) { }
+    }
+    """;
+
+    [Test]
+    public async Task ModifyModifier_BatchTargetNotFound_ErrorCodeIsNotFoundAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var path = workspace.PathOf(FixtureRelativePath);
+
+        var result = await tools.ModifyModifier(
+            reason: "error code test target not found",
+            batchEdits:
+            [
+                new ModifierEdit { FilePath = path, TargetName = "WordingMethodDoesNotExist", Modifier = NonAccessibilityModifier.@virtual, Action = AddRemoveAction.add },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task ModifyModifier_BatchAmbiguousSnippet_ErrorCodeIsAmbiguousAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, OverloadedFixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var path = workspace.PathOf(FixtureRelativePath);
+
+        var result = await tools.ModifyModifier(
+            reason: "error code test ambiguous snippet",
+            batchEdits:
+            [
+                new ModifierEdit { FilePath = path, TargetName = "Run", Modifier = NonAccessibilityModifier.@virtual, Action = AddRemoveAction.add, ContextSnippet = "public void Run(" },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous), result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task ModifyModifier_BatchFailuresDisagreeOnKind_ErrorCodeFallsBackToInvalidArgumentAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, OverloadedFixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var path = workspace.PathOf(FixtureRelativePath);
+
+        var result = await tools.ModifyModifier(
+            reason: "error code test mixed failures",
+            batchEdits:
+            [
+                new ModifierEdit { FilePath = path, TargetName = "Run", Modifier = NonAccessibilityModifier.@virtual, Action = AddRemoveAction.add, ContextSnippet = "public void Run(double d)" },
+                new ModifierEdit { FilePath = path, TargetName = "Run", Modifier = NonAccessibilityModifier.@virtual, Action = AddRemoveAction.add, ContextSnippet = "public void Run(" },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument), result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchTargetNotFound_ErrorCodeIsNotFoundAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var path = workspace.PathOf(FixtureRelativePath);
+
+        var result = await tools.ModifyAttribute(
+            reason: "error code test target not found",
+            batchEdits:
+            [
+                new AttributeEdit { FilePath = path, TargetName = "WordingTargetDoesNotExist", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task ModifyBaseType_BatchTypeNotFound_ErrorCodeIsNotFoundAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var path = workspace.PathOf(FixtureRelativePath);
+
+        var result = await tools.ModifyBaseType(
+            reason: "error code test type not found",
+            batchEdits:
+            [
+                new BaseTypeEdit { FilePath = path, TypeName = "WordingTargetDoesNotExist", BaseTypeName = "IWordingMarker", Action = AddRemoveAction.add },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), result.ErrorData?.Message);
+    }
+
     [Test]
     public async Task ModifyBaseType_BatchSecondEditTargetNotFound_ErrorNamesBatchEditsIndexAsync()
     {

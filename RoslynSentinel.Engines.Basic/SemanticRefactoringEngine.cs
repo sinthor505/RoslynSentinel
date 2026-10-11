@@ -346,7 +346,7 @@ public class SemanticRefactoringEngine
         }
         catch (ToolException ex)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = $"// ContextSnippet error: {ex.Message}", FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = $"// ContextSnippet error: {ex.Message}", ErrorCode = ex.ErrorCode, FilePath = filePath };
         }
     }
 }

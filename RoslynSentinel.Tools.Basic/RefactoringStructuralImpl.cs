@@ -119,6 +119,13 @@ public class RefactoringStructuralImpl
         }
     }
 
+    /// <summary>
+    /// The error code for a Modify*Batch rejection: the engine's code when EVERY collected error came from an engine result
+    /// that carried one and they all agree (so a model can branch on NotFound vs Ambiguous), else InvalidArgument.
+    /// </summary>
+    private static string BatchErrorCode(IReadOnlyCollection<string> engineCodes, int totalErrorCount)
+        => engineCodes.Count == totalErrorCount && engineCodes.Distinct().Count() == 1 ? engineCodes.First() : ToolErrorCode.InvalidArgument;
+
     private async Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyModifierBatch(List<ModifierEdit> edits, bool dryRun, bool returnDiff, CancellationToken cancellationToken)
     {
         if (edits.Count > MaxModifierFamilyEditsPerBatch)
@@ -155,6 +162,7 @@ public class RefactoringStructuralImpl
 
         var finalContents = new Dictionary<FilePathWrapper, string>();
         var touchedFiles = new List<FilePathWrapper>();
+        var engineErrorCodes = new List<string>();
         var handledByStaticConversion = new HashSet<int>();
         var staticNotes = new List<string>();
 
@@ -228,6 +236,10 @@ public class RefactoringStructuralImpl
             if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
             {
                 perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
+                if (updated.ErrorCode is not null)
+                {
+                    engineErrorCodes.Add(updated.ErrorCode);
+                }
                 continue;
             }
 
@@ -240,7 +252,7 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ModifyModifier batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
+                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), "ModifyModifier batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
             };
         }
 
@@ -331,6 +343,7 @@ public class RefactoringStructuralImpl
         var finalContents = new Dictionary<FilePathWrapper, string>();
         var touchedFiles = new List<FilePathWrapper>();
         var appliedIndexes = new HashSet<int>();
+        var engineErrorCodes = new List<string>();
         foreach (var fileGroup in editsByFile)
         {
             var filePathResolved = fileGroup.Key;
@@ -354,6 +367,10 @@ public class RefactoringStructuralImpl
             if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
             {
                 perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
+                if (updated.ErrorCode is not null)
+                {
+                    engineErrorCodes.Add(updated.ErrorCode);
+                }
                 continue;
             }
 
@@ -383,7 +400,7 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ModifyAttribute batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
+                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), "ModifyAttribute batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
             };
         }
 
@@ -455,6 +472,7 @@ public class RefactoringStructuralImpl
 
         var finalContents = new Dictionary<FilePathWrapper, string>();
         var touchedFiles = new List<FilePathWrapper>();
+        var engineErrorCodes = new List<string>();
         foreach (var fileGroup in editsByFile)
         {
             var filePathResolved = fileGroup.Key;
@@ -477,6 +495,10 @@ public class RefactoringStructuralImpl
             if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
             {
                 perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
+                if (updated.ErrorCode is not null)
+                {
+                    engineErrorCodes.Add(updated.ErrorCode);
+                }
                 continue;
             }
 
@@ -489,7 +511,7 @@ public class RefactoringStructuralImpl
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ModifyBaseType batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
+                ErrorData = new ResultError(BatchErrorCode(engineErrorCodes, perEditErrors.Count), "ModifyBaseType batch rejected - no changes were written:\n" + string.Join("\n", perEditErrors))
             };
         }
 

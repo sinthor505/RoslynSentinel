@@ -398,6 +398,176 @@ public enum ToolScope
     }
 
     [Test]
+    public async Task ApplyAttributeBatch_TargetMissing_ReturnsNotFoundErrorCode()
+    {
+        SetSource(OverloadedRunSource, "AttrBatchNotFound.cs");
+
+        var result = await _memberRefactoringEngine.ApplyAttributeBatchAsync(
+            "AttrBatchNotFound.cs",
+            [(0, "NoSuchMember", "Obsolete", AttributeModifyAction.add, null, null, null, null)]);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ApplyAttributeBatch_MixedFailureKinds_LeavesErrorCodeUnset()
+    {
+        SetSource(OverloadedRunSource, "AttrBatchMixed.cs");
+
+        var result = await _memberRefactoringEngine.ApplyAttributeBatchAsync(
+            "AttrBatchMixed.cs",
+            [
+                (0, "Run", "Obsolete", AttributeModifyAction.add, null, "public void Run(double d)", null, null),
+                (1, "Run", "Obsolete", AttributeModifyAction.add, null, "public void Run(", null, null)
+            ]);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.ErrorCode, Is.Null, "A batch whose failures disagree on kind carries no single code.");
+    }
+
+    private const string DuplicateTypeSource = """
+        namespace A { public class Dup { } }
+        namespace B { public class Dup { } }
+        """;
+
+    [Test]
+    public async Task ApplyBaseTypeBatch_TypeMissing_ReturnsNotFoundErrorCode()
+    {
+        SetSource(OverloadedRunSource, "BaseBatchNotFound.cs");
+
+        var result = await _memberRefactoringEngine.ApplyBaseTypeBatchAsync(
+            "BaseBatchNotFound.cs",
+            [(0, "NoSuchType", "IDisposable", AddRemoveAction.add, null, null, null)]);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ApplyBaseTypeBatch_AmbiguousType_ReturnsAmbiguousErrorCode()
+    {
+        SetSource(DuplicateTypeSource, "BaseBatchAmbiguous.cs");
+
+        var result = await _memberRefactoringEngine.ApplyBaseTypeBatchAsync(
+            "BaseBatchAmbiguous.cs",
+            [(0, "Dup", "IDisposable", AddRemoveAction.add, "public class Dup", null, null)]);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+    }
+
+    [Test]
+    public async Task ApplyBaseTypeBatch_MixedFailureKinds_LeavesErrorCodeUnset()
+    {
+        SetSource(DuplicateTypeSource, "BaseBatchMixed.cs");
+
+        var result = await _memberRefactoringEngine.ApplyBaseTypeBatchAsync(
+            "BaseBatchMixed.cs",
+            [
+                (0, "Dup", "IDisposable", AddRemoveAction.add, "no such text anywhere", null, null),
+                (1, "Dup", "IDisposable", AddRemoveAction.add, "public class Dup", null, null)
+            ]);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.ErrorCode, Is.Null, "A batch whose failures disagree on kind carries no single code.");
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Engine catch (ToolException) sites copy ex.ErrorCode into the result
+    // (a snippet that matches nothing throws ToolNotFoundException from ContextHelper.FindSnippetPosition).
+    // ══════════════════════════════════════════════════════════════
+
+    private const string SnippetMissSource = """
+        public class Holder
+        {
+            public void Run()
+            {
+                var x = 1;
+                System.Console.WriteLine(x);
+            }
+        }
+        """;
+
+    [Test]
+    public async Task WrapInTryCatch_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    {
+        SetSource(SnippetMissSource, "WrapTryCatchMiss.cs");
+
+        var result = await _basicRefactoringEngine.WrapInTryCatchAsync("WrapTryCatchMiss.cs", "no such text anywhere", null, null);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task WrapInRegion_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    {
+        SetSource(SnippetMissSource, "WrapRegionMiss.cs");
+
+        var result = await _basicRefactoringEngine.WrapInRegionAsync("WrapRegionMiss.cs", "no such text anywhere", null, null, "R");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task WrapInUsing_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    {
+        SetSource(SnippetMissSource, "WrapUsingMiss.cs");
+        var semanticEngine = new SemanticRefactoringEngine(_workspaceManager);
+
+        var result = await semanticEngine.WrapInUsingAsync("WrapUsingMiss.cs", "no such text anywhere", null, null, "d");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task SafeDeleteSymbol_ContextSnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    {
+        SetSource(DuplicateTypeSource, "SafeDeleteMiss.cs");
+        var refinementEngine = new StructuralRefinementEngine(_workspaceManager, new SentinelConfiguration());
+
+        var result = await refinementEngine.SafeDeleteSymbolAsync("SafeDeleteMiss.cs", "Dup", "no such text anywhere", null, null);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ExtractMethodSafe_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    {
+        SetSource(SnippetMissSource, "ExtractMethodMiss.cs");
+        var augmentEngine = new MsToolAugmentEngine(_workspaceManager);
+
+        var result = await augmentEngine.ExtractMethodSafeAsync("ExtractMethodMiss.cs", "Extracted", "no such text anywhere");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ExtractConstantSafe_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"extract-constant-miss-{Guid.NewGuid():N}.cs");
+        await File.WriteAllTextAsync(path, SnippetMissSource);
+        try
+        {
+            var augmentEngine = new MsToolAugmentEngine(_workspaceManager);
+
+            var result = await augmentEngine.ExtractConstantSafeAsync(path, "no such text anywhere", "MyConst");
+
+            Assert.That(result.IsError, Is.True);
+            Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Test]
     [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task GetMemberSource_SnippetMatchesNothing_ReturnsNotFoundErrorCode()
     {

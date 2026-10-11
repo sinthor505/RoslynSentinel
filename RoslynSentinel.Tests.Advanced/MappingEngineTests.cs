@@ -162,4 +162,21 @@ public class TargetModel
         Assert.That(result.UpdatedText, Does.Contain("return a + b"),
             "Source without assignments in range should be returned unchanged.");
     }
+
+    [Test]
+    public async Task InvertAssignments_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    {
+        SetSource(@"public class Syncer
+{
+    public void Sync(Local local, Remote remote)
+    {
+        remote.Value = local.Value;
+    }
+}", "SyncerMiss.cs");
+
+        var result = await _engine.InvertAssignmentsAsync("SyncerMiss.cs", "no such text anywhere", null, null);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

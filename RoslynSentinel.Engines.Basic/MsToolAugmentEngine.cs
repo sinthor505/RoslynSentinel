@@ -1069,7 +1069,7 @@ public class MsToolAugmentEngine
 
         int pos;
         try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
-        catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message); }
+        catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message, ex.ErrorCode); }
 
         // Find the nearest literal expression at or near the snippet position
         var node = root.FindNode(new TextSpan(pos, contextSnippet.Length));
@@ -1487,7 +1487,7 @@ public class MsToolAugmentEngine
         {
             int pos;
             try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
-            catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message); }
+            catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message, ex.ErrorCode); }
 
             var SelectionSpan = new TextSpan(pos, contextSnippet.Length);
             var node = root.FindNode(SelectionSpan);

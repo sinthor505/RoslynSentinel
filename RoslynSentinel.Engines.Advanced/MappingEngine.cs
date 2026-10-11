@@ -224,6 +224,7 @@ public class MappingEngine
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
                 Message = $"// ContextSnippet error: {ex.Message}",
+                ErrorCode = ex.ErrorCode,
                 UpdatedText = root.ToFullString() ?? string.Empty
             };
         }

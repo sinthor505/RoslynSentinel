@@ -228,7 +228,7 @@ public class StructuralRefinementEngine
             try { snippetPos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
             catch (ToolException ex)
             {
-                return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = ex.Message };
+                return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = ex.Message, ErrorCode = ex.ErrorCode };
             }
 
             target = candidates.FirstOrDefault(c => c.Span.Contains(snippetPos))

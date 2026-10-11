@@ -2151,7 +2151,8 @@ public class BasicRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// ContextSnippet error: {ex.Message}"
+                Message = $"// ContextSnippet error: {ex.Message}",
+                ErrorCode = ex.ErrorCode
             };
         }
     }
@@ -2255,7 +2256,8 @@ public class BasicRefactoringEngine
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// ContextSnippet error: {ex.Message}"
+                Message = $"// ContextSnippet error: {ex.Message}",
+                ErrorCode = ex.ErrorCode
             };
         }
     }
