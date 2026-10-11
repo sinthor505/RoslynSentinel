@@ -1,6 +1,6 @@
 # Finding: Result and status types use independent vocabularies, and the same condition maps to different outcomes by path
 
-**Status:** OPEN 2026-10-02. Fix not decided; the shared-interface design is in `proposals/proposal_shared_result_status_interface.md`.
+**Status:** FIXED 2026-10-11 by `proposals/proposal_shared_result_status_interface.md` (implementation in `plans/plan_shared_result_status_interface.md`). Item 3 (`ErrorCodeFor(EditOutcome)`) and item 7 (Cancelled/TimedOut codes) were closed by plan steps 2-3. Text below is the original audit.
 
 ## Context
 Audit run 2026-10-02 in session cc715aa0 after the NoChange work (`finding_nochange_producer_classification.md`)

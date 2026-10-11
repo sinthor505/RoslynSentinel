@@ -131,5 +131,5 @@ Per project convention, when fixed: add the regression test, move this doc to
 - **Verified:** full suite 3915 tests, 3889 passed, 0 failed, 26 skipped. A live smoke run of
   `Model_FixesWholeFileRewriteBug_MinimalGuidance` (host 113, qwen3.5-9b-coder) now passes SetUp and runs 20 turns
   (the 2026-10-11 20:19 run failed in SetUp, the 20:25 run reached the model).
-- **Commit:** the commit that moves this file into `resolved/` (hash recorded in `plan_shared_result_status_interface.md`).
+- **Commit:** 5e36871c (fix, regression test, and this file moved into `resolved/`).
 - **Not done:** the stale summary in `ModelEvalAssemblySetUp.cs:6-8` (direction 3) and capturing the verbatim exception text.

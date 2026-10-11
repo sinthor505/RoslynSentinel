@@ -5,6 +5,10 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Result and status types used independent vocabularies; MCP `isError` was re-parsed from JSON - resolved 2026-10-11
+
+**Resolved 2026-10-11** (24499e55 phase 1, b406f44a, 333f3147, 4c82fa12, 68502897, 2e428075, 10018cdd, f2642445, 770748d2, 70322b91, 1122f2c3, a4c733c7, 00abfd09, 527a7287, 18ce4ef0, 018e9436, 9c92ae51, 0d692829; ModelEval DI fix 5e36871c). Every status-carrying type now implements `IResultStatus` (`IsError`, `Status`, `Code`, `Message`, all `[JsonIgnore]`); the envelope serializes `isError` and `isSuccess` is gone from the wire; agent-side consumers read `isError`. See `plans/plan_shared_result_status_interface.md` and `proposals/proposal_shared_result_status_interface.md`. Deferred: JSON-text read of build `outcome` in `SubAgentEvalResult.cs` (~94-95); dead `RenameSymbolResult.ToToolResponse` (`BasicRefactoringEngine.cs:58`, anonymous `success` key, 0 callers); `ClassEdit` `AlreadyInTargetState` reports Success.
+
 ## Search / ListAll / FindReferences: exclude test projects by default - resolved 2026-10-10
 
 **Resolved 2026-10-10** (9eb70d8e (shared detector), 52fc2f59 (text), 8b51cf94 (ListAll/kinds), b92d1e70 (symbol), f5b9b649 (references)). Tools gained `includeTests` (tool default false, impl default true); see `plans/plan_search_exclude_test_projects_by_default.md`. Entry was: hits from test projects buried answers (392 of 423 text hits for `PersistentWorkspaceManager`).

@@ -1,6 +1,6 @@
 # A shared status interface for status-carrying result types, with IsError as the canonical flag
 
-**Status:** PROPOSED 2026-10-02, REVISED 2026-10-04 after discussion with the user. Phase 1 committed (24499e55); phases 2-5 not started, sequenced in `plans/plan_shared_result_status_interface.md` (2026-10-11).
+**Status:** IMPLEMENTED 2026-10-11 (phases 1-5; hashes in `plans/plan_shared_result_status_interface.md`). Originally PROPOSED 2026-10-02, REVISED 2026-10-04. Open question 8 was decided 2026-10-11: keep return shapes, batch types get an aggregate `IResultStatus` through shared helpers (`FromFailureCount`, `FailureCountMessage`), partial results map to Failed with a message.
 
 ## Motivation
 `finding_result_status_vocabularies_fragmented.md` shows 82 status-carrying types with independent
