@@ -327,4 +327,50 @@ public class ResultStatusTests
         Assert.That(rootProperties, Does.Not.Contain("Code"));
         Assert.That(rootProperties, Does.Not.Contain("Message"));
     }
+
+    [Test]
+    public void VariableLifetimeReport_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
+    {
+        IResultStatus ok = new VariableLifetimeReport { VariableName = "v" };
+        IResultStatus bad = new VariableLifetimeReport { Error = "boom" };
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(bad.Message, Is.EqualTo("boom"));
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((VariableLifetimeReport)bad));
+        string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(rootProperties, Does.Not.Contain("IsError"));
+        Assert.That(rootProperties, Does.Not.Contain("Status"));
+        Assert.That(rootProperties, Does.Not.Contain("Code"));
+        Assert.That(rootProperties, Does.Not.Contain("Message"));
+    }
+
+    [Test]
+    public void ToolsetChange_ChangedMapsToSuccessOrAlreadyInState_AndSerializationHasNoStatusFields()
+    {
+        IResultStatus changed = new ToolsetChange(default, true, true, [], [], [], [], []);
+        IResultStatus noop = new ToolsetChange(default, false, false, [], [], [], [], []);
+
+        Assert.That(changed.IsError, Is.False);
+        Assert.That(changed.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(changed.Code, Is.Null);
+        Assert.That(changed.Message, Is.Null);
+        Assert.That(noop.IsError, Is.False);
+        Assert.That(noop.Status, Is.EqualTo(ResultStatus.AlreadyInState));
+        Assert.That(noop.Code, Is.Null);
+        Assert.That(noop.Message, Is.Null);
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((ToolsetChange)noop));
+        string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(rootProperties, Does.Not.Contain("IsError"));
+        Assert.That(rootProperties, Does.Not.Contain("Status"));
+        Assert.That(rootProperties, Does.Not.Contain("Code"));
+        Assert.That(rootProperties, Does.Not.Contain("Message"));
+    }
 }

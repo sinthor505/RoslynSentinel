@@ -24,7 +24,20 @@ public sealed record ToolsetChange(
     IReadOnlyList<string> RemovedTools,
     IReadOnlyList<string> UnavailableTools,
     IReadOnlyList<ToolSetName> EnabledToolSets,
-    IReadOnlyList<string> ActiveTools);
+    IReadOnlyList<string> ActiveTools) : IResultStatus
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => false;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => Changed ? ResultStatus.Success : ResultStatus.AlreadyInState;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => null;
+}
 
 /// <summary>
 /// Owns the runtime state behind <c>McpToolsetControl</c>: which on-demand toolsets are on, and the live
