@@ -102,6 +102,16 @@ public static class ToolErrorCode
     /// (compiler errors) and <see cref="Exception"/> (unexpected failure).
     /// </summary>
     public const string EolChangeRefused = "EolChangeRefused";
+
+    /// <summary>
+    /// The operation was cancelled before it finished.
+    /// </summary>
+    public const string Cancelled = "Cancelled";
+
+    /// <summary>
+    /// The operation exceeded its time limit. Distinct from <see cref="SolutionLoadTimeout"/>, which is specific to the solution load.
+    /// </summary>
+    public const string TimedOut = "TimedOut";
 }
 
 // ── Envelope ──────────────────────────────────────────────────────────────────

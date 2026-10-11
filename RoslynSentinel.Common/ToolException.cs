@@ -204,6 +204,16 @@ public static class ToolErrorMapper
             return (ToolErrorCode.SolutionNotLoaded, $"{context} failed: no solution is loaded. Call LoadSolution first. Data: {ex.Message}");
         }
 
+        if (ex is OperationCanceledException)
+        {
+            return (ToolErrorCode.Cancelled, $"{context} was cancelled before it finished. Data: {ex.Message}");
+        }
+
+        if (ex is TimeoutException)
+        {
+            return (ToolErrorCode.TimedOut, $"{context} timed out before it finished. Data: {ex.Message}");
+        }
+
         return (ToolErrorCode.Exception, $"{context} failed unexpectedly ({ex.GetType().Name}). Data: {ex.Message}");
     }
 }

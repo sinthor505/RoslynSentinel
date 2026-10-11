@@ -96,6 +96,11 @@ never `IsError`. An alternative fallback is default interface members (`Status` 
    (`WorkspaceBuildTestImpl.cs:273-275`). `SubAgentEvalResult.cs:71-72` still re-reads `"outcome"`; revisit in plan step 6.
 5. DECIDED 2026-10-11 (user): add `ToolErrorCode.Cancelled` and `TimedOut` (plan step 3).
 6. The agent's matrix left 51 cells UNREAD; re-read the consumer columns before phase 4.
+8. OPEN 2026-10-11 (user): some engines return one result object and others a collection. Idea raised: make
+   every engine return a collection (a collection of 1 is valid). Counter-considerations to weigh before phase 4:
+   it rewrites every engine signature and its callers; and per-item status needs an aggregate rule (all-success,
+   any-error, partial) that `ResultStatus` has no member for. Alternative: keep return shapes, give batch/collection
+   result types their own `IResultStatus` (aggregate computed from items) via one shared helper. Decide in plan step 6.
 7. RESOLVED 2026-10-04: the filter does not need the typed value; it reads the body's `isError` once and sets
    the protocol flag (option c). A typed hook is unnecessary.
 

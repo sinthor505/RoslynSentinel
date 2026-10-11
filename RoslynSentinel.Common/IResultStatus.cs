@@ -94,6 +94,8 @@ public static class ResultStatusExtensions
         ToolErrorCode.InvalidArgument => ResultStatus.InvalidInput,
         ToolErrorCode.TargetIneligible => ResultStatus.NotApplicable,
         ToolErrorCode.FeatureDisabled => ResultStatus.FeatureDisabled,
+        ToolErrorCode.Cancelled => ResultStatus.Cancelled,
+        ToolErrorCode.TimedOut or ToolErrorCode.SolutionLoadTimeout => ResultStatus.TimedOut,
         _ => ResultStatus.Failed
     };
 }

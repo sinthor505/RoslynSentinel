@@ -483,7 +483,8 @@ public class Svc
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(MigrationErrorCode.Exception));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Cancelled),
+            "A cancelled call reports Cancelled, not the catch-all Exception code.");
         Assert.That(result.ErrorData.Detail, Is.Not.Null.And.Not.Empty,
             "Detail must carry the exception message.");
     }

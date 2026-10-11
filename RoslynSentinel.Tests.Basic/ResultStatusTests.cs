@@ -24,6 +24,9 @@ public class ResultStatusTests
     [TestCase(ToolErrorCode.InvalidArgument, ResultStatus.InvalidInput)]
     [TestCase(ToolErrorCode.TargetIneligible, ResultStatus.NotApplicable)]
     [TestCase(ToolErrorCode.FeatureDisabled, ResultStatus.FeatureDisabled)]
+    [TestCase(ToolErrorCode.Cancelled, ResultStatus.Cancelled)]
+    [TestCase(ToolErrorCode.TimedOut, ResultStatus.TimedOut)]
+    [TestCase(ToolErrorCode.SolutionLoadTimeout, ResultStatus.TimedOut)]
     [TestCase(ToolErrorCode.Exception, ResultStatus.Failed)]
     [TestCase("SomeUnknownCode", ResultStatus.Failed)]
     public void Envelope_Failure_MapsErrorCodeToStatus_AndIsError(string code, ResultStatus expected)
@@ -134,5 +137,38 @@ public class ResultStatusTests
 
         var json = JsonSerializer.Serialize(new DocumentEditResult(EditOutcome.Modified, default));
         Assert.That(json, Does.Not.Contain("\"IsError\"").And.Not.Contain("\"Status\"").And.Not.Contain("\"Code\""));
+    }
+
+    [Test]
+    public void ToResultError_OperationCanceled_MapsToCancelled()
+    {
+        ResultError error = ToolErrorMapper.ToResultError(new OperationCanceledException("c"), null!, "Op");
+
+        Assert.That(error.ErrorCode, Is.EqualTo(ToolErrorCode.Cancelled));
+        Assert.That(ResultStatusExtensions.FromErrorCode(error.ErrorCode), Is.EqualTo(ResultStatus.Cancelled));
+
+        ResultError taskCanceled = ToolErrorMapper.ToResultError(new System.Threading.Tasks.TaskCanceledException("t"), null!, "Op");
+
+        Assert.That(taskCanceled.ErrorCode, Is.EqualTo(ToolErrorCode.Cancelled));
+        Assert.That(ResultStatusExtensions.FromErrorCode(taskCanceled.ErrorCode), Is.EqualTo(ResultStatus.Cancelled));
+    }
+
+    [Test]
+    public void ToResultError_TimeoutException_MapsToTimedOut()
+    {
+        ResultError error = ToolErrorMapper.ToResultError(new TimeoutException("t"), null!, "Op");
+
+        Assert.That(error.ErrorCode, Is.EqualTo(ToolErrorCode.TimedOut));
+        Assert.That(ResultStatusExtensions.FromErrorCode(error.ErrorCode), Is.EqualTo(ResultStatus.TimedOut));
+    }
+
+    [Test]
+    public void ToResultError_ToolNotFoundAndPlainException_KeepTheirExistingCodes()
+    {
+        ResultError notFound = ToolErrorMapper.ToResultError(new ToolNotFoundException("missing"), null!, "Op");
+        ResultError plain = ToolErrorMapper.ToResultError(new InvalidOperationException("boom"), null!, "Op");
+
+        Assert.That(notFound.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(plain.ErrorCode, Is.EqualTo(ToolErrorCode.Exception));
     }
 }
