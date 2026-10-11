@@ -200,6 +200,47 @@ public class ResultStatusTests
     }
 
     [Test]
+    public void ApplyChangesResult_StatusAgreesWithIsError_AndRefusalCodeWins()
+    {
+        IResultStatus ok = new ApplyChangesResult(false, [], [], "wrote 1 file");
+        IResultStatus failed = new ApplyChangesResult(true, [], [], "write failed");
+        IResultStatus refused = new ApplyChangesResult(true, [], [], "eol refused", RefusalCode: ToolErrorCode.EolChangeRefused);
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+        Assert.That(failed.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(failed.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(failed.Message, Is.EqualTo("write failed"));
+        Assert.That(refused.IsError, Is.True);
+        Assert.That(refused.Code, Is.EqualTo(ToolErrorCode.EolChangeRefused));
+        Assert.That(refused.Status.IsErrorStatus(), Is.True);
+
+        string json = JsonSerializer.Serialize((ApplyChangesResult)failed);
+        Assert.That(json, Does.Not.Contain("\"Status\"").And.Not.Contain("\"Code\"").And.Not.Contain("\"Message\""));
+    }
+
+    [Test]
+    public void DiagnosticReport_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
+    {
+        IResultStatus ok = new DiagnosticReport(false, []);
+        IResultStatus bad = new DiagnosticReport(true, [new DiagnosticInfo("CS0103", "Error", "m", "C.cs", 1, 1, 1, 2)]);
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status.IsErrorStatus(), Is.True);
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.ValidationFailed));
+        Assert.That(bad.Message, Does.StartWith("1 error diagnostic"));
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((DiagnosticReport)bad));
+        string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(rootProperties, Is.EquivalentTo(new[] { "IsError", "Diagnostics" }));
+    }
+
+    [Test]
     public void MsAugmentResult_StatusAgreesWithIsError_AndExplicitErrorCodeWins()
     {
         IResultStatus ok = MsAugmentResult.Ok("text");

@@ -28,4 +28,15 @@ public record ApplyChangesResult(
     List<string>? RolledBackFiles = null,
     List<string>? NoOpFiles = null,
     string? RefusalCode = null
-);
+) : IResultStatus
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    /// <summary>Failure code: <see cref="RefusalCode"/> when the write chokepoint refused, else Exception. Null on success.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? RefusalCode ?? ToolErrorCode.Exception : null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => IsError ? Summary : null;
+}

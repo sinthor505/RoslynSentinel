@@ -5,7 +5,17 @@ namespace RoslynSentinel.Common;
 public record DiagnosticReport(
     bool IsError,
     List<DiagnosticInfo> Diagnostics
-);
+) : IResultStatus
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.ValidationFailed : null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => IsError ? $"{Diagnostics.Count(d => d.Severity == "Error")} error diagnostic(s)." : null;
+}
 
 public static class DiagnosticReportExtensions
 {
