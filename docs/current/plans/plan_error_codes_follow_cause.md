@@ -130,9 +130,12 @@ Measured against current code (explore-sonnet). Line numbers in the Steps above 
   element, cascades into `RefactoringSignatureImpl` 173/350, `RefactoringStructuralImpl` 549, `RefactoringExtractionDocsImpl` 177);
   `Modify*Batch` tool wrappers in `RefactoringStructuralImpl` (~243, 386, 492) hardcode `InvalidArgument`;
   no test covers `ApplyAttributeBatchAsync`/`ApplyBaseTypeBatchAsync`.
-- Next, in order: (1) copy `ex.ErrorCode` at the 9 engine `catch (ToolException)` sites that drop it (MappingEngine 220,
-  BasicRefactoringEngine 2146/2250, SemanticRefactoringEngine 347, StructuralRefinementEngine 229, MsToolAugmentEngine
-  261/769/1072/1490) and surface the batch code in the `Modify*Batch` wrappers; (2) `CodeTransformTools` decides success
+- Slice (1) DONE cf95f356: 7 of the 9 engine `catch (ToolException)` sites now keep the code; the `Modify*Batch` tools
+  report the engine code when all errors agree (`BatchErrorCode`), else `InvalidArgument`; 17 tests; full suite 3939 run,
+  0 failed, 26 skipped. LEFT: `MsToolAugmentEngine.AnalyzeSwitchForPatternConversionAsync` (~261, record
+  `SwitchConversionAnalysis`, 11 callers) and `AnalyzeForeachForLinqConversionAsync` (~769, record `ForeachLinqAnalysis`,
+  12 callers) return positional records that cannot carry a code; plus the four tuple-returning methods above.
+- Next, in order: (2) `CodeTransformTools` decides success
   from `Outcome`/`Code` instead of `IsNullOrEmpty(UpdatedText)` (38 sites), and `RequireUpdatedText` treats
   `AlreadyInTargetState` as success; (3) Step 1 LEFT: ~20 `AsyncOptimizationEngine` throws (394-456, 616-662, 988, 1801,
   1809, 2269, 2371), `CodeGenerationEngine` 387, `MsToolAugmentEngine` 590, with the `AsyncBatchEngine` catches
