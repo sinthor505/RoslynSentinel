@@ -256,4 +256,29 @@ public class ResultStatusTests
         Assert.That(coded.Code, Is.EqualTo(ToolErrorCode.TargetIneligible));
         Assert.That(coded.Message, Is.EqualTo("nope"));
     }
+
+    [TestCase(EngineOutcome.Success, ResultStatus.Success, null)]
+    [TestCase(EngineOutcome.Failure, ResultStatus.Failed, ToolErrorCode.Exception)]
+    [TestCase(EngineOutcome.DocumentNotFound, ResultStatus.NotFound, ToolErrorCode.NotFound)]
+    [TestCase(EngineOutcome.TargetNotFound, ResultStatus.NotFound, ToolErrorCode.NotFound)]
+    [TestCase(EngineOutcome.InvalidInput, ResultStatus.InvalidInput, ToolErrorCode.InvalidArgument)]
+    [TestCase(EngineOutcome.Timeout, ResultStatus.TimedOut, ToolErrorCode.TimedOut)]
+    [TestCase(EngineOutcome.InternalError, ResultStatus.Failed, ToolErrorCode.Exception)]
+    public void EngineResultWrapper_EveryOutcome_StatusAndCodeAgreeWithIsError(EngineOutcome outcome, ResultStatus expectedStatus, string? expectedCode)
+    {
+        IResultStatus result = new EngineResultWrapper<int>(outcome, outcome == EngineOutcome.Success ? 1 : default, outcome == EngineOutcome.Success ? null : new EngineError("m"));
+
+        Assert.That(result.IsError, Is.EqualTo(expectedStatus.IsErrorStatus()));
+        Assert.That(result.Status, Is.EqualTo(expectedStatus));
+        Assert.That(result.Code, Is.EqualTo(expectedCode));
+    }
+
+    [Test]
+    public void EngineError_ToToolResponse_EmitsIsErrorAndNoSuccessField()
+    {
+        using var doc = JsonDocument.Parse(new EngineError("boom").ToToolResponse());
+
+        Assert.That(doc.RootElement.GetProperty("isError").GetBoolean(), Is.True);
+        Assert.That(doc.RootElement.TryGetProperty("success", out _), Is.False);
+    }
 }

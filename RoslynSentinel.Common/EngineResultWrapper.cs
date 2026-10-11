@@ -11,7 +11,7 @@ public enum EngineErrorCode
     BuildNotRun,
 }
 
-public sealed class EngineResultWrapper<T>
+public sealed class EngineResultWrapper<T> : IResultStatus
 {
     public EngineOutcome Outcome
     {
@@ -51,6 +51,32 @@ public sealed class EngineResultWrapper<T>
         Error = error;
     }
     public static EngineResultWrapper<T> Failure(EngineOutcome outcome, EngineError error) => new(outcome, default, error);
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Outcome != EngineOutcome.Success;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => Outcome switch
+    {
+        EngineOutcome.Success => ResultStatus.Success,
+        EngineOutcome.DocumentNotFound or EngineOutcome.TargetNotFound => ResultStatus.NotFound,
+        EngineOutcome.InvalidInput => ResultStatus.InvalidInput,
+        EngineOutcome.Timeout => ResultStatus.TimedOut,
+        _ => ResultStatus.Failed
+    };
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => Status switch
+    {
+        ResultStatus.Success => null,
+        ResultStatus.NotFound => ToolErrorCode.NotFound,
+        ResultStatus.InvalidInput => ToolErrorCode.InvalidArgument,
+        ResultStatus.TimedOut => ToolErrorCode.TimedOut,
+        _ => ToolErrorCode.Exception
+    };
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => Error?.Message;
 }
 
 public enum EngineOutcome
@@ -100,7 +126,7 @@ public class EngineError
     {
         return JsonSerializer.Serialize(new
         {
-            success = false,
+            isError = true,
             error = Message,
             errorCode = Code?.ToString() ?? EngineErrorCode.General.ToString()
         });

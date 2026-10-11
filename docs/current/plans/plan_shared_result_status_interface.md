@@ -1,6 +1,6 @@
 # Plan: adopt IResultStatus across the remaining status-carrying result types (phases 2-5)
 
-**Status:** IN PROGRESS 2026-10-11. Done: phase 1 (24499e55), step 2 (b406f44a), step 3 (333f3147). Step 4 done: `FromFlag` + Engines.Basic records (4c82fa12), Engines.Advanced (68502897), Tools.Basic (2e428075), Common records (this commit). Next: step 5.
+**Status:** IN PROGRESS 2026-10-11. Done: phase 1 (24499e55), step 2 (b406f44a), step 3 (333f3147). Step 4 done: `FromFlag` + Engines.Basic records (4c82fa12), Engines.Advanced (68502897), Tools.Basic (2e428075), Common records (this commit). Step 5 (EngineResultWrapper, implementer) done in the commit after 95242602. Next: step 6.
 
 ## Problem
 `proposals/proposal_shared_result_status_interface.md` defines `IResultStatus` (`IsError`, `Status`, `Code`,
