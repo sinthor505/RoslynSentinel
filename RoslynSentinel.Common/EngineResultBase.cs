@@ -2,7 +2,7 @@
 
 namespace RoslynSentinel.Common;
 
-public record EngineResultBase
+public record EngineResultBase : IResultStatus
 {
     protected static readonly System.Text.Json.JsonSerializerOptions _jsonOptions = new System.Text.Json.JsonSerializerOptions()
     {
@@ -28,4 +28,16 @@ public record EngineResultBase
     {
         get; init;
     } = string.Empty;
+
+    /// <summary><see cref="IResultStatus.Status"/>: the canonical status of <see cref="Outcome"/>. Not serialized.</summary>
+    [JsonIgnore]
+    public ResultStatus Status => Outcome.ToResultStatus();
+
+    /// <summary><see cref="IResultStatus.IsError"/>: computed from <see cref="Status"/> so it cannot disagree with <see cref="Outcome"/>. Not serialized.</summary>
+    [JsonIgnore]
+    public bool IsError => Status.IsErrorStatus();
+
+    /// <summary><see cref="IResultStatus.Code"/>: the <see cref="ToolErrorCode"/> for <see cref="Outcome"/>; null when not an error. Not serialized.</summary>
+    [JsonIgnore]
+    public virtual string? Code => Outcome.ToErrorCode();
 }

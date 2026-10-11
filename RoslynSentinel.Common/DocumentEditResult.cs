@@ -30,6 +30,10 @@ namespace RoslynSentinel.Common
             get; init;
         }
 
+        /// <summary><see cref="IResultStatus.Code"/>: <see cref="ErrorCode"/> when set, else the code for <see cref="EngineResultBase.Outcome"/>. Not serialized.</summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public override string? Code => ErrorCode ?? base.Code;
+
         /// <summary>
         /// Batch engines only: the caller-supplied edit indexes that actually changed this file's text. An index that
         /// was requested but is absent here had no effect (e.g. removing an attribute that was not present), so a

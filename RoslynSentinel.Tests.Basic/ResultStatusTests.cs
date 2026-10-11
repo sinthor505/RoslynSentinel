@@ -93,4 +93,46 @@ public class ResultStatusTests
         Assert.That(back!.IsError, Is.False);
         Assert.That(back.SuccessData, Is.EqualTo("x"));
     }
+
+    [TestCase(EditOutcome.Modified, ResultStatus.Success, null)]
+    [TestCase(EditOutcome.AlreadyInTargetState, ResultStatus.AlreadyInState, null)]
+    [TestCase(EditOutcome.TargetNotFound, ResultStatus.NotFound, ToolErrorCode.NotFound)]
+    [TestCase(EditOutcome.DocumentNotFound, ResultStatus.NotFound, ToolErrorCode.NotFound)]
+    [TestCase(EditOutcome.NoCandidatesFound, ResultStatus.NotFound, ToolErrorCode.NotFound)]
+    [TestCase(EditOutcome.SourceInvalid, ResultStatus.InvalidInput, ToolErrorCode.InvalidArgument)]
+    [TestCase(EditOutcome.FeatureDisabled, ResultStatus.FeatureDisabled, ToolErrorCode.FeatureDisabled)]
+    [TestCase(EditOutcome.CannotOptimize, ResultStatus.NotApplicable, ToolErrorCode.TargetIneligible)]
+    [TestCase(EditOutcome.CannotEdit, ResultStatus.NotApplicable, ToolErrorCode.TargetIneligible)]
+    [TestCase(EditOutcome.CannotMove, ResultStatus.NotApplicable, ToolErrorCode.TargetIneligible)]
+    [TestCase(EditOutcome.CannotRemove, ResultStatus.NotApplicable, ToolErrorCode.TargetIneligible)]
+    [TestCase(EditOutcome.CannotConvert, ResultStatus.NotApplicable, ToolErrorCode.TargetIneligible)]
+    [TestCase(EditOutcome.Error, ResultStatus.Failed, ToolErrorCode.Exception)]
+    [TestCase(EditOutcome.Unset, ResultStatus.Failed, ToolErrorCode.Exception)]
+    public void EditOutcome_MapsToStatusAndCode_AndResultAgrees(EditOutcome outcome, ResultStatus expectedStatus, string? expectedCode)
+    {
+        Assert.That(outcome.ToResultStatus(), Is.EqualTo(expectedStatus));
+        Assert.That(outcome.ToErrorCode(), Is.EqualTo(expectedCode));
+
+        IResultStatus result = new DocumentEditResult(outcome, default);
+        Assert.That(result.Status, Is.EqualTo(expectedStatus));
+        Assert.That(result.IsError, Is.EqualTo(expectedStatus.IsErrorStatus()));
+        Assert.That(result.Code, Is.EqualTo(expectedCode));
+    }
+
+    [Test]
+    public void EditOutcome_EveryMember_ErrorStatusAgreesWithCode_AndExplicitErrorCodeWins()
+    {
+        foreach (var outcome in Enum.GetValues<EditOutcome>())
+        {
+            var status = outcome.ToResultStatus();
+            Assert.That(outcome.ToErrorCode() is null, Is.EqualTo(!status.IsErrorStatus()), $"{outcome}: code presence must match IsError");
+        }
+
+        IResultStatus withCode = new DocumentEditResult(EditOutcome.CannotEdit, default) { ErrorCode = ToolErrorCode.Ambiguous };
+        Assert.That(withCode.Code, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(withCode.IsError, Is.True);
+
+        var json = JsonSerializer.Serialize(new DocumentEditResult(EditOutcome.Modified, default));
+        Assert.That(json, Does.Not.Contain("\"IsError\"").And.Not.Contain("\"Status\"").And.Not.Contain("\"Code\""));
+    }
 }

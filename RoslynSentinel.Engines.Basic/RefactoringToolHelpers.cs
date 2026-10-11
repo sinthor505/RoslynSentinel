@@ -30,12 +30,7 @@ public static class RefactoringToolHelpers
     /// <c>Member(replace)</c> path, which builds its own message, cannot drift from
     /// <see cref="RequireUpdatedText"/> on the code.
     /// </summary>
-    public static string ErrorCodeFor(EditOutcome outcome) => outcome switch
-    {
-        EditOutcome.TargetNotFound or EditOutcome.DocumentNotFound => ToolErrorCode.NotFound,
-        EditOutcome.SourceInvalid => ToolErrorCode.InvalidArgument,
-        _ => ToolErrorCode.Exception
-    };
+    public static string ErrorCodeFor(EditOutcome outcome) => outcome.ToErrorCode() ?? ToolErrorCode.Exception;
 
     /// <summary>
     /// Maps a document-edit result to the error code the agent sees, preferring ErrorCode if set.

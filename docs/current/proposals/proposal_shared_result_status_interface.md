@@ -1,6 +1,6 @@
 # A shared status interface for status-carrying result types, with IsError as the canonical flag
 
-**Status:** PROPOSED 2026-10-02, REVISED 2026-10-04 after discussion with the user. Phase 1 implemented 2026-10-04 (uncommitted); phases 2-5 not started.
+**Status:** PROPOSED 2026-10-02, REVISED 2026-10-04 after discussion with the user. Phase 1 committed (24499e55); phases 2-5 not started, sequenced in `plans/plan_shared_result_status_interface.md` (2026-10-11).
 
 ## Motivation
 `finding_result_status_vocabularies_fragmented.md` shows 82 status-carrying types with independent
@@ -56,7 +56,7 @@ never `IsError`. An alternative fallback is default interface members (`Status` 
 `Code`/`Message` null); check target frameworks and `LangVersion` first.
 
 1. Define `IResultStatus`, `ResultStatus`, `IsErrorStatus()` in `Common`. Implement on
-   `SentinelCallToolResult<TSuccess, TError>`. `SolutionNotLoaded` polarity fixed. DONE 2026-10-04, uncommitted.
+   `SentinelCallToolResult<TSuccess, TError>`. `SolutionNotLoaded` polarity fixed. DONE 2026-10-04, committed 24499e55.
    The envelope now STORES and SERIALIZES `isError` (default true, fail closed, same as the old `IsSuccess`
    default false); `Status`/`Code`/`Message` are computed and `[JsonIgnore]`d. `IsSuccess` survives only as a
    non-serialized source-compat alias (`get => !IsError`, `init` sets `IsError = !value`) so the ~1264 existing
@@ -85,18 +85,16 @@ never `IsError`. An alternative fallback is default interface members (`Status` 
 - **Collapse all enums into one.** Lost: non-outcome enums are not results of one operation.
 
 ## Open questions
-1. NoChange / AlreadyInState: option a (new `AlreadyInState`), b (keep `NoChange`, relabel the 4 class-4
-   producers; my recommendation), or c (Success + `Changed = false`). Decides whether `AlreadyInState` is in
-   `ResultStatus`. The 4 class-4 producers must be relabelled before or during phase 2.
+1. RESOLVED (seen in source 2026-10-11): option a. `EditOutcome.AlreadyInTargetState` exists, `NoChange` is
+   `[Obsolete]` with no producers, so `ResultStatus.AlreadyInState` stays and maps from it in phase 2.
 2. RESOLVED 2026-10-04: `isError` is serialized in the envelope body and `isSuccess` is gone from the wire
    (done in phase 1; full suite 3065 passed, 0 failed, 109 skipped). Remaining: bodies keyed `"success"` that
    are not `SentinelCallToolResult` (`EngineResultWrapper`, `DocWriteResult`, ...) still use their own spelling
    until their phase.
 3. RESOLVED 2026-10-04 (user): `SolutionNotLoaded` at `:282` returns `isError: true`. Done in phase 1.
-4. DECIDED 2026-10-04 (user): a failed build returns `isError: true`, for consistency. NOT YET IMPLEMENTED
-   (`WorkspaceBuildTestImpl.cs:139/:170-175`); `SubAgentEvalResult` depends on today's behavior (agent claim,
-   unverified), so check it when making the change.
-5. Is `Cancelled`/`TimedOut` wanted on the tool surface? Today both fall to `Exception`.
+4. RESOLVED (seen in source 2026-10-11): a failed build returns `isError: true` with `BuildFailed`
+   (`WorkspaceBuildTestImpl.cs:273-275`). `SubAgentEvalResult.cs:71-72` still re-reads `"outcome"`; revisit in plan step 6.
+5. DECIDED 2026-10-11 (user): add `ToolErrorCode.Cancelled` and `TimedOut` (plan step 3).
 6. The agent's matrix left 51 cells UNREAD; re-read the consumer columns before phase 4.
 7. RESOLVED 2026-10-04: the filter does not need the typed value; it reads the body's `isError` once and sets
    the protocol flag (option c). A typed hook is unnecessary.
