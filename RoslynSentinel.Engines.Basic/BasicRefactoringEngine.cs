@@ -1679,13 +1679,14 @@ public class BasicRefactoringEngine
             target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -1856,13 +1857,14 @@ public class BasicRefactoringEngine
             target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -1921,7 +1923,7 @@ public class BasicRefactoringEngine
             target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return (EditOutcome.CannotEdit, ex.Message, null);
         }

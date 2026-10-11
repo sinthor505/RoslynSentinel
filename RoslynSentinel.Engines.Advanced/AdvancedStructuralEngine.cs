@@ -1361,13 +1361,14 @@ public class StructuralRefactoringEngine
         {
             target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, text, contextSnippet, lineBefore, lineAfter, (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode))?.Node as MemberDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 

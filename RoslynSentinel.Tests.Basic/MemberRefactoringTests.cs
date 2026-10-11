@@ -337,6 +337,103 @@ public enum ToolScope
         Assert.That(info.StartLine, Is.EqualTo(4));
     }
 
+    private const string OverloadedRunSource = """
+        public class Holder
+        {
+            public void Run(int x) { }
+            public void Run(string s) { }
+        }
+        """;
+
+    [Test]
+    public async Task AddModifier_SnippetMatchesBothOverloads_ReturnsAmbiguousErrorCode()
+    {
+        SetSource(OverloadedRunSource, "RunAmbiguous.cs");
+
+        var result = await _memberRefactoringEngine.AddModifierAsync("RunAmbiguous.cs", "Run", "static", contextSnippet: "public void Run(");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(result.Message, Does.Contain("ambiguous").IgnoreCase);
+    }
+
+    [Test]
+    public async Task AddModifier_SnippetMatchesNothing_ReturnsNotFoundErrorCode()
+    {
+        SetSource(OverloadedRunSource, "RunNotFound.cs");
+
+        var result = await _memberRefactoringEngine.AddModifierAsync("RunNotFound.cs", "Run", "static", contextSnippet: "public void Run(double d)");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ApplyModifierBatch_SnippetMatchesNothing_ReturnsNotFoundErrorCode()
+    {
+        SetSource(OverloadedRunSource, "RunBatchNotFound.cs");
+
+        var result = await _memberRefactoringEngine.ApplyModifierBatchAsync(
+            "RunBatchNotFound.cs",
+            [(0, "Run", "static", AddRemoveAction.add, "public void Run(double d)", null, null)]);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ApplyModifierBatch_MixedFailureKinds_LeavesErrorCodeUnset()
+    {
+        SetSource(OverloadedRunSource, "RunBatchMixed.cs");
+
+        var result = await _memberRefactoringEngine.ApplyModifierBatchAsync(
+            "RunBatchMixed.cs",
+            [
+                (0, "Run", "static", AddRemoveAction.add, "public void Run(double d)", null, null),
+                (1, "Run", "static", AddRemoveAction.add, "public void Run(", null, null)
+            ]);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.ErrorCode, Is.Null, "A batch whose failures disagree on kind carries no single code.");
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    public async Task GetMemberSource_SnippetMatchesNothing_ReturnsNotFoundErrorCode()
+    {
+        SetSource(OverloadedRunSource, "MemberSourceSnippetMiss.cs");
+
+        var (outcome, _, errorCode, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceSnippetMiss.cs", "Run", contextSnippet: "public void Run(double d)");
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(errorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(info, Is.Null);
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    public async Task IsEnumContainer_UnresolvableSnippet_SwallowsToolExceptionAndReturnsFalse()
+    {
+        SetSource("namespace A { public class Dup { } }\nnamespace B { public enum Dup { X } }\n", "DupContainers.cs");
+
+        var isEnum = await _symbolNavigationEngine.IsEnumContainerAsync("DupContainers.cs", "Dup", contextSnippet: "no such text anywhere");
+
+        Assert.That(isEnum, Is.False, "The pre-check swallows resolution failures so the real method can surface them.");
+    }
+
+    [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    public async Task GetContainerMembers_UnresolvableSnippet_ReturnsCannotEditWithMessage()
+    {
+        SetSource("namespace A { public class Dup { } }\nnamespace B { public enum Dup { X } }\n", "DupContainersMembers.cs");
+
+        var (outcome, message, members) = await _symbolNavigationEngine.GetContainerMembersAsync("DupContainersMembers.cs", "Dup", contextSnippet: "no such text anywhere");
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(message, Is.Not.Null.And.Not.Empty);
+        Assert.That(members, Is.Empty);
+    }
+
     [Test]
     [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task GetMemberSource_TypeNameOnly_ReturnsTargetIneligible()

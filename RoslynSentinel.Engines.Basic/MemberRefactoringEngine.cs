@@ -161,13 +161,14 @@ public class MemberRefactoringEngine
             classNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return (null, new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             });
         }
 
@@ -508,13 +509,14 @@ public class MemberRefactoringEngine
             classNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -643,7 +645,7 @@ public class MemberRefactoringEngine
             classNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return (EditOutcome.CannotEdit, ex.Message, []);
         }
@@ -729,13 +731,14 @@ public class MemberRefactoringEngine
             enumNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -1039,6 +1042,15 @@ public class MemberRefactoringEngine
     }
 
     /// <summary>
+    /// The single <see cref="ToolErrorCode"/> shared by every per-edit failure of a batch, or null when the
+    /// failures carry different codes (or none), so a mixed batch never reports a misleading single cause.
+    /// </summary>
+    private static string? SharedErrorCode(IReadOnlyCollection<string> codes)
+    {
+        return codes.Distinct().Count() == 1 ? codes.First() : null;
+    }
+
+    /// <summary>
     /// Batch form of <see cref="AddModifierAsync"/>/<see cref="RemoveModifierAsync"/>: applies every
     /// edit in <paramref name="edits"/> to <paramref name="filePath"/> against ONE original syntax root,
     /// then folds all replacements into a single <see cref="RoslynFormattingHelper.ReplaceNodesFormattedAsync"/>
@@ -1068,6 +1080,7 @@ public class MemberRefactoringEngine
         }
 
         var errors = new List<string>();
+        var errorCodes = new List<string>();
         var resolvedTargets = new Dictionary<int, MemberDeclarationSyntax>();
         foreach (var edit in edits)
         {
@@ -1080,19 +1093,21 @@ public class MemberRefactoringEngine
                 if (target == null)
                 {
                     errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): target not found.");
+                    errorCodes.Add(ToolErrorCode.NotFound);
                     continue;
                 }
                 resolvedTargets[edit.Index] = target;
             }
-            catch (InvalidOperationException ex)
+            catch (ToolException ex)
             {
                 errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
+                errorCodes.Add(ex.ErrorCode);
             }
         }
 
         if (errors.Count > 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors), ErrorCode = SharedErrorCode(errorCodes) };
         }
 
         // Same-node collision check: two edits resolving to the identical declaration is the node-identity
@@ -1202,7 +1217,7 @@ public class MemberRefactoringEngine
                 var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, request.TargetName, cancellationToken).Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
                 declaration = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, request.ContextSnippet, request.LineBefore, request.LineAfter, (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
             }
-            catch (InvalidOperationException)
+            catch (ToolException)
             {
                 // Not resolvable here: the plain modifier path reports the real resolution error for this request.
                 continue;
@@ -1314,7 +1329,7 @@ public class MemberRefactoringEngine
             memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return (EditOutcome.CannotEdit, ex.Message, []);
         }
@@ -1388,13 +1403,14 @@ public class MemberRefactoringEngine
             memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -1486,13 +1502,14 @@ public class MemberRefactoringEngine
             memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -1665,6 +1682,7 @@ public class MemberRefactoringEngine
         }
 
         var errors = new List<string>();
+        var errorCodes = new List<string>();
         var resolvedTargets = new Dictionary<int, SyntaxNode>();
         foreach (var edit in edits)
         {
@@ -1687,19 +1705,21 @@ public class MemberRefactoringEngine
                 if (targetNode == null)
                 {
                     errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): target not found.");
+                    errorCodes.Add(ToolErrorCode.NotFound);
                     continue;
                 }
                 resolvedTargets[edit.Index] = targetNode;
             }
-            catch (InvalidOperationException ex)
+            catch (ToolException ex)
             {
                 errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
+                errorCodes.Add(ex.ErrorCode);
             }
         }
 
         if (errors.Count > 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors), ErrorCode = SharedErrorCode(errorCodes) };
         }
 
         // Same-node collision: two edits on the identical declaration. A type and a member inside it are NOT a collision
@@ -1840,13 +1860,14 @@ public class MemberRefactoringEngine
             target = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -1924,13 +1945,14 @@ public class MemberRefactoringEngine
             target = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -2006,13 +2028,14 @@ public class MemberRefactoringEngine
             target = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -2111,13 +2134,14 @@ public class MemberRefactoringEngine
                 targetNode = memberNode;
             }
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -2135,13 +2159,14 @@ public class MemberRefactoringEngine
                     targetNode = typeNode;
                 }
             }
-            catch (InvalidOperationException ex)
+            catch (ToolException ex)
             {
                 return new DocumentEditResult
                 {
                     Outcome = EditOutcome.CannotEdit,
                     FilePath = filePath,
-                    Message = ex.Message
+                    Message = ex.Message,
+                    ErrorCode = ex.ErrorCode
                 };
             }
         }
@@ -2241,13 +2266,14 @@ public class MemberRefactoringEngine
                     (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
             }
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -2334,13 +2360,14 @@ public class MemberRefactoringEngine
             memberTarget = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -2400,13 +2427,14 @@ public class MemberRefactoringEngine
             container = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -2501,13 +2529,14 @@ public class MemberRefactoringEngine
             container = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -2807,13 +2836,14 @@ public class MemberRefactoringEngine
             member = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -2909,13 +2939,14 @@ public class MemberRefactoringEngine
             container = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -3158,13 +3189,14 @@ public class MemberRefactoringEngine
                     .ToList();
             }
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -4769,13 +4801,14 @@ public class MemberRefactoringEngine
             container = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -4847,13 +4880,14 @@ public class MemberRefactoringEngine
             container = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = ex.Message
+                Message = ex.Message,
+                ErrorCode = ex.ErrorCode
             };
         }
 
@@ -4912,6 +4946,7 @@ public class MemberRefactoringEngine
         }
 
         var errors = new List<string>();
+        var errorCodes = new List<string>();
         var resolvedTargets = new Dictionary<int, BaseTypeDeclarationSyntax>();
         foreach (var edit in edits)
         {
@@ -4925,19 +4960,21 @@ public class MemberRefactoringEngine
                 if (container == null)
                 {
                     errors.Add($"batchEdits[{edit.Index}] ({edit.TypeName}): type not found.");
+                    errorCodes.Add(ToolErrorCode.NotFound);
                     continue;
                 }
                 resolvedTargets[edit.Index] = container;
             }
-            catch (InvalidOperationException ex)
+            catch (ToolException ex)
             {
                 errors.Add($"batchEdits[{edit.Index}] ({edit.TypeName}): {ex.Message}");
+                errorCodes.Add(ex.ErrorCode);
             }
         }
 
         if (errors.Count > 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors), ErrorCode = SharedErrorCode(errorCodes) };
         }
 
         var seen = new Dictionary<BaseTypeDeclarationSyntax, int>();

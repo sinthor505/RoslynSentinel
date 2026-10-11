@@ -285,8 +285,9 @@ public static class SyntaxTargetResolver
     /// unambiguous candidate; when contextSnippet is null or the set already has &lt;= 1 entry, returns
     /// the sole candidate (or null) without requiring a snippet at all -- a defensively-supplied
     /// snippet must never fail a call that didn't actually need disambiguating.
-    /// Throws InvalidOperationException with a hintBuilder-produced message on zero or 2+ snippet
-    /// matches, matching the two resolvers' existing throw behavior.
+    /// Throws ToolNotFoundException (snippet matched nothing) or ToolAmbiguousMatchException (2+ snippet
+    /// matches, or the single match fell outside every candidate), each carrying the hintBuilder-produced
+    /// message. Callers catch ToolException and copy ex.ErrorCode onto their result.
     /// </summary>
     public static SyntaxNodeCandidate? ResolveBySnippetOrThrow(
         List<SyntaxNodeCandidate> candidates,
@@ -304,7 +305,7 @@ public static class SyntaxTargetResolver
         var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
         if (matches.Count == 0)
         {
-            throw new InvalidOperationException(hintBuilder(candidates, matches, "not found"));
+            throw new ToolNotFoundException(hintBuilder(candidates, matches, "not found"));
         }
 
         if (matches.Count == 1)
@@ -316,11 +317,11 @@ public static class SyntaxTargetResolver
                 return matchedCandidate;
             }
 
-            throw new InvalidOperationException(hintBuilder(candidates, matches, "ambiguous"));
+            throw new ToolAmbiguousMatchException(hintBuilder(candidates, matches, "ambiguous"));
         }
 
         // 2+ matches
-        throw new InvalidOperationException(hintBuilder(candidates, matches, "ambiguous"));
+        throw new ToolAmbiguousMatchException(hintBuilder(candidates, matches, "ambiguous"));
     }
 }
 

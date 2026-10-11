@@ -2423,7 +2423,7 @@ public class SymbolNavigationEngine
                 (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode));
             return target?.Kind == CandidateKind.EnumMember && target.Node.Parent is EnumDeclarationSyntax enumDecl ? enumDecl.Identifier.Text : null;
         }
-        catch (InvalidOperationException)
+        catch (ToolException)
         {
             return null;
         }
@@ -2463,7 +2463,7 @@ public class SymbolNavigationEngine
                 (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode));
             return resolved?.Kind == CandidateKind.Enum;
         }
-        catch (InvalidOperationException)
+        catch (ToolException)
         {
             return false;
         }
@@ -2511,7 +2511,7 @@ public class SymbolNavigationEngine
             containerNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
                 (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode))?.Node as BaseTypeDeclarationSyntax;
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
             return (EditOutcome.CannotEdit, ex.Message, []);
         }
@@ -2613,35 +2613,23 @@ public class SymbolNavigationEngine
         // ResolveBySnippetOrThrow returns the first candidate when no snippet is given. That is
         // acceptable for a write that a later precheck guards, but a read would silently return
         // the wrong overload, so an unresolved multi-candidate set is reported instead.
-        string? failureMode = null;
         SyntaxNodeCandidate? resolved;
         try
         {
             if (contextSnippet == null && memberCandidates.Count > 1)
             {
-                failureMode = "ambiguous";
-                throw new InvalidOperationException(SyntaxTargetResolver.BuildHintForCandidates(memberCandidates, [], failureMode));
+                throw new ToolAmbiguousMatchException(SyntaxTargetResolver.BuildHintForCandidates(memberCandidates, [], "ambiguous"));
             }
 
             resolved = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, mode) =>
-                {
-                    failureMode = mode;
-                    return SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, mode);
-                });
+                (candidates, matches, mode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, mode));
         }
-        catch (InvalidOperationException ex)
+        catch (ToolException ex)
         {
-            // failureMode is the mode ResolveBySnippetOrThrow handed the hint builder: "ambiguous"
-            // (2+ snippet matches, or the match fell outside every candidate) or "not found" (the
-            // snippet matched nothing). Anything else leaves the code unset.
-            var code = failureMode switch
-            {
-                "ambiguous" => ToolErrorCode.Ambiguous,
-                "not found" => ToolErrorCode.NotFound,
-                _ => null
-            };
-            return (EditOutcome.CannotEdit, ex.Message, code, null);
+            // ResolveBySnippetOrThrow throws ToolNotFoundException (snippet matched nothing) or
+            // ToolAmbiguousMatchException (2+ snippet matches, or the match fell outside every candidate);
+            // the exception carries its own error code.
+            return (EditOutcome.CannotEdit, ex.Message, ex.ErrorCode, null);
         }
 
         if (resolved == null)
