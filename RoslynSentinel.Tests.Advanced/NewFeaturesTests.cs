@@ -819,6 +819,12 @@ public class Clean
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.Message, Does.Contain("not found").IgnoreCase);
+        IResultStatus status = result;
+        Assert.That(status.IsError, Is.True);
+        Assert.That(status.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(status.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(status.Message, Is.EqualTo(result.Message));
+        Assert.That(System.Text.Json.JsonSerializer.Serialize(result), Does.Not.Contain("\"Status\"").And.Not.Contain("\"Code\""));
     }
 
     [Test]

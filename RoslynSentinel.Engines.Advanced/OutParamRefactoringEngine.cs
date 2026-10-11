@@ -16,7 +16,14 @@ public record OutParamConversionResult(
     int CallSitesRewritten,
     List<string> CallSiteWarnings,
     Dictionary<FilePathWrapper, string>? Changes = null
-);
+) : IResultStatus
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+}
 
 public class OutParamRefactoringEngine
 {
