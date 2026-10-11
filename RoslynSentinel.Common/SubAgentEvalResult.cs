@@ -10,7 +10,7 @@ namespace RoslynSentinel.Common;
 /// payloads) so the result stays small; the full detail is in the transcript at
 /// <see cref="TranscriptPath"/>.
 /// </summary>
-public sealed record SubAgentEvalResult
+public sealed record SubAgentEvalResult : IResultStatus
 {
     /// <summary>True only when the model stopped on its own within the caps. Says nothing about whether the task was done correctly.</summary>
     public required bool Converged { get; init; }
@@ -47,6 +47,29 @@ public sealed record SubAgentEvalResult
 
     /// <summary>Longest <see cref="FailureExcerpt"/> kept.</summary>
     public const int MaxFailureExcerptChars = 1500;
+
+    /// <summary><see cref="IResultStatus.IsError"/>: true when the run did not converge, the build failed, or any test failed. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => !Converged || !BuildSucceeded || TestFailedCount > 0;
+
+    /// <summary><see cref="IResultStatus.Status"/>: Failed when <see cref="IsError"/>, else Success. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => IsError ? ResultStatus.Failed : ResultStatus.Success;
+
+    /// <summary><see cref="IResultStatus.Code"/>: BuildFailed, TestRunFailed or Exception (non-convergence), in that order; null when not an error. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError
+        ? (!BuildSucceeded ? ToolErrorCode.BuildFailed : TestFailedCount > 0 ? ToolErrorCode.TestRunFailed : ToolErrorCode.Exception)
+        : null;
+
+    /// <summary><see cref="IResultStatus.Message"/>: <see cref="FailureExcerpt"/> when set, else the first applicable of the build, test or convergence reason; null when not an error. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => IsError
+        ? FailureExcerpt
+          ?? (!BuildSucceeded ? $"Build failed with {BuildErrorCount} error(s)"
+              : TestFailedCount > 0 ? $"{TestFailedCount} test(s) failed"
+              : $"Did not converge: {StopReason}")
+        : null;
 
     /// <summary>
     /// Assembles the result from the agent run and the child server's post-run snapshots.

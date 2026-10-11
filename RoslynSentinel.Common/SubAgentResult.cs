@@ -18,7 +18,7 @@ public enum SubAgentResponseFormat
 }
 
 /// <summary>Outcome of one SubAgent call: the dispatched model's answer plus how the run ended.</summary>
-public sealed record SubAgentResult
+public sealed record SubAgentResult : IResultStatus
 {
     /// <summary>The dispatched model's final message, verbatim. Empty if the run produced no message.</summary>
     public required string Output { get; init; }
@@ -36,4 +36,20 @@ public sealed record SubAgentResult
 
     /// <summary>The run's transcript.json, for a follow-up read.</summary>
     public required string TranscriptPath { get; init; }
+
+    /// <summary><see cref="IResultStatus.IsError"/>: true when the model did not converge. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => !Converged;
+
+    /// <summary><see cref="IResultStatus.Status"/>: Failed when not converged, else Success. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => IsError ? ResultStatus.Failed : ResultStatus.Success;
+
+    /// <summary><see cref="IResultStatus.Code"/>: Exception when not converged; null otherwise. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    /// <summary><see cref="IResultStatus.Message"/>: names the stop reason when not converged; null otherwise. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => IsError ? $"Sub-agent stopped without converging: {StopReason}" : null;
 }

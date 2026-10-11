@@ -21,7 +21,24 @@ public record ProjectTestSummary(
     int FailedCount,
     int SkippedCount,
     string? Detail
-);
+) : IResultStatus
+{
+    /// <summary>True when the project's test run did not succeed.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => !RunSucceeded;
+
+    /// <summary>Failed when IsError; otherwise Success.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    /// <summary>ToolErrorCode.TestRunFailed when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.TestRunFailed : null;
+
+    /// <summary>The detail, or a fallback text, when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => IsError ? (Detail ?? "Test run failed") : null;
+}
 
 public record TestRunResult(
     bool RunSucceeded,
@@ -38,7 +55,26 @@ public record TestRunResult(
     string? Detail = null,
     bool RunCompleted = true,
     List<ProjectTestSummary>? ProjectSummaries = null
-);
+) : IResultStatus
+{
+    // The RunTest tool itself sets the MCP isError only when !RunCompleted (WorkspaceBuildTestImpl.cs ~311).
+    // This member is the stricter engine-level view: a completed run with test failures is also an error.
+    /// <summary>True when the run did not succeed or did not complete.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => !RunSucceeded || !RunCompleted;
+
+    /// <summary>Failed when IsError; otherwise Success.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    /// <summary>ToolErrorCode.TestRunFailed when IsError (the closest existing code for both cases); null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.TestRunFailed : null;
+
+    /// <summary>Detail, or a count or incomplete-run text, when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => !IsError ? null : (Detail ?? (RunCompleted ? $"{FailedCount} of {TotalCount} tests failed" : "Test run did not complete"));
+}
 
 public class TestRunEngine
 {

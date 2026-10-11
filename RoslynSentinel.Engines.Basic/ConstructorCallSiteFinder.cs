@@ -58,7 +58,35 @@ public sealed record UnresolvedConstructorCallSite(string FilePath, int Line, st
 /// is not Modified (pass its message through); <see cref="InvalidArgumentMessage"/> is set; <see cref="UnresolvedSites"/>
 /// is non-empty; or <see cref="Changes"/> holds the class edit plus every call-site edit as one change set.
 /// </summary>
-public sealed record AddConstructorParameterCascadeResult(DocumentEditResult ClassEdit, Dictionary<FilePathWrapper, string> Changes, IReadOnlyList<UnresolvedConstructorCallSite> UnresolvedSites, string? InvalidArgumentMessage, int CallSitesUpdated, int CallSitesLeftToDefault);
+public sealed record AddConstructorParameterCascadeResult(DocumentEditResult ClassEdit, Dictionary<FilePathWrapper, string> Changes, IReadOnlyList<UnresolvedConstructorCallSite> UnresolvedSites, string? InvalidArgumentMessage, int CallSitesUpdated, int CallSitesLeftToDefault) : IResultStatus
+{
+    /// <summary><see cref="IResultStatus.Status"/>: InvalidInput for an invalid argument, the class edit's status when it failed, Failed when call sites were unresolved, else Success. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status =>
+        InvalidArgumentMessage is not null ? ResultStatus.InvalidInput
+        : ClassEdit.IsError ? ClassEdit.Status
+        : UnresolvedSites.Count > 0 ? ResultStatus.Failed
+        : ResultStatus.Success;
+
+    /// <summary><see cref="IResultStatus.IsError"/>: true for every state other than the full change set. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Status != ResultStatus.Success;
+
+    /// <summary><see cref="IResultStatus.Code"/>: the ToolErrorCode for the state; null on success. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code =>
+        InvalidArgumentMessage is not null ? ToolErrorCode.InvalidArgument
+        : ClassEdit.IsError ? ClassEdit.Code
+        : UnresolvedSites.Count > 0 ? ToolErrorCode.UnresolvedCallSites
+        : null;
+
+    /// <summary><see cref="IResultStatus.Message"/>: the invalid-argument text, else the class edit's message, else a count of unresolved sites; null on success. Not serialized.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message =>
+        InvalidArgumentMessage
+        ?? (ClassEdit.IsError && !string.IsNullOrEmpty(ClassEdit.Message) ? ClassEdit.Message : null)
+        ?? (UnresolvedSites.Count > 0 ? $"{UnresolvedSites.Count} call site(s) could not be resolved" : null);
+}
 
 /// <summary>
 /// Finds every syntactic call site of one constructor and appends an argument at each. Unlike the

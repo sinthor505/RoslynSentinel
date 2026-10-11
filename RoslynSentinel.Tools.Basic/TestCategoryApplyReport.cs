@@ -30,7 +30,32 @@ public sealed record TestCategoryProjectOutcome(
     string? ErrorCode,
     string? Error,
     string? ErrorDetail,
-    List<TestCategorySkippedEdit> SkippedEdits);
+    List<TestCategorySkippedEdit> SkippedEdits) : IResultStatus
+{
+    /// <summary>True when the project's batch was rejected (Status is "failed").</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Status == "failed";
+
+    /// <summary>ToolErrorCode from ErrorCode, or Exception when missing; null when not an error.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? (ErrorCode ?? ToolErrorCode.Exception) : null;
+
+    /// <summary>Error text when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => IsError ? Error : null;
+
+    /// <summary>
+    /// Explicit: the public <c>Status</c> is the string verdict (applied, no_changes, failed), so the IResultStatus view
+    /// is exposed here. "failed" maps through ErrorCode; "no_changes" is AlreadyInState; anything else is Success.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    ResultStatus IResultStatus.Status => Status switch
+    {
+        "failed" => ResultStatusExtensions.FromFlag(true, ErrorCode),
+        "no_changes" => ResultStatus.AlreadyInState,
+        _ => ResultStatus.Success,
+    };
+}
 
 /// <summary>An edit that was planned but not applied, with why.</summary>
 public sealed record TestCategorySkippedEdit(string Kind, string Level, string File, int Line, string Category, string Reason);
@@ -55,12 +80,31 @@ public sealed record TestCategoryAppliedSummary(
     int SkippedExisting,
     int Failed,
     List<TestCategoryProjectOutcome> Projects,
-    List<string> Warnings)
+    List<string> Warnings) : IResultStatus
 {
     /// <summary>"applied", "partially_applied" (some project failed, others landed) or "no_changes".</summary>
     public string Status => Failed > 0 && AffectedFiles.Count > 0
         ? "partially_applied"
         : AffectedFiles.Count == 0 ? "no_changes" : "applied";
+
+    /// <summary>True when any project failed.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Projects.Any(p => p.IsError);
+
+    /// <summary>
+    /// Explicit: the public <c>Status</c> is the string verdict, so the IResultStatus view is exposed here. Any failed
+    /// project makes the summary Failed; "no_changes" is AlreadyInState; anything else is Success.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    ResultStatus IResultStatus.Status => IsError ? ResultStatus.Failed : Status == "no_changes" ? ResultStatus.AlreadyInState : ResultStatus.Success;
+
+    /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    /// <summary>"N of M failed" over the per-project outcomes when any failed; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => ResultStatusExtensions.FailureCountMessage(Projects.Count(p => !p.IsError), Projects.Count(p => p.IsError));
 
     public string Note => ChangeIds.Count == 0
         ? "Nothing was written: the plan had no edits, or every planned attribute already exists. Run with dryRun: true to see the plan."

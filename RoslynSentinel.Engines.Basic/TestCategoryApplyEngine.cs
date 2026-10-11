@@ -23,13 +23,46 @@ public sealed record TestCategoryProjectApplyResult(
     IReadOnlyList<string> AffectedFiles,
     string? ChangeId,
     ResultError? Error,
-    IReadOnlyList<TestCategoryEditSkip> SkippedEdits)
+    IReadOnlyList<TestCategoryEditSkip> SkippedEdits) : IResultStatus
 {
     public bool Succeeded => Error is null;
+
+    /// <summary>True when the project's batch was rejected (Error is set).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Error is not null;
+
+    /// <summary>Failed when IsError; otherwise Success.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    /// <summary>The rejection's error code when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => Error?.ErrorCode ?? (IsError ? ToolErrorCode.Exception : null);
+
+    /// <summary>The rejection message when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => Error?.Message;
 }
 
 /// <summary>Per-project outcomes of an apply run, in plan order.</summary>
-public sealed record TestCategoryApplyResult(IReadOnlyList<TestCategoryProjectApplyResult> Projects);
+public sealed record TestCategoryApplyResult(IReadOnlyList<TestCategoryProjectApplyResult> Projects) : IResultStatus
+{
+    /// <summary>True when any project's batch was rejected.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Projects.Any(p => p.IsError);
+
+    /// <summary>Failed when any project failed; otherwise Success.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Projects.Count(p => p.IsError));
+
+    /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    /// <summary>"N of M failed" when projects failed; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => ResultStatusExtensions.FailureCountMessage(Projects.Count(p => !p.IsError), Projects.Count(p => p.IsError));
+}
 
 /// <summary>
 /// Applies a <see cref="TestCategoryPlan"/>: turns each test project's planned edits into new file text

@@ -743,4 +743,363 @@ public class ResultStatusTests
             }
         }
     }
+
+    [Test]
+    public void ProjectTestSummary_Passed_IsSuccess()
+    {
+        var summary = new ProjectTestSummary("P", true, 3, 3, 0, 0, null);
+
+        Assert.That(summary.IsError, Is.False);
+        Assert.That(summary.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(summary.Code, Is.Null);
+        Assert.That(summary.Message, Is.Null);
+    }
+
+    [Test]
+    public void ProjectTestSummary_RunFailed_IsFailedWithDetail()
+    {
+        var summary = new ProjectTestSummary("P", false, 3, 2, 1, 0, "boom");
+
+        Assert.That(summary.IsError, Is.True);
+        Assert.That(summary.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(summary.Code, Is.EqualTo(ToolErrorCode.TestRunFailed));
+        Assert.That(summary.Message, Is.EqualTo("boom"));
+    }
+
+    private static TestRunResult MakeRun(bool runSucceeded, bool runCompleted, int failed) => new(
+        runSucceeded, 0, 5, 5 - failed, failed, 0,
+        new List<GroupedCountSummary>(), new List<TestCaseResult>(), null, null, TimeSpan.Zero,
+        null, runCompleted);
+
+    [Test]
+    public void TestRunResult_Success_IsSuccess()
+    {
+        TestRunResult run = MakeRun(true, true, 0);
+
+        Assert.That(run.IsError, Is.False);
+        Assert.That(run.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(run.Code, Is.Null);
+        Assert.That(run.Message, Is.Null);
+    }
+
+    [Test]
+    public void TestRunResult_TestFailures_IsFailedWithCountMessage()
+    {
+        TestRunResult run = MakeRun(false, true, 2);
+
+        Assert.That(run.IsError, Is.True);
+        Assert.That(run.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(run.Code, Is.EqualTo(ToolErrorCode.TestRunFailed));
+        Assert.That(run.Message, Is.EqualTo("2 of 5 tests failed"));
+    }
+
+    [Test]
+    public void TestRunResult_IncompleteRun_IsFailedWithIncompleteMessage()
+    {
+        TestRunResult run = MakeRun(false, false, 0);
+
+        Assert.That(run.IsError, Is.True);
+        Assert.That(run.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(run.Code, Is.EqualTo(ToolErrorCode.TestRunFailed));
+        Assert.That(run.Message, Is.EqualTo("Test run did not complete"));
+    }
+
+    [Test]
+    public void TestRunTypes_ComputedStatusMembers_AreJsonIgnored()
+    {
+        foreach (Type type in new[] { typeof(ProjectTestSummary), typeof(TestRunResult) })
+        {
+            foreach (string name in new[] { "IsError", "Status", "Code", "Message" })
+            {
+                Assert.That(type.GetProperty(name)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, $"{type.Name}.{name}");
+            }
+        }
+    }
+
+    private static TestCategoryProjectApplyResult MakeProjectApply(ResultError? error) => new(
+        "P", 0, 0, 0, 0, 0, Array.Empty<string>(), null, error, Array.Empty<TestCategoryEditSkip>());
+
+    [Test]
+    public void TestCategoryProjectApplyResult_Success_IsSuccess()
+    {
+        TestCategoryProjectApplyResult result = MakeProjectApply(null);
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+    }
+
+    [Test]
+    public void TestCategoryProjectApplyResult_Rejected_CarriesErrorCodeAndMessage()
+    {
+        TestCategoryProjectApplyResult result = MakeProjectApply(new ResultError(ToolErrorCode.Exception, "compile errors"));
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(result.Message, Is.EqualTo("compile errors"));
+    }
+
+    [Test]
+    public void TestCategoryApplyResult_AllProjectsApplied_IsSuccess()
+    {
+        var result = new TestCategoryApplyResult(new[] { MakeProjectApply(null), MakeProjectApply(null) });
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+    }
+
+    [Test]
+    public void TestCategoryApplyResult_OneProjectRejected_IsFailedWithCountMessage()
+    {
+        var result = new TestCategoryApplyResult(new[]
+        {
+            MakeProjectApply(null),
+            MakeProjectApply(new ResultError(ToolErrorCode.Exception, "boom")),
+        });
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(result.Message, Is.EqualTo("1 of 2 failed"));
+    }
+
+    [Test]
+    public void TestCategoryTypes_ComputedStatusMembers_AreJsonIgnored()
+    {
+        foreach (Type type in new[] { typeof(TestCategoryProjectApplyResult), typeof(TestCategoryApplyResult) })
+        {
+            foreach (string name in new[] { "IsError", "Status", "Code", "Message" })
+            {
+                Assert.That(type.GetProperty(name)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, $"{type.Name}.{name}");
+            }
+        }
+    }
+
+    [Test]
+    public void AddConstructorParameterCascadeResult_InvalidArgument_IsInvalidInput()
+    {
+        var result = new AddConstructorParameterCascadeResult(new DocumentEditResult(), new Dictionary<FilePathWrapper, string>(), Array.Empty<UnresolvedConstructorCallSite>(), "bad fixup", 0, 0);
+
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.InvalidInput));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.Message, Is.EqualTo("bad fixup"));
+    }
+
+    [Test]
+    public void AddConstructorParameterCascadeResult_ClassEditFailed_PassesThroughClassEditStatus()
+    {
+        var classEdit = new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "no class" };
+        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), Array.Empty<UnresolvedConstructorCallSite>(), null, 0, 0);
+
+        Assert.That(result.Status, Is.EqualTo(classEdit.Status));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Code, Is.EqualTo(classEdit.Code));
+        Assert.That(result.Message, Is.EqualTo("no class"));
+    }
+
+    [Test]
+    public void AddConstructorParameterCascadeResult_UnresolvedSites_IsFailedWithUnresolvedCallSitesCode()
+    {
+        var classEdit = new DocumentEditResult { Outcome = EditOutcome.Modified };
+        var sites = new[] { new UnresolvedConstructorCallSite("a.cs", 3, "new Foo()", null) };
+        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), sites, null, 0, 0);
+
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.UnresolvedCallSites));
+        Assert.That(result.Message, Is.EqualTo("1 call site(s) could not be resolved"));
+    }
+
+    [Test]
+    public void AddConstructorParameterCascadeResult_FullChangeSet_IsSuccess()
+    {
+        var classEdit = new DocumentEditResult { Outcome = EditOutcome.Modified };
+        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), Array.Empty<UnresolvedConstructorCallSite>(), null, 2, 0);
+
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+    }
+
+    [Test]
+    public void AddConstructorParameterCascadeResult_ComputedStatusMembers_AreJsonIgnored()
+    {
+        foreach (string name in new[] { "IsError", "Status", "Code", "Message" })
+        {
+            Assert.That(typeof(AddConstructorParameterCascadeResult).GetProperty(name)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, name);
+        }
+    }
+
+    private static SubAgentEvalResult EvalResult(bool converged = true, bool buildSucceeded = true, int buildErrors = 0, int testsFailed = 0, string? excerpt = null) =>
+        new()
+        {
+            Converged = converged,
+            StopReason = "end_turn",
+            TurnCount = 3,
+            BuildSucceeded = buildSucceeded,
+            BuildErrorCount = buildErrors,
+            TestPassedCount = 5,
+            TestFailedCount = testsFailed,
+            TouchedPaths = Array.Empty<string>(),
+            FailureExcerpt = excerpt,
+            TranscriptPath = "t.json",
+        };
+
+    [Test]
+    public void SubAgentResult_Converged_IsSuccess()
+    {
+        var result = new SubAgentResult { Output = "done", Converged = true, StopReason = "end_turn", TurnCount = 2, TranscriptPath = "t.json" };
+
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+    }
+
+    [Test]
+    public void SubAgentResult_NotConverged_IsFailedWithExceptionCode()
+    {
+        var result = new SubAgentResult { Output = "partial", Converged = false, StopReason = "max_turns", TurnCount = 9, TranscriptPath = "t.json" };
+
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(result.Message, Is.EqualTo("Sub-agent stopped without converging: max_turns"));
+    }
+
+    [Test]
+    public void SubAgentEvalResult_CleanRun_IsSuccess()
+    {
+        var result = EvalResult();
+
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+    }
+
+    [Test]
+    public void SubAgentEvalResult_NotConverged_IsExceptionWithStopReasonMessage()
+    {
+        var result = EvalResult(converged: false);
+
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(result.Message, Is.EqualTo("Did not converge: end_turn"));
+    }
+
+    [Test]
+    public void SubAgentEvalResult_BuildFailed_IsBuildFailedWithErrorCountMessage()
+    {
+        var result = EvalResult(buildSucceeded: false, buildErrors: 3);
+
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.BuildFailed));
+        Assert.That(result.Message, Is.EqualTo("Build failed with 3 error(s)"));
+    }
+
+    [Test]
+    public void SubAgentEvalResult_TestsFailed_IsTestRunFailedWithCountMessage()
+    {
+        var result = EvalResult(testsFailed: 2);
+
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.TestRunFailed));
+        Assert.That(result.Message, Is.EqualTo("2 test(s) failed"));
+    }
+
+    [Test]
+    public void SubAgentEvalResult_FailureExcerpt_WinsOverDerivedMessage()
+    {
+        var result = EvalResult(buildSucceeded: false, buildErrors: 1, excerpt: "boom");
+
+        Assert.That(result.Message, Is.EqualTo("boom"));
+    }
+
+    [Test]
+    public void SubAgentTypes_ComputedStatusMembers_AreJsonIgnored()
+    {
+        foreach (Type type in new[] { typeof(SubAgentResult), typeof(SubAgentEvalResult) })
+        {
+            foreach (string name in new[] { "IsError", "Status", "Code", "Message" })
+            {
+                Assert.That(type.GetProperty(name)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, $"{type.Name}.{name}");
+            }
+        }
+    }
+
+    private static AppliedChangeSummary AppliedSummary(string? changeId, bool hasFile, bool dryRun = false, bool proposeOnly = false) =>
+        new(
+            changeId,
+            hasFile ? new List<FilePathWrapper> { new FilePathWrapper("C:/x/f0.cs") } : new List<FilePathWrapper>(),
+            "desc",
+            dryRun,
+            ChangedContent: proposeOnly ? new Dictionary<FilePathWrapper, string>() : null);
+
+    private static void AssertAppliedSummaryNotError(AppliedChangeSummary summary, ResultStatus expected)
+    {
+        var result = (IResultStatus)summary;
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Status, Is.EqualTo(expected));
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.EqualTo(summary.Note));
+    }
+
+    [Test]
+    public void AppliedChangeSummary_DryRunOk_IsSuccess()
+    {
+        var summary = AppliedSummary(null, hasFile: true, dryRun: true);
+
+        Assert.That(summary.Status, Is.EqualTo("dry_run_ok"));
+        AssertAppliedSummaryNotError(summary, ResultStatus.Success);
+    }
+
+    [Test]
+    public void AppliedChangeSummary_NotWritten_IsSuccess()
+    {
+        var summary = AppliedSummary(null, hasFile: true, proposeOnly: true);
+
+        Assert.That(summary.Status, Is.EqualTo("not_written"));
+        AssertAppliedSummaryNotError(summary, ResultStatus.Success);
+    }
+
+    [Test]
+    public void AppliedChangeSummary_NoChanges_IsAlreadyInState()
+    {
+        var summary = AppliedSummary(null, hasFile: false);
+
+        Assert.That(summary.Status, Is.EqualTo("no_changes"));
+        AssertAppliedSummaryNotError(summary, ResultStatus.AlreadyInState);
+    }
+
+    [Test]
+    public void AppliedChangeSummary_Applied_IsSuccess()
+    {
+        var summary = AppliedSummary("c1", hasFile: true);
+
+        Assert.That(summary.Status, Is.EqualTo("applied"));
+        AssertAppliedSummaryNotError(summary, ResultStatus.Success);
+    }
+
+    [Test]
+    public void AppliedChangeSummary_ComputedStatusMembers_AreJsonIgnored()
+    {
+        foreach (string name in new[] { "IsError", "Code", "Message" })
+        {
+            Assert.That(typeof(AppliedChangeSummary).GetProperty(name)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, name);
+        }
+
+        var explicitStatus = typeof(AppliedChangeSummary).GetProperty("RoslynSentinel.Common.IResultStatus.Status", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        Assert.That(explicitStatus, Is.Not.Null);
+        Assert.That(explicitStatus!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, "IResultStatus.Status");
+    }
 }

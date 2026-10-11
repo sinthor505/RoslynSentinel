@@ -127,4 +127,127 @@ public class ToolsBasicResultStatusTests
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
         Assert.That(rootProperties, Is.EquivalentTo(new[] { "Files", "Count", "Error" }));
     }
+
+    private static TestCategoryProjectOutcome MakeOutcome(string status, string? errorCode = null, string? error = null) => new(
+        "P", status, 0, 0, 0, 0, 0, null, new List<string>(), errorCode, error, null, new List<TestCategorySkippedEdit>());
+
+    [Test]
+    public void TestCategoryProjectOutcome_Applied_IsSuccess()
+    {
+        TestCategoryProjectOutcome outcome = MakeOutcome("applied");
+        IResultStatus view = outcome;
+
+        Assert.That(outcome.IsError, Is.False);
+        Assert.That(view.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(outcome.Code, Is.Null);
+        Assert.That(outcome.Message, Is.Null);
+    }
+
+    [Test]
+    public void TestCategoryProjectOutcome_NoChanges_IsAlreadyInState()
+    {
+        TestCategoryProjectOutcome outcome = MakeOutcome("no_changes");
+        IResultStatus view = outcome;
+
+        Assert.That(outcome.IsError, Is.False);
+        Assert.That(view.Status, Is.EqualTo(ResultStatus.AlreadyInState));
+        Assert.That(outcome.Code, Is.Null);
+        Assert.That(outcome.Message, Is.Null);
+    }
+
+    [Test]
+    public void TestCategoryProjectOutcome_Failed_IsFailedWithErrorCodeAndMessage()
+    {
+        TestCategoryProjectOutcome outcome = MakeOutcome("failed", ToolErrorCode.Exception, "boom");
+        IResultStatus view = outcome;
+
+        Assert.That(outcome.IsError, Is.True);
+        Assert.That(view.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(outcome.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(outcome.Message, Is.EqualTo("boom"));
+        Assert.That(outcome.Status, Is.EqualTo("failed"));
+    }
+
+    private static TestCategoryAppliedSummary MakeSummary(int failed, bool wroteFiles, params TestCategoryProjectOutcome[] projects) => new(
+        null, new List<string>(), wroteFiles ? new List<FilePathWrapper> { null! } : new List<FilePathWrapper>(),
+        "desc", false, true, null, 0, 0, 0, 0, failed, projects.ToList(), new List<string>());
+
+    [Test]
+    public void TestCategoryAppliedSummary_Applied_IsSuccess()
+    {
+        TestCategoryAppliedSummary summary = MakeSummary(0, true, MakeOutcome("applied"));
+        IResultStatus view = summary;
+
+        Assert.That(summary.Status, Is.EqualTo("applied"));
+        Assert.That(view.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(summary.IsError, Is.False);
+        Assert.That(summary.Code, Is.Null);
+        Assert.That(summary.Message, Is.Null);
+    }
+
+    [Test]
+    public void TestCategoryAppliedSummary_PartiallyApplied_IsFailedWithCountMessage()
+    {
+        TestCategoryAppliedSummary summary = MakeSummary(1, true, MakeOutcome("applied"), MakeOutcome("failed", null, "boom"));
+        IResultStatus view = summary;
+
+        Assert.That(summary.Status, Is.EqualTo("partially_applied"));
+        Assert.That(view.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(summary.IsError, Is.True);
+        Assert.That(summary.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(summary.Message, Is.EqualTo("1 of 2 failed"));
+    }
+
+    [Test]
+    public void TestCategoryAppliedSummary_NoChanges_IsAlreadyInState()
+    {
+        TestCategoryAppliedSummary summary = MakeSummary(0, false, MakeOutcome("no_changes"));
+        IResultStatus view = summary;
+
+        Assert.That(summary.Status, Is.EqualTo("no_changes"));
+        Assert.That(view.Status, Is.EqualTo(ResultStatus.AlreadyInState));
+        Assert.That(summary.IsError, Is.False);
+        Assert.That(summary.Code, Is.Null);
+        Assert.That(summary.Message, Is.Null);
+    }
+
+    [Test]
+    public void TestCategoryTypes_PublicPropertiesUnchanged_AndNewMembersJsonIgnored()
+    {
+        string[] outcomeNonComputed = typeof(TestCategoryProjectOutcome)
+            .GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Select(p => p.Name)
+            .Where(n => n is not ("IsError" or "Code" or "Message"))
+            .ToArray();
+        Assert.That(outcomeNonComputed, Is.EquivalentTo(new[]
+        {
+            "Project", "Status", "ClassLevelAdded", "MethodLevelAdded", "RemovedStale", "SkippedExisting", "Failed",
+            "ChangeId", "AffectedFiles", "ErrorCode", "Error", "ErrorDetail", "SkippedEdits",
+        }));
+
+        string[] summaryNonComputed = typeof(TestCategoryAppliedSummary)
+            .GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Select(p => p.Name)
+            .Where(n => n is not ("IsError" or "Code" or "Message"))
+            .ToArray();
+        Assert.That(summaryNonComputed, Is.EquivalentTo(new[]
+        {
+            "ChangeId", "ChangeIds", "AffectedFiles", "Description", "DryRun", "Validated", "WorkspaceVersion",
+            "ClassLevelAdded", "MethodLevelAdded", "RemovedStale", "SkippedExisting", "Failed", "Projects", "Warnings",
+            "Status", "Note",
+        }));
+
+        foreach (Type type in new[] { typeof(TestCategoryProjectOutcome), typeof(TestCategoryAppliedSummary) })
+        {
+            foreach (string name in new[] { "IsError", "Code", "Message" })
+            {
+                Assert.That(type.GetProperty(name)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, $"{type.Name}.{name}");
+            }
+
+            // Explicit IResultStatus.Status is a non-public property named after the interface.
+            System.Reflection.PropertyInfo explicitStatus = type.GetProperty("RoslynSentinel.Common.IResultStatus.Status", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            Assert.That(explicitStatus, Is.Not.Null, type.Name);
+            Assert.That(explicitStatus.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, $"{type.Name}.IResultStatus.Status");
+        }
+    }
 }
