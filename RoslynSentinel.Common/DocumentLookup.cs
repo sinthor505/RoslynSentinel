@@ -48,8 +48,24 @@ public sealed record DocumentLookupResult(
     string RequestedPath,
     Document? Document,
     IReadOnlyList<string> CandidatePaths,
-    int SearchedProjectCount)
+    int SearchedProjectCount) : IResultStatus
 {
+    /// <summary>True when the lookup failed; mirrors <see cref="IsFound"/>.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => !IsFound;
+
+    /// <summary>Error code for a failed lookup: Ambiguous or NotFound; null when found.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsFound ? null : Status == DocumentLookupStatus.Ambiguous ? ToolErrorCode.Ambiguous : ToolErrorCode.NotFound;
+
+    /// <summary>Failure text for a failed lookup; null when found.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => IsFound ? null : Describe();
+
+    /// <summary>Explicit: the positional <see cref="Status"/> is a <see cref="DocumentLookupStatus"/>, so the IResultStatus view is exposed here.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    ResultStatus IResultStatus.Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
     /// <summary>True when <see cref="Document"/> is populated.</summary>
     public bool IsFound => Status == DocumentLookupStatus.Found && Document is not null;
 

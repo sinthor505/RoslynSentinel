@@ -507,4 +507,73 @@ public class ResultStatusTests
         Assert.That(rootProperties, Does.Not.Contain("Code"));
         Assert.That(rootProperties, Does.Not.Contain("Message"));
     }
+
+    [Test]
+    public void DocumentLookupResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
+    {
+        var notFound = new DocumentLookupResult(DocumentLookupStatus.NotFound, "a.cs", null, Array.Empty<string>(), 2);
+        var ambiguous = new DocumentLookupResult(DocumentLookupStatus.Ambiguous, "a.cs", null, new[] { "x/a.cs", "y/a.cs" }, 2);
+        var foundWithoutDocument = new DocumentLookupResult(DocumentLookupStatus.Found, "a.cs", null, Array.Empty<string>(), 2);
+
+        IResultStatus nf = notFound;
+        Assert.That(nf.IsError, Is.True);
+        Assert.That(nf.Status, Is.EqualTo(ResultStatus.NotFound));
+        Assert.That(nf.Code, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(nf.Message, Is.Not.Null.And.Not.Empty);
+
+        IResultStatus amb = ambiguous;
+        Assert.That(amb.IsError, Is.True);
+        Assert.That(amb.Status, Is.EqualTo(ResultStatusExtensions.FromFlag(true, ToolErrorCode.Ambiguous)));
+        Assert.That(amb.Code, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(amb.Message, Is.Not.Null.And.Not.Empty);
+
+        // Found with no Document is not a usable result, so it reads as an error (IsFound is false).
+        IResultStatus found = foundWithoutDocument;
+        Assert.That(found.IsError, Is.True);
+        Assert.That(found.Code, Is.EqualTo(ToolErrorCode.NotFound));
+
+        // Status is explicit (the positional Status is DocumentLookupStatus), so check the declared type.
+        Assert.That(typeof(DocumentLookupResult).GetProperty("Status")!.PropertyType, Is.EqualTo(typeof(DocumentLookupStatus)));
+        foreach (string name in new[] { "IsError", "Code", "Message" })
+        {
+            Assert.That(typeof(DocumentLookupResult).GetProperty(name)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty);
+        }
+    }
+
+    private static BuildResult MakeBuildResult(BuildOutcome outcome, string? detail = null) => new(
+        outcome, default(BuildVerifyLevel), new List<string>(), true, 0, 0,
+        new List<DiagnosticInfo>(), new List<DiagnosticInfo>(),
+        new List<DiagnosticGroupSummary>(), new List<DiagnosticGroupSummary>(),
+        null, null, TimeSpan.Zero, Detail: detail);
+
+    [Test]
+    public void BuildResult_OutcomeDrivesStatus_AndSerializationHasNoStatusFields()
+    {
+        BuildResult ok = MakeBuildResult(BuildOutcome.Succeeded);
+        BuildResult notRun = MakeBuildResult(BuildOutcome.NotRun);
+        BuildResult failed = MakeBuildResult(BuildOutcome.Failed, "compile broke");
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatusExtensions.FromFlag(false, null)));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+
+        Assert.That(notRun.IsError, Is.True);
+        Assert.That(notRun.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(notRun.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(notRun.Message, Is.EqualTo("Build was not run"));
+
+        Assert.That(failed.IsError, Is.True);
+        Assert.That(failed.Status, Is.EqualTo(ResultStatusExtensions.FromFlag(true, ToolErrorCode.BuildFailed)));
+        Assert.That(failed.Code, Is.EqualTo(ToolErrorCode.BuildFailed));
+        Assert.That(failed.Message, Is.EqualTo("compile broke"));
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize(failed));
+        string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(rootProperties, Does.Contain("Outcome"));
+        Assert.That(rootProperties, Does.Not.Contain("IsError"));
+        Assert.That(rootProperties, Does.Not.Contain("Status"));
+        Assert.That(rootProperties, Does.Not.Contain("Code"));
+        Assert.That(rootProperties, Does.Not.Contain("Message"));
+    }
 }
