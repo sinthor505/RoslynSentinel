@@ -13,7 +13,20 @@ public record ControlFlowAnalysisResult(
     List<string> ThrowStatements,
     List<string> BreakStatements,
     List<string> ContinueStatements,
-    string? Error = null);
+    string? Error = null) : IResultStatus
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Error is not null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => Error;
+}
 
 public record DataFlowAnalysisResult(
     string MethodName,
@@ -23,7 +36,20 @@ public record DataFlowAnalysisResult(
     List<string> AlwaysAssigned,
     List<string> ReadInside,
     List<string> WrittenInside,
-    string? Error = null);
+    string? Error = null) : IResultStatus
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Error is not null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => Error;
+}
 
 public record CoveringTest(string TestFile, string TestMethodName, int Line);
 
