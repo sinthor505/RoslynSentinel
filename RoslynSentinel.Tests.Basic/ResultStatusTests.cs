@@ -461,4 +461,50 @@ public class ResultStatusTests
         Assert.That(rootProperties, Does.Not.Contain("Code"));
         Assert.That(rootProperties, Does.Not.Contain("Message"));
     }
+
+    [Test]
+    public void NamedArgumentsOutcome_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
+    {
+        IResultStatus ok = new NamedArgumentsOutcome(new Dictionary<FilePathWrapper, string>(), [], null);
+        IResultStatus bad = new NamedArgumentsOutcome(new Dictionary<FilePathWrapper, string>(), [], new ResultError(ToolErrorCode.NotFound, "gone"));
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status, Is.EqualTo(ResultStatus.NotFound));
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(bad.Message, Is.EqualTo("gone"));
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((NamedArgumentsOutcome)bad));
+        string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(rootProperties, Does.Not.Contain("IsError"));
+        Assert.That(rootProperties, Does.Not.Contain("Status"));
+        Assert.That(rootProperties, Does.Not.Contain("Code"));
+        Assert.That(rootProperties, Does.Not.Contain("Message"));
+    }
+
+    [Test]
+    public void SemanticReplaceOutcome_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
+    {
+        IResultStatus ok = new SemanticReplaceOutcome([], new Dictionary<FilePathWrapper, string>(), null);
+        IResultStatus bad = new SemanticReplaceOutcome([], new Dictionary<FilePathWrapper, string>(), new ResultError(ToolErrorCode.NotFound, "gone"));
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status, Is.EqualTo(ResultStatus.NotFound));
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(bad.Message, Is.EqualTo("gone"));
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((SemanticReplaceOutcome)bad));
+        string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(rootProperties, Does.Not.Contain("IsError"));
+        Assert.That(rootProperties, Does.Not.Contain("Status"));
+        Assert.That(rootProperties, Does.Not.Contain("Code"));
+        Assert.That(rootProperties, Does.Not.Contain("Message"));
+    }
 }

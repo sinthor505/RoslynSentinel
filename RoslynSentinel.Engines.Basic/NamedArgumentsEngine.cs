@@ -16,7 +16,20 @@ public sealed record NamedArgumentsRewriteResult(SyntaxNode Root, int CallSitesC
 public sealed record NamedArgumentsFileSummary(string FilePath, int CallSites, int Arguments);
 
 /// <summary>New text for every changed file (keyed by path), per-file counts, or an error.</summary>
-public sealed record NamedArgumentsOutcome(Dictionary<FilePathWrapper, string> Changes, IReadOnlyList<NamedArgumentsFileSummary> Files, ResultError? Error);
+public sealed record NamedArgumentsOutcome(Dictionary<FilePathWrapper, string> Changes, IReadOnlyList<NamedArgumentsFileSummary> Files, ResultError? Error) : IResultStatus
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Error is not null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => Error?.ErrorCode;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => Error?.Message;
+}
 
 /// <summary>
 /// Converts positional arguments to named arguments at call sites, resolved semantically.

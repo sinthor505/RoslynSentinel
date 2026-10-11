@@ -61,4 +61,17 @@ public sealed record ReferenceEdit(string FilePath, Microsoft.CodeAnalysis.Text.
 }
 
 /// <summary>Result of a semantic find-replace operation: sites found, file changes, and any error that occurred.</summary>
-public sealed record SemanticReplaceOutcome(List<SemanticReplaceSite> Sites, Dictionary<FilePathWrapper, string> Changes, ResultError? Error);
+public sealed record SemanticReplaceOutcome(List<SemanticReplaceSite> Sites, Dictionary<FilePathWrapper, string> Changes, ResultError? Error) : IResultStatus
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Error is not null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => Error?.ErrorCode;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => Error?.Message;
+}
