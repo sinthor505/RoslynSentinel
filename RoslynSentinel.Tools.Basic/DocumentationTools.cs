@@ -33,7 +33,7 @@ public class DocReadResult
     }
 }
 
-public class DocWriteResult
+public class DocWriteResult : IResultStatus
 {
     public bool IsError
     {
@@ -49,6 +49,15 @@ public class DocWriteResult
     {
         get; set;
     }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => Error;
 }
 
 public class DocListResult

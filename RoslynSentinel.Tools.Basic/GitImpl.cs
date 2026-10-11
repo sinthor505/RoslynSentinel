@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tools.Basic;
 
 // ─── Result types ────────────────────────────────────────────────────────────
-public record GitResult
+public record GitResult : IResultStatus
 {
     public bool IsError
     {
@@ -17,6 +17,17 @@ public record GitResult
     {
         get; set;
     }
+
+    /// <summary>Canonical status: Success when not an error, otherwise <see cref="GitErrorCodes.ToResultStatus"/> of <see cref="Code"/>.</summary>
+    [JsonIgnore]
+    public ResultStatus Status => IsError ? GitErrorCodes.ToResultStatus(Code) : ResultStatus.Success;
+
+    /// <summary>The code the Git tool reports on failure: <see cref="ErrorKind"/>, or the fallback GitError. Null on success.</summary>
+    [JsonIgnore]
+    public string? Code => IsError ? ErrorKind ?? GitErrorCodes.Fallback : null;
+
+    [JsonIgnore]
+    public string? Message => Error;
 
     /// <summary>Machine-readable cause of a failure, one of <see cref="GitErrorCodes"/>, when the cause is
     /// known. Null means unclassified: the Git tool then reports the fallback code GitError. Never
@@ -73,6 +84,16 @@ public static class GitErrorCodes
     public const string HunkSelection = "GitHunkSelection";
     /// <summary>The hunkFingerprint no longer matches the file's current diff.</summary>
     public const string HunkStale = "GitHunkStale";
+
+    /// <summary>Maps a Git failure code to the canonical status. Every Git code is a refusal or failure, so none maps to a non-error status; an unknown or fallback code is Failed.</summary>
+    public static ResultStatus ToResultStatus(string? code) => code switch
+    {
+        PathNotFound or TargetNotFound => ResultStatus.NotFound,
+        RefRequired or ActionRequired or InvalidName or HunkSelection or HunkStale => ResultStatus.InvalidInput,
+        IgnoredPath or NothingToCommit or NoChanges or OperationInProgress or AlreadyExists or WorkingTreeDirty
+            or StashConflict or Refused or HunkUnsupported => ResultStatus.NotApplicable,
+        _ => ResultStatus.Failed
+    };
 }
 
 /// <summary>Next-step text paired with <see cref="GitErrorCodes"/> in ResultError.Detail.</summary>
