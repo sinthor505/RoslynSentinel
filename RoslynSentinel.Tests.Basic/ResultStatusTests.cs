@@ -281,4 +281,50 @@ public class ResultStatusTests
         Assert.That(doc.RootElement.GetProperty("isError").GetBoolean(), Is.True);
         Assert.That(doc.RootElement.TryGetProperty("success", out _), Is.False);
     }
+
+    [Test]
+    public void ImpactReport_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
+    {
+        IResultStatus ok = new ImpactReport("s", "k", new List<ReferenceInfo>(), 0, 0, null);
+        IResultStatus bad = new ImpactReport("", "", new List<ReferenceInfo>(), 0, 0, "boom");
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(bad.Message, Is.EqualTo("boom"));
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((ImpactReport)bad));
+        string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(rootProperties, Does.Not.Contain("IsError"));
+        Assert.That(rootProperties, Does.Not.Contain("Status"));
+        Assert.That(rootProperties, Does.Not.Contain("Code"));
+        Assert.That(rootProperties, Does.Not.Contain("Message"));
+    }
+
+    [Test]
+    public void TypeHierarchyReport_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
+    {
+        IResultStatus ok = new TypeHierarchyReport { TypeName = "T" };
+        IResultStatus bad = new TypeHierarchyReport { Error = "boom" };
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(bad.Message, Is.EqualTo("boom"));
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((TypeHierarchyReport)bad));
+        string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(rootProperties, Does.Not.Contain("IsError"));
+        Assert.That(rootProperties, Does.Not.Contain("Status"));
+        Assert.That(rootProperties, Does.Not.Contain("Code"));
+        Assert.That(rootProperties, Does.Not.Contain("Message"));
+    }
 }
