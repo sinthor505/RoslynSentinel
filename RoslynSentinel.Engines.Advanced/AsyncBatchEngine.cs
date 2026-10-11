@@ -74,7 +74,26 @@ public record UpliftBatchResult(
     List<UpliftSkippedInfo> Skipped,
     int RemainingCallers,
     string StopReason
-);
+) : IResultStatus
+{
+    // A skip is not a failure: a run that skipped everything is an error only when it stopped short.
+    // A no_callers or dry_run result with skips is an expected outcome, not a failure.
+    /// <summary>True when nothing was uplifted, something was skipped, and the run did not end as no_callers or dry_run.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Skipped.Count > 0 && Uplifted.Count == 0 && StopReason != "no_callers" && StopReason != "dry_run";
+
+    /// <summary>Failed when IsError; otherwise Success.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => IsError ? ResultStatus.Failed : ResultStatus.Success;
+
+    /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    /// <summary>"N of M failed" when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => IsError ? ResultStatusExtensions.FailureCountMessage(Uplifted.Count, Skipped.Count) : null;
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // UpliftBatchMulti types
@@ -138,9 +157,25 @@ public class UpliftBatchMultiMethodResult : IResultStatus
 }
 
 /// <summary>Aggregate result of <c>run_uplift_batch_multi</c>.</summary>
-public class UpliftBatchMultiResult
+public class UpliftBatchMultiResult : IResultStatus
 {
     public List<UpliftBatchMultiMethodResult> PerMethod { get; set; } = new();
+
+    /// <summary>True when any method failed.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => PerMethod.Any(m => m.IsError);
+
+    /// <summary>Failed when any method failed; otherwise Success.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(PerMethod.Count(m => m.IsError));
+
+    /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    /// <summary>"N of M failed" when methods failed; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => ResultStatusExtensions.FailureCountMessage(PerMethod.Count(m => !m.IsError), PerMethod.Count(m => m.IsError));
     public int TotalUplifted
     {
         get; set;
@@ -231,7 +266,7 @@ public class PropagateCtResult : IResultStatus
 }
 
 /// <summary>Result of a file-level CancellationToken propagation operation.</summary>
-public class PropagateCtFileResult
+public class PropagateCtFileResult : IResultStatus
 {
     public string? ChangeId
     {
@@ -239,6 +274,22 @@ public class PropagateCtFileResult
     }
     public string FilePath { get; set; } = "";
     public List<PropagateCtResult> PerMethod { get; set; } = new();
+
+    /// <summary>True when any method failed. A file with no methods is not an error.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => PerMethod.Any(m => m.IsError);
+
+    /// <summary>Failed when any method failed; otherwise Success.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(PerMethod.Count(m => m.IsError));
+
+    /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    /// <summary>"N of M failed" when methods failed; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => ResultStatusExtensions.FailureCountMessage(PerMethod.Count(m => !m.IsError), PerMethod.Count(m => m.IsError));
     public int TotalForwarded
     {
         get; set;
@@ -296,9 +347,25 @@ public class PropagateCtFileFailure
 }
 
 /// <summary>Aggregate result of <c>propagate_cancellation_token_batch</c>.</summary>
-public class PropagateCtBatchResult
+public class PropagateCtBatchResult : IResultStatus
 {
     public List<PropagateCtFileResult> Applied { get; set; } = new();
+
+    /// <summary>True when any file failed to propagate (Failed.Count > 0).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Failed.Count > 0;
+
+    /// <summary>Failed when any file failed; otherwise Success.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Failed.Count);
+
+    /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    /// <summary>"N of M failed" when files failed; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => ResultStatusExtensions.FailureCountMessage(Applied.Count, Failed.Count);
     public List<PropagateCtFileFailure> Failed { get; set; } = new();
     public int TotalForwarded
     {

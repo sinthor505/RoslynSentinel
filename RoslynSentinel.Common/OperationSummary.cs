@@ -4,7 +4,7 @@ namespace RoslynSentinel.Common;
 /// Substrate-derived operation result with structured outcome classification and routed failure hints (spec §3.6).
 /// Always produced by <see cref="FromCounts"/> -> never constructed at call sites.
 /// </summary>
-public sealed class OperationSummary
+public sealed class OperationSummary : IResultStatus
 {
     public string BlobName { get; init; } = "";
     public string ChangeId { get; init; } = "";
@@ -56,6 +56,26 @@ public sealed class OperationSummary
     {
         get; init;
     }
+
+    /// <summary>True when any item failed or was blocked, or when the outcome is NoProgress.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => (Failed + Blocked) > 0 || Outcome == OperationOutcome.NoProgress;
+
+    /// <summary>Failed when IsError; AlreadyInState when nothing was attempted; otherwise Success.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => IsError ? ResultStatus.Failed
+        : Outcome == OperationOutcome.NothingToDo ? ResultStatus.AlreadyInState
+        : ResultStatus.Success;
+
+    /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    /// <summary>"N of M failed" when items failed; "No progress was made" otherwise; null when not an error.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => IsError
+        ? (ResultStatusExtensions.FailureCountMessage(Succeeded, Failed + Blocked) ?? "No progress was made")
+        : null;
 
     public bool BreakerOpen
     {

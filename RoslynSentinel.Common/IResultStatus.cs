@@ -114,4 +114,11 @@ public static class ResultStatusExtensions
         var mapped = FromErrorCode(errorCode);
         return mapped.IsErrorStatus() ? mapped : ResultStatus.Failed;
     }
+
+    /// <summary>Status for an aggregate with <paramref name="failed"/> failed items: <see cref="ResultStatus.Failed"/> when any failed, otherwise <see cref="ResultStatus.Success"/>.</summary>
+    public static ResultStatus FromFailureCount(int failed) => failed > 0 ? ResultStatus.Failed : ResultStatus.Success;
+
+    /// <summary>Message for an aggregate with failures, for example "2 of 5 failed"; null when none failed.</summary>
+    public static string? FailureCountMessage(int succeeded, int failed) =>
+        failed > 0 ? $"{failed} of {succeeded + failed} failed" : null;
 }

@@ -576,4 +576,171 @@ public class ResultStatusTests
         Assert.That(rootProperties, Does.Not.Contain("Code"));
         Assert.That(rootProperties, Does.Not.Contain("Message"));
     }
+
+    [Test]
+    public void FailureCountHelpers_ZeroFailed_IsSuccessWithNoMessage()
+    {
+        Assert.That(ResultStatusExtensions.FromFailureCount(0), Is.EqualTo(ResultStatus.Success));
+        Assert.That(ResultStatusExtensions.FailureCountMessage(3, 0), Is.Null);
+    }
+
+    [Test]
+    public void FailureCountHelpers_SomeFailed_IsFailedWithCountMessage()
+    {
+        Assert.That(ResultStatusExtensions.FromFailureCount(2), Is.EqualTo(ResultStatus.Failed));
+        Assert.That(ResultStatusExtensions.FailureCountMessage(3, 2), Is.EqualTo("2 of 5 failed"));
+    }
+
+    private static OperationSummary SummarizeCounts(int succeeded, int alreadySatisfied, int failed, int blocked) =>
+        OperationSummary.FromCounts("blob", "change", succeeded, alreadySatisfied, 0, failed, blocked,
+            succeeded + alreadySatisfied + failed + blocked, Array.Empty<ItemFailure>(), false, "directive", false);
+
+    [Test]
+    public void OperationSummary_CompletedFully_IsSuccess()
+    {
+        OperationSummary summary = SummarizeCounts(3, 0, 0, 0);
+
+        Assert.That(summary, Is.InstanceOf<IResultStatus>());
+        Assert.That(summary.Outcome, Is.EqualTo(OperationOutcome.CompletedFully));
+        Assert.That(summary.IsError, Is.False);
+        Assert.That(summary.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(summary.Code, Is.Null);
+        Assert.That(summary.Message, Is.Null);
+    }
+
+    [Test]
+    public void OperationSummary_PartialFailure_IsFailedWithCountMessage()
+    {
+        OperationSummary summary = SummarizeCounts(3, 0, 2, 0);
+
+        Assert.That(summary.Outcome, Is.EqualTo(OperationOutcome.PartialProgress));
+        Assert.That(summary.IsError, Is.True);
+        Assert.That(summary.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(summary.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(summary.Message, Is.EqualTo("2 of 5 failed"));
+    }
+
+    [Test]
+    public void OperationSummary_BlockedOnly_IsNoProgressFailed()
+    {
+        OperationSummary summary = SummarizeCounts(0, 0, 0, 2);
+
+        Assert.That(summary.Outcome, Is.EqualTo(OperationOutcome.NoProgress));
+        Assert.That(summary.IsError, Is.True);
+        Assert.That(summary.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(summary.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(summary.Message, Is.EqualTo("2 of 2 failed"));
+    }
+
+    [Test]
+    public void OperationSummary_NoProgressWithoutFailureCount_UsesFallbackMessage()
+    {
+        var summary = new OperationSummary { Outcome = OperationOutcome.NoProgress };
+
+        Assert.That(summary.IsError, Is.True);
+        Assert.That(summary.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(summary.Message, Is.EqualTo("No progress was made"));
+    }
+
+    [Test]
+    public void OperationSummary_NothingToDo_IsAlreadyInStateNotError()
+    {
+        OperationSummary summary = SummarizeCounts(0, 0, 0, 0);
+
+        Assert.That(summary.Outcome, Is.EqualTo(OperationOutcome.NothingToDo));
+        Assert.That(summary.IsError, Is.False);
+        Assert.That(summary.Status, Is.EqualTo(ResultStatus.AlreadyInState));
+        Assert.That(summary.Code, Is.Null);
+        Assert.That(summary.Message, Is.Null);
+    }
+
+    [Test]
+    public void OperationSummary_ComputedStatusMembers_AreJsonIgnored()
+    {
+        foreach (string name in new[] { "IsError", "Status", "Code", "Message" })
+        {
+            Assert.That(typeof(OperationSummary).GetProperty(name)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty);
+        }
+    }
+
+    [Test]
+    public void AsyncifyLoopResult_Success_IsSuccessWithNoMessage()
+    {
+        var result = new AsyncifyLoopResult { TotalSucceeded = 4, TotalFailed = 0 };
+
+        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+    }
+
+    [Test]
+    public void AsyncifyLoopResult_PartialFailure_IsFailedWithCountMessage()
+    {
+        var result = new AsyncifyLoopResult { TotalSucceeded = 3, TotalFailed = 2 };
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(result.Message, Is.EqualTo("2 of 5 failed"));
+    }
+
+    [Test]
+    public void BridgeAsyncMethodsResult_Success_IsSuccessWithNoMessage()
+    {
+        var result = new BridgeAsyncMethodsResult { Summary = new BatchResultSummary { Succeeded = 4, Failed = 0 } };
+
+        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+    }
+
+    [Test]
+    public void BridgeAsyncMethodsResult_PartialFailure_IsFailedWithCountMessage()
+    {
+        var result = new BridgeAsyncMethodsResult { Summary = new BatchResultSummary { Succeeded = 3, Failed = 2 } };
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(result.Message, Is.EqualTo("2 of 5 failed"));
+    }
+
+    [Test]
+    public void UpliftCallersResult_Success_IsSuccessWithNoMessage()
+    {
+        var result = new UpliftCallersResult { Summary = new BatchResultSummary { Succeeded = 4, Failed = 0 } };
+
+        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+    }
+
+    [Test]
+    public void UpliftCallersResult_PartialFailure_IsFailedWithCountMessage()
+    {
+        var result = new UpliftCallersResult { Summary = new BatchResultSummary { Succeeded = 3, Failed = 2 } };
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(result.Message, Is.EqualTo("2 of 5 failed"));
+    }
+
+    [Test]
+    public void BatchAggregates_ComputedStatusMembers_AreJsonIgnored()
+    {
+        foreach (Type type in new[] { typeof(AsyncifyLoopResult), typeof(BridgeAsyncMethodsResult), typeof(UpliftCallersResult) })
+        {
+            foreach (string name in new[] { "IsError", "Status", "Code", "Message" })
+            {
+                Assert.That(type.GetProperty(name)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, $"{type.Name}.{name}");
+            }
+        }
+    }
 }

@@ -147,7 +147,7 @@ public record BatchResultSummary : EngineResultBase
 }
 
 /// <summary>Return type for <c>AsyncifyLoop</c> -> aggregates per-iteration Asyncify results.</summary>
-public record AsyncifyLoopResult
+public record AsyncifyLoopResult : IResultStatus
 {
     /// <summary>Number of complete iterations executed.</summary>
     public int LoopsCompleted
@@ -171,6 +171,22 @@ public record AsyncifyLoopResult
     }
     /// <summary>One entry per completed iteration, in order.</summary>
     public List<BatchResultSummary> Iterations { get; init; } = new();
+
+    /// <summary>True when any iteration failed (TotalFailed > 0).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => TotalFailed > 0;
+
+    /// <summary>Failed when any iteration failed; otherwise Success.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(TotalFailed);
+
+    /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    /// <summary>"N of M failed" when items failed; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => ResultStatusExtensions.FailureCountMessage(TotalSucceeded, TotalFailed);
 }
 
 /// <summary>Per-failure detail included inline in BatchResultSummary (capped at 10 when Failed>10).</summary>
@@ -376,7 +392,7 @@ public class AsyncifyInput
 /// <see cref="SuggestedUpliftTargets"/> -> the exact input for the next workflow step
 /// (<c>uplift_callers</c>).
 /// </summary>
-public class BridgeAsyncMethodsResult
+public class BridgeAsyncMethodsResult : IResultStatus
 {
     public BatchResultSummary Summary { get; init; } = new();
     /// <summary>
@@ -384,6 +400,22 @@ public class BridgeAsyncMethodsResult
     /// Each entry has <c>BridgedMethodName</c> and <c>DocCommentId</c>; <c>ProjectName</c> is null (solution-scoped).
     /// </summary>
     public List<UpliftTarget> SuggestedUpliftTargets { get; init; } = new();
+
+    /// <summary>True when any bridged method failed (Summary.Failed > 0).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Summary.Failed > 0;
+
+    /// <summary>Failed when any method failed; otherwise Success.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Summary.Failed);
+
+    /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    /// <summary>"N of M failed" when items failed; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => ResultStatusExtensions.FailureCountMessage(Summary.Succeeded, Summary.Failed);
 }
 
 /// <summary>
@@ -391,7 +423,7 @@ public class BridgeAsyncMethodsResult
 /// <see cref="SuggestedPropagateTargets"/> -> the exact input for the next workflow step
 /// (<c>propagate_cancellation_token</c>).
 /// </summary>
-public class UpliftCallersResult
+public class UpliftCallersResult : IResultStatus
 {
     public BatchResultSummary Summary { get; init; } = new();
     /// <summary>
@@ -400,6 +432,22 @@ public class UpliftCallersResult
     /// <c>MethodNames</c> is null (process whole file).
     /// </summary>
     public List<BatchTarget> SuggestedPropagateTargets { get; init; } = new();
+
+    /// <summary>True when any caller uplift failed (Summary.Failed > 0).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Summary.Failed > 0;
+
+    /// <summary>Failed when any uplift failed; otherwise Success.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Summary.Failed);
+
+    /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    /// <summary>"N of M failed" when items failed; null otherwise.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => ResultStatusExtensions.FailureCountMessage(Summary.Succeeded, Summary.Failed);
     /// <summary>
     /// Structured outcome classification with routed failure hints (spec §3.6).
     /// Substrate-derived -> never infer outcome from Summary.Severity or prose scanning.

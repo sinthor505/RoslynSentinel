@@ -189,4 +189,142 @@ public class AdvancedResultStatusTests
             Assert.That(type.GetProperty(computed)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, computed);
         }
     }
+
+    private static List<UpliftSkippedInfo> SkipList() =>
+        new() { new UpliftSkippedInfo(null!, "Caller", "reason", new List<DiagnosticInfo>()) };
+
+    [Test]
+    public void UpliftBatchResult_NoSkips_IsSuccess()
+    {
+        var result = new UpliftBatchResult(new List<UpliftCallerInfo>(), new List<UpliftSkippedInfo>(), 0, "batch_complete");
+
+        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+    }
+
+    [Test]
+    public void UpliftBatchResult_AllSkippedAndStoppedShort_IsFailed()
+    {
+        var result = new UpliftBatchResult(new List<UpliftCallerInfo>(), SkipList(), 1, "batch_complete");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(result.Message, Is.EqualTo("1 of 1 failed"));
+    }
+
+    [Test]
+    public void UpliftBatchResult_DryRunWithSkips_IsNotError()
+    {
+        var result = new UpliftBatchResult(new List<UpliftCallerInfo>(), SkipList(), 1, "dry_run");
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+    }
+
+    [Test]
+    public void UpliftBatchMultiResult_AllMethodsOk_IsSuccess()
+    {
+        var result = new UpliftBatchMultiResult
+        {
+            PerMethod = new List<UpliftBatchMultiMethodResult> { new() { BridgedMethodName = "a" } },
+        };
+
+        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+    }
+
+    [Test]
+    public void UpliftBatchMultiResult_PartialFailure_IsFailedWithCountMessage()
+    {
+        var result = new UpliftBatchMultiResult
+        {
+            PerMethod = new List<UpliftBatchMultiMethodResult>
+            {
+                new() { BridgedMethodName = "a" },
+                new() { BridgedMethodName = "b", Error = "boom" },
+            },
+        };
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(result.Message, Is.EqualTo("1 of 2 failed"));
+    }
+
+    [Test]
+    public void PropagateCtFileResult_NoMethods_IsSuccess()
+    {
+        var result = new PropagateCtFileResult();
+
+        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+    }
+
+    [Test]
+    public void PropagateCtFileResult_MethodFailed_IsFailedWithCountMessage()
+    {
+        var result = new PropagateCtFileResult
+        {
+            PerMethod = new List<PropagateCtResult> { new() { MethodName = "m", Error = "boom" } },
+        };
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(result.Message, Is.EqualTo("1 of 1 failed"));
+    }
+
+    [Test]
+    public void PropagateCtBatchResult_AllApplied_IsSuccess()
+    {
+        var result = new PropagateCtBatchResult
+        {
+            Applied = new List<PropagateCtFileResult> { new() },
+        };
+
+        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+    }
+
+    [Test]
+    public void PropagateCtBatchResult_PartialFailure_IsFailedWithCountMessage()
+    {
+        var result = new PropagateCtBatchResult
+        {
+            Applied = new List<PropagateCtFileResult> { new() },
+            Failed = new List<PropagateCtFileFailure> { new() },
+        };
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(result.Message, Is.EqualTo("1 of 2 failed"));
+    }
+
+    [Test]
+    public void BatchResults_ComputedStatusMembers_AreJsonIgnored()
+    {
+        foreach (Type type in new[] { typeof(UpliftBatchResult), typeof(UpliftBatchMultiResult), typeof(PropagateCtFileResult), typeof(PropagateCtBatchResult) })
+        {
+            foreach (string name in new[] { "IsError", "Status", "Code", "Message" })
+            {
+                Assert.That(type.GetProperty(name)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, $"{type.Name}.{name}");
+            }
+        }
+    }
 }
