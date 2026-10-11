@@ -568,19 +568,15 @@ public class CodeTransformTools
                 case "add_guard_clauses":
                     {
                         var r = await _logicOptimizationEngine.AddGuardClausesAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "add_guard_clauses", $"method '{methodName}' in '{resolvedFilePath}'", MethodLookupHint, NoOpHandling.Success($"No parameters eligible for guard clause insertion found in '{methodName}' in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No parameters eligible for guard clause insertion found in '{methodName}' in '{resolvedFilePath}'."
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
@@ -596,57 +592,45 @@ public class CodeTransformTools
                         }
 
                         var r = await _advancedStructuralEngine.ConvertExpressionBodyAsync(resolvedFilePath, methodName, direction, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_expression_body", $"method '{methodName}' in '{resolvedFilePath}'", "Possible causes: member not found (verify name and file are correct), member already has the target body style, or contextSnippet did not uniquely match. Use GetFileOutline to confirm the member exists.", NoOpHandling.Error($"convert_expression_body ({direction}) found nothing to convert for '{methodName}' in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_expression_body ({direction}) found nothing to convert for '{methodName}' in '{resolvedFilePath}'. " + "Possible causes: member not found (verify name and file are correct), member already has the target body style, " + "or contextSnippet did not uniquely match. Use GetFileOutline to confirm the member exists.")
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
                 case "convert_lock_to_semaphore_slim":
                     {
                         var r = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_lock_to_semaphore_slim", $"method '{methodName}' in '{resolvedFilePath}'", MethodLookupHint, NoOpHandling.Success($"No lock statements found in '{methodName}' in '{resolvedFilePath}' to convert to SemaphoreSlim.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No lock statements found in '{methodName}' in '{resolvedFilePath}' to convert to SemaphoreSlim."
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
                 case "convert_method_to_indexer":
                     {
                         var r = await _advancedStructuralEngine.ConvertMethodToIndexerAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_method_to_indexer", $"method '{methodName}' in '{resolvedFilePath}'", "The method must have exactly one parameter and return a value. Use GetFileOutline to verify the method exists.", NoOpHandling.Error($"convert_method_to_indexer: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_method_to_indexer: method '{methodName}' not found or not eligible in '{resolvedFilePath}'. " + "The method must have exactly one parameter and return a value. Use GetFileOutline to verify the method exists.")
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
@@ -671,19 +655,15 @@ public class CodeTransformTools
                         try
                         {
                             var r = await _logicOptimizationEngine.ConvertStaticToExtensionAsync(resolvedFilePath, methodName, cancellationToken);
-                            if (string.IsNullOrEmpty(r.UpdatedText))
+                            if (RefactoringToolHelpers.GuardEngineResult(r, "convert_static_to_extension", $"method '{methodName}' in '{resolvedFilePath}'", "The method must be static and have at least one parameter to become the 'this' parameter. Use GetFileOutline to verify.", NoOpHandling.Error($"convert_static_to_extension: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
                             {
-                                return new SentinelCallToolResult<object>()
-                                {
-                                    IsError = true,
-                                    ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_static_to_extension: method '{methodName}' not found or not eligible in '{resolvedFilePath}'. " + "The method must be static and have at least one parameter to become the 'this' parameter. Use GetFileOutline to verify.")
-                                };
+                                return outcomeGuard;
                             }
 
                             return new SentinelCallToolResult<object>()
                             {
                                 IsError = false,
-                                SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                                SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                             };
                         }
                         catch (Exception ex)
@@ -700,57 +680,45 @@ public class CodeTransformTools
                 case "convert_switch_to_expression":
                     {
                         var r = await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_switch_to_expression", $"method '{methodName}' in '{resolvedFilePath}'", MethodLookupHint, NoOpHandling.Success($"No switch statements eligible for switch expression conversion found in '{methodName}' in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = false,
-                                SuccessData = $"No switch statements eligible for switch expression conversion found in '{methodName}' in '{resolvedFilePath}'."
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
                 case "convert_to_async_enumerable":
                     {
                         var r = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync(resolvedFilePath, methodName, cancellationToken: cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_to_async_enumerable", $"method '{methodName}' in '{resolvedFilePath}'", "The method must return Task<List<T>> or Task<IEnumerable<T>>. Use GetFileOutline to verify the method signature.", NoOpHandling.Error($"convert_to_async_enumerable: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_to_async_enumerable: method '{methodName}' not found or not eligible in '{resolvedFilePath}'. " + "The method must return Task<List<T>> or Task<IEnumerable<T>>. Use GetFileOutline to verify the method signature.")
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
                 case "extension_to_static":
                     {
                         var r = await _logicOptimizationEngine.ExtensionToStaticAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "extension_to_static", $"method '{methodName}' in '{resolvedFilePath}'", "The method must be in a static class and have a 'this' parameter. Use GetFileOutline to verify.", NoOpHandling.Error($"extension_to_static: method '{methodName}' not found or not an extension method in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"extension_to_static: method '{methodName}' not found or not an extension method in '{resolvedFilePath}'. " + "The method must be in a static class and have a 'this' parameter. Use GetFileOutline to verify.")
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
@@ -759,19 +727,15 @@ public class CodeTransformTools
                         try
                         {
                             var r = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync(resolvedFilePath, methodName, cancellationToken);
-                            if (string.IsNullOrEmpty(r.UpdatedText))
+                            if (RefactoringToolHelpers.GuardEngineResult(r, "generate_async_overload", $"method '{methodName}' in '{resolvedFilePath}'", "The method must be synchronous and non-void. Use GetFileOutline to verify the method exists and its signature.", NoOpHandling.Error($"generate_async_overload: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
                             {
-                                return new SentinelCallToolResult<object>
-                                {
-                                    IsError = true,
-                                    ErrorData = new ResultError(ToolErrorCode.Exception, $"generate_async_overload: method '{methodName}' not found or not eligible in '{resolvedFilePath}'. " + "The method must be synchronous and non-void. Use GetFileOutline to verify the method exists and its signature.")
-                                };
+                                return outcomeGuard;
                             }
 
                             return new SentinelCallToolResult<object>
                             {
                                 IsError = false,
-                                SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                                SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                             };
                         }
                         catch (Exception ex)
@@ -788,133 +752,105 @@ public class CodeTransformTools
                 case "make_method_static":
                     {
                         var r = await _memberRefactoringEngine.MakeMethodStaticAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "make_method_static", $"method '{methodName}' in '{resolvedFilePath}'", "The method must not access instance members. Use GetFileOutline to verify the method exists.", NoOpHandling.Error($"make_method_static: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"make_method_static: method '{methodName}' not found or not eligible in '{resolvedFilePath}'. " + "The method must not access instance members. Use GetFileOutline to verify the method exists.")
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
                 case "make_method_thread_safe":
                     {
                         var r = await _threadSafetyEngine.MakeMethodThreadSafeAsync(resolvedFilePath, methodName, lockFieldName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "make_method_thread_safe", $"method '{methodName}' in '{resolvedFilePath}'", "Use GetFileOutline to verify the method name (case-sensitive).", NoOpHandling.Error($"make_method_thread_safe: method '{methodName}' not found in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"make_method_thread_safe: method '{methodName}' not found in '{resolvedFilePath}'. " + "Use GetFileOutline to verify the method name (case-sensitive).")
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
                 case "optimize_independent_awaits":
                     {
                         var r = await _asyncOptimizationEngine.OptimizeIndependentAwaitsAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "optimize_independent_awaits", $"method '{methodName}' in '{resolvedFilePath}'", MethodLookupHint, NoOpHandling.Success($"No sequential independent awaits found to parallelize in '{methodName}' in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = false,
-                                SuccessData = $"No sequential independent awaits found to parallelize in '{methodName}' in '{resolvedFilePath}'."
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
                 case "optimize_to_value_task":
                     {
                         var r = await _asyncOptimizationEngine.OptimizeToValueTaskAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "optimize_to_value_task", $"method '{methodName}' in '{resolvedFilePath}'", "The method must return Task or Task<T> and be async. Use GetFileOutline to verify.", NoOpHandling.Error($"optimize_to_value_task: method '{methodName}' not found or not eligible in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"optimize_to_value_task: method '{methodName}' not found or not eligible in '{resolvedFilePath}'. " + "The method must return Task or Task<T> and be async. Use GetFileOutline to verify.")
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
                 case "reduce_block_depth":
                     {
                         var r = await _logicOptimizationEngine.ReduceBlockDepthAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "reduce_block_depth", $"method '{methodName}' in '{resolvedFilePath}'", MethodLookupHint, NoOpHandling.Success($"No deeply nested blocks found to flatten in '{methodName}' in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = false,
-                                SuccessData = $"No deeply nested blocks found to flatten in '{methodName}' in '{resolvedFilePath}'."
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
                 case "update_xml_docs_from_signature":
                     {
                         var r = await _refactoringEngine.UpdateXmlDocsFromSignatureAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "update_xml_docs_from_signature", $"method '{methodName}' in '{resolvedFilePath}'", MethodLookupHint, NoOpHandling.Success($"No XML doc parameters out of sync with the signature of '{methodName}' in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = false,
-                                SuccessData = $"No XML doc parameters out of sync with the signature of '{methodName}' in '{resolvedFilePath}'."
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
                 case "use_exception_expressions":
                     {
                         var r = await _syntaxUpgradeEngine.UseExceptionExpressionsAsync(resolvedFilePath, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "use_exception_expressions", $"method '{methodName}' in '{resolvedFilePath}'", MethodLookupHint, NoOpHandling.Success($"No if-throw guard patterns eligible for exception expression conversion found in '{methodName}' in '{resolvedFilePath}'.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = false,
-                                SuccessData = $"No if-throw guard patterns eligible for exception expression conversion found in '{methodName}' in '{resolvedFilePath}'."
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
@@ -936,6 +872,10 @@ public class CodeTransformTools
             };
         }
     }
+
+    // Appended to a method-scope transform's failure when the engine itself failed (as opposed to finding nothing to
+    // do). The guidance belongs to the tool layer; engines only report the outcome and a short reason.
+    private const string MethodLookupHint = "Use GetFileOutline to verify the method exists in the file and that the solution is loaded.";
 
     /// <summary>
     /// Builds the "filePath is required for {kind}" error for a codetransform switch case, distinguishing
@@ -1317,18 +1257,15 @@ public class CodeTransformTools
                         }
 
                         var r = await _testingEngine.AddBenchmarkStubAsync(resolvedFilePath, className, methodName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "add_benchmark_stub", $"'{className}.{methodName}' in '{resolvedFilePath}'", "Ensure the solution is loaded.", NoOpHandling.ErrorUnlessText($"add_benchmark_stub failed for '{className}.{methodName}' in '{resolvedFilePath}': file not found, class not found, or method not found.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"add_benchmark_stub failed for '{className}.{methodName}' in '{resolvedFilePath}': file not found, class not found, or method not found. Ensure the solution is loaded.")
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
@@ -1351,12 +1288,9 @@ public class CodeTransformTools
                         }
 
                         var result = await _codeGenerationEngine.GenerateConstructorAsync(resolvedFilePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(result.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(result, "generate_constructor", $"class '{className}' in '{resolvedFilePath}'", "Ensure the solution is loaded.", NoOpHandling.ErrorUnlessText($"generate_constructor failed for '{className}' in '{resolvedFilePath}': file not found or class not found.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"generate_constructor failed for '{className}' in '{resolvedFilePath}': file not found or class not found. Ensure the solution is loaded.")
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>()
@@ -1411,12 +1345,9 @@ public class CodeTransformTools
                         }
 
                         var result = await _antiPatternEngine.GenerateEqualityOverridesAsync(resolvedFilePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(result.UpdatedText))
+                        if (RefactoringToolHelpers.GuardEngineResult(result, "generate_equality_overrides", $"class '{className}' in '{resolvedFilePath}'", "Ensure the solution is loaded.", NoOpHandling.ErrorUnlessText($"generate_equality_overrides failed for '{className}' in '{resolvedFilePath}': file not found or class not found.")) is { } outcomeGuard)
                         {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"generate_equality_overrides failed for '{className}' in '{resolvedFilePath}': file not found or class not found. Ensure the solution is loaded.")
-                            };
+                            return outcomeGuard;
                         }
 
                         return new SentinelCallToolResult<object>()

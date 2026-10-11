@@ -1,0 +1,286 @@
+// Coverage for plan_error_codes_follow_cause.md, slice (2): CodeTransformTools decides success from the engine
+// result's Outcome, not from whether UpdatedText is empty. Runs the real tool class against the real engines
+// resolved from the production registration, over an in-memory test solution.
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+
+using RoslynSentinel.Server.Advanced;
+using RoslynSentinel.Tools.Experimental;
+
+namespace RoslynSentinel.Tests.Server;
+
+[TestFixture]
+[Category("CodeTransformTools")]
+public class CodeTransformToolsOutcomeTests
+{
+    private ServiceProvider _provider = null!;
+    private IWorkspaceManager _workspace = null!;
+    private CodeTransformTools _tools = null!;
+
+    [SetUp]
+    public void SetUp()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        services.AddRoslynSentinelEnginesAdvanced();
+        var mcpBuilder = services.AddMcpServer();
+        mcpBuilder.AddRoslynSentinelToolsAdvanced(
+            services, new HashSet<string>(["Experimental"], StringComparer.OrdinalIgnoreCase));
+
+        _provider = services.BuildServiceProvider();
+        _workspace = _provider.GetRequiredService<IWorkspaceManager>();
+        _tools = _provider.GetRequiredService<CodeTransformTools>();
+    }
+
+    [TearDown]
+    public void TearDown() => _provider.Dispose();
+
+    // Absolute path: Generate (unlike the method-scope transforms) rejects an unvalidated relative path, and an
+    // in-memory test solution has no root to resolve a relative one against.
+    private string SetSource(string fileName, string source)
+    {
+        var path = Path.Combine(Path.GetTempPath(), "TestProj", fileName);
+        _workspace.SetTestSolution(RoslynSentinel.Tests.TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(path, source)]));
+        return path;
+    }
+
+    private const string CounterWithoutTargetMethod = @"
+public class Counter
+{
+    private int _n;
+    public void Other() { _n++; }
+}";
+
+    // The engines report facts (outcome, optional code, a short reason); the tool owns every word of guidance.
+    // Each test pins one row of the per-tool behaviour table in the slice (2) rework.
+
+    // (a) A tool whose own pre-guard branch was an ERROR keeps that error and its hand-written hint, now carrying
+    // the engine's code (NotFound / TargetIneligible) instead of the generic Exception - and never the engine's
+    // Message verbatim (this engine puts the WHOLE source file in it).
+    [Test]
+    public async Task ConvertMethodToIndexer_MethodNotFound_IsNotFoundErrorWithTheToolsHintAndNoSource()
+    {
+        var path = SetSource("Counter.cs", CounterWithoutTargetMethod);
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Missing", "convert_method_to_indexer");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "the engine's code, not the generic Exception");
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain("convert_method_to_indexer: method 'Missing' not found or not eligible in"));
+        Assert.That(message, Does.Contain("The method must have exactly one parameter and return a value. Use GetFileOutline to verify the method exists."));
+        Assert.That(message, Does.Contain("Method 'Missing' not found in Counter.cs."));
+        Assert.That(message, Does.Not.Contain("private int _n"), "the engine puts the whole file in Message; it must not reach the agent");
+        Assert.That(message.Length, Is.LessThan(600));
+    }
+
+    [Test]
+    public async Task ConvertMethodToIndexer_TwoParameters_ReportsTheEnginesSpecificReason()
+    {
+        var path = SetSource("Counter.cs", "public class Counter\n{\n    public int Add(int a, int b) { return a + b; }\n}");
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Add", "convert_method_to_indexer");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.Contain("exactly one parameter (has 2)"));
+        Assert.That(result.ErrorData.Message, Does.Contain("GetFileOutline"));
+    }
+
+    // OptimizeToValueTask puts its reason in UpdatedText ("// WARNING: ..." ahead of the whole file) and leaves
+    // Message empty. The pre-guard tool shipped that text as the new file; the guard first produced an empty
+    // "(CannotOptimize)." message. Now: the tool's hint, plus the one-line reason, plus no source.
+    [Test]
+    public async Task OptimizeToValueTask_TooManyAwaits_IsTargetIneligibleWithHintAndTheEnginesReason()
+    {
+        var path = SetSource("Svc.cs", "using System.Threading.Tasks;\npublic class Svc\n{\n    public async Task<int> Work()\n    {\n        await Task.Delay(1);\n        await Task.Delay(2);\n        return 1;\n    }\n}");
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Work", "optimize_to_value_task");
+
+        Assert.That(result.IsError, Is.True, "the warning-prefixed whole file must not be returned as the transformed source");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain("The method must return Task or Task<T> and be async. Use GetFileOutline to verify."));
+        Assert.That(message, Does.Contain("Cannot safely convert to ValueTask: method has 2 await expressions."));
+        Assert.That(message, Does.Not.Contain("public class Svc"));
+        Assert.That(message, Does.Not.Contain("(CannotOptimize)."), "the empty-reason message of the reviewed-bad guard");
+    }
+
+    [Test]
+    public async Task OptimizeToValueTask_MethodDoesNotReturnTask_IsTargetIneligibleWithoutTheSource()
+    {
+        var path = SetSource("Svc.cs", "public class Svc\n{\n    public int Plain() { return 1; }\n}");
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Plain", "optimize_to_value_task");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(result.ErrorData!.Message, Does.Contain("method does not return Task."));
+        Assert.That(result.ErrorData.Message, Does.Not.Contain("public class Svc"), "this engine puts the whole file after the warning line");
+    }
+
+    [Test]
+    public async Task ConvertStaticToExtension_AlreadyAnExtension_IsAnErrorNotTheUnchangedFileAsASuccess()
+    {
+        var path = SetSource("Ext.cs", "public static class Ext\n{\n    public static int Twice(this int x) { return x * 2; }\n}");
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Twice", "convert_static_to_extension");
+
+        Assert.That(result.IsError, Is.True, "the engine returns TargetNotFound with the unchanged file as UpdatedText");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.Contain("The method must be static and have at least one parameter to become the 'this' parameter."));
+    }
+
+    // (b) A tool whose own pre-guard branch was a SUCCESS keeps that exact success message when the engine finds
+    // nothing to do; "nothing to do" is not turned into an error.
+    [Test]
+    public async Task AddGuardClauses_MethodNotFound_StaysASuccessWithTheToolsMessage()
+    {
+        var path = SetSource("Counter.cs", CounterWithoutTargetMethod);
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Missing", "add_guard_clauses");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(result.SuccessData, Is.EqualTo($"No parameters eligible for guard clause insertion found in 'Missing' in '{path}'."));
+    }
+
+    [Test]
+    public async Task OptimizeIndependentAwaits_MethodNotFound_StaysASuccessWithTheToolsMessage()
+    {
+        var path = SetSource("Counter.cs", CounterWithoutTargetMethod);
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Missing", "optimize_independent_awaits");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(result.SuccessData, Is.EqualTo($"No sequential independent awaits found to parallelize in 'Missing' in '{path}'."));
+    }
+
+    // The pre-guard tool used any non-empty UpdatedText, and this engine returns the unchanged file with a
+    // nothing-to-do outcome: still a success carrying the transform result.
+    [Test]
+    public async Task ConvertLockToSemaphoreSlim_MethodWithoutLock_StaysASuccess()
+    {
+        var path = SetSource("Counter.cs", "public class Counter\n{\n    private int _n;\n    public void Increment() { _n++; }\n}");
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Increment", "convert_lock_to_semaphore_slim");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(result.SuccessData, Is.TypeOf<SourceTransformResult>());
+    }
+
+    [Test]
+    public async Task AddGuardClauses_NoReferenceTypeParameters_StaysASuccess()
+    {
+        var path = SetSource("Counter.cs", "public class Counter\n{\n    public int Twice(int x) { return x * 2; }\n}");
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Twice", "add_guard_clauses");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+    }
+
+    [Test]
+    public async Task GenerateConstructor_ClassWithoutFields_StaysASuccess()
+    {
+        var path = SetSource("Empty.cs", "public class Empty\n{\n    public int P { get; set; }\n}");
+
+        var result = await _tools.Generate(CodeTransformKind.generate_constructor, "outcome test", path, className: "Empty");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+    }
+
+    // (c) A genuine engine failure (Error / DocumentNotFound / SourceInvalid ...) is an error with the engine's
+    // code, the engine's reason cut to one line, and the tool's hint.
+    [Test]
+    public async Task ConvertLockToSemaphoreSlim_MethodNotFound_IsErrorWithEngineNotFoundCodeAndTheToolsHint()
+    {
+        var path = SetSource("Counter.cs", CounterWithoutTargetMethod);
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Missing", "convert_lock_to_semaphore_slim");
+
+        Assert.That(result.IsError, Is.True, "an engine error must not be reported as a no-op success");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.StartWith("convert_lock_to_semaphore_slim failed for method 'Missing' in"));
+        Assert.That(result.ErrorData.Message, Does.Contain("(Error)"));
+        Assert.That(result.ErrorData.Message, Does.Contain("GetFileOutline"));
+        Assert.That(result.ErrorData.Message, Does.Not.Contain("private int _n"));
+        Assert.That(result.ErrorData.Message.Split('\n').Length, Is.EqualTo(1), "one line only");
+    }
+
+    [Test]
+    public async Task GenerateConstructor_ClassNotFound_IsNotFoundErrorWithTheToolsOldTextAndHint()
+    {
+        var path = SetSource("Counter.cs", CounterWithoutTargetMethod);
+
+        var result = await _tools.Generate(CodeTransformKind.generate_constructor, "outcome test", path, className: "Missing");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.Contain("generate_constructor failed for 'Missing' in"));
+        Assert.That(result.ErrorData.Message, Does.Contain("Ensure the solution is loaded."));
+    }
+
+    // (d) AlreadyInTargetState is a success with an explicit message; nothing is written (the tool never
+    // writes, and SuccessData carries no new file text).
+    [Test]
+    public async Task GenerateConstructor_ClassAlreadyHasConstructor_IsSuccessWithAlreadyInStateMessage()
+    {
+        var path = SetSource("MyService.cs", @"
+public class MyService
+{
+    private readonly string _name;
+
+    public MyService(string name)
+    {
+        _name = name;
+    }
+}");
+
+        var result = await _tools.Generate(CodeTransformKind.generate_constructor, "outcome test", path, className: "MyService");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.SuccessData, Is.TypeOf<string>());
+        Assert.That((string)result.SuccessData!, Does.Contain("already in the requested state"));
+    }
+
+    // The Modified path must be unaffected by the outcome gate.
+    [Test]
+    public async Task GenerateConstructor_ClassWithFields_StillSucceedsWithTheGeneratedSummary()
+    {
+        var path = SetSource("EmailService.cs", @"
+public class EmailService
+{
+    private readonly string _smtpHost;
+    private readonly int _port;
+}");
+
+        var result = await _tools.Generate(CodeTransformKind.generate_constructor, "outcome test", path, className: "EmailService");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(result.SuccessData as string, Does.Not.Contain("already in the requested state"));
+    }
+
+    [Test]
+    public async Task ConvertLockToSemaphoreSlim_MethodWithLock_StillReturnsTheTransformedSource()
+    {
+        var path = SetSource("Counter.cs", @"
+public class Counter
+{
+    private readonly object _gate = new object();
+    private int _n;
+    public void Increment()
+    {
+        lock (_gate)
+        {
+            _n++;
+        }
+    }
+}");
+
+        var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Increment", "convert_lock_to_semaphore_slim");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(result.SuccessData, Is.TypeOf<SourceTransformResult>());
+    }
+}

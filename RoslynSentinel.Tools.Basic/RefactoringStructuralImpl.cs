@@ -953,7 +953,7 @@ public class RefactoringStructuralImpl
             }
 
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyEnum", filePathResolved) is { } guardResult)
-                return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = guardResult.ErrorData };
+                return RefactoringToolHelpers.ToSummaryResult(guardResult);
 
             var description = string.IsNullOrEmpty(updated.Message)
                 ? $"Sets '{enumName}' members in {Path.GetFileName(filePathResolved)} to match the requested list."
@@ -1084,7 +1084,7 @@ public class RefactoringStructuralImpl
                 };
             }
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyAttribute", filePathResolved) is { } guardResult)
-                return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = guardResult.ErrorData };
+                return RefactoringToolHelpers.ToSummaryResult(guardResult);
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.", "ModifyAttribute", dryRun, returnDiff, cancellationToken: cancellationToken);
@@ -1212,7 +1212,7 @@ public class RefactoringStructuralImpl
                 };
             }
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyModifier", filePathResolved) is { } guardResult)
-                return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = guardResult.ErrorData };
+                return RefactoringToolHelpers.ToSummaryResult(guardResult);
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"{action} '{modifierText}' modifier on '{targetName}'.", "ModifyModifier", dryRun, returnDiff, cancellationToken: cancellationToken);
@@ -1318,7 +1318,7 @@ public class RefactoringStructuralImpl
                 };
             }
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyBaseType", filePathResolved) is { } guardResult)
-                return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = guardResult.ErrorData };
+                return RefactoringToolHelpers.ToSummaryResult(guardResult);
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"{action} base type '{baseTypeName}' on '{typeName}'.", "ModifyBaseType", dryRun, returnDiff, cancellationToken: cancellationToken);

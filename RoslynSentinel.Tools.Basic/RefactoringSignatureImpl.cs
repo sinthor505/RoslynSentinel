@@ -299,7 +299,7 @@ public class RefactoringSignatureImpl
             }
 
             if (RefactoringToolHelpers.RequireUpdatedText(updated, "ChangeAccessibility", filePathResolved) is { } guardResult)
-                return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = guardResult.ErrorData };
+                return RefactoringToolHelpers.ToSummaryResult(guardResult);
 
             var accessibilityKeyword = accessibility switch
             {
