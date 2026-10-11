@@ -111,8 +111,20 @@ public class UpliftBatchMultiInput
 }
 
 /// <summary>Per-method result within <c>UpliftBatchMultiResult</c>.</summary>
-public class UpliftBatchMultiMethodResult
+public class UpliftBatchMultiMethodResult : IResultStatus
 {
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Error is not null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => Error;
+
     public string BridgedMethodName { get; set; } = "";
     public string? ProjectName
     {
@@ -178,8 +190,20 @@ public class CallSiteSkip
 }
 
 /// <summary>Result of a single-method CancellationToken propagation operation.</summary>
-public class PropagateCtResult
+public class PropagateCtResult : IResultStatus
 {
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Error is not null || !MethodFound;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => !MethodFound && Error is null ? ResultStatus.NotFound : ResultStatusExtensions.FromFlag(IsError, Code);
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => !IsError ? null : (!MethodFound && Error is null ? ToolErrorCode.NotFound : ToolErrorCode.Exception);
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => Error ?? (MethodFound ? null : "Method not found");
+
     public string? ChangeId
     {
         get; set;

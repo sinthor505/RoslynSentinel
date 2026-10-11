@@ -81,4 +81,112 @@ public class AdvancedResultStatusTests
         Assert.That(rootProperties, Does.Not.Contain("Message"));
         Assert.That(doc.RootElement.GetProperty("Code").GetString(), Is.EqualTo("code"));
     }
+
+    [Test]
+    public void FluentBuilderResult_StatusAgreesWithIsError_AndSerializationKeepsDeclaredPropertiesOnly()
+    {
+        IResultStatus ok = new FluentBuilderResult("b", "c", "u", null);
+        IResultStatus bad = new FluentBuilderResult("b", "c", "u", "boom");
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(bad.Message, Is.EqualTo("boom"));
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((FluentBuilderResult)bad));
+        string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(rootProperties, Is.EquivalentTo(new[] { "BuilderClassName", "BuilderCode", "UsageExample", "Error" }));
+    }
+
+    [Test]
+    public void MemberCommentOutcome_StatusAgreesWithSucceeded_AndSerializationKeepsDeclaredPropertiesOnly()
+    {
+        IResultStatus ok = new CommentingEngine.MemberCommentOutcome(null!, true, null);
+        IResultStatus bad = new CommentingEngine.MemberCommentOutcome(null!, false, "boom");
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(bad.Message, Is.EqualTo("boom"));
+
+        // Serializing this record throws (STJ cannot build metadata for the pre-existing Site type graph),
+        // so verify the surface by reflection: declared properties only, computed members JsonIgnore-marked.
+        var type = typeof(CommentingEngine.MemberCommentOutcome);
+        string[] nonComputed = type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Select(p => p.Name)
+            .Where(n => n is not ("IsError" or "Status" or "Code" or "Message"))
+            .ToArray();
+        Assert.That(nonComputed, Is.EquivalentTo(new[] { "Site", "Succeeded", "FailureReason" }));
+        foreach (string computed in new[] { "IsError", "Status", "Code", "Message" })
+        {
+            Assert.That(type.GetProperty(computed)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, computed);
+        }
+    }
+
+    [Test]
+    public void PropagateCtResult_StatusAgreesWithMethodFoundAndError_AndSurfaceIsDeclaredOnly()
+    {
+        IResultStatus ok = new PropagateCtResult { MethodFound = true };
+        IResultStatus notFound = new PropagateCtResult { MethodFound = false };
+        IResultStatus bad = new PropagateCtResult { MethodFound = true, Error = "boom" };
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+        Assert.That(notFound.IsError, Is.True);
+        Assert.That(notFound.Status, Is.EqualTo(ResultStatus.NotFound));
+        Assert.That(notFound.Code, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(notFound.Message, Is.EqualTo("Method not found"));
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(bad.Message, Is.EqualTo("boom"));
+
+        var type = typeof(PropagateCtResult);
+        string[] nonComputed = type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Select(p => p.Name)
+            .Where(n => n is not ("IsError" or "Status" or "Code" or "Message"))
+            .ToArray();
+        Assert.That(nonComputed, Is.EquivalentTo(new[] { "ChangeId", "MethodName", "TokenParameterName", "Forwarded", "Skipped", "ForwardedCount", "SkippedCount", "MethodFound", "Error" }));
+        foreach (string computed in new[] { "IsError", "Status", "Code", "Message" })
+        {
+            Assert.That(type.GetProperty(computed)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, computed);
+        }
+    }
+
+    [Test]
+    public void UpliftBatchMultiMethodResult_StatusAgreesWithError_AndSurfaceIsDeclaredOnly()
+    {
+        IResultStatus ok = new UpliftBatchMultiMethodResult { BridgedMethodName = "m" };
+        IResultStatus bad = new UpliftBatchMultiMethodResult { Error = "boom" };
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(bad.Message, Is.EqualTo("boom"));
+
+        var type = typeof(UpliftBatchMultiMethodResult);
+        string[] nonComputed = type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .Select(p => p.Name)
+            .Where(n => n is not ("IsError" or "Status" or "Code" or "Message"))
+            .ToArray();
+        Assert.That(nonComputed, Is.EquivalentTo(new[] { "BridgedMethodName", "ProjectName", "Result", "Error" }));
+        foreach (string computed in new[] { "IsError", "Status", "Code", "Message" })
+        {
+            Assert.That(type.GetProperty(computed)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, computed);
+        }
+    }
 }

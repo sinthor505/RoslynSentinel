@@ -263,7 +263,20 @@ public class CommentingEngine
     // ── Phase 2: comment one file's worth of stale members ──────────────────
 
     /// <summary>Per-member outcome from <see cref="CommentFileAsync"/>.</summary>
-    public sealed record MemberCommentOutcome(MemberSite Site, bool Succeeded, string? FailureReason);
+    public sealed record MemberCommentOutcome(MemberSite Site, bool Succeeded, string? FailureReason) : IResultStatus
+    {
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool IsError => !Succeeded;
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? Message => IsError ? FailureReason : null;
+    }
 
     /// <summary>
     /// Comments every stale member belonging to one file against a local, in-memory <see
