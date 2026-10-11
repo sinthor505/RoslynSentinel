@@ -119,6 +119,28 @@ Updated 2026-10-01. Update this block after every committed slice; `git log` is 
   - S2-4: pilot - `ThreadSafetyEngine.ConvertLockToSemaphoreSlimAsync` catch copies `ToolException.ErrorCode` into the result; test. [x] Engine-level only. The consumer `CodemodTools.cs` ~615 (`convert_lock_to_semaphore_slim`) still treats any empty `UpdatedText`, including an `Error` outcome, as success, so the code does not reach the caller yet; classify that in Step 2b. Committed with this plan update.
 - Step 2b of the plan (NoChange classification, report only): [x] `docs/current/findings/finding_nochange_producer_classification.md`. 17 `NoChange` producers: 13 class 2 (already in state), 4 class 4 (cannot apply); 17 further empty-text producers (5/7/3/2 across classes 2/3/4/5) plus 11 LogicOptimizationEngine sites; ~50 consumer sites map empty `UpdatedText` to success and can mask an `Error` outcome. Decision still open: `AlreadyInState` vs narrowing `NoChange`. Nothing changed in code.
 
+### Re-baseline 2026-10-11 (after the IResultStatus work) - resume here
+Measured against current code (explore-sonnet). Line numbers in the Steps above are stale: `CodemodTools.cs` is now
+`Tools.Experimental/CodeTransformTools.cs`; `ResolveBySnippetOrThrow` is in `Engines.Basic/SyntaxTargetResolver.cs`.
+- Step 3: DONE 2daa71db. Resolver throws `ToolNotFoundException`/`ToolAmbiguousMatchException`; 33 catches
+  (35 call sites) propagate `ErrorCode`; batches report a code only when all failures share one; 7 tests; full suite
+  3922 run, 0 failed, 26 skipped. Follow-ups: four tuple-returning methods still drop the code
+  (`MemberRefactoringEngine.GetConstructorParametersAsync`/`GetMethodParametersAsync`,
+  `SymbolNavigationEngine.GetContainerMembersAsync`, `BasicRefactoringEngine.GetSummaryCommentAsync`; needs a tuple
+  element, cascades into `RefactoringSignatureImpl` 173/350, `RefactoringStructuralImpl` 549, `RefactoringExtractionDocsImpl` 177);
+  `Modify*Batch` tool wrappers in `RefactoringStructuralImpl` (~243, 386, 492) hardcode `InvalidArgument`;
+  no test covers `ApplyAttributeBatchAsync`/`ApplyBaseTypeBatchAsync`.
+- Next, in order: (1) copy `ex.ErrorCode` at the 9 engine `catch (ToolException)` sites that drop it (MappingEngine 220,
+  BasicRefactoringEngine 2146/2250, SemanticRefactoringEngine 347, StructuralRefinementEngine 229, MsToolAugmentEngine
+  261/769/1072/1490) and surface the batch code in the `Modify*Batch` wrappers; (2) `CodeTransformTools` decides success
+  from `Outcome`/`Code` instead of `IsNullOrEmpty(UpdatedText)` (38 sites), and `RequireUpdatedText` treats
+  `AlreadyInTargetState` as success; (3) Step 1 LEFT: ~20 `AsyncOptimizationEngine` throws (394-456, 616-662, 988, 1801,
+  1809, 2269, 2371), `CodeGenerationEngine` 387, `MsToolAugmentEngine` 590, with the `AsyncBatchEngine` catches
+  (543, 676, 1316, 1339) and `AsyncifyTools` 136/241, atomically; (4) Step 4 message splits (12 "not found or" tool
+  messages coded `Exception`, 5 engine ones, DeleteFile `WholeFileWriteTools` 131, `WorkspaceTools` 375, SyncTypeAndFilename
+  `RefactoringStructuralImpl` 1333/1339); (5) Step 5: read `CommentingEngine` 411 and `AsyncOptimizationEngine` 1202;
+  (6) close-out.
+
 ## Out of scope
 - Renaming or reorganising `ToolErrorCode` beyond `TargetIneligible`.
 - `catch (ToolException)` fallback sites already judged deliberate (`SymbolNavigationEngine` 400, 404,
