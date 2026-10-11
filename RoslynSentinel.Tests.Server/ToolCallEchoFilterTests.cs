@@ -513,7 +513,7 @@ public class ToolCallEchoStampTests
 {
     // Body as the SDK's default serializer writes it: <, >, ', ", & and + all HTML-escaped.
     private const string HtmlEscapedBody =
-        "{\"isSuccess\":true,\"successData\":{\"signature\":\"List\\u003C(int, string)\\u003E Run(string a)\"," +
+        "{\"isError\":false,\"successData\":{\"signature\":\"List\\u003C(int, string)\\u003E Run(string a)\"," +
         "\"note\":\"it\\u0027s \\u0022quoted\\u0022 \\u0026 a\\u002Bb\"}}";
 
     private static string StampedText(string text, string? echoedCode = null)

@@ -403,7 +403,9 @@ public static class ChildToolResult
 
     /// <summary>
     /// True when the call succeeded. RoslynSentinel reports failure inside the JSON envelope
-    /// (<c>isError: true</c>), so the MCP-level <c>IsError</c> flag alone is not enough.
+    /// (<c>isError: true</c>). The server filters copy the body's top-level isError onto <c>CallToolResult.IsError</c>,
+    /// so that flag is normally enough; the body check below stays as a defensive fallback for results that reach
+    /// here without the copy.
     /// <paramref name="failureText"/> is the offending text on failure, trimmed to a safe length.
     /// </summary>
     public static bool IsSuccess(ModelContextProtocol.Protocol.CallToolResult result, out string? failureText)

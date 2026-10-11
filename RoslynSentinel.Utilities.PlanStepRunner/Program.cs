@@ -271,7 +271,7 @@ public static class Program
             },
             progress: null, options: null, cancellationToken: CancellationToken.None);
         var buildText = ToolResultText(buildResult);
-        var buildErrorCount = ExtractIntField(buildText, "\"errorCount\"") ?? (ContainsFailureMarker(buildText) ? 1 : 0);
+        var buildErrorCount = ExtractIntField(buildText, "\"errorCount\"") ?? (buildResult.IsError == true ? 1 : 0);
 
         var testResult = await mcpClient.CallToolAsync(
             "RunTest",
@@ -418,9 +418,6 @@ public static class Program
 
     private static string ToolResultText(ModelContextProtocol.Protocol.CallToolResult result) =>
         result.Content.OfType<ModelContextProtocol.Protocol.TextContentBlock>().Select(c => c.Text).FirstOrDefault() ?? "";
-
-    private static bool ContainsFailureMarker(string json) =>
-        json.Contains("\"isSuccess\":false", StringComparison.OrdinalIgnoreCase);
 
     private static int? ExtractIntField(string json, string fieldNameWithQuotes)
     {
