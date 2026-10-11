@@ -417,7 +417,7 @@ public sealed class ModelAgentRunner
         catch (JsonException ex)
         {
             stopwatch.Stop();
-            return ($$"""{"success":false,"error":"Malformed tool-call arguments JSON: {{JsonEncode(ex.Message)}}"}""", true, stopwatch.Elapsed, startedAt, DateTimeOffset.Now);
+            return ($$"""{"isError":true,"error":"Malformed tool-call arguments JSON: {{JsonEncode(ex.Message)}}"}""", true, stopwatch.Elapsed, startedAt, DateTimeOffset.Now);
         }
 
         CallToolResult result;
@@ -433,7 +433,7 @@ public sealed class ModelAgentRunner
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             stopwatch.Stop();
-            return ($$"""{"success":false,"error":"MCP call threw: {{JsonEncode(ex.Message)}}"}""", true, stopwatch.Elapsed, startedAt, DateTimeOffset.Now);
+            return ($$"""{"isError":true,"error":"MCP call threw: {{JsonEncode(ex.Message)}}"}""", true, stopwatch.Elapsed, startedAt, DateTimeOffset.Now);
         }
 
         stopwatch.Stop();

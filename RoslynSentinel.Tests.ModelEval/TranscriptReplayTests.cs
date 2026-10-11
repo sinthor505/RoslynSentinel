@@ -224,7 +224,7 @@ public class TranscriptReplayTests
         }
         catch (JsonException ex)
         {
-            return ($$"""{"success":false,"error":"Malformed recorded arguments JSON: {{ex.Message}}"}""", true);
+            return ($$"""{"isError":true,"error":"Malformed recorded arguments JSON: {{ex.Message}}"}""", true);
         }
 
         CallToolResult result;
@@ -239,7 +239,7 @@ public class TranscriptReplayTests
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return ($$"""{"success":false,"error":"MCP call threw: {{ex.Message}}"}""", true);
+            return ($$"""{"isError":true,"error":"MCP call threw: {{ex.Message}}"}""", true);
         }
 
         var text = result.Content
