@@ -369,7 +369,7 @@ public class PlanImplementVerifyAgentTests
         var phaseRunDirectory = Path.Combine(_runDirectory, phaseName);
 
         var hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.Services.AddHttpClient<LmStudioAgentClient>(client =>
+        hostBuilder.Services.AddLmStudioAgentClient(client =>
         {
             client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));

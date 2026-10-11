@@ -321,7 +321,7 @@ public class WholeFileRewriteAgentTests
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
 
         var hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.Services.AddHttpClient<LmStudioAgentClient>(client =>
+        hostBuilder.Services.AddLmStudioAgentClient(client =>
         {
             client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
             // A slow local GPU (e.g. a GTX 1080) can take several minutes per completion on

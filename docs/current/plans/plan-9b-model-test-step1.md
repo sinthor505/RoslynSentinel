@@ -18,7 +18,7 @@ fails or times out, stop and report this as a blocking error.
 ```
 solutionPath: C:\Users\Administrator\source\repos\RoslynSentinel-AgentTesting\RoslynSentinel.slnx
 ```
-Confirm the response says `success: true`.
+Confirm the response has `isError: false`.
 
 ## Read the current (buggy) code
 

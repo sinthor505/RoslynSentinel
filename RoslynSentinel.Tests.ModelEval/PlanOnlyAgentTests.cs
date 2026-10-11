@@ -159,7 +159,7 @@ public class PlanOnlyAgentTests
             DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff"));
 
         var hostBuilder = Host.CreateApplicationBuilder();
-        hostBuilder.Services.AddHttpClient<LmStudioAgentClient>(client =>
+        hostBuilder.Services.AddLmStudioAgentClient(client =>
         {
             client.BaseAddress = new Uri(LlmOptions.BaseUrl.TrimEnd('/') + "/");
             client.Timeout = TimeSpan.FromSeconds(Math.Max(LlmOptions.TimeoutSeconds * 4, 600));
