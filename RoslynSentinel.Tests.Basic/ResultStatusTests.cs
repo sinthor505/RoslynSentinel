@@ -373,4 +373,92 @@ public class ResultStatusTests
         Assert.That(rootProperties, Does.Not.Contain("Code"));
         Assert.That(rootProperties, Does.Not.Contain("Message"));
     }
+
+    [Test]
+    public void ChangeSignatureResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
+    {
+        IResultStatus ok = new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), [], null);
+        IResultStatus bad = new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), [], "boom");
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(bad.Message, Is.EqualTo("boom"));
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((ChangeSignatureResult)bad));
+        string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(rootProperties, Does.Not.Contain("IsError"));
+        Assert.That(rootProperties, Does.Not.Contain("Status"));
+        Assert.That(rootProperties, Does.Not.Contain("Code"));
+        Assert.That(rootProperties, Does.Not.Contain("Message"));
+    }
+
+    [Test]
+    public void RenameSymbolResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
+    {
+        IResultStatus ok = new RenameSymbolResult("a", "b", new Dictionary<FilePathWrapper, string>());
+        IResultStatus bad = new RenameSymbolResult("a", "b", new Dictionary<FilePathWrapper, string>(), "boom");
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(bad.Message, Is.EqualTo("boom"));
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((RenameSymbolResult)bad));
+        string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(rootProperties, Does.Not.Contain("IsError"));
+        Assert.That(rootProperties, Does.Not.Contain("Status"));
+        Assert.That(rootProperties, Does.Not.Contain("Code"));
+        Assert.That(rootProperties, Does.Not.Contain("Message"));
+    }
+
+    [TestCase(true, ResultStatus.Success)]
+    [TestCase(false, ResultStatus.AlreadyInState)]
+    public void FormatPreviewResult_ChangedMapsToSuccessOrAlreadyInState_AndSerializationHasNoStatusFields(bool changed, ResultStatus expected)
+    {
+        IResultStatus result = new FormatPreviewResult(changed, 0, []);
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Status, Is.EqualTo(expected));
+        Assert.That(result.Code, Is.Null);
+        Assert.That(result.Message, Is.Null);
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((FormatPreviewResult)result));
+        string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(rootProperties, Does.Not.Contain("IsError"));
+        Assert.That(rootProperties, Does.Not.Contain("Status"));
+        Assert.That(rootProperties, Does.Not.Contain("Code"));
+        Assert.That(rootProperties, Does.Not.Contain("Message"));
+    }
+
+    [Test]
+    public void SymbolHoverInfo_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
+    {
+        IResultStatus ok = new SymbolHoverInfo("n", "k", "sig", null, null, null, "public", null, null, [], null);
+        IResultStatus bad = new SymbolHoverInfo("n", "k", "sig", null, null, null, "public", null, null, [], "boom");
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(ok.Message, Is.Null);
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(bad.Message, Is.EqualTo("boom"));
+
+        using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((SymbolHoverInfo)bad));
+        string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
+        Assert.That(rootProperties, Does.Not.Contain("IsError"));
+        Assert.That(rootProperties, Does.Not.Contain("Status"));
+        Assert.That(rootProperties, Does.Not.Contain("Code"));
+        Assert.That(rootProperties, Does.Not.Contain("Message"));
+    }
 }

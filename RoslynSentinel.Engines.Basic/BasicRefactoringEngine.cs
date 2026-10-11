@@ -25,9 +25,34 @@ public record ExtractMethodResult(bool IsError, string? ErrorMessage, string? Be
 }
 public record UsingDirectiveInfo(string Name, bool IsStatic, string? Alias);
 public record ResidualMention(FilePathWrapper FilePath, int LineNumber, string LineText);
-public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null);
-public record RenameSymbolResult(string OldName, string NewName, Dictionary<FilePathWrapper, string> PendingChanges, string? Error = null, SymbolHandle? UpdatedHandle = null, List<ResidualMention>? ResidualMentions = null)
+public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null) : IResultStatus
 {
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Error is not null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => Error;
+}
+public record RenameSymbolResult(string OldName, string NewName, Dictionary<FilePathWrapper, string> PendingChanges, string? Error = null, SymbolHandle? UpdatedHandle = null, List<ResidualMention>? ResidualMentions = null) : IResultStatus
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => Error is not null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => IsError ? ToolErrorCode.Exception : null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => Error;
+
     public string ToToolResponse()
     {
         return System.Text.Json.JsonSerializer.Serialize(new { success = Error is null, oldName = OldName, newName = NewName, filesChanged = PendingChanges.Count, updatedHandle = UpdatedHandle is SymbolHandle h ? new { h.ProjectName, h.DocCommentId } : null, note = UpdatedHandle is null ? "updatedHandle is null - re-run LocateSymbol before further operations on this symbol." : null });
@@ -37,7 +62,20 @@ public record RenameSymbolResult(string OldName, string NewName, Dictionary<File
 public record ControlFlowSummary(string MethodName, bool AlwaysReturns, bool SometimesReturns, bool NeverReturns, List<string> ReturnPoints, List<string> ThrowPoints, int ExitPathCount);
 public record DataFlowSummary(string MethodName, List<string> ReadBeforeAssignment, List<string> WrittenInside, List<string> ReadInside, List<string> WrittenOutside, List<string> CapturedVariables, List<string> DataFlowWarnings);
 public record FormatHunk(int StartLine, int EndLine, List<string> ContextBefore, List<string> RemovedLines, List<string> AddedLines, List<string> ContextAfter);
-public record FormatPreviewResult(bool Changed, int TotalHunks, List<FormatHunk> Hunks);
+public record FormatPreviewResult(bool Changed, int TotalHunks, List<FormatHunk> Hunks) : IResultStatus
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsError => false;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public ResultStatus Status => Changed ? ResultStatus.Success : ResultStatus.AlreadyInState;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Code => null;
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? Message => null;
+}
 public class BasicRefactoringEngine
 {
     private readonly ILogger<BasicRefactoringEngine> _logger;
