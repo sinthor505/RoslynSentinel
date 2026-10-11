@@ -1,6 +1,6 @@
 # Plan: adopt IResultStatus across the remaining status-carrying result types (phases 2-5)
 
-**Status:** DRAFT 2026-10-11. Phase 1 is committed (24499e55); nothing below is built.
+**Status:** IN PROGRESS 2026-10-11. Done: phase 1 (24499e55), step 2 (b406f44a), step 3 (333f3147). Step 4 in progress: `ResultStatusExtensions.FromFlag` added in `Common`; Engines.Basic records done; Engines.Advanced, Tools.Basic and Common records pending.
 
 ## Problem
 `proposals/proposal_shared_result_status_interface.md` defines `IResultStatus` (`IsError`, `Status`, `Code`,

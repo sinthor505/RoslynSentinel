@@ -1,6 +1,7 @@
 using System.Text.Json;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tests.Basic;
 
@@ -170,5 +171,48 @@ public class ResultStatusTests
 
         Assert.That(notFound.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(plain.ErrorCode, Is.EqualTo(ToolErrorCode.Exception));
+    }
+
+    [Test]
+    public void FromFlag_NotError_IsSuccess_AndErrorWithoutOrNonErrorCode_IsFailed()
+    {
+        Assert.That(ResultStatusExtensions.FromFlag(false, ToolErrorCode.NotFound), Is.EqualTo(ResultStatus.Success));
+        Assert.That(ResultStatusExtensions.FromFlag(true, null), Is.EqualTo(ResultStatus.Failed));
+        Assert.That(ResultStatusExtensions.FromFlag(true, ToolErrorCode.NotFound), Is.EqualTo(ResultStatus.NotFound));
+    }
+
+    [Test]
+    public void ExtractMethodResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
+    {
+        IResultStatus ok = new ExtractMethodResult(false, null, "b", "c", "m", "u");
+        IResultStatus bad = new ExtractMethodResult(true, "cannot extract", null, null, null, null);
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(bad.IsError, Is.True);
+        Assert.That(bad.Status.IsErrorStatus(), Is.True);
+        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(bad.Message, Is.EqualTo("cannot extract"));
+
+        string json = JsonSerializer.Serialize((ExtractMethodResult)bad);
+        Assert.That(json, Does.Not.Contain("\"Status\"").And.Not.Contain("\"Code\"").And.Not.Contain("\"Message\""));
+    }
+
+    [Test]
+    public void MsAugmentResult_StatusAgreesWithIsError_AndExplicitErrorCodeWins()
+    {
+        IResultStatus ok = MsAugmentResult.Ok("text");
+        IResultStatus plain = MsAugmentResult.Fail("boom");
+        IResultStatus coded = MsAugmentResult.Fail("nope", ToolErrorCode.TargetIneligible);
+
+        Assert.That(ok.IsError, Is.False);
+        Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
+        Assert.That(ok.Code, Is.Null);
+        Assert.That(plain.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(plain.Code, Is.EqualTo(ToolErrorCode.Exception));
+        Assert.That(coded.Status, Is.EqualTo(ResultStatus.NotApplicable));
+        Assert.That(coded.Code, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(coded.Message, Is.EqualTo("nope"));
     }
 }

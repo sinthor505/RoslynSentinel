@@ -98,4 +98,20 @@ public static class ResultStatusExtensions
         ToolErrorCode.TimedOut or ToolErrorCode.SolutionLoadTimeout => ResultStatus.TimedOut,
         _ => ResultStatus.Failed
     };
+
+    /// <summary>
+    /// Status for a type that stores a bare <c>IsError</c> flag plus an optional code: <see cref="ResultStatus.Success"/>
+    /// when not an error, otherwise the status <paramref name="errorCode"/> maps to, or <see cref="ResultStatus.Failed"/>
+    /// when the code is missing or maps to a non-error status. Keeps <c>Status</c> and <c>IsError</c> consistent.
+    /// </summary>
+    public static ResultStatus FromFlag(bool isError, string? errorCode)
+    {
+        if (!isError)
+        {
+            return ResultStatus.Success;
+        }
+
+        var mapped = FromErrorCode(errorCode);
+        return mapped.IsErrorStatus() ? mapped : ResultStatus.Failed;
+    }
 }
