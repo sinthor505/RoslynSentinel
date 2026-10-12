@@ -204,7 +204,8 @@ $instanceFolderPattern = '^[0-9a-f]{8}-[0-9a-f]{8}$'
 # launch.log on one of two folders after a simultaneous 4-tab VS Code launch. A build never taking
 # anywhere near 15s makes this a safe margin without meaningfully delaying real cleanup of
 # actually-stale (long-dead) folders, which will simply get swept on a later launch instead.
-$minimumAgeForSweep = [TimeSpan]::FromSeconds(15)
+# Incr
+$minimumAgeForSweep = [TimeSpan]::FromSeconds(3600)
 
 # Every currently-running RoslynSentinel.Server.Advanced.exe's own module path, gathered once
 # before the sweep loop (one CIM/WMI query instead of one per candidate folder). A live process's
