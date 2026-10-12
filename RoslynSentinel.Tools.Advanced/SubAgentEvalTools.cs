@@ -38,6 +38,8 @@ public class SubAgentEvalTools
         int? turnCap = null,
         [Description("Wall-clock limit for the model run, in minutes (build and test time excluded). Omit for the default (10).")]
         int? wallClockCapMinutes = null,
+        [Description("Whether to dispose the worktree after the model run.")]
+        bool disposeWorktree = true,
         CancellationToken cancellationToken = default)
-        => _impl.SubAgentEval(reason, prompt, model, maxTokensPerTurn, baseBranch, turnCap, wallClockCapMinutes, cancellationToken);
+        => _impl.SubAgentEval(reason, prompt, model, maxTokensPerTurn, baseBranch, turnCap, wallClockCapMinutes, disposeWorktree, cancellationToken);
 }

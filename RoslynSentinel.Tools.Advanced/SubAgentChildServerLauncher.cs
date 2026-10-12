@@ -31,10 +31,10 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
 
     /// <summary>
     /// Mode giving the dispatched model the same tool surface Claude Code itself drives with.
-    /// <c>--mode</c> (not <c>--include-tools</c>) because "Claude" is a mode name, and
+    /// <c>--mode</c> (not <c>--include-tools</c>) because "Claude-Lean" is a mode name, and
     /// <c>--include-tools</c> takes tool-class names.
     /// </summary>
-    public const string ChildToolMode = "Claude";
+    public const string ChildToolMode = "Claude-Lean";
 
     private const int MaxBuildDetailChars = 4000;
 
@@ -60,7 +60,7 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
     /// <param name="model">LM Studio model name the dispatched model runs as.</param>
     /// <exception cref="SubAgentLaunchException">Any launch step failed; everything created so far has been cleaned up.</exception>
     public async Task<SubAgentChildServer> LaunchAsync(
-        string solutionPath, string runId, string baseRef, string model, CancellationToken cancellationToken)
+        string solutionPath, string runId, string baseRef, string model, bool disposeWorktree, CancellationToken cancellationToken)
     {
         var solutionDirectory = Path.GetDirectoryName(solutionPath)
             ?? throw new SubAgentLaunchException(ToolErrorCode.InvalidArgument, "The loaded solution path has no directory.");
@@ -144,7 +144,7 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
                     loadError);
             }
 
-            return new SubAgentChildServer(client, worktreePath, runDirectory, logDirectory, runId, step, git, logger);
+            return new SubAgentChildServer(client, worktreePath, runDirectory, logDirectory, runId, step, git, disposeWorktree, logger);
         }
         catch (Exception)
         {
@@ -163,6 +163,7 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
             }
 
             await SubAgentChildServer.RemoveWorktreeAndBranchAsync(git, worktreePath, step, logger, runId);
+
             throw;
         }
     }
@@ -289,11 +290,12 @@ public sealed class SubAgentChildServer : IAsyncDisposable
 
     private readonly ILogger _logger;
     private readonly IWorktreeStep _step;
+    private readonly bool _disposeWorktree;
     private int _disposed;
 
     internal SubAgentChildServer(
         McpClient mcpClient, string worktreePath, string runDirectory, string logDirectory,
-        string runId, IWorktreeStep step, GitWorktreeManager gitWorktreeManager, ILogger logger)
+        string runId, IWorktreeStep step, GitWorktreeManager gitWorktreeManager, bool disposeWorktree, ILogger logger)
     {
         McpClient = mcpClient;
         WorktreePath = worktreePath;
@@ -302,24 +304,43 @@ public sealed class SubAgentChildServer : IAsyncDisposable
         RunId = runId;
         GitWorktreeManager = gitWorktreeManager;
         _step = step;
+        _disposeWorktree = disposeWorktree;
         _logger = logger;
     }
 
     /// <summary>Client connected to the child server, with the worktree's solution already loaded.</summary>
-    public McpClient McpClient { get; }
+    public McpClient McpClient
+    {
+        get;
+    }
 
     /// <summary>The run's disposable git worktree, where the dispatched model's edits land.</summary>
-    public string WorktreePath { get; }
+    public string WorktreePath
+    {
+        get;
+    }
 
     /// <summary>Folder owning this run's worktree, build output and logs. Logs outlive disposal.</summary>
-    public string RunDirectory { get; }
+    public string RunDirectory
+    {
+        get;
+    }
 
     /// <summary>Where the run's transcript.json and agent.log go; survives the worktree's removal.</summary>
-    public string LogDirectory { get; }
+    public string LogDirectory
+    {
+        get;
+    }
 
-    public string RunId { get; }
+    public string RunId
+    {
+        get;
+    }
 
-    public GitWorktreeManager GitWorktreeManager { get; }
+    public GitWorktreeManager GitWorktreeManager
+    {
+        get;
+    }
 
     public async ValueTask DisposeAsync()
     {
@@ -339,7 +360,10 @@ public sealed class SubAgentChildServer : IAsyncDisposable
             _logger.LogWarning(ex, "SubAgent {RunId}: disposing the child MCP client failed.", RunId);
         }
 
-        await RemoveWorktreeAndBranchAsync(GitWorktreeManager, WorktreePath, _step, _logger, RunId);
+        if (_disposeWorktree)
+        {
+            await RemoveWorktreeAndBranchAsync(GitWorktreeManager, WorktreePath, _step, _logger, RunId);
+        }
     }
 
     /// <summary>

@@ -40,7 +40,7 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
 
     public async Task<SentinelCallToolResult<SubAgentResult>> SubAgent(
         ToolCallReason reason, string prompt, string model, int maxTokensPerTurn,
-        int? turnCap, int? wallClockCapMinutes, SubAgentResponseFormat responseFormat, CancellationToken cancellationToken)
+        int? turnCap, int? wallClockCapMinutes, SubAgentResponseFormat responseFormat, bool disposeWorktree, CancellationToken cancellationToken)
     {
         var validationError = SubAgentModelRun.Validate(prompt, model, maxTokensPerTurn, turnCap, wallClockCapMinutes);
         if (validationError is not null)
@@ -61,7 +61,7 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
         try
         {
             await using var child = await new SubAgentChildServerLauncher(logger)
-                .LaunchAsync(solutionPath, runId, "HEAD", model, cancellationToken);
+                .LaunchAsync(solutionPath, runId, "HEAD", model, disposeWorktree, cancellationToken);
 
             var run = await SubAgentModelRun.RunAsync(
                 child, SystemPrompt, ApplyResponseFormat(prompt, responseFormat), model, maxTokensPerTurn,
@@ -95,14 +95,20 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
         }
         catch (Exception ex)
         {
-            // Never surface the raw exception or stack trace; the type name plus the server log is
-            // enough for a follow-up.
+            // Never surface the raw exception or stack trace. The type name plus the capped message goes
+            // in Detail so the caller can tell a bad host or model from an internal fault without a
+            // debugger (e.g. LM Studio's "No models loaded" arrives as an InvalidOperationException).
             logger.LogError(ex, "SubAgent {RunId}: failed unexpectedly.", runId);
             return Failure(new ResultError(ToolErrorCode.Exception,
-                $"SubAgent failed unexpectedly ({ex.GetType().Name}). Run id {runId}; see the server log and the run's agent.log for detail."));
+                $"SubAgent failed unexpectedly ({ex.GetType().Name}). Run id {runId}; see the server log and the run's agent.log for detail.",
+                Detail: ex.Message.Length > 400 ? ex.Message[..400] : ex.Message));
         }
     }
 
     private static SentinelCallToolResult<SubAgentResult> Failure(ResultError error) =>
-        new() { IsError = true, ErrorData = error };
+        new()
+        {
+            IsError = true,
+            ErrorData = error
+        };
 }

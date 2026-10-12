@@ -14,7 +14,7 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
 {
     public async Task<SentinelCallToolResult<SubAgentEvalResult>> SubAgentEval(
         ToolCallReason reason, string prompt, string model, int maxTokensPerTurn,
-        string? baseBranch, int? turnCap, int? wallClockCapMinutes, CancellationToken cancellationToken)
+        string? baseBranch, int? turnCap, int? wallClockCapMinutes, bool disposeWorktree, CancellationToken cancellationToken)
     {
         var validationError = SubAgentModelRun.Validate(prompt, model, maxTokensPerTurn, turnCap, wallClockCapMinutes);
         if (validationError is not null)
@@ -35,7 +35,7 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
         try
         {
             await using var child = await new SubAgentChildServerLauncher(logger)
-                .LaunchAsync(solutionPath, runId, string.IsNullOrWhiteSpace(baseBranch) ? "HEAD" : baseBranch, model, cancellationToken);
+                .LaunchAsync(solutionPath, runId, string.IsNullOrWhiteSpace(baseBranch) ? "HEAD" : baseBranch, model, disposeWorktree, cancellationToken);
 
             var run = await SubAgentModelRun.RunAsync(
                 child, AgentSystemPrompts.CodingAgent, prompt, model, maxTokensPerTurn, turnCap, wallClockCapMinutes, cancellationToken);
@@ -84,11 +84,13 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
         }
         catch (Exception ex)
         {
-            // Never surface the raw exception or stack trace; the type name plus the server log is
-            // enough for a follow-up.
+            // Never surface the raw exception or stack trace. The type name plus the capped message goes
+            // in Detail so the caller can tell a bad host or model from an internal fault without a
+            // debugger (e.g. LM Studio's "No models loaded" arrives as an InvalidOperationException).
             logger.LogError(ex, "SubAgentEval {RunId}: failed unexpectedly.", runId);
             return Failure(new ResultError(ToolErrorCode.Exception,
-                $"SubAgentEval failed unexpectedly ({ex.GetType().Name}). Run id {runId}; see the server log and the run's agent.log for detail."));
+                $"SubAgentEval failed unexpectedly ({ex.GetType().Name}). Run id {runId}; see the server log and the run's agent.log for detail.",
+                Detail: ex.Message.Length > 400 ? ex.Message[..400] : ex.Message));
         }
     }
 
@@ -114,5 +116,9 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
     }
 
     private static SentinelCallToolResult<SubAgentEvalResult> Failure(ResultError error) =>
-        new() { IsError = true, ErrorData = error };
+        new()
+        {
+            IsError = true,
+            ErrorData = error
+        };
 }

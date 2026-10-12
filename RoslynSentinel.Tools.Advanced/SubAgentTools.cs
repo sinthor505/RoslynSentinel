@@ -36,6 +36,8 @@ public class SubAgentTools
         int? wallClockCapMinutes = null,
         [Description("Text (default): the model's final message verbatim. Json: the prompt asks the model to end with a single JSON value; the message is still returned verbatim, unvalidated.")]
         SubAgentResponseFormat responseFormat = SubAgentResponseFormat.Text,
+        [Description("Whether to dispose the worktree after the model run.")]
+        bool disposeWorktree = true,
         CancellationToken cancellationToken = default)
-        => _impl.SubAgent(reason, prompt, model, maxTokensPerTurn, turnCap, wallClockCapMinutes, responseFormat, cancellationToken);
+        => _impl.SubAgent(reason, prompt, model, maxTokensPerTurn, turnCap, wallClockCapMinutes, responseFormat, disposeWorktree, cancellationToken);
 }

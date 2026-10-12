@@ -196,8 +196,16 @@ public sealed class ModelAgentRunner
             // estimator below still keys off the process-wide LlmOptions.Model, which can differ from
             // the per-call model a SubAgent/SubAgentEval run was given. That only skews this
             // heuristic's estimate (never correctness), so it is left as-is.
-            cumulativeTokens += modelMessage.TotalTokens ?? PromptTokenEstimator.EstimateTokens(
-                LlmOptions.Model ?? "", (modelMessage.Content ?? "") + (modelMessage.ReasoningContent ?? ""));
+            if (modelMessage.TotalTokens is not null)
+            {
+                cumulativeTokens = modelMessage.TotalTokens.Value;
+            }
+            else
+            {
+                cumulativeTokens += PromptTokenEstimator.EstimateTokens(
+                    LlmOptions.Model ?? "", (modelMessage.Content ?? "") + (modelMessage.ReasoningContent ?? ""));
+
+            }
 
             if (contextLength > 0 && cumulativeTokens >= contextLength * ContextUsageWarningFraction)
             {

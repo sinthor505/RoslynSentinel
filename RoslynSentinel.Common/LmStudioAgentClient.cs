@@ -294,7 +294,7 @@ public sealed class LmStudioAgentClient
         return new AgentChatMessage
         {
             Role = "assistant",
-            Content = messageText,
+            Content = string.IsNullOrEmpty(messageText) ? null : reasoningText,
             ReasoningContent = string.IsNullOrEmpty(reasoningText) ? null : reasoningText,
             ToolCalls = toolCalls,
             TotalTokens = completedResponse.Usage?.TotalTokens,
