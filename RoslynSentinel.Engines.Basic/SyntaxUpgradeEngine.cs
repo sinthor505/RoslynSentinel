@@ -59,7 +59,7 @@ public class SyntaxUpgradeEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.CannotEdit,
+                Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
                 Message = "// No if-throw guard clause patterns found to upgrade in this file."
             };
@@ -79,7 +79,7 @@ public class SyntaxUpgradeEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.CannotEdit,
+                Outcome = EditOutcome.FeatureDisabled,
                 FilePath = filePath,
                 Message = "// Feature IDE0011 is not enabled."
             };
@@ -124,7 +124,7 @@ public class SyntaxUpgradeEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.CannotEdit,
+                Outcome = EditOutcome.FeatureDisabled,
                 FilePath = filePath,
                 Message = "// Feature PatternMatching is not enabled."
             };
@@ -327,7 +327,7 @@ public class SyntaxUpgradeEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.CannotEdit,
+                Outcome = EditOutcome.FeatureDisabled,
                 FilePath = filePath,
                 Message = "// Feature ImplicitSpanCleanup is not enabled."
             };
@@ -813,7 +813,7 @@ public class SyntaxUpgradeEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
                 Message = "// Already uses file-scoped namespace declaration."
             };
@@ -824,7 +824,7 @@ public class SyntaxUpgradeEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
+                Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
                 Message = "// No block-form namespace declaration found in this file."
             };
@@ -962,7 +962,7 @@ public class SyntaxUpgradeEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
+                Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
                 Message = "// No replacements found."
             };
