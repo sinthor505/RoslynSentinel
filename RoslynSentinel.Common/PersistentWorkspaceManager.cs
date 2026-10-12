@@ -713,7 +713,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         {
             IncludeSubdirectories = true,
             NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.DirectoryName,
-            Filter = "*.*"
+            Filter = "*.cs"
         };
 
         _watcher.Changed += OnFileSystemChanged;
