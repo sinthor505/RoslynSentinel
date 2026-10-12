@@ -60,6 +60,34 @@ post-change `Build`, a `RunTest` over a project or the full suite, a baseline co
 `Build`/`RunTest` call, backgrounded if it must stay off the main context. Never dispatch a runner
 agent for it.
 
+## Implementation is never done in the main session (hard rule)
+
+All coding and plan implementation is dispatched to a subagent (`implementer`, or `implementer-senior`
+over the slice limits; `test-writer` for tests). The main session plans, scopes briefs, dispatches,
+reviews reports and commits. It does not make implementation edits itself - not even "small" ones -
+unless the user explicitly asks for it *and* approves it for that task. Approval does not carry over to
+later tasks.
+
+**Why:** the main chat's context is the scarce resource; implementation churn (edits, build output,
+retries) crowds out planning and review.
+
+**How to apply:** if you catch yourself about to call `ReplaceSnippet`, `Member`, `ApplyDiff`,
+`RenameSymbol`, `MoveMember` or similar on source, stop and write a dispatch brief instead. Reading,
+searching, building, running tests, git operations and editing docs/Markdown stay in the main session.
+Dispatch sequentially, never in parallel, for C# edits (see below).
+
+## Exploration and review are dispatched too (hard rule)
+
+The main session only does small reads: confirming or verifying a specific fact (one outline, one
+method, one file, one `git status`). Anything broader - exploring how something works, tracing call
+chains, surveying docs/proposals, reviewing a diff, file or plan - goes to a read-only subagent:
+`explore-haiku` for symbol/usage lookups, `explore-sonnet` for multi-file investigation and large
+reviews. Both already know the reference docs; the brief only needs the question and a breadth.
+
+**Why:** same as implementation - the main chat's context is the scarce resource, and subagents return
+a distilled answer instead of the file contents. **How to apply:** if a question needs more than a
+couple of reads to answer, dispatch instead of starting to read.
+
 ## Dispatching `implementer`
 
 Load the `dispatch-implementer` skill before the first dispatch. In short: pin `model: "haiku"`; the brief
