@@ -67,7 +67,7 @@ public sealed record WriteAdvice(
 /// </para>
 /// <para>
 /// Basic-only by design. Every tool this can name lives in Basic: the gated whole-file-write
-/// tools in <c>WholeFileWriteTools</c> and the structural tools in <c>RefactoringTools</c>;
+/// tools in <c>WholeFileWriteTools</c> and the structural tools in <c>RefactoringStructuralTools</c>;
 /// Advanced has no whole-file-write tools at all. (Distinguish those from <em>mutating</em>
 /// tools generally, a much larger set spanning both projects -> Advanced's mutators are semantic refactorings, not escape hatches for
 /// an oversized text edit, so they never appear here.)
@@ -86,10 +86,10 @@ public sealed class WriteToolAdviceHelper
             ["DeleteFile"] = "WholeFileWriteTools",
             ["ApplyDiff"] = "WholeFileWriteTools",
             ["ApplyUnifiedDiff"] = "WholeFileWriteTools",
-            ["Member"] = "RefactoringTools",
-            ["RenameSymbol"] = "RefactoringTools",
-            ["ChangeSignature"] = "RefactoringTools",
-            ["ExtractMethodSafe"] = "RefactoringTools",
+            ["Member"] = "RefactoringStructuralTools",
+            ["RenameSymbol"] = "RefactoringStructuralTools",
+            ["ChangeSignature"] = "RefactoringStructuralTools",
+            ["ExtractMethodSafe"] = "RefactoringStructuralTools",
         };
 
     private readonly HashSet<string> _activeToolClasses;

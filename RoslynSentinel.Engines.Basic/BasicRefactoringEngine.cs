@@ -845,7 +845,7 @@ public class BasicRefactoringEngine
             }
         }
 
-        // Per-file diffs are not computed here -> the caller (RefactoringTools.RenameSymbol)
+        // Per-file diffs are not computed here -> the caller (RefactoringStructuralTools.RenameSymbol)
         // gets them from ValidateAndApplyAsync's returnDiff option, which builds them via the
         // canonical DiffEngine.CreateDiff. This used to duplicate that with a second, weaker
         // lockstep diff (ComputeRenameHunks); removed as part of the diff-logic consistency fix

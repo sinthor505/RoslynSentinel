@@ -6,7 +6,7 @@ namespace RoslynSentinel.Tools.Basic;
 
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): implementation half of the
 // RefactoringExtractionDocsTools/Impl pair. Method bodies below are moved verbatim from
-// RefactoringTools.cs (GenerateMapping, UsingDirective, SummaryComment, ExtractLocalVariable,
+// RefactoringStructuralTools.cs (GenerateMapping, UsingDirective, SummaryComment, ExtractLocalVariable,
 // ExtractMethodSafe). ValidateAndApplyAsync is duplicated per-Impl-class per Decision 1-Amendment.
 public class RefactoringExtractionDocsImpl
 {

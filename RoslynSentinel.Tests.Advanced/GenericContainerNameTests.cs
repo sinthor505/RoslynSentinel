@@ -6,7 +6,7 @@
 // it could never equal a caller's raw generic string. Third recorded instance of this class of miss
 // (cf. docs/current/project_qwen36_35b_smoketest_and_member_containername_gap.md).
 //
-// Driven through BasicRefactoringEngine rather than the RefactoringTools surface: the fix is one
+// Driven through BasicRefactoringEngine rather than the RefactoringStructuralTools surface: the fix is one
 // engine-level chokepoint shared by 13 call sites across Member, ModifyEnum and ModifyBaseType, and
 // the engine needs three constructor arguments where the tool class needs sixteen.
 

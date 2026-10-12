@@ -487,7 +487,7 @@ public class CreateFileDeleteFileTests
         var diffEngine = new DiffEngine();
         var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         var memberRefactoringEngine = new MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
-        var refactoringTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
+        var refactoringStructuralTools = new RefactoringStructuralTools(new RefactoringStructuralImpl(
             refactoringEngine,
             memberRefactoringEngine,
             structuralRefinementEngine,
@@ -506,7 +506,7 @@ public class CreateFileDeleteFileTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
         // Populate a member inside the type CreateFile seeded.
-        var populateResult = await refactoringTools.Member(
+        var populateResult = await refactoringStructuralTools.Member(
             reason: "test message",
             operation: MemberAction.addMember,
             filePath: newFile,
@@ -515,7 +515,7 @@ public class CreateFileDeleteFileTests
         Assert.That(!populateResult.IsError, Is.True, populateResult.ErrorData?.Message);
 
         // Add a second top-level type -> CreateFile only seeds the first.
-        var secondTypeResult = await refactoringTools.Member(
+        var secondTypeResult = await refactoringStructuralTools.Member(
             reason: "test message",
             operation: MemberAction.addTopLevelType,
             filePath: newFile,

@@ -169,7 +169,7 @@ public class WorkspaceTools
 
     [McpServerTool(Name = "CreateFile")]
     [Produces(DataTag.ChangeId)]
-    [Description("Creates a new file; fails if it already exists. For a new file with its full content in one call, use WriteFile(operation: CreateFile, content: ...).")] 
+    [Description("Creates a new file; fails if it already exists. For a new file with its full content in one call, use WriteFile(operation: CreateFile, content: ...).")]
     public Task<SentinelCallToolResult<object>> CreateFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
@@ -224,7 +224,7 @@ public class WorkspaceTools
                     ? new
                     {
                         result = strippedConfirmedResult,
-                        diff = RefactoringTools.BuildDiffFromPreImages(pending.Value.Changes, confirmedResult.PreImages)
+                        diff = RefactoringStructuralTools.BuildDiffFromPreImages(pending.Value.Changes, confirmedResult.PreImages)
                     }
                     : strippedConfirmedResult;
                 return new SentinelCallToolResult<object>()
@@ -294,7 +294,7 @@ public class WorkspaceTools
                         ? new
                         {
                             result = strippedResult,
-                            diff = RefactoringTools.BuildDiffFromPreImages(changes, result.PreImages)
+                            diff = RefactoringStructuralTools.BuildDiffFromPreImages(changes, result.PreImages)
                         }
                         : strippedResult;
                     return new SentinelCallToolResult<object>()
@@ -398,7 +398,7 @@ public class WorkspaceTools
                             ? new
                             {
                                 result = strippedDiffResult,
-                                diff = RefactoringTools.BuildDiffFromPreImages(diffChanges, result.PreImages)
+                                diff = RefactoringStructuralTools.BuildDiffFromPreImages(diffChanges, result.PreImages)
                             }
                             : strippedDiffResult;
                         return new SentinelCallToolResult<object>()

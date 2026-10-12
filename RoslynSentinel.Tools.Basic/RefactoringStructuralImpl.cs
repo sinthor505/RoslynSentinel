@@ -7,8 +7,8 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tools.Basic;
 
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): implementation half of the
-// RefactoringSignatureTools/Impl pair. Method bodies below are moved verbatim from
-// RefactoringTools.cs (Member, ModifyEnum, ModifyAttribute, ModifyModifier, ModifyBaseType,
+// RefactoringStructuralTools/Impl pair. Method bodies below are moved verbatim from
+// RefactoringStructuralTools.cs (Member, ModifyEnum, ModifyAttribute, ModifyModifier, ModifyBaseType,
 // SyncTypeAndFilename) plus their 3 private batch helpers (ModifyModifierBatch, ModifyAttributeBatch,
 // ModifyBaseTypeBatch), each called from exactly one of the public methods above. ValidateAndApplyAsync
 // is duplicated per-Impl-class per Decision 1-Amendment.

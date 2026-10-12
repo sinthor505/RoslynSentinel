@@ -1,7 +1,7 @@
 namespace RoslynSentinel.Common;
 
 /// <summary>
-/// Result of a validate-then-write-through call (see RefactoringTools/
+/// Result of a validate-then-write-through call (see RefactoringStructuralTools/
 /// AdvancedRefactoringTools ValidateAndApplyAsync). Exactly one of
 /// <see cref="Error"/> or a written change (<see cref="ChangeId"/> non-null, when not a dry run)
 /// is populated on success.

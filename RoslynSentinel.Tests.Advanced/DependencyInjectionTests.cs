@@ -66,8 +66,8 @@ public class DependencyInjectionTests
         var workspaceTools = _serviceProvider.GetService<WorkspaceTools>();
         Assert.That(workspaceTools, Is.Not.Null);
 
-        var refactoringTools = _serviceProvider.GetService<RefactoringStructuralTools>();
-        Assert.That(refactoringTools, Is.Not.Null, "Failed to resolve RefactoringStructuralTools. Check constructor dependencies.");
+        var refactoringStructuralTools = _serviceProvider.GetService<RefactoringStructuralTools>();
+        Assert.That(refactoringStructuralTools, Is.Not.Null, "Failed to resolve RefactoringStructuralTools. Check constructor dependencies.");
     }
 
     [Test]

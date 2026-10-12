@@ -1,5 +1,3 @@
-using RoslynSentinel.Server.Basic;
-
 namespace RoslynSentinel.Tests.Server;
 
 /// <summary>
@@ -16,7 +14,7 @@ namespace RoslynSentinel.Tests.Server;
 public class WriteToolAdviceHelperTests
 {
     private const string WholeFileWriteClass = "WholeFileWriteTools";
-    private const string RefactoringClass = "RefactoringTools";
+    private const string RefactoringClass = "RefactoringStructuralTools";
 
     [Test]
     public void IsExposed_UnknownToolName_ReturnsFalse()

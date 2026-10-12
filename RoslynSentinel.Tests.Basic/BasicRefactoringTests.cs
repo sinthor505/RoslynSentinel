@@ -520,7 +520,7 @@ public enum OrderStatus
         Assert.That(added.Outcome, Is.EqualTo(EditOutcome.Modified));
 
         // BasicRefactoringEngine methods read from the workspace's current solution rather than each
-        // other's return values -> in the real tool layer, RefactoringTools writes
+        // other's return values -> in the real tool layer, RefactoringStructuralTools writes
         // UpdatedText back into the workspace between calls, so mirror that here.
         SetSource(added.UpdatedText!, "OrderStatus.cs");
 

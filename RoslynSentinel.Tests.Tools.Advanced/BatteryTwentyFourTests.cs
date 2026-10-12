@@ -1,5 +1,5 @@
-// Battery #24 -> RefactoringTools
-// Tests all ~65 public methods of RefactoringTools in-memory via TestSolutionBuilder.
+// Battery #24 -> RefactoringStructuralTools
+// Tests all ~65 public methods of RefactoringStructuralTools in-memory via TestSolutionBuilder.
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Advanced;

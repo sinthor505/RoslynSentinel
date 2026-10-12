@@ -27,7 +27,7 @@ public class StructuredContentDataTagTests
     private TestSolutionFixture _fixture = null!;
 
     // LocateSymbol lives in SymbolNavigationTools (Workspace mode); ModifyModifier lives in
-    // RefactoringTools (Refactor mode) - see ToolClassRegistry.cs. Both modes are needed.
+    // RefactoringStructuralTools (Refactor mode) - see ToolClassRegistry.cs. Both modes are needed.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace", "Refactor" };
 
     private const string ProbeSource = @"namespace ContosoOrders.Core;

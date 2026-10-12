@@ -136,7 +136,7 @@ public class ReplaceSnippetSizeGuardTests
         // configuration that scores 26/26 -> see project_wholefilewrite_gating_overnight_result_2026_09_08),
         // the size error must not send the agent to a tool it cannot call.
         using var workspace = CreateWorkspace();
-        var tools = BuildTools(workspace.Manager, new WriteToolAdviceHelper(["RefactoringTools"]));
+        var tools = BuildTools(workspace.Manager, new WriteToolAdviceHelper(["RefactoringStructuralTools"]));
 
         var targetFile = workspace.PathOf(TargetRelativePath);
         var anchor = FirstLine(workspace.ReadText(TargetRelativePath));

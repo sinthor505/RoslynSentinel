@@ -129,7 +129,7 @@ public static class ToolClassRegistry
             ["Workspace"] = ["WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "GitTools"],
             ["Admin"] = ["AdminTools"],
             ["WholeFileWrite"] = ["WholeFileWriteTools"],
-            ["Refactor"] = ["RefactoringTools", "AdvancedRefactoringTools"],
+            ["Refactor"] = ["RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools"],
             ["Intelligence"] = ["IntelligenceTools", "ScanTools"],
             ["Modernize"] = ["ModernizationTools"],
             ["Quality"] = ["QualityTools"],

@@ -4,7 +4,7 @@ namespace RoslynSentinel.Tools.Basic;
 
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): MCP-surface half of the
 // RefactoringExtractionDocsTools/Impl pair. All method bodies delegate one-line to _impl; all original
-// [McpServerTool]/[Produces]/[Description] attributes are preserved verbatim from RefactoringTools.cs.
+// [McpServerTool]/[Produces]/[Description] attributes are preserved verbatim from RefactoringStructuralTools.cs.
 [McpServerToolType]
 public class RefactoringExtractionDocsTools
 {

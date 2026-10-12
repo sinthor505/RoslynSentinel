@@ -5,7 +5,7 @@ namespace RoslynSentinel.Common;
 
 /// <summary>
 /// Shared implementation of the validate-then-write-through pattern used by both
-/// RefactoringTools (Basic) and AdvancedRefactoringTools (Advanced) -> previously
+/// RefactoringStructuralTools (Basic) and AdvancedRefactoringTools (Advanced) -> previously
 /// duplicated verbatim in each. Validates proposed changes against the current in-memory
 /// solution and, unless <paramref name="dryRun"/> is set, writes them straight to disk via
 /// <see cref="IWorkspaceManager.ApplyProposedChangesAsync"/> (write-through -> no
