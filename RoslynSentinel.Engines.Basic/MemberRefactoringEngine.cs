@@ -2460,7 +2460,7 @@ public class MemberRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.CannotEdit,
+                Outcome = EditOutcome.SourceInvalid,
                 FilePath = filePath,
                 Message = "// Cannot edit: invalid member source."
             };
@@ -2562,7 +2562,7 @@ public class MemberRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.CannotEdit,
+                Outcome = EditOutcome.SourceInvalid,
                 FilePath = filePath,
                 Message = "// Cannot edit: invalid member source."
             };
@@ -2985,7 +2985,7 @@ public class MemberRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
+                Outcome = EditOutcome.SourceInvalid,
                 FilePath = filePath,
                 Message = "// Failed to parse new member."
             };
@@ -3054,7 +3054,7 @@ public class MemberRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
+                Outcome = EditOutcome.SourceInvalid,
                 FilePath = filePath,
                 Message = newType == null ? "// Failed to parse new type." : "// newTypeSource did not parse as a type declaration (enum/class/record/struct/interface)."
             };

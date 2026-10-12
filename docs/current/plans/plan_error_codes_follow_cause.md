@@ -183,3 +183,39 @@ Measured against current code (explore-sonnet). Line numbers in the Steps above 
    and are committed (9f536a1); step 4 can proceed. Run `Git status` first anyway. Those edits
    already moved 11 pure not-found sites to `NotFound`; `convert_property_safe` (~1078) and
    `convert_to_background_service` (~1117) still say "not found or not eligible" and are step 4 work.
+
+## Resume block 2026-10-12 (slice 2 CodeTransformTools measurement)
+
+Relabel slices done: slice 1 (MemberRefactoringEngine, 6a6355e3), slice 2 engine half (SyntaxUpgradeEngine, cba603d4). Both were done by a Qwen3.5 SubAgent run (disposeWorktree=false), diff reviewed with Git(diff, repoPath), applied with ApplyUnifiedDiff (needs McpToolsetControl moveExtract), tested, committed, worktree and branch removed.
+
+Measured (explore-sonnet): all 34 `string.IsNullOrEmpty(rN.UpdatedText)` sites in RoslynSentinel.Tools.Experimental/CodeTransformTools.cs are CONVERT NOW, none BLOCKED. 21 in ApplyFileCodeTransform (check lines 88-520), 13 in ApplyClassCodeTransform (908-1185). One file, 34 edits, no engine edits. Pattern: commit 54a0bd98 (`if (RefactoringToolHelpers.GuardEngineResult(r, "<name>", $"... '{resolvedFilePath}'", <hint>, NoOpHandling.Success|Error(<old text>)) is { } outcomeGuard) { return outcomeGuard; }` and `r.UpdatedText!` in the success path). Success-style sites keep their old "nothing to do" text; Class-scope sites marked Error (class_to_record, record_to_class, make_class_immutable, convert_abstract_to_interface, replace_constructor_with_factory, convert_property_safe, convert_property_to_methods, convert_to_background_service, upgrade_to_primary_constructor) keep NoOpHandling.Error with their old lead and hint.
+
+Notes for the brief:
+- File scope has no shared hint constant (Method scope uses MethodLookupHint); pick/define a file-level hint once, not 21 variants.
+- Keep the raw SuccessData object returns at optimize_task_wait (result3.Outcome) and simplify_boolean_expressions (result7).
+- NOT sites: format_document_preview 231, format_document_safe 238, preview_add_missing_usings 283, sort_and_deduplicate_usings 386.
+- Masked bugs this fixes: seven engines return TargetNotFound with whole-file UpdatedText and the tool reports success (ClassToRecord, ConvertToSourceGeneratedLogging, MakeClassImmutable, OptimizeTaskWait, Add/RemoveConfigureAwaitFalse, SimplifyMemberAccess).
+- Rewriter engines always return Modified, so converting them only unmasks FeatureDisabled/DocumentNotFound/SourceInvalid; their "No X found" success text stays unreachable until change detection is added (separate item).
+- Check before committing: convert_property_to_methods can return CannotEdit with whole file in Message; confirm SummarizeEngineMessage keeps it off the error text.
+- Tests: none call ApplyFileCodeTransform/ApplyClassCodeTransform. Add coverage next to RoslynSentinel.Tests.Server/CodeTransformToolsOutcomeTests.cs (14 existing tests, Method/Generate only) via test-writer; at least one per outcome family (Modified, AlreadyInTargetState via upgrade_to_file_scoped_namespace, FeatureDisabled, TargetNotFound).
+- Suggested batching: 4-5 batches of 7-9 sites (file scope x3, class scope x2), each compiled green; Qwen with unique-message anchors works, or implementer-senior.
+
+Full-suite baseline note: 5 tool-surface tests (ClaudeLean_ExposesExactlyTheTwentyFiveCoreTools x2, ToolsArchitectureDocFreshness, Claude_BasicServer_IsTheAdvancedBaselineMinus..., Registry_EveryCoreToolName_IsDeclaredByAToolMethod) fail with 26 tools vs 25 expected since 348b03b3 (SubAgent enabled in claude-lean); T4_LargeResult_WrittenToFile_DataNull is flaky under the full run.
+
+Other LEFT relabel slices: 3 (ConfigureAwait + OptimizeTaskWait), 4 (ThreadSafety + CodeGeneration), 5 (Asyncify batch, HIGH risk). SyntaxUpgradeEngine rewriter engines (AddBraces, UpgradePatternMatching, CleanupImplicitSpans) still need change detection.
+
+## Scope decision 2026-10-12: claude-lean first, CodeTransformTools skipped
+
+User decision: skip RoslynSentinel.Tools.Experimental/CodeTransformTools.cs (not in active use; the 34-site conversion above is parked, not cancelled) and update the claude-lean core tools first. Survey result (explore-sonnet): only `Member` and `UsingDirective` read an engine DocumentEditResult in the 25-tool core. None can report a false success on a non-Modified outcome with text today. Relabel slices 3-5 feed no core tool (slice 3 -> CodeTransformTools only; slice 4 -> CodeTransformTools, ScanTools detectors, on-demand SyncInterface/GenerationTools; slice 5 -> AsyncifyTools, default Advanced only).
+
+Remaining claude-lean defects, by likely hit rate:
+1. `Member` replace (RefactoringStructuralImpl.cs ~603): correct labels; success still text-based. No change needed beyond optional GuardEngineResult.
+2. `Member` addMember/before/after (~877 autoStage=false, ~893 RequireUpdatedText): MemberRefactoringEngine ~2975 "Failed to parse new member" is TargetNotFound (should be SourceInvalid); InsertMemberAfterAsync ~2465 returns CannotEdit for invalid source.
+3. `UsingDirective` (RefactoringExtractionDocsImpl.cs ~100 autoStage=false, ~117): at ~100 every non-Modified outcome returns IsError=false with an empty change set, so DocumentNotFound looks like success; an already-present add lists the file as changed.
+4. `Member` remove (~669): RemoveMemberAsync ~3234 CannotRemove puts root.ToFullString() in Message; with skipPrecheck:true the whole file reaches the error text. RequireUpdatedText embeds updated.Message unsanitised.
+5. `Member` addTopLevelType (~722, ~738): "newTypeSource did not parse" ~3068 and "Failed to parse new type" return TargetNotFound (should be SourceInvalid).
+6. `Member` enum branches (~589 replace, ~658 remove, ~792 add; ~798 dead code): error code hard-coded ToolErrorCode.Exception, engine code/outcome ignored; an identical replace returns AlreadyInTargetState with no text and the tool reports an error.
+
+Recommended slice A (3 files, ~9 edits + tests): RefactoringToolHelpers.cs (RequireUpdatedText runs updated.Message through SummarizeEngineMessage), RefactoringStructuralImpl.cs (enum branches use engine code and treat AlreadyInTargetState as success; RequireUpdatedText before the !autoStage blocks at ~722/~877; delete dead ~798), RefactoringExtractionDocsImpl.cs (same reorder at ~100).
+Recommended slice B (1 file, ~4 edits): MemberRefactoringEngine.cs SourceInvalid relabels at ~2975, ~3068, ~3076, ~2465/~2567; check tests asserting those outcomes first.
+Unchecked: whether lean exposes autoStage:false (rows 2, 3, 5 only live if so), Declaration/ParameterEdit delegation, existing Member/UsingDirective outcome tests.

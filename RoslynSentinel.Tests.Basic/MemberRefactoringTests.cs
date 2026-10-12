@@ -931,7 +931,7 @@ namespace MyApp.Second
     }
 
     [Test]
-    public async Task AddTopLevelType_NotATypeDeclaration_ReturnsTargetNotFound()
+    public async Task AddTopLevelType_NotATypeDeclaration_ReturnsSourceInvalid()
     {
         SetSource(@"
 namespace MyApp;
@@ -941,7 +941,7 @@ public class Widget { }
 
         var result = await _memberRefactoringEngine.AddTopLevelTypeAsync("Widget.cs", "public string Foo() => \"bar\";");
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.SourceInvalid));
         Assert.That(result.Message, Does.Contain("did not parse as a type declaration"));
     }
 
