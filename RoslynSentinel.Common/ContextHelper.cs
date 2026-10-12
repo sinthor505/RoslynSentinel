@@ -658,13 +658,14 @@ public static class ContextHelper
         var lines = new List<string>();
         for (int i = 0; i < allMatches.Count; i++)
         {
-            var lineIndex = sourceText.Lines.GetLinePosition(allMatches[i].Start).Line;
-            var before = lineIndex > 0 ? sourceText.Lines[lineIndex - 1].ToString().Trim() : "(start of file)";
-            var after = lineIndex < sourceText.Lines.Count - 1
-                ? sourceText.Lines[lineIndex + 1].ToString().Trim()
+            var firstLineIndex = sourceText.Lines.GetLinePosition(allMatches[i].Start).Line;
+            var lastLineIndex = sourceText.Lines.GetLinePosition(allMatches[i].Start + allMatches[i].Length - 1).Line;
+            var before = firstLineIndex > 0 ? sourceText.Lines[firstLineIndex - 1].ToString().Trim() : "(start of file)";
+            var after = lastLineIndex < sourceText.Lines.Count - 1
+                ? sourceText.Lines[lastLineIndex + 1].ToString().Trim()
                 : "(end of file)";
             descriptions.Add((before, after));
-            lines.Add($"Match {i + 1} (line {lineIndex + 1}): lineBefore=\"{before}\" lineAfter=\"{after}\"");
+            lines.Add($"Match {i + 1} (lines {firstLineIndex + 1}-{lastLineIndex + 1}): lineBefore=\"{before}\" lineAfter=\"{after}\"");
         }
 
         var tieGroups = descriptions.Select((d, i) => (d, i)).GroupBy(x => x.d).Where(g => g.Count() > 1);
@@ -717,16 +718,17 @@ public static class ContextHelper
     private static bool FilterByAdjacentLinesPredicate(
         SourceText sourceText, SnippetMatch match, string? lbTrimmed, string? laTrimmed)
     {
-        var lineIndex = sourceText.Lines.GetLinePosition(match.Start).Line;
+        var firstLineIndex = sourceText.Lines.GetLinePosition(match.Start).Line;
+        var lastLineIndex = sourceText.Lines.GetLinePosition(match.Start + match.Length - 1).Line;
 
         if (lbTrimmed != null)
         {
-            if (lineIndex == 0)
+            if (firstLineIndex == 0)
             {
                 return false;
             }
 
-            var prevLine = sourceText.Lines[lineIndex - 1].ToString().Trim();
+            var prevLine = sourceText.Lines[firstLineIndex - 1].ToString().Trim();
             if (!MatchLine(prevLine, lbTrimmed))
             {
                 return false;
@@ -734,12 +736,12 @@ public static class ContextHelper
         }
         if (laTrimmed != null)
         {
-            if (lineIndex >= sourceText.Lines.Count - 1)
+            if (lastLineIndex >= sourceText.Lines.Count - 1)
             {
                 return false;
             }
 
-            var nextLine = sourceText.Lines[lineIndex + 1].ToString().Trim();
+            var nextLine = sourceText.Lines[lastLineIndex + 1].ToString().Trim();
             if (!MatchLine(nextLine, laTrimmed))
             {
                 return false;
