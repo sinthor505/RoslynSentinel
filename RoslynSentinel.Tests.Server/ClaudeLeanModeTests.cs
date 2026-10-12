@@ -31,7 +31,7 @@ public class ClaudeLeanModeTests
         "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
         "UsingDirective", "RenameSymbol", "WriteFile", "CreateFile", "DeleteFile",
         "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift",
-        "McpToolsetControl",
+        "McpToolsetControl", "SubAgent",
     ];
 
     /// <summary>The Advanced server's tool set for --mode claude, captured before claude-lean existed.</summary>
@@ -192,13 +192,14 @@ public class ClaudeLeanModeTests
             new HashSet<string>(),
             new HashSet<string>());
 
-        Assert.That(classes, Has.Count.EqualTo(15));
+        Assert.That(classes, Has.Count.EqualTo(16));
         Assert.That(classes, Does.Contain("ToolsetControlTools"));
         Assert.That(classes, Does.Contain("DeclarationTools"));
         Assert.That(classes, Does.Contain("ParameterEditTools"));
         Assert.That(classes, Does.Contain("SemanticFindReplaceTools"));
         Assert.That(classes, Does.Contain("NamedArgumentsTools"));
         Assert.That(classes, Does.Contain("TestCategoryTaggingTools"));
+        Assert.That(classes, Does.Contain("SubAgentTools"));
         Assert.That(classes, Does.Not.Contain("AdvancedRefactoringTools"));
         Assert.That(classes, Does.Not.Contain("DocumentationTools"));
     }

@@ -44,7 +44,7 @@ public static class ToolClassRegistry
             "Search", "FindReferences", "InspectSymbol", "LocateSymbol", "GetDiagnostics",
             "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
             "UsingDirective", "RenameSymbol", "WriteFile", "CreateFile", "DeleteFile",
-            "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift",
+            "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift", "SubAgent",
             ToolsetCatalog.ControlToolName,
         ],
         StringComparer.Ordinal);
@@ -59,7 +59,7 @@ public static class ToolClassRegistry
         "WorkspaceTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
         "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
         "AdminTools", "WholeFileWriteTools", "ToolsetControlTools", "DeclarationTools", "ParameterEditTools",
-        "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools",
+        "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools", "SubAgentTools",
     ];
 
     /// <summary>
@@ -75,7 +75,7 @@ public static class ToolClassRegistry
             "WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
             "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
             "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools", "DeclarationTools", "ParameterEditTools",
-            "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools",
+            "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools", "SubAgentTools",
         ],
         StringComparer.Ordinal);
 

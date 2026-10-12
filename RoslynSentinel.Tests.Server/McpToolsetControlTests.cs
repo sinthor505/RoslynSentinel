@@ -327,8 +327,14 @@ public class McpToolsetControlTests
         private readonly SemaphoreSlim _signal = new(0);
         private IAsyncDisposable? _registration;
 
-        public required IHost Host { get; init; }
-        public required McpClient Client { get; init; }
+        public required IHost Host
+        {
+            get; init;
+        }
+        public required McpClient Client
+        {
+            get; init;
+        }
         public int ListChangedCount => Volatile.Read(ref _listChanged);
 
         /// <summary>
@@ -378,7 +384,12 @@ public class McpToolsetControlTests
             await Client.CallToolAsync(tool, args, cancellationToken: TestContext.CurrentContext.CancellationToken);
 
         public Task<CallToolResult> ToggleAsync(string toolSet, bool enabled) =>
-            CallAsync("McpToolsetControl", new() { ["reason"] = Reason, ["toolSet"] = toolSet, ["enabled"] = enabled });
+            CallAsync("McpToolsetControl", new()
+            {
+                ["reason"] = Reason,
+                ["toolSet"] = toolSet,
+                ["enabled"] = enabled
+            });
 
         public static string Text(CallToolResult result) =>
             string.Join("\n", result.Content.OfType<TextContentBlock>().Select(b => b.Text));
@@ -531,7 +542,7 @@ public class McpToolsetControlTests
         using var host = BuildHost(advanced: true, "claude-lean", includeTools: null);
 
         var names = host.Services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolCollection!.PrimitiveNames;
-        Assert.That(names, Has.Count.EqualTo(25));
+        Assert.That(names, Has.Count.EqualTo(26));
         Assert.That(host.Services.GetRequiredService<ToolsetService>().DynamicToolNames, Is.Empty);
     }
 
