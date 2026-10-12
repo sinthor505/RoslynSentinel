@@ -1976,7 +1976,7 @@ public class MemberRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.CannotEdit,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
                 Message = "// Cannot edit: modifier already exists.",
                 UpdatedText = root.ToFullString()
@@ -2059,7 +2059,7 @@ public class MemberRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.CannotEdit,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
                 Message = "// Cannot edit: modifier not found.",
                 UpdatedText = root.ToFullString()
@@ -4827,7 +4827,7 @@ public class MemberRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.CannotEdit,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
                 Message = "// Cannot edit: base type already exists.",
                 UpdatedText = root!.ToFullString()
@@ -4905,7 +4905,7 @@ public class MemberRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.CannotEdit,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
                 Message = "// Cannot edit: base type not found."
             };
