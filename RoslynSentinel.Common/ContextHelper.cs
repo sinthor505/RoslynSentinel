@@ -309,9 +309,15 @@ public static class ContextHelper
 
         if (matches.Count == 0)
         {
+            var unfilteredCount = (lineBefore, lineAfter) is (null, null)
+                ? 0
+                : FindAllExactSnippetMatches(sourceText, contextSnippet).Count;
+            var diagnosis = unfilteredCount > 0
+                ? $"{label} matches {unfilteredCount} place(s) exactly, but the lineBefore/lineAfter you supplied filtered out all of them. lineBefore must equal the line before the match's first line and lineAfter the line after the match's last line (compared trimmed). Fix or drop lineBefore/lineAfter."
+                : DiagnoseNoMatch(sourceText, contextSnippet);
             throw ContextErrorBuilder.Build(
                 SnippetMatchOutcome.NoMatch, contextSnippet, sourceText,
-                diagnosis: DiagnoseNoMatch(sourceText, contextSnippet), verbatimRequired: true, snippetLabel: label);
+                diagnosis: diagnosis, verbatimRequired: true, snippetLabel: label);
         }
 
         if (matches.Count == 1)
