@@ -130,8 +130,8 @@ public class ContextHelperLineAfterTests
 
         Assert.Multiple(() =>
         {
-            Assert.That(ex!.Message, Does.Contain("Match 1 (lines 5-6): lineBefore="));
-            Assert.That(ex.Message, Does.Contain("Match 2 (lines 12-13): lineBefore="));
+            Assert.That(ex!.Message, Does.Contain("Match 1 (lines 5-6): matchLine=5 lineBefore="));
+            Assert.That(ex.Message, Does.Contain("Match 2 (lines 12-13): matchLine=12 lineBefore="));
             Assert.That(ex.Message, Does.Not.Contain(", in "));
         });
     }

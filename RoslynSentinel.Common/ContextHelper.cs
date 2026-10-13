@@ -294,6 +294,9 @@ public static class ContextHelper
     /// (allowing only for CRLF/LF differences) is reported as not found, prompting the caller to
     /// re-read the file and copy the exact current text rather than silently matching approximate
     /// content and risking a length mismatch on removal.
+    /// A blank selector means "not supplied": a null/empty/whitespace <paramref name="withinMember"/> and a
+    /// <paramref name="matchLine"/> of 0 or less are treated as null, because weak models send "" or 0
+    /// for an unused parameter and that must not filter out every match.
     /// </summary>
     public static SnippetMatch FindExactSnippetPosition(
         SourceText sourceText, string contextSnippet,
@@ -305,6 +308,16 @@ public static class ContextHelper
         if (string.IsNullOrWhiteSpace(contextSnippet))
         {
             throw new ToolNotFoundException($"{label} must not be empty.");
+        }
+
+        if (string.IsNullOrWhiteSpace(withinMember))
+        {
+            withinMember = null;
+        }
+
+        if (matchLine <= 0)
+        {
+            matchLine = null;
         }
 
         if (withinMember != null && memberNameAt == null)
@@ -365,9 +378,9 @@ public static class ContextHelper
         return (lbTrimmed, laTrimmed) switch
         {
             (null, null) => throw ContextErrorBuilder.Build(
-                SnippetMatchOutcome.Ambiguous, contextSnippet, sourceText, matches, snippetLabel: label, memberNameAt: memberNameAt),
+                SnippetMatchOutcome.Ambiguous, contextSnippet, sourceText, matches, snippetLabel: label, memberNameAt: memberNameAt, selectorsSupported: true),
             _ => throw ContextErrorBuilder.Build(
-                SnippetMatchOutcome.StillAmbiguous, contextSnippet, sourceText, matches, snippetLabel: label, memberNameAt: memberNameAt)
+                SnippetMatchOutcome.StillAmbiguous, contextSnippet, sourceText, matches, snippetLabel: label, memberNameAt: memberNameAt, selectorsSupported: true)
         };
     }
 
@@ -430,21 +443,17 @@ public static class ContextHelper
             supplied.Add($"withinMember=\"{withinMember}\"");
         }
 
-        var anchored = textMatches.Select(match =>
-        {
-            var position = FirstNonWhitespacePosition(sourceText, match);
-            return new SnippetMatch(position, match.Start + match.Length - position);
-        }).ToList();
         var listing = DescribeAmbiguousCandidates(
-            sourceText, anchored, label, memberNameAt, ContextErrorBuilder.MaxStillAmbiguousCandidatesListed);
+            sourceText, textMatches, label, memberNameAt, ContextErrorBuilder.MaxStillAmbiguousCandidatesListed,
+            selectorsSupported: true);
 
         var diagnosis =
             $"{label} matches {textMatches.Count} place(s) exactly, but none satisfied the selector(s) you supplied ({string.Join(", ", supplied)}). " +
             "Current matches:\n" + listing + "\n" +
             "matchLine is the 1-based line of the match's first non-whitespace character and withinMember is the name of its enclosing member. Fix or drop withinMember/matchLine.";
         return ContextErrorBuilder.Build(
-            SnippetMatchOutcome.NoMatch, contextSnippet, sourceText,
-            diagnosis: diagnosis, verbatimRequired: true, snippetLabel: label);
+            SnippetMatchOutcome.SelectorMismatch, contextSnippet, sourceText,
+            diagnosis: diagnosis, snippetLabel: label);
     }
 
     /// <summary>
@@ -900,11 +909,25 @@ public static class ContextHelper
     /// disambiguated this way at all. When <paramref name="memberNameAt"/> returns a name for a
     /// match start offset, the match line also names its enclosing member. At most
     /// <paramref name="maxListed"/> matches are listed, followed by an "... and N more" line.
+    /// When <paramref name="selectorsSupported"/> is set (only the exact ReplaceSnippet matcher, which
+    /// has withinMember/matchLine), each match is attributed to its first non-whitespace character (the
+    /// position the selectors compare against) and also lists a ready-to-copy matchLine=N plus
+    /// withinMember="X" when X is the enclosing member of exactly one of <paramref name="allMatches"/>;
+    /// the tie advice then points at those selectors. Left false, the output is unchanged.
     /// </summary>
     internal static string DescribeAmbiguousCandidates(
         SourceText sourceText, List<SnippetMatch> allMatches, string snippetLabel = "contextSnippet",
-        Func<int, string?>? memberNameAt = null, int maxListed = int.MaxValue)
+        Func<int, string?>? memberNameAt = null, int maxListed = int.MaxValue, bool selectorsSupported = false)
     {
+        int AnchorOf(SnippetMatch match) => selectorsSupported ? FirstNonWhitespacePosition(sourceText, match) : match.Start;
+        string? MemberOf(SnippetMatch match) => memberNameAt?.Invoke(AnchorOf(match));
+
+        // A member name only separates a match when no other match is in a member of that name.
+        var uniqueMembers = selectorsSupported && memberNameAt != null
+            ? allMatches.Select(MemberOf).Where(name => !string.IsNullOrEmpty(name))
+                .GroupBy(name => name!, StringComparer.Ordinal).Where(g => g.Count() == 1).Select(g => g.Key)
+                .ToHashSet(StringComparer.Ordinal)
+            : new HashSet<string>(StringComparer.Ordinal);
         var descriptions = new List<(string Before, string After)>();
         var lines = new List<string>();
         var listedCount = Math.Min(allMatches.Count, maxListed);
@@ -917,9 +940,20 @@ public static class ContextHelper
                 ? sourceText.Lines[lastLineIndex + 1].ToString().Trim()
                 : "(end of file)";
             descriptions.Add((before, after));
-            var memberName = memberNameAt?.Invoke(allMatches[i].Start);
+            var memberName = MemberOf(allMatches[i]);
             var inMember = string.IsNullOrEmpty(memberName) ? string.Empty : $", in {memberName}";
-            lines.Add($"Match {i + 1} (lines {firstLineIndex + 1}-{lastLineIndex + 1}{inMember}): lineBefore=\"{before}\" lineAfter=\"{after}\"");
+            var startLineIndex = selectorsSupported ? sourceText.Lines.GetLinePosition(AnchorOf(allMatches[i])).Line : firstLineIndex;
+            var lineSpan = selectorsSupported && startLineIndex == lastLineIndex
+                ? $"line {startLineIndex + 1}"
+                : $"lines {startLineIndex + 1}-{lastLineIndex + 1}";
+            var selectors = string.Empty;
+            if (selectorsSupported)
+            {
+                var member = !string.IsNullOrEmpty(memberName) && uniqueMembers.Contains(memberName) ? $"withinMember=\"{memberName}\" " : string.Empty;
+                selectors = $"{member}matchLine={startLineIndex + 1} ";
+            }
+
+            lines.Add($"Match {i + 1} ({lineSpan}{inMember}): {selectors}lineBefore=\"{before}\" lineAfter=\"{after}\"");
         }
 
         if (listedCount < allMatches.Count)
@@ -931,9 +965,11 @@ public static class ContextHelper
         foreach (var tie in tieGroups)
         {
             var matchNumbers = string.Join(" and ", tie.Select(x => x.i + 1));
-            lines.Add(
-                $"Matches {matchNumbers} have identical surrounding lines and cannot be " +
-                $"disambiguated by lineBefore/lineAfter alone; use a different tool or a longer {snippetLabel}.");
+            lines.Add(selectorsSupported
+                ? $"Matches {matchNumbers} have identical surrounding lines, so lineBefore/lineAfter cannot tell them apart. " +
+                  $"Pass matchLine (and withinMember where listed) copied from the list above, or widen {snippetLabel}."
+                : $"Matches {matchNumbers} have identical surrounding lines and cannot be " +
+                  $"disambiguated by lineBefore/lineAfter alone; use a different tool or a longer {snippetLabel}.");
         }
 
         return string.Join("\n", lines);

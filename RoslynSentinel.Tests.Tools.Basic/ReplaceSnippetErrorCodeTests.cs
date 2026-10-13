@@ -353,4 +353,41 @@ public class ReplaceSnippetErrorCodeTests
 
         Assert.That(h.Workspace.ReadText(MemberDupRelativePath), Is.EqualTo(original), "a rejected call must not write anything");
     }
+
+    [Test]
+    public async Task ReplaceSnippet_Single_MatchLineCopiedFromAmbiguityError_EditsExactlyThatMatchAsync()
+    {
+        using var h = CreateHarness();
+        var original = h.Workspace.ReadText(MemberDupRelativePath);
+        var path = h.Workspace.PathOf(MemberDupRelativePath);
+        const string replacement = "        Log(Compute());";
+        var (secondOffset, secondLine) = LocateRepeatedBlock(original, 1);
+
+        var ambiguous = await h.Tools.ReplaceSnippet(
+            reason: "read selectors off the ambiguity error",
+            ProposedChangeAction.apply,
+            filePath: path,
+            oldContent: MemberDupRepeatedBlock,
+            newContent: replacement);
+
+        Assert.That(ambiguous.IsError, Is.True);
+        Assert.That(ambiguous.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        var listed = System.Text.RegularExpressions.Regex.Match(
+            ambiguous.ErrorData.Message, @"Match 2 \([^)]*\): (?:withinMember=\""[^\""]*\"" )?matchLine=(\d+) ");
+        Assert.That(listed.Success, Is.True, ambiguous.ErrorData.Message);
+        var copiedLine = int.Parse(listed.Groups[1].Value);
+        Assert.That(copiedLine, Is.EqualTo(secondLine));
+
+        var retry = await h.Tools.ReplaceSnippet(
+            reason: "retry with the copied matchLine",
+            ProposedChangeAction.apply,
+            filePath: path,
+            oldContent: MemberDupRepeatedBlock,
+            newContent: replacement,
+            matchLine: copiedLine);
+
+        Assert.That(retry.IsError, Is.False, retry.ErrorData?.Message);
+        var expected = original.Remove(secondOffset, MemberDupRepeatedBlock.Length).Insert(secondOffset, replacement);
+        Assert.That(h.Workspace.ReadText(MemberDupRelativePath), Is.EqualTo(expected), "only the second match may change");
+    }
 }

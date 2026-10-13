@@ -14,7 +14,7 @@ namespace RoslynSentinel.Tests.Server;
 public class ReplaceSnippetSchemaTests
 {
     private const string ExpectedAnchorText =
-        "Single line adjacent to oldContent; only needed when oldContent matches more than once.";
+        "Optional extra filter, applied after matchLine/withinMember: the single line just before the first line (lineBefore) or just after the last line (lineAfter) of oldContent.";
 
     private static JsonObject BuildSchema()
     {

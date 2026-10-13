@@ -50,7 +50,7 @@ public static class ToolParams
     // ReplaceSnippet has no contextSnippet parameter: its anchors disambiguate oldContent. Applied to the
     // emitted schema by McpToolSchemaPatcher.ApplyReplaceSnippetLimits (top-level and batchEdits items).
     public const string ReplaceSnippetAnchorLine =
-        "Single line adjacent to oldContent; only needed when oldContent matches more than once.";
+        "Optional extra filter, applied after matchLine/withinMember: the single line just before the first line (lineBefore) or just after the last line (lineAfter) of oldContent.";
 
     // ReplaceSnippet match selectors: values are printed by the ambiguity error.
     public const string ReplaceSnippetWithinMember =

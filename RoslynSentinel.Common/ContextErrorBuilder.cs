@@ -17,7 +17,7 @@ public class ContextErrorBuilder
         List<ContextHelper.SnippetMatch>? matches = null, string? diagnosis = null,
         string? parameterName = null, string? invalidValue = null, bool? isAfter = null,
         bool verbatimRequired = false, string snippetLabel = "contextSnippet",
-        Func<int, string?>? memberNameAt = null)
+        Func<int, string?>? memberNameAt = null, bool selectorsSupported = false)
     {
         switch (outcome)
         {
@@ -25,11 +25,14 @@ public class ContextErrorBuilder
                 return BuildNoMatch(contextSnippet, verbatimRequired, diagnosis, snippetLabel);
 
             case SnippetMatchOutcome.Ambiguous:
-                return BuildAmbiguous(contextSnippet, sourceText, matches, stillAmbiguous: false, snippetLabel: snippetLabel, memberNameAt: memberNameAt);
+                return BuildAmbiguous(contextSnippet, sourceText, matches, stillAmbiguous: false, snippetLabel: snippetLabel, memberNameAt: memberNameAt, selectorsSupported: selectorsSupported);
 
             case SnippetMatchOutcome.StillAmbiguous:
             case SnippetMatchOutcome.TrueTie:
-                return BuildAmbiguous(contextSnippet, sourceText, matches, stillAmbiguous: true, snippetLabel: snippetLabel, memberNameAt: memberNameAt);
+                return BuildAmbiguous(contextSnippet, sourceText, matches, stillAmbiguous: true, snippetLabel: snippetLabel, memberNameAt: memberNameAt, selectorsSupported: selectorsSupported);
+
+            case SnippetMatchOutcome.SelectorMismatch:
+                return BuildSelectorMismatch(contextSnippet, diagnosis, snippetLabel);
 
             case SnippetMatchOutcome.InvalidDisambiguator:
                 return BuildInvalidDisambiguator(parameterName, invalidValue, isAfter);
@@ -58,7 +61,7 @@ public class ContextErrorBuilder
 
     private static ToolAmbiguousMatchException BuildAmbiguous(
         string contextSnippet, SourceText sourceText, List<ContextHelper.SnippetMatch>? matches, bool stillAmbiguous, string snippetLabel,
-        Func<int, string?>? memberNameAt = null)
+        Func<int, string?>? memberNameAt = null, bool selectorsSupported = false)
     {
         var trimmed = contextSnippet.Trim();
         var count = matches?.Count ?? 0;
@@ -66,24 +69,46 @@ public class ContextErrorBuilder
         if (!stillAmbiguous)
         {
             var candidateText = matches != null
-                ? ContextHelper.DescribeAmbiguousCandidates(sourceText, matches, snippetLabel, memberNameAt)
+                ? ContextHelper.DescribeAmbiguousCandidates(sourceText, matches, snippetLabel, memberNameAt, selectorsSupported: selectorsSupported)
                 : string.Empty;
             return new ToolAmbiguousMatchException(
                 $"{snippetLabel} is ambiguous ({count} matches): \"{trimmed}\". " +
-                "Provide lineBefore and/or lineAfter using one of the exact values below (copy " +
-                "verbatim, do not retype from memory) to select the intended match:\n" + candidateText);
+                (selectorsSupported
+                    ? "Provide matchLine (and withinMember where listed) copied verbatim from one of the matches below " +
+                      "to select the intended match; lineBefore/lineAfter may be added as an extra filter:\n"
+                    : "Provide lineBefore and/or lineAfter using one of the exact values below (copy " +
+                      "verbatim, do not retype from memory) to select the intended match:\n") + candidateText);
         }
 
         var stillMessage =
             $"{snippetLabel} is still ambiguous ({count} matches remain): \"{trimmed}\". " +
-            "Provide more specific lineBefore and/or lineAfter content.";
+            (selectorsSupported
+                ? "Pass matchLine (and withinMember where listed) copied from the candidates below, " +
+                  $"provide more specific lineBefore and/or lineAfter content, or widen {snippetLabel}."
+                : "Provide more specific lineBefore and/or lineAfter content.");
         if (matches is { Count: > 0 })
         {
             stillMessage += "\nRemaining candidates:\n" + ContextHelper.DescribeAmbiguousCandidates(
-                sourceText, matches, snippetLabel, memberNameAt, MaxStillAmbiguousCandidatesListed);
+                sourceText, matches, snippetLabel, memberNameAt, MaxStillAmbiguousCandidatesListed, selectorsSupported);
         }
 
         return new ToolAmbiguousMatchException(stillMessage);
+    }
+
+    /// <summary>
+    /// withinMember/matchLine selected none of the verbatim text matches. The text itself DID match,
+    /// so unlike <see cref="BuildNoMatch"/> this never tells the caller to re-read the file and
+    /// retype oldContent; the diagnosis lists the current matches with copyable selectors instead.
+    /// </summary>
+    private static ToolNotFoundException BuildSelectorMismatch(string contextSnippet, string? diagnosis, string snippetLabel)
+    {
+        var message = $"{snippetLabel} was found, but not at the withinMember/matchLine you supplied: \"{contextSnippet.Trim()}\".";
+        if (!string.IsNullOrEmpty(diagnosis))
+        {
+            message += "\n" + diagnosis;
+        }
+
+        return new ToolNotFoundException(message);
     }
 
     private static ToolNotFoundException BuildInvalidDisambiguator(string? parameterName, string? invalidValue, bool? isAfter)
@@ -118,4 +143,7 @@ public enum SnippetMatchOutcome
 
     /// <summary>lineBefore/lineAfter itself is malformed (e.g. multi-line).</summary>
     InvalidDisambiguator,
+
+    /// <summary>oldContent matched verbatim, but withinMember/matchLine selected none of the matches.</summary>
+    SelectorMismatch,
 }
