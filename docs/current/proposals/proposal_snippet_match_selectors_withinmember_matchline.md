@@ -1,6 +1,28 @@
 # Snippet match selectors: fix adjacent-line anchoring, add withinMember/matchLine
 
-**Status:** PROPOSED 2026-10-12. Awaiting review; nothing built. Phases 1-2 are defect fixes with a settled design; phases 3-4 are a design with open questions (below).
+**Status:** Phases 1-3 IMPLEMENTED (2026-10-13). Phase 4 is OPEN and is a deliberate decision, not a to-do.
+
+Phase 3 landed in five commits: 5cbc02fc (EnclosingMemberResolver extracted), f185a613 + 2e14c83d (member names in
+Ambiguous/StillAmbiguous errors; StillAmbiguous now lists candidates, capped at 5), 3d718ea4 (selector logic in
+`ContextHelper.FindExactSnippetPosition`), 09b38030 (parameters on both ReplaceSnippet tool classes, impl and
+`SnippetEdit`), 2ff95c44 (errors hand back copyable `matchLine`/`withinMember`; own wording for selector mismatch).
+
+Phase 3 decisions (resolving the open questions below):
+- `withinMember` is name-only, resolved at the tool layer (`WorkspaceFileEditImpl`, which holds the Document) and passed
+  to Common as a `Func<int,string?>`; it is paired with `matchLine` as the tie-break for overloads, constructors and
+  same-named members. The error lists `withinMember` only when the name is unique among the matches.
+- `matchLine` is the 1-based line of the match's first non-whitespace character, against the pre-call text. Batch edits
+  already match against the original snapshot, so no shift logic is needed. Staleness across calls is handled by the
+  self-verifying error that lists the current matches.
+- Precedence: `matchLine`/`withinMember` first, then `lineBefore`/`lineAfter` on the survivors. Blank `withinMember` and
+  `matchLine <= 0` count as unset.
+- Exact matcher only. The tolerant matcher and the ~24 engine callers are unchanged.
+- Top-level selectors combined with `batchEdits` are rejected, not silently dropped.
+- `lineBefore`/`lineAfter` are kept and reworded as an extra filter (phase 4 stays open).
+
+Known leftovers: the "lineBefore/lineAfter filtered out all of them" error still opens with the misleading
+"verbatim required ... Re-read the file" sentence (same defect as the selector-mismatch case, fixed there only);
+no live-model verification of phase 3 yet (server binary is stale; restart before verifying).
 
 ## Motivation
 
