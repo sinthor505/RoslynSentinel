@@ -1,6 +1,6 @@
 namespace RoslynSentinel.Common;
 
-public static class LineBlockAligner
+internal static class LineBlockAligner
 {
     /// <summary>
     /// Describes where a partial match diverged: the first needle line that did not match after
