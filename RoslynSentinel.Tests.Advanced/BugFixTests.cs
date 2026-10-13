@@ -1437,6 +1437,75 @@ public class Second { public void Run() { } }";
             Assert.That(ex.Message, Does.Contain("is ambiguous"));
         }
 
+        // -- Ambiguity error: candidate list carries a retry contextSnippet per candidate --
+        [Test]
+        public async Task FindCallersAsync_NoFilePath_AmbiguityMessageListsContextSnippetPerCandidate()
+        {
+            SetMultipleFiles(
+                ("First.cs", "public class First\r\n{\r\n    public void Run() { }\r\n}"),
+                ("Second.cs", "public class Second\r\n{\r\n    public void Run() { }\r\n}"));
+            var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _navigationEngine.FindCallersAsync(null, "Run", contextSnippet: null));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+            Assert.That(ex.Message, Does.StartWith("symbolName 'Run' is ambiguous"));
+            Assert.That(ex.Message, Does.Not.Contain("FindCallers:"));
+            Assert.That(ex.Message, Does.Contain("Candidates (retry with filePath + contextSnippet of the one you mean):"));
+            Assert.That(System.Text.RegularExpressions.Regex.Matches(ex.Message, "contextSnippet=\"").Count, Is.EqualTo(2));
+        }
+
+        // -- Ambiguity error: a candidate's filePath + contextSnippet, parsed from the message, resolves to that candidate --
+        [Test]
+        public async Task FindCallersAsync_NoFilePath_AmbiguityCandidateRoundTrips_ResolvesToThatClass()
+        {
+            SetMultipleFiles(
+                ("First.cs", "public class First\r\n{\r\n    public void Run() { }\r\n    public void Caller() { Run(); }\r\n}"),
+                ("Second.cs", "public class Second\r\n{\r\n    public void Run() { }\r\n    public void Caller() { Run(); }\r\n}"));
+            var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _navigationEngine.FindCallersAsync(null, "Run", contextSnippet: null));
+            var match = System.Text.RegularExpressions.Regex.Match(ex!.Message, "at (.+?):(\\d+), contextSnippet=\"(.*?)\"");
+            Assert.That(match.Success, Is.True, ex.Message);
+            var results = await _navigationEngine.FindCallersAsync(match.Groups[1].Value, "Run", contextSnippet: match.Groups[3].Value);
+            Assert.That(results.Select(r => r.CallerType).ToList(), Is.EqualTo(new[] { "First" }));
+        }
+
+        // -- Ambiguity error: an interface member dropped by PreferClassMember is reported as not counted --
+        [Test]
+        public async Task FindCallersAsync_NoFilePath_AmbiguityReportsDroppedInterfaceMember_AsNotCounted()
+        {
+            SetMultipleFiles(
+                ("IRunner.cs", "public interface IRunner\r\n{\r\n    void Run();\r\n}"),
+                ("Impl.cs", "public class Impl : IRunner\r\n{\r\n    public void Run() { }\r\n}"),
+                ("Other.cs", "public class Other\r\n{\r\n    public void Run() { }\r\n}"));
+            var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _navigationEngine.FindCallersAsync(null, "Run", contextSnippet: null));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+            Assert.That(ex.Message, Does.Contain("Not counted"));
+            Assert.That(ex.Message, Does.Contain("interface member"));
+        }
+
+        // -- Repro: by-name contextSnippet that resolves to a different symbol must not silently resolve to the wrong one --
+        [Test]
+        public async Task FindCallersAsync_BySnippet_SnippetResolvesToDifferentSymbolName_DoesNotResolveWrongSymbol()
+        {
+            SetMultipleFiles(
+                ("A.cs", "public class A\r\n{\r\n    public void Run() { }\r\n    public void Helper() { }\r\n}"),
+                ("B.cs", "public class B\r\n{\r\n    public void Run() { }\r\n}"));
+            // The snippet is the verbatim Helper declaration in A.cs: it names a different symbol than "Run".
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindCallersAsync(null, "Run", contextSnippet: "public void Helper() { }"));
+            Assert.That(ex!.Message, Does.Contain("'Run'"));
+        }
+
+        // -- FindImplementations by-name ambiguity: same candidate-list shape, no FindImplementations prefix --
+        [Test]
+        public async Task FindImplementationsForMemberAsync_NoFilePath_OverloadedAcrossClasses_ThrowsAmbiguousWithContextSnippet()
+        {
+            SetMultipleFiles(
+                ("Alpha.cs", "public class Alpha\r\n{\r\n    public virtual void Run() { }\r\n}"),
+                ("Beta.cs", "public class Beta\r\n{\r\n    public virtual void Run() { }\r\n}"));
+            var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _navigationEngine.FindImplementationsForMemberAsync(null, "Run", contextSnippet: null));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+            Assert.That(ex.Message, Does.Contain("is ambiguous"));
+            Assert.That(ex.Message, Does.Contain("contextSnippet=\""));
+            Assert.That(ex.Message, Does.Not.Contain("FindImplementations:"));
+        }
+
         [Test]
         public async Task FindCallersAsync_NoFilePath_UnknownName_ThrowsNotFound()
         {

@@ -1601,6 +1601,12 @@ public class SymbolNavigationEngine
                     try
                     {
                         symbol = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                        // A snippet can land on a neighbouring declaration or call site; only accept a symbol whose name matches symbolName.
+                        if (symbol != null && symbol.Name != symbolName
+                            && !(symbol is IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor } ctorSymbol && ctorSymbol.ContainingType.Name == symbolName))
+                        {
+                            symbol = null;
+                        }
                         if (symbol != null)
                         {
                             break;
@@ -1650,10 +1656,10 @@ public class SymbolNavigationEngine
                     // would silently pick an arbitrary one across the whole solution. Force the
                     // caller to disambiguate instead of returning results for the wrong symbol.
                     throw new ToolAmbiguousMatchException(
-                        $"FindCallers: symbolName '{symbolName}' is ambiguous - {narrowed.Count} candidates " +
+                        $"symbolName '{symbolName}' is ambiguous - {narrowed.Count} candidates " +
                         "found across the solution and no contextSnippet was supplied to disambiguate. " +
                         "This is NOT a confirmed result for any single symbol - resolution stopped before " +
-                        "the lookup ran. " + DescribeCandidateLocations(narrowed) +
+                        "the lookup ran. " + DescribeCandidateLocations(narrowed, memberMatches.Where(m => narrowed.All(n => !SymbolEqualityComparer.Default.Equals(n.Symbol, m.Symbol))).ToList()) +
                         "Supply contextSnippet (a verbatim substring near the intended declaration) or " +
                         "filePath to pin resolution to the one you mean.");
                 }
@@ -1872,6 +1878,12 @@ public class SymbolNavigationEngine
                     try
                     {
                         symbol = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                        // A snippet can land on a neighbouring declaration or call site; only accept a symbol whose name matches symbolName.
+                        if (symbol != null && symbol.Name != symbolName
+                            && !(symbol is IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor } ctorSymbol && ctorSymbol.ContainingType.Name == symbolName))
+                        {
+                            symbol = null;
+                        }
                         if (symbol != null)
                         {
                             break;
@@ -1920,10 +1932,10 @@ public class SymbolNavigationEngine
                     // would silently pick an arbitrary one across the whole solution. Force the
                     // caller to disambiguate instead of returning results for the wrong symbol.
                     throw new ToolAmbiguousMatchException(
-                        $"FindImplementations: symbolName '{symbolName}' is ambiguous - {narrowed.Count} " +
+                        $"symbolName '{symbolName}' is ambiguous - {narrowed.Count} " +
                         "candidates found across the solution and no contextSnippet was supplied to " +
                         "disambiguate. This is NOT a confirmed result for any single symbol - resolution " +
-                        "stopped before the lookup ran. " + DescribeCandidateLocations(narrowed) +
+                        "stopped before the lookup ran. " + DescribeCandidateLocations(narrowed, memberMatches.Where(m => narrowed.All(n => !SymbolEqualityComparer.Default.Equals(n.Symbol, m.Symbol))).ToList()) +
                         "Supply contextSnippet (a verbatim substring near the intended declaration) or " +
                         "filePath to pin resolution to the one you mean.");
                 }
@@ -2879,32 +2891,90 @@ public class SymbolNavigationEngine
     /// <summary>
     /// Solution-wide counterpart to DescribeNameOnlyCandidates: given a list of SemanticSymbolCandidate
     /// (ISymbol-backed matches spanning every project, not one file's syntax nodes), builds a
-    /// "here are the N candidates that made this ambiguous" hint - file:line plus containing type,
-    /// capped at 3 with a "+N more" suffix, mirroring the same style. Used by FindCallersAsync/
+    /// "retry with one of these" hint - per candidate: kind, short signature, containing type, file:line,
+    /// the trimmed declaration line as contextSnippet (plus lineBefore when not unique in its file),
+    /// capped at 10 with a "+N more" line; narrowed-away candidates are listed separately. Used by FindCallersAsync/
     /// FindImplementationsForMemberAsync's by-name-across-solution path when a contextSnippet misses
     /// every candidate, or when no contextSnippet was supplied and narrowing still leaves more than
     /// one candidate - both cases where silently picking FirstOrDefault() would resolve to an
     /// arbitrary same-named symbol instead of the one the caller meant.
     /// </summary>
-    public static string DescribeCandidateLocations(List<SemanticSymbolCandidate> candidates)
+    public static string DescribeCandidateLocations(
+        List<SemanticSymbolCandidate> candidates,
+        IReadOnlyList<SemanticSymbolCandidate>? excluded = null)
     {
         if (candidates.Count == 0)
         {
             return string.Empty;
         }
 
-        var previews = candidates.Take(3).Select(c =>
+        const int maxListed = 10;
+        var sb = new System.Text.StringBuilder("Candidates (retry with filePath + contextSnippet of the one you mean):");
+        foreach (var c in candidates.Take(maxListed))
         {
-            var loc = c.Symbol.Locations.FirstOrDefault(l => l.IsInSource);
-            var line = loc != null ? loc.GetLineSpan().StartLinePosition.Line + 1 : -1;
-            var file = loc?.SourceTree?.FilePath ?? c.FilePath ?? "?";
+            var site = ResolveDeclarationSite(c);
+            var signature = c.Symbol is IMethodSymbol m
+                ? m.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat)
+                : c.Symbol.Name;
             var containingType = c.Symbol.ContainingType?.Name ?? c.Symbol.ContainingNamespace?.Name ?? "?";
-            return $"{file}:{line} ({containingType}.{c.Symbol.Name})";
-        });
+            sb.Append($"\n  - {DescribeKind(c.Symbol)} {signature} in {containingType} at {site.File}:{site.Line}");
+            sb.Append($", contextSnippet=\"{site.Snippet}\"");
+            if (!site.IsUnique)
+            {
+                sb.Append($", lineBefore=\"{site.LineBefore}\"");
+            }
+        }
 
-        var count = candidates.Count;
-        var suffix = count > 3 ? $" (+{count - 3} more)" : "";
-        return $"Candidates: {string.Join(", ", previews)}{suffix}. ";
+        if (candidates.Count > maxListed)
+        {
+            sb.Append($"\n  (+{candidates.Count - maxListed} more)");
+        }
+
+        if (excluded is { Count: > 0 })
+        {
+            var dropped = excluded.Select(c =>
+            {
+                var site = ResolveDeclarationSite(c);
+                var kind = c.Symbol.ContainingType?.TypeKind == TypeKind.Interface
+                    ? "interface member"
+                    : DescribeKind(c.Symbol);
+                var containingType = c.Symbol.ContainingType?.Name ?? c.Symbol.ContainingNamespace?.Name ?? "?";
+                return $"{site.File}:{site.Line} ({containingType}.{c.Symbol.Name}, {kind})";
+            });
+            sb.Append("\nNot counted (pass filePath to select): ").Append(string.Join(", ", dropped));
+        }
+
+        sb.Append('\n');
+        return sb.ToString();
+    }
+
+    private static string DescribeKind(ISymbol symbol) => symbol switch
+    {
+        INamedTypeSymbol t => t.TypeKind.ToString().ToLowerInvariant(),
+        IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor } => "constructor",
+        _ => symbol.Kind.ToString().ToLowerInvariant()
+    };
+
+    private static (string File, int Line, string Snippet, string LineBefore, bool IsUnique) ResolveDeclarationSite(SemanticSymbolCandidate c)
+    {
+        var loc = c.Symbol.Locations.FirstOrDefault(l => l.IsInSource);
+        var file = loc?.SourceTree?.FilePath ?? c.FilePath ?? "?";
+        if (loc?.SourceTree == null)
+        {
+            return (file, -1, string.Empty, string.Empty, true);
+        }
+
+        var index = loc.GetLineSpan().StartLinePosition.Line;
+        var lines = loc.SourceTree.GetText().Lines;
+        if (index >= lines.Count)
+        {
+            return (file, index + 1, string.Empty, string.Empty, true);
+        }
+
+        var snippet = lines[index].ToString().Trim();
+        var lineBefore = index > 0 ? lines[index - 1].ToString().Trim() : string.Empty;
+        var isUnique = lines.Where(l => l.ToString().Trim() == snippet).Count() == 1;
+        return (file, index + 1, snippet, lineBefore, isUnique);
     }
 }
 /// <summary>
