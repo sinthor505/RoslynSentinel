@@ -303,57 +303,21 @@ public class DiffEngine
             return declaredLine; // Nothing to anchor on (pure insertion) - trust the declared offset.
         }
 
-        // Track the best (most leading anchor lines matched) candidate seen across the whole
-        // search, not just whether any position fully matched -> this is what makes the failure
-        // message below point at the actual point of divergence instead of always blaming
-        // anchorLines[0]. A hunk whose first few anchor lines are correct but whose LATER context
-        // (e.g. stale content copied from an earlier read, describing what's actually further
-        // down the file) doesn't match anywhere is a real, observed failure mode -> see
-        // docs/current/blockers -> and "First expected line: anchorLines[0]" is actively misleading
-        // for it, since line 0 matched fine at the best candidate position.
-        var best = (Position: declaredLine, MatchedCount: 0);
-
-        void ConsiderCandidate(int position)
+        // The alignment core (nearest-first search, best-prefix tracking) lives in LineBlockAligner so
+        // ContextHelper can share it. Candidates are tried in CandidatePositions order.
+        var best = LineBlockAligner.FindBestPrefixAlignment(lines, anchorLines, CandidatePositions(declaredLine));
+        if (best.IsFullMatch)
         {
-            var matchedCount = MatchLeadingCount(lines, anchorLines, position);
-            if (matchedCount > best.MatchedCount)
-            {
-                best = (position, matchedCount);
-            }
-        }
-
-        ConsiderCandidate(declaredLine);
-        if (best.MatchedCount == anchorLines.Count)
-        {
-            return declaredLine;
-        }
-
-        for (int delta = 1; delta <= HunkReanchorWindow; delta++)
-        {
-            ConsiderCandidate(declaredLine - delta);
-            if (best.MatchedCount == anchorLines.Count)
-            {
-                return declaredLine - delta;
-            }
-            ConsiderCandidate(declaredLine + delta);
-            if (best.MatchedCount == anchorLines.Count)
-            {
-                return declaredLine + delta;
-            }
+            return best.Position;
         }
 
         // Report the line that actually diverged at the closest-matching position found, not
-        // just anchorLines[0] -> e.g. "matched the first 3 anchor line(s) at line 269, but then
-        // expected ... at line 272". If nothing matched at all (best.MatchedCount == 0), this
-        // degrades to the original "first expected line" framing, which is still the right
-        // message for that case.
-        var mismatchLineNumber = best.Position + best.MatchedCount + 1;
+        // just anchorLines[0]. If nothing matched at all (MatchedCount == 0), this degrades to the
+        // original "first expected line" framing, which is still the right message for that case.
         var mismatchDetail = best.MatchedCount == 0
             ? $"First expected line: \"{anchorLines[0]}\"."
-            : $"Matched the first {best.MatchedCount} anchor line(s) starting at line {best.Position + 1}, " +
-              $"but then expected \"{anchorLines[best.MatchedCount]}\" at line {mismatchLineNumber} - found " +
-              $"\"{(best.Position + best.MatchedCount < lines.Count ? lines[best.Position + best.MatchedCount].Trim() : "<end of file>")}\" " +
-              "instead. This usually means a context/removal line partway through the hunk is stale - e.g. copied " +
+            : LineBlockAligner.DescribeDivergence(lines, anchorLines, best) +
+              " This usually means a context/removal line partway through the hunk is stale - e.g. copied " +
               "from a different part of the file during an earlier read - rather than the hunk's start position " +
               "being wrong.";
 
@@ -365,27 +329,18 @@ public class DiffEngine
     }
 
     /// <summary>
-    /// Returns how many leading <paramref name="anchorLines"/> match the file starting at
-    /// <paramref name="start"/> before the first divergence (or the file/list boundary) ->
-    /// <c>anchorLines.Count</c> means a full match. Used both to decide whether a candidate
-    /// position is the real anchor (full match) and, when no candidate fully matches, to find the
-    /// closest near-miss for a more precise error message.
+    /// Yields the anchor search order used by <see cref="ReanchorHunk"/>: the declared line first,
+    /// then alternating outward (declared - 1, declared + 1, declared - 2, ...) up to
+    /// <see cref="HunkReanchorWindow"/> lines in each direction.
     /// </summary>
-    private static int MatchLeadingCount(List<string> lines, List<string> anchorLines, int start)
+    private static IEnumerable<int> CandidatePositions(int declaredLine)
     {
-        if (start < 0)
+        yield return declaredLine;
+        for (int delta = 1; delta <= HunkReanchorWindow; delta++)
         {
-            return 0;
+            yield return declaredLine - delta;
+            yield return declaredLine + delta;
         }
-
-        for (int j = 0; j < anchorLines.Count; j++)
-        {
-            if (start + j >= lines.Count || lines[start + j].Trim() != anchorLines[j])
-            {
-                return j;
-            }
-        }
-        return anchorLines.Count;
     }
 
     /// <summary>
