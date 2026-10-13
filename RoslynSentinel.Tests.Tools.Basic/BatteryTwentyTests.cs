@@ -250,6 +250,16 @@ public class BatteryTwentyTests
     }
 
     [Test]
+    public async Task SearchSolutionText_NoMatches_WarningDescribesMatchingSemantics()
+    {
+        SetSource(SimpleSource, "Test.cs");
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "ThisPatternDoesNotAppearAnywhere");
+
+        Assert.That(result.IsError, Is.False, "zero matches is a valid empty answer, not a failure");
+        Assert.That(result.StatusMessage, Does.Contain("case-insensitive and per line"));
+    }
+
+    [Test]
     public async Task SearchSolutionText_InvalidRegexPattern_StillReturnsLiteralResults()
     {
         // Comment text containing an unclosed '[' -> unambiguously invalid regex in .NET -> but a

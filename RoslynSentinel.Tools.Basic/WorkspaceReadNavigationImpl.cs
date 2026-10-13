@@ -607,7 +607,7 @@ public class WorkspaceReadNavigationImpl
                 }
 
                 warnings.Add(
-                    $"No matches were found for '{pattern}' as either a literal substring or a regex pattern. Try adjusting the search pattern. " +
+                    $"No matches were found for '{pattern}' as either a literal substring or a regex pattern. Try adjusting the search pattern. Matching is case-insensitive and per line, over C# source files only; a|b alternation is supported. The text may have been reworded, so search for a shorter distinctive fragment, or search each alternative separately. " +
                     "If you were searching for a known symbol by name, use Search with mode: symbol instead (semantic lookup, not text matching). " +
                     "Use ListAll to browse the solution's structure, ProjectDoc to read plan/handoff/documentation files directly, or " +
                     "GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");

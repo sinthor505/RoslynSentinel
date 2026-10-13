@@ -623,7 +623,7 @@ public class WorkspaceTools
     public Task<SentinelCallToolResult<object>> SearchSolution(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     SearchMode mode,
-    [Description("mode: text = pattern matched as both a literal and a regex; symbol/references = symbol name; declaration-kind modes = optional case-insensitive name filter (see exactMatch). Omit in declaration-kind modes only if you want up to 30 rows of that kind.")]
+    [Description("mode: text = pattern matched as both a literal and a regex; symbol/references = symbol name; declaration-kind modes = optional case-insensitive name filter (see exactMatch). Omit in declaration-kind modes only if you want up to 30 rows of that kind. Text mode is case-insensitive and per line, .cs files only; use | for alternation.")]
         string? query = null,
     [Description("mode: text only. Glob restricting file paths (omit for all files). " +
         "Supports '*' (within one path segment), '**' (any depth), '?' (one char), " +
