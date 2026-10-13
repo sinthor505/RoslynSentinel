@@ -345,6 +345,9 @@ public static class ToolArgumentValidator
                 ["pattern"] = "query",
                 ["filePattern"] = "fileGlob",
                 ["glob"] = "fileGlob",
+                ["symbolName"] = "query",
+                ["name"] = "query",
+                ["symbol"] = "query",
             },
             ["FindReferences"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {

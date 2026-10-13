@@ -647,11 +647,11 @@ public class WorkspaceTools
         [Consumes(DataTag.SymbolKind)] FindReferencesKind? referencesKind = null,
     [Description("mode: symbol/references only. Pins resolution when the name is ambiguous across files. Ignored in text mode - use fileGlob.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
-    [Description("Required for mode: references. " + ToolParams.ContextSnippet)]
+    [Description("mode: references only. Optional; use when the name is ambiguous. " + ToolParams.ContextSnippet)]
         [Consumes(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
     [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
     [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-    [Description("false (default) = skip test projects; true = include them. Naming a test project in projectName/filePath always includes it.")] bool includeTests = false,
+    [Description("false (default) = skip test projects in every mode, including symbol; true = include them. Naming a test project in projectName/filePath always includes it.")] bool includeTests = false,
     CancellationToken cancellationToken = default)
     => DispatchSearch(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, referencesKind, filePath, contextSnippet, lineBefore, lineAfter, includeTests, cancellationToken);
 
@@ -690,14 +690,6 @@ public class WorkspaceTools
             case SearchMode.symbol:
                 return _symbolNavigation.LocateSymbol(reason, query ?? string.Empty, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch, includeTests: includeTests, cancellationToken: cancellationToken);
             case SearchMode.references:
-                if (string.IsNullOrEmpty(contextSnippet))
-                {
-                    return Task.FromResult(new SentinelCallToolResult<object>
-                    {
-                        IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "contextSnippet is required for mode: references - pass a short unique verbatim fragment identifying the target symbol.")
-                    });
-                }
                 if (referencesKind is null)
                 {
                     return Task.FromResult(new SentinelCallToolResult<object>
