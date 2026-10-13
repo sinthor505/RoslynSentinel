@@ -330,7 +330,7 @@ public static class ContextHelper
         // withinMember/matchLine act first, on the verbatim text matches; lineBefore/lineAfter then
         // filter whatever survives. With neither selector this is exactly the original single call.
         var hasSelectors = withinMember != null || matchLine != null;
-        var survivorsAfterSelectors = 0;
+        var survivorsAfterSelectors = new List<SnippetMatch>();
         List<SnippetMatch> matches;
         if (hasSelectors)
         {
@@ -343,7 +343,7 @@ public static class ContextHelper
                 throw BuildSelectorMismatch(sourceText, contextSnippet, textMatches, withinMember, matchLine, memberNameAt, label);
             }
 
-            survivorsAfterSelectors = selected.Count;
+            survivorsAfterSelectors = selected;
             matches = FilterByAdjacentLines(sourceText, selected, lineBefore, lineAfter);
         }
         else
@@ -353,18 +353,21 @@ public static class ContextHelper
 
         if (matches.Count == 0)
         {
-            var unfilteredCount = hasSelectors
+            var unfiltered = hasSelectors
                 ? survivorsAfterSelectors
                 : (lineBefore, lineAfter) is (null, null)
-                    ? 0
-                    : FindAllExactSnippetMatches(sourceText, contextSnippet).Count;
-            var afterSelectors = hasSelectors ? " (after the withinMember/matchLine selector)" : string.Empty;
-            var diagnosis = unfilteredCount > 0
-                ? $"{label} matches {unfilteredCount} place(s) exactly{afterSelectors}, but the lineBefore/lineAfter you supplied filtered out all of them. lineBefore must equal the line before the match's first line and lineAfter the line after the match's last line (compared trimmed). Fix or drop lineBefore/lineAfter."
-                : DiagnoseNoMatch(sourceText, contextSnippet);
+                    ? new List<SnippetMatch>()
+                    : FindAllExactSnippetMatches(sourceText, contextSnippet);
+            if (unfiltered.Count > 0)
+            {
+                // The text DID match; only lineBefore/lineAfter rejected every match, so this is not a
+                // "verbatim required" error.
+                throw BuildAdjacentLineMismatch(sourceText, contextSnippet, unfiltered, hasSelectors, memberNameAt, label);
+            }
+
             throw ContextErrorBuilder.Build(
                 SnippetMatchOutcome.NoMatch, contextSnippet, sourceText,
-                diagnosis: diagnosis, verbatimRequired: true, snippetLabel: label);
+                diagnosis: DiagnoseNoMatch(sourceText, contextSnippet), verbatimRequired: true, snippetLabel: label);
         }
 
         if (matches.Count == 1)
@@ -453,6 +456,28 @@ public static class ContextHelper
             "matchLine is the 1-based line of the match's first non-whitespace character and withinMember is the name of its enclosing member. Fix or drop withinMember/matchLine.";
         return ContextErrorBuilder.Build(
             SnippetMatchOutcome.SelectorMismatch, contextSnippet, sourceText,
+            diagnosis: diagnosis, snippetLabel: label);
+    }
+
+    /// <summary>
+    /// The text matched, but the lineBefore/lineAfter supplied filtered out every match. Keeps the
+    /// original "N place(s) ... filtered out all of them" body and lists the current matches with
+    /// copyable matchLine/withinMember values so the caller can switch to a selector.
+    /// </summary>
+    private static ToolException BuildAdjacentLineMismatch(
+        SourceText sourceText, string contextSnippet, List<SnippetMatch> textMatches,
+        bool afterSelectors, Func<int, string?>? memberNameAt, string label)
+    {
+        var listing = DescribeAmbiguousCandidates(
+            sourceText, textMatches, label, memberNameAt, ContextErrorBuilder.MaxStillAmbiguousCandidatesListed,
+            selectorsSupported: true);
+        var afterSelectorsText = afterSelectors ? " (after the withinMember/matchLine selector)" : string.Empty;
+        var diagnosis =
+            $"{label} matches {textMatches.Count} place(s) exactly{afterSelectorsText}, but the lineBefore/lineAfter you supplied filtered out all of them. " +
+            "lineBefore must equal the line before the match's first line and lineAfter the line after the match's last line (compared trimmed). " +
+            "Fix or drop lineBefore/lineAfter, or pass matchLine (and withinMember where listed) copied from the current matches:\n" + listing;
+        return ContextErrorBuilder.Build(
+            SnippetMatchOutcome.AdjacentLineMismatch, contextSnippet, sourceText,
             diagnosis: diagnosis, snippetLabel: label);
     }
 

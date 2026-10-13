@@ -34,6 +34,9 @@ public class ContextErrorBuilder
             case SnippetMatchOutcome.SelectorMismatch:
                 return BuildSelectorMismatch(contextSnippet, diagnosis, snippetLabel);
 
+            case SnippetMatchOutcome.AdjacentLineMismatch:
+                return BuildAdjacentLineMismatch(contextSnippet, diagnosis, snippetLabel);
+
             case SnippetMatchOutcome.InvalidDisambiguator:
                 return BuildInvalidDisambiguator(parameterName, invalidValue, isAfter);
 
@@ -111,6 +114,22 @@ public class ContextErrorBuilder
         return new ToolNotFoundException(message);
     }
 
+    /// <summary>
+    /// The text matched, but the lineBefore/lineAfter supplied filtered out every match. Like
+    /// <see cref="BuildSelectorMismatch"/>, never tells the caller to re-read the file and retype
+    /// oldContent; the diagnosis explains the adjacent-line rule and lists the current matches.
+    /// </summary>
+    private static ToolNotFoundException BuildAdjacentLineMismatch(string contextSnippet, string? diagnosis, string snippetLabel)
+    {
+        var message = $"{snippetLabel} was found, but not next to the lineBefore/lineAfter you supplied: \"{contextSnippet.Trim()}\".";
+        if (!string.IsNullOrEmpty(diagnosis))
+        {
+            message += "\n" + diagnosis;
+        }
+
+        return new ToolNotFoundException(message);
+    }
+
     private static ToolNotFoundException BuildInvalidDisambiguator(string? parameterName, string? invalidValue, bool? isAfter)
     {
         var direction = isAfter == true ? "after" : "before";
@@ -146,4 +165,7 @@ public enum SnippetMatchOutcome
 
     /// <summary>oldContent matched verbatim, but withinMember/matchLine selected none of the matches.</summary>
     SelectorMismatch,
+
+    /// <summary>oldContent matched verbatim, but the lineBefore/lineAfter supplied filtered out every match.</summary>
+    AdjacentLineMismatch,
 }

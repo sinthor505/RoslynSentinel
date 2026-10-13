@@ -28,8 +28,25 @@ public class ContextHelperLineAfterTests
         var ex = Assert.Throws<ToolNotFoundException>(() => ContextHelper.FindExactSnippetPosition(
             SourceText.From(TwoBlocksDifferentTails), MultiLineSnippet, lineAfter: "nonexistent;"));
 
-        Assert.That(ex!.Message, Does.Contain("filtered out all of them"));
-        Assert.That(ex.Message, Does.Not.Contain("not in the arrangement you supplied"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(ex!.Message, Does.StartWith("oldContent was found, but not next to the lineBefore/lineAfter you supplied:"));
+            Assert.That(ex.Message, Does.Contain("filtered out all of them"));
+            Assert.That(ex.Message, Does.Contain("Fix or drop lineBefore/lineAfter"));
+            Assert.That(ex.Message, Does.Contain("matchLine="));
+            Assert.That(ex.Message, Does.Not.Contain("verbatim"));
+            Assert.That(ex.Message, Does.Not.Contain("Re-read the file"));
+            Assert.That(ex.Message, Does.Not.Contain("not in the arrangement you supplied"));
+        });
+    }
+
+    [Test]
+    public void FindExactSnippetPosition_TextAbsentWithLineAfter_StillSaysVerbatimRequired()
+    {
+        var ex = Assert.Throws<ToolNotFoundException>(() => ContextHelper.FindExactSnippetPosition(
+            SourceText.From(TwoBlocksDifferentTails), "z = 99;", lineAfter: "throw;"));
+
+        Assert.That(ex!.Message, Does.Contain("(verbatim required)").And.Contain("Re-read the file"));
     }
 
     [Test]
