@@ -344,7 +344,11 @@ public class DiffEngine
     }
 
     /// <summary>
-    /// Generates a simple line-based Unified Diff between two versions of text.
+    /// Generates a line-based unified-style diff between two versions of text: the
+    /// <c>--- Original</c>/<c>+++ Modified</c> preamble, then ONE hunk per contiguous gap between
+    /// matched lines (header <c>@@ -oldStart,oldCount +newStart,newCount @@</c>, all removed lines,
+    /// then all added lines). No context lines are emitted. Line ends are always "\n" regardless of
+    /// platform or the input's own line endings (CR/LF/CRLF input lines compare equal).
     /// </summary>
     public static string CreateDiff(string oldText, string newText)
     {
@@ -352,8 +356,8 @@ public class DiffEngine
         var newLines = newText.Split(separatorArray, StringSplitOptions.None);
 
         var sb = new StringBuilder();
-        sb.AppendLine("--- Original");
-        sb.AppendLine("+++ Modified");
+        sb.Append("--- Original\n");
+        sb.Append("+++ Modified\n");
 
         // Trim the common prefix/suffix so only the actually-differing middle section goes
         // through the LCS matcher below. Bounds the O(n*m) table to the size of the real edit
@@ -380,67 +384,68 @@ public class DiffEngine
         var newMiddle = newLines[prefixLen..(newLines.Length - suffixLen)];
 
         // The LCS table is O(n*m) cells; cap it so a diff whose differing region spans most of a
-        // very large file falls back to the old best-effort pairing (O(n+m)) instead of
-        // allocating an unbounded int[,].
+        // very large file does not allocate an unbounded int[,]. Over the cap there are no
+        // resync points: the whole differing middle becomes one hunk (all '-' then all '+').
         const long MaxLcsCells = 16_000_000;
         var matches = (long)oldMiddle.Length * newMiddle.Length <= MaxLcsCells
             ? ComputeLcsMatches(oldMiddle, newMiddle)
-            : null;
+            : new List<(int OldIdx, int NewIdx)>();
 
+        // Each gap between consecutive LCS matches is one hunk. Two gaps are always separated by
+        // at least one matched line, so hunks never touch and no merging step is needed.
         int oldIdx = 0;
         int newIdx = 0;
-
-        void EmitMismatch()
+        foreach (var (matchOld, matchNew) in matches)
         {
-            sb.AppendLine($"@@ -{prefixLen + oldIdx + 1} +{prefixLen + newIdx + 1} @@");
-            if (oldIdx < oldMiddle.Length)
-            {
-                sb.AppendLine($"-{oldMiddle[oldIdx]}");
-                oldIdx++;
-            }
-            if (newIdx < newMiddle.Length)
-            {
-                sb.AppendLine($"+{newMiddle[newIdx]}");
-                newIdx++;
-            }
+            AppendHunk(sb, oldMiddle, newMiddle, prefixLen, oldIdx, matchOld, newIdx, matchNew);
+            oldIdx = matchOld + 1;
+            newIdx = matchNew + 1;
         }
-
-        if (matches != null)
-        {
-            foreach (var (matchOld, matchNew) in matches)
-            {
-                while (oldIdx < matchOld || newIdx < matchNew)
-                {
-                    EmitMismatch();
-                }
-                oldIdx++;
-                newIdx++;
-            }
-            while (oldIdx < oldMiddle.Length || newIdx < newMiddle.Length)
-            {
-                EmitMismatch();
-            }
-        }
-        else
-        {
-            // Fallback for a very large differing region: the original naive index-by-index
-            // pairing, scoped to the trimmed middle section.
-            while (oldIdx < oldMiddle.Length || newIdx < newMiddle.Length)
-            {
-                if (oldIdx < oldMiddle.Length && newIdx < newMiddle.Length && oldMiddle[oldIdx] == newMiddle[newIdx])
-                {
-                    oldIdx++;
-                    newIdx++;
-                }
-                else
-                {
-                    EmitMismatch();
-                }
-            }
-        }
+        AppendHunk(sb, oldMiddle, newMiddle, prefixLen, oldIdx, oldMiddle.Length, newIdx, newMiddle.Length);
 
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Appends ONE hunk for the contiguous gap [<paramref name="oldFrom"/>, <paramref name="oldTo"/>)
+    /// of <paramref name="oldMiddle"/> versus [<paramref name="newFrom"/>, <paramref name="newTo"/>) of
+    /// <paramref name="newMiddle"/>: header <c>@@ -oldStart,oldCount +newStart,newCount @@</c>, then every
+    /// removed line, then every added line. Starts are 1-based file line numbers (<paramref name="offset"/>
+    /// is the trimmed common prefix); a side with count 0 names the line BEFORE the gap, per the
+    /// unified-diff convention. An empty gap emits nothing.
+    /// </summary>
+    private static void AppendHunk(
+        StringBuilder sb,
+        string[] oldMiddle,
+        string[] newMiddle,
+        int offset,
+        int oldFrom,
+        int oldTo,
+        int newFrom,
+        int newTo)
+    {
+        int oldCount = oldTo - oldFrom;
+        int newCount = newTo - newFrom;
+        if (oldCount == 0 && newCount == 0)
+        {
+            return;
+        }
+
+        int oldStart = oldCount == 0 ? offset + oldFrom : offset + oldFrom + 1;
+        int newStart = newCount == 0 ? offset + newFrom : offset + newFrom + 1;
+        sb.Append("@@ -").Append(oldStart).Append(',').Append(oldCount)
+          .Append(" +").Append(newStart).Append(',').Append(newCount)
+          .Append(" @@\n");
+        for (int i = oldFrom; i < oldTo; i++)
+        {
+            sb.Append('-').Append(oldMiddle[i]).Append('\n');
+        }
+        for (int j = newFrom; j < newTo; j++)
+        {
+            sb.Append('+').Append(newMiddle[j]).Append('\n');
+        }
+    }
+
     /// <summary>
     /// Longest-common-subsequence line matches between <paramref name="oldLines"/> and
     /// <paramref name="newLines"/>, as ascending (oldIndex, newIndex) pairs of equal lines that a

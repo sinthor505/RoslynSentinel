@@ -323,6 +323,65 @@ public class ReplaceSnippetErrorCodeTests
     }
 
     [Test]
+    public async Task ReplaceSnippet_Batch_ReturnDiff_EmitsOneHunkPerEditRegionWithCountsThatMatchTheFileAsync()
+    {
+        using var h = CreateHarness();
+        var original = h.Workspace.ReadText(MemberDupRelativePath);
+        var path = h.Workspace.PathOf(MemberDupRelativePath);
+        const string firstReplacement = "        Log(Compute());";
+        const string secondReplacement = "        Log(Compute() + 1);";
+        var (_, firstLine) = LocateRepeatedBlock(original, 0);
+        var (_, secondLine) = LocateRepeatedBlock(original, 1);
+
+        // Both edits shrink two lines to one, so the second hunk's new-side start is one line
+        // earlier than its old-side start; the second edit's matchLine is an ORIGINAL-file line.
+        var result = await h.Tools.ReplaceSnippet(
+            reason: "batch returnDiff hunk shape",
+            ProposedChangeAction.apply,
+            batchEdits:
+            [
+                new SnippetEdit { FilePath = path, OldContent = MemberDupRepeatedBlock, NewContent = firstReplacement, MatchLine = firstLine },
+                new SnippetEdit { FilePath = path, OldContent = MemberDupRepeatedBlock, NewContent = secondReplacement, MatchLine = secondLine },
+            ],
+            returnDiff: true);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        var diff = result.SuccessData!.DiffContent;
+        Assert.That(diff, Is.Not.Null.And.Not.Empty);
+        Assert.That(diff, Does.Not.Contain("\r"), "diff text must use \\n only");
+
+        var diffLines = diff!.Split('\n');
+        var headers = diffLines.Where(l => l.StartsWith("@@ ", StringComparison.Ordinal)).ToList();
+        Assert.That(headers, Is.EqualTo(new[]
+        {
+            $"@@ -{firstLine},2 +{firstLine},1 @@",
+            $"@@ -{secondLine},2 +{secondLine - 1},1 @@",
+        }), "one hunk per edit region, counts and starts in standard unified-diff form");
+
+        // Each hunk body is one contiguous '-' run followed by one contiguous '+' run.
+        var bodySigns = new List<string>();
+        foreach (var line in diffLines)
+        {
+            if (line.StartsWith("@@ ", StringComparison.Ordinal))
+            {
+                bodySigns.Add(string.Empty);
+            }
+            else if (bodySigns.Count > 0 && (line.StartsWith('-') || line.StartsWith('+')))
+            {
+                bodySigns[^1] += line[0];
+            }
+        }
+        Assert.That(bodySigns, Is.EqualTo(new[] { "--+", "--+" }));
+
+        var originalLines = original.Split('\n');
+        var changedLines = h.Workspace.ReadText(MemberDupRelativePath).Split('\n');
+        Assert.That(diff, Does.Contain($"-{originalLines[firstLine - 1]}\n-{originalLines[firstLine]}\n+{firstReplacement}\n"));
+        Assert.That(diff, Does.Contain($"-{originalLines[secondLine - 1]}\n-{originalLines[secondLine]}\n+{secondReplacement}\n"));
+        Assert.That(changedLines[firstLine - 1], Is.EqualTo(firstReplacement), "first hunk's new start must point at its replacement in the real file");
+        Assert.That(changedLines[secondLine - 2], Is.EqualTo(secondReplacement), "second hunk's new start must point at its replacement in the real file");
+    }
+
+    [Test]
     public async Task ReplaceSnippet_TopLevelSelectorWithBatchEdits_IsRejectedAsInvalidArgumentAsync()
     {
         using var h = CreateHarness();
