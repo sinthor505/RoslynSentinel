@@ -151,4 +151,64 @@ public class CompilerErrorLookupHelperTests
         Assert.That(lines[1], Is.EqualTo("CS1002 at C:\\repo\\Other.cs:7: ; expected"),
             "a non-repeated diagnostic keeps the original single-diagnostic format");
     }
+
+    /// <summary>
+    /// SourceLine coverage for the single-item branch: when a diagnostic carries its source line, the
+    /// rendered line gets a "\n    > " quote appended so the model sees the offending code inline.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_SourceLinePresent_SingleItemAppendsQuotedSourceLine()
+    {
+        var report = new DiagnosticReport(true, new List<DiagnosticInfo>
+        {
+            new DiagnosticInfo("CS1002", "Error", "; expected", "C:\\repo\\Other.cs", 7, 1, 7, 2, null, "var x = 1"),
+        });
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Is.EqualTo("CS1002 at C:\\repo\\Other.cs:7: ; expected\n    > var x = 1"));
+    }
+
+    /// <summary>
+    /// SourceLine coverage for the grouped branch: the grouped header (one line for N identical
+    /// diagnostics) gets the quoted source line of its first occurrence appended.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_SourceLinePresent_GroupedHeaderAppendsQuotedSourceLine()
+    {
+        const string ctorMessage = "There is no argument given that corresponds to the required parameter 'workspaceManager'";
+        var report = new DiagnosticReport(true, new List<DiagnosticInfo>
+        {
+            new DiagnosticInfo("CS7036", "Error", ctorMessage, "C:\\repo\\A.cs", 10, 5, 10, 20, null, "return Foo(a);"),
+            new DiagnosticInfo("CS7036", "Error", ctorMessage, "C:\\repo\\B.cs", 20, 5, 20, 20, null, "return Foo(a);"),
+        });
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Is.EqualTo(
+            "CS7036 (x2): " + ctorMessage + " at: C:\\repo\\A.cs:10, C:\\repo\\B.cs:20\n    > return Foo(a);"));
+    }
+
+    /// <summary>
+    /// Regression guard: with SourceLine null (the default ToInfo() path), neither the single-item nor the
+    /// grouped rendering may emit a quote line, so output is unchanged from before SourceLine existed.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_NullSourceLine_OutputHasNoQuoteLine()
+    {
+        const string ctorMessage = "There is no argument given that corresponds to the required parameter 'workspaceManager'";
+        var report = new DiagnosticReport(true, new List<DiagnosticInfo>
+        {
+            new DiagnosticInfo("CS1002", "Error", "; expected", "C:\\repo\\Other.cs", 7, 1, 7, 2),
+            new DiagnosticInfo("CS7036", "Error", ctorMessage, "C:\\repo\\A.cs", 10, 5, 10, 20),
+            new DiagnosticInfo("CS7036", "Error", ctorMessage, "C:\\repo\\B.cs", 20, 5, 20, 20),
+        });
+
+        var description = await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine);
+
+        Assert.That(description, Does.Not.Contain("    > "),
+            "a null SourceLine must not add a quote line to either the single or the grouped rendering");
+        Assert.That(description, Does.Contain("CS1002 at C:\\repo\\Other.cs:7: ; expected"));
+        Assert.That(description, Does.StartWith("CS1002 at C:\\repo\\Other.cs:7: ; expected\n"));
+    }
 }

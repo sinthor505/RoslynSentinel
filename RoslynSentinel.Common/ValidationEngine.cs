@@ -229,7 +229,7 @@ public class ValidationEngine
                 Debug.WriteLine($"Found new error in project {candidateProject.Name}: {diagnostic.GetMessage()}");
                 if (!baselineErrors.Contains(DiagnosticKey(diagnostic)))
                 {
-                    introducedDiagnostics.Add(diagnostic.ToInfo());
+                    introducedDiagnostics.Add(diagnostic.ToInfo(includeSourceLine: true));
                 }
             }
         }
