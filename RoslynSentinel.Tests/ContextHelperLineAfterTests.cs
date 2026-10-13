@@ -105,4 +105,56 @@ public class ContextHelperLineAfterTests
         Assert.That(ex!.Message, Does.Contain($"was located at source line {rareLine}:"));
         Assert.That(ex.Message, Does.Contain("too common"));
     }
+
+    [Test]
+    public void FindExactSnippetPosition_Ambiguous_WithMemberNameAt_NamesEnclosingMemberPerMatch()
+    {
+        var bStart = TwoBlocksSameTails.IndexOf("void B", StringComparison.Ordinal);
+
+        var ex = Assert.Throws<ToolAmbiguousMatchException>(() => ContextHelper.FindExactSnippetPosition(
+            SourceText.From(TwoBlocksSameTails), MultiLineSnippet,
+            memberNameAt: offset => offset < bStart ? "A" : "B"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ex!.Message, Does.Contain("Match 1 (lines 5-6, in A)"));
+            Assert.That(ex.Message, Does.Contain("Match 2 (lines 12-13, in B)"));
+        });
+    }
+
+    [Test]
+    public void FindExactSnippetPosition_Ambiguous_WithoutMemberNameAt_KeepsOriginalFormat()
+    {
+        var ex = Assert.Throws<ToolAmbiguousMatchException>(() => ContextHelper.FindExactSnippetPosition(
+            SourceText.From(TwoBlocksSameTails), MultiLineSnippet));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ex!.Message, Does.Contain("Match 1 (lines 5-6): lineBefore="));
+            Assert.That(ex.Message, Does.Contain("Match 2 (lines 12-13): lineBefore="));
+            Assert.That(ex.Message, Does.Not.Contain(", in "));
+        });
+    }
+
+    [Test]
+    public void FindExactSnippetPosition_StillAmbiguous_ListsCandidatesCappedAtFive()
+    {
+        var blocks = string.Concat(Enumerable.Range(1, 7).Select(i =>
+            $"    void M{i}()\n    {{\n        x = 1;\n        y = 2;\n        return;\n    }}\n\n"));
+        var source = "class C\n{\n" + blocks + "}";
+
+        var ex = Assert.Throws<ToolAmbiguousMatchException>(() => ContextHelper.FindExactSnippetPosition(
+            SourceText.From(source), MultiLineSnippet, lineBefore: "{", lineAfter: "return;",
+            memberNameAt: offset => "M" + (source.Substring(0, offset).Split("void M").Length - 1)));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ex!.Message, Does.Contain("still ambiguous (7 matches remain)"));
+            Assert.That(ex.Message, Does.Contain("Match 1 (lines 5-6, in M1)"));
+            Assert.That(ex.Message, Does.Contain("Match 5 ("));
+            Assert.That(ex.Message, Does.Not.Contain("Match 6 ("));
+            Assert.That(ex.Message, Does.Contain("... and 2 more"));
+            Assert.That(ex.Message.Length, Is.LessThan(2048));
+        });
+    }
 }

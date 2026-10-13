@@ -4,6 +4,9 @@ namespace RoslynSentinel.Common;
 
 public class ContextErrorBuilder
 {
+    /// <summary>Cap on candidates listed in a StillAmbiguous message, to keep it small.</summary>
+    private const int MaxStillAmbiguousCandidatesListed = 5;
+
     /// <summary>
     /// Builds a <see cref="ToolException"/> for a failed contextSnippet match: wording and
     /// exception-type choice for every <see cref="SnippetMatchOutcome"/>, centralized here instead
@@ -13,7 +16,8 @@ public class ContextErrorBuilder
         SnippetMatchOutcome outcome, string contextSnippet, SourceText sourceText,
         List<ContextHelper.SnippetMatch>? matches = null, string? diagnosis = null,
         string? parameterName = null, string? invalidValue = null, bool? isAfter = null,
-        bool verbatimRequired = false, string snippetLabel = "contextSnippet")
+        bool verbatimRequired = false, string snippetLabel = "contextSnippet",
+        Func<int, string?>? memberNameAt = null)
     {
         switch (outcome)
         {
@@ -21,11 +25,11 @@ public class ContextErrorBuilder
                 return BuildNoMatch(contextSnippet, verbatimRequired, diagnosis, snippetLabel);
 
             case SnippetMatchOutcome.Ambiguous:
-                return BuildAmbiguous(contextSnippet, sourceText, matches, stillAmbiguous: false, snippetLabel: snippetLabel);
+                return BuildAmbiguous(contextSnippet, sourceText, matches, stillAmbiguous: false, snippetLabel: snippetLabel, memberNameAt: memberNameAt);
 
             case SnippetMatchOutcome.StillAmbiguous:
             case SnippetMatchOutcome.TrueTie:
-                return BuildAmbiguous(contextSnippet, sourceText, matches, stillAmbiguous: true, snippetLabel: snippetLabel);
+                return BuildAmbiguous(contextSnippet, sourceText, matches, stillAmbiguous: true, snippetLabel: snippetLabel, memberNameAt: memberNameAt);
 
             case SnippetMatchOutcome.InvalidDisambiguator:
                 return BuildInvalidDisambiguator(parameterName, invalidValue, isAfter);
@@ -53,7 +57,8 @@ public class ContextErrorBuilder
     }
 
     private static ToolAmbiguousMatchException BuildAmbiguous(
-        string contextSnippet, SourceText sourceText, List<ContextHelper.SnippetMatch>? matches, bool stillAmbiguous, string snippetLabel)
+        string contextSnippet, SourceText sourceText, List<ContextHelper.SnippetMatch>? matches, bool stillAmbiguous, string snippetLabel,
+        Func<int, string?>? memberNameAt = null)
     {
         var trimmed = contextSnippet.Trim();
         var count = matches?.Count ?? 0;
@@ -61,7 +66,7 @@ public class ContextErrorBuilder
         if (!stillAmbiguous)
         {
             var candidateText = matches != null
-                ? ContextHelper.DescribeAmbiguousCandidates(sourceText, matches, snippetLabel)
+                ? ContextHelper.DescribeAmbiguousCandidates(sourceText, matches, snippetLabel, memberNameAt)
                 : string.Empty;
             return new ToolAmbiguousMatchException(
                 $"{snippetLabel} is ambiguous ({count} matches): \"{trimmed}\". " +
@@ -69,9 +74,16 @@ public class ContextErrorBuilder
                 "verbatim, do not retype from memory) to select the intended match:\n" + candidateText);
         }
 
-        return new ToolAmbiguousMatchException(
+        var stillMessage =
             $"{snippetLabel} is still ambiguous ({count} matches remain): \"{trimmed}\". " +
-            "Provide more specific lineBefore and/or lineAfter content.");
+            "Provide more specific lineBefore and/or lineAfter content.";
+        if (matches is { Count: > 0 })
+        {
+            stillMessage += "\nRemaining candidates:\n" + ContextHelper.DescribeAmbiguousCandidates(
+                sourceText, matches, snippetLabel, memberNameAt, MaxStillAmbiguousCandidatesListed);
+        }
+
+        return new ToolAmbiguousMatchException(stillMessage);
     }
 
     private static ToolNotFoundException BuildInvalidDisambiguator(string? parameterName, string? invalidValue, bool? isAfter)

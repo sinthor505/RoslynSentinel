@@ -297,7 +297,8 @@ public static class ContextHelper
     /// </summary>
     public static SnippetMatch FindExactSnippetPosition(
         SourceText sourceText, string contextSnippet,
-        string? lineBefore = null, string? lineAfter = null)
+        string? lineBefore = null, string? lineAfter = null,
+        Func<int, string?>? memberNameAt = null)
     {
         const string label = "oldContent";
         if (string.IsNullOrWhiteSpace(contextSnippet))
@@ -331,9 +332,9 @@ public static class ContextHelper
         return (lbTrimmed, laTrimmed) switch
         {
             (null, null) => throw ContextErrorBuilder.Build(
-                SnippetMatchOutcome.Ambiguous, contextSnippet, sourceText, matches, snippetLabel: label),
+                SnippetMatchOutcome.Ambiguous, contextSnippet, sourceText, matches, snippetLabel: label, memberNameAt: memberNameAt),
             _ => throw ContextErrorBuilder.Build(
-                SnippetMatchOutcome.StillAmbiguous, contextSnippet, sourceText, matches, snippetLabel: label)
+                SnippetMatchOutcome.StillAmbiguous, contextSnippet, sourceText, matches, snippetLabel: label, memberNameAt: memberNameAt)
         };
     }
 
@@ -787,13 +788,18 @@ public static class ContextHelper
     /// Describes each candidate's real, verbatim adjacent line(s) so an ambiguous-match error can
     /// let the caller copy one back as lineBefore/lineAfter instead of constructing one from
     /// memory. Also flags true ties (identical before AND after) since those can't be
-    /// disambiguated this way at all.
+    /// disambiguated this way at all. When <paramref name="memberNameAt"/> returns a name for a
+    /// match start offset, the match line also names its enclosing member. At most
+    /// <paramref name="maxListed"/> matches are listed, followed by an "... and N more" line.
     /// </summary>
-    internal static string DescribeAmbiguousCandidates(SourceText sourceText, List<SnippetMatch> allMatches, string snippetLabel = "contextSnippet")
+    internal static string DescribeAmbiguousCandidates(
+        SourceText sourceText, List<SnippetMatch> allMatches, string snippetLabel = "contextSnippet",
+        Func<int, string?>? memberNameAt = null, int maxListed = int.MaxValue)
     {
         var descriptions = new List<(string Before, string After)>();
         var lines = new List<string>();
-        for (int i = 0; i < allMatches.Count; i++)
+        var listedCount = Math.Min(allMatches.Count, maxListed);
+        for (int i = 0; i < listedCount; i++)
         {
             var firstLineIndex = sourceText.Lines.GetLinePosition(allMatches[i].Start).Line;
             var lastLineIndex = sourceText.Lines.GetLinePosition(allMatches[i].Start + allMatches[i].Length - 1).Line;
@@ -802,7 +808,14 @@ public static class ContextHelper
                 ? sourceText.Lines[lastLineIndex + 1].ToString().Trim()
                 : "(end of file)";
             descriptions.Add((before, after));
-            lines.Add($"Match {i + 1} (lines {firstLineIndex + 1}-{lastLineIndex + 1}): lineBefore=\"{before}\" lineAfter=\"{after}\"");
+            var memberName = memberNameAt?.Invoke(allMatches[i].Start);
+            var inMember = string.IsNullOrEmpty(memberName) ? string.Empty : $", in {memberName}";
+            lines.Add($"Match {i + 1} (lines {firstLineIndex + 1}-{lastLineIndex + 1}{inMember}): lineBefore=\"{before}\" lineAfter=\"{after}\"");
+        }
+
+        if (listedCount < allMatches.Count)
+        {
+            lines.Add($"... and {allMatches.Count - listedCount} more");
         }
 
         var tieGroups = descriptions.Select((d, i) => (d, i)).GroupBy(x => x.d).Where(g => g.Count() > 1);
