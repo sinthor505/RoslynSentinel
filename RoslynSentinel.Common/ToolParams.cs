@@ -39,7 +39,7 @@ public static class ToolParams
     public const string ContextSnippet =
         "Short unique fragment identifying the target when its name alone is ambiguous, copied verbatim from a prior result.";
     */
-    public const string ContextSnippet = "Short unique verbatim disambiguating fragment for identifying the target";
+    public const string ContextSnippet = "Short verbatim line or fragment, unique in the file, copied exactly from the source (a bare name that appears on several lines is ambiguous - include more of the line, or add lineBefore/lineAfter)";
 
     public const string LineBefore =
         "Line before contextSnippet.";
