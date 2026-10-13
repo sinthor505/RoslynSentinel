@@ -1583,6 +1583,7 @@ public class SymbolNavigationEngine
 
             if (contextSnippet != null)
             {
+                ToolAmbiguousMatchException? firstAmbiguous = null;
                 foreach (var candidate in memberMatches)
                 {
                     if (candidate.FilePath == null)
@@ -1599,16 +1600,26 @@ public class SymbolNavigationEngine
 
                     try
                     {
-                        symbol = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, null, null, cancellationToken);
+                        symbol = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, lineBefore, lineAfter, cancellationToken);
                         if (symbol != null)
                         {
                             break;
                         }
                     }
+                    catch (ToolAmbiguousMatchException ambiguous)
+                    {
+                        // Keep the first ambiguity: if no candidate resolves, surface it instead of a misleading NotFound.
+                        firstAmbiguous ??= ambiguous;
+                    }
                     catch (ToolException)
                     {
                         // snippet not found in this document -> continue
                     }
+                }
+
+                if (symbol == null && firstAmbiguous != null)
+                {
+                    throw firstAmbiguous;
                 }
 
                 if (symbol == null)
@@ -1843,6 +1854,7 @@ public class SymbolNavigationEngine
 
             if (contextSnippet != null)
             {
+                ToolAmbiguousMatchException? firstAmbiguous = null;
                 foreach (var candidate in memberMatches)
                 {
                     if (candidate.FilePath == null)
@@ -1859,16 +1871,26 @@ public class SymbolNavigationEngine
 
                     try
                     {
-                        symbol = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, null, null, cancellationToken);
+                        symbol = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, lineBefore, lineAfter, cancellationToken);
                         if (symbol != null)
                         {
                             break;
                         }
                     }
+                    catch (ToolAmbiguousMatchException ambiguous)
+                    {
+                        // Keep the first ambiguity: if no candidate resolves, surface it instead of a misleading NotFound.
+                        firstAmbiguous ??= ambiguous;
+                    }
                     catch (ToolException)
                     {
                         // snippet not found in this document -> continue
                     }
+                }
+
+                if (symbol == null && firstAmbiguous != null)
+                {
+                    throw firstAmbiguous;
                 }
 
                 if (symbol == null)

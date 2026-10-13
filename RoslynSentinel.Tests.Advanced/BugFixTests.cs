@@ -1446,6 +1446,20 @@ public class Second { public void Run() { } }";
             Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
+        // -- 9j: by-name FindCallers whose contextSnippet matches several lines surfaces Ambiguous, not NotFound ---
+        [Test]
+        public async Task FindCallersAsync_NoFilePath_AmbiguousContextSnippet_SurfacesAmbiguousNotNotFound()
+        {
+            const string src = @"public class Greeter
+{
+    public void Greet() { }
+    public void Run() { Greet(); }
+}";
+            SetSource(src, "Greeter.cs");
+            var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _navigationEngine.FindCallersAsync(null, "Greet", contextSnippet: "Greet"));
+            Assert.That(ex!.Message, Does.Contain("ambiguous").IgnoreCase);
+        }
+
         // ── 9e: FindServicesNotRegistered -> IWebHostEnvironment etc. not flagged ──
         [Test]
         [Category("DependencyInjectionEngine")] // sentinel:auto-category
