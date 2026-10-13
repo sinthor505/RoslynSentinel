@@ -367,7 +367,7 @@ public static class ContextHelper
 
             throw ContextErrorBuilder.Build(
                 SnippetMatchOutcome.NoMatch, contextSnippet, sourceText,
-                diagnosis: DiagnoseNoMatch(sourceText, contextSnippet), verbatimRequired: true, snippetLabel: label);
+                diagnosis: DiagnoseNoMatch(sourceText, contextSnippet, label, verbatimRequired: true), verbatimRequired: true, snippetLabel: label);
         }
 
         if (matches.Count == 1)
@@ -593,7 +593,8 @@ public static class ContextHelper
     /// snippet line matched somewhere in the file, just not in the arrangement supplied.
     /// </summary>
     private static string FormatAllMatchedDiagnosis(
-        int filteredCount, List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText, bool IsWhitespaceOnly)> hits)
+        int filteredCount, List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText, bool IsWhitespaceOnly)> hits,
+        string snippetLabel = "contextSnippet", bool verbatimRequired = false)
     {
         // Boilerplate filter: a snippet line with many hits (a bare "}" or "return null;") is not a
         // useful candidate. Drop such lines unless that would drop every line.
@@ -617,14 +618,18 @@ public static class ContextHelper
         List<string> lines;
         if (hits.All(h => h.IsWhitespaceOnly))
         {
-            intro = "Every line of your contextSnippet matches source line content exactly except for " +
-                    "whitespace (indentation/spacing) - ReplaceSnippet requires a byte-exact match. Copy " +
+            // The byte-exact statement is only true for the verbatim (edit) path; a tolerant-path
+            // caller must not be told it needs a byte-exact match.
+            intro = $"Every line of your {snippetLabel} matches source line content exactly except for " +
+                    (verbatimRequired
+                        ? "whitespace (indentation/spacing) - ReplaceSnippet requires a byte-exact match. Copy "
+                        : "whitespace (indentation/spacing). Copy ") +
                     "these lines directly from the file rather than retyping them:";
             lines = kept.Select(h => $"snippet line {h.SnippetLineIndex + 1} -> source line {h.SourceLineNumber}: \"{h.SourceLineText}\"").ToList();
         }
         else
         {
-            intro = $"{filteredCount} of {filteredCount} lines in contextSnippet were located individually in " +
+            intro = $"{filteredCount} of {filteredCount} lines in {snippetLabel} were located individually in " +
                     "the file, but not in the arrangement you supplied. Each is a candidate to copy back verbatim:";
             lines = kept.Select(h => $"snippet line {h.SnippetLineIndex + 1} was located at source line {h.SourceLineNumber}: \"{h.SourceLineText}\"").ToList();
         }
@@ -661,7 +666,8 @@ public static class ContextHelper
     /// <paramref name="similarityFloor"/> -> never forces a suggestion onto unrelated content.
     /// </summary>
     private static string FormatZeroMatchedDiagnosis(
-        (int SourceLineNumber, string SourceLineText, int Score)?[] nearest, int similarityFloor)
+        (int SourceLineNumber, string SourceLineText, int Score)?[] nearest, int similarityFloor,
+        string snippetLabel = "contextSnippet")
     {
         var best = nearest.Where(n => n != null).Select(n => n!.Value)
             .OrderByDescending(n => n.Score).Cast<(int SourceLineNumber, string SourceLineText, int Score)?>()
@@ -669,14 +675,14 @@ public static class ContextHelper
 
         if (best != null && best.Value.Score >= similarityFloor)
         {
-            return "No line in contextSnippet was located anywhere in the file - this is not a " +
+            return $"No line in {snippetLabel} was located anywhere in the file - this is not a " +
                    "partial-transcription error, the block is wholly unrecognized. The closest line in the " +
                    $"file is line {best.Value.SourceLineNumber}: \"{best.Value.SourceLineText}\", but it is " +
                    "not a confident match - re-read the file rather than retrying this text.";
         }
 
-        return "No line in contextSnippet was located anywhere in the file, and no line in the file is " +
-               "similar enough to suggest - re-read the file and copy a fresh contextSnippet from its current content.";
+        return $"No line in {snippetLabel} was located anywhere in the file, and no line in the file is " +
+               $"similar enough to suggest - re-read the file and copy a fresh {snippetLabel} from its current content.";
     }
 
     /// <summary>
@@ -735,14 +741,14 @@ public static class ContextHelper
         int[] filteredIndexes, int[] matchedIndexes,
         List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText, bool IsWhitespaceOnly)> hits,
         (int SourceLineNumber, string SourceLineText, int Score)?[] nearest,
-        string[] snippetLines, int similarityFloor)
+        string[] snippetLines, int similarityFloor, string snippetLabel = "contextSnippet")
     {
         var matchedSet = matchedIndexes.ToHashSet();
         var unmatched = filteredIndexes.Where(i => !matchedSet.Contains(i)).ToArray();
         const int MaxMatchedShown = 3;
         var parts = new List<string>
         {
-            $"{matchedIndexes.Length} of {filteredIndexes.Length} lines in contextSnippet matched " +
+            $"{matchedIndexes.Length} of {filteredIndexes.Length} lines in {snippetLabel} matched " +
             "somewhere in the file; the rest did not - a partial-transcription error, not a genuine " +
             "absence."
         };
@@ -777,21 +783,21 @@ public static class ContextHelper
         int[] filteredIndexes, int[] matchedIndexes,
         List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText, bool IsWhitespaceOnly)> hits,
         (int SourceLineNumber, string SourceLineText, int Score)?[] nearest,
-        string[] snippetLines)
+        string[] snippetLines, string snippetLabel = "contextSnippet", bool verbatimRequired = false)
     {
         const int SimilarityFloor = 2;
 
         if (matchedIndexes.Length == filteredIndexes.Length)
         {
-            return FormatAllMatchedDiagnosis(filteredIndexes.Length, hits);
+            return FormatAllMatchedDiagnosis(filteredIndexes.Length, hits, snippetLabel, verbatimRequired);
         }
 
         if (matchedIndexes.Length > 0)
         {
-            return FormatPartialMatchDiagnosis(filteredIndexes, matchedIndexes, hits, nearest, snippetLines, SimilarityFloor);
+            return FormatPartialMatchDiagnosis(filteredIndexes, matchedIndexes, hits, nearest, snippetLines, SimilarityFloor, snippetLabel);
         }
 
-        return FormatZeroMatchedDiagnosis(nearest, SimilarityFloor);
+        return FormatZeroMatchedDiagnosis(nearest, SimilarityFloor, snippetLabel);
     }
 
     /// <summary>
@@ -864,54 +870,59 @@ public static class ContextHelper
     /// guidance to a NoMatch error instead of a bare "not found". See
     /// docs/current/plans/plan_contexterrorbuilder_orienting_guidance.md for the full design.
     /// </summary>
-    private static string DiagnoseNoMatch(SourceText sourceText, string contextSnippet)
+    private static string DiagnoseNoMatch(
+        SourceText sourceText, string contextSnippet,
+        string snippetLabel = "contextSnippet", bool verbatimRequired = false)
     {
         const int MinLineLength = 4;
 
-        var snippetLines = SplitSnippetIntoTrimmedContentLines(contextSnippet).Select(l => l.Trim()).ToArray();
+        var rawSnippetLines = SplitSnippetIntoTrimmedContentLines(contextSnippet);
+        var snippetLines = rawSnippetLines.Select(l => l.Trim()).ToArray();
+        var trimmedSource = sourceText.Lines.Select(l => l.ToString().Trim()).ToArray();
+        var window = AlignSnippetWindow(trimmedSource, snippetLines);
+
+        if (window is { IsFullMatch: true } full
+            && FormatWhitespaceReport(sourceText, rawSnippetLines, full, rawSnippetLines.Length) is { } whitespaceReport)
+        {
+            return $"Every line of your {snippetLabel} matches the file at source lines {full.Position + 1}-" +
+                   $"{full.Position + rawSnippetLines.Length} once whitespace at the ends of lines is ignored, but the " +
+                   "whitespace differs" +
+                   (verbatimRequired ? " - ReplaceSnippet requires a byte-exact match, so the indentation must be copied exactly:" : ":") +
+                   "\n" + whitespaceReport;
+        }
+
         var filteredIndexes = Enumerable.Range(0, snippetLines.Length)
             .Where(i => snippetLines[i].Length >= MinLineLength).ToArray();
 
         if (filteredIndexes.Length == 0)
         {
-            return "The contextSnippet has no line long enough to search for individually " +
+            return $"The {snippetLabel} has no line long enough to search for individually " +
                    "(every line is under 4 characters once trimmed) - re-read the file and copy " +
                    "a longer, more specific snippet.";
         }
 
         var (hits, nearest) = GatherNoMatchEvidence(sourceText, snippetLines, filteredIndexes);
         var matchedIndexes = hits.Select(h => h.SnippetLineIndex).Distinct().ToArray();
-        var diagnosis = FormatNoMatchDiagnosis(filteredIndexes, matchedIndexes, hits, nearest, snippetLines);
-        var closestWindow = FormatClosestWindowHint(sourceText, snippetLines);
+        var diagnosis = FormatNoMatchDiagnosis(filteredIndexes, matchedIndexes, hits, nearest, snippetLines, snippetLabel, verbatimRequired);
+        var closestWindow = FormatClosestWindowHint(sourceText, trimmedSource, snippetLines, rawSnippetLines, window);
         return closestWindow is null ? diagnosis : diagnosis + "\n" + closestWindow;
     }
 
     /// <summary>
-    /// Finds the contiguous source window that matches the longest leading run of the snippet's
-    /// non-blank lines and returns one sentence naming the first divergence. Returns null when
-    /// there is nothing useful to say: fewer than two snippet lines, no leading line matching
-    /// anywhere, or a full contiguous match (LineBlockAligner.Alignment.IsFullMatch).
-    /// Comparisons are trimmed, matching LineBlockAligner's convention.
+    /// Names the first divergence between the snippet and the contiguous source window that matches
+    /// its longest leading run. Returns null when there is nothing useful to say: fewer than two
+    /// snippet lines, no leading line matching anywhere, or a full contiguous (trimmed) match, which
+    /// <see cref="DiagnoseNoMatch"/> reports as a whitespace difference instead. Comparisons are
+    /// trimmed, matching LineBlockAligner's convention. Snippet lines are numbered over the same
+    /// array (blank interior lines included, 1-based) as every other label in the message, and a
+    /// blank source line is described as blank rather than quoted as if it were content.
     /// </summary>
-    private static string? FormatClosestWindowHint(SourceText sourceText, string[] snippetLines)
+    private static string? FormatClosestWindowHint(
+        SourceText sourceText, string[] trimmedSource, string[] snippetLines, string[] rawSnippetLines, Alignment? window)
     {
         const int MaxQuotedChars = 120;
 
-        var needle = snippetLines.Where(l => l.Length > 0).ToArray();
-        if (needle.Length < 2)
-        {
-            return null;
-        }
-
-        var source = sourceText.Lines.Select(l => l.ToString().Trim()).ToArray();
-        var candidates = Enumerable.Range(0, source.Length).Where(i => source[i] == needle[0]).ToArray();
-        if (candidates.Length == 0)
-        {
-            candidates = Enumerable.Range(0, source.Length).ToArray();
-        }
-
-        var best = LineBlockAligner.FindBestPrefixAlignment(source, needle, candidates);
-        if (best.MatchedCount < 1 || best.IsFullMatch)
+        if (window is not { } best || best.MatchedCount < 1 || best.IsFullMatch)
         {
             return null;
         }
@@ -919,12 +930,220 @@ public static class ContextHelper
         static string Quote(string text) => text.Length <= MaxQuotedChars ? text : text[..MaxQuotedChars] + "...";
 
         var divergeAt = best.Position + best.MatchedCount;
-        var sourceDivergence = divergeAt < source.Length
-            ? $"source line {divergeAt + 1} (\"{Quote(source[divergeAt])}\")"
-            : "the end of the file";
-        return $"Closest window: source lines {best.Position + 1}-{best.Position + best.MatchedCount} match your first " +
-               $"{best.MatchedCount} snippet line(s); snippet line {best.MatchedCount + 1} " +
-               $"(\"{Quote(needle[best.MatchedCount])}\") differs from {sourceDivergence}.";
+        var snippetLine = snippetLines[best.MatchedCount];
+        var snippetPart = snippetLine.Length == 0
+            ? $"snippet line {best.MatchedCount + 1} (a blank line)"
+            : $"snippet line {best.MatchedCount + 1} (\"{Quote(snippetLine)}\")";
+        var sourcePart = divergeAt >= trimmedSource.Length
+            ? "the end of the file"
+            : trimmedSource[divergeAt].Length == 0 && snippetLine.Length > 0
+                ? $"source line {divergeAt + 1}, a blank line that your snippet does not include"
+                : $"source line {divergeAt + 1} (\"{Quote(trimmedSource[divergeAt])}\")";
+        var hint = $"Closest window: source lines {best.Position + 1}-{best.Position + best.MatchedCount} match your first " +
+                   $"{best.MatchedCount} snippet line(s); {snippetPart} differs from {sourcePart}.";
+
+        var whitespace = FormatWhitespaceReport(sourceText, rawSnippetLines, best, best.MatchedCount, compact: true);
+        return whitespace is null
+            ? hint
+            : hint + "\nThe lines that did match also differ in whitespace:\n" + whitespace;
+    }
+
+    /// <summary>
+    /// Aligns the snippet's lines (blank lines included, so numbering matches every other
+    /// "snippet line N" label in a NoMatch message) against the trimmed source lines and returns
+    /// the best leading-run alignment. Null for a single-line snippet. Comparisons are trimmed,
+    /// matching <see cref="LineBlockAligner"/>'s convention, so a full match here can still differ
+    /// from the file in leading/trailing whitespace.
+    /// </summary>
+    private static Alignment? AlignSnippetWindow(string[] trimmedSource, string[] trimmedSnippetLines)
+    {
+        if (trimmedSnippetLines.Length < 2)
+        {
+            return null;
+        }
+
+        var candidates = Enumerable.Range(0, trimmedSource.Length).Where(i => trimmedSource[i] == trimmedSnippetLines[0]).ToArray();
+        if (candidates.Length == 0)
+        {
+            candidates = Enumerable.Range(0, trimmedSource.Length).ToArray();
+        }
+
+        return LineBlockAligner.FindBestPrefixAlignment(trimmedSource, trimmedSnippetLines, candidates);
+    }
+
+    /// <summary>
+    /// Whether a raw snippet line can sit in the file's raw line under the exact matcher's
+    /// substring semantics: the first snippet line may start mid-line (so the file line only has
+    /// to END with it), the last may stop mid-line (the file line only has to START with it), and
+    /// every interior line must be equal. A trimmed-equal line that fails this is a whitespace
+    /// difference that makes the exact matcher miss.
+    /// </summary>
+    private static bool IsRawCompatible(string fileLine, string snippetLine, bool isFirst, bool isLast)
+    {
+        if (isFirst && isLast)
+        {
+            return fileLine.Contains(snippetLine, StringComparison.Ordinal);
+        }
+
+        if (isFirst)
+        {
+            return fileLine.EndsWith(snippetLine, StringComparison.Ordinal);
+        }
+
+        if (isLast)
+        {
+            return fileLine.StartsWith(snippetLine, StringComparison.Ordinal);
+        }
+
+        return string.Equals(fileLine, snippetLine, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// One sentence naming how a trimmed-equal snippet line differs from its file line: leading
+    /// whitespace first (the common dropped-indentation case, with a tabs-vs-spaces note), else
+    /// trailing whitespace. "expected" is what the file has, "got" is what the snippet has.
+    /// </summary>
+    private static string DescribeWhitespaceDifference(
+        string fileLine, string snippetLine, int snippetLineNumber, int fileLineNumber, bool isFirst, bool isLast)
+    {
+        static string Leading(string line)
+        {
+            int i = 0;
+            while (i < line.Length && char.IsWhiteSpace(line[i]))
+            {
+                i++;
+            }
+            return line[..i];
+        }
+
+        static string Trailing(string line)
+        {
+            int i = line.Length;
+            while (i > 0 && char.IsWhiteSpace(line[i - 1]))
+            {
+                i--;
+            }
+            return line[i..];
+        }
+
+        static string Describe(string run)
+        {
+            if (run.Length == 0)
+            {
+                return "0";
+            }
+
+            int tabs = run.Count(c => c == '\t');
+            int spaces = run.Count(c => c == ' ');
+            int other = run.Length - tabs - spaces;
+            var parts = new List<string>();
+            if (tabs > 0)
+            {
+                parts.Add(tabs == 1 ? "1 tab" : $"{tabs} tabs");
+            }
+            if (spaces > 0)
+            {
+                parts.Add(spaces == 1 ? "1 space" : $"{spaces} spaces");
+            }
+            if (other > 0)
+            {
+                parts.Add($"{other} other whitespace character(s)");
+            }
+            return string.Join(" and ", parts);
+        }
+
+        var fileLead = Leading(fileLine);
+        var snippetLead = Leading(snippetLine);
+        var prefix = $"snippet line {snippetLineNumber} matches file line {fileLineNumber} except ";
+        // The first snippet line may start mid-indentation, so a shorter leading run that the file's
+        // run ends with is not a difference (see IsRawCompatible).
+        var leadingDiffers = isFirst
+            ? !fileLead.EndsWith(snippetLead, StringComparison.Ordinal)
+            : !string.Equals(fileLead, snippetLead, StringComparison.Ordinal);
+        if (leadingDiffers)
+        {
+            var kindNote = fileLead.Contains('\t') != snippetLead.Contains('\t') ? " (tabs vs spaces)" : "";
+            return $"{prefix}leading whitespace: expected {Describe(fileLead)}, got {Describe(snippetLead)}{kindNote}";
+        }
+
+        return $"{prefix}trailing whitespace: expected {Describe(Trailing(fileLine))}, got {Describe(Trailing(snippetLine))}";
+    }
+
+    /// <summary>
+    /// For the first <paramref name="comparedCount"/> lines of an aligned window (trimmed-equal by
+    /// construction), reports every snippet line whose raw text cannot sit in the file's raw line
+    /// (<see cref="IsRawCompatible"/>), then appends the file's actual lines for that window
+    /// verbatim as a copy-ready block. Bounded: at most 5 differences, 12 block lines and 1200
+    /// block characters, whole lines only. Returns null when no line differs in whitespace.
+    /// </summary>
+    private static string? FormatWhitespaceReport(
+        SourceText sourceText, string[] rawSnippetLines, Alignment window, int comparedCount, bool compact = false)
+    {
+        const int MaxLinesReported = 5;
+        const int MaxBlockLines = 12;
+        const int MaxBlockChars = 1200;
+
+        var lines = sourceText.Lines;
+        var differences = new List<string>();
+        for (int k = 0; k < comparedCount && window.Position + k < lines.Count && k < rawSnippetLines.Length; k++)
+        {
+            var fileLine = lines[window.Position + k].ToString();
+            if (IsRawCompatible(fileLine, rawSnippetLines[k], k == 0, k == rawSnippetLines.Length - 1))
+            {
+                continue;
+            }
+
+            differences.Add(DescribeWhitespaceDifference(
+                fileLine, rawSnippetLines[k], k + 1, window.Position + k + 1, k == 0, k == rawSnippetLines.Length - 1));
+        }
+
+        if (differences.Count == 0)
+        {
+            return null;
+        }
+
+        if (compact)
+        {
+            // Partial-match hint: the content divergence is the main message, so name one whitespace
+            // difference plus a count and a pointer instead of repeating the whole report and block.
+            return "  " + differences[0] + "\n  (whitespace differs on " + differences.Count +
+                   $" line(s) of source lines {window.Position + 1}-{window.Position + comparedCount}; copy that text exactly from ReadFile)";
+        }
+
+        var parts = differences.Take(MaxLinesReported).Select(d => "  " + d).ToList();
+        if (differences.Count > MaxLinesReported)
+        {
+            parts.Add($"  ... and {differences.Count - MaxLinesReported} more line(s) differ in whitespace");
+        }
+
+        int blockEnd = Math.Min(lines.Count, window.Position + comparedCount);
+        var shown = new List<string>();
+        int chars = 0;
+        for (int i = window.Position; i < blockEnd; i++)
+        {
+            var text = lines[i].ToString();
+            if (shown.Count >= MaxBlockLines || chars + text.Length + 1 > MaxBlockChars)
+            {
+                break;
+            }
+
+            shown.Add(text);
+            chars += text.Length + 1;
+        }
+
+        if (shown.Count > 0)
+        {
+            parts.Add($"The file's actual text at source lines {window.Position + 1}-{window.Position + shown.Count}, " +
+                      "verbatim (copy it exactly, including indentation):");
+            parts.AddRange(shown);
+            int hidden = blockEnd - window.Position - shown.Count;
+            if (hidden > 0)
+            {
+                parts.Add($"({hidden} more line(s) not shown; copy the rest from ReadFile)");
+            }
+        }
+
+        return string.Join("\n", parts);
     }
 
     /// <summary>
