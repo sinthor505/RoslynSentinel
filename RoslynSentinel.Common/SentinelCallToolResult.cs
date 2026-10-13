@@ -223,6 +223,16 @@ public record SentinelCallToolResult<TSuccess, TError> : IResultStatus
     }
 
     /// <summary>
+    /// Offset to pass as <c>offset</c> on the next call to continue past this page. Null when no
+    /// further rows remain or the tool does not page. Omitted from JSON when null.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public int? NextOffset
+    {
+        get; init;
+    }
+
+    /// <summary>
     /// Optional non-fatal hint surfaced alongside a successful result (e.g. a likely-mistaken
     /// argument value). Null when there is nothing noteworthy to flag.
     /// </summary>

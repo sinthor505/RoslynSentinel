@@ -537,4 +537,52 @@ public class GetLargeResultTests
         Assert.That(data.LiteralResults, Has.Count.EqualTo(3));
         Assert.That(data.RegexResults, Has.Count.EqualTo(5));
     }
+
+    [Test, CancelAfter(20000)]
+    public async Task T16_GetLargeResult_TextSearch_RegexOnly_NextOffsetChainPagesEveryRowOnceAndEndsNull()
+    {
+        var resultId = Guid.NewGuid().ToString("N");
+        var stored = new TextSearchResult([], MakeTextMatches(135, 0, MatchKind.Regex), 0, true);
+        WriteLargeResultFile(stored, ResultWrapperType.TextSearchMatchList, resultId);
+
+        var first = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 50, offset: 0);
+        var firstData = (TextSearchResult)first.SuccessData!;
+        var firstReturned = firstData.LiteralResults.Count + firstData.RegexResults.Count;
+        Assert.That(first.NextOffset, Is.EqualTo(firstReturned), "NextOffset must equal the rows returned on the first page.");
+
+        var lines = new List<int>();
+        int? next = first.NextOffset;
+        lines.AddRange(firstData.RegexResults.Select(r => r.Line));
+        var pages = 1;
+        while (next is int offset && pages < 20)
+        {
+            var page = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 50, offset: offset);
+            var data = (TextSearchResult)page.SuccessData!;
+            lines.AddRange(data.LiteralResults.Select(r => r.Line));
+            lines.AddRange(data.RegexResults.Select(r => r.Line));
+            pages++;
+            next = page.NextOffset;
+            if (next is null)
+            {
+                Assert.That(page.HasMoreData, Is.False, "The last page must report HasMoreData false.");
+            }
+        }
+
+        Assert.That(next, Is.Null, "The final page must end with NextOffset null.");
+        Assert.That(lines, Is.EqualTo(Enumerable.Range(0, 135)), "Following NextOffset must yield every row exactly once, in order.");
+    }
+
+    [Test, CancelAfter(10000)]
+    public async Task T17_GetLargeResult_TextSearch_SmallResult_NextOffsetIsNull()
+    {
+        var resultId = Guid.NewGuid().ToString("N");
+        var stored = new TextSearchResult(MakeTextMatches(3, 0, MatchKind.Literal), MakeTextMatches(5, 3, MatchKind.Regex), 0, true);
+        WriteLargeResultFile(stored, ResultWrapperType.TextSearchMatchList, resultId);
+
+        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 50, offset: 0);
+
+        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.HasMoreData, Is.False);
+        Assert.That(result.NextOffset, Is.Null, "A result that fits in one page must not carry a NextOffset.");
+    }
 }

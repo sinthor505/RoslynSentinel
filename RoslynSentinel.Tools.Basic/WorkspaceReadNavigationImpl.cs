@@ -1095,6 +1095,7 @@ public class WorkspaceReadNavigationImpl
                     SuccessData = pageData,
                     TotalRecords = rawText.Length,
                     HasMoreData = hasMoreRaw,
+                    NextOffset = hasMoreRaw ? nextOffset : null,
                     WarningDetails = hasMoreRaw
                         ? $"Raw result truncated to a {length}-char window. Call GetLargeResult(resultId, offset: {nextOffset}, charLimit: <N>) to continue reading."
                         : null
@@ -1477,6 +1478,7 @@ public class WorkspaceReadNavigationImpl
                 SuccessData = result.SuccessData,
                 TotalRecords = totalRecords,
                 HasMoreData = hasMorePages,
+                NextOffset = hasMorePages ? offset + (textSearchReturned ?? (result.SuccessData as System.Collections.ICollection)?.Count ?? limit) : null,
                 // The branch-built "page shrunk ... call again with offset" hint must reach the caller.
                 WarningDetails = result.WarningDetails,
             };
