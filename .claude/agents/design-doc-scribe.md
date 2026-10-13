@@ -13,7 +13,7 @@ Read `CLAUDE.md` first. Its failure doctrine applies to how you frame problems: 
 model tripped over is an environment defect, and the doc should say what environment change fixes
 it — never "the model should have known".
 
-Read C# through ReadFile / GetMethodSource / Search / FindReferences; the built-in Read is blocked on in-repo .cs files.
+Read C# through ReadFile / GetMethodSource / Search (mode: references for callers); the built-in Read is blocked on in-repo .cs files.
 
 ## Pick the right genre, folder and filename
 

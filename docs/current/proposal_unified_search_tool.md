@@ -180,6 +180,13 @@ search, instead of two names that could independently drift.
 
 ### 7. `FindReferences` remains a separate standalone tool
 
+> **Amended 2026-10-13:** `FindReferences` and `LocateSymbol` remain declared tools, but both were
+> dropped from the `claude-lean` Core set (26 -> 24 tools, commit 1785f33c); there, `Search(mode:
+> references)` and `Search(mode: symbol)` are the only entry points. `Search` got parity first
+> (commit 57bec9c3): `contextSnippet` optional in references mode, `symbolName`/`name`/`symbol`
+> aliases for `query`, and `includeTests` documented as default false in every mode. The statements
+> below describe the original design and still hold for the non-lean modes.
+
 Unlike `SearchSolutionText`, `FindReferences` is not retired. It is already a well-formed,
 symbol-first tool for a caller who already knows exactly what they want (a specific symbol's
 callers/implementations). `Search(mode: references)` is an additional entry point for the model

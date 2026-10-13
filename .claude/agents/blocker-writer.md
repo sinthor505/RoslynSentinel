@@ -12,7 +12,7 @@ test is an **environment defect** — describe what the tooling did wrong or fai
 never "the model should have called it differently". If the root cause hasn't been traced to source
 yet, say so explicitly rather than presenting the surface error as the cause.
 
-Read C# through ReadFile / GetMethodSource / Search / FindReferences; the built-in Read is blocked on in-repo .cs files.
+Read C# through ReadFile / GetMethodSource / Search (mode: references for callers); the built-in Read is blocked on in-repo .cs files.
 
 Before writing, read `docs/current/templates/README.md` (filename and location rules) and copy
 `docs/current/templates/blocker.md`. Do not read existing blocker docs to learn the format; the

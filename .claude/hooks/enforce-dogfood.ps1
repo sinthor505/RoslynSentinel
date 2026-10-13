@@ -181,7 +181,7 @@ try {
 
     # --- C# file reads -----------------------------------------------------------
     # Built-in Read on an in-repo .cs: the MCP read tools (ReadFile, GetFileOutline,
-    # GetMethodSource, Search, FindReferences) cover it. Same exemptions as the edit block.
+    # GetMethodSource, Search) cover it. Same exemptions as the edit block.
     if ($toolName -eq 'Read') {
         $filePath = [string]$toolInput.file_path
         if ($filePath -and $filePath.TrimEnd().EndsWith('.cs', [StringComparison]::OrdinalIgnoreCase)) {
@@ -199,7 +199,7 @@ C# is read through the RoslynSentinel MCP tools:
   ReadFile         - whole file or startLine/endLine
   GetFileOutline   - types and members with line ranges
   GetMethodSource  - one method
-  Search / FindReferences - symbols, callers
+  Search           - symbols (mode: symbol), callers (mode: references)
 
 If the right MCP tool is broken, unreachable, or has no equivalent operation,
 that is a BLOCKING finding: stop, write docs/current/blockers/blocking_error_<slug>.md,
@@ -291,13 +291,13 @@ was being asked to approximate:
 
   Search(mode: "text",             query: "$pattern")   # literal text, same as this Grep call
   Search(mode: "symbol",           query: "$pattern")   # find a type/method/field by name
-  Search(mode: "references",       query: "$pattern")   # equivalent to FindReferences
+  Search(mode: "references",       query: "$pattern", referencesKind: "callers")   # callers/implementations of a symbol
   Search(mode: "declaration-kind", query: "$pattern")   # find declarations of a given kind
 
 If the pattern above names a specific method or type, GetMethodSource or
 GetFileOutline is probably a more direct route than any Search mode.
 
-If Search/FindReferences is broken, unreachable, or has no equivalent for what
+If Search is broken, unreachable, or has no equivalent for what
 you need, that is a BLOCKING finding: stop, write
 docs/current/blockers/blocking_error_<slug>.md, and end the turn.
 "@
@@ -370,7 +370,7 @@ $($problems -join "`n")
 
 implementer is Haiku-tier. A brief it can finish names, up front: Files (3 or fewer, full
 paths including the project), Symbols, Call sites (pre-measured with
-InspectSymbol(aspect: blastRadius) / FindReferences), one Acceptance check, and Out of scope.
+InspectSymbol(aspect: blastRadius) / Search(mode: references)), one Acceptance check, and Out of scope.
 Load the dispatch-implementer skill for the full brief template and slice limits.
 Fix the brief and dispatch again. Nothing was dispatched.
 "@

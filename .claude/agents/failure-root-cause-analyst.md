@@ -10,7 +10,7 @@ and you report **what change to the environment would have prevented it**. Read 
 repo root first — its "Failure doctrine" and "Root-cause discipline" sections are the governing
 frame for this work, not optional background.
 
-Read C# through ReadFile / GetMethodSource / Search / FindReferences; the built-in Read is blocked on in-repo .cs files.
+Read C# through ReadFile / GetMethodSource / Search (mode: references for callers); the built-in Read is blocked on in-repo .cs files.
 
 ## The frame (short version)
 

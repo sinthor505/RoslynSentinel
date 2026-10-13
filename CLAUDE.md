@@ -101,7 +101,7 @@ All C# reads and writes, and all git operations, go through the RoslynSentinel M
 to work on RoslynSentinel's own source, which is nearly every task here - "I'm editing the server
 itself" is not an exemption.
 
-- NEVER use plain Grep on C# code. Use `Search` / `FindReferences` (`kind: callers` for callers).
+- NEVER use plain Grep on C# code. Use `Search` (`mode: symbol` for declarations; `mode: references` with `referencesKind: callers` for callers).
 - NEVER use the built-in Edit/Write tools on `.cs` files. Use `ReplaceSnippet`, `Member`, `MoveMember`
   and the other MCP tools below.
 - NEVER use shell `git add` or `git commit`. Use the `Git` tool.
@@ -113,7 +113,7 @@ itself" is not an exemption.
 | Instead of | Use |
 | --- | --- |
 | `Read` a `.cs` | `ReadFile`, `GetFileOutline`, `GetMethodSource` (methods only; for one field/property/constant use `Member(operation: view, memberName: ...)` or `ReadFile`) |
-| `Grep` / `Glob` for C# symbols | `Search(mode: text/symbol/references/all/namespace/class/interface/method/property/struct/record/enum/enum member/constructor/field)`, `FindReferences` |
+| `Grep` / `Glob` for C# symbols | `Search(mode: text/symbol/references/all/namespace/class/interface/method/property/struct/record/enum/enum member/constructor/field)` |
 | `Edit` / `Write` a `.cs` | `Member`, `MethodSignature`, `ModifyModifier`, `ReplaceSnippet`, `ApplyDiff`, `RenameSymbol`, `MoveMember` (toolset `moveExtract` - enable via `McpToolsetControl`) |
 | `Bash(git status/log/diff/add/commit/revert)` | `Git(operation: ...)` |
 | `Bash(dotnet build/test)` | `Build`, `RunTest` |

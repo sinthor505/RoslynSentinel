@@ -24,8 +24,8 @@ Out of scope: what not to touch (e.g. "do not commit", "items 5-7") - always inc
 Dispatch with `model: "haiku"` pinned explicitly.
 
 **Measure first, then slice.** Get the call-site list from `InspectSymbol(aspect: blastRadius)` (or
-`FindReferences`) and paste it into the brief. `blastRadius` takes one symbol per call (resolve it with
-`LocateSymbol`, then pass `filePath` + a verbatim `contextSnippet`) and returns `totalCallSites`,
+`Search(mode: references)`) and paste it into the brief. `blastRadius` takes one symbol per call (resolve it with
+`Search(mode: symbol)`, then pass `filePath` + a verbatim `contextSnippet`) and returns `totalCallSites`,
 `affectedProjectsCount` and the reference list; count distinct files yourself. Treat a non-empty
 `error` field as a failed measurement even if `isError` is false - on a stale server binary it
 otherwise reads as "zero blast radius".

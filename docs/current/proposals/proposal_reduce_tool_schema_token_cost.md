@@ -81,6 +81,9 @@ not measured.
   field; see the comment at `ToolParams.cs:90`), one batch-semantics sentence (edits resolve against
   the original file, apply atomically), and the "use `nullDefault`, not the string null" clause.
 - **Step 4b proposed Claude-mode toolsets** (sizes pre-diet):
+  - **Amended 2026-10-13:** FindReferences and LocateSymbol were later dropped from this set
+    (commit 1785f33c); `Search(mode: references / symbol)` covers them. The list below is the
+    original proposal.
   - Core, always on, 24 tools, 35.3k chars before the drift-tool merge (not re-measured; the merged
     tool replaces two schemas with one, and carries one extra enum parameter, `operation`, so the
     total should drop only slightly): LoadSolution, ReadFile, GetFileOutline, GetMethodSource,
