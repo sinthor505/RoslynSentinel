@@ -260,6 +260,21 @@ public class BatteryTwentyTests
     }
 
     [Test]
+    public async Task SearchSolutionText_MaxResults_CountsDistinctLinesWhenLiteralAndRegexOverlap()
+    {
+        const string widgetSource = "public class WidgetHolder\n{\n    public int A() { return 1; } // Widget\n    public int B() { return 2; } // Widget\n    public int C() { return 3; } // Widget\n}\n";
+        SetSource(widgetSource, "Test.cs");
+        // Literal and regex both match each line at the same column. Those regex hits are deduped out of
+        // the result lists, so they must not consume maxResults slots: 2 requested -> 2 distinct lines.
+        var result = await _workspaceTools.SearchSolution(reason: "test message", mode: SearchMode.text, query: "Widget", maxResults: 2);
+
+        Assert.That(!result.IsError, Is.True);
+        var payload = (TextSearchResult)result.SuccessData!;
+        Assert.That(payload.LiteralResults.Count, Is.EqualTo(2));
+        Assert.That(payload.LiteralResults.Select(r => r.Line).Distinct().Count(), Is.EqualTo(2), "maxResults must count distinct matched lines, not the literal and regex hit on the same line");
+    }
+
+    [Test]
     public async Task SearchSolutionText_InvalidRegexPattern_StillReturnsLiteralResults()
     {
         // Comment text containing an unclosed '[' -> unambiguously invalid regex in .NET -> but a

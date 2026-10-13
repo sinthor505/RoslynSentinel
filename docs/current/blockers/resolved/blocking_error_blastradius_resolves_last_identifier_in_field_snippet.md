@@ -138,7 +138,7 @@ counting edits.
 Resolved 2026-10-13 in 9d6e09829ab6acf9fe866ef4cfe1fdeae6c9ebb3 (ReplaceSnippet wording secondary note: 366656a5bdff49b66837064061bf65898f56c5e1).
 
 - Root cause: as traced above (`ContextHelper.AdvanceToLastIdentifier` used as the primary resolver in `ImpactAnalyzer`).
-- Fix: `ImpactAnalyzer.AnalyzeImpactAsync` resolves with `ContextHelper.FindSymbolAtSnippetAsync` first and keeps the last-identifier path as fallback; a resolved symbol with no source location returns an error starting "Not found:" naming the symbol. The error code stays `Exception` because `ImpactReport` has no code field (a real `NotFound` code needs one; follow-up).
+- Fix: `ImpactAnalyzer.AnalyzeImpactAsync` resolves with `ContextHelper.FindSymbolAtSnippetAsync` first and keeps the last-identifier path as fallback; a resolved symbol with no source location returns an error starting "Not found:" naming the symbol. The error code initially stayed `Exception` because `ImpactReport` had no code field; follow-up ed6b2aaac2b019ec7012bd0708208f8af9dd014c added a `[property: JsonIgnore] string? ErrorCode` to `ImpactReport` and both not-found returns now report `ToolErrorCode.NotFound`.
 - Secondary: the batch message now reads "Applied changes to N file(s) successfully".
 - Tests: `BatteryTwentyTwoTests.GetBlastRadius_FieldWithObjectCreationInitializer_ResolvesFieldNotConstructor`; `BatteryTwentyTwo` filter 56 of 56 passing. No `ContextHelperTests` case added.
 - The live server needs a restart before `InspectSymbol(blastRadius)` shows the fix.

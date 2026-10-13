@@ -553,7 +553,12 @@ public class WorkspaceReadNavigationImpl
                                 if (m.Success)
                                 {
                                     results.Add(new TextSearchMatch(docPath.Absolute, i + 1, m.Index + 1, BuildPreview(), MatchKind.Regex, EnclosingMemberAt(m.Index)));
-                                    Interlocked.Increment(ref resultCount);
+                                    // A regex hit at the same column as the literal hit is deduped out of the
+                                    // final lists (literalKeys), so it must not consume a resultCount slot.
+                                    if (!(literalCol >= 0 && m.Index == literalCol))
+                                    {
+                                        Interlocked.Increment(ref resultCount);
+                                    }
                                 }
                             }
                             catch (RegexMatchTimeoutException)
