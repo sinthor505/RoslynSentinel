@@ -69,13 +69,13 @@ public class ImpactAnalyzer
 
             if (symbol == null)
             {
-                return new ImpactReport("", "", [], 0, 0, Error: "No symbol found at the specified position.");
+                return new ImpactReport("", "", [], 0, 0, Error: "No symbol found at the specified position.", ErrorCode: ToolErrorCode.NotFound);
             }
 
             // Metadata (BCL/referenced) symbols have no source location; reporting their references would be a silent mis-resolution
             if (!symbol.Locations.Any(l => l.IsInSource))
             {
-                return new ImpactReport("", "", [], 0, 0, Error: $"Not found: '{symbol.ToDisplayString()}' is not declared in this solution. The snippet likely resolved to a referenced type or constructor. Pass the declared name with lineBefore/lineAfter.");
+                return new ImpactReport("", "", [], 0, 0, Error: $"Not found: '{symbol.ToDisplayString()}' is not declared in this solution. The snippet likely resolved to a referenced type or constructor. Pass the declared name with lineBefore/lineAfter.", ErrorCode: ToolErrorCode.NotFound);
             }
 
             if (_logger.IsEnabled(LogLevel.Information))

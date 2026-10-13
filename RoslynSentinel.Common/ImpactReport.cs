@@ -6,7 +6,8 @@ public record ImpactReport(
     List<ReferenceInfo> References,
     int TotalCallSites,
     int AffectedProjectsCount,
-    string? Error = null
+    string? Error = null,
+    [property: System.Text.Json.Serialization.JsonIgnore] string? ErrorCode = null
 ) : IResultStatus
 {
     [System.Text.Json.Serialization.JsonIgnore]
@@ -16,7 +17,7 @@ public record ImpactReport(
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
 
     [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code => IsError ? ToolErrorCode.Exception : null;
+    public string? Code => ErrorCode ?? (IsError ? ToolErrorCode.Exception : null);
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Error;

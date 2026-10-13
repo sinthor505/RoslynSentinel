@@ -935,7 +935,7 @@ public class Order
 
     [Test]
     [Description("sessionId is no longer an exposed parameter: docCommentId + projectName alone "
-                 + "(as returned by LocateSymbol/FindReferences) must be sufficient, since no tool "
+                 + "(as returned by Search, mode: symbol or references) must be sufficient, since no tool "
                  + "ever surfaces a sessionId for a caller to pass back in.")]
     public async Task SafeDeleteUnusedSymbol_DocCommentIdAndProjectNameOnly_NoLongerRequiresSessionId()
     {
