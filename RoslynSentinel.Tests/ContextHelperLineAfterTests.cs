@@ -58,4 +58,37 @@ public class ContextHelperLineAfterTests
             Assert.That(loose, Is.EqualTo(expected));
         });
     }
+
+    [Test]
+    public void FindExactSnippetPosition_NonContiguousSnippetWithHundredsOfHitsPerLine_CapsDiagnosis()
+    {
+        // Every snippet line occurs 300 times, but the file never has gamma() directly before alpha().
+        var source = string.Concat(Enumerable.Repeat("    alpha();\n    beta();\n", 300))
+            + string.Concat(Enumerable.Repeat("    gamma();\n", 300));
+        const string snippet = "    gamma();\n    alpha();\n    beta();";
+
+        var ex = Assert.Throws<ToolNotFoundException>(() => ContextHelper.FindExactSnippetPosition(
+            SourceText.From(source), snippet));
+
+        Assert.That(ex!.Message, Does.Contain("were located individually in"));
+        Assert.That(ex.Message, Does.Contain("more candidate line(s) not shown"));
+        Assert.That(ex.Message.Length, Is.LessThan(2300));
+    }
+
+    [Test]
+    public void FindExactSnippetPosition_RareLineWithBoilerplateLine_ReportsRareLineAndTooCommonNotice()
+    {
+        // "return;" occurs 60 times (boilerplate, 4+ chars so it survives the MinLineLength filter);
+        // rare_marker() occurs once and is never directly followed by "return;".
+        var source = "class C\n{\n" + string.Concat(Enumerable.Repeat("    if (a)\n    {\n        return;\n    }\n", 60))
+            + "    rare_marker();\n    c();\n}\n";
+        var rareLine = source.Split('\n').ToList().FindIndex(l => l.Contains("rare_marker", StringComparison.Ordinal)) + 1;
+        const string snippet = "    rare_marker();\n    return;";
+
+        var ex = Assert.Throws<ToolNotFoundException>(() => ContextHelper.FindExactSnippetPosition(
+            SourceText.From(source), snippet));
+
+        Assert.That(ex!.Message, Does.Contain($"was located at source line {rareLine}:"));
+        Assert.That(ex.Message, Does.Contain("too common"));
+    }
 }
