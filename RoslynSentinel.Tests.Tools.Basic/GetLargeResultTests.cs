@@ -427,4 +427,114 @@ public class GetLargeResultTests
         Assert.That(text.Length, Is.EqualTo(50), "A charLimit smaller than OffloadThresholdBytes should be honored as the window size, not ignored.");
         Assert.That(result.HasMoreData, Is.True);
     }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // T13-T15 - ResultWrapperType.TextSearchMatchList (stored Search mode:text results).
+    //           Regression for docs/current/blockers/blocking_error_getlargeresult_text_search_pages_halved_with_zero_totals_and_no_warning.md:
+    //           literal + regex rows are paged as one flat sequence, totalRecords is the combined count,
+    //           hasMoreData compares against the rows actually returned, and the shrink warning reaches the caller.
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Each match carries a long preview so a 50-row page serializes past the offload threshold and the
+    // size-shrink loop has to cut it. Line is a unique row id (its flat index) so paging can be checked for gaps/duplicates.
+    private static List<TextSearchMatch> MakeTextMatches(int count, int firstLine, MatchKind kind) =>
+        Enumerable.Range(firstLine, count)
+            .Select(i => new TextSearchMatch(
+                filePath: new FilePathWrapper($"Dir/File_{i}.cs", null),
+                Line: i,
+                Column: 1,
+                Preview: new string('p', 400),
+                MatchedAs: kind,
+                EnclosingMember: $"Member_{i}"))
+            .ToList();
+
+    private async Task<(List<TextSearchMatch> Rows, SentinelCallToolResult<object> First)> PageAllTextSearchRowsAsync(string resultId, int limit)
+    {
+        var rows = new List<TextSearchMatch>();
+        SentinelCallToolResult<object>? first = null;
+        var offset = 0;
+        var pages = 0;
+        while (true)
+        {
+            var page = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: limit, offset: offset);
+            Assert.That(!page.IsError, Is.True);
+            first ??= page;
+
+            var data = page.SuccessData as TextSearchResult;
+            Assert.That(data, Is.Not.Null, "Data should be TextSearchResult.");
+            var returned = data!.LiteralResults.Count + data.RegexResults.Count;
+            Assert.That(returned, Is.GreaterThan(0), "Every page must make progress, otherwise the caller loops forever.");
+
+            rows.AddRange(data.LiteralResults);
+            rows.AddRange(data.RegexResults);
+            offset += returned;
+            pages++;
+            Assert.That(pages, Is.LessThan(100), "Paging should terminate; this many pages indicates a broken offset/hasMoreData computation.");
+
+            if (!page.HasMoreData)
+            {
+                break;
+            }
+        }
+
+        return (rows, first!);
+    }
+
+    [Test, CancelAfter(20000)]
+    public async Task T13_GetLargeResult_TextSearch_RegexOnly_ShrunkPageReportsTotalsWarningAndPagesEveryRowOnce()
+    {
+        var resultId = Guid.NewGuid().ToString("N");
+        var stored = new TextSearchResult([], MakeTextMatches(135, 0, MatchKind.Regex), 0, true);
+        WriteLargeResultFile(stored, ResultWrapperType.TextSearchMatchList, resultId);
+
+        var (rows, first) = await PageAllTextSearchRowsAsync(resultId, limit: 50);
+
+        var firstData = (TextSearchResult)first.SuccessData!;
+        var firstReturned = firstData.LiteralResults.Count + firstData.RegexResults.Count;
+        Assert.That(firstReturned, Is.LessThan(50), "Fixture precondition: a 50-row page must exceed the size threshold and be shrunk.");
+        Assert.That(first.TotalRecords, Is.EqualTo(135), "TotalRecords must count the regex rows, not the empty literal list.");
+        Assert.That(first.HasMoreData, Is.True, "A shrunk first page with rows remaining must report HasMoreData.");
+        Assert.That(first.WarningDetails, Is.Not.Null.And.Contain("Page shrunk"), "The shrink warning must reach the caller.");
+        Assert.That(first.WarningDetails, Does.Contain($"offset: {firstReturned}"));
+
+        Assert.That(rows.Select(r => r.Line), Is.EqualTo(Enumerable.Range(0, 135)),
+            "Advancing offset by the rows returned must yield every stored row exactly once, in order.");
+    }
+
+    [Test, CancelAfter(20000)]
+    public async Task T14_GetLargeResult_TextSearch_LiteralAndRegex_PagesAsOneFlatSequenceAcrossTheBoundary()
+    {
+        var resultId = Guid.NewGuid().ToString("N");
+        var literal = MakeTextMatches(40, 0, MatchKind.Literal);
+        var regex = MakeTextMatches(95, 40, MatchKind.Regex);
+        WriteLargeResultFile(new TextSearchResult(literal, regex, 0, true), ResultWrapperType.TextSearchMatchList, resultId);
+
+        var (rows, first) = await PageAllTextSearchRowsAsync(resultId, limit: 50);
+
+        Assert.That(first.TotalRecords, Is.EqualTo(135), "TotalRecords must be literal + regex.");
+        Assert.That(first.HasMoreData, Is.True);
+        Assert.That(first.WarningDetails, Is.Not.Null);
+        Assert.That(rows.Select(r => r.Line), Is.EqualTo(Enumerable.Range(0, 135)),
+            "The flat offset must walk literal rows then regex rows with no gaps or duplicates.");
+        Assert.That(rows.Take(40).All(r => r.MatchedAs == MatchKind.Literal), Is.True);
+        Assert.That(rows.Skip(40).All(r => r.MatchedAs == MatchKind.Regex), Is.True);
+    }
+
+    [Test, CancelAfter(10000)]
+    public async Task T15_GetLargeResult_TextSearch_SmallResult_NoShrinkNoWarningNoMoreData()
+    {
+        var resultId = Guid.NewGuid().ToString("N");
+        var stored = new TextSearchResult(MakeTextMatches(3, 0, MatchKind.Literal), MakeTextMatches(5, 3, MatchKind.Regex), 0, true);
+        WriteLargeResultFile(stored, ResultWrapperType.TextSearchMatchList, resultId);
+
+        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 50, offset: 0);
+
+        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.TotalRecords, Is.EqualTo(8));
+        Assert.That(result.HasMoreData, Is.False);
+        Assert.That(result.WarningDetails, Is.Null);
+        var data = (TextSearchResult)result.SuccessData!;
+        Assert.That(data.LiteralResults, Has.Count.EqualTo(3));
+        Assert.That(data.RegexResults, Has.Count.EqualTo(5));
+    }
 }

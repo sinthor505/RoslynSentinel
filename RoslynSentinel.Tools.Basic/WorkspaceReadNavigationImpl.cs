@@ -1103,6 +1103,11 @@ public class WorkspaceReadNavigationImpl
 
             SentinelCallToolResult<object> result;
 
+            // Set by branches whose stored payload is not a single JSON array, so the post-switch totals block
+            // cannot derive the total or the returned-row count from the payload's first property.
+            int? textSearchTotal = null;
+            int? textSearchReturned = null;
+
             switch (all.Type)
             {
                 case ResultWrapperType.MigrationCandidateFindingList:
@@ -1257,12 +1262,26 @@ public class WorkspaceReadNavigationImpl
                             break;
                         }
 
-                        var requestedLiteral = searchResult.LiteralResults.Skip(offset).Take(limit).ToList();
-                        var requestedRegex = searchResult.RegexResults.Skip(offset).Take(limit).ToList();
-                        var literalPage = requestedLiteral;
-                        var regexPage = requestedRegex;
+                        // Literal and regex matches are paged as ONE flat sequence (literal first, then regex), so
+                        // offset/limit/totalRecords/hasMoreData mean the same thing as for every list-shaped result and
+                        // a caller advancing offset by the rows returned sees every row exactly once.
+                        var literalAll = searchResult.LiteralResults;
+                        var regexAll = searchResult.RegexResults;
+                        textSearchTotal = literalAll.Count + regexAll.Count;
+
+                        (List<TextSearchMatch> Literal, List<TextSearchMatch> Regex) BuildTextSearchPage(int rowCount)
+                        {
+                            var literalPart = literalAll.Skip(offset).Take(rowCount).ToList();
+                            var regexPart = regexAll.Skip(Math.Max(0, offset - literalAll.Count)).Take(Math.Max(0, rowCount - literalPart.Count)).ToList();
+                            return (literalPart, regexPart);
+                        }
+
+                        var requestedRows = Math.Max(0, Math.Min(limit, textSearchTotal.Value - Math.Max(0, offset)));
+                        var pageRows = requestedRows;
+                        var (literalPage, regexPage) = BuildTextSearchPage(pageRows);
                         const int envelopeOverheadBytes = 256;
-                        while (literalPage.Count + regexPage.Count > 0 &&
+                        // Never shrink below one row: a zero-row page would hand the caller an endless no-progress loop.
+                        while (pageRows > 1 &&
                                JsonSerializer.Serialize(searchResult with
                                {
                                    LiteralResults = literalPage,
@@ -1270,21 +1289,18 @@ public class WorkspaceReadNavigationImpl
                                }, _jsonOptions).Length
                                    > LargeResultHelper.OffloadThresholdBytes - envelopeOverheadBytes)
                         {
-                            if (literalPage.Count >= regexPage.Count && literalPage.Count > 0)
-                                literalPage = literalPage.Take(Math.Max(0, literalPage.Count / 2)).ToList();
-                            else if (regexPage.Count > 0)
-                                regexPage = regexPage.Take(Math.Max(0, regexPage.Count / 2)).ToList();
-                            else
-                                break;
+                            pageRows = Math.Max(1, pageRows / 2);
+                            (literalPage, regexPage) = BuildTextSearchPage(pageRows);
                         }
 
-                        var shrunk = literalPage.Count < requestedLiteral.Count || regexPage.Count < requestedRegex.Count;
+                        var returnedRows = literalPage.Count + regexPage.Count;
+                        textSearchReturned = returnedRows;
                         result = new SentinelCallToolResult<object>
                         {
                             IsError = false,
                             SuccessData = searchResult with { LiteralResults = literalPage, RegexResults = regexPage },
-                            WarningDetails = shrunk
-                                ? $"Page shrunk to {literalPage.Count} literal + {regexPage.Count} regex record(s) to stay under the size threshold. Call again with offset: {offset + Math.Max(literalPage.Count, regexPage.Count)} to continue."
+                            WarningDetails = returnedRows < requestedRows
+                                ? $"Page shrunk from {requestedRows} to {returnedRows} record(s) ({literalPage.Count} literal + {regexPage.Count} regex) to stay under the size threshold. Call again with offset: {offset + returnedRows} to continue."
                                 : null
                         };
                         break;
@@ -1432,11 +1448,24 @@ public class WorkspaceReadNavigationImpl
             }
             else
             {
-                var dataArray = all.Data as JsonArray
-                    ?? all.Data?.AsObject().FirstOrDefault().Value?.AsArray()
-                    ?? [];
-                totalRecords = dataArray.Count;
-                hasMorePages = (offset + limit) < totalRecords;
+                if (textSearchTotal is int searchTotal)
+                {
+                    totalRecords = searchTotal;
+                }
+                else
+                {
+                    var dataArray = all.Data as JsonArray
+                        ?? all.Data?.AsObject().FirstOrDefault().Value?.AsArray()
+                        ?? [];
+                    totalRecords = dataArray.Count;
+                }
+
+                // Compare against the rows actually returned, not the requested limit: a page shrunk to fit the
+                // size threshold returns fewer rows than limit and the remainder is still unread.
+                var returnedCount = textSearchReturned
+                    ?? (result.SuccessData as System.Collections.ICollection)?.Count
+                    ?? limit;
+                hasMorePages = (offset + returnedCount) < totalRecords;
             }
 
             return new SentinelCallToolResult<object>
@@ -1448,6 +1477,8 @@ public class WorkspaceReadNavigationImpl
                 SuccessData = result.SuccessData,
                 TotalRecords = totalRecords,
                 HasMoreData = hasMorePages,
+                // The branch-built "page shrunk ... call again with offset" hint must reach the caller.
+                WarningDetails = result.WarningDetails,
             };
         }
         catch (Exception ex)
