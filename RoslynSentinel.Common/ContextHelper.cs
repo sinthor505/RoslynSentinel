@@ -438,6 +438,12 @@ public static class ContextHelper
         return sharedPrefix - lengthDiff;
     }
 
+    private const int MaxHitsPerSnippetLine = 5;
+
+    private const int MaxAllMatchedDiagnosisChars = 2000;
+
+    private const int BoilerplateHitThreshold = 8;
+
     /// <summary>
     /// "Your block is right but not contiguous / not where you think" case: every filtered
     /// snippet line matched somewhere in the file, just not in the arrangement supplied.
@@ -445,21 +451,64 @@ public static class ContextHelper
     private static string FormatAllMatchedDiagnosis(
         int filteredCount, List<(int SnippetLineIndex, int SourceLineNumber, string SourceLineText, bool IsWhitespaceOnly)> hits)
     {
+        // Boilerplate filter: a snippet line with many hits (a bare "}" or "return null;") is not a
+        // useful candidate. Drop such lines unless that would drop every line.
+        var hitCounts = hits.GroupBy(h => h.SnippetLineIndex).ToDictionary(g => g.Key, g => g.Count());
+        var keptIndexes = hitCounts.Keys.Where(k => hitCounts[k] <= BoilerplateHitThreshold).ToHashSet();
+        if (keptIndexes.Count == 0)
+        {
+            keptIndexes = hitCounts.Keys.ToHashSet();
+        }
+        int droppedSnippetLines = hitCounts.Count - keptIndexes.Count;
+
+        // Per kept snippet line, keep only the first MaxHitsPerSnippetLine hits by source line number.
+        var candidateHits = hits.Where(h => keptIndexes.Contains(h.SnippetLineIndex)).ToList();
+        var kept = candidateHits.GroupBy(h => h.SnippetLineIndex)
+            .SelectMany(g => g.OrderBy(h => h.SourceLineNumber).Take(MaxHitsPerSnippetLine))
+            .OrderBy(h => h.SnippetLineIndex).ThenBy(h => h.SourceLineNumber)
+            .ToList();
+        int omittedHits = candidateHits.Count - kept.Count;
+
+        string intro;
+        List<string> lines;
         if (hits.All(h => h.IsWhitespaceOnly))
         {
-            var wsLines = hits.OrderBy(h => h.SnippetLineIndex).ThenBy(h => h.SourceLineNumber)
-                .Select(h => $"snippet line {h.SnippetLineIndex + 1} -> source line {h.SourceLineNumber}: \"{h.SourceLineText}\"");
-            return $"Every line of your contextSnippet matches source line content exactly except for " +
-                   "whitespace (indentation/spacing) - ReplaceSnippet requires a byte-exact match. Copy " +
-                   "these lines directly from the file rather than retyping them:\n" +
-                   string.Join("\n", wsLines);
+            intro = "Every line of your contextSnippet matches source line content exactly except for " +
+                    "whitespace (indentation/spacing) - ReplaceSnippet requires a byte-exact match. Copy " +
+                    "these lines directly from the file rather than retyping them:";
+            lines = kept.Select(h => $"snippet line {h.SnippetLineIndex + 1} -> source line {h.SourceLineNumber}: \"{h.SourceLineText}\"").ToList();
+        }
+        else
+        {
+            intro = $"{filteredCount} of {filteredCount} lines in contextSnippet were located individually in " +
+                    "the file, but not in the arrangement you supplied. Each is a candidate to copy back verbatim:";
+            lines = kept.Select(h => $"snippet line {h.SnippetLineIndex + 1} was located at source line {h.SourceLineNumber}: \"{h.SourceLineText}\"").ToList();
         }
 
-        var lines = hits.OrderBy(h => h.SnippetLineIndex).ThenBy(h => h.SourceLineNumber)
-            .Select(h => $"snippet line {h.SnippetLineIndex + 1} was located at source line {h.SourceLineNumber}: \"{h.SourceLineText}\"");
-        return $"{filteredCount} of {filteredCount} lines in contextSnippet were located individually in " +
-               "the file, but not in the arrangement you supplied. Each is a candidate to copy back verbatim:\n" +
-               string.Join("\n", lines);
+        // Length cap: whole candidate lines only, never a line cut mid-way.
+        var shown = new List<string>();
+        int length = intro.Length;
+        int truncatedLines = 0;
+        for (int i = 0; i < lines.Count; i++)
+        {
+            int added = lines[i].Length + 1; // +1 for the joining newline
+            if (length + added > MaxAllMatchedDiagnosisChars)
+            {
+                truncatedLines = lines.Count - i;
+                break;
+            }
+            shown.Add(lines[i]);
+            length += added;
+        }
+        var text = intro + "\n" + string.Join("\n", shown);
+
+        // Notice goes last and is appended after the cap, so it may exceed the cap by its own length.
+        int hiddenCandidates = omittedHits + truncatedLines;
+        if (hiddenCandidates > 0 || droppedSnippetLines > 0)
+        {
+            text += $"\n({hiddenCandidates} more candidate line(s) not shown; {droppedSnippetLines} lines were too common to be useful - copy the exact block from ReadFile)";
+        }
+        return text;
     }
 
     /// <summary>
