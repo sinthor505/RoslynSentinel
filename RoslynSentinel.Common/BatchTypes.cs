@@ -577,6 +577,16 @@ public class SnippetEdit
     {
         get; set;
     }
+    /// <summary>Optional name of the member containing the intended OldContent match.</summary>
+    public string? WithinMember
+    {
+        get; set;
+    }
+    /// <summary>Optional 1-based line (in the original file) where the intended OldContent match starts.</summary>
+    public int? MatchLine
+    {
+        get; set;
+    }
 }
 
 /// <summary>One edit in a batch ModifyModifier call.</summary>

@@ -52,6 +52,13 @@ public static class ToolParams
     public const string ReplaceSnippetAnchorLine =
         "Single line adjacent to oldContent; only needed when oldContent matches more than once.";
 
+    // ReplaceSnippet match selectors: values are printed by the ambiguity error.
+    public const string ReplaceSnippetWithinMember =
+        "Name of the member containing the intended oldContent match, as printed by the ambiguity error.";
+
+    public const string ReplaceSnippetMatchLine =
+        "1-based line where the intended oldContent match starts, as printed by the ambiguity error. Refers to the file before this call.";
+
     /*
     public const string OldContent =
         "REQUIRED. Verbatim text to find and replace - copied exactly from a prior tool result " +

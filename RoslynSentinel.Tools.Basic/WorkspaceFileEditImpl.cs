@@ -520,6 +520,8 @@ public class WorkspaceFileEditImpl
         string? newContent = null,
         string? lineBefore = null,
         string? lineAfter = null,
+        string? withinMember = null,
+        int? matchLine = null,
         List<SnippetEdit>? batchEdits = null,
         bool validateOnApply = true,
         bool returnDiff = false,
@@ -527,7 +529,8 @@ public class WorkspaceFileEditImpl
     {
         try
         {
-            bool hasSingularEdit = filePath is not null || !string.IsNullOrEmpty(oldContent) || newContent != null;
+            bool hasSingularEdit = filePath is not null || !string.IsNullOrEmpty(oldContent) || newContent != null
+                || withinMember is not null || matchLine is not null;
             bool hasBatchEdit = batchEdits != null;
 
             if (hasSingularEdit && hasBatchEdit)
@@ -636,7 +639,8 @@ public class WorkspaceFileEditImpl
                     // project_replacesnippet_silent_splice_corruption_adjacent_lines memory).
                     var root = await document.GetSyntaxRootAsync(cancellationToken);
                     var match = ContextHelper.FindExactSnippetPosition(
-                        oldText, oldContent, lineBefore, lineAfter, memberNameAt: MemberNameResolverFor(root));
+                        oldText, oldContent, lineBefore, lineAfter, memberNameAt: MemberNameResolverFor(root),
+                        withinMember: withinMember, matchLine: matchLine);
                     var newFileContent = oldText.ToString().Remove(match.Start, match.Length).Insert(match.Start, newContent);
                     var dominantEol = EolUtilities.DetectDominantEol(oldText);
                     var normalizedContent = EolUtilities.NormalizeEol(newFileContent, dominantEol);
@@ -819,7 +823,8 @@ public class WorkspaceFileEditImpl
                 try
                 {
                     var match = ContextHelper.FindExactSnippetPosition(
-                        originalText, edit.OldContent, edit.LineBefore, edit.LineAfter, memberNameAt: memberNameAt);
+                        originalText, edit.OldContent, edit.LineBefore, edit.LineAfter, memberNameAt: memberNameAt,
+                        withinMember: edit.WithinMember, matchLine: edit.MatchLine);
                     resolved.Add((index, match, edit.NewContent));
                 }
                 catch (ToolException toolEx)

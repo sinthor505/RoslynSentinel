@@ -71,11 +71,13 @@ public class WorkspaceFileEditTools
         [ToolOption(ToolOptionTag.NewContent, required: false)][Description(ToolParams.NewContent)] string? newContent = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
+        [Description(ToolParams.ReplaceSnippetWithinMember)] string? withinMember = null,
+        [Description(ToolParams.ReplaceSnippetMatchLine)] int? matchLine = null,
         [Description(ToolParams.SnippetEdits)] List<SnippetEdit>? batchEdits = null,
         [ToolOption(ToolOptionTag.ValidateOnApply)][Description(ToolParams.ValidateOnApply)] bool validateOnApply = true,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default)
-        => _impl.ReplaceSnippet(reason, action, filePath, oldContent, newContent, lineBefore, lineAfter, batchEdits, validateOnApply, returnDiff, cancellationToken);
+        => _impl.ReplaceSnippet(reason, action, filePath, oldContent, newContent, lineBefore, lineAfter, withinMember, matchLine, batchEdits, validateOnApply, returnDiff, cancellationToken);
 
     [McpServerTool(Name = "CreateFile")]
     [Produces(DataTag.ChangeId)]

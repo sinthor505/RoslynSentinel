@@ -66,4 +66,28 @@ public class ReplaceSnippetSchemaTests
             Assert.That(props["lineAfter"]!["description"]!.GetValue<string>(), Is.EqualTo(ExpectedAnchorText));
         }
     }
+
+    [Test]
+    public void WithinMemberAndMatchLine_AreEmittedAsOptionalProperties_TopLevelAndInBatchItems()
+    {
+        var schema = BuildSchema();
+        var item = ResolveItemSchema(schema);
+
+        foreach (var node in new[] { schema, item })
+        {
+            var props = (JsonObject)node["properties"]!;
+            Assert.That(props.ContainsKey("withinMember"), Is.True, "withinMember must be emitted");
+            Assert.That(props.ContainsKey("matchLine"), Is.True, "matchLine must be emitted");
+            if (node == schema)
+            {
+                // Batch item properties come from SnippetEdit's XML-free POCO shape and carry no description.
+                Assert.That(props["withinMember"]!["description"]!.GetValue<string>(), Is.EqualTo(ToolParams.ReplaceSnippetWithinMember));
+                Assert.That(props["matchLine"]!["description"]!.GetValue<string>(), Is.EqualTo(ToolParams.ReplaceSnippetMatchLine));
+            }
+
+            var required = ((JsonArray?)node["required"])?.Select(n => n!.GetValue<string>()).ToList() ?? [];
+            Assert.That(required, Does.Not.Contain("withinMember"));
+            Assert.That(required, Does.Not.Contain("matchLine"));
+        }
+    }
 }
