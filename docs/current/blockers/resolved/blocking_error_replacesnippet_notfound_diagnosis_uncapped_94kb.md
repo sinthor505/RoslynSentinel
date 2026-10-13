@@ -1,6 +1,6 @@
 # `ReplaceSnippet` NotFound diagnosis is uncapped (94 KB) and strands a small model on identical-branch edits
 
-**Status:** OPEN 2026-10-12. Both causes are traced to source. The turn-3 NotFound was a false negative: `lineAfter` is checked against the line after the match's *first* line (`ContextHelper.FilterByAdjacentLinesPredicate`), so it filtered out both exact matches. The 94 KB comes from `ContextHelper.FormatAllMatchedDiagnosis`, which has no cap. Both are latent, not regressions (see "Root cause"). Proposed replacement selectors: `docs/current/proposals/proposal_snippet_match_selectors_withinmember_matchline.md`.
+**Status:** RESOLVED 2026-10-13 (see "Resolution"). Was OPEN 2026-10-12. Both causes are traced to source. The turn-3 NotFound was a false negative: `lineAfter` is checked against the line after the match's *first* line (`ContextHelper.FilterByAdjacentLinesPredicate`), so it filtered out both exact matches. The 94 KB comes from `ContextHelper.FormatAllMatchedDiagnosis`, which has no cap. Both are latent, not regressions (see "Root cause"). Proposed replacement selectors: `docs/current/proposals/proposal_snippet_match_selectors_withinmember_matchline.md`.
 
 ## What was being attempted
 
@@ -118,3 +118,7 @@ Follow-up items (separate slices, in priority order):
 3. **Name the working fallback in the Ambiguous message.** Replace "use a different tool or a longer oldContent" with the concrete options: `withinMember` (once item 2 exists), or `ApplyUnifiedDiff` with a hunk anchored on the reported line numbers. Do not name a gated tool without stating how to enable it (see memory `feedback_dont_name_gated_tools_in_agent_docs`); `ApplyUnifiedDiff` is in the on-demand `moveExtract` toolset.
 4. **Make the `Member(operation: replace)` rejection point at the right tool.** When `newMemberSource` fails to parse as a member declaration and looks like a statement/body fragment, say that `Member(replace)` replaces a whole member and suggest `ReplaceSnippet` (with `withinMember` once available) for an edit inside a body.
 5. **Break the SubAgent loop on repeated identical calls sooner.** `RepeatedToolFailure` fired only after four identical `Member` calls (turns 12, 17-19). Detecting an identical (tool, arguments) failure on the second occurrence, and returning a message to the model that says "this exact call already failed; change the approach", would save turns for weak models. Also relevant: the empty `SubAgent` `output` field on a non-converged run should carry the last `ReasoningContent`.
+
+## Resolution
+
+Fixed across: b66e0d49 (lineAfter checked against the match's last line), 43f8de55 (distinct "filtered out all of them" error), 100fb9a5 (regression tests), 16f5f179 (LineBlockAligner shared with DiffEngine), b97400ab + 89171ed6 (FormatAllMatchedDiagnosis capped: boilerplate threshold 8 hits, 5 hits per line, 2000 chars; tests), and the closest-contiguous-window hint (DiagnoseNoMatch / FormatClosestWindowHint, commit of this note). Not done: proposal phases 3-4 (withinMember/matchLine selectors, deprecation).

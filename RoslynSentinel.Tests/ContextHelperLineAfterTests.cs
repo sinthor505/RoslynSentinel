@@ -60,6 +60,20 @@ public class ContextHelperLineAfterTests
     }
 
     [Test]
+    public void FindExactSnippetPosition_MultiLineSnippetWithStaleMiddleLine_AppendsClosestWindowHint()
+    {
+        const string source = "class C\n{\n    void A()\n    {\n        a = 1;\n        b = 2;\n        c = 3;\n        d = 4;\n        e = 5;\n    }\n}";
+        const string staleSnippet = "a = 1;\n        b = 2;\n        c = 99;\n        d = 4;\n        e = 5;";
+
+        var ex = Assert.Throws<ToolNotFoundException>(() => ContextHelper.FindExactSnippetPosition(
+            SourceText.From(source), staleSnippet));
+
+        Assert.That(ex!.Message, Does.Contain("Closest window"));
+        Assert.That(ex.Message, Does.Contain("source lines 5-6"));
+        Assert.That(ex.Message, Does.Contain("c = 3;"));
+    }
+
+    [Test]
     public void FindExactSnippetPosition_NonContiguousSnippetWithHundredsOfHitsPerLine_CapsDiagnosis()
     {
         // Every snippet line occurs 300 times, but the file never has gamma() directly before alpha().

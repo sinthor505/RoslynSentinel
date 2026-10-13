@@ -737,7 +737,50 @@ public static class ContextHelper
 
         var (hits, nearest) = GatherNoMatchEvidence(sourceText, snippetLines, filteredIndexes);
         var matchedIndexes = hits.Select(h => h.SnippetLineIndex).Distinct().ToArray();
-        return FormatNoMatchDiagnosis(filteredIndexes, matchedIndexes, hits, nearest, snippetLines);
+        var diagnosis = FormatNoMatchDiagnosis(filteredIndexes, matchedIndexes, hits, nearest, snippetLines);
+        var closestWindow = FormatClosestWindowHint(sourceText, snippetLines);
+        return closestWindow is null ? diagnosis : diagnosis + "\n" + closestWindow;
+    }
+
+    /// <summary>
+    /// Finds the contiguous source window that matches the longest leading run of the snippet's
+    /// non-blank lines and returns one sentence naming the first divergence. Returns null when
+    /// there is nothing useful to say: fewer than two snippet lines, no leading line matching
+    /// anywhere, or a full contiguous match (LineBlockAligner.Alignment.IsFullMatch).
+    /// Comparisons are trimmed, matching LineBlockAligner's convention.
+    /// </summary>
+    private static string? FormatClosestWindowHint(SourceText sourceText, string[] snippetLines)
+    {
+        const int MaxQuotedChars = 120;
+
+        var needle = snippetLines.Where(l => l.Length > 0).ToArray();
+        if (needle.Length < 2)
+        {
+            return null;
+        }
+
+        var source = sourceText.Lines.Select(l => l.ToString().Trim()).ToArray();
+        var candidates = Enumerable.Range(0, source.Length).Where(i => source[i] == needle[0]).ToArray();
+        if (candidates.Length == 0)
+        {
+            candidates = Enumerable.Range(0, source.Length).ToArray();
+        }
+
+        var best = LineBlockAligner.FindBestPrefixAlignment(source, needle, candidates);
+        if (best.MatchedCount < 1 || best.IsFullMatch)
+        {
+            return null;
+        }
+
+        static string Quote(string text) => text.Length <= MaxQuotedChars ? text : text[..MaxQuotedChars] + "...";
+
+        var divergeAt = best.Position + best.MatchedCount;
+        var sourceDivergence = divergeAt < source.Length
+            ? $"source line {divergeAt + 1} (\"{Quote(source[divergeAt])}\")"
+            : "the end of the file";
+        return $"Closest window: source lines {best.Position + 1}-{best.Position + best.MatchedCount} match your first " +
+               $"{best.MatchedCount} snippet line(s); snippet line {best.MatchedCount + 1} " +
+               $"(\"{Quote(needle[best.MatchedCount])}\") differs from {sourceDivergence}.";
     }
 
     /// <summary>
