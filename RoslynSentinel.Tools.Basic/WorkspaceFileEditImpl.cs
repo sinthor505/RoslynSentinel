@@ -298,9 +298,32 @@ public class WorkspaceFileEditImpl
     }
 
     public async Task<SentinelCallToolResult<object>> ReadFile(ToolCallReason reason, string filePath, int? startLine = null,
-        int? endLine = null, CancellationToken cancellationToken = default)
+        int? endLine = null, string? memberName = null, string? containerName = null, CancellationToken cancellationToken = default)
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
+        if (!string.IsNullOrEmpty(memberName))
+        {
+            if (startLine.HasValue || endLine.HasValue)
+            {
+                return new SentinelCallToolResult<object>()
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ReadFile: memberName cannot be combined with startLine/endLine. Pass either memberName (optionally containerName) or a line range.")
+                };
+            }
+            try
+            {
+                var (sourceOutcome, sourceMessage, sourceErrorCode, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, null, null, null, cancellationToken);
+                if (sourceOutcome != EditOutcome.Modified || source is null)
+                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(sourceErrorCode ?? RefactoringToolHelpers.ErrorCodeFor(sourceOutcome), $"ReadFile: {sourceMessage}") };
+                return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source) };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "ReadFile member read failed for '{FilePathWrapper}'", filePathResolved);
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ReadFile") };
+            }
+        }
         if (filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
             && !string.IsNullOrWhiteSpace(filePath)
             && Path.IsPathRooted(filePath))

@@ -575,14 +575,16 @@ public class WorkspaceTools
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "ReadFile")]
     [Produces(DataTag.SourceCode)]
-    [Description("Returns a file's raw text verbatim, or a 1-based line-range slice via startLine/endLine.")]
+    [Description("Returns a file's raw text verbatim, or a 1-based line-range slice via startLine/endLine. To read a single member, pass memberName (optionally containerName).")]
     public Task<SentinelCallToolResult<object>> ReadFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Omit to start from the first line.")] int? startLine = null,
         [Description("Omit to read through the last line.")] int? endLine = null,
+        [Consumes(DataTag.SymbolName, required: false)] [Description("Read just this member's source (method, property, field, constructor) instead of the whole file. Cannot be combined with startLine/endLine.")] string? memberName = null,
+        [Consumes(DataTag.SymbolName, required: false)] [Description("Only with memberName: the type that holds the member, to disambiguate same-named members.")] string? containerName = null,
         CancellationToken cancellationToken = default)
-        => _fileEdit.ReadFile(reason, filePath, startLine, endLine, cancellationToken);
+        => _fileEdit.ReadFile(reason, filePath, startLine, endLine, memberName, containerName, cancellationToken);
 
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "GetFileOutline")]

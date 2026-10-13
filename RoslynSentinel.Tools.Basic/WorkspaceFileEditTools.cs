@@ -41,14 +41,16 @@ public class WorkspaceFileEditTools
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "ReadFile")]
     [Produces(DataTag.SourceCode)]
-    [Description("Returns the raw text of a file in the loaded solution, verbatim (no reformatting). Pass startLine/endLine (1-based, inclusive) to read a slice instead of the whole file - useful once GetFileOutline or a search result gives you a line range. Whole-file reads past the size threshold are written to .roslynsentinel/largeresults and returned as a resultId (see GetMethodSource) instead of inline text.")]
+    [Description("Returns the raw text of a file in the loaded solution, verbatim (no reformatting). Pass startLine/endLine (1-based, inclusive) to read a slice instead of the whole file - useful once GetFileOutline or a search result gives you a line range. Whole-file reads past the size threshold are written to .roslynsentinel/largeresults and returned as a resultId (see GetMethodSource) instead of inline text. To read a single member, pass memberName (optionally containerName).")]
     public Task<SentinelCallToolResult<object>> ReadFile(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("1-based, inclusive. Omit to start from the first line.")] int? startLine = null,
         [Description("1-based, inclusive. Omit to read through the last line.")] int? endLine = null,
+        [Consumes(DataTag.SymbolName, required: false)] [Description("Read just this member's source (method, property, field, constructor) instead of the whole file. Cannot be combined with startLine/endLine.")] string? memberName = null,
+        [Consumes(DataTag.SymbolName, required: false)] [Description("Only with memberName: the type that holds the member, to disambiguate same-named members.")] string? containerName = null,
         CancellationToken cancellationToken = default)
-        => _impl.ReadFile(reason, filePath, startLine, endLine, cancellationToken);
+        => _impl.ReadFile(reason, filePath, startLine, endLine, memberName, containerName, cancellationToken);
 
     [McpServerTool(Name = "ReplaceSnippet")]
     [SupportsBatching]
