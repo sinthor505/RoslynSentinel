@@ -1611,9 +1611,9 @@ public class SymbolNavigationEngine
                         // Keep the first ambiguity: if no candidate resolves, surface it instead of a misleading NotFound.
                         firstAmbiguous ??= ambiguous;
                     }
-                    catch (ToolException)
+                    catch (ToolNotFoundException)
                     {
-                        // snippet not found in this document -> continue
+                        // snippet not found in this document -> continue (other ToolException kinds propagate)
                     }
                 }
 
@@ -1882,9 +1882,9 @@ public class SymbolNavigationEngine
                         // Keep the first ambiguity: if no candidate resolves, surface it instead of a misleading NotFound.
                         firstAmbiguous ??= ambiguous;
                     }
-                    catch (ToolException)
+                    catch (ToolNotFoundException)
                     {
-                        // snippet not found in this document -> continue
+                        // snippet not found in this document -> continue (other ToolException kinds propagate)
                     }
                 }
 

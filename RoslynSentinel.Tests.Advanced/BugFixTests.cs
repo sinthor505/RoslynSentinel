@@ -1460,6 +1460,17 @@ public class Second { public void Run() { } }";
             Assert.That(ex!.Message, Does.Contain("ambiguous").IgnoreCase);
         }
 
+        // -- 9k: by-name FindCallers still skips a candidate whose document lacks the snippet and resolves in the other ---
+        [Test]
+        public async Task FindCallersAsync_NoFilePath_SnippetInOnlyOneOfTwoDocuments_StillResolves()
+        {
+            SetMultipleFiles(
+                ("A.cs", "public class Alpha\r\n{\r\n    public void Run() { }\r\n}"),
+                ("B.cs", "public class Beta\r\n{\r\n    public void Run() { Helper(); }\r\n    void Helper() { }\r\n}"));
+            var results = await _navigationEngine.FindCallersAsync(null, "Run", contextSnippet: "public void Run() { }");
+            Assert.That(results, Is.Not.Null);
+        }
+
         // ── 9e: FindServicesNotRegistered -> IWebHostEnvironment etc. not flagged ──
         [Test]
         [Category("DependencyInjectionEngine")] // sentinel:auto-category
