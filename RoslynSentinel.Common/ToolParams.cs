@@ -9,13 +9,13 @@ public static class ToolParams
         "cannot block each other; the repo's own bin/ is NOT updated, so isServerBinaryStale will not react to this build.";
 
     public const string ProjectName =
-        "Project name returned by LocateSymbol in the projectName field. " +
+        "Project name returned by Search(mode: symbol) in the projectName field. " +
         "Must match exactly - case-sensitive.";
 
     public const string DocCommentId =
         "Uniquely identifies the symbol across the codebase. " +
-        "Use the LocateSymbol tool to obtain this value. " +
-        "Do not construct this value - pass it exactly as returned by LocateSymbol.";
+        "Use the Search(mode: symbol) tool to obtain this value. " +
+        "Do not construct this value - pass it exactly as returned by Search(mode: symbol).";
 
     // Validate-and-apply workflow
     public const string AutoStage =

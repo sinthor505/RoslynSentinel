@@ -2290,7 +2290,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 Handle = handle,
                 Error = new EngineError(
                     EngineErrorCode.SymbolNotResolved,
-                    $"Symbol '{docCommentId}' no longer resolves - may have been renamed, moved, or removed. Re-run LocateSymbol.",
+                    $"Symbol '{docCommentId}' no longer resolves - may have been renamed, moved, or removed. Re-run Search(mode: symbol).",
                     DataTag.SymbolHandle)
             };
         }

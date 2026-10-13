@@ -34,12 +34,12 @@ public class SymbolNavigationTools
 
     [McpServerTool(Name = "InspectSymbol")]
     [Produces(DataTag.DocCommentId)]
-    [Description("Inspects a symbol in depth. Requires a file and a context snippet to resolve the symbol - if you only have a name, use LocateSymbol first to find the declaring file.")]
+    [Description("Inspects a symbol in depth. Requires a file and a context snippet to resolve the symbol - if you only have a name, use Search(mode: symbol) first to find the declaring file.")]
     public Task<SentinelCallToolResult<object>> InspectSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description(ToolParams.ContextSnippet)][Consumes(DataTag.ContextSnippet, required: true)] string contextSnippet,
-        [Description("info returns type, kind, accessibility, attributes, and documentation. blastRadius returns all call sites and affected projects - for a full caller/override breakdown instead of a summary, use FindReferences.")]
+        [Description("info returns type, kind, accessibility, attributes, and documentation. blastRadius returns all call sites and affected projects - for a full caller/override breakdown instead of a summary, use Search(mode: references).")]
         [ToolOption(ToolOptionTag.Aspect)] InspectSymbolAspect aspect,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
@@ -49,7 +49,7 @@ public class SymbolNavigationTools
 
     [McpServerTool(Name = "GetTypeInfo")]
     [Produces(DataTag.Report)]
-    [Description("Returns type information for a type you already know the name of - hierarchy, members, or both. If unsure it exists or the name is ambiguous, use LocateSymbol first. To change an enum's values, use ModifyEnum.")]
+    [Description("Returns type information for a type you already know the name of - hierarchy, members, or both. If unsure it exists or the name is ambiguous, use Search(mode: symbol) first. To change an enum's values, use ModifyEnum.")]
     public Task<SentinelCallToolResult<object>> GetTypeInfo(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.DataType)] string typeName,
