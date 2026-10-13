@@ -343,4 +343,68 @@ public class ReadFileTests
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
     }
+
+    private void UseDocumentSource(string source)
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
+            new[]
+            {
+                ("Foo.cs", source, _documentPath),
+            });
+        _workspaceManager.SetTestSolution(solution);
+    }
+
+    [Test]
+    public async Task ReadFile_MemberNameOnly_ReturnsOnlyThatMemberSourceAsync()
+    {
+        UseDocumentSource("public class Alpha\n{\n    public int Keep() => 1;\n    public int Other() => 2;\n}\n");
+
+        var result = await _tools.ReadFile(reason: "test message", _documentPath, memberName: "Keep");
+
+        Assert.That(result.IsError, Is.False);
+        var view = (MemberSourceViewResult)result.SuccessData!;
+        Assert.That(view.Member.Name, Is.EqualTo("Keep"));
+        Assert.That(view.Member.Source, Does.Contain("public int Keep()"));
+        Assert.That(view.Member.Source, Does.Not.Contain("Other"));
+    }
+
+    [Test]
+    public async Task ReadFile_MemberNameWithContainerName_ReturnsMethodFromNamedContainerAsync()
+    {
+        UseDocumentSource(
+            "public class First\n{\n    public int Value() => 1;\n}\n\n" +
+            "public class Second\n{\n    public int Value() => 2;\n}\n");
+
+        var result = await _tools.ReadFile(reason: "test message", _documentPath, memberName: "Value", containerName: "Second");
+
+        Assert.That(result.IsError, Is.False);
+        var view = (MemberSourceViewResult)result.SuccessData!;
+        Assert.That(view.Member.Source, Does.Contain("=> 2"));
+        Assert.That(view.Member.Source, Does.Not.Contain("=> 1"));
+    }
+
+    [Test]
+    public async Task ReadFile_MemberNameCombinedWithStartLine_ReturnsInvalidArgumentAsync()
+    {
+        var result = await _tools.ReadFile(reason: "test message", _documentPath, startLine: 1, memberName: "Keep");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+    }
+
+    [Test]
+    public async Task ReadFile_UnknownMemberName_ReturnsErrorWithoutRawExceptionAsync()
+    {
+        UseDocumentSource("public class Alpha\n{\n    public int Keep() => 1;\n}\n");
+
+        var result = await _tools.ReadFile(reason: "test message", _documentPath, memberName: "DoesNotExist");
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Is.Not.Null.And.Not.Empty);
+        Assert.That(message, Does.Not.Contain("Exception"));
+        Assert.That(message, Does.Not.Contain("   at "));
+    }
 }
