@@ -706,7 +706,7 @@ public class WorkspaceFileEditImpl
             }
             if (string.IsNullOrEmpty(edit.OldContent))
             {
-                perEditErrors.Add($"batchEdits[{i}] ({edit.FilePath}): oldContent is required.");
+                perEditErrors.Add($"batchEdits[{i}] ({edit.FilePath}): oldContent is required; lineBefore/lineAfter only disambiguate it.");
                 continue;
             }
             if (edit.NewContent == null)

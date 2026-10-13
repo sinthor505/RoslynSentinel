@@ -363,6 +363,37 @@ public class ContextHelperTests
     }
 
     [Test]
+    public void FindExactSnippetPosition_TwentyFiveLinesOneCharDiffers_NamesCulpritFirstAndStaysCompact()
+    {
+        // Slice 3 of blocking_error_replacesnippet_schema_invites_anchor_only_edits.md: the
+        // non-matching line and its character difference must come BEFORE the matched entries,
+        // the matched list is capped at 3, and the whole message stays far below the old ~9 KB.
+        var sourceLines = Enumerable.Range(1, 25).Select(n => $"        int value{n} = Compute({n});").ToList();
+        var source = "public class C {\n    void M() {\n" + string.Join("\n", sourceLines) + "\n    }\n}";
+        var snippetLines = Enumerable.Range(1, 25).Select(n => n == 13
+            ? "int value13 = Compute(31);"
+            : $"int value{n} = Compute({n});");
+        var snippet = string.Join("\n", snippetLines);
+
+        var ex = Assert.Throws<ToolNotFoundException>(
+            () => ContextHelper.FindExactSnippetPosition(SourceText.From(source), snippet));
+        var message = ex!.Message;
+
+        var culpritIndex = message.IndexOf("line 13 (", StringComparison.Ordinal);
+        var diffIndex = message.IndexOf("first difference at char 23", StringComparison.Ordinal);
+        var firstMatchedIndex = message.IndexOf("-> source line", StringComparison.Ordinal);
+        Assert.That(culpritIndex, Is.GreaterThanOrEqualTo(0), message);
+        Assert.That(diffIndex, Is.GreaterThan(culpritIndex), message);
+        Assert.That(firstMatchedIndex, Is.GreaterThan(diffIndex), "Matched entries must follow the culprit. " + message);
+        Assert.That(message, Does.Contain("yours \"31);\" vs file \"13);\""));
+
+        var matchedEntryCount = System.Text.RegularExpressions.Regex.Matches(message, "-> source line").Count;
+        Assert.That(matchedEntryCount, Is.LessThanOrEqualTo(3), message);
+        Assert.That(message, Does.Contain("more matched"));
+        Assert.That(message.Length, Is.LessThan(2048), $"Message was {message.Length} chars: {message}");
+    }
+
+    [Test]
     public void FindExactSnippetPosition_LiteralMatch_ReturnsCorrectStartAndLength()
     {
         var source = "namespace Foo;\npublic class Bar { public int X => 42; }";

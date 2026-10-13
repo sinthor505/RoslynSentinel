@@ -377,10 +377,61 @@ public static class McpToolSchemaPatcher
             propertiesObj,
             "newContent",
             $"Verbatim replacement text for oldContent. Limit: {ReplaceSnippetOptions.MaxNewContentLines} lines / {ReplaceSnippetOptions.MaxNewContentChars} chars (excluding leading indentation).");
+        // ReplaceSnippet has no contextSnippet parameter, so the shared "Line before contextSnippet."
+        // text (ToolParams.LineBefore/LineAfter) misleads here; anchors only disambiguate oldContent.
+        anyPatched |= PatchDescription(propertiesObj, "lineBefore", ToolParams.ReplaceSnippetAnchorLine);
+        anyPatched |= PatchDescription(propertiesObj, "lineAfter", ToolParams.ReplaceSnippetAnchorLine);
+        anyPatched |= PatchBatchEditItems(schemaObj, propertiesObj);
 
         if (anyPatched)
         {
             tool.ProtocolTool.InputSchema = JsonSerializer.SerializeToElement(schemaNode);
+        }
+
+        // Each batchEdits item must carry oldContent (the top-level oldContent stays optional because
+        // the batch form omits it), and its anchors get the same ReplaceSnippet-specific wording.
+        static bool PatchBatchEditItems(JsonObject schemaObj, JsonObject propertiesObj)
+        {
+            if (!propertiesObj.TryGetPropertyValue("batchEdits", out JsonNode? batchNode) ||
+                batchNode is not JsonObject batchObj ||
+                batchObj["items"] is not JsonObject itemsObj)
+            {
+                return false;
+            }
+
+            // The exporter may emit the item schema inline or as a $ref into $defs.
+            JsonObject itemSchema = itemsObj;
+            if (itemsObj["$ref"] is JsonValue refValue &&
+                refValue.TryGetValue(out string? refPath) &&
+                refPath is not null &&
+                refPath.StartsWith("#/$defs/", StringComparison.Ordinal) &&
+                schemaObj["$defs"] is JsonObject defsObj &&
+                defsObj[refPath["#/$defs/".Length..]] is JsonObject resolved)
+            {
+                itemSchema = resolved;
+            }
+
+            if (itemSchema["properties"] is not JsonObject itemProps || !itemProps.ContainsKey("oldContent"))
+            {
+                return false;
+            }
+
+            if (itemSchema["required"] is not JsonArray requiredArray)
+            {
+                requiredArray = [];
+                itemSchema["required"] = requiredArray;
+            }
+
+            bool alreadyRequired = requiredArray.Any(n =>
+                n is JsonValue v && v.TryGetValue(out string? s) && s == "oldContent");
+            if (!alreadyRequired)
+            {
+                requiredArray.Add("oldContent");
+            }
+
+            PatchDescription(itemProps, "lineBefore", ToolParams.ReplaceSnippetAnchorLine);
+            PatchDescription(itemProps, "lineAfter", ToolParams.ReplaceSnippetAnchorLine);
+            return true;
         }
 
         static bool PatchDescription(JsonObject propertiesObj, string parameterName, string description)

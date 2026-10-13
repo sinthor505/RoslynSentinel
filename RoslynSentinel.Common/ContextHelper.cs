@@ -485,7 +485,7 @@ public static class ContextHelper
     /// entry per unmatched snippet line, with a nearest-neighbor candidate when one clears
     /// <paramref name="similarityFloor"/>.
     /// </summary>
-    private static string AppendUnmatchedLines(
+    private static void AppendUnmatchedLines(
         List<string> parts, int[] unmatched,
         (int SourceLineNumber, string SourceLineText, int Score)?[] nearest,
         string[] snippetLines, int similarityFloor)
@@ -494,12 +494,37 @@ public static class ContextHelper
         foreach (var i in unmatched)
         {
             var n = nearest[i];
-            parts.Add(n != null && n.Value.Score >= similarityFloor
-                ? $"  line {i + 1} (\"{snippetLines[i]}\") did not match; closest is source line " +
-                  $"{n.Value.SourceLineNumber}: \"{n.Value.SourceLineText}\""
-                : $"  line {i + 1} (\"{snippetLines[i]}\") did not match, and no file line is close to it");
+            if (n != null && n.Value.Score >= similarityFloor)
+            {
+                parts.Add($"  line {i + 1} (\"{snippetLines[i]}\") did not match; closest is source line " +
+                          $"{n.Value.SourceLineNumber}: \"{n.Value.SourceLineText}\"");
+                parts.Add("    " + DescribeFirstDifference(snippetLines[i], n.Value.SourceLineText));
+            }
+            else
+            {
+                parts.Add($"  line {i + 1} (\"{snippetLines[i]}\") did not match, and no file line is close to it");
+            }
         }
-        return string.Join("\n", parts);
+    }
+
+    /// <summary>
+    /// Character-level pointer to where a snippet line first diverges from its closest source
+    /// line, so a one-character slip is visible without comparing two long strings by eye.
+    /// </summary>
+    private static string DescribeFirstDifference(string yours, string file)
+    {
+        int k = 0;
+        int max = Math.Min(yours.Length, file.Length);
+        while (k < max && yours[k] == file[k])
+        {
+            k++;
+        }
+
+        static string Excerpt(string s, int from) => from >= s.Length
+            ? "(end of line)"
+            : "\"" + (s.Length - from > 20 ? s.Substring(from, 20) + "..." : s.Substring(from)) + "\"";
+
+        return $"first difference at char {k + 1} (1-based): yours {Excerpt(yours, k)} vs file {Excerpt(file, k)}";
     }
 
     /// <summary>
@@ -515,18 +540,32 @@ public static class ContextHelper
     {
         var matchedSet = matchedIndexes.ToHashSet();
         var unmatched = filteredIndexes.Where(i => !matchedSet.Contains(i)).ToArray();
+        const int MaxMatchedShown = 3;
         var parts = new List<string>
         {
             $"{matchedIndexes.Length} of {filteredIndexes.Length} lines in contextSnippet matched " +
             "somewhere in the file; the rest did not - a partial-transcription error, not a genuine " +
-            "absence. Lines that matched:"
+            "absence."
         };
-        parts.AddRange(hits.Where(h => matchedSet.Contains(h.SnippetLineIndex))
-            .OrderBy(h => h.SnippetLineIndex).ThenBy(h => h.SourceLineNumber)
+        AppendUnmatchedLines(parts, unmatched, nearest, snippetLines, similarityFloor);
+
+        // One entry per matched snippet line (first hit), whitespace-only ones first since they
+        // are actionable; capped so the culprit above is not buried.
+        var matchedEntries = hits.Where(h => matchedSet.Contains(h.SnippetLineIndex))
+            .GroupBy(h => h.SnippetLineIndex)
+            .Select(g => g.OrderBy(h => h.IsWhitespaceOnly ? 0 : 1).ThenBy(h => h.SourceLineNumber).First())
+            .OrderBy(h => h.IsWhitespaceOnly ? 0 : 1).ThenBy(h => h.SnippetLineIndex)
+            .ToList();
+        parts.Add("Lines that matched (for orientation):");
+        parts.AddRange(matchedEntries.Take(MaxMatchedShown)
             .Select(h => h.IsWhitespaceOnly
                 ? $"  line {h.SnippetLineIndex + 1} -> source line {h.SourceLineNumber}: whitespace differs only - \"{h.SourceLineText}\""
                 : $"  line {h.SnippetLineIndex + 1} -> source line {h.SourceLineNumber}: \"{h.SourceLineText}\""));
-        return AppendUnmatchedLines(parts, unmatched, nearest, snippetLines, similarityFloor);
+        if (matchedEntries.Count > MaxMatchedShown)
+        {
+            parts.Add($"  ... and {matchedEntries.Count - MaxMatchedShown} more matched");
+        }
+        return string.Join("\n", parts);
     }
 
     /// <summary>

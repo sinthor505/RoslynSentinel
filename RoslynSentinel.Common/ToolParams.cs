@@ -47,6 +47,11 @@ public static class ToolParams
     public const string LineAfter =
         "Line after contextSnippet.";
 
+    // ReplaceSnippet has no contextSnippet parameter: its anchors disambiguate oldContent. Applied to the
+    // emitted schema by McpToolSchemaPatcher.ApplyReplaceSnippetLimits (top-level and batchEdits items).
+    public const string ReplaceSnippetAnchorLine =
+        "Single line adjacent to oldContent; only needed when oldContent matches more than once.";
+
     /*
     public const string OldContent =
         "REQUIRED. Verbatim text to find and replace - copied exactly from a prior tool result " +
@@ -57,7 +62,7 @@ public static class ToolParams
         "disambiguate.";
 
     */
-    public const string OldContent = "Verbatim text to find and replace using literal substring match.";
+    public const string OldContent = "Verbatim text to find and replace using literal substring match. Default limit of 2000 characters.";
 
     /*
     public const string NewContent =
@@ -65,7 +70,7 @@ public static class ToolParams
         "than oldContent (net insertion), as long as it stays within the size limit (a startup-" +
         "configured line/char limit, reported in the error if exceeded).";
     */
-    public const string NewContent = "Verbatim replacement text for oldContent.";
+    public const string NewContent = "Verbatim replacement text for oldContent. Default limit of 2000 characters.";
 
     public const string ContainingTypeName =
         "Name of the type that directly declares the target. Only needed when the target's name AND " +
