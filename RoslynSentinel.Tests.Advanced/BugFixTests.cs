@@ -1464,11 +1464,15 @@ public class Second { public void Run() { } }";
         [Test]
         public async Task FindCallersAsync_NoFilePath_SnippetInOnlyOneOfTwoDocuments_StillResolves()
         {
+            // A.cs is listed first: candidate order follows document order, so the snippet-lacking
+            // candidate is tried first and the by-name loop must skip it (ToolNotFoundException) to reach B.cs.
             SetMultipleFiles(
                 ("A.cs", "public class Alpha\r\n{\r\n    public void Run() { }\r\n}"),
-                ("B.cs", "public class Beta\r\n{\r\n    public void Run() { Helper(); }\r\n    void Helper() { }\r\n}"));
-            var results = await _navigationEngine.FindCallersAsync(null, "Run", contextSnippet: "public void Run() { }");
+                ("B.cs", "public class Beta\r\n{\r\n    public void Run() { Helper(); }\r\n    void Helper() { }\r\n    public void Caller() { Run(); }\r\n}"));
+            var results = await _navigationEngine.FindCallersAsync(null, "Run", contextSnippet: "public void Run() { Helper(); }");
             Assert.That(results, Is.Not.Null);
+            Assert.That(results.Select(r => r.CallerMethod), Does.Contain("Caller"));
+            Assert.That(results.Single(r => r.CallerMethod == "Caller").FilePath, Does.EndWith("B.cs"));
         }
 
         // ── 9e: FindServicesNotRegistered -> IWebHostEnvironment etc. not flagged ──
