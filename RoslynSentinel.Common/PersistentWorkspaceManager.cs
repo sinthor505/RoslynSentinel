@@ -1869,7 +1869,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
             var summary = rolledBack.Count > 0
                 ? $"Partial write failure - {rolledBack.Count} already-written/deleted file(s) rolled back to keep the change atomic. {failed.Count} file(s) failed: {string.Join(", ", failed.Keys.Select(f => Path.GetFileName(f)))}."
-                : $"Applied {succeeded.Count} changes successfully ({deletePaths.Count} delete(s)). {failed.Count} failures.";
+                : $"Applied changes to {succeeded.Count} file(s) successfully ({deletePaths.Count} delete(s)). {failed.Count} failures.";
             if (noOp.Count > 0)
             {
                 summary += $" The operation was successful. The old and new content of {noOp.Count} file(s) were semantically identical: {string.Join(", ", noOp.Select(Path.GetFileName))}.";
