@@ -57,7 +57,7 @@
 | ScanTools | ScanBreakingChanges | Intelligence | - | Compares a captured API baseline against current code and reports breaking changes. |
 | ScanTools | ScanDuplicateBlocksInClass | Intelligence | - | Finds duplicate statement sequences within a single class's methods via structural hashing. |
 | SubAgentEvalTools | SubAgentEval | SubAgentEval | - | Runs a prompt against a real LM Studio model in a fresh, worktree-isolated copy of the repo (branched from committed... |
-| SubAgentTools | SubAgent | SubAgent | - | Runs a prompt against a real LM Studio model in a fresh, worktree-isolated copy of the repo (branched from committed... |
+| SubAgentTools | SubAgent | claude-lean, SubAgent | - | Runs a prompt against a real LM Studio model in a fresh, worktree-isolated copy of the repo (branched from committed... |
 
 ## RoslynSentinel.Tools.Basic
 

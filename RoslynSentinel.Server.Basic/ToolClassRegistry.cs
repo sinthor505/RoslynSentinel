@@ -33,15 +33,16 @@ public static class ToolClassRegistry
         new HashSet<string>([ClaudeLeanMode, ExperimentalMode], StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The 26 MCP tool names the <see cref="ClaudeLeanMode"/> mode exposes: the proposal's 25-tool Core set
-    /// plus McpToolsetControl, which switches the on-demand toolsets (<see cref="ToolsetCatalog"/>) at runtime.
+    /// The 24 MCP tool names the <see cref="ClaudeLeanMode"/> mode exposes: the proposal's Core set minus
+    /// FindReferences and LocateSymbol (reachable via Search mode: references and mode: symbol, which saves
+    /// their schema tokens) plus McpToolsetControl, which switches the on-demand toolsets (<see cref="ToolsetCatalog"/>) at runtime.
     /// McpServerStatus is declared by ServerStatusTools, which is registered outside the class
     /// registry, and passes through the same allow-list.
     /// </summary>
     public static readonly IReadOnlySet<string> ClaudeLeanToolNames = new HashSet<string>(
         [
             "LoadSolution", "ReadFile", "GetFileOutline", "GetMethodSource", "GetLargeResult",
-            "Search", "FindReferences", "InspectSymbol", "LocateSymbol", "GetDiagnostics",
+            "Search", "InspectSymbol", "GetDiagnostics",
             "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
             "UsingDirective", "RenameSymbol", "WriteFile", "CreateFile", "DeleteFile",
             "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift", "SubAgent",

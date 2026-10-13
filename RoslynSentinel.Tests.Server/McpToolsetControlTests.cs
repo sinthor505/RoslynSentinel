@@ -542,7 +542,7 @@ public class McpToolsetControlTests
         using var host = BuildHost(advanced: true, "claude-lean", includeTools: null);
 
         var names = host.Services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolCollection!.PrimitiveNames;
-        Assert.That(names, Has.Count.EqualTo(26));
+        Assert.That(names, Has.Count.EqualTo(24));
         Assert.That(host.Services.GetRequiredService<ToolsetService>().DynamicToolNames, Is.Empty);
     }
 

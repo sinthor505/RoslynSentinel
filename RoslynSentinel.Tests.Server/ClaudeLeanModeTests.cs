@@ -23,11 +23,11 @@ namespace RoslynSentinel.Tests.Server;
 [Category("ToolClassRegistry")] // sentinel:auto-category
 public class ClaudeLeanModeTests
 {
-    /// <summary>The proposal's Core set plus McpToolsetControl (slice 4b-2), spelled out independently of ToolClassRegistry.ClaudeLeanToolNames.</summary>
+    /// <summary>The proposal's Core set minus FindReferences/LocateSymbol plus McpToolsetControl (slice 4b-2), spelled out independently of ToolClassRegistry.ClaudeLeanToolNames.</summary>
     private static readonly string[] CoreTools =
     [
         "LoadSolution", "ReadFile", "GetFileOutline", "GetMethodSource", "GetLargeResult",
-        "Search", "FindReferences", "InspectSymbol", "LocateSymbol", "GetDiagnostics",
+        "Search", "InspectSymbol", "GetDiagnostics",
         "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
         "UsingDirective", "RenameSymbol", "WriteFile", "CreateFile", "DeleteFile",
         "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift",
@@ -106,11 +106,11 @@ public class ClaudeLeanModeTests
 
     [TestCase(true)]
     [TestCase(false)]
-    public async Task ClaudeLean_ExposesExactlyTheTwentyFiveCoreTools(bool advanced)
+    public async Task ClaudeLean_ExposesExactlyTheTwentyFourCoreTools(bool advanced)
     {
         var names = await ListToolNamesAsync(advanced, "claude-lean");
 
-        Assert.That(names, Has.Length.EqualTo(25));
+        Assert.That(names, Has.Length.EqualTo(24));
         Assert.That(names, Is.EquivalentTo(CoreTools));
     }
 
