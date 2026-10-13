@@ -22,6 +22,29 @@ public class ReplaceSnippetErrorCodeTests
     private const string DupHolderRelativePath = "ContosoOrders.Core/DupHolder.cs";
     private const string DupHolderSource = "class DupHolder { void A() { Run(); } void B() { Run(); } void Run() { } }";
 
+    private const string MemberDupRelativePath = "ContosoOrders.Core/MemberDup.cs";
+    private const string MemberDupSource =
+        "class MemberDup\n" +
+        "{\n" +
+        "    void FirstMethod()\n" +
+        "    {\n" +
+        "        var total = Compute();\n" +
+        "        Log(total);\n" +
+        "    }\n" +
+        "\n" +
+        "    void SecondMethod()\n" +
+        "    {\n" +
+        "        var total = Compute();\n" +
+        "        Log(total);\n" +
+        "    }\n" +
+        "\n" +
+        "    int Compute() => 1;\n" +
+        "\n" +
+        "    void Log(int x) { }\n" +
+        "}\n";
+
+    private const string MemberDupRepeatedBlock = "        var total = Compute();\n        Log(total);";
+
     private sealed record Harness(InMemoryWorkspace Workspace, WorkspaceTools Tools) : IDisposable
     {
         public string DupHolderPath => Workspace.PathOf(DupHolderRelativePath);
@@ -33,7 +56,9 @@ public class ReplaceSnippetErrorCodeTests
 
     private static Harness CreateHarness()
     {
-        var workspace = InMemoryWorkspace.Create((DupHolderRelativePath, DupHolderSource));
+        var workspace = InMemoryWorkspace.Create(
+            (DupHolderRelativePath, DupHolderSource),
+            (MemberDupRelativePath, MemberDupSource));
         var manager = workspace.Manager;
 
         var config = new SentinelConfiguration();
@@ -124,5 +149,65 @@ public class ReplaceSnippetErrorCodeTests
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
         Assert.That(result.ErrorData.Message, Does.Contain("oldContent is ambiguous").And.Not.Contain("contextSnippet"));
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_Single_AmbiguousMultiLineOldContent_NamesEnclosingMemberPerMatchAsync()
+    {
+        using var h = CreateHarness();
+        var original = h.Workspace.ReadText(MemberDupRelativePath);
+
+        var result = await h.Tools.ReplaceSnippet(
+            reason: "member names in ambiguity error single",
+            ProposedChangeAction.apply,
+            filePath: h.Workspace.PathOf(MemberDupRelativePath),
+            oldContent: MemberDupRepeatedBlock,
+            newContent: "        Log(Compute());");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(result.ErrorData.Message, Does.Contain("in FirstMethod").And.Contain("in SecondMethod"));
+        Assert.That(h.Workspace.ReadText(MemberDupRelativePath), Is.EqualTo(original), "a rejected edit must not write anything");
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_Batch_AmbiguousMultiLineOldContent_NamesEnclosingMemberPerMatchAsync()
+    {
+        using var h = CreateHarness();
+        var original = h.Workspace.ReadText(MemberDupRelativePath);
+
+        var result = await h.Tools.ReplaceSnippet(
+            reason: "member names in ambiguity error batch",
+            ProposedChangeAction.apply,
+            batchEdits:
+            [
+                new SnippetEdit
+                {
+                    FilePath = h.Workspace.PathOf(MemberDupRelativePath),
+                    OldContent = MemberDupRepeatedBlock,
+                    NewContent = "        Log(Compute());",
+                },
+            ]);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(result.ErrorData.Message, Does.Contain("in FirstMethod").And.Contain("in SecondMethod"));
+        Assert.That(h.Workspace.ReadText(MemberDupRelativePath), Is.EqualTo(original), "a rejected batch must not write anything");
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_Single_UniqueMatchInFileWithRepeatedBlocks_StillSucceedsAsync()
+    {
+        using var h = CreateHarness();
+
+        var result = await h.Tools.ReplaceSnippet(
+            reason: "unique match unchanged",
+            ProposedChangeAction.apply,
+            filePath: h.Workspace.PathOf(MemberDupRelativePath),
+            oldContent: "int Compute() => 1;",
+            newContent: "int Compute() => 2;");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(h.Workspace.ReadText(MemberDupRelativePath), Does.Contain("int Compute() => 2;"));
     }
 }

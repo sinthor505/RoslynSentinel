@@ -504,6 +504,14 @@ public class WorkspaceFileEditImpl
         return exceeded;
     }
 
+    /// <summary>
+    /// Builds the delegate that lets an ambiguity error name the member enclosing each match.
+    /// Returns null for a document with no syntax tree (e.g. a non-C# file), in which case the
+    /// error simply omits the member names.
+    /// </summary>
+    private static Func<int, string?>? MemberNameResolverFor(Microsoft.CodeAnalysis.SyntaxNode? root)
+        => root is null ? null : position => EnclosingMemberResolver.GetEnclosingMemberName(root, position);
+
     public async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippet(
         ToolCallReason reason,
         ProposedChangeAction action,
@@ -626,7 +634,9 @@ public class WorkspaceFileEditImpl
                     // the real removable span. Using oldContent.Length instead of match.Length used
                     // to corrupt adjacent lines when a fallback match fired (see
                     // project_replacesnippet_silent_splice_corruption_adjacent_lines memory).
-                    var match = ContextHelper.FindExactSnippetPosition(oldText, oldContent, lineBefore, lineAfter);
+                    var root = await document.GetSyntaxRootAsync(cancellationToken);
+                    var match = ContextHelper.FindExactSnippetPosition(
+                        oldText, oldContent, lineBefore, lineAfter, memberNameAt: MemberNameResolverFor(root));
                     var newFileContent = oldText.ToString().Remove(match.Start, match.Length).Insert(match.Start, newContent);
                     var dominantEol = EolUtilities.DetectDominantEol(oldText);
                     var normalizedContent = EolUtilities.NormalizeEol(newFileContent, dominantEol);
@@ -797,6 +807,7 @@ public class WorkspaceFileEditImpl
 
             var originalText = await document.GetTextAsync(cancellationToken);
             var originalString = originalText.ToString();
+            var memberNameAt = MemberNameResolverFor(await document.GetSyntaxRootAsync(cancellationToken));
 
             // Resolve every edit's match against the file's ORIGINAL text -> never against a prior
             // edit's output within this same batch. This is what removes the sequencing hazard a
@@ -807,7 +818,8 @@ public class WorkspaceFileEditImpl
             {
                 try
                 {
-                    var match = ContextHelper.FindExactSnippetPosition(originalText, edit.OldContent, edit.LineBefore, edit.LineAfter);
+                    var match = ContextHelper.FindExactSnippetPosition(
+                        originalText, edit.OldContent, edit.LineBefore, edit.LineAfter, memberNameAt: memberNameAt);
                     resolved.Add((index, match, edit.NewContent));
                 }
                 catch (ToolException toolEx)
