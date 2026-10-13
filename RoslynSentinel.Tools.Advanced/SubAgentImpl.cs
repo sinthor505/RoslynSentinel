@@ -61,7 +61,7 @@ public sealed class SubAgentImpl(IWorkspaceManager workspaceManager, ILogger log
         try
         {
             await using var child = await new SubAgentChildServerLauncher(logger)
-                .LaunchAsync(solutionPath, runId, "HEAD", model, disposeWorktree, cancellationToken);
+                .LaunchAsync(solutionPath, runId, "HEAD", model, disposeWorktree, replaceSnippetMaxOldLines: 200, replaceSnippetMaxNewLines: 200, replaceSnippetMaxOldChars: 4000, replaceSnippetMaxNewChars: 4000, cancellationToken);
 
             var run = await SubAgentModelRun.RunAsync(
                 child, SystemPrompt, ApplyResponseFormat(prompt, responseFormat), model, maxTokensPerTurn,

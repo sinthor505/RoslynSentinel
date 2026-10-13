@@ -129,7 +129,7 @@ public class SubAgentLaunchTests
         // append would be ignored and the test would prove nothing).
         var overridesMode = extraArgs.Any(a => a.StartsWith("--mode=", StringComparison.Ordinal));
         var args = SubAgentChildServerLauncher
-            .BuildServerArguments(@"C:\wt", "some-model", @"C:\logs", "run-1")
+            .BuildServerArguments(@"C:\wt", "some-model", @"C:\logs", "run-1", replaceSnippetMaxOldLines: 200, replaceSnippetMaxNewLines: 200, replaceSnippetMaxOldChars: 4000, replaceSnippetMaxNewChars: 4000)
             .Where(a => !(overridesMode && a.StartsWith("--mode=", StringComparison.Ordinal)))
             .Concat(extraArgs)
             .ToArray();
@@ -175,7 +175,7 @@ public class SubAgentLaunchTests
     [Category("SubAgentChildServerLauncher")] // sentinel:auto-category
     public void ChildServerArguments_CarryTheModelAndRunIdentity()
     {
-        var args = SubAgentChildServerLauncher.BuildServerArguments(@"C:\wt", "some-model", @"C:\logs", "run-1");
+        var args = SubAgentChildServerLauncher.BuildServerArguments(@"C:\wt", "some-model", @"C:\logs", "run-1", replaceSnippetMaxOldLines: 200, replaceSnippetMaxNewLines: 200, replaceSnippetMaxOldChars: 4000, replaceSnippetMaxNewChars: 4000);
 
         Assert.Multiple(() =>
         {
@@ -191,7 +191,11 @@ public class SubAgentLaunchTests
     // ── Reading a child tool result ─────────────────────────────────────────────
 
     private static CallToolResult Result(string text, bool? isError = null) =>
-        new() { Content = [new TextContentBlock { Text = text }], IsError = isError };
+        new()
+        {
+            Content = [new TextContentBlock { Text = text }],
+            IsError = isError
+        };
 
     [Test]
     [Category("ChildToolResult")] // sentinel:auto-category

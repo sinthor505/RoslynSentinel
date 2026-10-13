@@ -38,8 +38,8 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
 
     private const int MaxBuildDetailChars = 4000;
 
-    /// <summary>The command-line arguments the child server is launched with.</summary>
-    public static IReadOnlyList<string> BuildServerArguments(string worktreePath, string model, string logDirectory, string runId) =>
+    /// <summary>The command-line arguments the child server is launched with.</summary> 
+    public static IReadOnlyList<string> BuildServerArguments(string worktreePath, string model, string logDirectory, string runId, int replaceSnippetMaxOldLines, int replaceSnippetMaxNewLines, int replaceSnippetMaxOldChars, int replaceSnippetMaxNewChars) =>
     [
         "--base-repo-dir=" + worktreePath,
         "--mode=" + ChildToolMode,
@@ -60,7 +60,7 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
     /// <param name="model">LM Studio model name the dispatched model runs as.</param>
     /// <exception cref="SubAgentLaunchException">Any launch step failed; everything created so far has been cleaned up.</exception>
     public async Task<SubAgentChildServer> LaunchAsync(
-        string solutionPath, string runId, string baseRef, string model, bool disposeWorktree, CancellationToken cancellationToken)
+        string solutionPath, string runId, string baseRef, string model, bool disposeWorktree, int replaceSnippetMaxOldLines, int replaceSnippetMaxNewLines, int replaceSnippetMaxOldChars, int replaceSnippetMaxNewChars, CancellationToken cancellationToken)
     {
         var solutionDirectory = Path.GetDirectoryName(solutionPath)
             ?? throw new SubAgentLaunchException(ToolErrorCode.InvalidArgument, "The loaded solution path has no directory.");
@@ -120,7 +120,7 @@ public sealed class SubAgentChildServerLauncher(ILogger logger)
             {
                 Name = "RoslynSentinel.Server.Advanced",
                 Command = serverExe,
-                Arguments = BuildServerArguments(worktreePath, model, logDirectory, runId).ToList(),
+                Arguments = BuildServerArguments(worktreePath, model, logDirectory, runId, replaceSnippetMaxOldLines, replaceSnippetMaxNewLines, replaceSnippetMaxOldChars, replaceSnippetMaxNewChars).ToList(),
                 WorkingDirectory = worktreePath,
             });
 

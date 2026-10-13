@@ -35,7 +35,7 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
         try
         {
             await using var child = await new SubAgentChildServerLauncher(logger)
-                .LaunchAsync(solutionPath, runId, string.IsNullOrWhiteSpace(baseBranch) ? "HEAD" : baseBranch, model, disposeWorktree, cancellationToken);
+                .LaunchAsync(solutionPath, runId, string.IsNullOrWhiteSpace(baseBranch) ? "HEAD" : baseBranch, model, disposeWorktree, replaceSnippetMaxOldLines: 200, replaceSnippetMaxNewLines: 200, replaceSnippetMaxOldChars: 4000, replaceSnippetMaxNewChars: 4000, cancellationToken);
 
             var run = await SubAgentModelRun.RunAsync(
                 child, AgentSystemPrompts.CodingAgent, prompt, model, maxTokensPerTurn, turnCap, wallClockCapMinutes, cancellationToken);
