@@ -5,7 +5,7 @@ namespace RoslynSentinel.Common;
 public class ContextErrorBuilder
 {
     /// <summary>Cap on candidates listed in a StillAmbiguous message, to keep it small.</summary>
-    private const int MaxStillAmbiguousCandidatesListed = 5;
+    internal const int MaxStillAmbiguousCandidatesListed = 5;
 
     /// <summary>
     /// Builds a <see cref="ToolException"/> for a failed contextSnippet match: wording and

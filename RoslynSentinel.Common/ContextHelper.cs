@@ -298,7 +298,8 @@ public static class ContextHelper
     public static SnippetMatch FindExactSnippetPosition(
         SourceText sourceText, string contextSnippet,
         string? lineBefore = null, string? lineAfter = null,
-        Func<int, string?>? memberNameAt = null)
+        Func<int, string?>? memberNameAt = null,
+        string? withinMember = null, int? matchLine = null)
     {
         const string label = "oldContent";
         if (string.IsNullOrWhiteSpace(contextSnippet))
@@ -306,15 +307,47 @@ public static class ContextHelper
             throw new ToolNotFoundException($"{label} must not be empty.");
         }
 
-        var matches = FindAllExactSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
+        if (withinMember != null && memberNameAt == null)
+        {
+            throw new ToolNotFoundException(
+                "withinMember cannot be applied: this document has no syntax tree, so its enclosing members are unknown. " +
+                "Drop withinMember and use matchLine, lineBefore or lineAfter instead.");
+        }
+
+        // withinMember/matchLine act first, on the verbatim text matches; lineBefore/lineAfter then
+        // filter whatever survives. With neither selector this is exactly the original single call.
+        var hasSelectors = withinMember != null || matchLine != null;
+        var survivorsAfterSelectors = 0;
+        List<SnippetMatch> matches;
+        if (hasSelectors)
+        {
+            ThrowIfMultiLine(sourceText, nameof(lineBefore), lineBefore, isAfter: false);
+            ThrowIfMultiLine(sourceText, nameof(lineAfter), lineAfter, isAfter: true);
+            var textMatches = FindAllExactSnippetMatches(sourceText, contextSnippet);
+            var selected = FilterBySelectors(sourceText, textMatches, withinMember, matchLine, memberNameAt);
+            if (textMatches.Count > 0 && selected.Count == 0)
+            {
+                throw BuildSelectorMismatch(sourceText, contextSnippet, textMatches, withinMember, matchLine, memberNameAt, label);
+            }
+
+            survivorsAfterSelectors = selected.Count;
+            matches = FilterByAdjacentLines(sourceText, selected, lineBefore, lineAfter);
+        }
+        else
+        {
+            matches = FindAllExactSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
+        }
 
         if (matches.Count == 0)
         {
-            var unfilteredCount = (lineBefore, lineAfter) is (null, null)
-                ? 0
-                : FindAllExactSnippetMatches(sourceText, contextSnippet).Count;
+            var unfilteredCount = hasSelectors
+                ? survivorsAfterSelectors
+                : (lineBefore, lineAfter) is (null, null)
+                    ? 0
+                    : FindAllExactSnippetMatches(sourceText, contextSnippet).Count;
+            var afterSelectors = hasSelectors ? " (after the withinMember/matchLine selector)" : string.Empty;
             var diagnosis = unfilteredCount > 0
-                ? $"{label} matches {unfilteredCount} place(s) exactly, but the lineBefore/lineAfter you supplied filtered out all of them. lineBefore must equal the line before the match's first line and lineAfter the line after the match's last line (compared trimmed). Fix or drop lineBefore/lineAfter."
+                ? $"{label} matches {unfilteredCount} place(s) exactly{afterSelectors}, but the lineBefore/lineAfter you supplied filtered out all of them. lineBefore must equal the line before the match's first line and lineAfter the line after the match's last line (compared trimmed). Fix or drop lineBefore/lineAfter."
                 : DiagnoseNoMatch(sourceText, contextSnippet);
             throw ContextErrorBuilder.Build(
                 SnippetMatchOutcome.NoMatch, contextSnippet, sourceText,
@@ -336,6 +369,82 @@ public static class ContextHelper
             _ => throw ContextErrorBuilder.Build(
                 SnippetMatchOutcome.StillAmbiguous, contextSnippet, sourceText, matches, snippetLabel: label, memberNameAt: memberNameAt)
         };
+    }
+
+    /// <summary>
+    /// Position a match is attributed to for the withinMember/matchLine selectors: its first
+    /// non-whitespace character, so a match that begins with a newline or indentation is placed on
+    /// the line (and in the member) a human sees it on.
+    /// </summary>
+    private static int FirstNonWhitespacePosition(SourceText sourceText, SnippetMatch match)
+    {
+        var last = match.Start + match.Length - 1;
+        var position = match.Start;
+        while (position < last && char.IsWhiteSpace(sourceText[position]))
+        {
+            position++;
+        }
+
+        return position;
+    }
+
+    /// <summary>
+    /// Keeps only matches whose first non-whitespace line equals <paramref name="matchLine"/> (1-based)
+    /// and/or whose enclosing member name equals <paramref name="withinMember"/> (ordinal). Both
+    /// together are an intersection. The caller guarantees <paramref name="memberNameAt"/> is set
+    /// whenever <paramref name="withinMember"/> is.
+    /// </summary>
+    private static List<SnippetMatch> FilterBySelectors(
+        SourceText sourceText, List<SnippetMatch> matches, string? withinMember, int? matchLine,
+        Func<int, string?>? memberNameAt)
+    {
+        return matches.Where(match =>
+        {
+            var position = FirstNonWhitespacePosition(sourceText, match);
+            if (matchLine != null && sourceText.Lines.GetLinePosition(position).Line + 1 != matchLine)
+            {
+                return false;
+            }
+
+            return withinMember == null
+                || string.Equals(memberNameAt!(position), withinMember, StringComparison.Ordinal);
+        }).ToList();
+    }
+
+    /// <summary>
+    /// The text matched, but no match satisfied withinMember/matchLine. Lists the current matches
+    /// (re-anchored on their first non-whitespace character, the same position the selectors use)
+    /// so a stale matchLine or member name can be corrected from the message alone.
+    /// </summary>
+    private static ToolException BuildSelectorMismatch(
+        SourceText sourceText, string contextSnippet, List<SnippetMatch> textMatches,
+        string? withinMember, int? matchLine, Func<int, string?>? memberNameAt, string label)
+    {
+        var supplied = new List<string>();
+        if (matchLine != null)
+        {
+            supplied.Add($"matchLine={matchLine}");
+        }
+        if (withinMember != null)
+        {
+            supplied.Add($"withinMember=\"{withinMember}\"");
+        }
+
+        var anchored = textMatches.Select(match =>
+        {
+            var position = FirstNonWhitespacePosition(sourceText, match);
+            return new SnippetMatch(position, match.Start + match.Length - position);
+        }).ToList();
+        var listing = DescribeAmbiguousCandidates(
+            sourceText, anchored, label, memberNameAt, ContextErrorBuilder.MaxStillAmbiguousCandidatesListed);
+
+        var diagnosis =
+            $"{label} matches {textMatches.Count} place(s) exactly, but none satisfied the selector(s) you supplied ({string.Join(", ", supplied)}). " +
+            "Current matches:\n" + listing + "\n" +
+            "matchLine is the 1-based line of the match's first non-whitespace character and withinMember is the name of its enclosing member. Fix or drop withinMember/matchLine.";
+        return ContextErrorBuilder.Build(
+            SnippetMatchOutcome.NoMatch, contextSnippet, sourceText,
+            diagnosis: diagnosis, verbatimRequired: true, snippetLabel: label);
     }
 
     /// <summary>
