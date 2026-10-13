@@ -750,7 +750,7 @@ public class WorkspaceTools
 
     [McpServerTool(Name = "GetLargeResult")]
     [Produces(DataTag.Report)]
-    [Description("Pages through a large result written to disk after exceeding the inline size threshold.")]
+    [Description("Pages through a large result written to disk after exceeding the inline size threshold. Page with offset; the response carries nextOffset and hasMoreData.")]
     public Task<SentinelCallToolResult<object>> GetLargeResult(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of resultId/filePath must be supplied;
@@ -759,7 +759,7 @@ public class WorkspaceTools
         [Consumes(DataTag.ResultId)] string? resultId = null,
         [Description("Path to a largeresult_*.json file. Required if resultId is omitted.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
-        [Description("Max records to return. Ignored for Raw/text results - use charLimit.")]
+        [Description("Max records to return. Ignored for Raw/text results - use charLimit. A page may return fewer rows than limit when the result exceeds the inline size backstop; always continue from nextOffset while hasMoreData is true.")]
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
         [Description("Records (or characters, for text results) to skip before the next page.")]
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,

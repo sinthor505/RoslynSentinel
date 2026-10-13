@@ -103,7 +103,7 @@ public class WorkspaceReadNavigationTools
         => _impl.GetOperationDetail(reason, changeId, filter, maxItems, offset, cancellationToken);
     [McpServerTool(Name = "GetLargeResult")]
     [Produces(DataTag.Report)]
-    [Description("Pages through a large result that was written to disk because it exceeded the inline size threshold.")]
+    [Description("Pages through a large result that was written to disk because it exceeded the inline size threshold. Page with offset; the response carries nextOffset and hasMoreData.")]
     public Task<SentinelCallToolResult<object>> GetLargeResult(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of resultId/filePath must be supplied;
@@ -112,7 +112,7 @@ public class WorkspaceReadNavigationTools
         [Consumes(DataTag.ResultId)] string? resultId = null,
         [Description("Path to a largeresult_*.json file under .roslynsentinel/largeresults. Required if resultId is omitted.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
-        [Description("Maximum number of records to return. Ignored when paging a Raw/offloaded text result - use charLimit instead.")]
+        [Description("Maximum number of records to return. Ignored when paging a Raw/offloaded text result - use charLimit instead. A page may return fewer rows than limit when the result exceeds the inline size backstop; always continue from nextOffset while hasMoreData is true.")]
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
         [Description("Number of records (or, for a Raw/offloaded text result, characters) to skip before taking the next page.")]
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
