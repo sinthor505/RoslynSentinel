@@ -188,6 +188,22 @@ public class OrderService : IOrderService
     // --- GetBlastRadius (via InspectSymbol) ---
     [Test]
     [Category("SymbolNavigationTools")] // sentinel:auto-category
+    public async Task GetBlastRadius_FieldWithObjectCreationInitializer_ResolvesFieldNotConstructor()
+    {
+        const string fieldSource = "using System.Collections.Generic;\nclass C { public static readonly IReadOnlySet<string> Names = new HashSet<string>(new[] { \"a\" }); void M() { var n = Names; } }";
+        SetSource(fieldSource, "Test.cs");
+        var result = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "public static readonly IReadOnlySet<string> Names = new HashSet<string>(", InspectSymbolAspect.blastRadius);
+        Assert.That(result, Is.Not.Null);
+        Assert.That(!result.IsError, Is.True);
+        var report = (ImpactReport)result.SuccessData!;
+        Assert.That(report.Error, Is.Null);
+        Assert.That(report.SymbolKind, Is.EqualTo("Field"));
+        Assert.That(report.SymbolName, Does.Contain("Names"));
+        Assert.That(report.TotalCallSites, Is.GreaterThanOrEqualTo(1));
+    }
+
+    [Test]
+    [Category("SymbolNavigationTools")] // sentinel:auto-category
     public async Task GetBlastRadius_ValidMethod_ReturnsReport()
     {
         SetSource(RichSource, "Test.cs");

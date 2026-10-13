@@ -48,11 +48,13 @@ public class ImpactAnalyzer
 
             // Find the symbol at the given position
             var sourceText = await document.GetTextAsync(cancellationToken);
+            // Resolve at the snippet start first (mirrors InspectSymbol(info)); the last-identifier path below is the fallback
+            var symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
             var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
             // Advance to the last identifier token in the snippet span so FindSymbolAtPositionAsync works
             position = ContextHelper.AdvanceToLastIdentifier(syntaxRoot, position, contextSnippet.Length);
             var token = syntaxRoot.FindToken(position);
-            var symbol = await SymbolFinder.FindSymbolAtPositionAsync(document, position, cancellationToken);
+            symbol ??= await SymbolFinder.FindSymbolAtPositionAsync(document, position, cancellationToken);
 
             if (symbol == null)
             {
@@ -68,6 +70,12 @@ public class ImpactAnalyzer
             if (symbol == null)
             {
                 return new ImpactReport("", "", [], 0, 0, Error: "No symbol found at the specified position.");
+            }
+
+            // Metadata (BCL/referenced) symbols have no source location; reporting their references would be a silent mis-resolution
+            if (!symbol.Locations.Any(l => l.IsInSource))
+            {
+                return new ImpactReport("", "", [], 0, 0, Error: $"Not found: '{symbol.ToDisplayString()}' is not declared in this solution. The snippet likely resolved to a referenced type or constructor. Pass the declared name with lineBefore/lineAfter.");
             }
 
             if (_logger.IsEnabled(LogLevel.Information))
