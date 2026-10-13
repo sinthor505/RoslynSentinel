@@ -35,7 +35,7 @@ public class SemanticFindReplaceTools
     [McpServerTool(Name = "SemanticFindReplace")]
     [Produces(DataTag.ChangeId)]
     [Description("Rename a bool property or field and invert its polarity at every site. " +
-        "symbol is a docCommentId (from Search or LocateSymbol). " +
+        "symbol is a docCommentId (from Search(mode: symbol)). " +
         "operation: invertBoolean renames the symbol and flips its logic (true<->false, Read gets !, NegatedRead loses !). " +
         "mode: preview lists the sites (before/after text) without writing anything; apply performs the changes. " +
         "Mode is mandatory - use preview first to review. " +

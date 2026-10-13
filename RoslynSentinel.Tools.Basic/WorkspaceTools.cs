@@ -527,7 +527,7 @@ public class WorkspaceTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Preferred, with docCommentId.")] string projectName = "",
-        [Description("Preferred, with projectName (from LocateSymbol/FindReferences).")] string docCommentId = "",
+        [Description("Preferred, with projectName (from Search, mode: symbol or references).")] string docCommentId = "",
         [Description("Fallback; add contextSnippet to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: false)] string? symbolName = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,

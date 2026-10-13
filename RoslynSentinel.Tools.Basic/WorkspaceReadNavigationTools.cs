@@ -71,7 +71,7 @@ public class WorkspaceReadNavigationTools
     [McpServerTool(Name = "SearchSolutionText")]
     [Produces(DataTag.Report)]
     [Produces(DataTag.FileList)]
-    [Description("Searches source files in the loaded solution for a pattern, evaluated both as a literal substring and (if it compiles) as a regex in one pass. Returns literalResults (all literal-substring matches) and regexResults (additional regex-only matches), plus regexOverlapCount and regexPatternValid. Each match has file, line, column, a preview, and the enclosing member name. For a known symbol name, LocateSymbol is more precise. If you don't know the exact name, call ListAll first.")]
+    [Description("Searches source files in the loaded solution for a pattern, evaluated both as a literal substring and (if it compiles) as a regex in one pass. Returns literalResults (all literal-substring matches) and regexResults (additional regex-only matches), plus regexOverlapCount and regexPatternValid. Each match has file, line, column, a preview, and the enclosing member name. For a known symbol name, Search(mode: symbol) is more precise. If you don't know the exact name, call ListAll first.")]
     public Task<SentinelCallToolResult<object>> SearchSolutionText(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Text to search for, matched both as a literal substring and as a regex.")]

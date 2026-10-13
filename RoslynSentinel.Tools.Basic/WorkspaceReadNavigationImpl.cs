@@ -430,7 +430,7 @@ public class WorkspaceReadNavigationImpl
                     HasMoreData = true,
                     ListSummary = summary,
                     StatusMessage = exclusionNote,
-                    WarningDetails = $"Truncated: showing the first {entries.Count} of {totalMatches} matching declarations (cap {maxItems}), spread over {summary.FileCount} files and {summary.ByProject!.Count} projects - listSummary.byProject and listSummary.byFile (top {summary.ByFile.Count} files, {summary.TruncatedFileCount} more files not shown) count ALL matches, use them to pick where to look. Narrow with query (name filter) or projectName, or use mode: symbol. For all callers/implementations of a symbol use FindReferences or QuerySymbolRelationships; for orientation use ListAll or GetFileOutline."
+                    WarningDetails = $"Truncated: showing the first {entries.Count} of {totalMatches} matching declarations (cap {maxItems}), spread over {summary.FileCount} files and {summary.ByProject!.Count} projects - listSummary.byProject and listSummary.byFile (top {summary.ByFile.Count} files, {summary.TruncatedFileCount} more files not shown) count ALL matches, use them to pick where to look. Narrow with query (name filter) or projectName, or use mode: symbol. For all callers/implementations of a symbol use Search(mode: references) or QuerySymbolRelationships; for orientation use ListAll or GetFileOutline."
                 };
             }
 

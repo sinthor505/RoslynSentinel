@@ -87,8 +87,8 @@ public class WorkspaceProjectManagementTools
     public Task<SentinelCallToolResult<object>> SafeDeleteUnusedSymbol(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
-        [Description("Preferred resolution path, together with docCommentId - as returned by LocateSymbol/FindReferences. The most reliable and accurate way to identify the target.")] string projectName = "",
-        [Description("Preferred resolution path, together with projectName - as returned by LocateSymbol/FindReferences.")] string docCommentId = "",
+        [Description("Preferred resolution path, together with docCommentId - as returned by Search (mode: symbol or references). The most reliable and accurate way to identify the target.")] string projectName = "",
+        [Description("Preferred resolution path, together with projectName - as returned by Search (mode: symbol or references).")] string docCommentId = "",
         [Description("Fallback resolution path if projectName/docCommentId aren't available. Combine with contextSnippet/lineBefore/lineAfter to disambiguate; symbolName alone is enough if there's only one declaration with that name.")]
         [Consumes(DataTag.SymbolName, required: false)] string? symbolName = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,

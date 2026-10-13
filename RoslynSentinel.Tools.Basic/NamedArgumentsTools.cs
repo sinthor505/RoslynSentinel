@@ -38,7 +38,7 @@ public class NamedArgumentsTools
     [Description("Convert positional call arguments to named arguments (M(1, 2) -> M(a: 1, b: 2)) using the compiler's binding, " +
         "for method calls, constructor calls (new T(..), new(..), : base(..)/: this(..)) and attribute constructor arguments. " +
         "scope: solution (every project), project (scopeName = project name) or file (scopeName = file path). " +
-        "targetSymbol: optional docCommentId of one method/constructor (from Search or LocateSymbol); only calls to it are converted. " +
+        "targetSymbol: optional docCommentId of one method/constructor (from Search(mode: symbol)); only calls to it are converted. " +
         "minParameters: only convert calls whose method has at least this many parameters (default 2, or 1 when targetSymbol is given). " +
         "literalArgumentsOnly: only name arguments that are literals (numbers, strings, true/false/null/default). " +
         "Skipped by design: params methods, expression trees (CS0853), delegate invokes, generated code, already-named arguments. " +

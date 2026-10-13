@@ -132,3 +132,13 @@ call that otherwise succeeds. No existing blocker covers it (checked `docs/curre
 `List<string>` of paths, :1535): 3 edits across 2 files reports "Applied 2 changes". Other batch tools say
 "N edit(s) across M file(s)" (`RefactoringStructuralImpl.cs:263, 425, 522`). Fix by aligning the wording and
 counting edits.
+
+## Resolution
+
+Resolved 2026-10-13 in 9d6e09829ab6acf9fe866ef4cfe1fdeae6c9ebb3 (ReplaceSnippet wording secondary note: 366656a5bdff49b66837064061bf65898f56c5e1).
+
+- Root cause: as traced above (`ContextHelper.AdvanceToLastIdentifier` used as the primary resolver in `ImpactAnalyzer`).
+- Fix: `ImpactAnalyzer.AnalyzeImpactAsync` resolves with `ContextHelper.FindSymbolAtSnippetAsync` first and keeps the last-identifier path as fallback; a resolved symbol with no source location returns an error starting "Not found:" naming the symbol. The error code stays `Exception` because `ImpactReport` has no code field (a real `NotFound` code needs one; follow-up).
+- Secondary: the batch message now reads "Applied changes to N file(s) successfully".
+- Tests: `BatteryTwentyTwoTests.GetBlastRadius_FieldWithObjectCreationInitializer_ResolvesFieldNotConstructor`; `BatteryTwentyTwo` filter 56 of 56 passing. No `ContextHelperTests` case added.
+- The live server needs a restart before `InspectSymbol(blastRadius)` shows the fix.

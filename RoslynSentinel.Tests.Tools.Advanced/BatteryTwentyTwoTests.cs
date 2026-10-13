@@ -762,7 +762,7 @@ public class OrderService : IOrderService
         var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "ProcessAsync", FindUsagesSearchKind.objectCreations);
         Assert.That(!result.IsError, Is.False, "objectCreations against a method name must be rejected, not silently return [].");
         Assert.That(result.ErrorData, Is.Not.Null);
-        Assert.That(result.ErrorData!.Message, Does.Contain("FindReferences"), "The guard should point the caller at FindReferences instead of objectCreations for a member name.");
+        Assert.That(result.ErrorData!.Message, Does.Contain("Search(mode: references"), "The guard should point the caller at FindReferences instead of objectCreations for a member name.");
     }
 
     [Test]

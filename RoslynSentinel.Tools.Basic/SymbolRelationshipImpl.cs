@@ -64,7 +64,7 @@ public class SymbolRelationshipImpl
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"'{name}' resolves to a {kindsFound} ({resolved.Count} declaration(s) found), not a type - " + "objectCreations only matches 'new TypeName(...)' expressions and is structurally incapable of " + $"returning anything for a member name. Use FindReferences(symbolName: \"{name}\", kind: callers) " + "to find call sites, or kind: implementations for overrides.")
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"'{name}' resolves to a {kindsFound} ({resolved.Count} declaration(s) found), not a type - " + "objectCreations only matches 'new TypeName(...)' expressions and is structurally incapable of " + $"returning anything for a member name. Use Search(mode: references, query: \"{name}\", referencesKind: callers) " + "to find call sites, or referencesKind: implementations for overrides.")
                     };
                 }
             }

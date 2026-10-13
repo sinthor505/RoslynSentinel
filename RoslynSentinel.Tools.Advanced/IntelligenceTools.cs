@@ -248,7 +248,7 @@ public class IntelligenceTools
 
     [McpServerTool(Name = "TraceVariableLifetime")]
     [Produces(DataTag.Report)]
-    [Description("Traces a local variable/parameter's full lifetime: every read, write, ref/out pass, return, and capture across all code paths. Use FindReferences for methods/properties/fields instead.")]
+    [Description("Traces a local variable/parameter's full lifetime: every read, write, ref/out pass, return, and capture across all code paths. Use Search(mode: references) for methods/properties/fields instead.")]
     public async Task<SentinelCallToolResult<object>> TraceVariableLifetime([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Description("Name of the local variable or parameter to trace.")][Consumes(DataTag.SymbolName)] string variableName, [Description("1-based declaration line; disambiguates duplicate names in the file.")][Consumes(DataTag.StartLine)] int lineNumber, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {

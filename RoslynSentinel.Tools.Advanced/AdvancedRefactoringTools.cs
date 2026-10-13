@@ -992,7 +992,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"SyncInterface implement: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " + "Verify both names are spelled correctly (case-sensitive). Use LocateSymbol to confirm the interface exists in the solution.")
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"SyncInterface implement: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " + "Verify both names are spelled correctly (case-sensitive). Use Search(mode: symbol) to confirm the interface exists in the solution.")
                     };
                 var implChanges = new Dictionary<FilePathWrapper, string>
                 {
@@ -1032,7 +1032,7 @@ public class AdvancedRefactoringTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"SyncInterface sync: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " + "Verify both names are spelled correctly (case-sensitive). Use LocateSymbol to confirm the interface exists in the solution.")
+                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"SyncInterface sync: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " + "Verify both names are spelled correctly (case-sensitive). Use Search(mode: symbol) to confirm the interface exists in the solution.")
                     };
                 var syncChanges = new Dictionary<FilePathWrapper, string>
                 {

@@ -361,7 +361,7 @@ public class BatteryTwentyTests
         Assert.That(summary.ByProject, Has.Count.EqualTo(1));
         Assert.That(summary.ByProject![0].ProjectName, Is.EqualTo("TestProj"));
         Assert.That(summary.ByProject[0].Count, Is.EqualTo(WorkspaceTools.KindListingMaxItems + 5));
-        Assert.That(result.WarningDetails, Does.Contain("FindReferences"));
+        Assert.That(result.WarningDetails, Does.Contain("Search(mode: references)"));
         Assert.That(result.WarningDetails, Does.Contain("GetFileOutline"));
         Assert.That(result.WarningDetails, Does.Contain("mode: symbol"));
     }
