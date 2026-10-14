@@ -155,6 +155,12 @@ Every matcher and lookup returns its candidates wherever they exist, and every t
 
 **Why.** Whitespace handling is a frequent weak-model struggle: models weigh it differently from code, miscount it, and the text passes through several serialization layers. The repeated identical tool calls seen in failed runs likely come from the model not understanding the message, or believing its revised call is already correct. Messages such as "no matches found, try an exact snippet" or "a match was found from lines x through y but differed at line z" make the model do bookkeeping and translation across several layers. A candidate list removes that: the model copies the right text on its next turn and recovers unambiguously. Compare the Qwen run, where seven NotFound results named no concrete text to copy (Evidence above).
 
+**Second reason: diagnosis by reading the result.** Today a "no matches found" result forces a manual trace: find the model's submitted text in the transcript, find the file's text, and work out what should have matched. With candidates in the result, the error alone shows what the model sent against what the file holds, so a reviewer sees where the model was mistaken. When no candidates are listed, that is positive evidence that nothing close exists, not a gap in the message. This makes the no-match output an audit record, so:
+
+- A no-match error states what was probed (tiers tried, case mode, the number of lines and windows examined) and either lists the closest windows or says explicitly that none scored above the threshold.
+- The error echoes the snippet as received (length-capped, with line count and any leading or trailing whitespace on each line made visible), so a serialization change between the model and the tool shows up in the result rather than being invisible.
+- The listing is deterministic for a given file and snippet, so a failure can be reproduced from the logged request.
+
 **What a candidate is.**
 
 - **Ambiguous:** each accepted match, as today (line, enclosing member, ready-to-use selectors), plus the file's actual text for that match so the model can see what differs between candidates.
