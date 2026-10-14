@@ -5,8 +5,9 @@ namespace RoslynSentinel.Common.SnippetMatching;
 /// <summary>
 /// Dispatcher for snippet-in-text matching. Runs the matchers in ladder order up to the requested
 /// <see cref="WhitespaceTolerance"/>, stops at the first tier that finds a match, and reports the outcome as data
-/// (never an exception for a match outcome). Delegates to the stage logic in <see cref="ContextHelper"/>; this
-/// slice adds no behaviour of its own except the cap and the near-match probe.
+/// (never an exception for a match outcome). The ordinal, line-ending and whitespace-collapsing matchers delegate to
+/// the stage logic in <see cref="ContextHelper"/>; <see cref="IndentationMatcher"/> is the one new matcher, and the cap
+/// and the near-match probe are the dispatcher's own behaviour.
 /// </summary>
 /// <remarks>
 /// The class is public but <see cref="Resolve"/> is internal, because <see cref="SnippetMatchResult"/> and the
@@ -19,11 +20,12 @@ public static class SnippetResolver
     /// <summary>Maximum number of near-matches listed in a result; the full count is in NearMatchTotalCount.</summary>
     internal const int MaxNearMatches = 5;
 
-    // Ladder order. There is no IndentationMatcher yet (slice 2d adds it between LineEnding and Collapsed).
+    // Ladder order, strictest first.
     private static readonly ISnippetMatcher[] Ladder =
     {
         new ExactMatcher(),
         new LineEndingMatcher(),
+        new IndentationMatcher(),
         new CollapsedWhitespaceMatcher(),
     };
 
@@ -47,9 +49,8 @@ public static class SnippetResolver
     /// compare case-sensitively, exactly as <see cref="ContextHelper.FindAllSnippetMatchesWithLength"/> does.
     /// </summary>
     /// <exception cref="ArgumentException">
-    /// <paramref name="tolerance"/> is <see cref="WhitespaceTolerance.IgnoreIndentation"/> (not implemented until
-    /// slice 2d), is not a defined value, or <paramref name="caseMode"/> is CaseInsensitive with a tolerance below
-    /// IgnoreAllWhitespace. These are programming errors, never match outcomes.
+    /// <paramref name="tolerance"/> is not a defined value, or <paramref name="caseMode"/> is CaseInsensitive with a
+    /// tolerance below IgnoreAllWhitespace. These are programming errors, never match outcomes.
     /// </exception>
     internal static SnippetMatchResult Resolve(
         SourceText sourceText, string snippet, WhitespaceTolerance tolerance, SnippetCaseMode caseMode)
@@ -65,14 +66,6 @@ public static class SnippetResolver
         if (!Enum.IsDefined(caseMode))
         {
             throw new ArgumentException($"Unknown SnippetCaseMode value {(int)caseMode}.", nameof(caseMode));
-        }
-
-        if (tolerance == WhitespaceTolerance.IgnoreIndentation)
-        {
-            throw new ArgumentException(
-                "WhitespaceTolerance.IgnoreIndentation is not implemented yet: the IndentationMatcher arrives in slice 2d. " +
-                "Request Exact, IgnoreLineEndings or IgnoreAllWhitespace.",
-                nameof(tolerance));
         }
 
         if (caseMode == SnippetCaseMode.CaseInsensitive && tolerance < WhitespaceTolerance.IgnoreAllWhitespace)

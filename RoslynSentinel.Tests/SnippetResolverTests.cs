@@ -17,6 +17,23 @@ public class SnippetResolverTests
 
     // ---- (1) parity with the legacy helpers over the shared corpus ----
 
+    // Corpus cases where the ladder now stops at IgnoreIndentation, before the collapse stages, and so reports the
+    // narrower true span (or a different window) instead of what FindAllSnippetMatchesWithLength reports. Each value
+    // lists the expected (Start, matched text) per match. Every other corpus case still equals the legacy result.
+    private static readonly Dictionary<(string Text, string Snippet), (int Start, string Matched)[]> ParityDivergences = new()
+    {
+        // Legacy window stage started at the line start (indentation included): (0, 40). Now starts at the fragment.
+        [("        }\n        var trailingIssue = x;\n", "}\nvar trailingIssue = x;")] = new[] { (8, "}\n        var trailingIssue = x;") },
+        [("    a\r\n    b\r\n", "a\nb")] = new[] { (4, "a\r\n    b") },
+        [("    a\n    b\n\n    a\n    b\n", "a\nb")] = new[] { (4, "a\n    b"), (17, "a\n    b") },
+        // Legacy window stage kept the last line's trailing whitespace in the span; the new span stops after "bar();".
+        [("foo();   \nbar();  \n", "foo();\nbar();")] = new[] { (0, "foo();   \nbar();") },
+        [("    a\n\n    b\n", "a\n\nb")] = new[] { (4, "a\n\n    b") },
+        // Legacy collapsed single-line stage matched the one line "a b" at (0, 3); the real two-line block now wins first.
+        [("a b\n  a\n  b\n", "a\nb")] = new[] { (6, "a\n  b") },
+        [("\n  \n    a\n    b\n  \n", "\n\na\nb\n\n")] = new[] { (8, "a\n    b") },
+    };
+
     [TestCaseSource(typeof(SnippetMatcherTests), nameof(SnippetMatcherTests.Corpus))]
     public void Parity_IgnoreAllWhitespaceCaseInsensitive_EqualsFindAllSnippetMatchesWithLength(string text, string snippet)
     {
@@ -25,7 +42,21 @@ public class SnippetResolverTests
         var legacy = ContextHelper.FindAllSnippetMatchesWithLength(sourceText, snippet);
         var result = SnippetResolver.Resolve(sourceText, snippet, WhitespaceTolerance.IgnoreAllWhitespace, SnippetCaseMode.CaseInsensitive);
 
-        Assert.That(result.Matches.Select(m => (m.Start, m.Length)), Is.EqualTo(legacy.Select(m => (m.Start, m.Length))));
+        if (ParityDivergences.TryGetValue((text, snippet), out var expected))
+        {
+            Assert.Multiple(() =>
+            {
+                Assert.That(result.Matches.Select(m => (m.Start, text.Substring(m.Start, m.Length))), Is.EqualTo(expected));
+                Assert.That(result.Matches.Select(m => m.Tier).Distinct(), Is.EqualTo(new[] { WhitespaceTolerance.IgnoreIndentation }));
+                Assert.That(result.Matches.Select(m => (m.Start, m.Length)), Is.Not.EqualTo(legacy.Select(m => (m.Start, m.Length))),
+                    "a listed divergence must really differ from the legacy result, otherwise remove it from the list");
+            });
+        }
+        else
+        {
+            Assert.That(result.Matches.Select(m => (m.Start, m.Length)), Is.EqualTo(legacy.Select(m => (m.Start, m.Length))));
+        }
+
         Assert.That(result.NearMatches, Is.Empty, "the loosest tier has nothing looser to probe");
         AssertOutcomeMatchesCount(result);
     }
@@ -109,6 +140,7 @@ public class SnippetResolverTests
 
     [TestCase(0)]
     [TestCase(1)]
+    [TestCase(2)]
     [TestCase(3)]
     public void Resolve_WhitespaceOnlyOrEmptySnippet_IsNoMatch_AndDoesNotThrow(int toleranceValue)
     {
@@ -138,7 +170,7 @@ public class SnippetResolverTests
     [TestCaseSource(typeof(SnippetMatcherTests), nameof(SnippetMatcherTests.Corpus))]
     public void Resolve_EveryAcceptedMatch_SpliceReproducesTheFile(string text, string snippet)
     {
-        foreach (var tolerance in new[] { WhitespaceTolerance.Exact, WhitespaceTolerance.IgnoreLineEndings, WhitespaceTolerance.IgnoreAllWhitespace })
+        foreach (var tolerance in new[] { WhitespaceTolerance.Exact, WhitespaceTolerance.IgnoreLineEndings, WhitespaceTolerance.IgnoreIndentation, WhitespaceTolerance.IgnoreAllWhitespace })
         {
             var result = Resolve(text, snippet, tolerance);
             foreach (var match in result.Matches)
@@ -180,13 +212,89 @@ public class SnippetResolverTests
     }
 
     [Test]
-    public void Cap_IgnoreLineEndingsRequest_DoesNotReachTheCollapsedTier()
+    public void Cap_IgnoreLineEndingsRequest_DoesNotReachTheIndentationTier()
     {
         var result = Resolve("    a\n    b\n", "a\nb", WhitespaceTolerance.IgnoreLineEndings);
 
         Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.MatchedLooserThanRequested));
         Assert.That(result.Matches, Is.Empty);
-        Assert.That(result.NearMatches.Single().LowestTier, Is.EqualTo(WhitespaceTolerance.IgnoreAllWhitespace));
+        Assert.That(result.NearMatches.Single().LowestTier, Is.EqualTo(WhitespaceTolerance.IgnoreIndentation));
+    }
+
+    [Test]
+    public void Cap_ExactRequest_NeverReturnsAnIndentationMatch_EvenWhenOneExistsElsewhere()
+    {
+        // The verbatim block is first; the block further down differs by trailing whitespace and matches only at IgnoreIndentation.
+        var result = Resolve("a\nb\nmid();\na   \nb  \n", "a\nb", WhitespaceTolerance.Exact);
+
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.Matched));
+        Assert.That(result.Matches.Select(m => (m.Start, m.Tier)), Is.EqualTo(new[] { (0, WhitespaceTolerance.Exact) }));
+        Assert.That(result.NearMatches, Is.Empty);
+
+        var indentation = Resolve("a\nb\nmid();\na   \nb  \n", "a\nb", WhitespaceTolerance.IgnoreIndentation);
+        Assert.That(indentation.Matches.Select(m => m.Tier), Is.All.EqualTo(WhitespaceTolerance.Exact),
+            "the ladder stops at the first tier with matches, so the looser-only block is not added");
+        Assert.That(indentation.Matches, Has.Count.EqualTo(1));
+    }
+
+    [Test]
+    public void Cap_ExactRequest_WhereOnlyIndentationMatches_ReportsMatchedLooserThanRequested()
+    {
+        var result = Resolve("foo();   \nbar();  \n", "foo();\nbar();", WhitespaceTolerance.Exact);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.MatchedLooserThanRequested));
+            Assert.That(result.Matches, Is.Empty);
+            Assert.That(result.NearMatches.Single().LowestTier, Is.EqualTo(WhitespaceTolerance.IgnoreIndentation));
+            Assert.That(result.NearMatches.Single().ActualLines, Is.EqualTo(new[] { "foo();   ", "bar();  " }));
+        });
+    }
+
+    [Test]
+    public void Cap_IgnoreIndentationRequest_NeverReturnsAnIgnoreAllWhitespaceOnlyMatch()
+    {
+        var result = Resolve("var r = a  +  b;\n", "a + b;", WhitespaceTolerance.IgnoreIndentation);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.MatchedLooserThanRequested));
+            Assert.That(result.Matches, Is.Empty);
+            Assert.That(result.NearMatches.Single().LowestTier, Is.EqualTo(WhitespaceTolerance.IgnoreAllWhitespace));
+            Assert.That(result.NearMatches.Single().ActualLines, Is.EqualTo(new[] { "var r = a  +  b;" }));
+        });
+    }
+
+    [Test]
+    public void Cap_IgnoreIndentationRequest_AcceptsEverythingTheLowerTiersAccept()
+    {
+        foreach (var (text, snippet) in new[]
+                 {
+                     ("int x = 1;\nint y = 2;\n", "int y = 2;"),
+                     ("a\nb\nc\n", "a\nb"),
+                     ("a\r\nb\r\nc\r\n", "a\nb"),
+                     ("if (a) return x;\n", "return x;"),
+                     ("    return foo;\n}\nother();\n", "return foo;\n}\n"),
+                 })
+        {
+            var result = Resolve(text, snippet, WhitespaceTolerance.IgnoreIndentation);
+
+            Assert.That(result.Matches, Is.Not.Empty, $"'{snippet}'");
+            Assert.That(result.Matches.Select(m => m.Tier), Is.All.LessThanOrEqualTo(WhitespaceTolerance.IgnoreIndentation));
+        }
+    }
+
+    [Test]
+    public void Cap_IgnoreAllWhitespaceRequest_StillMatchesWhatOnlyTheCollapseStagesAccept()
+    {
+        var interior = Resolve("var r = a  +  b;\n", "a + b;", WhitespaceTolerance.IgnoreAllWhitespace);
+        var windowInterior = Resolve("x\n  a  +  b\ny\n", "x\na + b\ny", WhitespaceTolerance.IgnoreAllWhitespace);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(interior.Single().Tier, Is.EqualTo(WhitespaceTolerance.IgnoreAllWhitespace));
+            Assert.That(windowInterior.Single().Tier, Is.EqualTo(WhitespaceTolerance.IgnoreAllWhitespace));
+        });
     }
 
     // ---- (4) the Qwen regression ----
@@ -208,8 +316,32 @@ public class SnippetResolverTests
             Assert.That(result.NearMatches[0].ActualLines, Is.EqualTo(new[] { "        }", "        var trailingIssue = x;" }));
             Assert.That(result.NearMatches[0].StartLine, Is.EqualTo(8));
             Assert.That(result.NearMatches[0].Differences, Is.Empty, "structured differences arrive in slice 3");
-            // IgnoreAllWhitespace for now because no IndentationMatcher exists; slice 2d lowers this to IgnoreIndentation.
-            Assert.That(result.NearMatches[0].LowestTier, Is.EqualTo(WhitespaceTolerance.IgnoreAllWhitespace));
+            Assert.That(result.NearMatches[0].LowestTier, Is.EqualTo(WhitespaceTolerance.IgnoreIndentation));
+        });
+    }
+
+    [Test]
+    public void QwenRegression_IgnoreIndentationRequest_IsOneMatch_StartingAfterTheIndentation_AndSpliceReproducesTheFile()
+    {
+        const string text = "class C\n{\n    void M()\n    {\n        if (a)\n        {\n            y();\n        }\n        var trailingIssue = x;\n    }\n}\n";
+        const string snippet = "}\nvar trailingIssue = x;";
+
+        var result = Resolve(text, snippet, WhitespaceTolerance.IgnoreIndentation);
+
+        var match = result.Single();
+        var matched = text.Substring(match.Start, match.Length);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.Matched));
+            Assert.That(result.NearMatches, Is.Empty);
+            Assert.That(match.Tier, Is.EqualTo(WhitespaceTolerance.IgnoreIndentation));
+            Assert.That(match.Line, Is.EqualTo(8));
+            Assert.That(text[match.Start], Is.EqualTo('}'), "the span starts after the first line's indentation");
+            Assert.That(matched, Is.EqualTo("}\n        var trailingIssue = x;"));
+            Assert.That(text.Remove(match.Start, match.Length).Insert(match.Start, matched), Is.EqualTo(text));
+            // Replacing the span keeps the file's indentation on the first line.
+            Assert.That(text.Remove(match.Start, match.Length).Insert(match.Start, "}\n        var y = 1;"),
+                Does.Contain("        }\n        var y = 1;\n    }"));
         });
     }
 
@@ -256,17 +388,17 @@ public class SnippetResolverTests
     // ---- (6) programming errors ----
 
     [Test]
-    public void Resolve_IgnoreIndentation_ThrowsArgumentException_NamingSlice2d()
+    public void Resolve_IgnoreIndentation_IsAnImplementedTier_AndDoesNotThrow()
     {
-        var ex = Assert.Throws<ArgumentException>(() =>
-            Resolve("a\n", "a", WhitespaceTolerance.IgnoreIndentation));
+        var result = Resolve("    a\n", "a", WhitespaceTolerance.IgnoreIndentation);
 
-        Assert.That(ex!.Message, Does.Contain("IgnoreIndentation"));
-        Assert.That(ex.Message, Does.Contain("2d"));
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.Matched));
+        Assert.That(result.RequestedTolerance, Is.EqualTo(WhitespaceTolerance.IgnoreIndentation));
     }
 
     [TestCase(0)]
     [TestCase(1)]
+    [TestCase(2)]
     public void Resolve_CaseInsensitiveBelowIgnoreAllWhitespace_ThrowsArgumentException(int toleranceValue)
     {
         var tolerance = (WhitespaceTolerance)toleranceValue;
@@ -300,7 +432,9 @@ public class SnippetResolverTests
         yield return new TestCaseData("int x = 1;\nint y = 2;\n", "int y = 2;", (int)WhitespaceTolerance.Exact).SetName("Fixture_SingleLineVerbatim");
         yield return new TestCaseData("a\nb\nc\n", "a\nb", (int)WhitespaceTolerance.Exact).SetName("Fixture_MultiLineVerbatim");
         yield return new TestCaseData("a\r\nb\r\nc\r\n", "a\nb", (int)WhitespaceTolerance.IgnoreLineEndings).SetName("Fixture_LineEndingDifference");
-        yield return new TestCaseData("    a\r\n    b\r\n", "a\nb", (int)WhitespaceTolerance.IgnoreAllWhitespace).SetName("Fixture_IndentationDifference");
+        yield return new TestCaseData("    a\r\n    b\r\n", "a\nb", (int)WhitespaceTolerance.IgnoreIndentation).SetName("Fixture_IndentationDifference");
+        yield return new TestCaseData("foo();   \nbar();  \n", "foo();\nbar();", (int)WhitespaceTolerance.IgnoreIndentation).SetName("Fixture_TrailingWhitespaceDifference");
+        yield return new TestCaseData("if (a) return x;\n", "return x;", (int)WhitespaceTolerance.Exact).SetName("Fixture_MidLineFragment");
         yield return new TestCaseData("var r = a  +  b;\n", "a + b;", (int)WhitespaceTolerance.IgnoreAllWhitespace).SetName("Fixture_InteriorWhitespaceDifference");
     }
 
@@ -309,7 +443,7 @@ public class SnippetResolverTests
     {
         var lowestTier = (WhitespaceTolerance)lowestTierValue;
 
-        foreach (var requested in new[] { WhitespaceTolerance.Exact, WhitespaceTolerance.IgnoreLineEndings, WhitespaceTolerance.IgnoreAllWhitespace })
+        foreach (var requested in new[] { WhitespaceTolerance.Exact, WhitespaceTolerance.IgnoreLineEndings, WhitespaceTolerance.IgnoreIndentation, WhitespaceTolerance.IgnoreAllWhitespace })
         {
             var result = Resolve(text, snippet, requested);
             var label = $"requested {requested}";
