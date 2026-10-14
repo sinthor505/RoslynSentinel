@@ -45,6 +45,12 @@ public class ReplaceSnippetErrorCodeTests
 
     private const string MemberDupRepeatedBlock = "        var total = Compute();\n        Log(total);";
 
+    // The file has "    int Compute() => 1;", a blank line, then "    void Log(int x) { }". This block drops the
+    // indentation on both lines, so it matches only at the looser (IgnoreIndentation) tier and is unique.
+    private const string MemberDupLooserBlock = "int Compute() => 1;\n\nvoid Log(int x) { }";
+
+    private const string MemberDupMissingBlock = "NotInTheFile();";
+
     private sealed record Harness(InMemoryWorkspace Workspace, WorkspaceTools Tools) : IDisposable
     {
         public string DupHolderPath => Workspace.PathOf(DupHolderRelativePath);
@@ -448,5 +454,28 @@ public class ReplaceSnippetErrorCodeTests
         Assert.That(retry.IsError, Is.False, retry.ErrorData?.Message);
         var expected = original.Remove(secondOffset, MemberDupRepeatedBlock.Length).Insert(secondOffset, replacement);
         Assert.That(h.Workspace.ReadText(MemberDupRelativePath), Is.EqualTo(expected), "only the second match may change");
+    }
+
+    [Test]
+    public async Task ReplaceSnippet_Batch_LooserTierAndNotFoundTogether_ReportsAmbiguousCodeAndWritesNothingAsync()
+    {
+        using var h = CreateHarness();
+        var path = h.Workspace.PathOf(MemberDupRelativePath);
+        var original = h.Workspace.ReadText(MemberDupRelativePath);
+
+        var result = await h.Tools.ReplaceSnippet(
+            reason: "mixed looser-tier and missing batch",
+            ProposedChangeAction.apply,
+            batchEdits:
+            [
+                new SnippetEdit { FilePath = path, OldContent = MemberDupLooserBlock, NewContent = "void Log(int x) { }" },
+                new SnippetEdit { FilePath = path, OldContent = MemberDupMissingBlock, NewContent = "x" },
+            ]);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous),
+            "a mix of MatchedLooserThanRequested and NotFound reports Ambiguous, not InvalidArgument");
+        Assert.That(h.Workspace.ReadText(MemberDupRelativePath), Is.EqualTo(original),
+            "a rejected batch must not write anything");
     }
 }

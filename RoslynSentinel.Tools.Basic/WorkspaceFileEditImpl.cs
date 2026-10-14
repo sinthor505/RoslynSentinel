@@ -904,9 +904,9 @@ public class WorkspaceFileEditImpl
         if (perEditErrors.Count > 0)
         {
             // When every rejection carries its own code (a failed path lookup, or a snippet match that was
-            // ambiguous/missing), report that code so a caller can branch on it. Mixed NotFound/Ambiguous reports Ambiguous; any other mix or unattributed rejection stays InvalidArgument.
+            // ambiguous/missing), report that code so a caller can branch on it. Mixes of NotFound, Ambiguous and MatchedLooserThanRequested report Ambiguous; any other mix or unattributed rejection stays InvalidArgument.
             var errorCode = failureCodes.Count > 0 && failureCodes.Count == perEditErrors.Count
-                ? (failureCodes.Distinct().Count() == 1 ? failureCodes[0] : failureCodes.All(c => c == ToolErrorCode.Ambiguous || c == ToolErrorCode.NotFound) ? ToolErrorCode.Ambiguous : ToolErrorCode.InvalidArgument)
+                ? (failureCodes.Distinct().Count() == 1 ? failureCodes[0] : failureCodes.All(c => c == ToolErrorCode.Ambiguous || c == ToolErrorCode.NotFound || c == ToolErrorCode.MatchedLooserThanRequested) ? ToolErrorCode.Ambiguous : ToolErrorCode.InvalidArgument)
                 : ToolErrorCode.InvalidArgument;
             return new SentinelCallToolResult<ReplaceSnippetResult>()
             {
