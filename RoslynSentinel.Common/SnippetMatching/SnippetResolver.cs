@@ -11,9 +11,10 @@ namespace RoslynSentinel.Common.SnippetMatching;
 /// </summary>
 /// <remarks>
 /// The matchers and <c>ISnippetMatcher</c> are internal: callers go through <see cref="Resolve"/> only. Selectors
-/// (withinMember, matchLine, lineBefore, lineAfter) are not part of the dispatcher yet; callers keep using the
-/// <see cref="ContextHelper"/> selector code. The older <see cref="ContextHelper"/> snippet helpers keep their own
-/// behaviour and do not delegate here; callers move to <see cref="Resolve"/> deliberately, batch by batch.
+/// (withinMember, matchLine, lineBefore, lineAfter) are applied by the <see cref="SnippetSelectors"/> overload of
+/// <see cref="Resolve"/>, as a post-filter on the matches at the winning tier. The older <see cref="ContextHelper"/>
+/// snippet helpers keep their own behaviour and do not delegate here; callers move to <see cref="Resolve"/>
+/// deliberately, batch by batch.
 /// </remarks>
 public static class SnippetResolver
 {
@@ -130,6 +131,36 @@ public static class SnippetResolver
         }
 
         return Build(tolerance, caseMode, SnippetMatchOutcome.NoMatch, Array.Empty<SnippetMatch>(), Array.Empty<SnippetNearMatch>(), 0);
+    }
+
+    /// <summary>
+    /// Like <see cref="Resolve(SourceText, string, WhitespaceTolerance, SnippetCaseMode)"/>, then narrows the matches at the
+    /// winning tier with <paramref name="selectors"/>. Precedence: withinMember and matchLine act first (intersected), then
+    /// lineBefore and lineAfter filter whatever survives; see <see cref="SnippetSelectors"/> for what counts as supplied.
+    /// <list type="bullet">
+    /// <item>No selector supplied, or nothing matched at any accepted tier: the tier result is returned unchanged.</item>
+    /// <item>A malformed selector (a multi-line lineBefore/lineAfter, or withinMember without a
+    /// <paramref name="memberNameAt"/> delegate): <see cref="SnippetMatchOutcome.InvalidDisambiguator"/>, with the offending
+    /// parameter in <c>InvalidParameterName</c>/<c>InvalidParameterValue</c>.</item>
+    /// <item>withinMember/matchLine remove every match: <see cref="SnippetMatchOutcome.SelectorMismatch"/>. lineBefore/lineAfter
+    /// then remove every survivor: <see cref="SnippetMatchOutcome.AdjacentLineMismatch"/>. In both, <c>Matches</c> is empty and
+    /// the candidates stay in <c>PreFilterMatches</c> (and <c>SelectorSurvivors</c>).</item>
+    /// <item>One survivor: <see cref="SnippetMatchOutcome.Matched"/>. Several: <see cref="SnippetMatchOutcome.StillAmbiguous"/>.</item>
+    /// </list>
+    /// The filter trail (<c>FilterTrail</c> and the candidate counts) records which selectors ran and how many matches each
+    /// removed. Never throws for a selector mistake; argument errors are as for the four-parameter overload.
+    /// </summary>
+    /// <param name="selectors">The selectors; null means none.</param>
+    /// <param name="memberNameAt">Maps a character offset (the match's first non-whitespace character) to the name of its
+    /// enclosing member, or null. Required when <c>WithinMember</c> is supplied.</param>
+    public static SnippetMatchResult Resolve(
+        SourceText sourceText, string snippet, WhitespaceTolerance tolerance, SnippetCaseMode caseMode,
+        SnippetSelectors? selectors, Func<int, string?>? memberNameAt)
+    {
+        var tierResult = Resolve(sourceText, snippet, tolerance, caseMode);
+        return selectors == null
+            ? tierResult
+            : SnippetSelectorFilter.Apply(sourceText, snippet, tierResult, selectors, memberNameAt);
     }
 
     // Only the whitespace-collapsing matcher is case-insensitive; the ordinal and line-ending stages stay

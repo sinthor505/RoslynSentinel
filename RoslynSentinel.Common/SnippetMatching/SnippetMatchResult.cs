@@ -75,6 +75,15 @@ public sealed record SnippetNearMatch(
 public sealed record SnippetClosestWindow(int StartLine, IReadOnlyList<string> ActualLines, double Score);
 
 /// <summary>
+/// One entry of a result's filter trail: a selector that was applied after tier resolution and how many matches it
+/// removed. Data only. Entries are in application order: matchLine, withinMember, lineBefore, lineAfter (a selector
+/// that was not supplied has no entry).
+/// </summary>
+/// <param name="Selector">The selector's parameter name: <c>matchLine</c>, <c>withinMember</c>, <c>lineBefore</c> or <c>lineAfter</c>.</param>
+/// <param name="Removed">How many of the then-remaining matches this selector removed.</param>
+public sealed record SnippetFilterStep(string Selector, int Removed);
+
+/// <summary>
 /// Result of looking a snippet up in a text. Carries data only (no message text): wording lives
 /// in <see cref="ContextErrorBuilder"/>. Build one with <see cref="Create"/>, which enforces:
 /// <see cref="NearMatches"/> is non-empty only when <see cref="Matches"/> is empty, and
@@ -90,8 +99,15 @@ public sealed record SnippetMatchResult
         WhitespaceTolerance requestedTolerance, SnippetCaseMode requestedCaseMode, SnippetMatchOutcome outcome,
         IReadOnlyList<SnippetMatch> matches, IReadOnlyList<SnippetNearMatch> nearMatches, int nearMatchTotalCount,
         IReadOnlyList<SnippetClosestWindow> closestWindows,
-        int candidatesBeforeSelectors, int candidatesAfterSelectors, int candidatesAfterAdjacentLines)
+        int candidatesBeforeSelectors, int candidatesAfterSelectors, int candidatesAfterAdjacentLines,
+        IReadOnlyList<SnippetFilterStep> filterTrail, IReadOnlyList<SnippetMatch>? preFilterMatches,
+        IReadOnlyList<SnippetMatch> selectorSurvivors, string? invalidParameterName, string? invalidParameterValue)
     {
+        FilterTrail = filterTrail;
+        preFilterMatchesOrNull = preFilterMatches;
+        SelectorSurvivors = selectorSurvivors;
+        InvalidParameterName = invalidParameterName;
+        InvalidParameterValue = invalidParameterValue;
         RequestedTolerance = requestedTolerance;
         RequestedCaseMode = requestedCaseMode;
         Outcome = outcome;
@@ -134,6 +150,34 @@ public sealed record SnippetMatchResult
     /// <summary>Filter trail: candidates remaining after lineBefore/lineAfter filtering.</summary>
     public int CandidatesAfterAdjacentLines { get; }
 
+    private readonly IReadOnlyList<SnippetMatch>? preFilterMatchesOrNull;
+
+    /// <summary>
+    /// Which selectors were applied after tier resolution and how many matches each removed, in application order.
+    /// Empty when no selector ran (none supplied, or the lookup ended before selectors could apply).
+    /// </summary>
+    public IReadOnlyList<SnippetFilterStep> FilterTrail { get; }
+
+    /// <summary>
+    /// The matches at the winning tier before any selector ran. Equal to <see cref="Matches"/> when no selector ran.
+    /// On <see cref="SnippetMatchOutcome.SelectorMismatch"/> and <see cref="SnippetMatchOutcome.AdjacentLineMismatch"/>
+    /// <see cref="Matches"/> is empty and this is where the candidates for the error message live.
+    /// </summary>
+    public IReadOnlyList<SnippetMatch> PreFilterMatches => preFilterMatchesOrNull ?? Matches;
+
+    /// <summary>
+    /// The matches that survived the withinMember/matchLine selectors, before lineBefore/lineAfter ran. Equal to
+    /// <see cref="Matches"/> when the adjacent-line selectors did not run or removed nothing; on
+    /// <see cref="SnippetMatchOutcome.AdjacentLineMismatch"/> it holds the matches that lineBefore/lineAfter rejected.
+    /// </summary>
+    public IReadOnlyList<SnippetMatch> SelectorSurvivors { get; }
+
+    /// <summary>For <see cref="SnippetMatchOutcome.InvalidDisambiguator"/>: the name of the offending parameter (lineBefore, lineAfter or withinMember); otherwise null.</summary>
+    public string? InvalidParameterName { get; }
+
+    /// <summary>For <see cref="SnippetMatchOutcome.InvalidDisambiguator"/>: the offending value, verbatim; otherwise null.</summary>
+    public string? InvalidParameterValue { get; }
+
     /// <summary>True when exactly one accepted match exists: the only check an editing caller needs.</summary>
     public bool IsSingleMatch => Matches.Count == 1;
 
@@ -174,7 +218,9 @@ public sealed record SnippetMatchResult
         WhitespaceTolerance requestedTolerance, SnippetCaseMode requestedCaseMode, SnippetMatchOutcome outcome,
         IReadOnlyList<SnippetMatch> matches, IReadOnlyList<SnippetNearMatch> nearMatches, int nearMatchTotalCount,
         IReadOnlyList<SnippetClosestWindow> closestWindows,
-        int candidatesBeforeSelectors, int candidatesAfterSelectors, int candidatesAfterAdjacentLines)
+        int candidatesBeforeSelectors, int candidatesAfterSelectors, int candidatesAfterAdjacentLines,
+        IReadOnlyList<SnippetFilterStep>? filterTrail = null, IReadOnlyList<SnippetMatch>? preFilterMatches = null,
+        IReadOnlyList<SnippetMatch>? selectorSurvivors = null, string? invalidParameterName = null, string? invalidParameterValue = null)
     {
         ArgumentNullException.ThrowIfNull(matches);
         ArgumentNullException.ThrowIfNull(nearMatches);
@@ -208,6 +254,8 @@ public sealed record SnippetMatchResult
 
         return new SnippetMatchResult(
             requestedTolerance, requestedCaseMode, outcome, matches, nearMatches, nearMatchTotalCount, closestWindows,
-            candidatesBeforeSelectors, candidatesAfterSelectors, candidatesAfterAdjacentLines);
+            candidatesBeforeSelectors, candidatesAfterSelectors, candidatesAfterAdjacentLines,
+            filterTrail ?? Array.Empty<SnippetFilterStep>(), preFilterMatches, selectorSurvivors ?? matches,
+            invalidParameterName, invalidParameterValue);
     }
 }
