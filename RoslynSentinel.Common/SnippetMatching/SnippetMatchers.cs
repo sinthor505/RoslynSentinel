@@ -45,6 +45,21 @@ internal static class SnippetMatcherSupport
         }
     }
 
+    /// <summary>
+    /// Splits a (possibly CRLF/CR/LF-mixed) multi-line snippet into its own content lines, with
+    /// leading/trailing blank lines trimmed off.
+    /// </summary>
+    internal static string[] SplitSnippetIntoTrimmedContentLines(string contextSnippet)
+    {
+        var normalized = contextSnippet.Replace("\r\n", "\n").Replace("\r", "\n");
+        var lineTexts = normalized.Split('\n')
+            .SkipWhile(string.IsNullOrWhiteSpace)
+            .Reverse().SkipWhile(string.IsNullOrWhiteSpace).Reverse()
+            .ToArray();
+        // Fallback: a snippet that is entirely blank lines trims to nothing, so return the raw split instead.
+        return lineTexts.Length == 0 ? normalized.Split('\n') : lineTexts;
+    }
+
     public static StringComparison ToComparison(SnippetCaseMode caseMode)
         => caseMode == SnippetCaseMode.CaseInsensitive ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 }
@@ -161,7 +176,7 @@ internal sealed class IndentationMatcher : ISnippetMatcher
             return Array.Empty<SnippetMatch>();
         }
 
-        var snippetLines = SplitContentLines(snippet).Select(l => l.Trim()).ToArray();
+        var snippetLines = SnippetMatcherSupport.SplitSnippetIntoTrimmedContentLines(snippet).Select(l => l.Trim()).ToArray();
         var lines = sourceText.Lines;
         var matches = new List<SnippetMatch>();
 
@@ -221,18 +236,5 @@ internal sealed class IndentationMatcher : ISnippetMatcher
         }
 
         return matches;
-    }
-
-    // Mirrors ContextHelper.SplitSnippetIntoTrimmedContentLines (internal there; it stays in ContextHelper because
-    // DiagnoseNoMatch also uses it, and this duplicate is left until the diagnostics split): line endings
-    // normalised, fully blank leading and trailing lines dropped. The caller has already rejected a blank snippet,
-    // so at least one non-blank line remains.
-    private static string[] SplitContentLines(string snippet)
-    {
-        var normalized = snippet.Replace("\r\n", "\n").Replace("\r", "\n");
-        return normalized.Split('\n')
-            .SkipWhile(string.IsNullOrWhiteSpace)
-            .Reverse().SkipWhile(string.IsNullOrWhiteSpace).Reverse()
-            .ToArray();
     }
 }

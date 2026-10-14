@@ -144,7 +144,7 @@ internal static class SnippetStages
         // swallow one real, unrelated source line that was never meant to be part of the
         // match. Trim blank leading/trailing lines before computing windowSize so the window
         // reflects only the snippet's actual content lines.
-        var snippetLineTexts = ContextHelper.SplitSnippetIntoTrimmedContentLines(contextSnippet);
+        var snippetLineTexts = SnippetMatcherSupport.SplitSnippetIntoTrimmedContentLines(contextSnippet);
         var snippetWindowNorm = System.Text.RegularExpressions.Regex.Replace(
             string.Join("\n", snippetLineTexts.Select(l => l.Trim())).Trim(), @"\s+", " ");
         var lines = sourceText.Lines;
