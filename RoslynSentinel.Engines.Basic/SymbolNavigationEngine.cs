@@ -174,7 +174,7 @@ public class SymbolNavigationEngine
     /// symbolName: simple or fully-qualified name (e.g. "GetById" or "Acme.SuccessData.Repo.GetById").
     /// symbolKind: optional filter -> "type", "method", "property", "field", "event", or "any" (default).
     /// projectName: optional -> restricts the search to a single project.
-    /// exactMatch: true (default) for exact name match; false for prefix/contains (discovery mode).
+    /// exactMatch: true (default) for exact name match; false for prefix/contains (discovery failureMode).
     ///
     /// Returns all matches. Overloads appear as separate entries distinguishable by Signature.
     /// When multiple results are returned, inspect Signature and ContainingType to pick the target,
@@ -1676,7 +1676,7 @@ public class SymbolNavigationEngine
                 $"FindCallers: symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                 (contextSnippet != null ? " with the supplied contextSnippet" : "") + ". " +
                 "This is NOT a confirmed zero-references result - the lookup never ran. " + nearMissHint +
-                "Verify the name via Search(mode: symbol)/GetFileOutline before treating this as evidence the symbol is unused.");
+                "Verify the name via Search(failureMode: symbol)/GetFileOutline before treating this as evidence the symbol is unused.");
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -1975,7 +1975,7 @@ public class SymbolNavigationEngine
                     ($"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                     (contextSnippet != null ? " with the supplied contextSnippet" : "") + ".")) +
                 " This is NOT a confirmed zero-implementations result - the lookup never ran. " + nearMissHint +
-                "Verify the name via Search(mode: symbol)/GetFileOutline before treating this as evidence of no implementations.");
+                "Verify the name via Search(failureMode: symbol)/GetFileOutline before treating this as evidence of no implementations.");
         }
 
         // The resolved symbol may still be structurally incapable of having implementations - e.g.
@@ -2000,7 +2000,7 @@ public class SymbolNavigationEngine
                 "member - it is structurally incapable of having implementations, so this is NOT a confirmed " +
                 "zero-implementations result. If you meant the interface/virtual declaration this member " +
                 "implements or overrides, disambiguate with contextSnippet or filepath pointing at that " +
-                "declaration specifically, or call Search(mode: symbol, exactMatch: true) first to see every " +
+                "declaration specifically, or call Search(failureMode: symbol, exactMatch: true) first to see every " +
                 $"same-named candidate ('{symbolName}') with its containing type and kind.");
         }
 
@@ -2455,7 +2455,7 @@ public class SymbolNavigationEngine
         try
         {
             var target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode));
+                (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode));
             return target?.Kind == CandidateKind.EnumMember && target.Node.Parent is EnumDeclarationSyntax enumDecl ? enumDecl.Identifier.Text : null;
         }
         catch (ToolException)
@@ -2657,7 +2657,7 @@ public class SymbolNavigationEngine
             }
 
             resolved = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, mode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, mode));
+                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode));
         }
         catch (ToolException ex)
         {
