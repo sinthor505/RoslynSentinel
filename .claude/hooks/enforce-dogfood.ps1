@@ -320,124 +320,144 @@ docs/current/blockers/blocking_error_<slug>.md, and end the turn.
     # "Tier: S1"); the hook denies a tier above the lane's current 'tier' and a Files list over that
     # tier's maxFiles. A missing or invalid tier file fails CLOSED (the dispatch is denied, with the
     # file named), unlike the rest of this hook, because an unreadable limit table cannot be enforced.
+    # The tier file is validated on load (tier and every limit key a whole number, limits >= 1), and the
+    # whole block sits in its own try/catch that denies on any unexpected exception.
     # Resuming an existing agent (SendMessage) is a different tool and is not checked here.
     if ($toolName -in @('Agent', 'Task') -and [string]$toolInput.subagent_type -in @('implementer', 'implementer-sweep')) {
-        $brief = [string]$toolInput.prompt
-        $model = [string]$toolInput.model
-        $agentType = [string]$toolInput.subagent_type
-        $problems = New-Object System.Collections.Generic.List[string]
-
-        # Load this lane's limits. $laneName/$lane stay $null when the file cannot be used; the
-        # problem is recorded here and the tier checks below are skipped.
-        $tierFilePath = Join-Path $repoRoot '.claude\implementer-tiers.json'
-        $tierFileRel  = '.claude/implementer-tiers.json'
-        $laneName = $null; $lane = $null; $laneTiers = @(); $laneCurrent = -1
         try {
-            if (-not (Test-Path -LiteralPath $tierFilePath)) { throw "file not found" }
-            $tierCfg = Get-Content -LiteralPath $tierFilePath -Raw | ConvertFrom-Json
-            foreach ($ln in @('depth', 'sweep')) {
-                $cand = $tierCfg.$ln
-                if ($cand -and [string]$cand.agent -eq $agentType) { $laneName = $ln; $lane = $cand }
-            }
-            if (-not $lane) { throw "no lane has agent '$agentType'" }
-            $laneTiers = @($lane.tiers)
-            if ($laneTiers.Count -eq 0) { throw "lane '$laneName' has no 'tiers' entries" }
-            $laneCurrent = [int]$lane.tier
-            if ($laneCurrent -lt 0 -or $laneCurrent -ge $laneTiers.Count) { throw "lane '$laneName' has 'tier' $laneCurrent outside its 'tiers' list (0..$($laneTiers.Count - 1))" }
-        }
-        catch {
+            $brief = [string]$toolInput.prompt
+            $model = [string]$toolInput.model
+            $agentType = [string]$toolInput.subagent_type
+            $problems = New-Object System.Collections.Generic.List[string]
+
+            # Load this lane's limits. $laneName/$lane stay $null when the file cannot be used; the
+            # problem is recorded here and the tier checks below are skipped.
+            $tierFilePath = Join-Path $repoRoot '.claude\implementer-tiers.json'
+            $tierFileRel  = '.claude/implementer-tiers.json'
             $laneName = $null; $lane = $null; $laneTiers = @(); $laneCurrent = -1
-            $problems.Add("  tier file $tierFileRel is missing, unreadable or invalid ($($_.Exception.Message)). The limits cannot be enforced, so the dispatch is refused. Restore the file (see docs/current/plans/plan_implementer_lanes_tiers_and_tool_gap_reporting.md, Step 1) and dispatch again.")
-        }
-
-        if ($model -ne 'haiku') {
-            $problems.Add("  model: pass model: `"haiku`" explicitly (got '$model'). An unpinned dispatch can inherit the caller's tier.")
-        }
-
-        # Field labels at line start, tolerant of markdown bullets/bold ("- **Files:**").
-        $labels = [ordered]@{
-            'Files'        = '(?im)^\W*Files\b[^\r\n:]{0,20}:'
-            'Symbols'      = '(?im)^\W*Symbols\b[^\r\n:]{0,20}:'
-            'Call sites'   = '(?im)^\W*Call[ -]sites\b[^\r\n:]{0,20}:'
-            'Acceptance'   = '(?im)^\W*Acceptance(?: check)?\b[^\r\n:]{0,20}:'
-            'Out of scope' = '(?im)^\W*Out of scope\b[^\r\n:]{0,20}:'
-            'Tier'         = '(?im)^\W*Tier\b[^\r\n:]{0,20}:'
-            'Limits'       = '(?im)^\W*Limits\b[^\r\n:]{0,20}:'
-        }
-        if ($agentType -eq 'implementer-sweep') {
-            $labels['Operation'] = '(?im)^\W*Operation\b[^\r\n:]{0,20}:'
-        }
-        $found = @{}
-        foreach ($k in $labels.Keys) {
-            $mm = [regex]::Match($brief, $labels[$k])
-            if ($mm.Success) { $found[$k] = $mm } else { $problems.Add("  missing field '${k}:' (use the brief template in the dispatch-implementer skill).") }
-        }
-
-        # Tier value: letter (D = depth lane, S = sweep lane) + tier number, e.g. D0, S2.
-        $tierEntry = $null; $tierLabel = $null
-        if ($found.ContainsKey('Tier')) {
-            $tm = [regex]::Match($brief.Substring($found['Tier'].Index + $found['Tier'].Length), '^[ \t*_`''"]*(?<l>[A-Za-z])[ \t]*(?<n>\d+)\b')
-            if (-not $tm.Success) {
-                $problems.Add("  Tier: value must be the lane letter plus the tier number, e.g. 'Tier: D0' (depth, implementer) or 'Tier: S0' (sweep, implementer-sweep).")
+            try {
+                if (-not (Test-Path -LiteralPath $tierFilePath)) { throw "file not found" }
+                $tierCfg = Get-Content -LiteralPath $tierFilePath -Raw | ConvertFrom-Json
+                foreach ($ln in @('depth', 'sweep')) {
+                    $cand = $tierCfg.$ln
+                    if ($cand -and [string]$cand.agent -eq $agentType) { $laneName = $ln; $lane = $cand }
+                }
+                if (-not $lane) { throw "no lane has agent '$agentType'" }
+                $laneTiers = @($lane.tiers)
+                if ($laneTiers.Count -eq 0) { throw "lane '$laneName' has no 'tiers' entries" }
+                # Validate before any cast: [int] turns a missing key into 0 and throws on junk, and a throw
+                # outside this try would reach the hook's global fail-open catch. JSON strings ("3") are rejected.
+                $isWhole = { param($v) (($v -is [int] -or $v -is [long]) -and [long]$v -le [int]::MaxValue) }
+                $tierProp = $lane.PSObject.Properties['tier']
+                if (-not $tierProp -or -not (& $isWhole $tierProp.Value) -or [long]$tierProp.Value -lt 0) {
+                    throw "lane '$laneName' has 'tier' = '$(if ($tierProp) { $tierProp.Value })' (must be a whole number >= 0)"
+                }
+                $requiredKeys = if ($laneName -eq 'depth') { @('maxFiles', 'maxEdits', 'maxAcceptance', 'maxToolCalls') }
+                                else { @('maxOperations', 'maxFiles', 'maxCallSites', 'maxProjects', 'maxToolCalls') }
+                for ($ti = 0; $ti -lt $laneTiers.Count; $ti++) {
+                    foreach ($rk in $requiredKeys) {
+                        $rp = $(if ($laneTiers[$ti]) { $laneTiers[$ti].PSObject.Properties[$rk] })
+                        if (-not $rp -or -not (& $isWhole $rp.Value) -or [long]$rp.Value -lt 1) {
+                            throw "lane '$laneName' tier $ti has '$rk' = '$(if ($rp) { $rp.Value })' (must be a whole number >= 1)"
+                        }
+                    }
+                }
+                $laneCurrent = [int]$lane.tier
+                if ($laneCurrent -lt 0 -or $laneCurrent -ge $laneTiers.Count) { throw "lane '$laneName' has 'tier' $laneCurrent outside its 'tiers' list (0..$($laneTiers.Count - 1))" }
             }
-            elseif ($laneName) {
-                $wantLetter = $laneName.Substring(0, 1).ToUpperInvariant()
-                $gotLetter  = $tm.Groups['l'].Value.ToUpperInvariant()
-                $tierNum    = [int]$tm.Groups['n'].Value
-                $tierLabel  = "$gotLetter$tierNum"
-                if ($gotLetter -ne $wantLetter) {
-                    $problems.Add("  Tier: '$tierLabel' uses the wrong lane letter; $agentType is the $laneName lane, so its tiers are written '${wantLetter}0', '${wantLetter}1', ...")
+            catch {
+                $laneName = $null; $lane = $null; $laneTiers = @(); $laneCurrent = -1
+                $problems.Add("  tier file $tierFileRel is missing, unreadable or invalid ($($_.Exception.Message)). The limits cannot be enforced, so the dispatch is refused. Restore the file (see docs/current/plans/plan_implementer_lanes_tiers_and_tool_gap_reporting.md, Step 1) and dispatch again.")
+            }
+
+            if ($model -ne 'haiku') {
+                $problems.Add("  model: pass model: `"haiku`" explicitly (got '$model'). An unpinned dispatch can inherit the caller's tier.")
+            }
+
+            # Field labels at line start, tolerant of markdown bullets/bold ("- **Files:**").
+            $labels = [ordered]@{
+                'Files'        = '(?im)^\W*Files\b[^\r\n:]{0,20}:'
+                'Symbols'      = '(?im)^\W*Symbols\b[^\r\n:]{0,20}:'
+                'Call sites'   = '(?im)^\W*Call[ -]sites\b[^\r\n:]{0,20}:'
+                'Acceptance'   = '(?im)^\W*Acceptance(?: check)?\b[^\r\n:]{0,20}:'
+                'Out of scope' = '(?im)^\W*Out of scope\b[^\r\n:]{0,20}:'
+                'Tier'         = '(?im)^\W*Tier\b[^\r\n:]{0,20}:'
+                'Limits'       = '(?im)^\W*Limits\b[^\r\n:]{0,20}:'
+            }
+            if ($agentType -eq 'implementer-sweep') {
+                $labels['Operation'] = '(?im)^\W*Operation\b[^\r\n:]{0,20}:'
+            }
+            $found = @{}
+            foreach ($k in $labels.Keys) {
+                $mm = [regex]::Match($brief, $labels[$k])
+                if ($mm.Success) { $found[$k] = $mm } else { $problems.Add("  missing field '${k}:' (use the brief template in the dispatch-implementer skill).") }
+            }
+
+            # Tier value: letter (D = depth lane, S = sweep lane) + tier number, e.g. D0, S2.
+            $tierEntry = $null; $tierLabel = $null
+            if ($found.ContainsKey('Tier')) {
+                $tm = [regex]::Match($brief.Substring($found['Tier'].Index + $found['Tier'].Length), '^[ \t*_`''"]*(?<l>[A-Za-z])[ \t]*(?<n>\d+)\b')
+                if (-not $tm.Success) {
+                    $problems.Add("  Tier: value must be the lane letter plus the tier number, e.g. 'Tier: D0' (depth, implementer) or 'Tier: S0' (sweep, implementer-sweep).")
                 }
-                elseif ($tierNum -ge $laneTiers.Count) {
-                    $problems.Add("  Tier: '$tierLabel' has no entry in $tierFileRel (the $laneName lane defines tiers 0..$($laneTiers.Count - 1)).")
+                elseif ($laneName) {
+                    $wantLetter = $laneName.Substring(0, 1).ToUpperInvariant()
+                    $gotLetter  = $tm.Groups['l'].Value.ToUpperInvariant()
+                    $tierNum    = [int]$tm.Groups['n'].Value
+                    $tierLabel  = "$gotLetter$tierNum"
+                    if ($gotLetter -ne $wantLetter) {
+                        $problems.Add("  Tier: '$tierLabel' uses the wrong lane letter; $agentType is the $laneName lane, so its tiers are written '${wantLetter}0', '${wantLetter}1', ...")
+                    }
+                    elseif ($tierNum -ge $laneTiers.Count) {
+                        $problems.Add("  Tier: '$tierLabel' has no entry in $tierFileRel (the $laneName lane defines tiers 0..$($laneTiers.Count - 1)).")
+                    }
+                    elseif ($tierNum -gt $laneCurrent) {
+                        $problems.Add("  Tier: '$tierLabel' is above the $laneName lane's current tier ($wantLetter$laneCurrent). Use '$wantLetter$laneCurrent' or lower; tiers are raised only by editing 'tier' in $tierFileRel after a ledger review.")
+                    }
+                    else {
+                        $tierEntry = $laneTiers[$tierNum]
+                    }
                 }
-                elseif ($tierNum -gt $laneCurrent) {
-                    $problems.Add("  Tier: '$tierLabel' is above the $laneName lane's current tier ($wantLetter$laneCurrent). Use '$wantLetter$laneCurrent' or lower; tiers are raised only by editing 'tier' in $tierFileRel after a ledger review.")
+            }
+
+            # Files section = text from the Files label up to the next label; count distinct .cs paths.
+            if ($found.ContainsKey('Files') -and $tierEntry) {
+                $start = $found['Files'].Index + $found['Files'].Length
+                $end = $brief.Length
+                foreach ($k in $found.Keys) {
+                    if ($k -ne 'Files' -and $found[$k].Index -gt $start -and $found[$k].Index -lt $end) { $end = $found[$k].Index }
+                }
+                $filesText = $brief.Substring($start, $end - $start)
+                $csFiles = @([regex]::Matches($filesText, '[\w.\\/\-]+\.cs\b') | ForEach-Object { $_.Value.ToLowerInvariant() } | Select-Object -Unique)
+                $maxFiles = [int]$tierEntry.maxFiles
+                if ($csFiles.Count -gt $maxFiles) {
+                    $problems.Add("  Files lists $($csFiles.Count) distinct .cs files; the $laneName lane at tier $tierLabel allows at most $maxFiles. Split it into compile-green slices (CLAUDE.md), or send it to implementer-senior if it cannot be split.")
+                }
+            }
+
+            # Out of scope section = text from the label to the end of the brief. CLAUDE.md requires it to
+            # tell the implementer to reply RESCOPE: instead of editing outside the named symbols
+            # (db2b9846:L8 - an implementer edited an out-of-brief branch to make a test pass).
+            if ($found.ContainsKey('Out of scope')) {
+                $oosText = $brief.Substring($found['Out of scope'].Index)
+                if ($oosText -notmatch 'RESCOPE') {
+                    $problems.Add("  Out of scope must tell the implementer to reply RESCOPE: instead of editing anything outside the named symbols (CLAUDE.md slice contract).")
+                }
+                if ($oosText -notmatch '(?i)\b(Write|Edit|shell)\b') {
+                    [Console]::Error.WriteLine("WARNING (not blocking) from dispatch policy: Out of scope names none of Write/Edit/shell. Consider adding 'no Write/Edit/shell writes on .cs files' so the implementer does not bypass the MCP tools.")
+                }
+            }
+
+            if ($problems.Count -gt 0) {
+                $laneSummary = if ($laneName) {
+                    $curEntry = $laneTiers[$laneCurrent]
+                    $limitText = (@($curEntry.PSObject.Properties) | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join ', '
+                    "Lane: $laneName ($agentType). Current tier: $($laneName.Substring(0, 1).ToUpperInvariant())$laneCurrent. Limits at that tier: $limitText."
                 }
                 else {
-                    $tierEntry = $laneTiers[$tierNum]
+                    "Lane: $agentType. Limits unavailable: fix $tierFileRel first."
                 }
-            }
-        }
-
-        # Files section = text from the Files label up to the next label; count distinct .cs paths.
-        if ($found.ContainsKey('Files') -and $tierEntry) {
-            $start = $found['Files'].Index + $found['Files'].Length
-            $end = $brief.Length
-            foreach ($k in $found.Keys) {
-                if ($k -ne 'Files' -and $found[$k].Index -gt $start -and $found[$k].Index -lt $end) { $end = $found[$k].Index }
-            }
-            $filesText = $brief.Substring($start, $end - $start)
-            $csFiles = @([regex]::Matches($filesText, '[\w.\\/\-]+\.cs\b') | ForEach-Object { $_.Value.ToLowerInvariant() } | Select-Object -Unique)
-            $maxFiles = [int]$tierEntry.maxFiles
-            if ($csFiles.Count -gt $maxFiles) {
-                $problems.Add("  Files lists $($csFiles.Count) distinct .cs files; the $laneName lane at tier $tierLabel allows at most $maxFiles. Split it into compile-green slices (CLAUDE.md), or send it to implementer-senior if it cannot be split.")
-            }
-        }
-
-        # Out of scope section = text from the label to the end of the brief. CLAUDE.md requires it to
-        # tell the implementer to reply RESCOPE: instead of editing outside the named symbols
-        # (db2b9846:L8 - an implementer edited an out-of-brief branch to make a test pass).
-        if ($found.ContainsKey('Out of scope')) {
-            $oosText = $brief.Substring($found['Out of scope'].Index)
-            if ($oosText -notmatch 'RESCOPE') {
-                $problems.Add("  Out of scope must tell the implementer to reply RESCOPE: instead of editing anything outside the named symbols (CLAUDE.md slice contract).")
-            }
-            if ($oosText -notmatch '(?i)\b(Write|Edit|shell)\b') {
-                [Console]::Error.WriteLine("WARNING (not blocking) from dispatch policy: Out of scope names none of Write/Edit/shell. Consider adding 'no Write/Edit/shell writes on .cs files' so the implementer does not bypass the MCP tools.")
-            }
-        }
-
-        if ($problems.Count -gt 0) {
-            $laneSummary = if ($laneName) {
-                $curEntry = $laneTiers[$laneCurrent]
-                $limitText = (@($curEntry.PSObject.Properties) | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join ', '
-                "Lane: $laneName ($agentType). Current tier: $($laneName.Substring(0, 1).ToUpperInvariant())$laneCurrent. Limits at that tier: $limitText."
-            }
-            else {
-                "Lane: $agentType. Limits unavailable: fix $tierFileRel first."
-            }
-            Deny @"
+                Deny @"
 BLOCKED by dispatch policy: $agentType brief does not meet the slice contract.
 
 $($problems -join "`n")
@@ -450,8 +470,21 @@ Tier (e.g. D0 or S0) and Limits (copied from $tierFileRel), plus Operation for i
 Load the dispatch-implementer skill for the full brief template and slice limits.
 Fix the brief and dispatch again. Nothing was dispatched.
 "@
+            }
+            exit 0
         }
-        exit 0
+        catch {
+            # Fail CLOSED for this block only (the rest of the hook keeps its fail-open design): an
+            # unexpected error here would otherwise reach the global catch and let a dispatch through
+            # unchecked. Deny/exit is not an exception, so the Deny calls above are not caught here.
+            Deny @"
+BLOCKED by dispatch policy: internal error in dispatch check: $($_.Exception.Message)
+
+The implementer dispatch check could not run to completion, so the dispatch is refused rather than
+allowed unchecked. Check .claude/implementer-tiers.json and the brief format, then dispatch again.
+Nothing was dispatched.
+"@
+        }
     }
 
     # --- ReplaceSnippet parameter/ordering guard --------------------------------------

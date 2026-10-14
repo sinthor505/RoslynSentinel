@@ -156,11 +156,13 @@ final slice once reference count is zero. Preferred over any "everything at once
   shows it.
 - The hook does not validate `Call sites:` counts against the tier's `maxCallSites`; the dispatcher
   measures and the agent re-measures in preflight. Unverified whether that is enough for sweeps.
-- Review follow-ups not yet done (2026-10-14): the hook does not validate individual tier entries (a
-  missing `maxFiles` denies every brief with "allows at most 0"; a non-numeric value hits the hook's
-  global fail-open catch); `maxAcceptance` and the other non-file `Limits:` values are unenforced by the
-  hook; `journal-improvement-planner.md` still says "3 files or fewer" for plan slicing; a depth brief
-  with an `Operation:` line after `Files:` would have its `.cs` paths counted as Files entries.
+- Review follow-ups (2026-10-14): tier-entry validation is DONE (the dispatching lane's `tier` and every
+  required limit must be a whole number in range, else the dispatch is denied; the dispatch block also
+  denies on any unexpected exception; a live-file smoke test checks both lanes). Still open:
+  `maxAcceptance` and the other non-file `Limits:` values are unenforced by the hook;
+  `journal-improvement-planner.md` still says "3 files or fewer" for plan slicing; a depth brief with an
+  `Operation:` line after `Files:` would have its `.cs` paths counted as Files entries; the denial text
+  for an out-of-int-range limit does not mention the upper bound.
 - Sweep starting numbers (S0) are a proposal, not measured. Treat the first 5 dispatches as the
   calibration.
 - Tokenizer reportedly counts about 30% more tokens; `scripts/Measure-OrientationCost.ps1` figures

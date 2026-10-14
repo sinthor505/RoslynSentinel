@@ -51,7 +51,7 @@ function Get-FixtureHook([string]$kind) {
     $hookDir = Join-Path $root '.claude\hooks'
     New-Item -ItemType Directory -Path $hookDir -Force | Out-Null
     Copy-Item $hook (Join-Path $hookDir 'enforce-dogfood.ps1') -Force
-    if ($kind -notin @('norepo', 'tiers', 'tierbad', 'tierjson', 'notier')) { & git -C $root init -q 2>&1 | Out-Null }
+    if ($kind -notmatch '^(norepo|notier|tier)') { & git -C $root init -q 2>&1 | Out-Null }
     # Implementer-dispatch fixtures vary the tier file the hook reads from <root>\.claude\. 'tiers' is a
     # known-good copy of the plan's table with depth at tier 0 and sweep at tier 1 (independent of the
     # live file, so promoting a lane there cannot break these tests); 'tierbad' has a current tier
@@ -60,6 +60,29 @@ function Get-FixtureHook([string]$kind) {
     if ($kind -eq 'tiers')    { Set-Content -LiteralPath $tierPath -Value $tierJson -Encoding UTF8 }
     if ($kind -eq 'tierbad')  { Set-Content -LiteralPath $tierPath -Value ($tierJson -replace '"tier": 0,', '"tier": 7,') -Encoding UTF8 }
     if ($kind -eq 'tierjson') { Set-Content -LiteralPath $tierPath -Value '{ this is not json' -Encoding UTF8 }
+    # Limit-validation variants (all depth-lane edits unless noted; sweep stays valid except 'tiersweepbad').
+    $tierVariants = @{
+        tiermissingkey = { $tierJson.Replace('"maxFiles": 3, "maxEdits": 15', '"maxEdits": 15') }              # depth tier 1 lacks maxFiles
+        tierstring     = { $tierJson.Replace('"maxFiles": 3, "maxEdits": 10', '"maxFiles": "3", "maxEdits": 10') } # JSON string, not a number
+        tierzero       = { $tierJson.Replace('"maxFiles": 3, "maxEdits": 10', '"maxFiles": 0, "maxEdits": 10') }
+        tierhuge       = { $tierJson.Replace('"maxFiles": 3, "maxEdits": 10', '"maxFiles": 99999999999, "maxEdits": 10') } # whole but overflows [int]
+        tiernotier     = { $tierJson.Replace('"tier": 0,', '') }                                                  # depth lane lacks 'tier'
+        tiersweepbad   = { $tierJson.Replace('"maxProjects": 2, "maxToolCalls": 30', '"maxToolCalls": 30') }      # sweep tier 0 lacks maxProjects
+    }
+    if ($tierVariants.ContainsKey($kind)) {
+        $v = & $tierVariants[$kind]
+        if ($v -eq $tierJson) { throw "fixture '$kind' did not change the tier JSON" }
+        Set-Content -LiteralPath $tierPath -Value $v -Encoding UTF8
+    }
+    # 'tierthrow' = good tier file plus a hook copy that throws inside the dispatch block, to prove that block fails closed.
+    if ($kind -eq 'tierthrow') {
+        Set-Content -LiteralPath $tierPath -Value $tierJson -Encoding UTF8
+        $hp = Join-Path $hookDir 'enforce-dogfood.ps1'
+        $txt = Get-Content -LiteralPath $hp -Raw
+        $anchor = '$brief = [string]$toolInput.prompt'
+        if (-not $txt.Contains($anchor)) { throw 'tierthrow fixture: injection anchor not found in hook' }
+        Set-Content -LiteralPath $hp -Value $txt.Replace($anchor, "throw 'injected test failure'; $anchor") -Encoding UTF8
+    }
     if ($kind -eq 'staged') {
         Set-Content -LiteralPath (Join-Path $root 'a.txt') -Value 'x'
         & git -C $root add -- a.txt 2>&1 | Out-Null
@@ -432,6 +455,26 @@ $cases = @(
     @{ n = 'denial text names lane, current tier and limits'; want = 'DENY'; fx = 'tiers'; match = 'Current tier: S1. Limits at that tier: maxOperations=2, maxFiles=15'
        p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 2 'S0' 'Limits: x') } } }
 
+    # --- tier file limit validation (fail closed; dispatching lane only) ---
+    @{ n = 'tier limits: depth tier 1 missing maxFiles'; want = 'DENY'; fx = 'tiermissingkey'; match = "lane 'depth' tier 1 has 'maxFiles' = ''"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'D0') } } }
+    @{ n = 'tier limits: maxFiles is a JSON string "3"'; want = 'DENY'; fx = 'tierstring'; match = "'maxFiles' = '3'"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'D0') } } }
+    @{ n = 'tier limits: maxFiles is 0'; want = 'DENY'; fx = 'tierzero'; match = "'maxFiles' = '0'"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'D0') } } }
+    @{ n = 'tier limits: maxFiles beyond int range'; want = 'DENY'; fx = 'tierhuge'; match = "'maxFiles'"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'D0') } } }
+    @{ n = 'tier limits: depth lane missing current tier'; want = 'DENY'; fx = 'tiernotier'; match = "lane 'depth' has 'tier'"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'D0') } } }
+    @{ n = 'tier limits: sweep tier 0 missing maxProjects, sweep dispatch'; want = 'DENY'; fx = 'tiersweepbad'; match = "lane 'sweep' tier 0 has 'maxProjects'"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 2 'S0' 'Limits: x' 'Rename') } } }
+    @{ n = 'tier limits: broken sweep lane does not block a depth dispatch'; want = 'allow'; fx = 'tiersweepbad'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'D0') } } }
+    @{ n = 'dispatch block: unexpected exception fails closed'; want = 'DENY'; fx = 'tierthrow'; match = 'internal error in dispatch check: injected test failure'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'D0') } } }
+    @{ n = 'non-implementer dispatch unaffected by the dispatch block'; want = 'allow'; fx = 'tierthrow'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'Explore'; prompt = 'where is X' } } }
+
     # --- unrelated commands: allow ---
     @{ n = 'dotnet build'; want = 'allow'
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'dotnet build' } } }
@@ -482,6 +525,40 @@ $bypassLog = Join-Path $fixtureRoots['tok'] '.claude\journal\hook-bypass.jsonl'
 $logged = (Test-Path -LiteralPath $bypassLog) -and ((Get-Content -LiteralPath $bypassLog -Raw) -match '"reason":"reading vendored file"')
 if ($logged) { $pass++; $mark = 'ok  ' } else { $fail++; $mark = 'FAIL' }
 '{0} {1,-42}' -f $mark, 'bypass log records accepted bypass' | Write-Host
+
+# Smoke test: both lanes of the LIVE tier file must satisfy the hook's validation rules, so a bad
+# hand-edit (missing key, string value, 0, tier outside the list) fails this suite, not a dispatch.
+function Test-LiveTierFile {
+    $path = Join-Path $repo '.claude\implementer-tiers.json'
+    $problems = @()
+    try { $cfg = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json } catch { return @("not valid JSON: $($_.Exception.Message)") }
+    $whole = { param($v) (($v -is [int] -or $v -is [long]) -and [long]$v -le [int]::MaxValue) }
+    $req = @{
+        depth = @('maxFiles', 'maxEdits', 'maxAcceptance', 'maxToolCalls')
+        sweep = @('maxOperations', 'maxFiles', 'maxCallSites', 'maxProjects', 'maxToolCalls')
+    }
+    $agents = @{ depth = 'implementer'; sweep = 'implementer-sweep' }
+    foreach ($ln in @('depth', 'sweep')) {
+        $lane = $cfg.$ln
+        if (-not $lane) { $problems += "lane '$ln' missing"; continue }
+        if ([string]$lane.agent -ne $agents[$ln]) { $problems += "lane '$ln' agent is '$($lane.agent)', expected '$($agents[$ln])'" }
+        $tiers = @($lane.tiers)
+        if ($tiers.Count -eq 0) { $problems += "lane '$ln' has no tiers"; continue }
+        $tp = $lane.PSObject.Properties['tier']
+        if (-not $tp -or -not (& $whole $tp.Value) -or [long]$tp.Value -lt 0) { $problems += "lane '$ln' 'tier' invalid" }
+        elseif ([long]$tp.Value -ge $tiers.Count) { $problems += "lane '$ln' 'tier' $($tp.Value) outside tiers list" }
+        for ($i = 0; $i -lt $tiers.Count; $i++) {
+            foreach ($k in $req[$ln]) {
+                $rp = $(if ($tiers[$i]) { $tiers[$i].PSObject.Properties[$k] })
+                if (-not $rp -or -not (& $whole $rp.Value) -or [long]$rp.Value -lt 1) { $problems += "lane '$ln' tier $i '$k' invalid" }
+            }
+        }
+    }
+    return $problems
+}
+$liveProblems = @(Test-LiveTierFile)
+if ($liveProblems.Count -eq 0) { $pass++; $mark = 'ok  ' } else { $fail++; $mark = 'FAIL' }
+'{0} {1,-42} {2}' -f $mark, 'live implementer-tiers.json (both lanes) valid', ($liveProblems -join '; ') | Write-Host
 
 foreach ($r in $fixtureRoots.Values) { Remove-Item -LiteralPath $r -Recurse -Force -ErrorAction SilentlyContinue }
 
