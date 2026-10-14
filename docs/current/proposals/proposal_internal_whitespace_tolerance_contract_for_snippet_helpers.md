@@ -137,7 +137,7 @@ New folder `RoslynSentinel.Common/SnippetMatching/`, class `SnippetResolver`. No
 `sealed record SnippetMatchResult`:
 
 - `RequestedTolerance`, and the case mode (echoed back).
-- `Outcome`: the existing `SnippetMatchOutcome` (`ContextErrorBuilder.cs:149`) is **extended**, not duplicated. It has `NoMatch`, `Ambiguous`, `StillAmbiguous`, `TrueTie`, `InvalidDisambiguator`, `SelectorMismatch`, `AdjacentLineMismatch`; add `Matched` and `MatchedLooserThanRequested`. Its doc comment ("why a lookup failed to resolve to exactly one match") and `ContextErrorBuilder.Build`'s throwing `default` branch must be updated for a non-error member. The dispatcher uses `InvalidDisambiguator` instead of `ThrowIfMultiLine` throwing. It reports `Ambiguous` when no adjacent-line or selector filter was supplied and `StillAmbiguous` otherwise; `TrueTie` stays a diagnostics-stage refinement (to be confirmed in the plan).
+- `Outcome`: the existing `SnippetMatchOutcome` (`ContextErrorBuilder.cs:149`) is **extended**, not duplicated. It has `NoMatch`, `Ambiguous`, `StillAmbiguous`, `TrueTie`, `InvalidDisambiguator`, `SelectorMismatch`, `AdjacentLineMismatch`; add `Matched` and `MatchedLooserThanRequested`. Its doc comment ("why a lookup failed to resolve to exactly one match") and `ContextErrorBuilder.Build`'s throwing `default` branch must be updated for a non-error member. The dispatcher uses `InvalidDisambiguator` instead of `ThrowIfMultiLine` throwing. It reports `Ambiguous` when no adjacent-line or selector filter was supplied and `StillAmbiguous` otherwise; `TrueTie` stays a diagnostics-stage refinement (decided; the slice 2a implementer confirms its current producer).
 - `Matches`: `IReadOnlyList<SnippetMatch>` at or stricter than the requested tier. Each `SnippetMatch` has start, line, **true span length**, the tier that matched and the matcher name. This is the only type an edit adapter accepts. The new record collides in name with the legacy nested `ContextHelper.SnippetMatch(Start, Length)` (`:24`); slice 2 must resolve that, and the nested one is deleted in the final slice.
 - `NearMatches`: `IReadOnlyList<SnippetNearMatch>`, matches that exist only at a looser tier. Each has the lowest tier needed, the file's actual lines verbatim and copy-ready, and a short **structured** difference (for example: leading whitespace, line 3, expected 8, got 0). `SnippetNearMatch` is a **separate type** from `SnippetMatch`, so a near-match cannot be passed to an edit path: a compile-time guard for the splice-corruption rule.
 - Invariants: `NearMatches` is populated only when `Matches` is empty and only when the snippet matched nothing before selectors; a result has accepted matches, near-matches or neither, never both. When the text matched but a selector removed everything, that is `SelectorMismatch`/`AdjacentLineMismatch`, not a near-match.
@@ -176,7 +176,7 @@ Every matcher and lookup returns its candidates wherever they exist, and every t
 - The DTO carries the candidates as data (`Matches`, `NearMatches`, and a new closest-windows list for the no-match case); `ContextErrorBuilder`/`SnippetDiagnostics` formats them. Every lookup helper that adopts the dispatcher inherits this, including the lookup callers (`ResolveBySnippetOrThrow` and friends), not only the edit tools.
 - Test: for each failure outcome, a test asserts the error text contains the candidate's literal lines, and that sending a candidate back succeeds. That second check is the guard for "recovers on the next turn".
 
-Open for the plan: the closest-window ranking for the no-match case (whether to reuse `LineBlockAligner` scoring as is), and whether a lookup tool (not an edit) should return the single best near-match as a result with a warning rather than an error.
+Closest-window ranking and the lookup-tool near-match policy are settled under "Resolved plan-level questions".
 
 Every matcher must return the real span, and each needs a **splice-invariant test**: replacing the reported span with the matched text reproduces the file. This is the direct regression guard for the 2026-09-10 corruption.
 
@@ -236,12 +236,22 @@ The ten questions listed in the previous draft were decided as follows.
 
 Added requirement: every matcher and lookup returns its candidates, and tool errors list them (section E, "Candidates in every failure").
 
-## Still open (for the plan, not blocking)
+## Resolved plan-level questions (2026-10-13)
 
-- Whole-line versus fragment semantics per tier (the single-line stage is a substring match, the window stage is whole-line equality).
-- Closest-window ranking for the no-match case: reuse `LineBlockAligner` scoring as is, or rank differently.
-- Whether a lookup tool returns its single best near-match with a warning instead of an error.
-- Whether `TrueTie` stays a diagnostics-stage refinement (section E).
+None of these blocked slices 2a to 2c. The first blocks 2d and the second blocks slice 3.
+
+1. **Whole-line versus fragment semantics (blocks slice 2d).** Fragment semantics at the edges, whole-line equality inside. This keeps the rule that each tier accepts everything the tier below accepts: a snippet that matches mid-line at `Exact` (for example `return x;` inside `if (a) return x;`) must still match at `IgnoreIndentation`.
+   - A single-line snippet is a trimmed substring match.
+   - For a multi-line snippet, the first line must be a suffix of the trimmed file line, the last line a prefix of it, and interior lines equal after trimming.
+   - The two existing collapse stages stay exactly as they are (no behaviour change).
+   - A test pins a mid-line start and end against the `Exact` result.
+2. **Closest-window ranking for no-match (blocks slice 3).** Reuse `LineBlockAligner` for scoring, wrapped rather than changed, because `DiffEngine` shares it.
+   - Normalize both sides with the requested case mode, which also closes defect 3.
+   - Break ties by file order so the listing is deterministic.
+   - Apply a minimum score threshold, so "nothing close" is a reportable result.
+   - The slice 3 implementer confirms the scoring on the Qwen snippet before relying on it. Scoring behaviour was taken from this proposal's description and not re-read when this was decided.
+3. **Lookup tools and near-matches.** A lookup tool never returns a best-guess near-match as a result. When even the loosest tier fails it returns an error that lists candidates. A silent best guess is the same class of problem as the old `ResolveBySnippetOrThrow` single-candidate rule. The DTO keeps the option open; revisit after live runs show whether the extra round trip hurts.
+4. **`TrueTie`.** It stays a diagnostics-stage refinement. The dispatcher reports only `Ambiguous` or `StillAmbiguous`, and `ContextErrorBuilder`/`SnippetDiagnostics` refine from `Matches`. The slice 2a implementer first confirms what produces `TrueTie` today; if it needs information the text-only dispatcher lacks, this is revisited.
 
 ## Cost / risk
 
