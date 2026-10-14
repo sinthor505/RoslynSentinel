@@ -1,6 +1,6 @@
 # Internal WhitespaceTolerance contract and SnippetResolver for snippet-in-text matching
 
-**Status:** PROPOSED 2026-10-13. Direction agreed with the user 2026-10-13 (internal-only enum, one dispatcher in `Common`, three-outcome result, staged migration); sections A-G below record that design as settled, except where marked open. Not approved for implementation: slicing and file counts are estimates for review.
+**Status:** PROPOSED 2026-10-13. Direction agreed with the user 2026-10-13 (internal-only enum, one dispatcher in `Common`, three-outcome result, staged migration); sections A-G below record that design as settled, except where marked open. All ten open questions were decided 2026-10-13 (see "Decisions"), and a candidates-in-errors requirement was added (section E, "Candidates in every failure"). Slicing and file counts are still estimates for the plan.
 
 This revision replaces the first draft (committed at 412ae839). The motivation, evidence, prior art and `MatchStrictness` comparison are carried over; the design is rewritten.
 
@@ -85,7 +85,7 @@ In scope: snippet-in-text matching, meaning text plus snippet in, matches out. T
 
 Out of scope: `DiffEngine` hunk anchoring (`ReanchorHunk`), name-based symbol lookup (`ResolveCandidates`), `Search(mode: text)` (per-line, case-insensitive, regex plus literal), `GetMethodSource`/`ReadFile`. These may adopt the enum later; otherwise they keep a simple guard (section C).
 
-### B. The enum (settled shape; LF/CRLF boundary and case axis open)
+### B. The enum (settled)
 
 `WhitespaceTolerance`, internal use only, in `RoslynSentinel.Common`. An ordered ladder; each tier accepts everything the one before accepts:
 
@@ -93,19 +93,19 @@ Out of scope: `DiffEngine` hunk anchoring (`ReanchorHunk`), name-based symbol lo
 | --- | --- |
 | `Exact` | nothing: ordinal comparison, no EOL regex |
 | `IgnoreLineEndings` | CR, LF and CRLF interchangeable between snippet and file |
-| `IgnoreIndentation` | differing per-line leading whitespace; interior and trailing text still compared as written |
+| `IgnoreIndentation` | differing per-line leading and trailing whitespace; interior text still compared as written |
 | `IgnoreAllWhitespace` | per-line trim plus interior whitespace-run collapse |
 
-LF/CRLF as its own tier (recommended, still open, question 4). Reason: today's "exact" matcher already accepts it (`ContextHelper.cs:269-277`), so a tier named `Exact` that also did so would be untrue, and the enum exists to stop names promising something untrue. It also matters in practice: the repo's own source files are CRLF while a model's multi-line snippet is typically LF, so an ordinal `Exact` `ReplaceSnippet` would fail every multi-line edit. `ReplaceSnippet` therefore passes `IgnoreLineEndings`, preserving its behaviour exactly. For a single-line snippet the two lowest tiers behave identically (the EOL regex runs only when the snippet contains `\n`).
+LF/CRLF as its own tier (decided). Reason: today's "exact" matcher already accepts it (`ContextHelper.cs:269-277`), so a tier named `Exact` that also did so would be untrue, and the enum exists to stop names promising something untrue. It also matters in practice: the repo's own source files are CRLF while a model's multi-line snippet is typically LF, so an ordinal `Exact` `ReplaceSnippet` would fail every multi-line edit. `ReplaceSnippet` therefore passes `IgnoreLineEndings`, preserving its behaviour exactly. For a single-line snippet the two lowest tiers behave identically (the EOL regex runs only when the snippet contains `\n`).
 
 Mapping from today's code:
 
 - `Exact`, `IgnoreLineEndings`: the ordinal and EOL-regex stages (`:60-85`).
 - `IgnoreAllWhitespace`: the two collapse stages (`:87-165`).
 - `IgnoreIndentation`: **no stage today**. Nothing ignores only leading whitespace while preserving interior whitespace; the single-line stage collapses interior runs too, and the window stage trims and collapses every line. This tier needs a new matcher (`IndentationMatcher`). That, and the cap in section C, are the only behaviour additions in the plan, and are a named, separate step (G, slice 2d).
-- Open within the ladder: whether `IgnoreIndentation` also ignores trailing whitespace (models reproduce it unreliably and it is invisible, which argues yes); whole-line versus fragment semantics per tier (the single-line stage is a substring match, the window stage is whole-line equality); and the span-start convention (defect 6). A tier above `Exact` must return the real source span, never `contextSnippet.Length`.
+- Decided: `IgnoreIndentation` ignores leading **and** trailing whitespace per line (models reproduce trailing whitespace unreliably and it is invisible). The span must exclude the first line's indentation, consistent with the exact matcher, so a replacement does not eat the file's indentation. Still for the plan: whole-line versus fragment semantics per tier (the single-line stage is a substring match, the window stage is whole-line equality). A tier above `Exact` must return the real source span, never `contextSnippet.Length`.
 
-Case-insensitivity is a **separate axis**, not a rung. It is not whitespace, and C# is case-sensitive, so a case-insensitive hit can resolve to a different identifier. The tolerant stages are OrdinalIgnoreCase today (the first two stages are ordinal) and the diagnostics are case-sensitive; migrating callers must keep today's behaviour explicit until each states otherwise. The mechanism (second required enum versus a small `SnippetMatchPolicy` record) is open.
+Case-insensitivity is a **separate axis**, not a rung. It is not whitespace, and C# is case-sensitive, so a case-insensitive hit can resolve to a different identifier. The tolerant stages are OrdinalIgnoreCase today (the first two stages are ordinal) and the diagnostics are case-sensitive; migrating callers must keep today's behaviour explicit until each states otherwise. Decided: a second required enum, no default; lookup callers stay case-insensitive and edit callers are case-sensitive.
 
 No tool schema, `ToolParams`, Lean-profile or schema-test change.
 
@@ -147,27 +147,50 @@ New folder `RoslynSentinel.Common/SnippetMatching/`, class `SnippetResolver`. No
 
 Why the name `IsSingleMatch`, and why not an equality test. It is deliberately not `IsMatch` or `IsExactMatch`: `Exact` is a tier name, and an accepted `IgnoreIndentation` hit is not an `Exact` match. A caller must not test "matched tier equals requested tier": a stricter match is acceptable (an `IgnoreIndentation` request against a file that matches verbatim is fine). Because of the cap, accepted matches are never looser than requested, so "at or stricter" holds by construction and callers need no tier comparison.
 
-Near-match probing is **lazy**: it runs only on failure, as a read-only probe of looser tiers reporting the lowest tier that matches. The list is capped at a small number with a total count (cap size open). A near-match is never used to edit.
+Near-match probing is **lazy**: it runs only on failure, as a read-only probe of looser tiers reporting the lowest tier that matches. The list is capped at 3 to 5 entries with a total count (decided; the exact number is a plan detail). A near-match is never used to edit.
+
+#### Candidates in every failure (requirement, decided 2026-10-13)
+
+Every matcher and lookup returns its candidates wherever they exist, and every tool error built from a failed result **lists them**. A failure that has candidates is never reported as prose alone.
+
+**Why.** Whitespace handling is a frequent weak-model struggle: models weigh it differently from code, miscount it, and the text passes through several serialization layers. The repeated identical tool calls seen in failed runs likely come from the model not understanding the message, or believing its revised call is already correct. Messages such as "no matches found, try an exact snippet" or "a match was found from lines x through y but differed at line z" make the model do bookkeeping and translation across several layers. A candidate list removes that: the model copies the right text on its next turn and recovers unambiguously. Compare the Qwen run, where seven NotFound results named no concrete text to copy (Evidence above).
+
+**What a candidate is.**
+
+- **Ambiguous:** each accepted match, as today (line, enclosing member, ready-to-use selectors), plus the file's actual text for that match so the model can see what differs between candidates.
+- **Looser-tier only:** each `SnippetNearMatch` carries the file's actual lines verbatim and copy-ready (the text the model should send as `oldContent`), the lowest tier needed, and the structured difference.
+- **No match at any tier:** the closest windows, each as actual file lines verbatim, ranked, rather than a description of where lines differed. Having no candidate to show is a legitimate outcome only when the probe finds nothing close, and the message says so.
+- **Selector and adjacent-line failures:** the candidates the filter removed, with the values that would select each one.
+
+**Rules.**
+
+- Candidate text is the file's text, not a rendering of the snippet. Where the model sends it back, it must match at the requested tier without further editing.
+- Caps keep errors bounded (3 to 5 candidates, a total count, and the existing character cap `MaxAllMatchedDiagnosisChars`). A cap must not drop the most likely candidate: rank before truncating, and say how many were omitted. This replaces the 5-candidate cut in H2, which can hide the intended match.
+- Prose stays secondary: one line naming the outcome, then the candidates. Slice 1's per-line difference notes remain as the annotation on each candidate, not as the only information.
+- The DTO carries the candidates as data (`Matches`, `NearMatches`, and a new closest-windows list for the no-match case); `ContextErrorBuilder`/`SnippetDiagnostics` formats them. Every lookup helper that adopts the dispatcher inherits this, including the lookup callers (`ResolveBySnippetOrThrow` and friends), not only the edit tools.
+- Test: for each failure outcome, a test asserts the error text contains the candidate's literal lines, and that sending a candidate back succeeds. That second check is the guard for "recovers on the next turn".
+
+Open for the plan: the closest-window ranking for the no-match case (whether to reuse `LineBlockAligner` scoring as is), and whether a lookup tool (not an edit) should return the single best near-match as a result with a warning rather than an error.
 
 Every matcher must return the real span, and each needs a **splice-invariant test**: replacing the reported span with the matched text reproduces the file. This is the direct regression guard for the 2026-09-10 corruption.
 
-### F. Three-outcome error model (settled; code name open)
+### F. Three-outcome error model (settled)
 
 Replaces `NotFound` for these paths:
 
-1. **No match at any tier.** `NotFound`; the message names what was tried.
-2. **Matched only at a looser tier than the caller accepts** (`MatchedLooserThanRequested`). Its own error code in `ToolErrorCode` (`Common/SentinelCallToolResult.cs:42`) and a `ToolException` subclass, not `NotFound`. The message names the tier and shows the file's actual lines. This is what would have turned the Qwen run's turns 2-11 into one retry.
-3. **Ambiguous.** Existing `ToolAmbiguousMatchException` behaviour.
+1. **No match at any tier.** `NotFound`; the message names what was tried and lists the closest windows as actual file lines (see "Candidates in every failure").
+2. **Matched only at a looser tier than the caller accepts** (`MatchedLooserThanRequested`). Its own error code in `ToolErrorCode` (`Common/SentinelCallToolResult.cs:42`; the name and placement are aligned with `project_tool_error_code_taxonomy_proposal` later) and a `ToolException` subclass, not `NotFound`. The message names the tier and lists each near-match as copy-ready file lines. This is what would have turned the Qwen run's turns 2-11 into one retry.
+3. **Ambiguous.** Existing `ToolAmbiguousMatchException` behaviour, with each candidate's file text included.
 
-Edit tools can adopt the policy "`Exact`-class tier, but report the near-match". Read and lookup tools usually accept the loosest tier, which makes outcome 2 moot for them.
+Edit tools adopt the policy "`Exact`-class tier, but report the near-match". Read and lookup tools accept the loosest tier, which makes outcome 2 moot for them (decided); outcomes 1 and 3 still list candidates.
 
-`ResolveBySnippetOrThrow`'s single-candidate behaviour (snippet ignored when there is one name candidate) becomes an explicit, documented contract rather than an accident of a guard clause. Open: keep as is, or validate the snippet even with one candidate (which would turn a currently silent wrong snippet into an error for 35 call sites).
+`ResolveBySnippetOrThrow` validates the snippet even when there is one name candidate (decided). A currently silent wrong snippet becomes an error at up to 35 call sites, so slice 4 for that helper must expect new failures in existing tests and treat each as a finding, not as noise.
 
 ### G. Staged migration (every step compiles; implementer slices of 3 or fewer `.cs` files; file counts are estimates)
 
 1. **Diagnostics-only fix, independent of everything else.** (a) Indentation-aware NoMatch message: when trimmed lines match but raw lines do not, say "line N matches except leading whitespace: expected X spaces, got Y" and emit the file's actual lines verbatim. (b) Fix `FormatClosestWindowHint` numbering: the needle drops blank lines (`:900`), so "snippet line N" is off by one and blames a blank source line. (c) Remove the hardcoded "byte-exact" and `contextSnippet` wording by threading the label through. Files: `ContextHelper.cs`, `ContextErrorBuilder.cs`, one test file. Tests in `RoslynSentinel.Tests` (`ContextHelperTests.cs`, `ContextHelperSelectorTests.cs`, `ContextHelperLineAfterTests.cs`); `ContextHelperDisambiguationTests` in `Tests.Tools.Basic/RegressionTests.cs` also touches the area. Shared `LineBlockAligner` callers (`DiffEngine`) must be re-run.
 2. **Enum, `SnippetResolver`, matchers and DTO, delegating to existing code, no behaviour change.** Likely over 3 files, so split: 2a enum, DTO, `ISnippetMatcher`, extended outcome; 2b matchers and dispatcher; 2c pure-move of matching logic out of `ContextHelper` and inversion so old helpers delegate to the dispatcher (the two delegation directions cannot coexist; ordering is for the plan to settle); 2d the `IndentationMatcher` and the cap, the only behaviour additions. Tests: the matrix (every tier against every matcher) and a splice-invariant test per matcher.
-3. **`SnippetDiagnostics` split and tier-aware diagnostics** (defect 3, case handling, the structured near-match difference, outcome 2's message).
+3. **`SnippetDiagnostics` split and tier-aware diagnostics** (defect 3, case handling, the structured near-match difference, outcome 2's message, and the candidate listings required by "Candidates in every failure" for all three outcomes, including the closest-windows list for no-match).
 4. **Callers, in batches**, each with that batch's `[Obsolete]` warnings cleared: `ReplaceSnippet`/`ReplaceSnippetBatch` (2 sites, `WorkspaceFileEditImpl.cs`) onto `IgnoreLineEndings` with outcome 2; `FindSnippetPosition` (16 sites, 9 files); `TryFindSnippetPosition` (8 sites, 4 files); `FindSymbolAtSnippetAsync` (6 sites, 2 files); `ResolveBySnippetOrThrow` (35 sites, 4 files) in 2-3 slices, with `MemberRefactoringEngine.cs` (27) split by method group. I did not re-read the dispatch skill's call-site limit; batching is a planning decision.
 5. **Final slice:** make the old helpers internal, delete them, `FindNodeAtSnippet` and the legacy nested `SnippetMatch`; rename leftovers whose names overpromise (for example `FindExactSnippetPosition`).
 
@@ -176,7 +199,7 @@ Test impact: 48 references to `FindExactSnippetPosition` and 8 to `FindSnippetPo
 ### H. Adjacent follow-ups (not core; each is its own item)
 
 1. **Breaker signature.** `tool|errorCode|file` ignores arguments (`ModelAgentRunner.cs:344`). Adding an `oldContent` hash conflicts with that function's stated intent (a model changing an argument is not looping). In the Qwen run every attempt had different `oldContent`, so a hash (hypothesis) would have kept the breaker from tripping and cost more turns. Revisit only after outcome 2 ships and shows whether repeated identical attempts are the real failure. Distinct error codes for `AdjacentLineMismatch` and `SelectorMismatch` (both surface as `ToolNotFoundException` today, `ContextErrorBuilder.cs`) is the less contentious half.
-2. **Ambiguity listing caps.** `StillAmbiguous`, `SelectorMismatch` and `AdjacentLineMismatch` list at most 5 candidates (`ContextErrorBuilder.MaxStillAmbiguousCandidatesListed`, `:8`); the first-time `Ambiguous` listing is uncapped (`DescribeAmbiguousCandidates` default `int.MaxValue`). The brief says the Qwen target was match 8 of 11, so a cap of 5 would hide it once the model's text matches; I did not verify the 8-of-11 figure (the logged run never got past NoMatch). The static "withinMember where listed" wording is defect 5.
+2. **Ambiguity listing caps.** `StillAmbiguous`, `SelectorMismatch` and `AdjacentLineMismatch` list at most 5 candidates (`ContextErrorBuilder.MaxStillAmbiguousCandidatesListed`, `:8`); the first-time `Ambiguous` listing is uncapped (`DescribeAmbiguousCandidates` default `int.MaxValue`). The brief says the Qwen target was match 8 of 11, so a cap of 5 would hide it once the model's text matches; I did not verify the 8-of-11 figure (the logged run never got past NoMatch). The static "withinMember where listed" wording is defect 5. The candidates-in-errors requirement (section E) supersedes a fixed cap of 5: rank, then truncate, and report how many were omitted.
 3. **ReplaceSnippet description.** Add a line that indentation and blank lines must match exactly. The `oldContent` text is assembled in `McpToolSchemaPatcher.cs:375` (`ApplyReplaceSnippetLimits`); I saw only a preview of it.
 
 ## Alternatives considered, not pursued
@@ -188,18 +211,31 @@ Test impact: 48 references to `FindExactSnippetPosition` and 8 to `FindSnippetPo
 - **Interface-based result** (an `ISnippetMatch` that near-matches also implement). Rejected: a near-match could then be passed to an edit path. Separate types make that a compile error.
 - **Revive `MatchStrictness` and fold whitespace into it.** Would conflate candidate policy with text normalization; see the comparison above.
 
-## Open questions
+## Decisions (2026-10-13)
 
-1. Case axis: second required enum or a policy record; and whether lookup callers keep today's case-insensitive behaviour.
-2. Whether `DiffEngine` anchoring (`ReanchorHunk`) and `Search(mode: text)` join the ladder later. The second is tool-visible, which contradicts "internal only".
-3. Default tolerance per caller category. Proposed: edit tools `Exact`-class with near-match reporting; read and lookup tools tolerant. Not decided.
-4. Whether LF/CRLF is its own tier (recommended yes, section B).
-5. `ResolveBySnippetOrThrow` single-candidate rule: keep, or validate the snippet even with one candidate. May share a vocabulary with `MatchStrictness`.
-6. How engines receive a tolerance without MCP types (chosen in `Tools.*`, or hard-wired per engine call; layering forbids MCP types below `Tools.*`).
-7. Near-match list cap size.
-8. Whether `IgnoreIndentation` ignores trailing whitespace; whole-line versus fragment semantics per tier; the span-start convention (defect 6).
-9. Name and placement of the new error code, and its relationship to `project_tool_error_code_taxonomy_proposal`.
-10. Slice 2 sequencing: whether the logic move precedes or follows the dispatcher (2b/2c), since delegation cannot run both ways.
+The ten questions listed in the previous draft were decided as follows.
+
+| # | Decision |
+| --- | --- |
+| 1 | Case is a second required enum, no default. Lookup callers stay case-insensitive; edit callers are case-sensitive. |
+| 2 | `DiffEngine` anchoring (`ReanchorHunk`) and `Search(mode: text)` are deferred until after slice 4. |
+| 3 | Edit tools are `Exact`-class with near-match reporting. Read and lookup tools are tolerant. |
+| 4 | LF/CRLF is its own tier (`IgnoreLineEndings`). |
+| 5 | `ResolveBySnippetOrThrow` validates the snippet even with one name candidate. |
+| 6 | Tolerance is hard-wired per engine call site; no MCP types below `Tools.*`. |
+| 7 | Near-match cap of 3 to 5 entries, with a total count. |
+| 8 | `IgnoreIndentation` ignores leading and trailing whitespace. Spans exclude the first line's indentation, consistent with the exact matcher. |
+| 9 | A new distinct code in `ToolErrorCode`; name and placement aligned with `project_tool_error_code_taxonomy_proposal` later. |
+| 10 | Dispatcher first, delegating to the existing code (2b), then move the logic (2c). |
+
+Added requirement: every matcher and lookup returns its candidates, and tool errors list them (section E, "Candidates in every failure").
+
+## Still open (for the plan, not blocking)
+
+- Whole-line versus fragment semantics per tier (the single-line stage is a substring match, the window stage is whole-line equality).
+- Closest-window ranking for the no-match case: reuse `LineBlockAligner` scoring as is, or rank differently.
+- Whether a lookup tool returns its single best near-match with a warning instead of an error.
+- Whether `TrueTie` stays a diagnostics-stage refinement (section E).
 
 ## Cost / risk
 
