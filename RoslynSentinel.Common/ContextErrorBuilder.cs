@@ -24,6 +24,15 @@ public class ContextErrorBuilder
             case SnippetMatchOutcome.NoMatch:
                 return BuildNoMatch(contextSnippet, verbatimRequired, diagnosis, snippetLabel);
 
+            case SnippetMatchOutcome.MatchedLooserThanRequested:
+                // Reported as NotFound for now: the snippet matched only at a looser tier than the
+                // caller accepts. Its dedicated error code and near-match listing arrive in slice 3.
+                return BuildNoMatch(contextSnippet, verbatimRequired, diagnosis, snippetLabel);
+
+            case SnippetMatchOutcome.Matched:
+                throw new InvalidOperationException(
+                    "SnippetMatchOutcome.Matched is a success outcome; there is no error to build for it.");
+
             case SnippetMatchOutcome.Ambiguous:
                 return BuildAmbiguous(contextSnippet, sourceText, matches, stillAmbiguous: false, snippetLabel: snippetLabel, memberNameAt: memberNameAt, selectorsSupported: selectorsSupported);
 
@@ -141,10 +150,12 @@ public class ContextErrorBuilder
 }
 
 /// <summary>
-/// Classifies why a contextSnippet-based lookup failed to resolve to exactly one match, so
+/// Classifies the result of a contextSnippet-based lookup: either the lookup resolved
+/// (<see cref="Matched"/>) or why it failed to resolve to exactly one match, so
 /// <see cref="ContextErrorBuilder"/> can pick the right exception type and wording instead of
 /// each call site hand-rolling its own message. Scoped narrowly to context-snippet/text-anchor
 /// errors only -> does not introduce a parallel <see cref="ToolErrorCode"/> taxonomy.
+/// <see cref="Matched"/> is the one non-error member: <see cref="ContextErrorBuilder.Build"/> rejects it.
 /// </summary>
 public enum SnippetMatchOutcome
 {
@@ -168,4 +179,10 @@ public enum SnippetMatchOutcome
 
     /// <summary>oldContent matched verbatim, but the lineBefore/lineAfter supplied filtered out every match.</summary>
     AdjacentLineMismatch,
+
+    /// <summary>Success: at least one match at or stricter than the requested whitespace tolerance. Not an error; never passed to <see cref="ContextErrorBuilder.Build"/>.</summary>
+    Matched,
+
+    /// <summary>The snippet matched only at a looser whitespace tolerance than the caller accepts (near-matches only, no accepted match).</summary>
+    MatchedLooserThanRequested,
 }
