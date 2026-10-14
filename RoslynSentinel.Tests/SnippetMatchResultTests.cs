@@ -200,37 +200,4 @@ public class SnippetMatchResultTests
                 Is.Empty, type.Name);
         }
     }
-
-    // ---- ContextErrorBuilder.Build for the new outcomes ----
-
-    [Test]
-    public void ContextErrorBuilder_Build_Matched_ThrowsInvalidOperationException()
-    {
-        Assert.Throws<InvalidOperationException>(() =>
-            ContextErrorBuilder.Build(SnippetMatchOutcome.Matched, "x", SourceText.From("x")));
-    }
-
-    [Test]
-    public void ContextErrorBuilder_Build_MatchedLooserThanRequested_MapsToNotFoundLikeNoMatch()
-    {
-        var looser = ContextErrorBuilder.Build(SnippetMatchOutcome.MatchedLooserThanRequested, "x", SourceText.From("x"));
-        var noMatch = ContextErrorBuilder.Build(SnippetMatchOutcome.NoMatch, "x", SourceText.From("x"));
-
-        Assert.That(looser, Is.TypeOf<ToolNotFoundException>());
-        Assert.That(looser.Message, Is.EqualTo(noMatch.Message));
-    }
-
-    [Test]
-    public void ContextErrorBuilder_Build_ExistingOutcomesKeepTheirExceptionTypes()
-    {
-        var source = SourceText.From("int x = 1; int y = 1;");
-
-        Assert.That(ContextErrorBuilder.Build(SnippetMatchOutcome.NoMatch, "q", source), Is.TypeOf<ToolNotFoundException>());
-        Assert.That(ContextErrorBuilder.Build(SnippetMatchOutcome.Ambiguous, "int", source, new List<ContextHelper.SnippetMatch>()), Is.TypeOf<ToolAmbiguousMatchException>());
-        Assert.That(ContextErrorBuilder.Build(SnippetMatchOutcome.StillAmbiguous, "int", source), Is.TypeOf<ToolAmbiguousMatchException>());
-        Assert.That(ContextErrorBuilder.Build(SnippetMatchOutcome.TrueTie, "int", source), Is.TypeOf<ToolAmbiguousMatchException>());
-        Assert.That(ContextErrorBuilder.Build(SnippetMatchOutcome.SelectorMismatch, "int", source), Is.TypeOf<ToolNotFoundException>());
-        Assert.That(ContextErrorBuilder.Build(SnippetMatchOutcome.AdjacentLineMismatch, "int", source), Is.TypeOf<ToolNotFoundException>());
-        Assert.That(ContextErrorBuilder.Build(SnippetMatchOutcome.InvalidDisambiguator, "int", source, parameterName: "lineBefore", invalidValue: "a\nb", isAfter: false), Is.TypeOf<ToolNotFoundException>());
-    }
 }

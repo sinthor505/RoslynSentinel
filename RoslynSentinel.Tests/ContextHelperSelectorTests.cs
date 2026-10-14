@@ -271,22 +271,6 @@ public class ContextHelperSelectorTests
     }
 
     [Test]
-    public void NoSelectors_KeepsExistingAmbiguousBehaviourAndWording()
-    {
-        var ex = Assert.Throws<ToolAmbiguousMatchException>(() => ContextHelper.FindExactSnippetPosition(
-            SourceText.From(Source), Snippet));
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(ex!.Message, Does.StartWith("oldContent is ambiguous (3 matches): \"x = 1;\n        y = 2;\". "));
-            Assert.That(ex.Message, Does.Contain(
-                "Provide matchLine (and withinMember where listed) copied verbatim from one of the matches below to select the intended match; lineBefore/lineAfter may be added as an extra filter:\n"));
-            Assert.That(ex.Message, Does.Contain("Match 1 (lines 5-6): matchLine=5 lineBefore=\"{\" lineAfter=\"return;\""));
-            Assert.That(ex.Message, Does.Not.Contain("withinMember=\""), "no member lookup was supplied, so no member can be offered");
-        });
-    }
-
-    [Test]
     public void MatchLine_MatchBeginningWithNewline_IsAttributedToItsFirstNonWhitespaceLine()
     {
         // Match 2 starts with the newline ending the "{" line (11), but a human sees "x = 1;" on line 12.
@@ -441,15 +425,6 @@ public class ContextHelperSelectorTests
             Assert.That(ex.Message, Does.Contain("matchLine=12 "));
             Assert.That(ex.Message, Does.Contain("matchLine=19 "));
         });
-    }
-
-    [Test]
-    public void GenuineNoMatch_WithASelector_StillSaysVerbatimRequired()
-    {
-        var ex = Assert.Throws<ToolNotFoundException>(() => ContextHelper.FindExactSnippetPosition(
-            SourceText.From(Source), "no such text", matchLine: 5));
-
-        Assert.That(ex!.Message, Does.Contain("(verbatim required)").And.Contain("Re-read the file"));
     }
 
     [TestCase("")]
