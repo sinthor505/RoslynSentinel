@@ -464,32 +464,36 @@ public class SnippetSelectorTests
         });
     }
 
-    // ---- parity with ContextHelper.FindExactSnippetPosition over the existing selector corpus ----
+    // ---- fixed expectations (formerly parity with ContextHelper.FindExactSnippetPosition) over the selector corpus ----
+    // The trailing three TestCase arguments are what the removed legacy helper returned for that case, captured once in
+    // slice 5e: a (start, length) match, or an error kind ("Ambiguous" = ToolAmbiguousMatchException, "NotFound" =
+    // ToolNotFoundException).
     // Divergence (documented, not a parity failure): when several matches survive withinMember/matchLine alone, the
     // legacy helper reports Ambiguous and the filter reports StillAmbiguous; both leave no single match.
 
     private const string NewlineSnippet = "\n        x = 1;\n        y = 2;";
 
-    [TestCase(null, 12, null, null, false)]
-    [TestCase("A", null, null, null, false)]
-    [TestCase("B", 19, null, null, false)]
-    [TestCase("B", null, null, "throw;", false)]
-    [TestCase(null, 12, null, null, true)]
-    [TestCase(null, 11, null, null, true)]
-    [TestCase(null, null, null, "throw;", false)]
-    [TestCase("B", null, null, null, false)]
-    [TestCase(null, 99, null, null, false)]
-    [TestCase("A", 12, null, null, false)]
-    [TestCase("Missing", null, null, null, false)]
-    [TestCase("B", null, null, "nonexistent;", false)]
-    [TestCase(null, null, null, null, false)]
-    [TestCase(null, 12, "a\nb", null, false)]
-    [TestCase(null, 12, null, "a\nb", false)]
-    [TestCase(null, null, "{", null, false)]
-    [TestCase(null, 0, null, null, false)]
-    [TestCase("  ", null, null, null, false)]
-    public void Parity_ChoosesTheSameMatchAsFindExactSnippetPosition(
-        string? withinMember, int? matchLine, string? lineBefore, string? lineAfter, bool newlineSnippet)
+    [TestCase(null, 12, null, null, false, 109, 21, null)]
+    [TestCase("A", null, null, null, false, 37, 21, null)]
+    [TestCase("B", 19, null, null, false, 186, 21, null)]
+    [TestCase("B", null, null, "throw;", false, 186, 21, null)]
+    [TestCase(null, 12, null, null, true, 100, 30, null)]
+    [TestCase(null, 11, null, null, true, null, null, "NotFound")]
+    [TestCase(null, null, null, "throw;", false, 186, 21, null)]
+    [TestCase("B", null, null, null, false, null, null, "Ambiguous")]
+    [TestCase(null, 99, null, null, false, null, null, "NotFound")]
+    [TestCase("A", 12, null, null, false, null, null, "NotFound")]
+    [TestCase("Missing", null, null, null, false, null, null, "NotFound")]
+    [TestCase("B", null, null, "nonexistent;", false, null, null, "NotFound")]
+    [TestCase(null, null, null, null, false, null, null, "Ambiguous")]
+    [TestCase(null, 12, "a\nb", null, false, null, null, "NotFound")]
+    [TestCase(null, 12, null, "a\nb", false, null, null, "NotFound")]
+    [TestCase(null, null, "{", null, false, null, null, "Ambiguous")]
+    [TestCase(null, 0, null, null, false, null, null, "Ambiguous")]
+    [TestCase("  ", null, null, null, false, null, null, "Ambiguous")]
+    public void Corpus_ChoosesTheMatchTheLegacyFindExactSnippetPositionChose(
+        string? withinMember, int? matchLine, string? lineBefore, string? lineAfter, bool newlineSnippet,
+        int? legacyStart, int? legacyLength, string? legacyError)
     {
         var text = SourceText.From(Source);
         var snippet = newlineSnippet ? NewlineSnippet : Snippet;
@@ -499,21 +503,6 @@ public class SnippetSelectorTests
             text, snippet, WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive,
             new SnippetSelectors(withinMember, matchLine, lineBefore, lineAfter), memberNameAt);
 
-        int? legacyStart = null;
-        int? legacyLength = null;
-        ToolException? legacyError = null;
-        try
-        {
-            var legacy = ContextHelper.FindExactSnippetPosition(
-                text, snippet, lineBefore, lineAfter, memberNameAt, withinMember, matchLine);
-            legacyStart = legacy.Start;
-            legacyLength = legacy.Length;
-        }
-        catch (ToolException ex)
-        {
-            legacyError = ex;
-        }
-
         if (legacyError == null)
         {
             Assert.Multiple(() =>
@@ -522,7 +511,7 @@ public class SnippetSelectorTests
                 Assert.That((result.Single().Start, result.Single().Length), Is.EqualTo((legacyStart, legacyLength)));
             });
         }
-        else if (legacyError is ToolAmbiguousMatchException)
+        else if (legacyError == "Ambiguous")
         {
             Assert.Multiple(() =>
             {

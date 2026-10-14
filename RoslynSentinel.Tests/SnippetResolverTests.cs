@@ -4,8 +4,8 @@ using RoslynSentinel.Common.SnippetMatching;
 namespace RoslynSentinel.Tests;
 
 /// <summary>
-/// Tests for the <see cref="SnippetResolver"/> dispatcher (slice 2b of the whitespace-tolerance proposal): parity
-/// with the legacy <see cref="ContextHelper"/> helpers, the cap, the near-match probe and the programming-error guards.
+/// Tests for the <see cref="SnippetResolver"/> dispatcher (slice 2b of the whitespace-tolerance proposal): fixed
+/// expectations captured from the legacy ContextHelper helpers (removed in slice 5f), the cap, the near-match probe and the programming-error guards.
 /// Test methods take tier values as <c>int</c> because <see cref="WhitespaceTolerance"/> is internal and an NUnit
 /// test method must be public.
 /// </summary>
@@ -15,7 +15,7 @@ public class SnippetResolverTests
     private static SnippetMatchResult Resolve(string text, string snippet, WhitespaceTolerance tolerance, SnippetCaseMode caseMode = SnippetCaseMode.CaseSensitive)
         => SnippetResolver.Resolve(SourceText.From(text), snippet, tolerance, caseMode);
 
-    // ---- (1) parity with the legacy helpers over the shared corpus ----
+    // ---- (1) fixed expectations (formerly parity with the legacy helpers) over the shared corpus ----
 
     // Corpus cases where the ladder now stops at IgnoreIndentation, before the collapse stages, and so reports the
     // narrower true span (or a different window) instead of what FindAllSnippetMatchesWithLength reports. Each value
@@ -34,12 +34,59 @@ public class SnippetResolverTests
         [("\n  \n    a\n    b\n  \n", "\n\na\nb\n\n")] = new[] { (8, "a\n    b") },
     };
 
+    // Fixed (Start, Length) per match that the removed ContextHelper.FindAllSnippetMatchesWithLength produced for every
+    // corpus case, captured once by running that helper in slice 5e before it was deleted. Cases listed in
+    // ParityDivergences differ from these on purpose; every other case must still equal them.
+    private static readonly Dictionary<(string Text, string Snippet), (int Start, int Length)[]> LegacyAllWhitespaceSpans = new()
+    {
+        [("int x = 1;\nint y = 2;\n", "int y = 2;")] = new[] { (11, 10) },
+        [("a\nb\nc\n", "a\nb")] = new[] { (0, 3) },
+        [("a\r\nb\r\nc\r\n", "a\nb")] = new[] { (0, 4) },
+        [("a\nb\nc\n", "a\r\nb")] = new[] { (0, 3) },
+        [("    int x = 1;\n", "int x = 1;")] = new[] { (4, 10) },
+        [("        }\n        var trailingIssue = x;\n", "}\nvar trailingIssue = x;")] = new[] { (0, 40) },
+        [("    a\r\n    b\r\n", "a\nb")] = new[] { (0, 12) },
+        [("var r = a  +  b;\n", "a + b;")] = new[] { (8, 8) },
+        [("Console.WriteLine(X);\n", "console.writeline(x);")] = new[] { (0, 21) },
+        [("if (a) return x;\n", "return x;")] = new[] { (7, 9) },
+        [("foo();\nfoo();\nfoo();\n", "foo();")] = new[] { (0, 6), (7, 6), (14, 6) },
+        [("    a\n    b\n\n    a\n    b\n", "a\nb")] = new[] { (0, 11), (13, 11) },
+        [("aaaa", "aa")] = new[] { (0, 2), (1, 2), (2, 2) },
+        [("    return foo;\n}\nother();\n", "return foo;\n}\n")] = new[] { (4, 14) },
+        [("int x = 1;\n", "   ")] = Array.Empty<(int, int)>(),
+        [("int x = 1;\n", "")] = Array.Empty<(int, int)>(),
+        [("int x = 1;\n", "nothing like this")] = Array.Empty<(int, int)>(),
+        [("foo();   \nbar();  \n", "foo();\nbar();")] = new[] { (0, 18) },
+        [("foo();\nbar();\n", "foo();  \nbar();  ")] = new[] { (0, 13) },
+        [("    a\n\n    b\n", "a\n\nb")] = new[] { (0, 12) },
+        [("a b\n  a\n  b\n", "a\nb")] = new[] { (0, 3) },
+        [("if (a) {\n  b();\n} else {\n", "{\n  b();\n}")] = new[] { (7, 10) },
+        [("\n  \n    a\n    b\n  \n", "\n\na\nb\n\n")] = new[] { (4, 11) },
+    };
+
+    // Fixed (Start, Length) per match that the removed ContextHelper.FindAllExactSnippetMatches produced (it never
+    // collapsed whitespace, so every corpus case not listed here found nothing), captured once in slice 5e.
+    private static readonly Dictionary<(string Text, string Snippet), (int Start, int Length)[]> LegacyExactSpans = new()
+    {
+        [("int x = 1;\nint y = 2;\n", "int y = 2;")] = new[] { (11, 10) },
+        [("a\nb\nc\n", "a\nb")] = new[] { (0, 3) },
+        [("a\r\nb\r\nc\r\n", "a\nb")] = new[] { (0, 4) },
+        [("a\nb\nc\n", "a\r\nb")] = new[] { (0, 3) },
+        [("    int x = 1;\n", "int x = 1;")] = new[] { (4, 10) },
+        [("if (a) return x;\n", "return x;")] = new[] { (7, 9) },
+        [("foo();\nfoo();\nfoo();\n", "foo();")] = new[] { (0, 6), (7, 6), (14, 6) },
+        [("aaaa", "aa")] = new[] { (0, 2), (1, 2), (2, 2) },
+        [("    return foo;\n}\nother();\n", "return foo;\n}\n")] = new[] { (4, 14) },
+        [("if (a) {\n  b();\n} else {\n", "{\n  b();\n}")] = new[] { (7, 10) },
+    };
+
     [TestCaseSource(typeof(SnippetMatcherTests), nameof(SnippetMatcherTests.Corpus))]
-    public void Parity_IgnoreAllWhitespaceCaseInsensitive_EqualsFindAllSnippetMatchesWithLength(string text, string snippet)
+    public void Corpus_IgnoreAllWhitespaceCaseInsensitive_MatchesFixedSpans(string text, string snippet)
     {
         var sourceText = SourceText.From(text);
 
-        var legacy = ContextHelper.FindAllSnippetMatchesWithLength(sourceText, snippet);
+        // Fixed values the removed legacy helper produced for this case (see LegacyAllWhitespaceSpans).
+        var legacy = LegacyAllWhitespaceSpans[(text, snippet)];
         var result = SnippetResolver.Resolve(sourceText, snippet, WhitespaceTolerance.IgnoreAllWhitespace, SnippetCaseMode.CaseInsensitive);
 
         if (ParityDivergences.TryGetValue((text, snippet), out var expected))
@@ -48,13 +95,13 @@ public class SnippetResolverTests
             {
                 Assert.That(result.Matches.Select(m => (m.Start, text.Substring(m.Start, m.Length))), Is.EqualTo(expected));
                 Assert.That(result.Matches.Select(m => m.Tier).Distinct(), Is.EqualTo(new[] { WhitespaceTolerance.IgnoreIndentation }));
-                Assert.That(result.Matches.Select(m => (m.Start, m.Length)), Is.Not.EqualTo(legacy.Select(m => (m.Start, m.Length))),
+                Assert.That(result.Matches.Select(m => (m.Start, m.Length)), Is.Not.EqualTo(legacy),
                     "a listed divergence must really differ from the legacy result, otherwise remove it from the list");
             });
         }
         else
         {
-            Assert.That(result.Matches.Select(m => (m.Start, m.Length)), Is.EqualTo(legacy.Select(m => (m.Start, m.Length))));
+            Assert.That(result.Matches.Select(m => (m.Start, m.Length)), Is.EqualTo(legacy));
         }
 
         Assert.That(result.NearMatches, Is.Empty, "the loosest tier has nothing looser to probe");
@@ -62,15 +109,16 @@ public class SnippetResolverTests
     }
 
     [TestCaseSource(typeof(SnippetMatcherTests), nameof(SnippetMatcherTests.Corpus))]
-    public void Parity_IgnoreLineEndingsCaseSensitive_EqualsFindAllExactSnippetMatches(string text, string snippet)
+    public void Corpus_IgnoreLineEndingsCaseSensitive_MatchesFixedSpans(string text, string snippet)
     {
         var sourceText = SourceText.From(text);
 
-        var legacy = ContextHelper.FindAllExactSnippetMatches(sourceText, snippet);
+        // Fixed values the removed legacy helper produced for this case (see LegacyExactSpans); absent means no match.
+        var legacy = LegacyExactSpans.GetValueOrDefault((text, snippet), Array.Empty<(int Start, int Length)>());
         var result = SnippetResolver.Resolve(sourceText, snippet, WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive);
 
-        Assert.That(result.Matches.Select(m => (m.Start, m.Length)), Is.EqualTo(legacy.Select(m => (m.Start, m.Length))));
-        if (legacy.Count > 0)
+        Assert.That(result.Matches.Select(m => (m.Start, m.Length)), Is.EqualTo(legacy));
+        if (legacy.Length > 0)
         {
             AssertOutcomeMatchesCount(result);
         }
