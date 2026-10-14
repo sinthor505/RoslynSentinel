@@ -2108,6 +2108,40 @@ public class OtherClass
             Assert.That(result.UpdatedText, Does.Contain("=>"), "Method should have been converted to an expression body.");
         }
 
+        [Test]
+        public async Task ConvertExpressionBody_UnambiguousMemberWithMismatchedContextSnippet_WarnsOnce()
+        {
+            const string src = @"public class MyClass
+{
+    public string GetName()
+    {
+        return ""hello"";
+    }
+}";
+            SetSource(src, "MyClass.cs");
+            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody", contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+            Assert.That(result.Warnings, Is.Not.Null);
+            Assert.That(result.Warnings!, Has.Count.EqualTo(1));
+            Assert.That(result.Warnings![0], Does.Contain("GetName"));
+        }
+
+        [Test]
+        public async Task ConvertExpressionBody_UnambiguousMemberWithMatchingContextSnippet_HasNoWarning()
+        {
+            const string src = @"public class MyClass
+{
+    public string GetName()
+    {
+        return ""hello"";
+    }
+}";
+            SetSource(src, "MyClass.cs");
+            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody", contextSnippet: "return \"hello\";");
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+            Assert.That(result.Warnings, Is.Null);
+        }
+
         /// <summary>
         /// Regression tests for 5 high-priority bugs: BUG-70, 71, 72, 73, 74
         /// </summary>

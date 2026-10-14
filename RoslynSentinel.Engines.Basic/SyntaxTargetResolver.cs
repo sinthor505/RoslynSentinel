@@ -289,8 +289,10 @@ public static class SyntaxTargetResolver
     /// Throws ToolNotFoundException (snippet matched nothing) or ToolAmbiguousMatchException (2+ snippet
     /// matches, or the single match fell outside every candidate), each carrying the hintBuilder-produced
     /// message. Callers catch ToolException and copy ex.ErrorCode onto their result.
-    /// allowLooseMatch: true keeps the legacy single-candidate pass-through (a lone candidate is returned
-    /// without validating contextSnippet). Default false validates every supplied snippet.
+    /// trustSingleCandidate: true keeps the single-candidate shortcut (a lone candidate is returned without
+    /// requiring contextSnippet to select it); this wrapper discards the warning that
+    /// <see cref="ResolveBySnippetWithWarning"/> produces for a snippet the shortcut ignored. It is unrelated to the
+    /// whitespace tolerance tier. Default false validates every supplied snippet.
     /// </summary>
     public static SyntaxNodeCandidate? ResolveBySnippetOrThrow(
         List<SyntaxNodeCandidate> candidates,
@@ -298,24 +300,48 @@ public static class SyntaxTargetResolver
         string? contextSnippet,
         string? lineBefore,
         string? lineAfter,
-        Func<List<SyntaxNodeCandidate>, List<int>, string, string> hintBuilder, bool allowLooseMatch = false)
+        Func<List<SyntaxNodeCandidate>, List<int>, string, string> hintBuilder, bool trustSingleCandidate = false)
+    {
+        return ResolveBySnippetWithWarning(
+            candidates, sourceText, contextSnippet, lineBefore, lineAfter, hintBuilder, trustSingleCandidate).Candidate;
+    }
+
+    /// <summary>
+    /// Same resolution and exceptions as <see cref="ResolveBySnippetOrThrow"/>, but also returns a non-fatal warning.
+    /// The warning is non-null only when trustSingleCandidate is true, exactly one candidate exists, and a non-blank
+    /// contextSnippet does not match anywhere inside that candidate's declaration (so the shortcut ignored a snippet
+    /// that the validating path would have rejected or resolved elsewhere). Candidate is null only when there are no candidates.
+    /// </summary>
+    public static (SyntaxNodeCandidate? Candidate, string? Warning) ResolveBySnippetWithWarning(
+        List<SyntaxNodeCandidate> candidates,
+        SourceText sourceText,
+        string? contextSnippet,
+        string? lineBefore,
+        string? lineAfter,
+        Func<List<SyntaxNodeCandidate>, List<int>, string, string> hintBuilder, bool trustSingleCandidate = false)
     {
         if (contextSnippet == null || candidates.Count == 0)
         {
-            return candidates.FirstOrDefault();
+            return (candidates.FirstOrDefault(), null);
         }
 
-        // allowLooseMatch: true preserves the legacy single-candidate pass-through for the two tool paths
-        // (ReplaceMember and ConvertExpressionBody). A later slice will emit a warning there instead of silently accepting.
-        if (allowLooseMatch && candidates.Count == 1)
+        // trustSingleCandidate: true keeps the single-candidate shortcut for the two tool paths (ReplaceMember and
+        // ConvertExpressionBody). A blank snippet is silent; a non-blank one that does not match inside the candidate warns.
+        if (trustSingleCandidate && candidates.Count == 1)
         {
-            return candidates[0];
+            var only = candidates[0];
+            if (string.IsNullOrWhiteSpace(contextSnippet) || SnippetMatchesInside(sourceText, contextSnippet, lineBefore, lineAfter, only.Node.Span))
+            {
+                return (only, null);
+            }
+
+            return (only, $"contextSnippet did not match inside the only candidate declaration '{only.Name}'; it was ignored because there is exactly one candidate. Verify the edit targeted the member you intended.");
         }
 
         // A blank snippet cannot be validated against anything; with one candidate it is the same as no snippet.
         if (candidates.Count == 1 && string.IsNullOrWhiteSpace(contextSnippet))
         {
-            return candidates[0];
+            return (candidates[0], null);
         }
 
         var result = SnippetLookup.Resolve(sourceText, contextSnippet, lineBefore, lineAfter);
@@ -352,7 +378,7 @@ public static class SyntaxTargetResolver
 
         if (survivors.Count == 1)
         {
-            return survivors[0].Candidate;
+            return (survivors[0].Candidate, null);
         }
 
         var outcome = result.Outcome == SnippetMatchOutcome.StillAmbiguous
@@ -385,6 +411,16 @@ public static class SyntaxTargetResolver
             lead: null,
             scope: outside > 0 ? $"{outside} further match(es) of contextSnippet lie outside the candidate declarations and are not listed." : null,
             hintBuilder(candidates, matchStarts, "ambiguous"));
+    }
+
+    /// <summary>
+    /// True when contextSnippet (lookup policy: all-whitespace-insensitive, case-insensitive) has at least one match whose
+    /// first visible character lies inside <paramref name="span"/>, the same ownership test the validating path uses.
+    /// </summary>
+    private static bool SnippetMatchesInside(SourceText sourceText, string contextSnippet, string? lineBefore, string? lineAfter, TextSpan span)
+    {
+        var result = SnippetLookup.Resolve(sourceText, contextSnippet, lineBefore, lineAfter);
+        return result.Matches.Any(m => span.Contains(FirstNonWhitespacePosition(sourceText, m)));
     }
 
     /// <summary>

@@ -2827,14 +2827,17 @@ public class MemberRefactoringEngine
         }
 
         SyntaxNode? member;
+        string? snippetWarning;
         try
         {
             var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken)
                 .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember))
                 .ToList());
             memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
-            member = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode), allowLooseMatch: true)?.Node;
+            var resolved = SyntaxTargetResolver.ResolveBySnippetWithWarning(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode), trustSingleCandidate: true);
+            member = resolved.Candidate?.Node;
+            snippetWarning = resolved.Warning;
         }
         catch (ToolException ex)
         {
@@ -2899,7 +2902,8 @@ public class MemberRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Replaced with {DescribeParsedMember(newMember)}.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, member, newMember, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, member, newMember, cancellationToken),
+            Warnings = snippetWarning == null ? null : new[] { snippetWarning }
         };
     }
 

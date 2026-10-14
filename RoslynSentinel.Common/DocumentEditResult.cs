@@ -45,6 +45,17 @@ namespace RoslynSentinel.Common
             get; init;
         }
 
+        /// <summary>
+        /// Non-fatal notes about a successful edit (for example a contextSnippet that was ignored because exactly one
+        /// candidate existed). Null when there are none. Not serialized: ToJsonSummary has 13 callers whose output shape
+        /// must not change; the tool layer surfaces these through the envelope's WarningDetails instead.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public IReadOnlyList<string>? Warnings
+        {
+            get; init;
+        }
+
         public DocumentEditResult()
         {
         }

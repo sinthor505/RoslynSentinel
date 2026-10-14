@@ -619,10 +619,11 @@ public class RefactoringStructuralImpl
                 var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
                 if (apply.Error is not null)
                     return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
-                return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
+                var replaceEnvelope = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                     new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Replaced '{memberName}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId),
                     _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
                     workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: $"Replaced '{memberName}' in {Path.GetFileName(filePathResolved)}.", cancellationToken: cancellationToken);
+                return replaceEnvelope with { WarningDetails = result.Warnings is { Count: > 0 } ? string.Join(" ", result.Warnings) : null };
             }
 
             if (operation == MemberAction.remove)

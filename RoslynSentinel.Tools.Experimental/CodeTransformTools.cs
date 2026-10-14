@@ -600,7 +600,8 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath),
+                            WarningDetails = r.Warnings is { Count: > 0 } ? string.Join(" ", r.Warnings) : null
                         };
                     }
 

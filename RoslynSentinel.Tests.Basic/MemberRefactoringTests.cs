@@ -2215,6 +2215,49 @@ public class OrderService
     }
 
     [Test]
+    [Description("The single-candidate shortcut still succeeds on a mismatched contextSnippet, but now reports one "
+             + "non-fatal warning naming the member so the caller can verify the edit hit the intended target.")]
+    public async Task ReplaceMember_SingleNonOverloadedMember_MismatchedContextSnippetWarnsOnce()
+    {
+        SetSource(ApplyDiscountLikeSource, "Order.cs");
+        var newSource = "public decimal ApplyDiscount(decimal percentage)\n{\n    return DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage);\n}";
+
+        var result = await _memberRefactoringEngine.ReplaceMemberAsync("Order.cs", "ApplyDiscount", newSource,
+            contextSnippet: "this text does not appear anywhere in the file");
+
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, result.Message);
+        Assert.That(result.Warnings, Is.Not.Null);
+        Assert.That(result.Warnings!, Has.Count.EqualTo(1));
+        Assert.That(result.Warnings![0], Does.Contain("ApplyDiscount"));
+        Assert.That(result.Warnings![0], Does.Contain("exactly one candidate"));
+    }
+
+    [Test]
+    public async Task ReplaceMember_SingleNonOverloadedMember_MatchingContextSnippetHasNoWarning()
+    {
+        SetSource(ApplyDiscountLikeSource, "Order.cs");
+        var newSource = "public decimal ApplyDiscount(decimal percentage)\n{\n    return DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage);\n}";
+
+        var result = await _memberRefactoringEngine.ReplaceMemberAsync("Order.cs", "ApplyDiscount", newSource,
+            contextSnippet: "ContosoOrders.Core.Discounts.DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage)");
+
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, result.Message);
+        Assert.That(result.Warnings, Is.Null);
+    }
+
+    [Test]
+    public async Task ReplaceMember_SingleNonOverloadedMember_BlankContextSnippetHasNoWarning()
+    {
+        SetSource(ApplyDiscountLikeSource, "Order.cs");
+        var newSource = "public decimal ApplyDiscount(decimal percentage)\n{\n    return DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage);\n}";
+
+        var result = await _memberRefactoringEngine.ReplaceMemberAsync("Order.cs", "ApplyDiscount", newSource, contextSnippet: "   ");
+
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, result.Message);
+        Assert.That(result.Warnings, Is.Null);
+    }
+
+    [Test]
     public async Task ReplaceMember_OverloadedMembers_StillRequireContextSnippetToDisambiguate()
     {
         SetSource(@"

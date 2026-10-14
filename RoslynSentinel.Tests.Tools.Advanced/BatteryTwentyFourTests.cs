@@ -940,6 +940,20 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
+    [Test]
+    [Category("RefactoringStructuralTools")]
+    public async Task ReplaceMember_SingleCandidateWithMismatchedContextSnippet_SurfacesWarningDetails()
+    {
+        SetSource(SimpleSource, "Order.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.replace, memberName: "GetStatus", newMemberSource: "public string GetStatus() => \"Active\";", contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE", dryRun: true);
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(result.WarningDetails, Does.Contain("GetStatus"));
+
+        var matching = await _refactoringStructuralTools.Member(reason: "test message", "Order.cs", MemberAction.replace, memberName: "GetStatus", newMemberSource: "public string GetStatus() => \"Active\";", contextSnippet: "if (OrderId == 1)", dryRun: true);
+        Assert.That(matching.IsError, Is.False, matching.ErrorData?.Message);
+        Assert.That(matching.WarningDetails, Is.Null);
+    }
+
     // --- AddMemberToClass ---
     [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category

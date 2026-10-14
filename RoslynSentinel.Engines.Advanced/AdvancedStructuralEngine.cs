@@ -1358,9 +1358,12 @@ public class StructuralRefactoringEngine
         var text = await document.GetTextAsync(cancellationToken);
         var candidates = SyntaxTargetResolver.ResolveCandidates(root, text, memberName, cancellationToken).Where(c => c.Kind is CandidateKind.Method or CandidateKind.Property or CandidateKind.Constructor).ToList();
         MemberDeclarationSyntax? target;
+        string? snippetWarning;
         try
         {
-            target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, text, contextSnippet, lineBefore, lineAfter, (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode), allowLooseMatch: true)?.Node as MemberDeclarationSyntax;
+            var resolved = SyntaxTargetResolver.ResolveBySnippetWithWarning(candidates, text, contextSnippet, lineBefore, lineAfter, (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode), trustSingleCandidate: true);
+            target = resolved.Candidate?.Node as MemberDeclarationSyntax;
+            snippetWarning = resolved.Warning;
         }
         catch (ToolException ex)
         {
@@ -1461,7 +1464,8 @@ public class StructuralRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (await formatted.GetTextAsync(cancellationToken)).ToString()
+            UpdatedText = (await formatted.GetTextAsync(cancellationToken)).ToString(),
+            Warnings = snippetWarning == null ? null : new[] { snippetWarning }
         };
     }
 
