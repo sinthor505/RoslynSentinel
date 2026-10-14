@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis.Text;
+using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Tests;
 
@@ -44,11 +45,17 @@ public class ContextHelperIndentationDiagnosisTests
         const string source = "    void M()\n    {\n        a = 1;\n        b = 2;\n    }";
         const string snippet = "a = 1;\n\t\tb = 2;";
 
-        var ex = Assert.Throws<ToolNotFoundException>(() => ContextHelper.FindExactSnippetPosition(
-            SourceText.From(source), snippet));
+        var text = SourceText.From(source);
+        var result = SnippetResolver.Resolve(
+            text, snippet, WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive);
+        var ex = SnippetErrorFormatter.Build(result, text, snippet, "oldContent");
 
-        Assert.That(ex!.Message, Does.Contain(
-            "snippet line 2 matches file line 4 except leading whitespace: expected 8 spaces, got 2 tabs (tabs vs spaces)"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.MatchedLooserThanRequested));
+            Assert.That(ex.Message, Does.Contain(
+                "line 2: file has 8 leading spaces, snippet has 2 leading tabs (file line 4)"));
+        });
     }
 
     [Test]
@@ -57,11 +64,17 @@ public class ContextHelperIndentationDiagnosisTests
         const string source = "    void M()\n    {\n        a = 1;\n        b = 2;\n        c = 3;\n    }";
         const string snippet = "a = 1;   \n        b = 2;\n        c = 3;";
 
-        var ex = Assert.Throws<ToolNotFoundException>(() => ContextHelper.FindExactSnippetPosition(
-            SourceText.From(source), snippet));
+        var text = SourceText.From(source);
+        var result = SnippetResolver.Resolve(
+            text, snippet, WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive);
+        var ex = SnippetErrorFormatter.Build(result, text, snippet, "oldContent");
 
-        Assert.That(ex!.Message, Does.Contain(
-            "snippet line 1 matches file line 3 except trailing whitespace: expected 0, got 3 spaces"));
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.MatchedLooserThanRequested));
+            Assert.That(ex.Message, Does.Contain(
+                "line 1: file has none, snippet has 3 trailing spaces (file line 3)"));
+        });
     }
 
     [Test]
