@@ -114,6 +114,25 @@ Wrapping all 116 untyped methods is not recommended: most are internal helpers. 
 
 Next: a read-only check of the 7 wrapper sites, then fold the decision into the warnings proposal. Slice 4d's single-candidate pass-through is a separate step and does not depend on this.
 
+## Wrapper check result (read-only, 2026-10-14)
+Verified against source by a read-only agent after the discussion above. Line numbers are the agent's and unconfirmed by me.
+
+| # | Method | T | T is `IResultStatus` |
+| --- | --- | --- | --- |
+| 1 | `BuildEngine.RunQuickBuildAsync` (:40) | `BuildResult` | yes (`Common/BuildResult.cs:7`) |
+| 2 | `BuildEngine.RunFullBuildAsync` (:180) | `BuildResult` | yes |
+| 3-5 | `DiagnosticEngine.GetFile/Project/SolutionDiagnosticsAsync` (:32, :47, :86) | `DiagnosticSummary(Errors, Warnings, Details, BuildVerification)` | no |
+| 6 | `TestRunEngine.RunAsync` (:89) | `TestRunResult` | yes (`TestRunEngine.cs:43,57`) |
+| 7 | `LogicSimplificationEngine.InvertBooleanLogicAsync` (`LogicOptimizationEngine.cs:653`) | `List<DocumentEditResult>` | list: no |
+
+- The hypothesis holds for methods 1, 2 and 6 (double-enveloped). Methods 3-5 never fail through the wrapper: every return is `Success`, and failures are thrown as `ToolNotFoundException` (`DiagnosticEngine.cs:35,50`), so `.Data` never throws there. The "diagnostics list" type is `DiagnosticSummary`, not a `DiagnosticReport`.
+- Wrapper facts: `Data` throws `InvalidOperationException` when not Success (`EngineResultWrapper.cs:41`). A non-throwing `TryGetData` already exists (:29) and the tools use it. `EngineOutcome` has seven values (Success plus six failures); `Timeout` and `InternalError` are never constructed by engines. `Findings` is never set by any engine, so the tool copies at `WorkspaceBuildTestImpl.cs` copy an empty list. `EngineError` is also used outside the wrapper (`PersistentWorkspaceManager.cs:2292`, `DiscoveryEngine.cs:543`).
+- **Defect:** method 7's only caller (`Tools.Advanced/ModernizationTools.cs:48-53`) sets `SuccessData = result` (the whole wrapper) and `IsError = false`, so `DocumentNotFound` and `TargetNotFound` outcomes (`LogicOptimizationEngine.cs:660,682`) go out as tool successes. Whether serialising a failed wrapper throws (via `Data`) is a hypothesis, not traced.
+- **Defect:** `GetDiagnostics` and `GetWorkspaceHealth` read the build wrapper with `TryGetData` and silently drop a failure (`WorkspaceBuildTestImpl.cs:87-89`, `WorkspaceHealthMiscImpl.cs:143-146`).
+- `TestRunResult.IsError` is stricter than the tool's MCP `isError` (a completed run with failing tests is `IsError == true`; `RunTest` sets `isError` only when `!RunCompleted`). A generic boundary check on `IResultStatus.IsError` would change behaviour.
+- Cheapest removal: methods 1, 2 and 6 return their own type, with a `NotRun`/not-completed factory (both constructors take 11-13 positional arguments), and `BuildResult.NotRun` maps to `ToolErrorCode.Exception`, losing `EngineErrorCode.BuildNotRun`. Methods 3-5 return `DiagnosticSummary` directly (about 15 test call sites; no new DTO needed). Method 7 is the one real failure-carrying case and needs a boundary fix (throw not-found as `DiagnosticEngine` does, or map the outcome in `ModernizationTools`); if left alone the wrapper survives with that one user. Tests asserting `Outcome == InvalidInput` and `Error.Code == BuildNotRun`: `BuildEngineTests.cs:23-25,40-42`.
+- Not checked: `BuildEngine.cs:262-347` bodies, what `ToolErrorMapper` does with `InvalidOperationException`, tests reading `.Data`/`.Findings`, and `Tools.Experimental`/`Server.*` users (a by-name solution search found none).
+
 ## Out of scope
 - Payload-only types and anonymous or untyped tool return shapes (`finding_anonymous_and_untyped_return_shapes.md`).
 - The `Tools.*` layer beyond its conversion code; test projects were not counted.
