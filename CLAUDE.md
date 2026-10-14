@@ -90,10 +90,31 @@ couple of reads to answer, dispatch instead of starting to read.
 
 ## Dispatching `implementer`
 
-Load the `dispatch-implementer` skill before the first dispatch. In short: pin `model: "haiku"`; the brief
-has `Files:` (3 or fewer .cs), `Symbols:`, `Call sites:` (measured with `InspectSymbol(aspect: blastRadius)`),
-one `Acceptance:` check and `Out of scope:` (including the `RESCOPE:` clause). Over the limits, go
-to `implementer-senior`. The `enforce-dogfood.ps1` hook refuses a non-conforming dispatch.
+Load the `dispatch-implementer` skill before the first dispatch. In short: two Haiku 5.5 lanes,
+`implementer` (several edits, few files) and `implementer-sweep` (one mechanical operation, many files),
+each with an evaluated tier ladder. The limits live in `.claude/implementer-tiers.json`, not in prose;
+the brief carries `Tier:` and `Limits:` copied from it, plus `Symbols:`, `Call sites:` (measured with
+`InspectSymbol(aspect: blastRadius)`), `Acceptance:` and `Out of scope:` (including the `RESCOPE:`
+clause). Tiers rise only on ledger evidence and fall back on failures (thresholds in the skill). Over the
+limits, split or go to `implementer-senior`. The `enforce-dogfood.ps1` hook refuses a non-conforming dispatch.
+
+## Tool gaps and large changes: report, don't brute-force
+
+If a task is blocked, or its blast radius is large, because no tool can do it as one semantic operation
+(a tool's limit blocks it, or no tool exists), stop. Do not perform it with many manual edits, a shell
+loop or text search-and-replace. Report `TOOL-GAP:` (task, tool tried and its limit or "no tool",
+measured call sites/files/projects, suggested change: extend tool X with Y, or new tool Z with inputs and
+outputs). The dispatcher records it as a `docs/current/TODO.md` line or a proposal and continues with
+any staged slice; if no staged route exists, the blocker workflow applies.
+
+Prefer **migration-first** changes: add the new overload, delegate or property beside the old member,
+mark the old one `[Obsolete("Use X")]`, move callers in slices, and remove the old member in a final
+slice once nothing references it. This is an encouraged workflow, not a workaround; it keeps every step
+compile-green and every slice inside a tier. See
+`docs/current/proposals/proposal_parallel_change_deprecated_wrappers.md`.
+
+**Why:** a missing or too-narrow tool is a gap in the tool surface (see Mission); brute force hides it
+and burns the context the agent needs.
 
 ## Dog-fooding policy (hard rule)
 
@@ -139,7 +160,8 @@ whenever a tool is awkward hides exactly those failures - the awkwardness is its
 ### Tool failures, bypasses and hooks
 
 **A tool failure is a blocking finding.** If a needed MCP tool fails, returns wrong data, is
-unreachable, or has no equivalent operation: finish any in-flight edit, stop advancing the task, and
+unreachable, or has no equivalent operation (and no staged route exists - see "Tool gaps and large
+changes"; a gap with a staged route is a `TOOL-GAP:` report, not a blocker): finish any in-flight edit, stop advancing the task, and
 write `docs/current/blockers/blocking_error_<slug>.md` (slug from the real symptom, never generic).
 Do not retry speculatively and do not route around it with shell tools. Then follow the Blocker
 workflow below.

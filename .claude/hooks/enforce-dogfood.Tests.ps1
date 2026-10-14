@@ -13,7 +13,8 @@ $ErrorActionPreference = 'Continue'
 $hook = Join-Path $PSScriptRoot 'enforce-dogfood.ps1'
 
 function Invoke-Hook([string]$payload, [string]$hookPath = $hook) {
-    $payload | & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $hookPath 2>&1 | Out-Null
+    # Output kept in $script:lastHookOut so a case can assert WHY it was denied (see 'match' below).
+    $script:lastHookOut = ($payload | & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $hookPath 2>&1 | Out-String)
     if ($LASTEXITCODE -eq 2) { 'DENY' } else { 'allow' }
 }
 
@@ -22,13 +23,43 @@ function Invoke-Hook([string]$payload, [string]$hookPath = $hook) {
 # staged" without touching the real repo, run a temp copy of the hook inside a throwaway git
 # repo. fx = 'empty' -> nothing staged; fx = 'staged' -> one staged path; fx = 'norepo' -> git fails.
 $fixtureRoots = @{}
+$tierJson = @'
+{
+  "depth": {
+    "agent": "implementer",
+    "tier": 0,
+    "tiers": [
+      { "maxFiles": 3, "maxEdits": 10, "maxAcceptance": 1, "maxToolCalls": 25 },
+      { "maxFiles": 3, "maxEdits": 15, "maxAcceptance": 1, "maxToolCalls": 35 },
+      { "maxFiles": 3, "maxEdits": 20, "maxAcceptance": 2, "maxToolCalls": 45 }
+    ]
+  },
+  "sweep": {
+    "agent": "implementer-sweep",
+    "tier": 1,
+    "tiers": [
+      { "maxOperations": 1, "maxFiles": 8, "maxCallSites": 25, "maxProjects": 2, "maxToolCalls": 30 },
+      { "maxOperations": 2, "maxFiles": 15, "maxCallSites": 50, "maxProjects": 2, "maxToolCalls": 45 },
+      { "maxOperations": 2, "maxFiles": 25, "maxCallSites": 100, "maxProjects": 3, "maxToolCalls": 60 }
+    ]
+  }
+}
+'@
 function Get-FixtureHook([string]$kind) {
     if ($fixtureRoots.ContainsKey($kind)) { return Join-Path $fixtureRoots[$kind] '.claude\hooks\enforce-dogfood.ps1' }
     $root = Join-Path ([System.IO.Path]::GetTempPath()) ("rs-dogfood-fx-$kind-" + [guid]::NewGuid().ToString('N'))
     $hookDir = Join-Path $root '.claude\hooks'
     New-Item -ItemType Directory -Path $hookDir -Force | Out-Null
     Copy-Item $hook (Join-Path $hookDir 'enforce-dogfood.ps1') -Force
-    if ($kind -ne 'norepo') { & git -C $root init -q 2>&1 | Out-Null }
+    if ($kind -notin @('norepo', 'tiers', 'tierbad', 'tierjson', 'notier')) { & git -C $root init -q 2>&1 | Out-Null }
+    # Implementer-dispatch fixtures vary the tier file the hook reads from <root>\.claude\. 'tiers' is a
+    # known-good copy of the plan's table with depth at tier 0 and sweep at tier 1 (independent of the
+    # live file, so promoting a lane there cannot break these tests); 'tierbad' has a current tier
+    # outside its tiers list; 'tierjson' is not JSON; 'notier' has no tier file at all.
+    $tierPath = Join-Path $root '.claude\implementer-tiers.json'
+    if ($kind -eq 'tiers')    { Set-Content -LiteralPath $tierPath -Value $tierJson -Encoding UTF8 }
+    if ($kind -eq 'tierbad')  { Set-Content -LiteralPath $tierPath -Value ($tierJson -replace '"tier": 0,', '"tier": 7,') -Encoding UTF8 }
+    if ($kind -eq 'tierjson') { Set-Content -LiteralPath $tierPath -Value '{ this is not json' -Encoding UTF8 }
     if ($kind -eq 'staged') {
         Set-Content -LiteralPath (Join-Path $root 'a.txt') -Value 'x'
         & git -C $root add -- a.txt 2>&1 | Out-Null
@@ -43,6 +74,17 @@ $msg = "Fix it`n`nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 # deny cases need real in-repo paths.
 $repo    = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path.TrimEnd('\', '/')
 $repoFwd = $repo.Replace('\', '/')
+
+# Implementer / implementer-sweep briefs for the tier cases. $files is a count of distinct .cs paths.
+$oosText = 'Out of scope: do not commit; no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed'
+function New-Brief([int]$files, [string]$tier, [string]$limits = 'Limits: see tier file', [string]$operation = '') {
+    $list = (1..$files | ForEach-Object { "P/F$_.cs" }) -join ', '
+    $b = "Files: $list`nSymbols: x`nCall sites: none`nAcceptance: clean Build"
+    if ($tier)      { $b += "`nTier: $tier" }
+    if ($limits)    { $b += "`n$limits" }
+    if ($operation) { $b += "`nOperation: $operation" }
+    $b + "`n$oosText"
+}
 
 $cases = @(
     # --- .cs edits: deny ---
@@ -311,27 +353,84 @@ $cases = @(
 
     # --- implementer dispatch: slice contract ---
     @{ n = 'implementer brief, all fields, 2 files, haiku'; want = 'allow'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: RoslynSentinel.Common/A.cs, RoslynSentinel.Common/B.cs`nSymbols: A.Foo`nCall sites: none`nAcceptance: clean Build`nOut of scope: do not commit; no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: RoslynSentinel.Common/A.cs, RoslynSentinel.Common/B.cs`nSymbols: A.Foo`nCall sites: none`nAcceptance: clean Build`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`nOut of scope: do not commit; no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'implementer brief, markdown-bold labels'; want = 'allow'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "- **Files:** RoslynSentinel.Common/A.cs`n- **Symbols:** A.Foo`n- **Call sites:** none`n- **Acceptance check:** clean Build`n- **Out of scope:** do not commit; no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "- **Files:** RoslynSentinel.Common/A.cs`n- **Symbols:** A.Foo`n- **Call sites:** none`n- **Acceptance check:** clean Build`n- **Tier:** D0`n- **Limits:** 3 files / 10 edits / 1 acceptance / 25 tool calls`n- **Out of scope:** do not commit; no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'implementer brief, model omitted'; want = 'DENY'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'implementer brief, model sonnet'; want = 'DENY'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'sonnet'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'sonnet'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'implementer brief, missing Acceptance'; want = 'DENY'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: A.cs`nSymbols: x`nCall sites: none`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'implementer brief, free-form prose'; want = 'DENY'
        p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = 'Please refactor the Git tool to use the new result type everywhere.' } } }
     @{ n = 'implementer brief, 4 files in Files section'; want = 'DENY'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs, P/B.cs, P/C.cs, P/D.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs, P/B.cs, P/C.cs, P/D.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'implementer brief, call-site files do not count toward the 3'; want = 'allow'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: P/B.cs:1, P/C.cs:2, P/D.cs:3, P/E.cs:4`nAcceptance: Build`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: P/B.cs:1, P/C.cs:2, P/D.cs:3, P/E.cs:4`nAcceptance: Build`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`nOut of scope: no Write/Edit/shell writes on .cs files; reply RESCOPE: if more is needed" } } }
     @{ n = 'implementer brief, Out of scope without RESCOPE'; want = 'DENY'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: do not commit; no Write/Edit/shell writes on .cs files" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`nOut of scope: do not commit; no Write/Edit/shell writes on .cs files" } } }
     @{ n = 'implementer brief, RESCOPE but no Write/Edit/shell (warn only)'; want = 'allow'
-       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nOut of scope: do not commit; reply RESCOPE: if more is needed" } } }
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = "Files: P/A.cs`nSymbols: x`nCall sites: none`nAcceptance: Build`nTier: D0`nLimits: 3 files / 10 edits / 1 acceptance / 25 tool calls`nOut of scope: do not commit; reply RESCOPE: if more is needed" } } }
     @{ n = 'other subagent type: not checked'; want = 'allow'
        p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'Explore'; prompt = 'where is X' } } }
+
+    # --- implementer / implementer-sweep: tiers, lanes and the tier file ---
+    # fx 'tiers' = known-good tier file, depth current tier 0, sweep current tier 1 (see Get-FixtureHook).
+    @{ n = 'tier: live tier file loads, sweep S0 allowed'; want = 'allow'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 2 'S0' 'Limits: 1 operation / 8 files' 'RenameSymbol Foo -> Bar') } } }
+    @{ n = 'sweep brief with Operation, S0'; want = 'allow'; fx = 'tiers'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 2 'S0' 'Limits: 1 operation / 8 files' 'RenameSymbol Foo -> Bar') } } }
+    @{ n = 'sweep brief with Operation, S1 (at current tier)'; want = 'allow'; fx = 'tiers'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 2 'S1' 'Limits: 2 operations / 15 files' 'RenameSymbol Foo -> Bar') } } }
+    @{ n = 'sweep brief, markdown-bold Tier/Operation labels'; want = 'allow'; fx = 'tiers'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = "- **Files:** P/A.cs`n- **Symbols:** x`n- **Call sites:** none`n- **Acceptance:** Build`n- **Tier:** S0`n- **Limits:** 1 op`n- **Operation:** RenameSymbol`n- **Out of scope:** no Write/Edit/shell; reply RESCOPE:" } } }
+    @{ n = 'sweep brief missing Operation'; want = 'DENY'; fx = 'tiers'; match = "missing field 'Operation:'"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 2 'S0') } } }
+    @{ n = 'depth brief does not need Operation'; want = 'allow'; fx = 'tiers'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'D0') } } }
+    @{ n = 'sweep brief missing Tier'; want = 'DENY'; fx = 'tiers'; match = "missing field 'Tier:'"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 2 '' 'Limits: x' 'Rename') } } }
+    @{ n = 'depth brief missing Limits'; want = 'DENY'; fx = 'tiers'; match = "missing field 'Limits:'"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'D0' '') } } }
+    @{ n = 'tier above lane current tier (sweep S2, current 1)'; want = 'DENY'; fx = 'tiers'; match = "above the sweep lane's current tier"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 2 'S2' 'Limits: x' 'Rename') } } }
+    @{ n = 'tier above lane current tier (depth D1, current 0)'; want = 'DENY'; fx = 'tiers'; match = "above the depth lane's current tier"
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'D1') } } }
+    @{ n = 'tier number with no entry in tiers (S3)'; want = 'DENY'; fx = 'tiers'; match = 'has no entry'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 2 'S3' 'Limits: x' 'Rename') } } }
+    @{ n = 'wrong lane letter (implementer with S0)'; want = 'DENY'; fx = 'tiers'; match = 'wrong lane letter'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'S0') } } }
+    @{ n = 'wrong lane letter (implementer-sweep with D0)'; want = 'DENY'; fx = 'tiers'; match = 'wrong lane letter'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 2 'D0' 'Limits: x' 'Rename') } } }
+    @{ n = 'Tier value not letter+number'; want = 'DENY'; fx = 'tiers'; match = 'Tier: value must be'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'zero') } } }
+    # File-count limit per tier (distinct .cs paths in Files).
+    @{ n = 'file limit: sweep S0 allows 8 files'; want = 'allow'; fx = 'tiers'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 8 'S0' 'Limits: x' 'Rename') } } }
+    @{ n = 'file limit: sweep S0 denies 9 files'; want = 'DENY'; fx = 'tiers'; match = 'at most 8'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 9 'S0' 'Limits: x' 'Rename') } } }
+    @{ n = 'file limit: sweep S1 allows 15 files'; want = 'allow'; fx = 'tiers'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 15 'S1' 'Limits: x' 'Rename') } } }
+    @{ n = 'file limit: sweep S1 denies 16 files'; want = 'DENY'; fx = 'tiers'; match = 'at most 15'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 16 'S1' 'Limits: x' 'Rename') } } }
+    @{ n = 'file limit: depth D0 allows 3 files'; want = 'allow'; fx = 'tiers'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 3 'D0') } } }
+    @{ n = 'file limit: depth D0 denies 4 files'; want = 'DENY'; fx = 'tiers'; match = 'at most 3'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 4 'D0') } } }
+    @{ n = 'file limit: brief tier S0 (not current S1) sets the limit'; want = 'DENY'; fx = 'tiers'; match = 'at most 8'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 12 'S0' 'Limits: x' 'Rename') } } }
+    # Tier file missing / unreadable / invalid: fail closed with the file named.
+    @{ n = 'tier file missing: fail closed'; want = 'DENY'; fx = 'notier'; match = 'implementer-tiers.json'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'D0') } } }
+    @{ n = 'tier file missing: sweep fails closed'; want = 'DENY'; fx = 'notier'; match = 'implementer-tiers.json'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 2 'S0' 'Limits: x' 'Rename') } } }
+    @{ n = 'tier file not JSON: fail closed'; want = 'DENY'; fx = 'tierjson'; match = 'implementer-tiers.json'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'D0') } } }
+    @{ n = 'tier file current tier outside tiers list: fail closed'; want = 'DENY'; fx = 'tierbad'; match = 'implementer-tiers.json'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer'; model = 'haiku'; prompt = (New-Brief 2 'D0') } } }
+    @{ n = 'denial text names lane, current tier and limits'; want = 'DENY'; fx = 'tiers'; match = 'Current tier: S1. Limits at that tier: maxOperations=2, maxFiles=15'
+       p = @{ tool_name = 'Agent'; tool_input = @{ subagent_type = 'implementer-sweep'; model = 'haiku'; prompt = (New-Brief 2 'S0' 'Limits: x') } } }
 
     # --- unrelated commands: allow ---
     @{ n = 'dotnet build'; want = 'allow'
@@ -361,9 +460,13 @@ foreach ($c in $cases) {
     $got = Invoke-Hook $json $hookPath
     if ($tokenPath) { Remove-Item -LiteralPath $tokenPath -Force -ErrorAction SilentlyContinue }
 
+    $why = ''
+    if ($got -eq $c.want -and $c.match -and $got -eq 'DENY' -and $script:lastHookOut -notmatch [regex]::Escape($c.match)) {
+        $got = 'DENY(wrong reason)'; $why = " expected text: $($c.match)"
+    }
     if ($got -eq $c.want) { $pass++; $mark = 'ok  ' }
     else                  { $fail++; $mark = 'FAIL' }
-    '{0} {1,-42} want={2,-5} got={3}' -f $mark, $c.n, $c.want, $got | Write-Host
+    '{0} {1,-42} want={2,-5} got={3}{4}' -f $mark, $c.n, $c.want, $got, $why | Write-Host
 }
 
 # Robustness: the hook must never block on bad input.

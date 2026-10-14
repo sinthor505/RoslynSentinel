@@ -34,7 +34,11 @@
 #     regex limitation as git detection above.
 #   - Bash/PowerShell WRITES to a .cs file (Set-Content/Out-File/Copy-Item/Move-Item/tee/cp/mv,
 #     [IO.File]::WriteAll*, or a > redirect to a .cs target) -> Member/ReplaceSnippet/WriteFile/...
-#   - Agent dispatch of `implementer`: slice-contract fields, 3-file limit, RESCOPE in Out of scope.
+#   - Agent dispatch of `implementer` (depth lane) or `implementer-sweep` (sweep lane): slice-contract
+#     fields (Files, Symbols, Call sites, Acceptance, Out of scope, Tier, Limits; Operation for sweep),
+#     Tier letter matching the lane (D/S), tier number not above the lane's current tier and present in
+#     .claude/implementer-tiers.json, distinct .cs files in Files within that tier's maxFiles, and
+#     RESCOPE in Out of scope. Fails closed when the tier file is missing, unreadable or invalid.
 #   - ReplaceSnippet called with filePath and batchEdits together (rejected server-side anyway,
 #     but the server's InvalidArgument error doesn't name a corrected example call the way this
 #     hook's message does), and a soft warning (not a block - this is a heuristic, not a real
@@ -305,17 +309,46 @@ docs/current/blockers/blocking_error_<slug>.md, and end the turn.
         exit 0
     }
 
-    # --- Dispatching `implementer`: slice contract --------------------------------------
-    # Skill dispatch-implementer (CLAUDE.md "Dispatching `implementer`"). implementer is Haiku-tier and
-    # stalls on briefs that are large or underspecified, and only the orchestrator's own prompt
-    # used to carry that rule - a general-purpose dispatcher never saw it. This makes a
+    # --- Dispatching `implementer` / `implementer-sweep`: slice contract -----------------
+    # Skill dispatch-implementer (CLAUDE.md "Dispatching `implementer`"). The implementer lanes are
+    # Haiku-tier and stall on briefs that are large or underspecified, and only the orchestrator's own
+    # prompt used to carry that rule - a general-purpose dispatcher never saw it. This makes a
     # non-conforming brief fail at dispatch time, naming the missing field. Not bypassable:
     # it guards the dispatch contract, not a policy a human might deliberately waive.
+    # Limits come from .claude/implementer-tiers.json (one object per lane: depth = implementer,
+    # sweep = implementer-sweep; matched on its 'agent' field). The brief names its tier ("Tier: D0",
+    # "Tier: S1"); the hook denies a tier above the lane's current 'tier' and a Files list over that
+    # tier's maxFiles. A missing or invalid tier file fails CLOSED (the dispatch is denied, with the
+    # file named), unlike the rest of this hook, because an unreadable limit table cannot be enforced.
     # Resuming an existing agent (SendMessage) is a different tool and is not checked here.
-    if ($toolName -in @('Agent', 'Task') -and [string]$toolInput.subagent_type -eq 'implementer') {
+    if ($toolName -in @('Agent', 'Task') -and [string]$toolInput.subagent_type -in @('implementer', 'implementer-sweep')) {
         $brief = [string]$toolInput.prompt
         $model = [string]$toolInput.model
+        $agentType = [string]$toolInput.subagent_type
         $problems = New-Object System.Collections.Generic.List[string]
+
+        # Load this lane's limits. $laneName/$lane stay $null when the file cannot be used; the
+        # problem is recorded here and the tier checks below are skipped.
+        $tierFilePath = Join-Path $repoRoot '.claude\implementer-tiers.json'
+        $tierFileRel  = '.claude/implementer-tiers.json'
+        $laneName = $null; $lane = $null; $laneTiers = @(); $laneCurrent = -1
+        try {
+            if (-not (Test-Path -LiteralPath $tierFilePath)) { throw "file not found" }
+            $tierCfg = Get-Content -LiteralPath $tierFilePath -Raw | ConvertFrom-Json
+            foreach ($ln in @('depth', 'sweep')) {
+                $cand = $tierCfg.$ln
+                if ($cand -and [string]$cand.agent -eq $agentType) { $laneName = $ln; $lane = $cand }
+            }
+            if (-not $lane) { throw "no lane has agent '$agentType'" }
+            $laneTiers = @($lane.tiers)
+            if ($laneTiers.Count -eq 0) { throw "lane '$laneName' has no 'tiers' entries" }
+            $laneCurrent = [int]$lane.tier
+            if ($laneCurrent -lt 0 -or $laneCurrent -ge $laneTiers.Count) { throw "lane '$laneName' has 'tier' $laneCurrent outside its 'tiers' list (0..$($laneTiers.Count - 1))" }
+        }
+        catch {
+            $laneName = $null; $lane = $null; $laneTiers = @(); $laneCurrent = -1
+            $problems.Add("  tier file $tierFileRel is missing, unreadable or invalid ($($_.Exception.Message)). The limits cannot be enforced, so the dispatch is refused. Restore the file (see docs/current/plans/plan_implementer_lanes_tiers_and_tool_gap_reporting.md, Step 1) and dispatch again.")
+        }
 
         if ($model -ne 'haiku') {
             $problems.Add("  model: pass model: `"haiku`" explicitly (got '$model'). An unpinned dispatch can inherit the caller's tier.")
@@ -328,6 +361,11 @@ docs/current/blockers/blocking_error_<slug>.md, and end the turn.
             'Call sites'   = '(?im)^\W*Call[ -]sites\b[^\r\n:]{0,20}:'
             'Acceptance'   = '(?im)^\W*Acceptance(?: check)?\b[^\r\n:]{0,20}:'
             'Out of scope' = '(?im)^\W*Out of scope\b[^\r\n:]{0,20}:'
+            'Tier'         = '(?im)^\W*Tier\b[^\r\n:]{0,20}:'
+            'Limits'       = '(?im)^\W*Limits\b[^\r\n:]{0,20}:'
+        }
+        if ($agentType -eq 'implementer-sweep') {
+            $labels['Operation'] = '(?im)^\W*Operation\b[^\r\n:]{0,20}:'
         }
         $found = @{}
         foreach ($k in $labels.Keys) {
@@ -335,8 +373,35 @@ docs/current/blockers/blocking_error_<slug>.md, and end the turn.
             if ($mm.Success) { $found[$k] = $mm } else { $problems.Add("  missing field '${k}:' (use the brief template in the dispatch-implementer skill).") }
         }
 
+        # Tier value: letter (D = depth lane, S = sweep lane) + tier number, e.g. D0, S2.
+        $tierEntry = $null; $tierLabel = $null
+        if ($found.ContainsKey('Tier')) {
+            $tm = [regex]::Match($brief.Substring($found['Tier'].Index + $found['Tier'].Length), '^[ \t*_`''"]*(?<l>[A-Za-z])[ \t]*(?<n>\d+)\b')
+            if (-not $tm.Success) {
+                $problems.Add("  Tier: value must be the lane letter plus the tier number, e.g. 'Tier: D0' (depth, implementer) or 'Tier: S0' (sweep, implementer-sweep).")
+            }
+            elseif ($laneName) {
+                $wantLetter = $laneName.Substring(0, 1).ToUpperInvariant()
+                $gotLetter  = $tm.Groups['l'].Value.ToUpperInvariant()
+                $tierNum    = [int]$tm.Groups['n'].Value
+                $tierLabel  = "$gotLetter$tierNum"
+                if ($gotLetter -ne $wantLetter) {
+                    $problems.Add("  Tier: '$tierLabel' uses the wrong lane letter; $agentType is the $laneName lane, so its tiers are written '${wantLetter}0', '${wantLetter}1', ...")
+                }
+                elseif ($tierNum -ge $laneTiers.Count) {
+                    $problems.Add("  Tier: '$tierLabel' has no entry in $tierFileRel (the $laneName lane defines tiers 0..$($laneTiers.Count - 1)).")
+                }
+                elseif ($tierNum -gt $laneCurrent) {
+                    $problems.Add("  Tier: '$tierLabel' is above the $laneName lane's current tier ($wantLetter$laneCurrent). Use '$wantLetter$laneCurrent' or lower; tiers are raised only by editing 'tier' in $tierFileRel after a ledger review.")
+                }
+                else {
+                    $tierEntry = $laneTiers[$tierNum]
+                }
+            }
+        }
+
         # Files section = text from the Files label up to the next label; count distinct .cs paths.
-        if ($found.ContainsKey('Files')) {
+        if ($found.ContainsKey('Files') -and $tierEntry) {
             $start = $found['Files'].Index + $found['Files'].Length
             $end = $brief.Length
             foreach ($k in $found.Keys) {
@@ -344,8 +409,9 @@ docs/current/blockers/blocking_error_<slug>.md, and end the turn.
             }
             $filesText = $brief.Substring($start, $end - $start)
             $csFiles = @([regex]::Matches($filesText, '[\w.\\/\-]+\.cs\b') | ForEach-Object { $_.Value.ToLowerInvariant() } | Select-Object -Unique)
-            if ($csFiles.Count -gt 3) {
-                $problems.Add("  Files lists $($csFiles.Count) distinct .cs files; a slice is at most 3. Split it into compile-green slices (CLAUDE.md), or send it to implementer-senior if it cannot be split.")
+            $maxFiles = [int]$tierEntry.maxFiles
+            if ($csFiles.Count -gt $maxFiles) {
+                $problems.Add("  Files lists $($csFiles.Count) distinct .cs files; the $laneName lane at tier $tierLabel allows at most $maxFiles. Split it into compile-green slices (CLAUDE.md), or send it to implementer-senior if it cannot be split.")
             }
         }
 
@@ -363,14 +429,24 @@ docs/current/blockers/blocking_error_<slug>.md, and end the turn.
         }
 
         if ($problems.Count -gt 0) {
+            $laneSummary = if ($laneName) {
+                $curEntry = $laneTiers[$laneCurrent]
+                $limitText = (@($curEntry.PSObject.Properties) | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join ', '
+                "Lane: $laneName ($agentType). Current tier: $($laneName.Substring(0, 1).ToUpperInvariant())$laneCurrent. Limits at that tier: $limitText."
+            }
+            else {
+                "Lane: $agentType. Limits unavailable: fix $tierFileRel first."
+            }
             Deny @"
-BLOCKED by dispatch policy: implementer brief does not meet the slice contract.
+BLOCKED by dispatch policy: $agentType brief does not meet the slice contract.
 
 $($problems -join "`n")
 
-implementer is Haiku-tier. A brief it can finish names, up front: Files (3 or fewer, full
-paths including the project), Symbols, Call sites (pre-measured with
-InspectSymbol(aspect: blastRadius) / Search(mode: references)), one Acceptance check, and Out of scope.
+$laneSummary
+$agentType is Haiku-tier. A brief it can finish names, up front: Files (full paths including the
+project, within the tier's file limit), Symbols, Call sites (pre-measured with
+InspectSymbol(aspect: blastRadius) / Search(mode: references)), one Acceptance check, Out of scope,
+Tier (e.g. D0 or S0) and Limits (copied from $tierFileRel), plus Operation for implementer-sweep.
 Load the dispatch-implementer skill for the full brief template and slice limits.
 Fix the brief and dispatch again. Nothing was dispatched.
 "@
