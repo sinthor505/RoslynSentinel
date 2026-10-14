@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common.SnippetMatching;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Basic;
 
@@ -1353,7 +1354,7 @@ public class ContextHelperDisambiguationTests
     public void FindSnippetPosition_SingleMatch_ReturnsCorrectOffset()
     {
         var src = Src("int x = 1;\nint y = 2;");
-        var offset = ContextHelper.FindSnippetPosition(src, "int y");
+        var offset = SnippetLookup.ResolveOrThrow(src, "int y").Start;
         Assert.That(offset, Is.EqualTo(11)); // after the first line + '\n'
     }
 
@@ -1364,7 +1365,7 @@ public class ContextHelperDisambiguationTests
     {
         var src = Src("int x = 1;\nint x = 2;");
         var ex = Assert.Throws<ToolAmbiguousMatchException>(
-            () => ContextHelper.FindSnippetPosition(src, "int x"));
+            () => SnippetLookup.ResolveOrThrow(src, "int x"));
         Assert.That(ex!.Message, Does.Contain("ambiguous").IgnoreCase
             .Or.Contain("2 matches").IgnoreCase);
     }
@@ -1376,7 +1377,7 @@ public class ContextHelperDisambiguationTests
     {
         var src = Src("// first block\nint x = 1;\n// second block\nint x = 2;");
         // "int x" appears twice; lineBefore = "second block" selects the second
-        var offset = ContextHelper.FindSnippetPosition(src, "int x", lineBefore: "second block");
+        var offset = SnippetLookup.ResolveOrThrow(src, "int x", lineBefore: "second block").Start;
         var linePos = src.Lines.GetLinePosition(offset);
         Assert.That(linePos.Line, Is.EqualTo(3)); // 0-based line 3 = "int x = 2;"
     }
@@ -1389,7 +1390,7 @@ public class ContextHelperDisambiguationTests
         // lineBefore and lineAfter both appear identically near each occurrence
         var src = Src("// same\nint x = 1;\n// end\n// same\nint x = 2;\n// end");
         var ex = Assert.Throws<ToolAmbiguousMatchException>(
-            () => ContextHelper.FindSnippetPosition(src, "int x",
+            () => SnippetLookup.ResolveOrThrow(src, "int x",
                 lineBefore: "same", lineAfter: "end"));
         Assert.That(ex!.Message, Does.Contain("ambiguous").IgnoreCase
             .Or.Contain("still ambiguous").IgnoreCase);

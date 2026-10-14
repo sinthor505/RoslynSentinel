@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common.SnippetMatching;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Advanced;
@@ -1027,7 +1028,7 @@ public class Repo
             const string source = "void M() { var x = \"hello\"; }\nvoid M() { var y = \"world\"; }";
             var sourceText = Microsoft.CodeAnalysis.Text.SourceText.From(source);
             // lineBefore: "void M() { var x = \"hello\"; }" -> \" normalized to " by MatchLine
-            var pos = ContextHelper.FindSnippetPosition(sourceText, "void M()", lineBefore: "void M() { var x = \\\"hello\\\"; }");
+            var pos = SnippetLookup.ResolveOrThrow(sourceText, "void M()", lineBefore: "void M() { var x = \\\"hello\\\"; }").Start;
             // Should find the occurrence on line 1 (after line 0's position)
             var firstOccurrence = source.IndexOf("void M()", StringComparison.Ordinal);
             Assert.That(pos, Is.GreaterThan(firstOccurrence), "Should find the second 'void M()' occurrence (line 1), not the first");
@@ -1043,7 +1044,7 @@ public class Repo
             var sourceText = Microsoft.CodeAnalysis.Text.SourceText.From(source);
             // lineBefore for line 1 = line 0: var x = "hello";
             // AI provides it escaped: var x = \"hello\";
-            var pos = ContextHelper.FindSnippetPosition(sourceText, "\"hello\"", lineBefore: "var x = \\\"hello\\\";");
+            var pos = SnippetLookup.ResolveOrThrow(sourceText, "\"hello\"", lineBefore: "var x = \\\"hello\\\";").Start;
             // Should find the occurrence on line 1, which is after line 0's occurrence
             var firstOccurrence = source.IndexOf("\"hello\"", StringComparison.Ordinal);
             Assert.That(pos, Is.GreaterThan(firstOccurrence), "Should find the 'hello' occurrence on line 1, not line 0");

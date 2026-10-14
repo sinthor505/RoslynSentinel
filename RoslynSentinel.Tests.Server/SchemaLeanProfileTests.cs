@@ -14,6 +14,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
+using RoslynSentinel.Common.SnippetMatching;
 using RoslynSentinel.Server.Basic;
 
 namespace RoslynSentinel.Tests.Server;
@@ -341,7 +342,7 @@ public class SchemaLeanProfileTests
     public void AmbiguousSnippetError_NamesLineBeforeAndLineAfter()
     {
         var ex = Assert.Throws<ToolAmbiguousMatchException>(
-            () => ContextHelper.FindSnippetPosition("int x = 1; int y = 1;", "int"));
+            () => SnippetLookup.ResolveOrThrow(SourceText.From("int x = 1; int y = 1;"), "int"));
 
         Assert.That(ex!.Message, Does.Contain("lineBefore"));
         Assert.That(ex.Message, Does.Contain("lineAfter"));
@@ -350,8 +351,10 @@ public class SchemaLeanProfileTests
     [Test]
     public void StillAmbiguousSnippetError_NamesLineBeforeAndLineAfter()
     {
-        var ex = ContextErrorBuilder.Build(
-            SnippetMatchOutcome.StillAmbiguous, "int", SourceText.From("int x = 1; int y = 1;"));
+        var text = SourceText.From("// same\nint x = 1;\n// end\n// same\nint x = 2;\n// end");
+        var result = SnippetLookup.Resolve(text, "int x", "same", "end");
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.StillAmbiguous));
+        var ex = SnippetErrorFormatter.Build(result, text, "int x", "contextSnippet");
 
         Assert.That(ex.Message, Does.Contain("lineBefore"));
         Assert.That(ex.Message, Does.Contain("lineAfter"));
