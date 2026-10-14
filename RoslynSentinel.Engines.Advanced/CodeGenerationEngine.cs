@@ -5,6 +5,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common.SnippetMatching;
+
 namespace RoslynSentinel.Engines.Advanced;
 
 public record GenerationResult(FilePathWrapper filePath, string Content);
@@ -1065,7 +1067,7 @@ public class CodeGenerationEngine
         else
         {
             var srcText = await document.GetTextAsync(cancellationToken);
-            var pos = ContextHelper.TryFindSnippetPosition(srcText, contextSnippet, out var snippetError, lineBefore, lineAfter);
+            var pos = SnippetLookup.TryResolve(srcText, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
             if (pos < 0)
             {
                 return new DocumentEditResult
@@ -1278,7 +1280,7 @@ public class CodeGenerationEngine
         }
 
         var srcText = await document.GetTextAsync(cancellationToken);
-        var pos = ContextHelper.TryFindSnippetPosition(srcText, contextSnippet, out var snippetError, lineBefore, lineAfter);
+        var pos = SnippetLookup.TryResolve(srcText, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
         if (pos < 0)
         {
             return new DocumentEditResult

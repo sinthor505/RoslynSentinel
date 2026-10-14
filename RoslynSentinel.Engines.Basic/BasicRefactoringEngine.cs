@@ -10,6 +10,8 @@ using Microsoft.CodeAnalysis.Simplification;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common.SnippetMatching;
+
 namespace RoslynSentinel.Engines.Basic;
 
 public record ExtractMethodResult(bool IsError, string? ErrorMessage, string? BeforeSnippet, string? CallSiteReplacement, string? ExtractedMethodText, string? UpdatedSourceContent) : IResultStatus
@@ -1052,7 +1054,7 @@ public class BasicRefactoringEngine
 
         var root = (await document.GetSyntaxRootAsync(cancellationToken))!;
         var text = await document.GetTextAsync(cancellationToken);
-        var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
+        var pos = SnippetLookup.TryResolve(text, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
         if (pos < 0)
         {
             return new DocumentEditResult
@@ -1063,7 +1065,7 @@ public class BasicRefactoringEngine
             };
         }
 
-        var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length));
+        var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, snippetMatch!.Length));
         var literal = node.DescendantNodesAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault() ?? node.AncestorsAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault();
         if (literal == null)
         {
@@ -1152,7 +1154,7 @@ public class BasicRefactoringEngine
 
         var root = (await document.GetSyntaxRootAsync(cancellationToken))!;
         var text = await document.GetTextAsync(cancellationToken);
-        var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
+        var pos = SnippetLookup.TryResolve(text, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
         if (pos < 0)
         {
             // ContextHelper's message ("contextSnippet not found"/"ambiguous (N matches)") is
@@ -1397,7 +1399,7 @@ public class BasicRefactoringEngine
         MethodDeclarationSyntax? method = null;
         if (contextSnippet != null)
         {
-            var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out _, lineBefore, lineAfter);
+            var pos = SnippetLookup.TryResolve(text, contextSnippet, lineBefore, lineAfter, out var lookup) ? lookup.Matches.Single().Start : -1;
             if (pos >= 0)
             {
                 method = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0)).AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
@@ -1442,7 +1444,7 @@ public class BasicRefactoringEngine
         MethodDeclarationSyntax? method = null;
         if (contextSnippet != null)
         {
-            var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out _, lineBefore, lineAfter);
+            var pos = SnippetLookup.TryResolve(text, contextSnippet, lineBefore, lineAfter, out var lookup) ? lookup.Matches.Single().Start : -1;
             if (pos >= 0)
             {
                 method = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0)).AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();

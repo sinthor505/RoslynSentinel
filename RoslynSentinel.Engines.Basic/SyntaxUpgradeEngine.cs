@@ -3,6 +3,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common.SnippetMatching;
+
 namespace RoslynSentinel.Engines.Basic;
 
 public class SyntaxUpgradeEngine
@@ -189,7 +191,7 @@ public class SyntaxUpgradeEngine
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var text = await document.GetTextAsync(cancellationToken);
-        var pos = ContextHelper.TryFindSnippetPosition(text, contextSnippet, out var snippetError, lineBefore, lineAfter);
+        var pos = SnippetLookup.TryResolve(text, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
         if (pos < 0)
         {
             return new DocumentEditResult
@@ -200,7 +202,7 @@ public class SyntaxUpgradeEngine
             };
         }
 
-        var node = root?.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length))
+        var node = root?.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, snippetMatch!.Length))
             .DescendantNodesAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault(l => l.IsKind(SyntaxKind.StringLiteralExpression));
 
         if (node != null)

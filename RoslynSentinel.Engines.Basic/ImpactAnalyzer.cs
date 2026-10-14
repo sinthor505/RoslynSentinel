@@ -49,7 +49,7 @@ public class ImpactAnalyzer
             // Find the symbol at the given position
             var sourceText = await document.GetTextAsync(cancellationToken);
             // Resolve at the snippet start first (mirrors InspectSymbol(info)); the last-identifier path below is the fallback
-            var symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
+            var symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
             var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
             // Advance to the last identifier token in the snippet span so FindSymbolAtPositionAsync works
             position = ContextHelper.AdvanceToLastIdentifier(syntaxRoot, position, contextSnippet.Length);

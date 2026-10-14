@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
 
 using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Advanced;
 
@@ -763,7 +764,7 @@ public class StructuralRefactoringEngine
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
-        var position = ContextHelper.TryFindSnippetPosition(sourceText, contextSnippet, out var paramSnippetError, lineBefore, lineAfter);
+        var position = SnippetLookup.TryResolve(sourceText, contextSnippet, lineBefore, lineAfter, out var paramMatch, out var paramSnippetError) ? paramMatch.Start : -1;
         if (position < 0)
         {
             return new DocumentEditResult

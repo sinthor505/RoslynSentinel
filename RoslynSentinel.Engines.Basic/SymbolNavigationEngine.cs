@@ -414,15 +414,15 @@ public class SymbolNavigationEngine
         ISymbol? symbol = null;
         try
         {
-            symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
+            symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
         }
-        catch (ToolException ex) when (ex.Message.Contains("matched") || ex.Message.Contains("No match"))
+        catch (ToolException ex)
         {
-            return ErrorHoverInfo($"Snippet not found: {ex.Message}");
-        }
-        catch (ToolException)
-        {
-            // fallthrough to position-based approach
+            // Any snippet failure (no match, several matches, malformed lineBefore/lineAfter) is reported with the
+            // lookup's own message, which lists the file's candidates. The old filter on the message text
+            // ("matched" / "No match") is gone: it coupled this catch to wording the candidate-listing messages
+            // do not promise, and the fallthrough it guarded only re-threw the same failure below.
+            return ErrorHoverInfo(ex.Message);
         }
 
         // Fallback: position-based lookup using SymbolFinder (handles usage sites)
@@ -1529,7 +1529,7 @@ public class SymbolNavigationEngine
 
             if (contextSnippet != null)
             {
-                symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken) ?? throw new ToolNotFoundException(
+                symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken) ?? throw new ToolNotFoundException(
                         $"FindCallers: contextSnippet did not resolve to a symbol in '{filePath}'. " +
                         $"This is NOT a confirmed zero-references result for '{symbolName}' - the lookup " +
                         "never ran. " + DescribeNameOnlyCandidates(decls, symbolName) +
@@ -1600,7 +1600,7 @@ public class SymbolNavigationEngine
 
                     try
                     {
-                        symbol = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                        symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(doc, contextSnippet, lineBefore, lineAfter, cancellationToken);
                         // A snippet can land on a neighbouring declaration or call site; only accept a symbol whose name matches symbolName.
                         if (symbol != null && symbol.Name != symbolName
                             && !(symbol is IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor } ctorSymbol && ctorSymbol.ContainingType.Name == symbolName))
@@ -1795,7 +1795,7 @@ public class SymbolNavigationEngine
                 }
                 else if (contextSnippet != null)
                 {
-                    symbol = await ContextHelper.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
                     if (symbol == null)
                     {
                         // Same name-only lookup as the no-snippet branch below, used purely to
@@ -1877,7 +1877,7 @@ public class SymbolNavigationEngine
 
                     try
                     {
-                        symbol = await ContextHelper.FindSymbolAtSnippetAsync(doc, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                        symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(doc, contextSnippet, lineBefore, lineAfter, cancellationToken);
                         // A snippet can land on a neighbouring declaration or call site; only accept a symbol whose name matches symbolName.
                         if (symbol != null && symbol.Name != symbolName
                             && !(symbol is IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor } ctorSymbol && ctorSymbol.ContainingType.Name == symbolName))
