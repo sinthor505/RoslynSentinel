@@ -496,4 +496,152 @@ public class SnippetErrorFormatterTests
         Assert.That(message, Does.Not.Contain("Exception"));
         Assert.That(message, Does.Not.Contain(":\\"));
     }
+
+    [Test]
+    public void LengthCap_LargeFileAllIndentationDropped_StaysBoundedAndStatesTheUnlistedDifferences()
+    {
+        var fileLines = Enumerable.Range(0, 3000).Select(i => $"        step{i}();").ToList();
+        var source = string.Join("\n", fileLines);
+        var snippet = string.Join("\n", fileLines.Skip(1000).Take(40).Select(l => l.TrimStart()));
+        var result = Resolve(source, snippet, WhitespaceTolerance.IgnoreLineEndings);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.MatchedLooserThanRequested));
+        Assert.That(result.NearMatches, Has.Count.EqualTo(1));
+        Assert.That(result.NearMatches[0].StartLine, Is.EqualTo(1001));
+        Assert.That(result.NearMatches[0].Differences, Has.Count.EqualTo(39), "the first snippet line starts mid-line, so it is not a difference");
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex.Message, Does.Contain("(31 more difference(s) not listed)"));
+        Assert.That(ex.Message, Does.Contain("file has 8 leading spaces, snippet has none"));
+        Assert.That(Fences(ex.Message).Single().Length, Is.LessThanOrEqualTo(40), "the verbatim file block is the 40 snippet lines at most");
+        Assert.That(ex.Message.Length, Is.LessThanOrEqualTo(SnippetErrorFormatter.MaxMessageChars));
+    }
+
+    [Test]
+    public void LengthCap_RepeatedLinesInALargeFile_StaysBoundedAndFast()
+    {
+        var source = string.Concat(Enumerable.Repeat("    alpha();\n    beta();\n", 300))
+                     + string.Concat(Enumerable.Repeat("    gamma();\n", 300));
+        const string snippet = "    gamma();\n    alpha();\n    beta();";
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+        var result = Resolve(source, snippet);
+        var ex = Build(source, snippet, result);
+
+        stopwatch.Stop();
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+        Assert.That(result.ClosestWindows.Count, Is.LessThanOrEqualTo(5));
+        Assert.That(ex.Message.Length, Is.LessThanOrEqualTo(SnippetErrorFormatter.MaxMessageChars));
+        Assert.That(stopwatch.Elapsed, Is.LessThan(TimeSpan.FromSeconds(10)), "the search must not degrade on repeated lines");
+    }
+
+    [Test]
+    public void NoMatch_TwentyFiveLineNearMiss_QuotesTheFilesDifferingLine_AndCapsTheEcho()
+    {
+        var longLine = "    var longValue = \"" + new string('x', 150) + "\";";
+        var shared = Enumerable.Range(0, 25).Select(i => i == 2 ? longLine : $"    Step{i}();").ToArray();
+        var fileBlock = (string[])shared.Clone();
+        fileBlock[12] = "    var result = Compute(31);";
+        var snippetBlock = (string[])shared.Clone();
+        snippetBlock[12] = "    var result = Compute(13);";
+        var source = Lines(Enumerable.Range(0, 5).Select(i => $"    Setup{i}();")
+            .Concat(fileBlock)
+            .Concat(Enumerable.Range(0, 5).Select(i => $"    Teardown{i}();"))
+            .ToArray());
+        var snippet = Lines(snippetBlock);
+        var result = Resolve(source, snippet);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+        Assert.That(result.ClosestWindows, Is.Not.Empty);
+        Assert.That(result.ClosestWindows[0].StartLine, Is.EqualTo(6), "the window starts at the block's first line");
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex, Is.InstanceOf<ToolNotFoundException>());
+        Assert.That(ex.Message, Does.Contain("Window 1 (starts at line 6, score "));
+        Assert.That(ex.Message, Does.Contain("    var result = Compute(31);"), "the file's own differing line, verbatim");
+        Assert.That(ex.Message, Does.Not.Contain("Compute(13)"), "the echo stops before the differing snippet line");
+        Assert.That(Fences(ex.Message)[0], Is.EqualTo(fileBlock));
+        Assert.That(Regex.Matches(ex.Message, @"^  \d+: \[", RegexOptions.Multiline), Has.Count.EqualTo(SnippetErrorFormatter.MaxEchoLines));
+        Assert.That(ex.Message, Does.Contain("... 17 more line(s) not shown"));
+        Assert.That(ex.Message, Does.Contain($"...(+{longLine.Length - 100} chars)"), "an echo line over 100 characters is cut and says by how much");
+        Assert.That(ex.Message.Length, Is.LessThanOrEqualTo(SnippetErrorFormatter.MaxMessageChars));
+    }
+
+    [Test]
+    public void Build_EveryFailureOutcome_ReturnsItsExceptionTypeAndErrorCode()
+    {
+        const string twice = "a();\nx();\nb();\nc();\nx();\nd();";
+        var selectorText = SourceText.From(SelectorSource);
+        var tieMatches = new[]
+        {
+            new SnippetMatch(0, 1, 4, WhitespaceTolerance.Exact, "Test"),
+            new SnippetMatch(5, 2, 4, WhitespaceTolerance.Exact, "Test"),
+        };
+        var tie = SnippetMatchResult.Create(
+            WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive, SnippetMatchOutcome.TrueTie, tieMatches,
+            Array.Empty<SnippetNearMatch>(), 0, Array.Empty<SnippetClosestWindow>(), 2, 2, 2);
+
+        var cases = new (SnippetMatchOutcome Outcome, string Source, string Snippet, SnippetMatchResult Result, Type ExceptionType, string ErrorCode)[]
+        {
+            (SnippetMatchOutcome.NoMatch, QwenSource, "qqqq zzzz\nwwww jjjj", Resolve(QwenSource, "qqqq zzzz\nwwww jjjj"),
+                typeof(ToolNotFoundException), ToolErrorCode.NotFound),
+            (SnippetMatchOutcome.MatchedLooserThanRequested, QwenSource, QwenSnippet, Resolve(QwenSource, QwenSnippet),
+                typeof(ToolMatchedLooserTierException), ToolErrorCode.MatchedLooserThanRequested),
+            (SnippetMatchOutcome.Ambiguous, twice, "x();", Resolve(twice, "x();"),
+                typeof(ToolAmbiguousMatchException), ToolErrorCode.Ambiguous),
+            (SnippetMatchOutcome.StillAmbiguous, SelectorSource, SelectorSnippet, ResolveSelectors(new SnippetSelectors(WithinMember: "B")),
+                typeof(ToolAmbiguousMatchException), ToolErrorCode.Ambiguous),
+            (SnippetMatchOutcome.TrueTie, "x();\nx();", "x();", tie,
+                typeof(ToolAmbiguousMatchException), ToolErrorCode.Ambiguous),
+            (SnippetMatchOutcome.SelectorMismatch, SelectorSource, SelectorSnippet, ResolveSelectors(new SnippetSelectors(MatchLine: 99)),
+                typeof(ToolNotFoundException), ToolErrorCode.NotFound),
+            (SnippetMatchOutcome.AdjacentLineMismatch, twice, "x();", Resolve(twice, "x();", selectors: new SnippetSelectors(LineBefore: "nonexistent();")),
+                typeof(ToolNotFoundException), ToolErrorCode.NotFound),
+            (SnippetMatchOutcome.InvalidDisambiguator, twice, "x();", Resolve(twice, "x();", selectors: new SnippetSelectors(LineBefore: "a();\nb();")),
+                typeof(ToolNotFoundException), ToolErrorCode.NotFound),
+        };
+
+        foreach (var (outcome, source, snippet, result, exceptionType, errorCode) in cases)
+        {
+            Assert.That(result.Outcome, Is.EqualTo(outcome), "precondition: " + outcome);
+
+            var ex = Build(source, snippet, result, MemberByLines(selectorText), selectorsSupported: true);
+
+            Assert.That(ex, Is.TypeOf(exceptionType), outcome.ToString());
+            Assert.That(ex.ErrorCode, Is.EqualTo(errorCode), outcome.ToString());
+        }
+    }
+
+    [Test]
+    public void LooserTier_OnlyOneInteriorLineFlushLeft_NamesThatLineWithCountsAndQuotesTheFilesLine()
+    {
+        const string source = "class C\n{\n    void M()\n    {\n        var first = 1;\n        {\n            var trailingIssue = first;\n        }\n    }\n}";
+        const string snippet = "var first = 1;\n        {\nvar trailingIssue = first;\n        }";
+        var result = Resolve(source, snippet, WhitespaceTolerance.IgnoreLineEndings);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.MatchedLooserThanRequested));
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex, Is.InstanceOf<ToolMatchedLooserTierException>());
+        Assert.That(ex.Message, Does.Contain("- line 3: file has 12 leading spaces, snippet has none (file line 7)"));
+        Assert.That(Regex.Matches(ex.Message, @"^  - line \d+:", RegexOptions.Multiline), Has.Count.EqualTo(1), "only the flush-left line differs");
+        Assert.That(ex.Message, Does.Contain("\n            var trailingIssue = first;"), "the file's own line, verbatim");
+    }
+
+    [Test]
+    public void NoMatch_WhitespaceOnlyDifferencesOnNonContiguousLines_QuotesTheFilesOwnLines()
+    {
+        const string source = "var  x = 1;\nother();\nvar  y = 2;";
+        const string snippet = "var x = 1;\nvar y = 2;";
+        var result = Resolve(source, snippet, WhitespaceTolerance.IgnoreLineEndings);
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+        Assert.That(result.ClosestWindows, Is.Not.Empty);
+
+        var ex = Build(source, snippet, result);
+
+        Assert.That(ex, Is.InstanceOf<ToolNotFoundException>());
+        Assert.That(ex.Message, Does.Contain("Window 1 (starts at line 1, score "));
+        Assert.That(Fences(ex.Message)[0], Is.EqualTo(new[] { "var  x = 1;", "other();" }), "the file's own lines (a window is as long as the snippet), double spaces included");
+        Assert.That(ex.Message, Does.Contain("[var x = 1;] \\n"), "the echo shows what was sent");
+    }
 }

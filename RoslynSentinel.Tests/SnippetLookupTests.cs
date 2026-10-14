@@ -26,6 +26,34 @@ public class SnippetLookupTests
 
     private const string TwiceSource = "a();\nx();\nb();\nc();\nx();\nd();";
 
+    // Copied from ContextHelperTests (a live ContosoOrders agent run): 8/12-space indentation, CRLF line endings.
+    private const string OrderProcessorLikeSource =
+        "namespace ContosoOrders.Core;\r\n" +
+        "\r\n" +
+        "public class Order\r\n" +
+        "{\r\n" +
+        "    public string BuildOrderSummary()\r\n" +
+        "    {\r\n" +
+        "        var sb = new System.Text.StringBuilder();\r\n" +
+        "        sb.AppendLine($\"Order for {_customerId}\");\r\n" +
+        "        sb.AppendLine($\"Status: {Status}\");\r\n" +
+        "\r\n" +
+        "        // --- extract-target block start ---\r\n" +
+        "        decimal runningTotal = 0m;\r\n" +
+        "        int totalUnits = 0;\r\n" +
+        "        foreach (var line in _lines)\r\n" +
+        "        {\r\n" +
+        "            runningTotal += line.Quantity * line.UnitPrice;\r\n" +
+        "            totalUnits += line.Quantity;\r\n" +
+        "        }\r\n" +
+        "        sb.AppendLine($\"Total units: {totalUnits}\");\r\n" +
+        "        sb.AppendLine($\"Running total: {runningTotal:C}\");\r\n" +
+        "        // --- extract-target block end ---\r\n" +
+        "\r\n" +
+        "        return sb.ToString();\r\n" +
+        "    }\r\n" +
+        "}\r\n";
+
     private static SourceText Text(string source) => SourceText.From(source);
 
     // The lines inside each fenced block of a message, in order.
@@ -187,5 +215,27 @@ public class SnippetLookupTests
     public void ResolveOrThrow_BlankSnippet_ThrowsNotFoundRatherThanMatchingEverywhere()
     {
         Assert.Throws<ToolNotFoundException>(() => SnippetLookup.ResolveOrThrow(Text("a();\nb();"), "   "));
+    }
+
+    [Test]
+    public void ResolveOrThrow_MultilineSnippetWithFlattenedIndentation_StartsAtTheFirstStatementNotTheLine()
+    {
+        // The snippet as a model retypes it: 0 spaces on the outer lines, 4 in the loop body; the file uses 8/12.
+        const string flattened =
+            "decimal runningTotal = 0m;\n" +
+            "int totalUnits = 0;\n" +
+            "foreach (var line in _lines)\n" +
+            "{\n" +
+            "    runningTotal += line.Quantity * line.UnitPrice;\n" +
+            "    totalUnits += line.Quantity;\n" +
+            "}";
+
+        var match = SnippetLookup.ResolveOrThrow(Text(OrderProcessorLikeSource), flattened);
+
+        var expected = OrderProcessorLikeSource.IndexOf("decimal runningTotal = 0m;", StringComparison.Ordinal);
+        Assert.That(match.Start, Is.EqualTo(expected));
+        Assert.That(match.Start, Is.EqualTo(307));
+        Assert.That(match.Line, Is.EqualTo(12));
+        Assert.That(match.Tier, Is.EqualTo(WhitespaceTolerance.IgnoreIndentation));
     }
 }
