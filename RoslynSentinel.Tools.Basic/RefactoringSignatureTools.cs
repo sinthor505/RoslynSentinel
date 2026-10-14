@@ -35,14 +35,14 @@ public class RefactoringSignatureTools
     public Task<SentinelCallToolResult<object>> MethodSignature(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
-        [Description("add (needs paramName+paramType): appends a parameter to the end of the list. remove (needs paramName): removes only the LAST parameter, so paramName must match it; positional call sites are updated, but named-argument call sites make the operation refuse. view: lists parameters (name, type, default).")]
+        [Description("add (needs paramName+paramType): appends a parameter to the end of the list. remove (needs paramName): " + ToolParams.RemoveLastParameter + " the operation refuse. view: lists parameters (name, type, default).")]
         [Consumes(DataTag.Action, required: true)] AddRemoveViewAction operation,
         [Consumes(DataTag.MethodName, required: true)] string methodName,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add/remove, unused for operation=view.
         [Consumes(DataTag.SymbolName, required: false)] string? paramName = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add, unused for remove/view.
         [Consumes(DataTag.DataType, required: false)] string? paramType = null,
-        [Description("add only. Default value for the new parameter (e.g. \"3\", \"\\\"foo\\\"\"); omit for a required parameter. To default to null use nullDefault:true, not the string \"null\". Mutually exclusive with nullDefault.")]
+        [Description(ToolParams.DefaultValueLead + "\"3\", \"\\\"foo\\\"\"" + ToolParams.DefaultValueTail)]
         [ExternalInputRequired(DataTag.Initializer, required: false)] string? defaultValue = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -51,7 +51,7 @@ public class RefactoringSignatureTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default,
-        [Description("add only. Sets the new parameter's default to the null literal (use instead of defaultValue:\"null\"). Mutually exclusive with defaultValue.")] bool nullDefault = false) =>
+        [Description(ToolParams.NullDefaultLead + " (use instead of defaultValue:\"null\")." + ToolParams.NullDefaultTail)] bool nullDefault = false) =>
         _impl.MethodSignature(reason, filePath, operation, methodName, paramName, paramType, defaultValue, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, nullDefault);
 
     [McpServerTool(Name = "ChangeAccessibility")]
@@ -84,9 +84,9 @@ public class RefactoringSignatureTools
         [Consumes(DataTag.SymbolName, required: false)] string? paramName = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for operation=add, unused for remove/view.
         [Consumes(DataTag.DataType, required: false)] string? paramType = null,
-        [Description("add only. Overrides the derived field name (_camelCase); paramName and its underscore-prefixed form both resolve to '_paramName'.")]
+        [Description("add only. " + ToolParams.FieldNameOverride)]
         [Consumes(DataTag.SymbolName, required: false)] string? fieldName = null,
-        [Description("add only. Default value for the new parameter (e.g. \"null!\", \"new SentinelConfiguration()\"); omit for a required parameter. To default to null use nullDefault:true, not the string \"null\". Mutually exclusive with nullDefault.")]
+        [Description(ToolParams.DefaultValueLead + "\"null!\", \"new SentinelConfiguration()\"" + ToolParams.DefaultValueTail)]
         [ExternalInputRequired(DataTag.Initializer, required: false)] string? defaultValue = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
@@ -95,7 +95,7 @@ public class RefactoringSignatureTools
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default,
-        [Description("add only. Sets the new parameter's default to the null literal (use instead of defaultValue:\"null\"). Mutually exclusive with defaultValue.")] bool nullDefault = false,
-        [Description("add only. Supplies the new parameter's argument at existing constructor call sites (new, target-typed new, `: this(...)`, `: base(...)`) so the parameter can be required instead of defaulted. Key: \"FilePath:Line\" (full path, 1-based line), \"FilePath:*\" (every call site in that file) or \"*\" (every call site); an exact line beats FilePath:*, which beats *. Value: the argument expression for that site (e.g. \"config\", \"_config\" or \"new SentinelConfiguration()\"); appended as a named argument when the site uses named arguments or omits trailing optional parameters. A site with no matching key falls back to defaultValue/nullDefault, else the call is rejected listing each unresolved site's exact key.")] Dictionary<string, string>? callSiteFixups = null) =>
+        [Description(ToolParams.NullDefaultLead + " (use instead of defaultValue:\"null\")." + ToolParams.NullDefaultTail)] bool nullDefault = false,
+        [Description("add only. Supplies the new parameter's argument at existing constructor call sites " + ToolParams.CallSiteTargets + " " + ToolParams.CallSiteKeys + " an exact line beats FilePath:*, which beats *. Value: the argument expression for that site (e.g. \"config\", \"_config\" or \"new SentinelConfiguration()\"); appended as a named argument when the site uses named arguments or omits trailing optional parameters. " + ToolParams.CallSiteFallback + " exact key.")] Dictionary<string, string>? callSiteFixups = null) =>
         _impl.ConstructorParameter(reason, filePath, operation, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, defaultValue, nullDefault, callSiteFixups);
 }

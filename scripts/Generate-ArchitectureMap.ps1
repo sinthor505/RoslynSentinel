@@ -4,8 +4,8 @@
 
 .DESCRIPTION
   Sets ROSLYNSENTINEL_UPDATE_GENERATED_DOCS=1 and runs the architecture doc freshness tests,
-  which regenerate docs/generated/architecture_tools.md (and architecture_projects.md when
-  Phase 2 is complete). Then displays git status --short to show what changed.
+  which regenerate docs/generated/architecture_tools.md and docs/generated/architecture_projects.md.
+  Then displays git status --short to show what changed.
 
 .EXAMPLE
   .\scripts\Generate-ArchitectureMap.ps1

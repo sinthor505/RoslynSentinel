@@ -126,4 +126,59 @@ public static class ToolParams
     // Added by ModifyBaseType batch support
     public const string BaseTypeEdits =
     "Batch form of filePath/typeName/baseTypeName/action - use it instead of them, not with them. " + BatchSemantics;
+
+    // ---- Merged-tool shared text ----
+    // In claude-lean, ParameterEdit replaces MethodSignature + ConstructorParameter, and Declaration replaces
+    // ModifyModifier + ChangeAccessibility + ModifyAttribute + ModifyBaseType. A clause that both a merged tool and a
+    // source tool emit lives here ONCE and is referenced from both, so editing it changes both. The wrapper text around
+    // each clause (operation prefixes, per-tool examples) intentionally differs and stays on the tools.
+    // MergedToolDescriptionSyncTests pins that both sides still emit these clauses.
+
+    // ParameterEdit <-> MethodSignature / ConstructorParameter: defaultValue = Lead + examples + Tail.
+    public const string DefaultValueLead =
+        "add only. Default value for the new parameter (e.g. ";
+
+    public const string DefaultValueTail =
+        "); omit for a required parameter. To default to null use nullDefault:true, not the string \"null\". Mutually exclusive with nullDefault.";
+
+    // nullDefault: ParameterEdit = Lead + "." + Tail; MethodSignature/ConstructorParameter = Lead + " (use instead of ...)." + Tail.
+    public const string NullDefaultLead =
+        "add only. Sets the new parameter's default to the null literal";
+
+    public const string NullDefaultTail =
+        " Mutually exclusive with defaultValue.";
+
+    // fieldName: ConstructorParameter = "add only. " + clause; ParameterEdit = "constructor, add only. " + clause.
+    public const string FieldNameOverride =
+        "Overrides the derived field name (_camelCase); paramName and its underscore-prefixed form both resolve to '_paramName'.";
+
+    // operation: the remove clause, followed by " the operation refuse." (MethodSignature) or " it refuse." (ParameterEdit).
+    public const string RemoveLastParameter =
+        "removes only the LAST parameter, so paramName must match it; positional call sites are updated, but named-argument call sites make";
+
+    // callSiteFixups: Targets, then Keys, then the per-tool middle, then Fallback + " key." (ParameterEdit) or " exact key." (ConstructorParameter).
+    public const string CallSiteTargets =
+        "(new, target-typed new, `: this(...)`, `: base(...)`)";
+
+    public const string CallSiteKeys =
+        "so the parameter can be required instead of defaulted. Key: \"FilePath:Line\" (full path, 1-based line), \"FilePath:*\" (every call site in that file) or \"*\" (every call site);";
+
+    public const string CallSiteFallback =
+        "A site with no matching key falls back to defaultValue/nullDefault, else the call is rejected listing each unresolved site's";
+
+    // Declaration <-> ModifyModifier / ModifyAttribute / ModifyBaseType.
+    public const string AddStaticUnsupported =
+        "auto-properties, init accessors, virtual/override/abstract members, interface implementations, members of generic types";
+
+    // existingAttribute: ModifyAttribute = "The " + clause; Declaration = "attribute: the " + clause.
+    public const string AttributeNameClause =
+        "attribute to add/replace/remove, with or without [ ] brackets.";
+
+    // newAttribute: ModifyAttribute = "action=replace: " + clause; Declaration = "attribute, action=replace: " + clause.
+    public const string NewAttributeClause =
+        "the attribute to replace existingAttribute with.";
+
+    // baseTypeName: ModifyBaseType = "The " + clause; Declaration = "baseType: the " + clause.
+    public const string BaseTypeNameClause =
+        "base type or interface name.";
 }

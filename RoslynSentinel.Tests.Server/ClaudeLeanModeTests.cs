@@ -1,7 +1,10 @@
 // Coverage for proposal_reduce_tool_schema_token_cost.md Step 4b, slice 4b-1: the opt-in, exclusive
-// "claude-lean" mode exposes exactly the proposal's 25 Core tools plus McpToolsetControl, slice 4b-2
+// "claude-lean" mode exposes exactly the proposal's Core tools plus McpToolsetControl, slice 4b-2
 // (a per-tool allow-list on top of the
-// class registry), "claude" keeps its pre-existing 68-tool set, and "all" never expands to claude-lean.
+// class registry), "claude" keeps its pre-existing tool set, and "all" never expands to claude-lean.
+// Counts are never hand-copied: CoreTools below is the one explicit oracle for the claude-lean surface and every
+// expected count is derived from it or from the registry. Adding a core tool = edit ToolClassRegistry.ClaudeLeanToolNames
+// and CoreTools (McpToolsetControlTests reads CoreTools too).
 // Same in-process MCP host shape as SchemaLeanProfileTests.cs; no solution load is needed. Nothing here
 // mutates process-wide static state, so the fixture needs no [NonParallelizable].
 using System.IO.Pipelines;
@@ -24,8 +27,12 @@ namespace RoslynSentinel.Tests.Server;
 [Category("ToolClassRegistry")] // sentinel:auto-category
 public class ClaudeLeanModeTests
 {
-    /// <summary>The proposal's Core set minus FindReferences/LocateSymbol plus McpToolsetControl (slice 4b-2), spelled out independently of ToolClassRegistry.ClaudeLeanToolNames.</summary>
-    private static readonly string[] CoreTools =
+    /// <summary>
+    /// The Advanced claude-lean core surface, spelled out independently of ToolClassRegistry.ClaudeLeanToolNames so the
+    /// tests catch accidental registry changes. The single oracle: every claude-lean count in this file and in
+    /// McpToolsetControlTests is derived from it. Edit it together with ToolClassRegistry.ClaudeLeanToolNames.
+    /// </summary>
+    internal static readonly string[] CoreTools =
     [
         "LoadSolution", "ReadFile", "GetFileOutline", "GetMethodSource", "GetLargeResult",
         "Search", "InspectSymbol", "GetDiagnostics",
@@ -112,11 +119,12 @@ public class ClaudeLeanModeTests
     [TestCase(false)]
     public async Task ClaudeLean_ExposesExactlyTheCoreToolsForItsFlavor(bool advanced)
     {
-        // SubAgent is Advanced-only, so the Basic claude-lean surface is 23 tools rather than 24.
+        // SubAgent is Advanced-only, so the Basic claude-lean surface is one tool smaller (see BasicCoreTools).
+        var expected = advanced ? CoreTools : BasicCoreTools;
         var names = await ListToolNamesAsync(advanced, "claude-lean");
 
-        Assert.That(names, Has.Length.EqualTo(advanced ? 24 : 23));
-        Assert.That(names, Is.EquivalentTo(advanced ? CoreTools : BasicCoreTools));
+        Assert.That(names, Has.Length.EqualTo(expected.Length), "ToolClassRegistry.ClaudeLeanToolNames and ClaudeLeanModeTests.CoreTools must agree; edit both");
+        Assert.That(names, Is.EquivalentTo(expected), "ToolClassRegistry.ClaudeLeanToolNames and ClaudeLeanModeTests.CoreTools must agree; edit both");
     }
 
     [Test]
@@ -130,10 +138,18 @@ public class ClaudeLeanModeTests
     [Test]
     public async Task Claude_BasicServer_IsTheAdvancedBaselineMinusAdvancedOnlyClasses()
     {
-        // AdvancedRefactoringTools is the only Claude class Basic does not register; its 13 tools drop out.
+        // AdvancedRefactoringTools is the only Claude class Basic does not register; its tools drop out.
+        var advancedOnlyTools = McpToolSchemaPatcher
+            .DiscoverAllDeclaredTools(typeof(AdvancedRefactoringTools).Assembly)
+            .Where(t => t.ClassName == nameof(AdvancedRefactoringTools))
+            .Select(t => t.ToolName)
+            .Distinct()
+            .ToArray();
         var names = await ListToolNamesAsync(advanced: false, "claude");
 
-        Assert.That(names, Has.Length.EqualTo(ClaudeAdvancedBaseline.Length - 13));
+        Assert.That(advancedOnlyTools, Is.Not.Empty);
+        Assert.That(names, Has.Length.EqualTo(ClaudeAdvancedBaseline.Length - advancedOnlyTools.Length));
+        Assert.That(names.Intersect(advancedOnlyTools), Is.Empty);
         Assert.That(names, Is.SubsetOf(ClaudeAdvancedBaseline));
         Assert.That(names, Is.SupersetOf(BasicCoreTools.Where(t => t != "McpToolsetControl")));
         Assert.That(names, Does.Not.Contain("McpToolsetControl"));
@@ -146,7 +162,7 @@ public class ClaudeLeanModeTests
     {
         Assert.That(ToolClassRegistry.BasicModeToToolClasses.ContainsKey("claude-lean"), Is.True);
         Assert.That(ToolClassRegistry.AdvancedModeToToolClasses.ContainsKey("claude-lean"), Is.True);
-        Assert.That(ToolClassRegistry.ClaudeLeanToolNames, Is.EquivalentTo(CoreTools));
+        Assert.That(ToolClassRegistry.ClaudeLeanToolNames, Is.EquivalentTo(CoreTools), "ToolClassRegistry.ClaudeLeanToolNames and ClaudeLeanModeTests.CoreTools must agree; edit both");
     }
 
     [Test]
@@ -189,7 +205,7 @@ public class ClaudeLeanModeTests
 
     [Test]
     [Category("ServerStartupHelpers")] // sentinel:auto-category
-    public void ResolveActiveToolClasses_ClaudeLeanAlone_YieldsFifteenToolClasses()
+    public void ResolveActiveToolClasses_ClaudeLeanAlone_YieldsExactlyTheRegistryClaudeLeanClasses()
     {
         var classes = ServerStartupHelpers.ResolveActiveToolClasses(
             new HashSet<string>(["claude-lean"], StringComparer.OrdinalIgnoreCase),
@@ -197,7 +213,9 @@ public class ClaudeLeanModeTests
             new HashSet<string>(),
             new HashSet<string>());
 
-        Assert.That(classes, Has.Count.EqualTo(16));
+        var registered = ToolClassRegistry.BasicModeToToolClasses["claude-lean"];
+        Assert.That(classes, Has.Count.EqualTo(registered.Length), "claude-lean alone must resolve to exactly ToolClassRegistry.BasicModeToToolClasses[claude-lean]; edit ClaudeLeanToolClasses");
+        Assert.That(classes, Is.EquivalentTo(registered));
         Assert.That(classes, Does.Contain("ToolsetControlTools"));
         Assert.That(classes, Does.Contain("DeclarationTools"));
         Assert.That(classes, Does.Contain("ParameterEditTools"));

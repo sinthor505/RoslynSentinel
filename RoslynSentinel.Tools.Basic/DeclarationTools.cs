@@ -29,7 +29,7 @@ public class DeclarationTools
     [Produces(DataTag.ChangeId)]
     [Description("Changes a declaration's modifier, accessibility, attribute or base type. For overloaded targets provide contextSnippet. " +
         "modifier: ADD STATIC on a method or property is a conversion - the member must use no instance state, and instance-qualified callers are rewritten to Type.M(...) in the same atomic change; " +
-        "not supported for auto-properties, init accessors, virtual/override/abstract members, interface implementations, members of generic types. Returns changeId.")]
+        "not supported for " + ToolParams.AddStaticUnsupported + ". Returns changeId.")]
     public Task<SentinelCallToolResult<AppliedChangeSummary>> Declaration(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Required params per operation. " +
@@ -45,13 +45,13 @@ public class DeclarationTools
         [Description("add or remove; replace is for attribute only.")]
         [Consumes(DataTag.Action, required: false)] DeclarationAction? action = null,
         [Description(ToolParams.AccessibilityValues)][ExternalInputRequired(DataTag.Accessibility, required: false)] AccessibilityLevel? accessibility = null,
-        [Description("attribute: the attribute to add/replace/remove, with or without [ ] brackets.")]
+        [Description("attribute: the " + ToolParams.AttributeNameClause)]
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string? existingAttribute = null,
-        [Description("attribute, action=replace: the attribute to replace existingAttribute with.")]
+        [Description("attribute, action=replace: " + ToolParams.NewAttributeClause)]
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string? newAttribute = null,
         [Description("baseType: the type to change.")]
         [Consumes(DataTag.SymbolName, required: false)] string? typeName = null,
-        [Description("baseType: the base type or interface name.")] string? baseTypeName = null,
+        [Description("baseType: the " + ToolParams.BaseTypeNameClause)] string? baseTypeName = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,

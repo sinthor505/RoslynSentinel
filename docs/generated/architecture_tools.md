@@ -4,19 +4,19 @@
 
 | Class | Tool name | Modes | Breaker | Summary |
 |-------|-----------|-------|---------|---------|
-| AdvancedRefactoringTools | ChangeSignature | Claude, Refactor | - | Reorders, adds, or removes method parameters and updates all call sites solution-wide. |
-| AdvancedRefactoringTools | ConvertAnonymousToNamed | Claude, Refactor | - | Converts the first anonymous object creation in a file into a named class declaration. |
-| AdvancedRefactoringTools | ExtractMembers | Claude, Refactor | - | Extracts class members into a new interface, partial class, or superclass. |
-| AdvancedRefactoringTools | Inline | Claude, Refactor | - | Inlines a symbol by replacing all usages with its definition. |
-| AdvancedRefactoringTools | InlineClass | Claude, Refactor | - | Merges a source class's members into a target class and removes the source declaration. |
-| AdvancedRefactoringTools | Introduce | Claude, Refactor | - | Introduces a named local variable, field, parameter, or constant from an expression. |
-| AdvancedRefactoringTools | IntroduceParameterObject | Claude, Refactor | - | Encapsulates method parameters into a new C# 12 record type; call sites need manual follow-up (flagged with TODO). |
-| AdvancedRefactoringTools | InvertAssignments | Claude, Refactor | - | Swaps left and right sides of all assignment statements within a range. |
-| AdvancedRefactoringTools | MoveAllTypesToFiles | Claude, Refactor | - | Moves secondary types out of a file into their own files. |
-| AdvancedRefactoringTools | MoveMember | Claude, Refactor | - | Moves methods/properties/fields from one class to another as a single atomic change, rewriting call sites. |
-| AdvancedRefactoringTools | MoveType | Claude, Refactor | - | Moves a type to its own file, or a nested type out to its containing namespace. |
-| AdvancedRefactoringTools | SyncInterface | Claude, Refactor | - | Generates stub implementations, syncs missing members into an interface, or verifies implementation coverage. |
-| AdvancedRefactoringTools | WrapRange | Claude, Refactor | - | Wraps a line range or snippet in a try/catch, using, or #region block. |
+| AdvancedRefactoringTools | ChangeSignature | Claude, claude-lean (on demand), Refactor | - | Reorders, adds, or removes method parameters and updates all call sites solution-wide. |
+| AdvancedRefactoringTools | ConvertAnonymousToNamed | Claude, claude-lean (on demand), Refactor | - | Converts the first anonymous object creation in a file into a named class declaration. |
+| AdvancedRefactoringTools | ExtractMembers | Claude, claude-lean (on demand), Refactor | - | Extracts class members into a new interface, partial class, or superclass. |
+| AdvancedRefactoringTools | Inline | Claude, claude-lean (on demand), Refactor | - | Inlines a symbol by replacing all usages with its definition. |
+| AdvancedRefactoringTools | InlineClass | Claude, claude-lean (on demand), Refactor | - | Merges a source class's members into a target class and removes the source declaration. |
+| AdvancedRefactoringTools | Introduce | Claude, claude-lean (on demand), Refactor | - | Introduces a named local variable, field, parameter, or constant from an expression. |
+| AdvancedRefactoringTools | IntroduceParameterObject | Claude, claude-lean (on demand), Refactor | - | Encapsulates method parameters into a new C# 12 record type; call sites need manual follow-up (flagged with TODO). |
+| AdvancedRefactoringTools | InvertAssignments | Claude, claude-lean (on demand), Refactor | - | Swaps left and right sides of all assignment statements within a range. |
+| AdvancedRefactoringTools | MoveAllTypesToFiles | Claude, claude-lean (on demand), Refactor | - | Moves secondary types out of a file into their own files. |
+| AdvancedRefactoringTools | MoveMember | Claude, claude-lean (on demand), Refactor | - | Moves methods/properties/fields from one class to another as a single atomic change, rewriting call sites. |
+| AdvancedRefactoringTools | MoveType | Claude, claude-lean (on demand), Refactor | - | Moves a type to its own file, or a nested type out to its containing namespace. |
+| AdvancedRefactoringTools | SyncInterface | Claude, claude-lean (on demand), Refactor | - | Generates stub implementations, syncs missing members into an interface, or verifies implementation coverage. |
+| AdvancedRefactoringTools | WrapRange | Claude, claude-lean (on demand), Refactor | - | Wraps a line range or snippet in a try/catch, using, or #region block. |
 | AsyncifyTools | AddCancellationToken | Asyncify | - | Adds a CancellationToken parameter to async methods that lack one, in the specified files. |
 | AsyncifyTools | Asyncify | Asyncify | - | Full-workflow macro: runs the complete async-migration bridge path (extract event handler bodies, flag candidates,... |
 | AsyncifyTools | AsyncifyLoop | Asyncify | - | Debug and test harness: runs Asyncify in a loop until the workflow converges (Succeeded=0 and Failed=0), the circuit... |
@@ -65,37 +65,37 @@
 |-------|-----------|-------|---------|---------|
 | AdminTools | ExternalFileDrift | Admin, Claude, claude-lean | Allowed | Inspect and resolve external file drift: a tracked file that changed on disk outside this server (an editor, git, a... |
 | AdminTools | McpServerControl | Admin, Claude, claude-lean | - | Operator-only control of this server process. operation=GetServerStatus reports the running process.... |
-| DeclarationTools | Declaration | claude-lean | - | Changes a declaration's modifier, accessibility, attribute or base type. |
-| DocumentationTools | ProjectDoc | Claude, Workspace | - | Reads, writes, appends, or lists project doc files under docs/. |
+| DeclarationTools | Declaration | claude-lean (on demand) | - | Changes a declaration's modifier, accessibility, attribute or base type. |
+| DocumentationTools | ProjectDoc | Claude, claude-lean (on demand), Workspace | - | Reads, writes, appends, or lists project doc files under docs/. |
 | GitTools | Git | Claude, claude-lean, Workspace | Allowed | Unified git tool. |
-| NamedArgumentsTools | NamedArguments | claude-lean, NamedArguments | - | Convert positional call arguments to named arguments (M(1, 2) -> M(a: 1, b: 2)) using the compiler's binding, for... |
-| ParameterEditTools | ParameterEdit | claude-lean | - | Add, remove, or view parameters of a method (operation method, any method) or of a class's DI constructor (operation... |
-| RefactoringExtractionDocsTools | ExtractLocalVariable | Claude, claude-lean, Refactor, RefactorExtractionDocs | - | Extracts an inline expression into a named local variable declaration. exactExpressionText must be the WHOLE... |
-| RefactoringExtractionDocsTools | ExtractMethodSafe | Claude, claude-lean, Refactor, RefactorExtractionDocs | - | Extracts selected statements into a new method with the return type inferred from the selection. |
-| RefactoringExtractionDocsTools | SummaryComment | Claude, claude-lean, Refactor, RefactorExtractionDocs | - | Add, remove, or view a /// <summary> XML doc comment on a type or member. |
+| NamedArgumentsTools | NamedArguments | claude-lean (on demand), NamedArguments | - | Convert positional call arguments to named arguments (M(1, 2) -> M(a: 1, b: 2)) using the compiler's binding, for... |
+| ParameterEditTools | ParameterEdit | claude-lean (on demand) | - | Add, remove, or view parameters of a method (operation method, any method) or of a class's DI constructor (operation... |
+| RefactoringExtractionDocsTools | ExtractLocalVariable | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Extracts an inline expression into a named local variable declaration. exactExpressionText must be the WHOLE... |
+| RefactoringExtractionDocsTools | ExtractMethodSafe | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Extracts selected statements into a new method with the return type inferred from the selection. |
+| RefactoringExtractionDocsTools | SummaryComment | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Add, remove, or view a /// <summary> XML doc comment on a type or member. |
 | RefactoringExtractionDocsTools | UsingDirective | Claude, claude-lean, Refactor, RefactorExtractionDocs | - | Add, remove, or view using directives in a file. |
-| RefactoringSignatureTools | ChangeAccessibility | Claude, claude-lean, Refactor, RefactorSignature | - | Sets the accessibility of a type or member to the given level, replacing whatever is present. |
-| RefactoringSignatureTools | ConstructorParameter | Claude, claude-lean, Refactor, RefactorSignature | - | Add, remove, or view DI constructor parameters on a class. |
-| RefactoringSignatureTools | MethodSignature | Claude, claude-lean, Refactor, RefactorSignature | - | Add, remove, or view a method's parameters (any method; ConstructorParameter handles DI constructor parameters with a... |
+| RefactoringSignatureTools | ChangeAccessibility | Claude, Refactor, RefactorSignature | - | Sets the accessibility of a type or member to the given level, replacing whatever is present. |
+| RefactoringSignatureTools | ConstructorParameter | Claude, Refactor, RefactorSignature | - | Add, remove, or view DI constructor parameters on a class. |
+| RefactoringSignatureTools | MethodSignature | Claude, Refactor, RefactorSignature | - | Add, remove, or view a method's parameters (any method; ConstructorParameter handles DI constructor parameters with a... |
 | RefactoringSignatureTools | RenameSymbol | Claude, claude-lean, Refactor, RefactorSignature | - | Renames a symbol and all its references across the solution, including XML doc comments, inline comments and string... |
 | RefactoringStructuralTools | Member | Claude, claude-lean, Refactor, RefactoringStructural | - | Add, remove, replace, or view a raw source member, a typed property/field, or a brand-new top-level type. |
-| RefactoringStructuralTools | ModifyAttribute | Claude, claude-lean, Refactor, RefactoringStructural | - | Adds, replaces, or removes an [Attribute] on a type or member. |
-| RefactoringStructuralTools | ModifyBaseType | Claude, claude-lean, Refactor, RefactoringStructural | - | Adds or removes a base type or interface from a type declaration. |
-| RefactoringStructuralTools | ModifyEnum | Claude, claude-lean, Refactor, RefactoringStructural | - | Replaces an enum's complete member list in one operation. |
-| RefactoringStructuralTools | ModifyModifier | Claude, claude-lean, Refactor, RefactoringStructural | - | Adds or removes a non-accessibility modifier keyword (use ChangeAccessibility for private/public/etc.,... |
-| RefactoringStructuralTools | SyncTypeAndFilename | Claude, claude-lean, Refactor, RefactoringStructural | - | Synchronizes the filename to match a type declared in the file. |
-| SemanticFindReplaceTools | SemanticFindReplace | claude-lean | - | Rename a bool property or field and invert its polarity at every site. symbol is a docCommentId (from Search(mode:... |
-| SymbolNavigationTools | GetTypeInfo | Claude, claude-lean, SymbolNavigation, Workspace | - | Returns type information for a type you already know the name of - hierarchy, members, or both. |
+| RefactoringStructuralTools | ModifyAttribute | Claude, Refactor, RefactoringStructural | - | Adds, replaces, or removes an [Attribute] on a type or member. |
+| RefactoringStructuralTools | ModifyBaseType | Claude, Refactor, RefactoringStructural | - | Adds or removes a base type or interface from a type declaration. |
+| RefactoringStructuralTools | ModifyEnum | Claude, claude-lean (on demand), Refactor, RefactoringStructural | - | Replaces an enum's complete member list in one operation. |
+| RefactoringStructuralTools | ModifyModifier | Claude, Refactor, RefactoringStructural | - | Adds or removes a non-accessibility modifier keyword (use ChangeAccessibility for private/public/etc.,... |
+| RefactoringStructuralTools | SyncTypeAndFilename | Claude, claude-lean (on demand), Refactor, RefactoringStructural | - | Synchronizes the filename to match a type declared in the file. |
+| SemanticFindReplaceTools | SemanticFindReplace | claude-lean (on demand) | - | Rename a bool property or field and invert its polarity at every site. symbol is a docCommentId (from Search(mode:... |
+| SymbolNavigationTools | GetTypeInfo | Claude, claude-lean (on demand), SymbolNavigation, Workspace | - | Returns type information for a type you already know the name of - hierarchy, members, or both. |
 | SymbolNavigationTools | InspectSymbol | Claude, claude-lean, SymbolNavigation, Workspace | - | Inspects a symbol in depth. |
-| SymbolNavigationTools | LocateSymbol | Claude, claude-lean, SymbolNavigation, Workspace | - | Locates declaration sites for a symbol by name. |
-| SymbolRelationshipTools | FindReferences | Claude, claude-lean, SymbolRelationship, Workspace | - | Finds call sites and/or implementations for a symbol (single-level, flat lookup). |
-| SymbolRelationshipTools | GetBestInsertionPoint | Claude, claude-lean, SymbolRelationship, Workspace | - | Returns the best 1-based line number for inserting a new member in a type, following standard C# ordering (fields ->... |
-| SymbolRelationshipTools | PreviewRenameImpact | Claude, claude-lean, SymbolRelationship, Workspace | - | Previews the impact of renaming a symbol across the solution without applying changes. |
-| SymbolRelationshipTools | QuerySymbolRelationships | Claude, claude-lean, SymbolRelationship, Workspace | - | Queries type-relationship facts by name: implementors of an interface, attribute usages, object-creation sites,... |
-| TestCategoryTaggingTools | TagTestCategories | claude-lean, TestCategories | - | Plan test-category attributes: for every test method, find the production types it references (semantic model: calls,... |
+| SymbolNavigationTools | LocateSymbol | Claude, SymbolNavigation, Workspace | - | Locates declaration sites for a symbol by name. |
+| SymbolRelationshipTools | FindReferences | Claude, SymbolRelationship, Workspace | - | Finds call sites and/or implementations for a symbol (single-level, flat lookup). |
+| SymbolRelationshipTools | GetBestInsertionPoint | Claude, claude-lean (on demand), SymbolRelationship, Workspace | - | Returns the best 1-based line number for inserting a new member in a type, following standard C# ordering (fields ->... |
+| SymbolRelationshipTools | PreviewRenameImpact | Claude, claude-lean (on demand), SymbolRelationship, Workspace | - | Previews the impact of renaming a symbol across the solution without applying changes. |
+| SymbolRelationshipTools | QuerySymbolRelationships | Claude, claude-lean (on demand), SymbolRelationship, Workspace | - | Queries type-relationship facts by name: implementors of an interface, attribute usages, object-creation sites,... |
+| TestCategoryTaggingTools | TagTestCategories | claude-lean (on demand), TestCategories | - | Plan test-category attributes: for every test method, find the production types it references (semantic model: calls,... |
 | ToolsetControlTools | McpToolsetControl | claude-lean | - | Turns an on-demand toolset on or off; the server then sends tools/list_changed so your tool list updates. |
-| WholeFileWriteTools | ApplyDiff | Claude, claude-lean, WholeFileWrite | - | Applies or validates a change set as either full file contents (changesetFormat=files) or a unified diff... |
-| WholeFileWriteTools | ApplyUnifiedDiff | Claude, claude-lean, WholeFileWrite | - | Applies or validates a unified diff against a single file; mismatched hunk lines are re-anchored nearby. |
+| WholeFileWriteTools | ApplyDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a change set as either full file contents (changesetFormat=files) or a unified diff... |
+| WholeFileWriteTools | ApplyUnifiedDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a unified diff against a single file; mismatched hunk lines are re-anchored nearby. |
 | WholeFileWriteTools | DeleteFile | Claude, claude-lean, WholeFileWrite | - | Deletes a file from disk; fails if it doesn't exist. |
 | WholeFileWriteTools | WriteFile | Claude, claude-lean, WholeFileWrite | - | Writes a whole file to disk, creating or overwriting it. |
 | WorkspaceBuildTestTools | Build | WorkspaceBuildTest | - | Compiles the loaded solution and reports the result. level=quickBuild uses in-memory Roslyn diagnostics (fast, same... |
@@ -123,26 +123,26 @@
 | WorkspaceReadNavigationTools | SearchSolutionText | WorkspaceFileContent, WorkspaceReadNav | - | Searches source files in the loaded solution for a pattern, evaluated both as a literal substring and (if it... |
 | WorkspaceTools | Build | Claude, claude-lean, Workspace | - | Compiles the loaded solution and reports the result. level=quickBuild uses in-memory Roslyn diagnostics (fast, same... |
 | WorkspaceTools | CreateFile | Claude, claude-lean, Workspace | - | Creates a new file; fails if it already exists. |
-| WorkspaceTools | CreateProject | Claude, claude-lean, Workspace | - | Creates a new project and adds it to the loaded solution. |
-| WorkspaceTools | Features | Claude, claude-lean, Workspace | - | Queries or updates feature flags. |
+| WorkspaceTools | CreateProject | Claude, claude-lean (on demand), Workspace | - | Creates a new project and adds it to the loaded solution. |
+| WorkspaceTools | Features | Claude, claude-lean (on demand), Workspace | - | Queries or updates feature flags. |
 | WorkspaceTools | GetDiagnostics | Claude, claude-lean, Workspace | - | Gets compiler diagnostics for a file, project, or the whole solution. |
 | WorkspaceTools | GetFileOutline | Claude, claude-lean, Workspace | Allowed | Returns a structural outline of a file's types and members with 1-based line ranges (no bodies). |
 | WorkspaceTools | GetLargeResult | Claude, claude-lean, Workspace | - | Pages through a large result written to disk after exceeding the inline size threshold. |
 | WorkspaceTools | GetMethodSource | Claude, claude-lean, Workspace | - | Returns a method's or constructor's full source text and attributes. |
-| WorkspaceTools | GetOperationDetail | Claude, claude-lean, Workspace | Allowed | Returns a filtered, paged slice of an operation result blob by changeId. |
-| WorkspaceTools | GetWorkspaceHealth | Claude, claude-lean, Workspace | Allowed | Reports live workspace/solution health: loaded state, project/document counts, and staleness. |
-| WorkspaceTools | ListAll | Claude, claude-lean, Workspace | Allowed | Lists every declared symbol in the loaded solution with file, kind, name, container, and line range. |
-| WorkspaceTools | ListProjectFrameworkTargets | Claude, claude-lean, Workspace | - | Returns each project's TargetFramework value. |
-| WorkspaceTools | ListSolutionItems | Claude, claude-lean, Workspace | Allowed | Lists projects, files, dependencies, or solution-folder items in the loaded solution. |
-| WorkspaceTools | ListWorkspaceSolutions | Claude, claude-lean, Workspace | - | Lists .sln/.slnx files under a directory, for use with LoadSolution. |
+| WorkspaceTools | GetOperationDetail | Claude, claude-lean (on demand), Workspace | Allowed | Returns a filtered, paged slice of an operation result blob by changeId. |
+| WorkspaceTools | GetWorkspaceHealth | Claude, claude-lean (on demand), Workspace | Allowed | Reports live workspace/solution health: loaded state, project/document counts, and staleness. |
+| WorkspaceTools | ListAll | Claude, Workspace | Allowed | Lists every declared symbol in the loaded solution with file, kind, name, container, and line range. |
+| WorkspaceTools | ListProjectFrameworkTargets | Claude, claude-lean (on demand), Workspace | - | Returns each project's TargetFramework value. |
+| WorkspaceTools | ListSolutionItems | Claude, claude-lean (on demand), Workspace | Allowed | Lists projects, files, dependencies, or solution-folder items in the loaded solution. |
+| WorkspaceTools | ListWorkspaceSolutions | Claude, claude-lean (on demand), Workspace | - | Lists .sln/.slnx files under a directory, for use with LoadSolution. |
 | WorkspaceTools | LoadSolution | Claude, claude-lean, Workspace | - | Loads a .NET solution into memory. |
 | WorkspaceTools | ReadFile | Claude, claude-lean, Workspace | Allowed | Returns a file's raw text verbatim, or a 1-based line-range slice via startLine/endLine. |
 | WorkspaceTools | ReplaceSnippet | Claude, claude-lean, Workspace | - | Replaces one exact text block with another in a file, for small localized edits. |
-| WorkspaceTools | RetryFailedChanges | Claude, claude-lean, Workspace | - | Retries failed file writes using server-cached content. |
+| WorkspaceTools | RetryFailedChanges | Claude, claude-lean (on demand), Workspace | - | Retries failed file writes using server-cached content. |
 | WorkspaceTools | RunTest | Claude, claude-lean, Workspace | - | Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. |
-| WorkspaceTools | SafeDeleteUnusedSymbol | Claude, claude-lean, Workspace | - | Deletes a symbol only if it has zero usages anywhere in the codebase. |
+| WorkspaceTools | SafeDeleteUnusedSymbol | Claude, claude-lean (on demand), Workspace | - | Deletes a symbol only if it has zero usages anywhere in the codebase. |
 | WorkspaceTools | Search | Claude, claude-lean, Workspace | - | Unified search. mode selects what's searched: text (free-text/regex scan), symbol (declaration lookup by name),... |
-| WorkspaceTools | SplitProjectByFolder | Claude, claude-lean, Workspace | - | Moves all files under a folder from one project to a new target project, preserving structure. |
+| WorkspaceTools | SplitProjectByFolder | Claude, claude-lean (on demand), Workspace | - | Moves all files under a folder from one project to a new target project, preserving structure. |
 | WorkspaceTools | UndoLastApply | Claude, claude-lean, Workspace | - | Reverts files from a previous apply back to their pre-apply state. |
 
 ## RoslynSentinel.Tools.Experimental

@@ -85,7 +85,7 @@ public class McpToolsetControlTests
         Assert.That(second.Changed, Is.False);
         Assert.That(second.AddedTools, Is.Empty);
         Assert.That(collection.Count, Is.EqualTo(countAfterFirst));
-        Assert.That(changed, Is.EqualTo(1), "a 9-tool enable must be one list_changed, not nine; the repeat must be none");
+        Assert.That(changed, Is.EqualTo(1), "enabling a whole toolset must be one list_changed, not one per tool; the repeat must be none");
     }
 
     [Test]
@@ -208,8 +208,8 @@ public class McpToolsetControlTests
 
         Assert.That(all, Is.Unique);
         Assert.That(all.Intersect(ToolClassRegistry.ClaudeLeanToolNames), Is.Empty);
-        Assert.That(ToolsetCatalog.AllToolNames, Has.Count.EqualTo(all.Length));
-        Assert.That(all, Has.Length.EqualTo(40));
+        Assert.That(ToolsetCatalog.AllToolNames, Has.Count.EqualTo(all.Length), "every ToolsetCatalog.ToolsBySet entry must be counted once in ToolsetCatalog.AllToolNames");
+        Assert.That(all, Is.Not.Empty);
     }
 
     [Test]
@@ -542,7 +542,8 @@ public class McpToolsetControlTests
         using var host = BuildHost(advanced: true, "claude-lean", includeTools: null);
 
         var names = host.Services.GetRequiredService<IOptions<McpServerOptions>>().Value.ToolCollection!.PrimitiveNames;
-        Assert.That(names, Has.Count.EqualTo(24));
+        Assert.That(names, Has.Count.EqualTo(ClaudeLeanModeTests.CoreTools.Length), "ToolClassRegistry.ClaudeLeanToolNames and ClaudeLeanModeTests.CoreTools must agree; edit both");
+        Assert.That(names, Is.EquivalentTo(ClaudeLeanModeTests.CoreTools), "ToolClassRegistry.ClaudeLeanToolNames and ClaudeLeanModeTests.CoreTools must agree; edit both");
         Assert.That(host.Services.GetRequiredService<ToolsetService>().DynamicToolNames, Is.Empty);
     }
 

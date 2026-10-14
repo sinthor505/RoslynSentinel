@@ -180,11 +180,11 @@ public class RefactoringStructuralTools
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
         [Description("For overloads, combine with contextSnippet/lineBefore/lineAfter.")]
         [Consumes(DataTag.SymbolName, required: false)] string? targetName = null,
-        [Description("The attribute to add/replace/remove, with or without [ ] brackets.")]
+        [Description("The " + ToolParams.AttributeNameClause)]
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string? existingAttribute = null,
         [Consumes(DataTag.Action, required: false)] AttributeModifyAction? action = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required for action=replace, unused for add/remove.
-        [Description("action=replace: the attribute to replace existingAttribute with.")]
+        [Description("action=replace: " + ToolParams.NewAttributeClause)]
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string? newAttribute = null,
         [Description("Alias for existingAttribute (e.g. \"Obsolete\" or \"[Obsolete]\").")]
         [ExternalInputRequired(DataTag.AttributeName, required: false)] string? attribute = null,
@@ -201,7 +201,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "ModifyModifier", UseStructuredContent = false, OutputSchemaType = typeof(ModifyModifierResultEnvelope))]
     [SupportsBatching]
     [Produces(DataTag.ChangeId)]
-    [Description("Adds or removes a non-accessibility modifier keyword (use ChangeAccessibility for private/public/etc., ModifyAttribute for [Attribute]). For overloaded targets, provide contextSnippet and optionally lineBefore/lineAfter. ADD STATIC on a method or property is a conversion: the member must use no instance state (no this/base or instance members of its type), and instance-qualified callers (receiver.M(...), receiver.P) are rewritten to Type.M(...) in the same atomic change; members that only use each other may be converted together in one 'batchEdits' batch. Not supported for add static: auto-properties, init accessors, virtual/override/abstract members, interface implementations, members of generic types. Returns changeId.")]
+    [Description("Adds or removes a non-accessibility modifier keyword (use ChangeAccessibility for private/public/etc., ModifyAttribute for [Attribute]). For overloaded targets, provide contextSnippet and optionally lineBefore/lineAfter. ADD STATIC on a method or property is a conversion: the member must use no instance state (no this/base or instance members of its type), and instance-qualified callers (receiver.M(...), receiver.P) are rewritten to Type.M(...) in the same atomic change; members that only use each other may be converted together in one 'batchEdits' batch. Not supported for add static: " + ToolParams.AddStaticUnsupported + ". Returns changeId.")]
     public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyModifier(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
@@ -229,7 +229,7 @@ public class RefactoringStructuralTools
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
         [Description("For same-named types in one file, combine with contextSnippet/lineBefore/lineAfter.")]
         [Consumes(DataTag.SymbolName, required: false)] string? typeName = null,
-        [Description("The base type or interface name.")] string? baseTypeName = null,
+        [Description("The " + ToolParams.BaseTypeNameClause)] string? baseTypeName = null,
         AddRemoveAction? action = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,

@@ -29,7 +29,7 @@ public class ParameterEditTools
     public Task<SentinelCallToolResult<object>> ParameterEdit(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Required params per operation. " +
-            "method: filePath+methodName+action; remove removes only the LAST parameter, so paramName must match it; positional call sites are updated, but named-argument call sites make it refuse. " +
+            "method: filePath+methodName+action; remove " + ToolParams.RemoveLastParameter + " it refuse. " +
             "constructor: filePath+className+action; add creates a private readonly field, parameter and body assignment (and the constructor if none exists); " +
             "remove deletes the parameter and its assignment, and the backing field only if nothing else in the class uses it; fieldName and callSiteFixups are constructor-only.")]
         [Consumes(DataTag.Action, required: true)] ParameterEditOperation operation,
@@ -42,14 +42,14 @@ public class ParameterEditTools
         [Consumes(DataTag.ClassName, required: false)] string? className = null,
         [Consumes(DataTag.SymbolName, required: false)] string? paramName = null,
         [Consumes(DataTag.DataType, required: false)] string? paramType = null,
-        [Description("constructor, add only. Overrides the derived field name (_camelCase); paramName and its underscore-prefixed form both resolve to '_paramName'.")]
+        [Description("constructor, add only. " + ToolParams.FieldNameOverride)]
         [Consumes(DataTag.SymbolName, required: false)] string? fieldName = null,
-        [Description("add only. Default value for the new parameter (e.g. \"3\"); omit for a required parameter. To default to null use nullDefault:true, not the string \"null\". Mutually exclusive with nullDefault.")]
+        [Description(ToolParams.DefaultValueLead + "\"3\"" + ToolParams.DefaultValueTail)]
         [ExternalInputRequired(DataTag.Initializer, required: false)] string? defaultValue = null,
-        [Description("add only. Sets the new parameter's default to the null literal. Mutually exclusive with defaultValue.")] bool nullDefault = false,
-        [Description("constructor, add only. Argument expression per existing constructor call site (new, target-typed new, `: this(...)`, `: base(...)`), so the parameter can be required instead of defaulted. " +
-            "Key: \"FilePath:Line\" (full path, 1-based line), \"FilePath:*\" (every call site in that file) or \"*\" (every call site); the most specific key wins. " +
-            "A site with no matching key falls back to defaultValue/nullDefault, else the call is rejected listing each unresolved site's key.")] Dictionary<string, string>? callSiteFixups = null,
+        [Description(ToolParams.NullDefaultLead + "." + ToolParams.NullDefaultTail)] bool nullDefault = false,
+        [Description("constructor, add only. Argument expression per existing constructor call site " + ToolParams.CallSiteTargets + ", " +
+            ToolParams.CallSiteKeys + " the most specific key wins. " +
+            ToolParams.CallSiteFallback + " key.")] Dictionary<string, string>? callSiteFixups = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,

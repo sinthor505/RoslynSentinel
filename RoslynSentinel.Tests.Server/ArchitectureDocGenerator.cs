@@ -16,6 +16,12 @@ namespace RoslynSentinel.Tests.Server;
 /// </summary>
 public static class ArchitectureDocGenerator
 {
+    /// <summary>Modes-cell label for a tool on the claude-lean core allow-list.</summary>
+    public const string ClaudeLeanCoreLabel = "claude-lean";
+
+    /// <summary>Modes-cell label for a tool in a ToolsetCatalog toolset (hidden until McpToolsetControl enables it).</summary>
+    public const string ClaudeLeanOnDemandLabel = "claude-lean (on demand)";
+
     /// <summary>
     /// Generates the tools architecture markdown table by scanning loaded tool assemblies.
     /// </summary>
@@ -175,7 +181,7 @@ public static class ArchitectureDocGenerator
                     var summary = TruncateSummary(fullDesc, 120);
                     
                     var modes = classToModes.TryGetValue(toolType.Name, out var m) 
-                        ? m.OrderBy(x => x).ToList() 
+                        ? ResolvePerToolModes(toolType.Name, toolName, m) 
                         : new List<string>();
                     
                     var breakerAttr = method.GetCustomAttribute<UnrecoverableBreakerAttribute>();
@@ -201,7 +207,33 @@ public static class ArchitectureDocGenerator
         
         return result;
     }
-    
+
+    /// <summary>
+    /// Turns a class's mode list into the per-tool Modes cell. Every mode except claude-lean applies to the
+    /// whole class. claude-lean is per tool: "claude-lean" when the tool is on
+    /// <see cref="ToolClassRegistry.ClaudeLeanToolNames"/> (core, always exposed), "claude-lean (on demand)"
+    /// when it belongs to a <see cref="ToolsetCatalog"/> toolset (exposed after McpToolsetControl), and no
+    /// claude-lean entry otherwise, because the allow-list hides it even though its class is loaded.
+    /// </summary>
+    private static List<string> ResolvePerToolModes(string className, string toolName, IEnumerable<string> classModes)
+    {
+        var modes = classModes.ToList();
+        var classInClaudeLean = modes.Contains(ToolClassRegistry.ClaudeLeanMode, StringComparer.OrdinalIgnoreCase);
+        modes.RemoveAll(mode => string.Equals(mode, ToolClassRegistry.ClaudeLeanMode, StringComparison.OrdinalIgnoreCase));
+
+        if (classInClaudeLean && ToolClassRegistry.ClaudeLeanToolNames.Contains(toolName))
+        {
+            modes.Add(ClaudeLeanCoreLabel);
+        }
+        else if (ToolsetCatalog.AllToolNames.Contains(toolName)
+                 && (classInClaudeLean || ToolClassRegistry.ClaudeLeanOnDemandToolClasses.Contains(className)))
+        {
+            modes.Add(ClaudeLeanOnDemandLabel);
+        }
+
+        return modes.OrderBy(x => x).ToList();
+    }
+
     /// <summary>
     /// Finds tool classes that exist but are not registered in any mode.
     /// </summary>
