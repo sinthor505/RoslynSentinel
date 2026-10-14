@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Text;
+using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Tests;
 
@@ -11,38 +12,54 @@ public class ContextHelperTests
     {
         var source = "namespace Foo;\npublic class Bar { public int X => 42; }";
         var snippet = "public int X";
-        var pos = ContextHelper.FindSnippetPosition(source, snippet);
-        Assert.That(pos, Is.EqualTo(source.IndexOf(snippet, StringComparison.Ordinal)));
+        var match = SnippetLookup.ResolveOrThrow(SourceText.From(source), snippet);
+        Assert.That(match.Start, Is.EqualTo(source.IndexOf(snippet, StringComparison.Ordinal)));
     }
 
     [Test]
     public void FindSnippetPosition_NotFound_ThrowsHelpfulError()
     {
         var source = "namespace Foo;\npublic class Bar { }";
-        var ex = Assert.Throws<ToolNotFoundException>(
-            () => ContextHelper.FindSnippetPosition(source, "NotPresent"));
-        // Reworded per plan_contexterrorbuilder_orienting_guidance.md Step 3 (same class of change
-        // as FindExactSnippetPosition_ApproximateIndentation_ThrowsNotFound below) - "not found" read
-        // as content absence to a weak model, not a match failure.
-        Assert.That(ex!.Message, Does.Contain("An exact match could not be located").IgnoreCase);
+        var text = SourceText.From(source);
+        var result = SnippetLookup.Resolve(text, "NotPresent");
+        var ex = SnippetErrorFormatter.Build(result, text, "NotPresent", SnippetLookup.DefaultSnippetLabel);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+            Assert.That(ex, Is.InstanceOf<ToolNotFoundException>());
+            Assert.That(ex.Message, Does.Contain("contextSnippet was not found: it matches nothing at any whitespace tolerance probed"));
+        });
     }
 
     [Test]
     public void FindSnippetPosition_Ambiguous_ThrowsWithCount()
     {
         var source = "int x = 1; int y = 1;";
-        var ex = Assert.Throws<ToolAmbiguousMatchException>(
-            () => ContextHelper.FindSnippetPosition(source, "int"));
-        Assert.That(ex!.Message, Does.Contain("ambiguous").IgnoreCase);
-        Assert.That(ex.Message, Does.Contain("2"));
+        var text = SourceText.From(source);
+        var result = SnippetLookup.Resolve(text, "int");
+        var ex = SnippetErrorFormatter.Build(result, text, "int", SnippetLookup.DefaultSnippetLabel);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.Ambiguous));
+            Assert.That(ex, Is.InstanceOf<ToolAmbiguousMatchException>());
+            Assert.That(ex.Message, Does.Contain("ambiguous").IgnoreCase);
+            Assert.That(ex.Message, Does.Contain("2"));
+        });
     }
 
     [Test]
     public void FindSnippetPosition_EmptySnippet_Throws()
     {
         var source = "namespace Foo;";
-        Assert.Throws<ToolNotFoundException>(
-            () => ContextHelper.FindSnippetPosition(source, "   "));
+        var text = SourceText.From(source);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(SnippetLookup.Resolve(text, "   ").Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+            Assert.Throws<ToolNotFoundException>(() => SnippetLookup.ResolveOrThrow(text, "   "));
+        });
     }
 
     // ── Bug 7 regression: AdvanceToLastIdentifier ─────────────────────────────
@@ -173,8 +190,15 @@ public class ContextHelperTests
             "    totalUnits += line.Quantity;\n" +
             "}";
 
-        Assert.Throws<ToolNotFoundException>(
-            () => ContextHelper.FindSnippetPosition(OrderProcessorLikeSource, snippet));
+        var text = SourceText.From(OrderProcessorLikeSource);
+        var result = SnippetLookup.Resolve(text, snippet);
+        var ex = SnippetErrorFormatter.Build(result, text, snippet, SnippetLookup.DefaultSnippetLabel);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+            Assert.That(ex, Is.InstanceOf<ToolNotFoundException>());
+        });
     }
 
     [Test]
@@ -193,11 +217,11 @@ public class ContextHelperTests
         var source = "public class C {\n    int M() {\n        return a  +  b;\n    }\n}";
         var sourceText = SourceText.From(source);
 
-        var matches = ContextHelper.FindAllSnippetMatches(sourceText, "a + b");
+        var matches = SnippetLookup.Resolve(sourceText, "a + b").Matches.ToList();
 
         Assert.That(matches, Has.Count.EqualTo(1));
         var expectedOffset = source.IndexOf("a  +  b", StringComparison.Ordinal);
-        Assert.That(matches[0], Is.EqualTo(expectedOffset),
+        Assert.That(matches[0].Start, Is.EqualTo(expectedOffset),
             "Must resolve to the real 'a' offset, not the containing line's start.");
     }
 
@@ -210,11 +234,11 @@ public class ContextHelperTests
         var source = "public class C {\n    int M() {\n        return a + b;\n    }\n}";
         var sourceText = SourceText.From(source);
 
-        var matches = ContextHelper.FindAllSnippetMatches(sourceText, "a  +  b");
+        var matches = SnippetLookup.Resolve(sourceText, "a  +  b").Matches.ToList();
 
         Assert.That(matches, Has.Count.EqualTo(1));
         var expectedOffset = source.IndexOf("a + b", StringComparison.Ordinal);
-        Assert.That(matches[0], Is.EqualTo(expectedOffset));
+        Assert.That(matches[0].Start, Is.EqualTo(expectedOffset));
     }
 
     // ── Bug: ReplaceSnippet silent splice corruption (PlanStepRunner 20260910-002952-695) ──
@@ -233,7 +257,7 @@ public class ContextHelperTests
         var source = "public class C {\n    int M() {\n        return a  +  b;\n    }\n}";
         var sourceText = SourceText.From(source);
 
-        var matches = ContextHelper.FindAllSnippetMatchesWithLength(sourceText, "a + b");
+        var matches = SnippetLookup.Resolve(sourceText, "a + b").Matches.ToList();
 
         Assert.That(matches, Has.Count.EqualTo(1));
         var expectedOffset = source.IndexOf("a  +  b", StringComparison.Ordinal);
@@ -249,7 +273,7 @@ public class ContextHelperTests
         var source = "public class C {\n    int M() {\n        return a + b;\n    }\n}";
         var sourceText = SourceText.From(source);
 
-        var matches = ContextHelper.FindAllSnippetMatchesWithLength(sourceText, "a  +  b");
+        var matches = SnippetLookup.Resolve(sourceText, "a  +  b").Matches.ToList();
 
         Assert.That(matches, Has.Count.EqualTo(1));
         var expectedOffset = source.IndexOf("a + b", StringComparison.Ordinal);
@@ -266,7 +290,7 @@ public class ContextHelperTests
         // Insert newContent. Before the fix, this used contextSnippet.Length instead of the real
         // match length and corrupted the surrounding text when a whitespace fallback fired.
         var source = "public class C {\n    int M() {\n        return a  +  b;\n    }\n}";
-        var match = ContextHelper.FindSnippetPositionWithLength(source, "a + b");
+        var match = SnippetLookup.ResolveOrThrow(SourceText.From(source), "a + b");
 
         var result = source.Remove(match.Start, match.Length).Insert(match.Start, "a + b + c");
 
@@ -278,7 +302,9 @@ public class ContextHelperTests
     public void FindAllExactSnippetMatches_LiteralMatch_LengthAlwaysEqualsSnippetLength()
     {
         var source = "int ErrorCount,\nint WarningCount,";
-        var matches = ContextHelper.FindAllExactSnippetMatches(SourceText.From(source), "int ErrorCount,");
+        var matches = SnippetResolver.Resolve(
+            SourceText.From(source), "int ErrorCount,", WhitespaceTolerance.IgnoreLineEndings,
+            SnippetCaseMode.CaseSensitive).Matches.ToList();
 
         Assert.That(matches, Has.Count.EqualTo(1));
         Assert.That(matches[0].Length, Is.EqualTo("int ErrorCount,".Length));
@@ -291,9 +317,12 @@ public class ContextHelperTests
         // ReplaceSnippet silently mismatch. The strict/exact variant must never take that path ->
         // an approximate (differently-spaced) snippet should report zero matches, not a fuzzy one.
         var source = "public class C {\n    int M() {\n        return a  +  b;\n    }\n}";
-        var matches = ContextHelper.FindAllExactSnippetMatches(SourceText.From(source), "a + b");
+        var result = SnippetResolver.Resolve(
+            SourceText.From(source), "a + b", WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive);
 
-        Assert.That(matches, Is.Empty,
+        Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.MatchedLooserThanRequested),
+            "The whitespace-collapsed tier does match, but it is looser than requested: reported as a near-match, never as a match.");
+        Assert.That(result.Matches, Is.Empty,
             "The strict/exact variant must not fall back to whitespace-collapsed matching.");
     }
 
@@ -324,12 +353,20 @@ public class ContextHelperTests
         var source = "public class C {\n    int M() {\n        var  x = 1;\n        var  y = 2;\n    }\n}";
         var snippet = "var x = 1;\nvar y = 2;";
 
-        var ex = Assert.Throws<ToolNotFoundException>(
-            () => ContextHelper.FindExactSnippetPosition(SourceText.From(source), snippet));
-        Assert.That(ex!.Message, Does.Contain("whitespace"));
-        Assert.That(ex.Message, Does.Not.Contain("not in the arrangement you supplied"));
-        Assert.That(ex.Message, Does.Contain("var x = 1;"));
-        Assert.That(ex.Message, Does.Contain("var y = 2;"));
+        var text = SourceText.From(source);
+        var result = SnippetResolver.Resolve(
+            text, snippet, WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive);
+        var ex = SnippetErrorFormatter.Build(result, text, snippet, "oldContent");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.MatchedLooserThanRequested));
+            Assert.That(ex, Is.InstanceOf<ToolMatchedLooserTierException>());
+            Assert.That(ex.Message, Does.Contain("whitespace"));
+            Assert.That(ex.Message, Does.Not.Contain("not in the arrangement you supplied"));
+            Assert.That(ex.Message, Does.Contain("var x = 1;"));
+            Assert.That(ex.Message, Does.Contain("var y = 2;"));
+        });
     }
 
     [Test]
@@ -356,10 +393,19 @@ public class ContextHelperTests
         var source = "public class C {\n    int M() {\n        var foo = 1;\n    }\n}";
         var snippet = "var Foo = 1;";
 
-        var ex = Assert.Throws<ToolNotFoundException>(
-            () => ContextHelper.FindExactSnippetPosition(SourceText.From(source), snippet));
-        Assert.That(ex!.Message, Does.Not.Contain("whitespace differs only"));
-        Assert.That(ex.Message, Does.Not.Contain("except for \r\nwhitespace"));
+        var text = SourceText.From(source);
+        var result = SnippetResolver.Resolve(
+            text, snippet, WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive);
+        var ex = SnippetErrorFormatter.Build(result, text, snippet, "oldContent");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+            Assert.That(ex, Is.InstanceOf<ToolNotFoundException>());
+            Assert.That(ex.Message, Does.Not.Contain("whitespace differs only"));
+            Assert.That(ex.Message, Does.Not.Contain("except for \r\nwhitespace"));
+            Assert.That(ex.Message, Does.Not.Contain("matched only at a looser whitespace tolerance"));
+        });
     }
 
     [Test]
@@ -397,7 +443,9 @@ public class ContextHelperTests
     public void FindExactSnippetPosition_LiteralMatch_ReturnsCorrectStartAndLength()
     {
         var source = "namespace Foo;\npublic class Bar { public int X => 42; }";
-        var match = ContextHelper.FindExactSnippetPosition(SourceText.From(source), "public int X");
+        var match = SnippetResolver.Resolve(
+            SourceText.From(source), "public int X", WhitespaceTolerance.IgnoreLineEndings,
+            SnippetCaseMode.CaseSensitive).Single();
 
         Assert.That(match.Start, Is.EqualTo(source.IndexOf("public int X", StringComparison.Ordinal)));
         Assert.That(match.Length, Is.EqualTo("public int X".Length));
@@ -407,10 +455,18 @@ public class ContextHelperTests
     public void FindExactSnippetPosition_Ambiguous_ThrowsWithCount()
     {
         var source = "int x = 1; int y = 1;";
-        var ex = Assert.Throws<ToolAmbiguousMatchException>(
-            () => ContextHelper.FindExactSnippetPosition(SourceText.From(source), "int"));
-        Assert.That(ex!.Message, Does.Contain("ambiguous").IgnoreCase);
-        Assert.That(ex.Message, Does.Contain("2"));
+        var text = SourceText.From(source);
+        var result = SnippetResolver.Resolve(
+            text, "int", WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive);
+        var ex = SnippetErrorFormatter.Build(result, text, "int", "oldContent");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.Ambiguous));
+            Assert.That(ex, Is.InstanceOf<ToolAmbiguousMatchException>());
+            Assert.That(ex.Message, Does.Contain("ambiguous").IgnoreCase);
+            Assert.That(ex.Message, Does.Contain("2"));
+        });
     }
 
     [Test]
@@ -432,7 +488,9 @@ public class ContextHelperTests
         var oldContent = "    BuildOutcome Outcome,\n    int? ExitCode = null,\n    int ErrorCount,";
         var newContent = "    BuildOutcome Outcome,\n    List<string> ProjectsCompiled,\n    bool DiagnosticsComplete,\n    int ErrorCount,";
 
-        var match = ContextHelper.FindExactSnippetPosition(SourceText.From(source), oldContent);
+        var match = SnippetResolver.Resolve(
+            SourceText.From(source), oldContent, WhitespaceTolerance.IgnoreLineEndings,
+            SnippetCaseMode.CaseSensitive).Single();
         var result = source.Remove(match.Start, match.Length).Insert(match.Start, newContent);
 
         Assert.That(result, Does.Contain("int ErrorCount,\n    int WarningCount,"),
@@ -458,8 +516,9 @@ public class ContextHelperTests
             "}";
         var snippetWithTrailingNewline = snippetNoTrailingNewline + "\n";
 
-        var posWithoutTrailingNewline = ContextHelper.FindSnippetPosition(OrderProcessorLikeSource, snippetNoTrailingNewline);
-        var posWithTrailingNewline = ContextHelper.FindSnippetPosition(OrderProcessorLikeSource, snippetWithTrailingNewline);
+        var text = SourceText.From(OrderProcessorLikeSource);
+        var posWithoutTrailingNewline = SnippetLookup.ResolveOrThrow(text, snippetNoTrailingNewline).Start;
+        var posWithTrailingNewline = SnippetLookup.ResolveOrThrow(text, snippetWithTrailingNewline).Start;
 
         Assert.That(posWithTrailingNewline, Is.EqualTo(posWithoutTrailingNewline),
             "A trailing newline on an otherwise-identical snippet must resolve to the same position, " +
@@ -598,7 +657,7 @@ public class ContextHelperTests
         int pos;
         try
         {
-            pos = ContextHelper.FindSnippetPosition(testCase.Source, testCase.ContextSnippet);
+            pos = SnippetLookup.ResolveOrThrow(SourceText.From(testCase.Source), testCase.ContextSnippet).Start;
         }
         catch (ToolException ex)
         {
@@ -629,8 +688,15 @@ public class ContextHelperTests
             "    return $\"{_customerId}\" + \" \" + {_lines.Count} + \" line(s)\";\n" +
             "}";
 
-        Assert.Throws<ToolNotFoundException>(
-            () => ContextHelper.FindSnippetPosition(ApplyDiscountLikeSource, fabricatedSnippet));
+        var text = SourceText.From(ApplyDiscountLikeSource);
+        var result = SnippetLookup.Resolve(text, fabricatedSnippet);
+        var ex = SnippetErrorFormatter.Build(result, text, fabricatedSnippet, SnippetLookup.DefaultSnippetLabel);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.NoMatch));
+            Assert.That(ex, Is.InstanceOf<ToolNotFoundException>());
+        });
     }
 
     [Test]
@@ -649,11 +715,17 @@ public class ContextHelperTests
 
         var multilineLineBefore = "case A:\n    var entries = Deserialize(x);";
 
-        var ex = Assert.Throws<ToolNotFoundException>(
-            () => ContextHelper.FindSnippetPositionWithLength(
-                SourceText.From(source), "var entries = Deserialize(x);", lineBefore: multilineLineBefore));
-        Assert.That(ex!.Message, Does.Contain("single line"));
-        Assert.That(ex.Message, Does.Contain("lineBefore"));
+        var text = SourceText.From(source);
+        var result = SnippetLookup.Resolve(text, "var entries = Deserialize(x);", lineBefore: multilineLineBefore);
+        var ex = SnippetErrorFormatter.Build(result, text, "var entries = Deserialize(x);", SnippetLookup.DefaultSnippetLabel);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.Outcome, Is.EqualTo(SnippetMatchOutcome.InvalidDisambiguator));
+            Assert.That(ex, Is.InstanceOf<ToolNotFoundException>());
+            Assert.That(ex.Message, Does.Contain("single line"));
+            Assert.That(ex.Message, Does.Contain("lineBefore"));
+        });
     }
 
     [Test]
