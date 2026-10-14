@@ -49,6 +49,16 @@ public static class ToolErrorCode
     public const string TestRunFailed = "TestRunFailed";
     public const string NotFound = "NotFound";
     public const string Ambiguous = "Ambiguous";
+
+    /// <summary>
+    /// A contextSnippet/oldContent matched the file only at a looser whitespace tolerance than the call accepts
+    /// (for example the snippet's indentation or line endings differ from the file's), so nothing was located or
+    /// applied. The message lists each near-match as the file's own copy-ready lines plus the exact whitespace
+    /// differences; resend the file's text as shown. Distinct from <see cref="NotFound"/> (nothing close exists:
+    /// re-read the file) and <see cref="Ambiguous"/> (several accepted matches: pick one).
+    /// </summary>
+    public const string MatchedLooserThanRequested = "MatchedLooserThanRequested";
+
     public const string DiffApplyFailed = "DiffApplyFailed";
     public const string Exception = "Exception";
     public const string NotImplemented = "NotImplemented";

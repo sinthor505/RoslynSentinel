@@ -126,7 +126,7 @@ internal static class SnippetSelectorFilter
     /// Position a match is attributed to for withinMember/matchLine: its first non-whitespace character, so a match that
     /// begins with a newline or indentation is placed on the line (and in the member) a human sees it on.
     /// </summary>
-    private static int FirstNonWhitespacePosition(SourceText sourceText, SnippetMatch match)
+    internal static int FirstNonWhitespacePosition(SourceText sourceText, SnippetMatch match)
     {
         var last = match.Start + match.Length - 1;
         var position = match.Start;
@@ -174,7 +174,7 @@ internal static class SnippetSelectorFilter
             tierResult.RequestedTolerance, tierResult.RequestedCaseMode, SnippetMatchOutcome.InvalidDisambiguator,
             Array.Empty<SnippetMatch>(), Array.Empty<SnippetNearMatch>(), 0, Array.Empty<SnippetClosestWindow>(),
             candidatesBeforeSelectors: 0, candidatesAfterSelectors: 0, candidatesAfterAdjacentLines: 0,
-            invalidParameterName: parameterName, invalidParameterValue: value);
+            invalidParameterName: parameterName, invalidParameterValue: value, tiersProbed: tierResult.TiersProbed);
 
     private static SnippetMatchResult Build(
         SnippetMatchResult tierResult, SnippetMatchOutcome outcome, IReadOnlyList<SnippetMatch> matches,
@@ -184,5 +184,6 @@ internal static class SnippetSelectorFilter
             matches, Array.Empty<SnippetNearMatch>(), 0, Array.Empty<SnippetClosestWindow>(),
             candidatesBeforeSelectors: tierMatches.Count, candidatesAfterSelectors: afterSelectors.Count,
             candidatesAfterAdjacentLines: matches.Count,
-            filterTrail: trail, preFilterMatches: tierMatches, selectorSurvivors: afterSelectors);
+            filterTrail: trail, preFilterMatches: tierMatches, selectorSurvivors: afterSelectors,
+            tiersProbed: tierResult.TiersProbed);
 }

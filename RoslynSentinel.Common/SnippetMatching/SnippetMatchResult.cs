@@ -164,8 +164,8 @@ public sealed record SnippetMatchResult
 
     /// <summary>
     /// The tiers the dispatcher actually ran, strictest first (it stops at the first tier that matches, and a blank
-    /// snippet runs none). The case mode is <see cref="RequestedCaseMode"/>. Empty when the producer did not record it
-    /// (a result rebuilt by the selector filter does not carry it forward yet).
+    /// snippet runs none). The case mode is <see cref="RequestedCaseMode"/>. Empty when the producer did not record it.
+    /// A result rebuilt by the selector filter carries the tier result's value forward unchanged.
     /// </summary>
     public IReadOnlyList<WhitespaceTolerance> TiersProbed { get; }
 
