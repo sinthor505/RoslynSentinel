@@ -15,6 +15,7 @@ using ModelContextProtocol.Protocol;
 
 using RoslynSentinel.Server.Advanced;
 using RoslynSentinel.Server.Basic;
+using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Server;
@@ -33,6 +34,9 @@ public class ClaudeLeanModeTests
         "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift",
         "McpToolsetControl", "SubAgent",
     ];
+
+    /// <summary>CoreTools minus SubAgent, which is declared in Tools.Advanced and never registered by the Basic server.</summary>
+    private static readonly string[] BasicCoreTools = CoreTools.Where(t => t != "SubAgent").ToArray();
 
     /// <summary>The Advanced server's tool set for --mode claude, captured before claude-lean existed.</summary>
     private static readonly string[] ClaudeAdvancedBaseline =
@@ -106,12 +110,13 @@ public class ClaudeLeanModeTests
 
     [TestCase(true)]
     [TestCase(false)]
-    public async Task ClaudeLean_ExposesExactlyTheTwentyFourCoreTools(bool advanced)
+    public async Task ClaudeLean_ExposesExactlyTheCoreToolsForItsFlavor(bool advanced)
     {
+        // SubAgent is Advanced-only, so the Basic claude-lean surface is 23 tools rather than 24.
         var names = await ListToolNamesAsync(advanced, "claude-lean");
 
-        Assert.That(names, Has.Length.EqualTo(24));
-        Assert.That(names, Is.EquivalentTo(CoreTools));
+        Assert.That(names, Has.Length.EqualTo(advanced ? 24 : 23));
+        Assert.That(names, Is.EquivalentTo(advanced ? CoreTools : BasicCoreTools));
     }
 
     [Test]
@@ -130,7 +135,7 @@ public class ClaudeLeanModeTests
 
         Assert.That(names, Has.Length.EqualTo(ClaudeAdvancedBaseline.Length - 13));
         Assert.That(names, Is.SubsetOf(ClaudeAdvancedBaseline));
-        Assert.That(names, Is.SupersetOf(CoreTools.Where(t => t != "McpToolsetControl")));
+        Assert.That(names, Is.SupersetOf(BasicCoreTools.Where(t => t != "McpToolsetControl")));
         Assert.That(names, Does.Not.Contain("McpToolsetControl"));
     }
 
@@ -150,7 +155,7 @@ public class ClaudeLeanModeTests
     {
         // Guards against a typo in the allow-list silently dropping a tool from the surface.
         var declared = McpToolSchemaPatcher
-            .DiscoverAllDeclaredTools(typeof(ServerStatusTools).Assembly)
+            .DiscoverAllDeclaredTools(typeof(ServerStatusTools).Assembly, typeof(SubAgentTools).Assembly)
             .Select(t => t.ToolName)
             .ToHashSet(StringComparer.Ordinal);
 

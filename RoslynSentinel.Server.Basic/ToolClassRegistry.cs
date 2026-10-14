@@ -51,7 +51,7 @@ public static class ToolClassRegistry
         StringComparer.Ordinal);
 
     /// <summary>
-    /// Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool (the same in Basic and Advanced), plus
+    /// Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool (the same in Basic and Advanced, except SubAgentTools, which is Advanced-only and is not registered by Basic), plus
     /// DeclarationTools, ParameterEditTools and SemanticFindReplaceTools, whose single tools (Declaration, ParameterEdit, SemanticFindReplace) are on-demand only: the allow-list keeps
     /// them out of the startup surface and the <c>declarations</c> toolset adds them. Listed here so the class exists in claude-lean and McpServerStatus can name its mode.
     /// </summary>

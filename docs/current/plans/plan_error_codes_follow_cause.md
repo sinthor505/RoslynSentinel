@@ -200,7 +200,7 @@ Notes for the brief:
 - Tests: none call ApplyFileCodeTransform/ApplyClassCodeTransform. Add coverage next to RoslynSentinel.Tests.Server/CodeTransformToolsOutcomeTests.cs (14 existing tests, Method/Generate only) via test-writer; at least one per outcome family (Modified, AlreadyInTargetState via upgrade_to_file_scoped_namespace, FeatureDisabled, TargetNotFound).
 - Suggested batching: 4-5 batches of 7-9 sites (file scope x3, class scope x2), each compiled green; Qwen with unique-message anchors works, or implementer-senior.
 
-Full-suite baseline note: 5 tool-surface tests (ClaudeLean_ExposesExactlyTheTwentyFiveCoreTools x2, ToolsArchitectureDocFreshness, Claude_BasicServer_IsTheAdvancedBaselineMinus..., Registry_EveryCoreToolName_IsDeclaredByAToolMethod) fail with 26 tools vs 25 expected since 348b03b3 (SubAgent enabled in claude-lean); T4_LargeResult_WrittenToFile_DataNull is flaky under the full run.
+Full-suite baseline note (historical): 5 tool-surface tests were red since 348b03b3 (SubAgent enabled in claude-lean). The three ClaudeLeanModeTests failures are fixed (SubAgent is Advanced-only; see blockers/resolved/blocking_error_claudeleanmodetests_subagent_expected_in_basic_flavor.md). ToolsArchitectureDocFreshness was not re-checked. T4_LargeResult_WrittenToFile_DataNull is flaky under the full run.
 
 Other LEFT relabel slices: 3 (ConfigureAwait + OptimizeTaskWait), 4 (ThreadSafety + CodeGeneration), 5 (Asyncify batch, HIGH risk). SyntaxUpgradeEngine rewriter engines (AddBraces, UpgradePatternMatching, CleanupImplicitSpans) still need change detection.
 
