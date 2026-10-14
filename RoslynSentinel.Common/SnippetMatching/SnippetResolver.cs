@@ -39,9 +39,12 @@ public static class SnippetResolver
     /// with all of them in <c>Matches</c>.</item>
     /// <item>None: looser tiers are probed read-only. If one matches, the outcome is
     /// <see cref="SnippetMatchOutcome.MatchedLooserThanRequested"/> with up to <see cref="MaxNearMatches"/> near-matches
-    /// (the lowest looser tier that matches, the file's actual lines verbatim, no structured differences yet) and
-    /// the total in <c>NearMatchTotalCount</c>. Otherwise <see cref="SnippetMatchOutcome.NoMatch"/> with empty lists
-    /// (closest windows arrive in a later slice).</item>
+    /// (the lowest looser tier that matches, the file's actual lines verbatim, and the structured differences between
+    /// the snippet and those lines) and the total in <c>NearMatchTotalCount</c>. Otherwise
+    /// <see cref="SnippetMatchOutcome.NoMatch"/>, with the file's closest windows in <c>ClosestWindows</c> (ranked, capped
+    /// at <see cref="SnippetCandidateFinder.MaxClosestWindows"/>, total in <c>ClosestWindowTotalCount</c>) or, when none
+    /// scores above <see cref="SnippetCandidateFinder.MinClosestWindowScore"/>, <c>HasNoCandidates</c>. <c>TiersProbed</c>
+    /// lists the tiers that ran.</item>
     /// <item>An empty or whitespace-only snippet is <see cref="SnippetMatchOutcome.NoMatch"/>, not an exception.</item>
     /// </list>
     /// Case handling: <paramref name="caseMode"/> = <see cref="SnippetCaseMode.CaseInsensitive"/> is accepted only with
@@ -94,6 +97,8 @@ public static class SnippetResolver
             return Build(tolerance, caseMode, SnippetMatchOutcome.NoMatch, Array.Empty<SnippetMatch>(), Array.Empty<SnippetNearMatch>(), 0);
         }
 
+        var probed = new List<WhitespaceTolerance>();
+
         // Requested tiers, strictest first; the first one that matches ends the search.
         foreach (var matcher in Ladder)
         {
@@ -102,13 +107,14 @@ public static class SnippetResolver
                 break;
             }
 
+            probed.Add(matcher.Tier);
             var matches = matcher.FindAll(sourceText, snippet, CaseModeFor(matcher, caseMode));
             if (matches.Count > 0)
             {
                 return Build(
                     tolerance, caseMode,
                     matches.Count == 1 ? SnippetMatchOutcome.Matched : SnippetMatchOutcome.Ambiguous,
-                    matches, Array.Empty<SnippetNearMatch>(), 0);
+                    matches, Array.Empty<SnippetNearMatch>(), 0, tiersProbed: probed);
             }
         }
 
@@ -120,17 +126,22 @@ public static class SnippetResolver
                 continue;
             }
 
+            probed.Add(matcher.Tier);
             var found = matcher.FindAll(sourceText, snippet, CaseModeFor(matcher, caseMode));
             if (found.Count > 0)
             {
-                var nearMatches = found.Take(MaxNearMatches).Select(m => ToNearMatch(sourceText, m)).ToList();
+                var nearMatches = found.Take(MaxNearMatches).Select(m => ToNearMatch(sourceText, snippet, m)).ToList();
                 return Build(
                     tolerance, caseMode, SnippetMatchOutcome.MatchedLooserThanRequested,
-                    Array.Empty<SnippetMatch>(), nearMatches, found.Count);
+                    Array.Empty<SnippetMatch>(), nearMatches, found.Count, tiersProbed: probed);
             }
         }
 
-        return Build(tolerance, caseMode, SnippetMatchOutcome.NoMatch, Array.Empty<SnippetMatch>(), Array.Empty<SnippetNearMatch>(), 0);
+        // Nothing at any tier: the file's closest windows are the only candidates there can be.
+        var search = SnippetCandidateFinder.FindClosestWindows(sourceText, snippet, caseMode);
+        return Build(
+            tolerance, caseMode, SnippetMatchOutcome.NoMatch, Array.Empty<SnippetMatch>(), Array.Empty<SnippetNearMatch>(), 0,
+            search.Windows, search.TotalQualifying, probed, sourceText.Lines.Count, search.WindowsExamined);
     }
 
     /// <summary>
@@ -168,7 +179,7 @@ public static class SnippetResolver
     private static SnippetCaseMode CaseModeFor(ISnippetMatcher matcher, SnippetCaseMode requested)
         => matcher.Tier == WhitespaceTolerance.IgnoreAllWhitespace ? requested : SnippetCaseMode.CaseSensitive;
 
-    private static SnippetNearMatch ToNearMatch(SourceText sourceText, SnippetMatch match)
+    private static SnippetNearMatch ToNearMatch(SourceText sourceText, string snippet, SnippetMatch match)
     {
         // The last character of the span decides the last line (a span ending in a line break belongs to the
         // line that break ends). The lines are the file's own text, verbatim, without line breaks.
@@ -180,14 +191,20 @@ public static class SnippetResolver
             actualLines.Add(sourceText.Lines[i].ToString());
         }
 
-        return new SnippetNearMatch(match.Tier, firstLine + 1, actualLines, Array.Empty<SnippetDifference>());
+        var differences = SnippetCandidateFinder.ComputeDifferences(sourceText, snippet, firstLine + 1, actualLines);
+        return new SnippetNearMatch(match.Tier, firstLine + 1, actualLines, differences);
     }
 
     private static SnippetMatchResult Build(
         WhitespaceTolerance tolerance, SnippetCaseMode caseMode, SnippetMatchOutcome outcome,
-        IReadOnlyList<SnippetMatch> matches, IReadOnlyList<SnippetNearMatch> nearMatches, int nearMatchTotalCount)
+        IReadOnlyList<SnippetMatch> matches, IReadOnlyList<SnippetNearMatch> nearMatches, int nearMatchTotalCount,
+        IReadOnlyList<SnippetClosestWindow>? closestWindows = null, int closestWindowTotalCount = 0,
+        IReadOnlyList<WhitespaceTolerance>? tiersProbed = null, int linesExamined = 0, int windowsExamined = 0)
         => SnippetMatchResult.Create(
-            tolerance, caseMode, outcome, matches, nearMatches, nearMatchTotalCount, Array.Empty<SnippetClosestWindow>(),
+            tolerance, caseMode, outcome, matches, nearMatches, nearMatchTotalCount,
+            closestWindows ?? Array.Empty<SnippetClosestWindow>(),
             candidatesBeforeSelectors: matches.Count, candidatesAfterSelectors: matches.Count,
-            candidatesAfterAdjacentLines: matches.Count);
+            candidatesAfterAdjacentLines: matches.Count,
+            tiersProbed: tiersProbed, closestWindowTotalCount: closestWindowTotalCount,
+            linesExamined: linesExamined, windowsExamined: windowsExamined);
 }

@@ -24,7 +24,7 @@ public sealed record SnippetMatch(int Start, int Line, int Length, WhitespaceTol
 /// <summary>What kind of difference a <see cref="SnippetDifference"/> describes.</summary>
 public enum SnippetDifferenceKind
 {
-    /// <summary>The line ending differs (CR, LF or CRLF).</summary>
+    /// <summary>The line ending after the line differs (CR, LF or CRLF). Expected and Got hold the names CR, LF or CRLF.</summary>
     LineEnding,
 
     /// <summary>The line's leading whitespace differs.</summary>
@@ -33,20 +33,29 @@ public enum SnippetDifferenceKind
     /// <summary>The line's trailing whitespace differs.</summary>
     TrailingWhitespace,
 
-    /// <summary>Whitespace inside the line differs.</summary>
+    /// <summary>
+    /// Whitespace inside the line differs (a run of a different width, a tab for spaces, or a different line break
+    /// structure inside a collapsed window). Expected and Got hold the trimmed line text.
+    /// </summary>
     InteriorWhitespace,
 }
 
 /// <summary>
 /// A structured difference between a snippet and the file text a near-match was found in. Data
-/// only; wording is built elsewhere. <see cref="SnippetResolver.Resolve"/> does not populate these yet (a
-/// near-match's <see cref="SnippetNearMatch.Differences"/> is empty until the diagnostics slice).
+/// only; wording is built elsewhere. <see cref="SnippetResolver.Resolve"/> fills these into every near-match's
+/// <see cref="SnippetNearMatch.Differences"/>: one entry per kind per differing line, in snippet-line order. A line that
+/// would be accepted by the exact matcher (including a first line that starts mid-line and a last line that stops
+/// mid-line) has no entry.
 /// </summary>
 /// <param name="Kind">What differs.</param>
-/// <param name="Line">1-based line within the snippet.</param>
+/// <param name="Line">1-based line within the snippet as the caller sent it (leading blank lines count).</param>
 /// <param name="Expected">The snippet's text for the differing part, verbatim.</param>
 /// <param name="Got">The file's text for the differing part, verbatim.</param>
-public sealed record SnippetDifference(SnippetDifferenceKind Kind, int Line, string Expected, string Got);
+/// <param name="FileLine">1-based line in the file the snippet line was compared with; 0 when not recorded.</param>
+/// <param name="ActualLineText">The whole file line, verbatim and without its line break, ready to be copied into the
+/// next snippet; empty when not recorded.</param>
+public sealed record SnippetDifference(
+    SnippetDifferenceKind Kind, int Line, string Expected, string Got, int FileLine = 0, string ActualLineText = "");
 
 /// <summary>
 /// A match that exists only at a looser tier than the one requested. Never usable for an edit:
@@ -65,13 +74,13 @@ public sealed record SnippetNearMatch(
 
 /// <summary>
 /// One of the file's windows that scored closest to a snippet that matched at no tier. Never
-/// usable for an edit: it shares no base type or interface with <see cref="SnippetMatch"/>. The dispatcher does
-/// not produce these yet; <see cref="SnippetMatchResult.ClosestWindows"/> is always empty until the diagnostics
-/// slice.
+/// usable for an edit: it shares no base type or interface with <see cref="SnippetMatch"/>. The dispatcher lists
+/// these in <see cref="SnippetMatchResult.ClosestWindows"/> only when nothing matched at any tier (see
+/// <c>SnippetCandidateFinder</c> for the scoring, threshold and cap).
 /// </summary>
 /// <param name="StartLine">1-based line in the file where the window starts.</param>
 /// <param name="ActualLines">The file's actual lines, verbatim.</param>
-/// <param name="Score">Similarity score; higher is closer.</param>
+/// <param name="Score">Similarity score in 0..1; higher is closer. Never 1 (a full match would have been found).</param>
 public sealed record SnippetClosestWindow(int StartLine, IReadOnlyList<string> ActualLines, double Score);
 
 /// <summary>
@@ -101,8 +110,13 @@ public sealed record SnippetMatchResult
         IReadOnlyList<SnippetClosestWindow> closestWindows,
         int candidatesBeforeSelectors, int candidatesAfterSelectors, int candidatesAfterAdjacentLines,
         IReadOnlyList<SnippetFilterStep> filterTrail, IReadOnlyList<SnippetMatch>? preFilterMatches,
-        IReadOnlyList<SnippetMatch> selectorSurvivors, string? invalidParameterName, string? invalidParameterValue)
+        IReadOnlyList<SnippetMatch> selectorSurvivors, string? invalidParameterName, string? invalidParameterValue,
+        IReadOnlyList<WhitespaceTolerance> tiersProbed, int closestWindowTotalCount, int linesExamined, int windowsExamined)
     {
+        TiersProbed = tiersProbed;
+        ClosestWindowTotalCount = closestWindowTotalCount;
+        LinesExamined = linesExamined;
+        WindowsExamined = windowsExamined;
         FilterTrail = filterTrail;
         preFilterMatchesOrNull = preFilterMatches;
         SelectorSurvivors = selectorSurvivors;
@@ -140,6 +154,34 @@ public sealed record SnippetMatchResult
 
     /// <summary>The file's windows closest to the snippet, listed only when nothing matched at any tier.</summary>
     public IReadOnlyList<SnippetClosestWindow> ClosestWindows { get; }
+
+    /// <summary>
+    /// How many windows scored at or above the minimum similarity, which can exceed <see cref="ClosestWindows"/>.Count
+    /// when the list was capped (the caller can say how many were omitted). Zero unless <see cref="ClosestWindows"/> is
+    /// non-empty.
+    /// </summary>
+    public int ClosestWindowTotalCount { get; }
+
+    /// <summary>
+    /// The tiers the dispatcher actually ran, strictest first (it stops at the first tier that matches, and a blank
+    /// snippet runs none). The case mode is <see cref="RequestedCaseMode"/>. Empty when the producer did not record it
+    /// (a result rebuilt by the selector filter does not carry it forward yet).
+    /// </summary>
+    public IReadOnlyList<WhitespaceTolerance> TiersProbed { get; }
+
+    /// <summary>Number of file lines examined while looking for closest windows; zero when no window search ran.</summary>
+    public int LinesExamined { get; }
+
+    /// <summary>Number of candidate windows scored while looking for closest windows; zero when no window search ran.</summary>
+    public int WindowsExamined { get; }
+
+    /// <summary>
+    /// True when this result lists no candidate of any kind: no accepted matches, no near-matches, no closest windows
+    /// and no pre-filter matches. An error built from such a result must say that nothing close was found rather than
+    /// stay silent. Describes the lists in this result only.
+    /// </summary>
+    public bool HasNoCandidates =>
+        Matches.Count == 0 && NearMatches.Count == 0 && ClosestWindowTotalCount == 0 && PreFilterMatches.Count == 0;
 
     /// <summary>Filter trail: candidates before withinMember/matchLine selectors ran.</summary>
     public int CandidatesBeforeSelectors { get; }
@@ -220,7 +262,9 @@ public sealed record SnippetMatchResult
         IReadOnlyList<SnippetClosestWindow> closestWindows,
         int candidatesBeforeSelectors, int candidatesAfterSelectors, int candidatesAfterAdjacentLines,
         IReadOnlyList<SnippetFilterStep>? filterTrail = null, IReadOnlyList<SnippetMatch>? preFilterMatches = null,
-        IReadOnlyList<SnippetMatch>? selectorSurvivors = null, string? invalidParameterName = null, string? invalidParameterValue = null)
+        IReadOnlyList<SnippetMatch>? selectorSurvivors = null, string? invalidParameterName = null, string? invalidParameterValue = null,
+        IReadOnlyList<WhitespaceTolerance>? tiersProbed = null, int? closestWindowTotalCount = null,
+        int linesExamined = 0, int windowsExamined = 0)
     {
         ArgumentNullException.ThrowIfNull(matches);
         ArgumentNullException.ThrowIfNull(nearMatches);
@@ -252,10 +296,31 @@ public sealed record SnippetMatchResult
                 nameof(candidatesBeforeSelectors), "Candidate counts cannot be negative.");
         }
 
+        var windowTotal = closestWindowTotalCount ?? closestWindows.Count;
+        if (windowTotal < closestWindows.Count)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(closestWindowTotalCount), windowTotal, "ClosestWindowTotalCount cannot be less than ClosestWindows.Count.");
+        }
+
+        if (windowTotal > 0 && (matches.Count > 0 || nearMatches.Count > 0))
+        {
+            throw new ArgumentException(
+                "ClosestWindowTotalCount may be non-zero only when both Matches and NearMatches are empty.",
+                nameof(closestWindowTotalCount));
+        }
+
+        if (linesExamined < 0 || windowsExamined < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(linesExamined), "LinesExamined and WindowsExamined cannot be negative.");
+        }
+
         return new SnippetMatchResult(
             requestedTolerance, requestedCaseMode, outcome, matches, nearMatches, nearMatchTotalCount, closestWindows,
             candidatesBeforeSelectors, candidatesAfterSelectors, candidatesAfterAdjacentLines,
             filterTrail ?? Array.Empty<SnippetFilterStep>(), preFilterMatches, selectorSurvivors ?? matches,
-            invalidParameterName, invalidParameterValue);
+            invalidParameterName, invalidParameterValue,
+            tiersProbed ?? Array.Empty<WhitespaceTolerance>(), windowTotal, linesExamined, windowsExamined);
     }
 }

@@ -315,7 +315,12 @@ public class SnippetResolverTests
             Assert.That(result.NearMatchTotalCount, Is.EqualTo(1));
             Assert.That(result.NearMatches[0].ActualLines, Is.EqualTo(new[] { "        }", "        var trailingIssue = x;" }));
             Assert.That(result.NearMatches[0].StartLine, Is.EqualTo(8));
-            Assert.That(result.NearMatches[0].Differences, Is.Empty, "structured differences arrive in slice 3");
+            // Slice 3a: the first line is a fragment at its start, so only the second line differs (its indentation).
+            var difference = result.NearMatches[0].Differences.Single();
+            Assert.That(difference.Kind, Is.EqualTo(SnippetDifferenceKind.LeadingWhitespace));
+            Assert.That(difference.Line, Is.EqualTo(2));
+            Assert.That(difference.FileLine, Is.EqualTo(9));
+            Assert.That(difference.ActualLineText, Is.EqualTo("        var trailingIssue = x;"));
             Assert.That(result.NearMatches[0].LowestTier, Is.EqualTo(WhitespaceTolerance.IgnoreIndentation));
         });
     }
