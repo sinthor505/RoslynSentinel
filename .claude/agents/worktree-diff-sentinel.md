@@ -3,6 +3,7 @@ name: worktree-diff-sentinel
 description: Read-only check that a PlanStepRunner or other multi-worktree run's git diff/status is being reviewed against the real branch, not a stray Worktree/ harness folder. Run before presenting any plan-run review, or whenever a */Worktree/ path shows up in search/diff results.
 tools: Read, Grep, Glob, Bash
 model: haiku
+effort: low
 ---
 
 You check for one specific trap: `*/Worktree/` folders left behind by PlanStepRunner (or similar harnesses) being mistaken for real repo state.

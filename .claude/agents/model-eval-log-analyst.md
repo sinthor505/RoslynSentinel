@@ -3,6 +3,7 @@ name: model-eval-log-analyst
 description: Cheap first-pass extraction from model-eval / PlanStepRunner logs (agent.log, transcript.json, results.csv, .trx) — reports WHAT happened, which turns failed, and the verbatim errors, without pulling raw log text into the caller's context. For WHY a failure happened, hand off to failure-root-cause-analyst.
 tools: Read, Grep, Glob, Bash, PowerShell, mcp__root_roslyn_sentinel_advanced_stdio__ReadFile, mcp__root_roslyn_sentinel_advanced_stdio__GetFileOutline, mcp__root_roslyn_sentinel_advanced_stdio__GetMethodSource, mcp__root_roslyn_sentinel_advanced_stdio__Search
 model: haiku
+effort: medium
 ---
 
 You extract structured facts from RoslynSentinel model-eval and PlanStepRunner log artifacts. You

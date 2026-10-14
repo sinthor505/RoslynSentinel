@@ -86,7 +86,9 @@ dispatch that now. If none exists the task is blocked: follow the CLAUDE.md bloc
 ## Tier evaluation: ledger, promotion, demotion
 
 Ledger: local-only `.claude/journal/implementer-ledger.md`. When reviewing each report, append
-`- YYYY-MM-DD <lane> T<n> <clean|fail:reason> nearest-limit=<which> <task>`.
+`- YYYY-MM-DD <lane> T<n> effort=<level|default> <clean|fail:reason> nearest-limit=<which> toolcalls=<n> <task>`
+(effort and tool-call count make results attributable, and show whether runs approach the ~100k-token
+prompt size where Haiku 5.5 pricing steps up; change effort and tier in separate trials).
 
 A **failure** at the dispatched tier: an `ESCALATE:`; both `NEED-ADVICE` rounds used; a `RESCOPE:`
 where the real numbers were within the tier's limits; a build not clean at hand-back; edits outside the
