@@ -6,14 +6,14 @@ namespace RoslynSentinel.Common.SnippetMatching;
 /// Dispatcher for snippet-in-text matching. Runs the matchers in ladder order up to the requested
 /// <see cref="WhitespaceTolerance"/>, stops at the first tier that finds a match, and reports the outcome as data
 /// (never an exception for a match outcome). The ordinal, line-ending and whitespace-collapsing matchers delegate to
-/// the stage logic in <see cref="ContextHelper"/>; <see cref="IndentationMatcher"/> is the one new matcher, and the cap
-/// and the near-match probe are the dispatcher's own behaviour.
+/// the stage logic in <c>SnippetStages</c>; <c>IndentationMatcher</c> is the one new matcher, and the cap and the
+/// near-match probe are the dispatcher's own behaviour.
 /// </summary>
 /// <remarks>
-/// The class is public but <see cref="Resolve"/> is internal, because <see cref="SnippetMatchResult"/> and the
-/// enums are internal until the migration slices decide the public surface. Selectors (withinMember,
-/// matchLine, lineBefore, lineAfter) are not part of the dispatcher yet; callers keep using the
-/// <see cref="ContextHelper"/> selector code.
+/// The matchers and <c>ISnippetMatcher</c> are internal: callers go through <see cref="Resolve"/> only. Selectors
+/// (withinMember, matchLine, lineBefore, lineAfter) are not part of the dispatcher yet; callers keep using the
+/// <see cref="ContextHelper"/> selector code. The older <see cref="ContextHelper"/> snippet helpers keep their own
+/// behaviour and do not delegate here; callers move to <see cref="Resolve"/> deliberately, batch by batch.
 /// </remarks>
 public static class SnippetResolver
 {
@@ -30,7 +30,7 @@ public static class SnippetResolver
     };
 
     /// <summary>
-    /// Looks <paramref name="snippet"/> up in <paramref name="sourceText"/>.
+    /// Looks <paramref name="snippet"/> up in <paramref name="sourceText"/> and reports the outcome as data.
     /// <list type="bullet">
     /// <item>Matchers run in ladder order up to <paramref name="tolerance"/>; the first tier that matches wins (the
     /// cap: an <see cref="WhitespaceTolerance.Exact"/> request never matches looser).</item>
@@ -47,12 +47,24 @@ public static class SnippetResolver
     /// <see cref="WhitespaceTolerance.IgnoreAllWhitespace"/>, because the whitespace-collapsing stages are the only
     /// case-insensitive stages today and no caller needs more. Under it, the ordinal and line-ending stages still
     /// compare case-sensitively, exactly as <see cref="ContextHelper.FindAllSnippetMatchesWithLength"/> does.
+    /// <para>What each tier accepts is documented on <see cref="WhitespaceTolerance"/>. <c>Matches</c> are at or
+    /// stricter than <paramref name="tolerance"/> and each span is the true span in the text. <c>NearMatches</c> are
+    /// reported only when there are no accepted matches, and are never edit candidates: they are a different type
+    /// from <see cref="SnippetMatch"/>. This method never throws for a match outcome (no match, several matches,
+    /// near-matches only, a blank snippet); every such outcome is returned in the result.</para>
     /// </summary>
+    /// <param name="sourceText">The text to search.</param>
+    /// <param name="snippet">The snippet to find. Empty or whitespace-only yields <see cref="SnippetMatchOutcome.NoMatch"/>.</param>
+    /// <param name="tolerance">The loosest tier the caller accepts. There is no default.</param>
+    /// <param name="caseMode">Whether letter case is compared. There is no default; see <see cref="SnippetCaseMode"/>.</param>
+    /// <returns>The matches, near-matches and outcome; see <see cref="SnippetMatchResult"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="sourceText"/> or <paramref name="snippet"/> is null.</exception>
     /// <exception cref="ArgumentException">
-    /// <paramref name="tolerance"/> is not a defined value, or <paramref name="caseMode"/> is CaseInsensitive with a
-    /// tolerance below IgnoreAllWhitespace. These are programming errors, never match outcomes.
+    /// <paramref name="tolerance"/> or <paramref name="caseMode"/> is not a defined value, or <paramref name="caseMode"/>
+    /// is CaseInsensitive with a tolerance below IgnoreAllWhitespace. These are programming errors, never match
+    /// outcomes.
     /// </exception>
-    internal static SnippetMatchResult Resolve(
+    public static SnippetMatchResult Resolve(
         SourceText sourceText, string snippet, WhitespaceTolerance tolerance, SnippetCaseMode caseMode)
     {
         ArgumentNullException.ThrowIfNull(sourceText);

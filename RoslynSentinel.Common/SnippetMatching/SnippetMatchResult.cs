@@ -4,18 +4,25 @@ namespace RoslynSentinel.Common.SnippetMatching;
 /// One accepted match of a snippet in a text, at or stricter than the requested tier. This is the
 /// only match type an edit path accepts: <see cref="SnippetNearMatch"/> and
 /// <see cref="SnippetClosestWindow"/> are deliberately unrelated types, so passing a looser-tier
-/// hit or a guess to an edit is a compile error. Distinct from the legacy nested
-/// <c>ContextHelper.SnippetMatch(Start, Length)</c>, which is removed in the final migration slice.
+/// hit or a guess to an edit is a compile error.
+/// <para>Which <c>SnippetMatch</c> to use: this type, obtained from <see cref="SnippetResolver.Resolve"/>, is the
+/// one for new code (it adds the 1-based line, the tier and the matcher name). It has the same simple name as the
+/// legacy nested <c>ContextHelper.SnippetMatch(Start, Length)</c>, which the older <c>ContextHelper.FindAll...</c>
+/// helpers still return and which is removed in the final migration slice. Inside the
+/// <c>RoslynSentinel.Common.SnippetMatching</c> namespace the simple name means this type; refer to the legacy
+/// one as <c>ContextHelper.SnippetMatch</c>.</para>
+/// <para>Like the legacy type, <see cref="Length"/> is the true length of the span in the file, not the snippet's
+/// length, so a caller that replaces or removes the span must use it.</para>
 /// </summary>
 /// <param name="Start">0-based character offset where the matched span starts.</param>
 /// <param name="Line">1-based line number of <paramref name="Start"/>.</param>
 /// <param name="Length">The true length of the matched span in the file text (never the snippet's length).</param>
 /// <param name="Tier">The tier at which this match was found; never looser than the requested tier.</param>
 /// <param name="MatcherName">Name of the matcher that produced the match.</param>
-internal sealed record SnippetMatch(int Start, int Line, int Length, WhitespaceTolerance Tier, string MatcherName);
+public sealed record SnippetMatch(int Start, int Line, int Length, WhitespaceTolerance Tier, string MatcherName);
 
 /// <summary>What kind of difference a <see cref="SnippetDifference"/> describes.</summary>
-internal enum SnippetDifferenceKind
+public enum SnippetDifferenceKind
 {
     /// <summary>The line ending differs (CR, LF or CRLF).</summary>
     LineEnding,
@@ -32,23 +39,25 @@ internal enum SnippetDifferenceKind
 
 /// <summary>
 /// A structured difference between a snippet and the file text a near-match was found in. Data
-/// only; wording is built elsewhere.
+/// only; wording is built elsewhere. <see cref="SnippetResolver.Resolve"/> does not populate these yet (a
+/// near-match's <see cref="SnippetNearMatch.Differences"/> is empty until the diagnostics slice).
 /// </summary>
 /// <param name="Kind">What differs.</param>
 /// <param name="Line">1-based line within the snippet.</param>
 /// <param name="Expected">The snippet's text for the differing part, verbatim.</param>
 /// <param name="Got">The file's text for the differing part, verbatim.</param>
-internal sealed record SnippetDifference(SnippetDifferenceKind Kind, int Line, string Expected, string Got);
+public sealed record SnippetDifference(SnippetDifferenceKind Kind, int Line, string Expected, string Got);
 
 /// <summary>
 /// A match that exists only at a looser tier than the one requested. Never usable for an edit:
-/// it shares no base type or interface with <see cref="SnippetMatch"/>.
+/// it shares no base type or interface with <see cref="SnippetMatch"/>, so passing one to an edit path is a
+/// compile error. Its <see cref="ActualLines"/> are the file's own text, to be sent back as the next snippet.
 /// </summary>
 /// <param name="LowestTier">The lowest tier at which the snippet matches.</param>
 /// <param name="StartLine">1-based line in the file where the near-match starts.</param>
 /// <param name="ActualLines">The file's actual lines, verbatim and copy-ready as the next oldContent.</param>
 /// <param name="Differences">Structured differences between the snippet and <paramref name="ActualLines"/>.</param>
-internal sealed record SnippetNearMatch(
+public sealed record SnippetNearMatch(
     WhitespaceTolerance LowestTier,
     int StartLine,
     IReadOnlyList<string> ActualLines,
@@ -56,12 +65,14 @@ internal sealed record SnippetNearMatch(
 
 /// <summary>
 /// One of the file's windows that scored closest to a snippet that matched at no tier. Never
-/// usable for an edit: it shares no base type or interface with <see cref="SnippetMatch"/>.
+/// usable for an edit: it shares no base type or interface with <see cref="SnippetMatch"/>. The dispatcher does
+/// not produce these yet; <see cref="SnippetMatchResult.ClosestWindows"/> is always empty until the diagnostics
+/// slice.
 /// </summary>
 /// <param name="StartLine">1-based line in the file where the window starts.</param>
 /// <param name="ActualLines">The file's actual lines, verbatim.</param>
 /// <param name="Score">Similarity score; higher is closer.</param>
-internal sealed record SnippetClosestWindow(int StartLine, IReadOnlyList<string> ActualLines, double Score);
+public sealed record SnippetClosestWindow(int StartLine, IReadOnlyList<string> ActualLines, double Score);
 
 /// <summary>
 /// Result of looking a snippet up in a text. Carries data only (no message text): wording lives
@@ -69,8 +80,11 @@ internal sealed record SnippetClosestWindow(int StartLine, IReadOnlyList<string>
 /// <see cref="NearMatches"/> is non-empty only when <see cref="Matches"/> is empty, and
 /// <see cref="ClosestWindows"/> is non-empty only when both are empty. A violation throws
 /// <see cref="ArgumentException"/> (an internal programming error, not a tool error).
+/// <para>A result has accepted matches, near-matches or neither, never both. <see cref="IsSingleMatch"/> is the
+/// only check an editing caller needs; do not compare tiers (a stricter match than requested is acceptable).
+/// Read <see cref="Outcome"/> to map a failure to an error code.</para>
 /// </summary>
-internal sealed record SnippetMatchResult
+public sealed record SnippetMatchResult
 {
     private SnippetMatchResult(
         WhitespaceTolerance requestedTolerance, SnippetCaseMode requestedCaseMode, SnippetMatchOutcome outcome,

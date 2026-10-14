@@ -68,7 +68,7 @@ internal sealed class ExactMatcher : ISnippetMatcher
             return Array.Empty<SnippetMatch>();
         }
 
-        var legacy = ContextHelper.FindOrdinalStage(sourceText.ToString(), snippet);
+        var legacy = SnippetStages.FindOrdinalStage(sourceText.ToString(), snippet);
         return SnippetMatcherSupport.Convert(sourceText, legacy, Tier, Name);
     }
 }
@@ -94,7 +94,7 @@ internal sealed class LineEndingMatcher : ISnippetMatcher
             return Array.Empty<SnippetMatch>();
         }
 
-        var legacy = ContextHelper.FindLineEndingStage(sourceText.ToString(), snippet);
+        var legacy = SnippetStages.FindLineEndingStage(sourceText.ToString(), snippet);
         return SnippetMatcherSupport.Convert(sourceText, legacy, Tier, Name);
     }
 }
@@ -120,10 +120,10 @@ internal sealed class CollapsedWhitespaceMatcher : ISnippetMatcher
         }
 
         var comparison = SnippetMatcherSupport.ToComparison(caseMode);
-        var legacy = ContextHelper.FindCollapsedSingleLineStage(sourceText, snippet, comparison);
+        var legacy = SnippetStages.FindCollapsedSingleLineStage(sourceText, snippet, comparison);
         if (legacy.Count == 0)
         {
-            legacy = ContextHelper.FindCollapsedWindowStage(sourceText, snippet, comparison);
+            legacy = SnippetStages.FindCollapsedWindowStage(sourceText, snippet, comparison);
         }
 
         return SnippetMatcherSupport.Convert(sourceText, legacy, Tier, Name);
@@ -223,9 +223,10 @@ internal sealed class IndentationMatcher : ISnippetMatcher
         return matches;
     }
 
-    // Mirrors ContextHelper.SplitSnippetIntoTrimmedContentLines (private there, and ContextHelper is not to be
-    // changed in this slice): line endings normalised, fully blank leading and trailing lines dropped. The caller
-    // has already rejected a blank snippet, so at least one non-blank line remains.
+    // Mirrors ContextHelper.SplitSnippetIntoTrimmedContentLines (internal there; it stays in ContextHelper because
+    // DiagnoseNoMatch also uses it, and this duplicate is left until the diagnostics split): line endings
+    // normalised, fully blank leading and trailing lines dropped. The caller has already rejected a blank snippet,
+    // so at least one non-blank line remains.
     private static string[] SplitContentLines(string snippet)
     {
         var normalized = snippet.Replace("\r\n", "\n").Replace("\r", "\n");
