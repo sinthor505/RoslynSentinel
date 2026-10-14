@@ -1,3 +1,5 @@
+using Microsoft.CodeAnalysis.Text;
+
 namespace RoslynSentinel.Common.SnippetMatching;
 
 /// <summary>
@@ -13,9 +15,11 @@ internal interface ISnippetMatcher
     string Name { get; }
 
     /// <summary>
-    /// Finds every match of <paramref name="snippet"/> in <paramref name="text"/> at this matcher's tier.
-    /// Each returned span is the true span in <paramref name="text"/>, so replacing it with the matched
-    /// text reproduces the file. Never throws for a snippet that simply does not match.
+    /// Finds every match of <paramref name="snippet"/> in <paramref name="sourceText"/> at this matcher's tier
+    /// (this matcher's own stage only; the dispatcher composes the ladder). Each returned span is the true
+    /// span in the text, so replacing it with the matched text reproduces the file. Never throws for a
+    /// snippet that simply does not match; an empty or whitespace-only snippet yields no matches. Takes a
+    /// <see cref="SourceText"/> (not a string) because the collapse stages work on <c>SourceText.Lines</c>.
     /// </summary>
-    IReadOnlyList<SnippetMatch> FindAll(string text, string snippet, SnippetCaseMode caseMode);
+    IReadOnlyList<SnippetMatch> FindAll(SourceText sourceText, string snippet, SnippetCaseMode caseMode);
 }
