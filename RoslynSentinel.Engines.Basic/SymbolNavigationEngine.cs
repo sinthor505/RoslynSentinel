@@ -2495,7 +2495,7 @@ public class SymbolNavigationEngine
         try
         {
             var resolved = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode));
+                (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode));
             return resolved?.Kind == CandidateKind.Enum;
         }
         catch (ToolException)
@@ -2544,7 +2544,7 @@ public class SymbolNavigationEngine
         try
         {
             containerNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode))?.Node as BaseTypeDeclarationSyntax;
+                (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
         }
         catch (ToolException ex)
         {
