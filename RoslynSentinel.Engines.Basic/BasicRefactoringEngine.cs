@@ -2069,7 +2069,7 @@ public class BasicRefactoringEngine
         try
         {
             // Find the snippet position
-            var snippetPos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+            var snippetPos = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter).Start;
             var tree = root.SyntaxTree;
             // Convert position to line numbers
             var linePos = sourceText.Lines.GetLinePosition(snippetPos);
@@ -2223,7 +2223,7 @@ public class BasicRefactoringEngine
         try
         {
             // Find the snippet position
-            var snippetPos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
+            var snippetPos = SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter).Start;
             // Convert position to line number
             var linePos = text.Lines.GetLinePosition(snippetPos);
             var startLine = linePos.Line + 1;

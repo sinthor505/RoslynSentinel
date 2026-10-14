@@ -650,7 +650,7 @@ public class StructuralRefactoringEngine
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
-        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+        var position = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter).Start;
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
@@ -872,7 +872,7 @@ public class StructuralRefactoringEngine
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
-        var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+        var position = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter).Start;
         // Primary: find an expression whose span starts at position and whose text matches
         // the snippet -> handles compound expressions like "a + b".
         var trimmedSnippet = contextSnippet.Trim();

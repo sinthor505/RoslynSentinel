@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
+using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
 
@@ -50,9 +51,9 @@ public class ImpactAnalyzer
             var sourceText = await document.GetTextAsync(cancellationToken);
             // Resolve at the snippet start first (mirrors InspectSymbol(info)); the last-identifier path below is the fallback
             var symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
-            var position = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+            var snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter);
             // Advance to the last identifier token in the snippet span so FindSymbolAtPositionAsync works
-            position = ContextHelper.AdvanceToLastIdentifier(syntaxRoot, position, contextSnippet.Length);
+            var position = ContextHelper.AdvanceToLastIdentifier(syntaxRoot, snippetMatch.Start, snippetMatch.Length);
             var token = syntaxRoot.FindToken(position);
             symbol ??= await SymbolFinder.FindSymbolAtPositionAsync(document, position, cancellationToken);
 

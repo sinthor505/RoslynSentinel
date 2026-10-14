@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using RoslynSentinel.Common;
 using Microsoft.CodeAnalysis.FindSymbols;
+using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
 public record AttributeUsageSite(string AttributeName, string[] Attributes, string SymbolId, string TargetKind, string TargetName, string ContainingType, string ContainingNamespace, string ProjectName, FilePathWrapper FilePath, int Line);
@@ -560,7 +561,7 @@ public class DiscoveryEngine
             // contextSnippet, when omitted, falls back to symbolName as the search text -> either
             // way, lineBefore/lineAfter must be forwarded or disambiguation silently never happens.
             var snippet = contextSnippet ?? symbolName;
-            var position = ContextHelper.FindSnippetPosition(sourceText, snippet, lineBefore, lineAfter);
+            var position = SnippetLookup.ResolveOrThrow(sourceText, snippet, lineBefore, lineAfter).Start;
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken) ?? throw new InvalidOperationException("Could not get semantic model.");
             var foundSymbol = (semanticModel.GetSymbolInfo(root!.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken).Symbol ?? semanticModel.GetDeclaredSymbol(root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(position, 0)), cancellationToken)) ?? throw new ToolNotFoundException($"Symbol '{symbolName}' not found at the provided location.");
             symbol = foundSymbol;

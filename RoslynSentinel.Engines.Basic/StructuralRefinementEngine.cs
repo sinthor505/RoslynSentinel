@@ -5,6 +5,8 @@ using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 
+using RoslynSentinel.Common.SnippetMatching;
+
 namespace RoslynSentinel.Engines.Basic;
 
 public class StructuralRefinementEngine
@@ -224,15 +226,15 @@ public class StructuralRefinementEngine
         }
         else
         {
-            int snippetPos;
-            try { snippetPos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
+            SnippetMatch snippetMatch;
+            try { snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter); }
             catch (ToolException ex)
             {
                 return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = ex.Message, ErrorCode = ex.ErrorCode };
             }
 
-            target = candidates.FirstOrDefault(c => c.Span.Contains(snippetPos))
-                ?? candidates.FirstOrDefault(c => new TextSpan(snippetPos, contextSnippet.Length).OverlapsWith(c.Span));
+            target = candidates.FirstOrDefault(c => c.Span.Contains(snippetMatch.Start))
+                ?? candidates.FirstOrDefault(c => new TextSpan(snippetMatch.Start, snippetMatch.Length).OverlapsWith(c.Span));
         }
 
         if (target == null)

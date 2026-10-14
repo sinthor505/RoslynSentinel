@@ -3,6 +3,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common.SnippetMatching;
+
 namespace RoslynSentinel.Engines.Basic;
 
 public class SemanticRefactoringEngine
@@ -297,7 +299,7 @@ public class SemanticRefactoringEngine
         try
         {
             // Find the snippet position
-            var snippetPos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+            var snippetPos = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter).Start;
 
             // Find the statements that contain the snippet position
             var nodes = root.DescendantNodes()

@@ -8,6 +8,8 @@ using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common.SnippetMatching;
+
 namespace RoslynSentinel.Engines.Basic;
 
 public record CallerInfo(
@@ -429,15 +431,14 @@ public class SymbolNavigationEngine
         if (symbol == null)
         {
             var text = await document.GetTextAsync(cancellationToken);
-            int pos;
-            try
+            // The primary lookup above already resolved this snippet, so this only fails when the primary returned
+            // early (no syntax root or semantic model); the error then carries the candidate listing.
+            if (!SnippetLookup.TryResolve(text, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError))
             {
-                pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
+                return ErrorHoverInfo(snippetError!);
             }
-            catch (ToolException ex)
-            {
-                return ErrorHoverInfo(ex.Message);
-            }
+
+            var pos = snippetMatch.Start;
 
             var model = await document.GetSemanticModelAsync(cancellationToken);
             if (model == null)
@@ -449,7 +450,7 @@ public class SymbolNavigationEngine
             var root = await document.GetSyntaxRootAsync(cancellationToken);
             if (root != null)
             {
-                pos = ContextHelper.AdvanceToLastIdentifier(root, pos, contextSnippet.Length);
+                pos = ContextHelper.AdvanceToLastIdentifier(root, pos, snippetMatch.Length);
             }
 
             symbol = await SymbolFinder.FindSymbolAtPositionAsync(model, pos, solution.Workspace, cancellationToken);

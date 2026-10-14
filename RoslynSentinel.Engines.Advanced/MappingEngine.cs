@@ -3,6 +3,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common.SnippetMatching;
+
 namespace RoslynSentinel.Engines.Advanced;
 
 public class MappingEngine
@@ -170,7 +172,7 @@ public class MappingEngine
         try
         {
             // Find the snippet position
-            var snippetPos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
+            var snippetPos = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter).Start;
 
             // Find assignment expressions near/at the snippet position
             var nodes = root.DescendantNodes()

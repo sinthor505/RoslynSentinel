@@ -6,6 +6,8 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 
+using RoslynSentinel.Common.SnippetMatching;
+
 namespace RoslynSentinel.Engines.Basic;
 
 // ── Result Types ──────────────────────────────────────────────────────────────
@@ -254,8 +256,8 @@ public class MsToolAugmentEngine
         SwitchStatementSyntax? sw = null;
         try
         {
-            var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
-            var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length));
+            var snippetMatch = SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter);
+            var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(snippetMatch.Start, snippetMatch.Length));
             sw = node.AncestorsAndSelf().OfType<SwitchStatementSyntax>().FirstOrDefault();
         }
         catch (ToolException ex)
@@ -317,8 +319,8 @@ public class MsToolAugmentEngine
         var root = (await doc.GetSyntaxRootAsync(cancellationToken))!;
         var text = await doc.GetTextAsync(cancellationToken);
 
-        var pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
-        var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length));
+        var snippetMatch = SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter);
+        var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(snippetMatch.Start, snippetMatch.Length));
         var sw = node.AncestorsAndSelf().OfType<SwitchStatementSyntax>().First();
         string? targetVariable = null;
         bool isReturnSwitch = true;
@@ -455,11 +457,11 @@ public class MsToolAugmentEngine
         }
 
         // Find the string.Format invocation
-        int pos;
-        try { pos = ContextHelper.FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter); }
+        SnippetMatch snippetMatch;
+        try { snippetMatch = SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter); }
         catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message, ex.ErrorCode); }
 
-        var invocation = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, contextSnippet.Length))
+        var invocation = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(snippetMatch.Start, snippetMatch.Length))
             .AncestorsAndSelf()
             .OfType<InvocationExpressionSyntax>()
             .FirstOrDefault(inv =>
@@ -764,14 +766,14 @@ public class MsToolAugmentEngine
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
         var root = await tree.GetRootAsync(cancellationToken);
 
-        int pos;
-        try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
+        SnippetMatch snippetMatch;
+        try { snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter); }
         catch (ToolException ex)
         {
             return new ForeachLinqAnalysis(false, "", 0, ex.Message, "Cannot analyze.");
         }
 
-        var node = root.FindNode(new TextSpan(pos, contextSnippet.Length));
+        var node = root.FindNode(new TextSpan(snippetMatch.Start, snippetMatch.Length));
         var forEach = node.AncestorsAndSelf().OfType<ForEachStatementSyntax>().FirstOrDefault();
 
         if (forEach == null)
@@ -1067,12 +1069,12 @@ public class MsToolAugmentEngine
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
         var root = await tree.GetRootAsync(cancellationToken);
 
-        int pos;
-        try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
+        SnippetMatch snippetMatch;
+        try { snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter); }
         catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message, ex.ErrorCode); }
 
         // Find the nearest literal expression at or near the snippet position
-        var node = root.FindNode(new TextSpan(pos, contextSnippet.Length));
+        var node = root.FindNode(new TextSpan(snippetMatch.Start, snippetMatch.Length));
         var literal = node.AncestorsAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault()
                    ?? node.DescendantNodes().OfType<LiteralExpressionSyntax>().FirstOrDefault();
 
@@ -1485,11 +1487,11 @@ public class MsToolAugmentEngine
         }
         else
         {
-            int pos;
-            try { pos = ContextHelper.FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter); }
+            SnippetMatch snippetMatch;
+            try { snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter); }
             catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message, ex.ErrorCode); }
 
-            var SelectionSpan = new TextSpan(pos, contextSnippet.Length);
+            var SelectionSpan = new TextSpan(snippetMatch.Start, snippetMatch.Length);
             var node = root.FindNode(SelectionSpan);
 
             // Walk up to the nearest block so we can work with statement-level items
