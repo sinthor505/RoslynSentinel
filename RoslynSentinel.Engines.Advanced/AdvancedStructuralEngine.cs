@@ -1360,7 +1360,7 @@ public class StructuralRefactoringEngine
         MemberDeclarationSyntax? target;
         try
         {
-            target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, text, contextSnippet, lineBefore, lineAfter, (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode))?.Node as MemberDeclarationSyntax;
+            target = SyntaxTargetResolver.ResolveBySnippetOrThrow(candidates, text, contextSnippet, lineBefore, lineAfter, (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode), allowLooseMatch: true)?.Node as MemberDeclarationSyntax;
         }
         catch (ToolException ex)
         {

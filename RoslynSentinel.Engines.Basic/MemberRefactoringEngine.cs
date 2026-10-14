@@ -2834,7 +2834,7 @@ public class MemberRefactoringEngine
                 .ToList());
             memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
             member = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
+                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode), allowLooseMatch: true)?.Node;
         }
         catch (ToolException ex)
         {

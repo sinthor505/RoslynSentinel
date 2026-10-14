@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
 
@@ -288,6 +289,8 @@ public static class SyntaxTargetResolver
     /// Throws ToolNotFoundException (snippet matched nothing) or ToolAmbiguousMatchException (2+ snippet
     /// matches, or the single match fell outside every candidate), each carrying the hintBuilder-produced
     /// message. Callers catch ToolException and copy ex.ErrorCode onto their result.
+    /// allowLooseMatch: true keeps the legacy single-candidate pass-through (a lone candidate is returned
+    /// without validating contextSnippet). Default false validates every supplied snippet.
     /// </summary>
     public static SyntaxNodeCandidate? ResolveBySnippetOrThrow(
         List<SyntaxNodeCandidate> candidates,
@@ -295,34 +298,197 @@ public static class SyntaxTargetResolver
         string? contextSnippet,
         string? lineBefore,
         string? lineAfter,
-        Func<List<SyntaxNodeCandidate>, List<int>, string, string> hintBuilder)
+        Func<List<SyntaxNodeCandidate>, List<int>, string, string> hintBuilder, bool allowLooseMatch = false)
     {
-        if (contextSnippet == null || candidates.Count <= 1)
+        if (contextSnippet == null || candidates.Count == 0)
         {
             return candidates.FirstOrDefault();
         }
 
-        var matches = ContextHelper.FindAllSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
-        if (matches.Count == 0)
+        // allowLooseMatch: true preserves the legacy single-candidate pass-through for the two tool paths
+        // (ReplaceMember and ConvertExpressionBody). A later slice will emit a warning there instead of silently accepting.
+        if (allowLooseMatch && candidates.Count == 1)
         {
-            throw new ToolNotFoundException(hintBuilder(candidates, matches, "not found"));
+            return candidates[0];
         }
 
-        if (matches.Count == 1)
+        // A blank snippet cannot be validated against anything; with one candidate it is the same as no snippet.
+        if (candidates.Count == 1 && string.IsNullOrWhiteSpace(contextSnippet))
         {
-            var match = matches[0];
-            var matchedCandidate = candidates.FirstOrDefault(c => c.Node.Span.Contains(match));
-            if (matchedCandidate != null)
+            return candidates[0];
+        }
+
+        var result = SnippetLookup.Resolve(sourceText, contextSnippet, lineBefore, lineAfter);
+        var matchStarts = result.Matches.Select(m => m.Start).ToList();
+
+        if (result.Outcome is not (SnippetMatchOutcome.Matched or SnippetMatchOutcome.Ambiguous or SnippetMatchOutcome.StillAmbiguous))
+        {
+            if (result.Outcome == SnippetMatchOutcome.InvalidDisambiguator)
             {
-                return matchedCandidate;
+                throw SnippetErrorFormatter.Build(result, sourceText, contextSnippet, SnippetLookup.DefaultSnippetLabel);
             }
 
-            throw new ToolAmbiguousMatchException(hintBuilder(candidates, matches, "ambiguous"));
+            string? scope = null;
+            if (result.Outcome == SnippetMatchOutcome.NoMatch)
+            {
+                (result, scope) = ScopeNoMatchToCandidates(candidates, sourceText, contextSnippet, result);
+            }
+
+            throw ComposeFailure(
+                SnippetErrorFormatter.Build(result, sourceText, contextSnippet, SnippetLookup.DefaultSnippetLabel),
+                lead: null, scope, hintBuilder(candidates, matchStarts, "not found"));
         }
 
-        // 2+ matches
-        throw new ToolAmbiguousMatchException(hintBuilder(candidates, matches, "ambiguous"));
+        var survivors = new List<(SyntaxNodeCandidate Candidate, SnippetMatch Match)>();
+        foreach (var match in result.Matches)
+        {
+            var position = FirstNonWhitespacePosition(sourceText, match);
+            var owner = candidates.FirstOrDefault(c => c.Node.Span.Contains(position));
+            if (owner != null && !survivors.Any(s => ReferenceEquals(s.Candidate, owner)))
+            {
+                survivors.Add((owner, match));
+            }
+        }
+
+        if (survivors.Count == 1)
+        {
+            return survivors[0].Candidate;
+        }
+
+        var outcome = result.Outcome == SnippetMatchOutcome.StillAmbiguous
+            ? SnippetMatchOutcome.StillAmbiguous
+            : SnippetMatchOutcome.Ambiguous;
+        SnippetMatchResult Ambiguity(IReadOnlyList<SnippetMatch> matches) => SnippetMatchResult.Create(
+            result.RequestedTolerance, result.RequestedCaseMode, outcome, matches, Array.Empty<SnippetNearMatch>(), 0,
+            Array.Empty<SnippetClosestWindow>(), result.CandidatesBeforeSelectors, result.CandidatesAfterSelectors, matches.Count,
+            filterTrail: result.FilterTrail, tiersProbed: result.TiersProbed);
+
+        if (survivors.Count == 0)
+        {
+            // The snippet is in the file but not in any candidate, so it selects none of them. List where it is.
+            var lead = $"contextSnippet matches {result.Matches.Count} place(s) in the file, but none is inside the " +
+                       $"{candidates.Count} candidate declaration(s) ({DescribeCandidateRanges(candidates)}), so it does not select any of them. " +
+                       "The place(s) it does match:";
+            throw ComposeFailure(
+                SnippetErrorFormatter.Build(Ambiguity(result.Matches), sourceText, contextSnippet, SnippetLookup.DefaultSnippetLabel),
+                lead, scope: null, hintBuilder(candidates, matchStarts, "ambiguous"));
+        }
+
+        string? MemberNameAt(int position) =>
+            candidates.FirstOrDefault(c => c.Node.Span.Contains(position)) is { } owner ? $"{owner.Kind} {owner.Name}" : null;
+
+        var outside = result.Matches.Count - survivors.Count;
+        throw ComposeFailure(
+            SnippetErrorFormatter.Build(
+                Ambiguity(survivors.Select(s => s.Match).ToList()), sourceText, contextSnippet,
+                SnippetLookup.DefaultSnippetLabel, MemberNameAt),
+            lead: null,
+            scope: outside > 0 ? $"{outside} further match(es) of contextSnippet lie outside the candidate declarations and are not listed." : null,
+            hintBuilder(candidates, matchStarts, "ambiguous"));
     }
+
+    /// <summary>
+    /// Wraps the formatter's exception with an optional lead sentence (before) and the scope sentence and the caller's
+    /// hint (after), keeping the exception type, and so the ErrorCode callers copy, unchanged.
+    /// </summary>
+    private static ToolException ComposeFailure(ToolException formatted, string? lead, string? scope, string hint)
+    {
+        var parts = new List<string>();
+        if (!string.IsNullOrEmpty(lead))
+        {
+            parts.Add(lead);
+        }
+
+        parts.Add(formatted.Message);
+        if (!string.IsNullOrEmpty(scope))
+        {
+            parts.Add(scope);
+        }
+
+        parts.Add(hint);
+        var message = string.Join("\n", parts);
+        return formatted switch
+        {
+            ToolAmbiguousMatchException => new ToolAmbiguousMatchException(message),
+            ToolNotFoundException => new ToolNotFoundException(message),
+            _ => formatted,
+        };
+    }
+
+    /// <summary>
+    /// Where a match visibly begins: a collapsed-whitespace window match starts at its first line's start, before the
+    /// indentation, which is outside the declaration's span even when the match is the declaration's own first line.
+    /// </summary>
+    private static int FirstNonWhitespacePosition(SourceText sourceText, SnippetMatch match)
+    {
+        var end = Math.Min(sourceText.Length, match.Start + match.Length);
+        var position = match.Start;
+        while (position < end - 1 && char.IsWhiteSpace(sourceText[position]))
+        {
+            position++;
+        }
+
+        return position;
+    }
+
+    /// <summary>
+    /// Re-ranks the closest windows of a no-match so they come from inside the candidate declarations, the only places a
+    /// snippet could have selected. Each candidate's own lines are searched on their own and the windows are shifted back
+    /// to file line numbers, ranked by score then position and capped. When no candidate holds anything close, the
+    /// file-wide result is returned unchanged (its windows, if any, are outside every candidate; the scope sentence says so).
+    /// </summary>
+    private static (SnippetMatchResult Result, string Scope) ScopeNoMatchToCandidates(
+        List<SyntaxNodeCandidate> candidates, SourceText sourceText, string snippet, SnippetMatchResult fileResult)
+    {
+        var windows = new List<SnippetClosestWindow>();
+        var qualifying = 0;
+        var linesExamined = 0;
+        var windowsExamined = 0;
+        foreach (var candidate in candidates)
+        {
+            var span = candidate.Node.Span;
+            var firstLine = sourceText.Lines.GetLineFromPosition(span.Start).LineNumber;
+            var lastLine = sourceText.Lines.GetLineFromPosition(Math.Max(span.Start, span.End - 1)).LineNumber;
+            var body = sourceText.ToString(TextSpan.FromBounds(sourceText.Lines[firstLine].Start, sourceText.Lines[lastLine].End));
+            var local = SnippetResolver.Resolve(
+                SourceText.From(body), snippet, WhitespaceTolerance.IgnoreAllWhitespace, SnippetCaseMode.CaseInsensitive);
+            linesExamined += local.LinesExamined;
+            windowsExamined += local.WindowsExamined;
+            qualifying += local.ClosestWindowTotalCount;
+            windows.AddRange(local.ClosestWindows.Select(w => w with { StartLine = w.StartLine + firstLine }));
+        }
+
+        var ranges = DescribeCandidateRanges(candidates);
+        if (windows.Count == 0)
+        {
+            var scope = fileResult.ClosestWindows.Count > 0
+                ? $"No text inside the {candidates.Count} candidate declaration(s) ({ranges}) is close to contextSnippet; the closest windows above are elsewhere in the file and are NOT inside any candidate."
+                : $"None of the {candidates.Count} candidate declaration(s) ({ranges}) contains text close to contextSnippet.";
+            return (fileResult, scope);
+        }
+
+        var ranked = windows.OrderByDescending(w => w.Score).ThenBy(w => w.StartLine).Take(MaxScopedWindows).ToList();
+        var scoped = SnippetMatchResult.Create(
+            fileResult.RequestedTolerance, fileResult.RequestedCaseMode, SnippetMatchOutcome.NoMatch,
+            Array.Empty<SnippetMatch>(), Array.Empty<SnippetNearMatch>(), 0, ranked,
+            candidatesBeforeSelectors: 0, candidatesAfterSelectors: 0, candidatesAfterAdjacentLines: 0,
+            tiersProbed: fileResult.TiersProbed, closestWindowTotalCount: Math.Max(qualifying, ranked.Count),
+            linesExamined: linesExamined, windowsExamined: windowsExamined);
+        return (scoped, $"The closest windows above come only from inside the {candidates.Count} candidate declaration(s) that were considered ({ranges}).");
+    }
+
+    private static string DescribeCandidateRanges(List<SyntaxNodeCandidate> candidates)
+    {
+        const int maxListed = 5;
+        var ranges = candidates.Take(maxListed)
+            .Select(c => c.StartLine == c.EndLine ? $"line {c.StartLine}" : $"lines {c.StartLine}-{c.EndLine}")
+            .ToList();
+        var more = candidates.Count > maxListed ? $", +{candidates.Count - maxListed} more" : string.Empty;
+        return string.Join(", ", ranges) + more;
+    }
+
+    // Same cap as the resolver's own closest-window list (SnippetCandidateFinder.MaxClosestWindows, internal to Common).
+    private const int MaxScopedWindows = 5;
 }
 
 /// <summary>
