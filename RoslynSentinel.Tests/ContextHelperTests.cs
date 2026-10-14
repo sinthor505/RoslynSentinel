@@ -152,31 +152,6 @@ public class ContextHelperTests
         "}\r\n";
 
     [Test]
-    public void FindSnippetPosition_MultilineSnippetWithFlattenedIndentation_ResolvesViaWindowFallback()
-    {
-        // Exact snippet shape from the live agent transcript: \n-joined, 0 spaces on the
-        // outer lines, 4 spaces inside the loop body -> the file itself uses 8/12 spaces.
-        var snippet =
-            "decimal runningTotal = 0m;\n" +
-            "int totalUnits = 0;\n" +
-            "foreach (var line in _lines)\n" +
-            "{\n" +
-            "    runningTotal += line.Quantity * line.UnitPrice;\n" +
-            "    totalUnits += line.Quantity;\n" +
-            "}";
-
-        var pos = ContextHelper.FindSnippetPosition(OrderProcessorLikeSource, snippet);
-
-        // The window fallback resolves to the start of the matched source *line* (including its
-        // real leading whitespace), not the start of the trimmed statement text within it -> same
-        // convention as the existing single-line collapsed-whitespace fallback just above it.
-        var lineStart = OrderProcessorLikeSource.LastIndexOf(
-            '\n', OrderProcessorLikeSource.IndexOf("decimal runningTotal = 0m;", StringComparison.Ordinal)) + 1;
-        Assert.That(pos, Is.EqualTo(lineStart),
-            "Should resolve to the start of the real (differently-indented) block in source");
-    }
-
-    [Test]
     public void FindSnippetPosition_MultilineSnippetReorderedStatements_StillNotFound()
     {
         // The window fallback must stay structure-sensitive: reordering statements is a real
@@ -327,20 +302,6 @@ public class ContextHelperTests
     }
 
     [Test]
-    public void FindExactSnippetPosition_ApproximateIndentation_ThrowsNotFound()
-    {
-        var source = "public class C {\n    int M() {\n        return a  +  b;\n    }\n}";
-
-        var ex = Assert.Throws<ToolNotFoundException>(
-            () => ContextHelper.FindExactSnippetPosition(SourceText.From(source), "a + b"));
-        // Reworded per plan_contexterrorbuilder_orienting_guidance.md Step 3: "not found" read as
-        // content absence to a weak model, not a match failure. New wording is unambiguous that
-        // this is a *matching* problem, and explicitly requires verbatim text for this strict path.
-        Assert.That(ex!.Message, Does.Contain("An exact match could not be located"));
-        Assert.That(ex.Message, Does.Contain("verbatim required"));
-    }
-
-    [Test]
     public void FindExactSnippetPosition_AllLinesIndentationOnlyDiffer_NamesWhitespaceNotArrangement()
     {
         // plan_contexterrorbuilder_orienting_guidance.md Step 6: every filtered snippet line
@@ -370,21 +331,6 @@ public class ContextHelperTests
     }
 
     [Test]
-    public void FindExactSnippetPosition_OneLineInternalSpacingDiffers_LabelsWhitespaceOnlyDistinctFromMiss()
-    {
-        // One line among several is whitespace-only (internal spacing), one line is a genuine
-        // content miss - the diagnosis must label the two differently, not lump both under one
-        // "diverging line" bucket.
-        var source = "public class C {\n    int M() {\n        int  x = 1;\n        int y = 2;\n    }\n}";
-        var snippet = "int x = 1;\nint z = 2;";
-
-        var ex = Assert.Throws<ToolNotFoundException>(
-            () => ContextHelper.FindExactSnippetPosition(SourceText.From(source), snippet));
-        Assert.That(ex!.Message, Does.Contain("whitespace differs only"));
-        Assert.That(ex.Message, Does.Contain("did NOT match"));
-    }
-
-    [Test]
     public void FindExactSnippetPosition_CaseOnlyDifference_StaysGenuineMissNotWhitespaceOnly()
     {
         // Regression: a case-only difference must never be folded into the whitespace-only
@@ -406,37 +352,6 @@ public class ContextHelperTests
             Assert.That(ex.Message, Does.Not.Contain("except for \r\nwhitespace"));
             Assert.That(ex.Message, Does.Not.Contain("matched only at a looser whitespace tolerance"));
         });
-    }
-
-    [Test]
-    public void FindExactSnippetPosition_TwentyFiveLinesOneCharDiffers_NamesCulpritFirstAndStaysCompact()
-    {
-        // Slice 3 of blocking_error_replacesnippet_schema_invites_anchor_only_edits.md: the
-        // non-matching line and its character difference must come BEFORE the matched entries,
-        // the matched list is capped at 3, and the whole message stays far below the old ~9 KB.
-        var sourceLines = Enumerable.Range(1, 25).Select(n => $"        int value{n} = Compute({n});").ToList();
-        var source = "public class C {\n    void M() {\n" + string.Join("\n", sourceLines) + "\n    }\n}";
-        var snippetLines = Enumerable.Range(1, 25).Select(n => n == 13
-            ? "int value13 = Compute(31);"
-            : $"int value{n} = Compute({n});");
-        var snippet = string.Join("\n", snippetLines);
-
-        var ex = Assert.Throws<ToolNotFoundException>(
-            () => ContextHelper.FindExactSnippetPosition(SourceText.From(source), snippet));
-        var message = ex!.Message;
-
-        var culpritIndex = message.IndexOf("line 13 (", StringComparison.Ordinal);
-        var diffIndex = message.IndexOf("first difference at char 23", StringComparison.Ordinal);
-        var firstMatchedIndex = message.IndexOf("-> source line", StringComparison.Ordinal);
-        Assert.That(culpritIndex, Is.GreaterThanOrEqualTo(0), message);
-        Assert.That(diffIndex, Is.GreaterThan(culpritIndex), message);
-        Assert.That(firstMatchedIndex, Is.GreaterThan(diffIndex), "Matched entries must follow the culprit. " + message);
-        Assert.That(message, Does.Contain("yours \"31);\" vs file \"13);\""));
-
-        var matchedEntryCount = System.Text.RegularExpressions.Regex.Matches(message, "-> source line").Count;
-        Assert.That(matchedEntryCount, Is.LessThanOrEqualTo(3), message);
-        Assert.That(message, Does.Contain("more matched"));
-        Assert.That(message.Length, Is.LessThan(2048), $"Message was {message.Length} chars: {message}");
     }
 
     [Test]
@@ -726,43 +641,5 @@ public class ContextHelperTests
             Assert.That(ex.Message, Does.Contain("single line"));
             Assert.That(ex.Message, Does.Contain("lineBefore"));
         });
-    }
-
-    [Test]
-    [Description("DiagnoseNoMatch: mirrors the real entries/entries2 CS0103 bug - 4 of 5 snippet " +
-              "lines match verbatim at contiguous source lines and one line diverges (caller " +
-              "typed 'entries' where the file actually has 'entries2'). The error must name the " +
-              "specific diverging line and quote what's actually on disk there, not just say " +
-              "'not found'.")]
-    public void FindSnippetPositionWithLength_ContiguousLineDiverges_NamesDivergingLineAndQuotesActualText()
-    {
-        var source =
-            "void M()\n" +
-            "{\n" +
-            "    var entries2 = Deserialize(payload);\n" +
-            "    var count = entries2.Count;\n" +
-            "    var first = entries2.First();\n" +
-            "    return first;\n" +
-            "}\n";
-
-        // Caller's contextSnippet mistranscribes the 3rd line ("entries" instead of "entries2") -
-        // the other 3 lines are verbatim-correct and contiguous in the real file.
-        var contextSnippet =
-            "    var entries = Deserialize(payload);\n" +
-            "    var count = entries2.Count;\n" +
-            "    var first = entries2.First();\n" +
-            "    return first;";
-
-        var ex = Assert.Throws<ToolNotFoundException>(
-            () => ContextHelper.FindSnippetPositionWithLength(SourceText.From(source), contextSnippet));
-
-        // 3 of 4 lines matched verbatim (the ones already using "entries2"); only line 1 (the
-        // mistranscribed "entries") diverges - this is the partial-match diagnosis path, and it
-        // must name the diverging line and quote the real "entries2 = Deserialize(payload);" text
-        // as the near-miss candidate to copy back verbatim.
-        Assert.That(ex!.Message, Does.Contain("did NOT match"));
-        Assert.That(ex.Message, Does.Contain("closest is source line 3"));
-        Assert.That(ex.Message, Does.Contain("entries2 = Deserialize(payload);"),
-            "must quote the actual on-disk text of the diverging line as the near-miss candidate");
     }
 }

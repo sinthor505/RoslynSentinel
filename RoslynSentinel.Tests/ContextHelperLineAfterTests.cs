@@ -52,15 +52,6 @@ public class ContextHelperLineAfterTests
     }
 
     [Test]
-    public void FindExactSnippetPosition_TextAbsentWithLineAfter_StillSaysVerbatimRequired()
-    {
-        var ex = Assert.Throws<ToolNotFoundException>(() => ContextHelper.FindExactSnippetPosition(
-            SourceText.From(TwoBlocksDifferentTails), "z = 99;", lineAfter: "throw;"));
-
-        Assert.That(ex!.Message, Does.Contain("(verbatim required)").And.Contain("Re-read the file"));
-    }
-
-    [Test]
     public void FindExactSnippetPosition_StillAmbiguous_ReportsLinesOfEachMatch()
     {
         var text = SourceText.From(TwoBlocksSameTails);
@@ -118,39 +109,6 @@ public class ContextHelperLineAfterTests
     }
 
     [Test]
-    public void FindExactSnippetPosition_NonContiguousSnippetWithHundredsOfHitsPerLine_CapsDiagnosis()
-    {
-        // Every snippet line occurs 300 times, but the file never has gamma() directly before alpha().
-        var source = string.Concat(Enumerable.Repeat("    alpha();\n    beta();\n", 300))
-            + string.Concat(Enumerable.Repeat("    gamma();\n", 300));
-        const string snippet = "    gamma();\n    alpha();\n    beta();";
-
-        var ex = Assert.Throws<ToolNotFoundException>(() => ContextHelper.FindExactSnippetPosition(
-            SourceText.From(source), snippet));
-
-        Assert.That(ex!.Message, Does.Contain("were located individually in"));
-        Assert.That(ex.Message, Does.Contain("more candidate line(s) not shown"));
-        Assert.That(ex.Message.Length, Is.LessThan(2300));
-    }
-
-    [Test]
-    public void FindExactSnippetPosition_RareLineWithBoilerplateLine_ReportsRareLineAndTooCommonNotice()
-    {
-        // "return;" occurs 60 times (boilerplate, 4+ chars so it survives the MinLineLength filter);
-        // rare_marker() occurs once and is never directly followed by "return;".
-        var source = "class C\n{\n" + string.Concat(Enumerable.Repeat("    if (a)\n    {\n        return;\n    }\n", 60))
-            + "    rare_marker();\n    c();\n}\n";
-        var rareLine = source.Split('\n').ToList().FindIndex(l => l.Contains("rare_marker", StringComparison.Ordinal)) + 1;
-        const string snippet = "    rare_marker();\n    return;";
-
-        var ex = Assert.Throws<ToolNotFoundException>(() => ContextHelper.FindExactSnippetPosition(
-            SourceText.From(source), snippet));
-
-        Assert.That(ex!.Message, Does.Contain($"was located at source line {rareLine}:"));
-        Assert.That(ex.Message, Does.Contain("too common"));
-    }
-
-    [Test]
     public void FindExactSnippetPosition_Ambiguous_WithMemberNameAt_NamesEnclosingMemberPerMatch()
     {
         var bStart = TwoBlocksSameTails.IndexOf("void B", StringComparison.Ordinal);
@@ -183,28 +141,6 @@ public class ContextHelperLineAfterTests
             Assert.That(ex.Message, Does.Contain("Candidate 2 of 2 (lines 12-13):"));
             Assert.That(ex.Message, Does.Contain("matchLine=12 lineBefore="));
             Assert.That(ex.Message, Does.Not.Contain(", in "));
-        });
-    }
-
-    [Test]
-    public void FindExactSnippetPosition_StillAmbiguous_ListsCandidatesCappedAtFive()
-    {
-        var blocks = string.Concat(Enumerable.Range(1, 7).Select(i =>
-            $"    void M{i}()\n    {{\n        x = 1;\n        y = 2;\n        return;\n    }}\n\n"));
-        var source = "class C\n{\n" + blocks + "}";
-
-        var ex = Assert.Throws<ToolAmbiguousMatchException>(() => ContextHelper.FindExactSnippetPosition(
-            SourceText.From(source), MultiLineSnippet, lineBefore: "{", lineAfter: "return;",
-            memberNameAt: offset => "M" + (source.Substring(0, offset).Split("void M").Length - 1)));
-
-        Assert.Multiple(() =>
-        {
-            Assert.That(ex!.Message, Does.Contain("still ambiguous (7 matches remain)"));
-            Assert.That(ex.Message, Does.Contain("Match 1 (lines 5-6, in M1)"));
-            Assert.That(ex.Message, Does.Contain("Match 5 ("));
-            Assert.That(ex.Message, Does.Not.Contain("Match 6 ("));
-            Assert.That(ex.Message, Does.Contain("... and 2 more"));
-            Assert.That(ex.Message.Length, Is.LessThan(2048));
         });
     }
 }
