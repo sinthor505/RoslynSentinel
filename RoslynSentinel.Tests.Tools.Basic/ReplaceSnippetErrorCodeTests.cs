@@ -288,7 +288,7 @@ public class ReplaceSnippetErrorCodeTests
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(result.ErrorData.Message, Does.Contain($"matchLine={staleLine}").And.Contain("none satisfied the selector"));
+        Assert.That(result.ErrorData.Message, Does.Contain("but not at the matchLine you supplied").And.Contain($"matchLine={firstLine} "));
         Assert.That(result.ErrorData.Message, Does.Not.Contain("is ambiguous"), "a stale selector is a distinct error from an ambiguity");
         Assert.That(h.Workspace.ReadText(MemberDupRelativePath), Is.EqualTo(original), "a rejected edit must not write anything");
     }
@@ -432,7 +432,7 @@ public class ReplaceSnippetErrorCodeTests
         Assert.That(ambiguous.IsError, Is.True);
         Assert.That(ambiguous.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
         var listed = System.Text.RegularExpressions.Regex.Match(
-            ambiguous.ErrorData.Message, @"Match 2 \([^)]*\): (?:withinMember=\""[^\""]*\"" )?matchLine=(\d+) ");
+            ambiguous.ErrorData.Message, @"Candidate 2 of 2 \([^)]*\):\s+(?:withinMember=\""[^\""]*\"" )?matchLine=(\d+) ");
         Assert.That(listed.Success, Is.True, ambiguous.ErrorData.Message);
         var copiedLine = int.Parse(listed.Groups[1].Value);
         Assert.That(copiedLine, Is.EqualTo(secondLine));

@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Common.SnippetMatching;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
@@ -512,6 +513,30 @@ public class WorkspaceFileEditImpl
     private static Func<int, string?>? MemberNameResolverFor(Microsoft.CodeAnalysis.SyntaxNode? root)
         => root is null ? null : position => EnclosingMemberResolver.GetEnclosingMemberName(root, position);
 
+    /// <summary>
+    /// Resolves oldContent to the single span a ReplaceSnippet edit may splice, shared by the single and batch
+    /// paths. The request tier is IgnoreLineEndings with case-sensitive comparison: the ordinal stage, then the
+    /// CR/LF/CRLF-interchangeable stage, exactly what ContextHelper.FindExactSnippetPosition did, so the returned
+    /// span is always the real removable span (see project_replacesnippet_silent_splice_corruption_adjacent_lines).
+    /// Only <see cref="SnippetMatchOutcome.Matched"/> yields a match. Every other outcome, including a snippet that
+    /// matches only at a looser tier (its near-matches are never edit candidates), is thrown through
+    /// <see cref="SnippetErrorFormatter.Build"/> so the message lists the file's own candidate lines.
+    /// </summary>
+    private static SnippetMatch ResolveEditMatch(
+        SourceText sourceText, string oldContent, string? lineBefore, string? lineAfter,
+        Func<int, string?>? memberNameAt, string? withinMember, int? matchLine)
+    {
+        var result = SnippetResolver.Resolve(
+            sourceText, oldContent, WhitespaceTolerance.IgnoreLineEndings, SnippetCaseMode.CaseSensitive,
+            new SnippetSelectors(withinMember, matchLine, lineBefore, lineAfter), memberNameAt);
+        if (result.Outcome != SnippetMatchOutcome.Matched)
+        {
+            throw SnippetErrorFormatter.Build(result, sourceText, oldContent, "oldContent", memberNameAt, selectorsSupported: true);
+        }
+
+        return result.Matches.Single();
+    }
+
     public async Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippet(
         ToolCallReason reason,
         ProposedChangeAction action,
@@ -632,13 +657,13 @@ public class WorkspaceFileEditImpl
                     }
 
                     var oldText = await document.GetTextAsync(cancellationToken: cancellationToken);
-                    // FindExactSnippetPosition (not FindSnippetPosition) is required here: it never
-                    // uses ContextHelper's whitespace-collapsing fallback, so match.Length is always
-                    // the real removable span. Using oldContent.Length instead of match.Length used
-                    // to corrupt adjacent lines when a fallback match fired (see
+                    // ResolveEditMatch caps the tier at IgnoreLineEndings, so it never uses a
+                    // whitespace-collapsing fallback and match.Length is always the real removable
+                    // span. Using oldContent.Length instead of match.Length used to corrupt adjacent
+                    // lines when a fallback match fired (see
                     // project_replacesnippet_silent_splice_corruption_adjacent_lines memory).
                     var root = await document.GetSyntaxRootAsync(cancellationToken);
-                    var match = ContextHelper.FindExactSnippetPosition(
+                    var match = ResolveEditMatch(
                         oldText, oldContent, lineBefore, lineAfter, memberNameAt: MemberNameResolverFor(root),
                         withinMember: withinMember, matchLine: matchLine);
                     var newFileContent = oldText.ToString().Remove(match.Start, match.Length).Insert(match.Start, newContent);
@@ -817,12 +842,12 @@ public class WorkspaceFileEditImpl
             // edit's output within this same batch. This is what removes the sequencing hazard a
             // series of single ReplaceSnippet calls has: every edit here is anchored against one
             // fixed snapshot, not a chain of intermediate results the model never sees.
-            var resolved = new List<(int index, ContextHelper.SnippetMatch match, string newContent)>();
+            var resolved = new List<(int index, SnippetMatch match, string newContent)>();
             foreach (var (edit, index) in fileGroup)
             {
                 try
                 {
-                    var match = ContextHelper.FindExactSnippetPosition(
+                    var match = ResolveEditMatch(
                         originalText, edit.OldContent, edit.LineBefore, edit.LineAfter, memberNameAt: memberNameAt,
                         withinMember: edit.WithinMember, matchLine: edit.MatchLine);
                     resolved.Add((index, match, edit.NewContent));
