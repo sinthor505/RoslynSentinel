@@ -4,6 +4,10 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## `MoveType(destination: ownFile)` has no target-folder parameter (2026-10-14) - not started
+
+Found moving `SnippetMatchOutcome` out of `ContextErrorBuilder.cs` (commit d9a2ff90). `MoveType` can only create the new file beside the source file, so a type cannot be moved into a subfolder such as `SnippetMatching/`. It also adds an unused `using Microsoft.CodeAnalysis.Text;` to the new file and drops the type-level doc summary. Suggested change: add an optional `targetFolder` (or `targetPath`) parameter, copy the source file's usings only where the moved type needs them, and carry the type's doc comment across. Workaround used: accept the source folder and fix the using and summary with one `ReplaceSnippet`.
+
 ## `MoveMember` follow-ups left open by the whole-file reformat fix (2026-10-03) - not started
 
 These came out of the fix in 4dedc78, a23c581, 4aa2dc2 and 389ae1b. The details are in the "Resolution" section of `blockers/resolved/blocking_error_movemember_reformats_entire_source_and_caller_files.md`.

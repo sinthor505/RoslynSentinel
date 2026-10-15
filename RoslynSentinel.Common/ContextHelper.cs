@@ -16,274 +16,13 @@ public static class ContextHelper
     /// <summary>
     /// A snippet match's location AND real length in the source text. The length is not always
     /// <c>contextSnippet.Length</c> -> the whitespace-collapsing fallback paths in
-    /// <see cref="FindAllSnippetMatchesWithLength"/> match content that is equivalent once
+    /// FindAllSnippetMatchesWithLength match content that is equivalent once
     /// whitespace is normalized, but whose raw span in the source can be a different length
     /// (different indentation, extra spaces, etc.). Any caller that removes/replaces a span of the
     /// real source text (as opposed to merely using <c>Start</c> as an entry point into a
     /// Roslyn node/token lookup) MUST use <c>Length</c>, not <c>contextSnippet.Length</c>.
     /// </summary>
     public readonly record struct SnippetMatch(int Start, int Length);
-
-    /// <summary>
-    /// Non-throwing variant that returns every candidate match instead of resolving to one.
-    /// Empty list = not found. Single-item list = unambiguous (equivalent to FindSnippetPosition's
-    /// success case). Multi-item list = ambiguous; caller decides what to do, including building
-    /// its own hint from the candidates.
-    /// </summary>
-    public static List<int> FindAllSnippetMatches(
-        SourceText sourceText, string contextSnippet,
-        string? lineBefore = null, string? lineAfter = null)
-        => FindAllSnippetMatchesWithLength(sourceText, contextSnippet, lineBefore, lineAfter)
-            .Select(m => m.Start).ToList();
-
-    /// <summary>
-    /// Same matching behavior as <see cref="FindAllSnippetMatches"/> (literal match, then
-    /// CRLF-normalized, then whitespace-collapsed single-line, then whitespace-collapsed
-    /// multi-line window), but returns each match's real length in the source alongside its
-    /// start offset. Use this instead of <see cref="FindAllSnippetMatches"/> whenever the caller
-    /// needs to remove/replace the matched span of text -> see <see cref="SnippetMatch"/>.
-    /// </summary>
-    public static List<SnippetMatch> FindAllSnippetMatchesWithLength(
-        SourceText sourceText, string contextSnippet,
-        string? lineBefore = null, string? lineAfter = null)
-    {
-        if (string.IsNullOrWhiteSpace(contextSnippet))
-        {
-            return new List<SnippetMatch>();
-        }
-
-        ThrowIfMultiLine(sourceText, nameof(lineBefore), lineBefore, isAfter: false);
-        ThrowIfMultiLine(sourceText, nameof(lineAfter), lineAfter, isAfter: true);
-
-        var source = sourceText.ToString();
-        var allMatches = SnippetStages.FindOrdinalStage(source, contextSnippet);
-
-        if (allMatches.Count == 0 && contextSnippet.Contains('\n'))
-        {
-            allMatches = SnippetStages.FindLineEndingStage(source, contextSnippet);
-        }
-
-        if (allMatches.Count == 0)
-        {
-            allMatches = SnippetStages.FindCollapsedSingleLineStage(sourceText, contextSnippet, StringComparison.OrdinalIgnoreCase);
-        }
-
-        if (allMatches.Count == 0 && contextSnippet.Contains('\n'))
-        {
-            allMatches = SnippetStages.FindCollapsedWindowStage(sourceText, contextSnippet, StringComparison.OrdinalIgnoreCase);
-        }
-
-        if (allMatches.Count == 0)
-        {
-            return new List<SnippetMatch>();
-        }
-
-        return FilterByAdjacentLines(sourceText, allMatches, lineBefore, lineAfter);
-    }
-
-    /// <summary>
-    /// Finds the unique character offset of contextSnippet within sourceText.
-    /// Optionally, provide lineBefore/lineAfter (the single verbatim adjacent line) to disambiguate.
-    /// Throws InvalidOperationException if not found or still ambiguous after disambiguation.
-    /// </summary>
-    public static int FindSnippetPosition(
-        SourceText sourceText, string contextSnippet,
-        string? lineBefore = null, string? lineAfter = null)
-        => FindSnippetPositionWithLength(sourceText, contextSnippet, lineBefore, lineAfter).Start;
-
-    /// <summary>String overload -> delegates to SourceText for consistent line handling.</summary>
-    public static int FindSnippetPosition(
-        string fullSource, string contextSnippet,
-        string? lineBefore = null, string? lineAfter = null)
-        => FindSnippetPosition(SourceText.From(fullSource), contextSnippet, lineBefore, lineAfter);
-
-    /// <summary>
-    /// Same resolution/ambiguity behavior as <see cref="FindSnippetPosition(SourceText, string, string?, string?)"/>,
-    /// but returns the match's real length alongside its start offset (see <see cref="SnippetMatch"/>).
-    /// Use this instead of <see cref="FindSnippetPosition(SourceText, string, string?, string?)"/> whenever the
-    /// caller needs to remove/replace the matched span of text rather than just locate a node/token.
-    /// </summary>
-    public static SnippetMatch FindSnippetPositionWithLength(
-        SourceText sourceText, string contextSnippet,
-        string? lineBefore = null, string? lineAfter = null)
-    {
-        if (string.IsNullOrWhiteSpace(contextSnippet))
-        {
-            throw new ToolNotFoundException("contextSnippet must not be empty.");
-        }
-
-        var matches = FindAllSnippetMatchesWithLength(sourceText, contextSnippet, lineBefore, lineAfter);
-
-        if (matches.Count == 0)
-        {
-            throw ContextErrorBuilder.Build(
-                SnippetMatchOutcome.NoMatch, contextSnippet, sourceText,
-                diagnosis: DiagnoseNoMatch(sourceText, contextSnippet), verbatimRequired: false);
-        }
-
-        if (matches.Count == 1)
-        {
-            return matches[0];
-        }
-
-        var lbTrimmed = lineBefore?.Trim();
-        var laTrimmed = lineAfter?.Trim();
-
-        return (lbTrimmed, laTrimmed) switch
-        {
-            (null, null) => throw ContextErrorBuilder.Build(
-                SnippetMatchOutcome.Ambiguous, contextSnippet, sourceText, matches),
-            _ => throw ContextErrorBuilder.Build(
-                SnippetMatchOutcome.StillAmbiguous, contextSnippet, sourceText, matches)
-        };
-    }
-
-    /// <summary>String overload -> delegates to SourceText for consistent line handling.</summary>
-    public static SnippetMatch FindSnippetPositionWithLength(
-        string fullSource, string contextSnippet,
-        string? lineBefore = null, string? lineAfter = null)
-        => FindSnippetPositionWithLength(SourceText.From(fullSource), contextSnippet, lineBefore, lineAfter);
-
-    /// <summary>
-    /// Strict variant of <see cref="FindAllSnippetMatchesWithLength"/> for callers that remove/replace
-    /// the matched span of raw text (as opposed to merely locating a Roslyn node/token). Only the
-    /// literal-ordinal and CRLF-normalized match paths run -> never the whitespace-collapsing
-    /// fallbacks -> so every returned <see cref="SnippetMatch.Length"/> is guaranteed to equal
-    /// <c>contextSnippet.Length</c> (mod line-ending substitution) and the removed span is always
-    /// exactly the text the caller supplied. Used by <c>ReplaceSnippet</c>, whose contract is a
-    /// verbatim oldContent/newContent swap with no tolerance for the caller retyping content from
-    /// memory -> unlike <see cref="FindAllSnippetMatchesWithLength"/>'s callers (diff/patch-style
-    /// tools), which need the whitespace tolerance to recover from stale or approximately-quoted
-    /// context.
-    /// </summary>
-    public static List<SnippetMatch> FindAllExactSnippetMatches(
-        SourceText sourceText, string contextSnippet,
-        string? lineBefore = null, string? lineAfter = null)
-    {
-        if (string.IsNullOrWhiteSpace(contextSnippet))
-        {
-            return new List<SnippetMatch>();
-        }
-
-        ThrowIfMultiLine(sourceText, nameof(lineBefore), lineBefore, isAfter: false);
-        ThrowIfMultiLine(sourceText, nameof(lineAfter), lineAfter, isAfter: true);
-
-        var source = sourceText.ToString();
-        var allMatches = SnippetStages.FindOrdinalStage(source, contextSnippet);
-
-        if (allMatches.Count == 0 && contextSnippet.Contains('\n'))
-        {
-            allMatches = SnippetStages.FindLineEndingStage(source, contextSnippet);
-        }
-
-        if (allMatches.Count == 0)
-        {
-            return new List<SnippetMatch>();
-        }
-
-        return FilterByAdjacentLines(sourceText, allMatches, lineBefore, lineAfter);
-    }
-
-    /// <summary>
-    /// Throwing variant of <see cref="FindAllExactSnippetMatches"/> -> resolves to the unique exact
-    /// match, or throws <see cref="ToolNotFoundException"/>/<see cref="ToolAmbiguousMatchException"/>
-    /// with the same messages as <see cref="FindSnippetPositionWithLength"/>. Unlike that method,
-    /// never falls back to whitespace-collapsed matching: a snippet that isn't present verbatim
-    /// (allowing only for CRLF/LF differences) is reported as not found, prompting the caller to
-    /// re-read the file and copy the exact current text rather than silently matching approximate
-    /// content and risking a length mismatch on removal.
-    /// A blank selector means "not supplied": a null/empty/whitespace <paramref name="withinMember"/> and a
-    /// <paramref name="matchLine"/> of 0 or less are treated as null, because weak models send "" or 0
-    /// for an unused parameter and that must not filter out every match.
-    /// </summary>
-    public static SnippetMatch FindExactSnippetPosition(
-        SourceText sourceText, string contextSnippet,
-        string? lineBefore = null, string? lineAfter = null,
-        Func<int, string?>? memberNameAt = null,
-        string? withinMember = null, int? matchLine = null)
-    {
-        const string label = "oldContent";
-        if (string.IsNullOrWhiteSpace(contextSnippet))
-        {
-            throw new ToolNotFoundException($"{label} must not be empty.");
-        }
-
-        if (string.IsNullOrWhiteSpace(withinMember))
-        {
-            withinMember = null;
-        }
-
-        if (matchLine <= 0)
-        {
-            matchLine = null;
-        }
-
-        if (withinMember != null && memberNameAt == null)
-        {
-            throw new ToolNotFoundException(
-                "withinMember cannot be applied: this document has no syntax tree, so its enclosing members are unknown. " +
-                "Drop withinMember and use matchLine, lineBefore or lineAfter instead.");
-        }
-
-        // withinMember/matchLine act first, on the verbatim text matches; lineBefore/lineAfter then
-        // filter whatever survives. With neither selector this is exactly the original single call.
-        var hasSelectors = withinMember != null || matchLine != null;
-        var survivorsAfterSelectors = new List<SnippetMatch>();
-        List<SnippetMatch> matches;
-        if (hasSelectors)
-        {
-            ThrowIfMultiLine(sourceText, nameof(lineBefore), lineBefore, isAfter: false);
-            ThrowIfMultiLine(sourceText, nameof(lineAfter), lineAfter, isAfter: true);
-            var textMatches = FindAllExactSnippetMatches(sourceText, contextSnippet);
-            var selected = FilterBySelectors(sourceText, textMatches, withinMember, matchLine, memberNameAt);
-            if (textMatches.Count > 0 && selected.Count == 0)
-            {
-                throw BuildSelectorMismatch(sourceText, contextSnippet, textMatches, withinMember, matchLine, memberNameAt, label);
-            }
-
-            survivorsAfterSelectors = selected;
-            matches = FilterByAdjacentLines(sourceText, selected, lineBefore, lineAfter);
-        }
-        else
-        {
-            matches = FindAllExactSnippetMatches(sourceText, contextSnippet, lineBefore, lineAfter);
-        }
-
-        if (matches.Count == 0)
-        {
-            var unfiltered = hasSelectors
-                ? survivorsAfterSelectors
-                : (lineBefore, lineAfter) is (null, null)
-                    ? new List<SnippetMatch>()
-                    : FindAllExactSnippetMatches(sourceText, contextSnippet);
-            if (unfiltered.Count > 0)
-            {
-                // The text DID match; only lineBefore/lineAfter rejected every match, so this is not a
-                // "verbatim required" error.
-                throw BuildAdjacentLineMismatch(sourceText, contextSnippet, unfiltered, hasSelectors, memberNameAt, label);
-            }
-
-            throw ContextErrorBuilder.Build(
-                SnippetMatchOutcome.NoMatch, contextSnippet, sourceText,
-                diagnosis: DiagnoseNoMatch(sourceText, contextSnippet, label, verbatimRequired: true), verbatimRequired: true, snippetLabel: label);
-        }
-
-        if (matches.Count == 1)
-        {
-            return matches[0];
-        }
-
-        var lbTrimmed = lineBefore?.Trim();
-        var laTrimmed = lineAfter?.Trim();
-
-        return (lbTrimmed, laTrimmed) switch
-        {
-            (null, null) => throw ContextErrorBuilder.Build(
-                SnippetMatchOutcome.Ambiguous, contextSnippet, sourceText, matches, snippetLabel: label, memberNameAt: memberNameAt, selectorsSupported: true),
-            _ => throw ContextErrorBuilder.Build(
-                SnippetMatchOutcome.StillAmbiguous, contextSnippet, sourceText, matches, snippetLabel: label, memberNameAt: memberNameAt, selectorsSupported: true)
-        };
-    }
 
     /// <summary>
     /// Position a match is attributed to for the withinMember/matchLine selectors: its first
@@ -380,37 +119,9 @@ public static class ContextHelper
     }
 
     /// <summary>
-    /// Non-throwing variant of <see cref="FindSnippetPosition(SourceText, string, string?, string?)"/>.
-    /// Returns <c>-1</c> and sets <paramref name="error"/> to the diagnostic message when the snippet
-    /// cannot be found or is ambiguous. Use this when the caller wants to fall back or surface the
-    /// error as a return value rather than propagate an exception.
-    /// </summary>
-    public static int TryFindSnippetPosition(
-        SourceText sourceText, string contextSnippet, out string? error,
-        string? lineBefore = null, string? lineAfter = null)
-    {
-        try
-        {
-            error = null;
-            return FindSnippetPosition(sourceText, contextSnippet, lineBefore, lineAfter);
-        }
-        catch (ToolException ex)
-        {
-            error = ex.Message;
-            return -1;
-        }
-    }
-
-    /// <summary>String overload of <see cref="TryFindSnippetPosition(SourceText, string, out string?, string?, string?)"/>.</summary>
-    public static int TryFindSnippetPosition(
-        string fullSource, string contextSnippet, out string? error,
-        string? lineBefore = null, string? lineAfter = null)
-        => TryFindSnippetPosition(SourceText.From(fullSource), contextSnippet, out error, lineBefore, lineAfter);
-
-    /// <summary>
     /// Splits a (possibly CRLF/CR/LF-mixed) multi-line snippet into its own content lines, with
     /// leading/trailing blank lines trimmed off. Shared by the multi-line window fallback in
-    /// <see cref="FindAllSnippetMatchesWithLength"/> and <see cref="DiagnoseNoMatch"/> -> a
+    /// FindAllSnippetMatchesWithLength and <see cref="DiagnoseNoMatch"/> -> a
     /// caller-supplied snippet very commonly starts/ends with a blank line (e.g. copying a whole
     /// statement plus its closing brace with a trailing newline), which would otherwise inflate
     /// line counts with content that was never meant to be matched.
@@ -1188,7 +899,7 @@ public static class ContextHelper
     }
 
     /// <summary>
-    /// After <see cref="FindSnippetPosition"/> returns a position, that position may land on a
+    /// After FindSnippetPosition returns a position, that position may land on a
     /// modifier keyword (e.g., "public") rather than the declared identifier.
     /// This helper scans the snippet span for identifier tokens and returns the position of the
     /// <em>last</em> one (the declared name, not the return type).
@@ -1211,55 +922,6 @@ public static class ContextHelper
             .LastOrDefault();
 
         return ident.HasValue ? ident.Value.SpanStart : snippetStart;
-    }
-
-    /// <summary>
-    /// Finds the SyntaxNode at the position identified by contextSnippet.
-    /// </summary>
-    public static SyntaxNode FindNodeAtSnippet(
-        SyntaxNode root, SourceText text, string contextSnippet,
-        string? lineBefore = null, string? lineAfter = null)
-    {
-        var pos = FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
-        return root.FindNode(new TextSpan(pos, contextSnippet.Length));
-    }
-
-    /// <summary>
-    /// Gets the ISymbol at the contextSnippet's position: the node's own declared symbol if the
-    /// snippet points at a declaration, otherwise the symbol the node references.
-    /// </summary>
-    /// <remarks>
-    /// Deliberately does NOT walk up <c>AncestorsAndSelf()</c> looking for the first ancestor with a
-    /// declared symbol -> for a snippet that lands on a plain reference (e.g. a field-assignment line
-    /// like <c>_x = x;</c>, which is neither a declaration nor annotated with symbol info itself, just
-    /// its child IdentifierName is), that walk climbs past the reference entirely and returns the
-    /// *enclosing member's* declared symbol (e.g. the constructor), silently resolving to the wrong
-    /// symbol instead of the one the snippet actually names. Only <paramref name="node"/> itself is
-    /// checked for a declared symbol; a <see cref="FieldDeclarationSyntax"/>/<see cref="EventFieldDeclarationSyntax"/>
-    /// snippet (which can declare multiple variables and so has no declared symbol of its own) is
-    /// handled by descending to its first <see cref="VariableDeclaratorSyntax"/> instead.
-    /// </remarks>
-    public static async Task<ISymbol?> FindSymbolAtSnippetAsync(
-        Document document, string contextSnippet,
-        string? lineBefore = null, string? lineAfter = null,
-        CancellationToken cancellationToken = default)
-    {
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var model = await document.GetSemanticModelAsync(cancellationToken);
-        var text = await document.GetTextAsync(cancellationToken);
-        if (root == null || model == null)
-        {
-            return null;
-        }
-
-        var pos = FindSnippetPosition(text, contextSnippet, lineBefore, lineAfter);
-        var node = root.FindNode(new TextSpan(pos, 0));
-
-        return model.GetDeclaredSymbol(node, cancellationToken)
-               ?? model.GetSymbolInfo(node, cancellationToken).Symbol
-               ?? node.DescendantNodes().OfType<VariableDeclaratorSyntax>()
-                      .Select(v => model.GetDeclaredSymbol(v, cancellationToken))
-                      .FirstOrDefault(s => s != null);
     }
 
     /// <summary>

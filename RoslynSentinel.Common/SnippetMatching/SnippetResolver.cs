@@ -50,7 +50,7 @@ public static class SnippetResolver
     /// Case handling: <paramref name="caseMode"/> = <see cref="SnippetCaseMode.CaseInsensitive"/> is accepted only with
     /// <see cref="WhitespaceTolerance.IgnoreAllWhitespace"/>, because the whitespace-collapsing stages are the only
     /// case-insensitive stages today and no caller needs more. Under it, the ordinal and line-ending stages still
-    /// compare case-sensitively, exactly as <see cref="ContextHelper.FindAllSnippetMatchesWithLength"/> does.
+    /// compare case-sensitively, exactly as the legacy ContextHelper matcher (removed) did.
     /// <para>What each tier accepts is documented on <see cref="WhitespaceTolerance"/>. <c>Matches</c> are at or
     /// stricter than <paramref name="tolerance"/> and each span is the true span in the text. <c>NearMatches</c> are
     /// reported only when there are no accepted matches, and are never edit candidates: they are a different type

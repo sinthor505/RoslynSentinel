@@ -11,7 +11,7 @@ namespace RoslynSentinel.Common.SnippetMatching;
 internal static class SnippetStages
 {
     /// <summary>
-    /// Stage 1 of <see cref="ContextHelper.FindAllSnippetMatchesWithLength"/> and <see cref="ContextHelper.FindAllExactSnippetMatches"/>:
+    /// Stage 1 of the legacy ContextHelper matchers (removed):
     /// every ordinal (case-sensitive, byte-exact) occurrence of <paramref name="contextSnippet"/> in
     /// <paramref name="source"/>, overlapping occurrences included. Each span's length is
     /// <c>contextSnippet.Length</c>, which is the real length because the comparison is ordinal. The caller
@@ -31,7 +31,7 @@ internal static class SnippetStages
     }
 
     /// <summary>
-    /// Stage 2 of <see cref="ContextHelper.FindAllSnippetMatchesWithLength"/> and <see cref="ContextHelper.FindAllExactSnippetMatches"/>:
+    /// Stage 2 of the legacy ContextHelper matchers (removed):
     /// a multi-line snippet matched with CR, LF and CRLF treated as interchangeable, and nothing else loosened
     /// (case-sensitive). Returns an empty list for a snippet with no '\n' (the stage only exists for a multi-line
     /// snippet). Each span is the real regex match, so its length can differ from <c>contextSnippet.Length</c>
@@ -65,7 +65,7 @@ internal static class SnippetStages
     }
 
     /// <summary>
-    /// Stage 3 of <see cref="ContextHelper.FindAllSnippetMatchesWithLength"/>: the snippet, whitespace-collapsed, searched as a
+    /// Stage 3 of the legacy ContextHelper matchers (removed): the snippet, whitespace-collapsed, searched as a
     /// substring of each source line (also whitespace-collapsed). Works for a single-line snippet and, because the
     /// snippet's newlines collapse to spaces, can also match a multi-line snippet against one line. Each span is
     /// mapped back to the real line text, so its length is NOT <c>contextSnippet.Length</c>. Today's callers pass
@@ -113,7 +113,7 @@ internal static class SnippetStages
     }
 
     /// <summary>
-    /// Stage 4 of <see cref="ContextHelper.FindAllSnippetMatchesWithLength"/>: a multi-line snippet matched against a window of the
+    /// Stage 4 of the legacy ContextHelper matchers (removed): a multi-line snippet matched against a window of the
     /// same number of consecutive source lines, each line trimmed and the window's whitespace runs collapsed.
     /// Returns an empty list for a snippet with no '\n' (the stage only exists for a multi-line snippet).
     /// Each span starts at the window's first line start (so it includes that line's indentation) and ends at the
@@ -177,7 +177,7 @@ internal static class SnippetStages
     /// Maps a character offset within a whitespace-collapsed, trimmed line (every run of
     /// whitespace replaced by a single space) back to the corresponding offset in the original,
     /// untrimmed line text. Used to recover a precise match position after
-    /// <see cref="ContextHelper.FindAllSnippetMatches"/>'s whitespace-tolerant fallback locates a snippet inside
+    /// the legacy ContextHelper matcher's (removed) whitespace-tolerant fallback locates a snippet inside
     /// the collapsed form.
     /// </summary>
     private static int MapNormalizedOffsetToRaw(string rawLine, int normalizedOffset)
