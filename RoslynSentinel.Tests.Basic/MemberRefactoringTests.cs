@@ -475,7 +475,7 @@ public enum ToolScope
 
     // ══════════════════════════════════════════════════════════════
     // Engine catch (ToolException) sites copy ex.ErrorCode into the result
-    // (a snippet that matches nothing throws ToolNotFoundException from ContextHelper.FindSnippetPosition).
+    // (a snippet that matches nothing throws ToolNotFoundException from the snippet position lookup).
     // ══════════════════════════════════════════════════════════════
 
     private const string SnippetMissSource = """

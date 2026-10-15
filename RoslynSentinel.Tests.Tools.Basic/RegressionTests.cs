@@ -346,7 +346,7 @@ public class RegressionTests
         // Regression for docs/current/blockers/blocking_error_findreferences_field_contextsnippet_resolves_to_ctorparam.md:
         // a contextSnippet taken from the field's own ctor-assignment line (`_engine = engine;`)
         // used to resolve to the ctor parameter/constructor instead of the field, because
-        // ContextHelper.FindSymbolAtSnippetAsync walked AncestorsAndSelf looking for the first
+        // The removed legacy ContextHelper symbol locator walked AncestorsAndSelf looking for the first
         // declared symbol and climbed straight past the reference to the enclosing constructor.
         SetMultipleFiles(
             ("Worker.cs", """

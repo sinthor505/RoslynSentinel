@@ -3050,7 +3050,7 @@ public class MyClass
             {
                 // BUG-72 documents that IntroduceFieldAsync has difficulty disambiguating
                 // simple parameter names when they appear multiple times in a method.
-                // ContextHelper.FindSnippetPosition requires lineBefore/lineAfter for disambiguation,
+                // The snippet lookup requires lineBefore/lineAfter for disambiguation,
                 // but this creates fragile tests. The bug itself is that IntroduceField may initialize
                 // a field with a local parameter in scope-unsafe ways.
                 const string code = @"
