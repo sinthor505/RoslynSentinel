@@ -32,6 +32,10 @@ In order, the method:
    `OperationItemRecord.BeforeSource` and `UndoLastApply`.
 8. Refuses a change that alters an existing file's line-ending style (`EolChangeGuard`, `ToolErrorCode.EolChangeRefused`).
    `ValidateAndApplyHelper` runs the same check earlier so tools get a structured error; this is the backstop.
+   Also in `ValidateAndApplyHelper` (not in the backstop), right after the EOL check and before the compile gate: when a
+   caller passes `expectedEdits` (MoveMember does), `CollateralChangeGuard` refuses with
+   `ToolErrorCode.CollateralChangeRefused` if a file's proposed text differs from its pre-image plus those `TextChange`s.
+   Files with no pre-image (new files) or no entry are unchecked.
 9. Processes deletes as their own pass, then writes each file: skips byte-identical content, skips whitespace-only
    changes to `.cs` files (`EnableAstNormalizationNoOpCheck`, compares `NormalizeWhitespace()` forms), optionally logs
    formatter divergence at Debug (observation only), normalizes EOL to the file's dominant style, preserves a UTF-8 BOM,
