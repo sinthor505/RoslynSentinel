@@ -197,11 +197,7 @@ public static class MoveMemberTextEdits
     }
 
     /// <summary>Applies non-overlapping edits to the original text and returns the new full text.</summary>
-    public static string ApplyChanges(SourceText text, IEnumerable<TextChange> changes)
-    {
-        var ordered = changes.OrderBy(c => c.Span.Start).ThenBy(c => c.Span.Length).ToList();
-        return ordered.Count == 0 ? text.ToString() : text.WithChanges(ordered).ToString();
-    }
+    public static string ApplyChanges(SourceText text, IEnumerable<TextChange> changes) => CollateralChangeGuard.ApplyEdits(text.ToString(), changes as IReadOnlyList<TextChange> ?? changes.ToList());
 
     /// <summary>
     /// Builds the source document's edit list for a move: reference edits that fall outside the moved members stay

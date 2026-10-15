@@ -10,7 +10,14 @@ namespace RoslynSentinel.Engines.Basic;
 public record PreviewCallSite(FilePathWrapper FilePath, int Line, string CallExpression, CallSiteStatus Status, string? BlockReason, string? SuggestedFix, IReadOnlyList<string> Candidates);
 public record SkippedCallSite(FilePathWrapper FilePath, int LineNumber, string Reason);
 
-public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, List<CallSiteLedgerEntry>? PendingLedgerEntries = null, string? PendingLedgerOperationName = null, List<AppliedCallSiteFixup>? AppliedFixups = null, IReadOnlyList<string>? Notes = null);
+/// <summary>
+/// The outcome of a MoveMember run. <paramref name = "AppliedEdits"/> holds, per EXISTING file in
+/// <paramref name = "Changes"/>, the exact <see cref = "TextChange"/>s the route applied to that file's ORIGINAL text to
+/// produce the proposed text (the write chokepoint passes them on as its collateral-change tripwire input, see
+/// CollateralChangeGuard). A file with no entry is unchecked; a brand-new file (new-class route) has no original text
+/// and so never has an entry. Null when a producer does not report edits.
+/// </summary>
+public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, List<CallSiteLedgerEntry>? PendingLedgerEntries = null, string? PendingLedgerOperationName = null, List<AppliedCallSiteFixup>? AppliedFixups = null, IReadOnlyList<string>? Notes = null, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? AppliedEdits = null);
 /// <summary>
 /// One call site rewritten from a caller-supplied callSiteFixups entry (not an auto-resolved one).
 /// <paramref name = "Line"/> is the 1-based line in the PROPOSED (post-rewrite, post-normalization)
@@ -3725,10 +3732,10 @@ public class MemberRefactoringEngine
         if (sameFile)
         {
             sourceEdits.Add(insertion);
-            return new MoveMemberResult(new Dictionary<FilePathWrapper, string> { { filePath, MoveMemberTextEdits.ApplyChanges(sourceText, sourceEdits) } }, new List<SkippedCallSite>());
+            return new MoveMemberResult(new Dictionary<FilePathWrapper, string> { { filePath, MoveMemberTextEdits.ApplyChanges(sourceText, sourceEdits) } }, new List<SkippedCallSite>(), AppliedEdits: new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>> { { filePath, sourceEdits.ToList() } });
         }
 
-        return new MoveMemberResult(new Dictionary<FilePathWrapper, string> { { filePath, MoveMemberTextEdits.ApplyChanges(sourceText, sourceEdits) }, { baseFile, MoveMemberTextEdits.ApplyChanges(baseText, new[] { insertion }) } }, new List<SkippedCallSite>());
+        return new MoveMemberResult(new Dictionary<FilePathWrapper, string> { { filePath, MoveMemberTextEdits.ApplyChanges(sourceText, sourceEdits) }, { baseFile, MoveMemberTextEdits.ApplyChanges(baseText, new[] { insertion }) } }, new List<SkippedCallSite>(), AppliedEdits: new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>> { { filePath, sourceEdits.ToList() }, { baseFile, new[] { insertion } } });
     }
 
     /// <summary>
@@ -3872,6 +3879,7 @@ public class MemberRefactoringEngine
 
         // Materialize each touched document's new text from its original text.
         var result = new Dictionary<FilePathWrapper, string>();
+        var appliedEdits = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>();
         foreach (var (documentId, edits) in editsByDocument)
         {
             var document = solution.GetDocument(documentId);
@@ -3882,9 +3890,10 @@ public class MemberRefactoringEngine
 
             var originalText = document.Id == sourceDocument.Id ? sourceText : document.Id == targetDocument.Id ? targetText : await document.GetTextAsync(cancellationToken);
             result[document.FilePath] = MoveMemberTextEdits.ApplyChanges(originalText, edits);
+            appliedEdits[document.FilePath] = edits.ToList();
         }
 
-        return new MoveMemberResult(result, new List<SkippedCallSite>());
+        return new MoveMemberResult(result, new List<SkippedCallSite>(), AppliedEdits: appliedEdits);
     }
 
     private static async Task<MoveMemberResult> MoveMembersToNewClassAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string newClassName, List<ISymbol> memberSymbols, CancellationToken cancellationToken)
@@ -3900,6 +3909,9 @@ public class MemberRefactoringEngine
 
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
         var newFilePath = Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs");
+        // Edits are reported only for EXISTING files (the source and any caller files). The new class file has no original
+        // text to apply edits to, so it never gets an entry and the write chokepoint leaves it unchecked.
+        var appliedEdits = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>();
         var result = new Dictionary<FilePathWrapper, string>
         {
             {
@@ -3917,9 +3929,10 @@ public class MemberRefactoringEngine
 
             var originalText = document.Id == sourceDocument.Id ? sourceText : await document.GetTextAsync(cancellationToken);
             result[document.FilePath] = MoveMemberTextEdits.ApplyChanges(originalText, edits);
+            appliedEdits[document.FilePath] = edits.ToList();
         }
 
-        return new MoveMemberResult(result, new List<SkippedCallSite>());
+        return new MoveMemberResult(result, new List<SkippedCallSite>(), AppliedEdits: appliedEdits);
     }
 
     /// <summary>
@@ -3975,9 +3988,18 @@ public class MemberRefactoringEngine
     /// Applies each document's edits to that document's ORIGINAL text (taken from <paramref name = "knownTexts"/> when
     /// already loaded) and returns the new full text keyed by file path. Documents with no edits are omitted.
     /// </summary>
-    public static async Task<Dictionary<FilePathWrapper, string>> MaterializeDocumentEditsAsync(Solution solution, Dictionary<DocumentId, List<TextChange>> editsByDocument, Dictionary<DocumentId, SourceText> knownTexts, CancellationToken cancellationToken)
+    public static async Task<Dictionary<FilePathWrapper, string>> MaterializeDocumentEditsAsync(Solution solution, Dictionary<DocumentId, List<TextChange>> editsByDocument, Dictionary<DocumentId, SourceText> knownTexts, CancellationToken cancellationToken) => (await MaterializeDocumentEditsWithAppliedEditsAsync(solution, editsByDocument, knownTexts, cancellationToken)).Texts;
+
+    /// <summary>
+    /// The single definition of "apply each document's edits to its ORIGINAL text": returns the new full text keyed by file
+    /// path (<c>Texts</c>) together with the exact edits applied to produce each of those texts (<c>AppliedEdits</c>, same
+    /// keys, positions in the document's original text). Both dictionaries are built in the same loop, so the recorded edits
+    /// can never differ from the ones that made the text. Documents with no edits or no file path are omitted from both.
+    /// </summary>
+    public static async Task<(Dictionary<FilePathWrapper, string> Texts, Dictionary<FilePathWrapper, IReadOnlyList<TextChange>> AppliedEdits)> MaterializeDocumentEditsWithAppliedEditsAsync(Solution solution, Dictionary<DocumentId, List<TextChange>> editsByDocument, Dictionary<DocumentId, SourceText> knownTexts, CancellationToken cancellationToken)
     {
         var result = new Dictionary<FilePathWrapper, string>();
+        var appliedEdits = new Dictionary<FilePathWrapper, IReadOnlyList<TextChange>>();
         foreach (var (documentId, edits) in editsByDocument)
         {
             var document = solution.GetDocument(documentId);
@@ -3988,9 +4010,10 @@ public class MemberRefactoringEngine
 
             var originalText = knownTexts.TryGetValue(documentId, out var known) ? known : await document.GetTextAsync(cancellationToken);
             result[document.FilePath] = MoveMemberTextEdits.ApplyChanges(originalText, edits);
+            appliedEdits[document.FilePath] = edits.ToList();
         }
 
-        return result;
+        return (result, appliedEdits);
     }
 
     private async Task<MoveMemberResult> MoveInstanceMembersAsync(Solution solution, FilePathWrapper filePath, string className, List<MemberDeclarationSyntax> membersToMove, string targetClassName, string[] memberNames, FilePathWrapper? targetFilePath, Document? existingTargetDoc, ClassDeclarationSyntax? existingTargetClassNode, Dictionary<string, string>? callSiteFixups, CancellationToken cancellationToken)
@@ -4097,7 +4120,9 @@ public class MemberRefactoringEngine
         }
 
         var (texts, newFiles) = await AddInstanceMoveStructuralEditsAsync(editsByDocument, document, root, classNode, membersToMove, targetClassName, existingTargetDoc, existingTargetClassNode, true, cancellationToken);
-        var result = await MaterializeDocumentEditsAsync(solution, editsByDocument, texts, cancellationToken);
+        // AppliedEdits covers every existing file the move touches (source, target and caller documents); the brand-new
+        // class file in newFiles has no original text, so it is added to the result below but gets no edit entry.
+        var (result, appliedEdits) = await MaterializeDocumentEditsWithAppliedEditsAsync(solution, editsByDocument, texts, cancellationToken);
         foreach (var (newFilePath, newFileText) in newFiles)
         {
             result[newFilePath] = newFileText;
@@ -4120,7 +4145,7 @@ public class MemberRefactoringEngine
             appliedFixups.Add(new AppliedCallSiteFixup(site.ReportPath, finalLine, source.Key, source.Value));
         }
 
-        return new MoveMemberResult(result, skippedCallSites, pendingLedgerEntries, pendingLedgerOperationName, appliedFixups);
+        return new MoveMemberResult(result, skippedCallSites, pendingLedgerEntries, pendingLedgerOperationName, appliedFixups, AppliedEdits: appliedEdits);
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -92,7 +93,7 @@ public class AdvancedRefactoringTools
     /// intermediate staging step). Rolls back any already-written files if a multi-file change
     /// partially fails, so a change never lands half-applied.
     /// </summary>
-    private Task<ApplyOutcome> ValidateAndApplyAsync(Dictionary<FilePathWrapper, string> changes, string description, string operationName, bool dryRun = false, bool returnDiff = false, IProgress<EngineProgress>? progress = default, IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null) => ValidateAndApplyHelper.ValidateAndApplyAsync(_validationEngine, _workspaceManager, _logger, changes, operationName, dryRun, returnDiff, progress, removePaths, cancellationToken: cancellationToken, deletePaths, describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct));
+    private Task<ApplyOutcome> ValidateAndApplyAsync(Dictionary<FilePathWrapper, string> changes, string description, string operationName, bool dryRun = false, bool returnDiff = false, IProgress<EngineProgress>? progress = default, IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default, IReadOnlyCollection<FilePathWrapper>? deletePaths = null, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null) => ValidateAndApplyHelper.ValidateAndApplyAsync(_validationEngine, _workspaceManager, _logger, changes, operationName, dryRun, returnDiff, progress, removePaths, cancellationToken: cancellationToken, deletePaths, describeValidationFailure: (report, ct) => CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, ct), expectedEdits: expectedEdits);
     private Task<string> BuildDiffAsync(Dictionary<FilePathWrapper, string> changes, CancellationToken cancellationToken = default) => ValidateAndApplyHelper.BuildDiffAsync(_workspaceManager, changes, cancellationToken);
     private static string BuildDiffFromPreImages(Dictionary<FilePathWrapper, string> changes, IReadOnlyDictionary<string, string?>? preImages) => ValidateAndApplyHelper.BuildDiffFromPreImages(changes, preImages);
     [McpServerTool(Name = "ChangeSignature")]
@@ -485,9 +486,20 @@ public class AdvancedRefactoringTools
                 };
             }
 
-            var apply = await ValidateAndApplyAsync(result.Changes, $"Move [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.", "MoveMember", dryRun, returnDiff, cancellationToken: cancellationToken);
+            var apply = await ValidateAndApplyAsync(result.Changes, $"Move [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.", "MoveMember", dryRun, returnDiff, cancellationToken: cancellationToken, expectedEdits: result.AppliedEdits);
             if (apply.Error is not null)
             {
+                // A collateral-change refusal is the real cause on its own (a step after the engine's edits rewrote text they
+                // did not touch), so return it as-is rather than let the unresolved-call-site hints below mask it.
+                if (apply.Error.ErrorCode == ToolErrorCode.CollateralChangeRefused)
+                {
+                    return new SentinelCallToolResult<AppliedChangeSummary>
+                    {
+                        IsError = true,
+                        ErrorData = apply.Error
+                    };
+                }
+
                 // The compile-gate rejection is often just a symptom: the engine already knows
                 // exactly which call sites it couldn't rewrite and why (BlockReason,
                 // CandidatesInScope) - surface that instead of the raw compiler-error dump so the
