@@ -322,4 +322,22 @@ public sealed record SnippetMatchResult
             invalidParameterName, invalidParameterValue,
             tiersProbed ?? Array.Empty<WhitespaceTolerance>(), windowTotal, linesExamined, windowsExamined);
     }
+
+    /// <summary>
+    /// Derives a result with the given ambiguity outcome and matches, keeping the source's request echo,
+    /// candidate counts and filter trail.
+    /// </summary>
+    public static SnippetMatchResult WithAmbiguity(SnippetMatchResult source, SnippetMatchOutcome outcome, IReadOnlyList<SnippetMatch> matches)
+    {
+        return Create(source.RequestedTolerance, source.RequestedCaseMode, outcome, matches, Array.Empty<SnippetNearMatch>(), 0, Array.Empty<SnippetClosestWindow>(), source.CandidatesBeforeSelectors, source.CandidatesAfterSelectors, matches.Count, filterTrail: source.FilterTrail, tiersProbed: source.TiersProbed);
+    }
+
+    /// <summary>
+    /// Derives a NoMatch result that lists only the given closest windows (for example, windows restricted
+    /// to a set of candidate declarations).
+    /// </summary>
+    public static SnippetMatchResult WithScopedClosestWindows(SnippetMatchResult source, IReadOnlyList<SnippetClosestWindow> closestWindows, int closestWindowTotalCount, int linesExamined, int windowsExamined)
+    {
+        return Create(source.RequestedTolerance, source.RequestedCaseMode, SnippetMatchOutcome.NoMatch, Array.Empty<SnippetMatch>(), Array.Empty<SnippetNearMatch>(), 0, closestWindows, candidatesBeforeSelectors: 0, candidatesAfterSelectors: 0, candidatesAfterAdjacentLines: 0, tiersProbed: source.TiersProbed, closestWindowTotalCount: closestWindowTotalCount, linesExamined: linesExamined, windowsExamined: windowsExamined);
+    }
 }
