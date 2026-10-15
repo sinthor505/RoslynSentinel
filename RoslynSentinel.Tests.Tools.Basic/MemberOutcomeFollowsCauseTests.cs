@@ -132,4 +132,67 @@ public class MemberOutcomeFollowsCauseTests
         });
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "the existing fixture must be untouched");
     }
+
+    [Test]
+    public async Task Member_Replace_EnumMemberInvalidValue_ErrorPointsAtModifyEnumAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
+
+        var result = await tools.Member(
+            reason: "test enum replace invalid value recovery hint",
+            operation: MemberAction.replace,
+            filePath: workspace.PathOf(FixtureRelativePath),
+            memberName: "Pending",
+            newMemberSource: "Pending = notanint");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsError, Is.True, "an invalid enum value must be an error");
+            Assert.That(result.ErrorData?.Message, Does.Contain("ModifyEnum(enumName:"), "the recovery hint must name ModifyEnum");
+            Assert.That(result.ErrorData?.Message, Does.Contain("OrderState"), "the recovery hint must name the enum");
+        });
+    }
+
+    [Test]
+    public async Task Member_Replace_MethodIdenticalSource_IsSuccessAndWritesNothingAsync()
+    {
+        const string methodFixture = "namespace ContosoOrders.Core;\n\npublic class OrderTarget\n{\n    public int Existing() => 1;\n}\n";
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, methodFixture));
+        var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
+        var before = workspace.ReadText(FixtureRelativePath);
+
+        var result = await tools.Member(
+            reason: "test method replace identical source outcome",
+            operation: MemberAction.replace,
+            filePath: workspace.PathOf(FixtureRelativePath),
+            memberName: "Existing",
+            newMemberSource: "public int Existing() => 1;");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "an already-in-state replace must not write");
+    }
+
+    [Test]
+    public async Task Member_AddMemberAfterUnparsableSource_ReturnsInvalidArgumentAndWritesNothingAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
+        var before = workspace.ReadText(FixtureRelativePath);
+
+        var result = await tools.Member(
+            reason: "test addMember unparsable source outcome",
+            operation: MemberAction.addMember,
+            filePath: workspace.PathOf(FixtureRelativePath),
+            containerName: "OrderTarget",
+            newMemberSource: "public int Broken( =>",
+            position: "after:Existing");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsError, Is.True, "an unparsable member source must be an error");
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        });
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a failed add must not write");
+    }
 }

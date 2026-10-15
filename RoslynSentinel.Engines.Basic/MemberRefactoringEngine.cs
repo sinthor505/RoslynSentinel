@@ -2897,12 +2897,23 @@ public class MemberRefactoringEngine
             };
         }
 
+        var replacedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, member, newMember, cancellationToken);
+        if (string.Equals(replacedText, root.ToFullString(), StringComparison.Ordinal))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.AlreadyInTargetState,
+                FilePath = filePath,
+                Message = $"// No change: the member already matches the requested declaration ({DescribeParsedMember(newMember)})."
+            };
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Replaced with {DescribeParsedMember(newMember)}.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, member, newMember, cancellationToken),
+            UpdatedText = replacedText,
             Warnings = snippetWarning == null ? null : new[] { snippetWarning }
         };
     }

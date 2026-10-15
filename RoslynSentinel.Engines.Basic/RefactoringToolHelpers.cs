@@ -44,6 +44,7 @@ public static class RefactoringToolHelpers
     /// propose replacing the whole file with nothing.
     /// Returns null when updated.UpdatedText is safe to use as the new file content.
     /// </summary>
+    /// <param name="recoveryHint">Optional guidance appended to the failure message only (not the AlreadyInTargetState success).</param>
     /// <remarks>
     /// The error code is derived from the outcome rather than always being
     /// <see cref="ToolErrorCode.Exception"/>: a target the engine simply couldn't find is an
@@ -61,7 +62,7 @@ public static class RefactoringToolHelpers
     /// Every other outcome keeps its previous behaviour: non-empty text proceeds, empty text is an error.
     /// </para>
     /// </remarks>
-    public static SentinelCallToolResult<object>? RequireUpdatedText(DocumentEditResult updated, string operationName, FilePathWrapper filePath)
+    public static SentinelCallToolResult<object>? RequireUpdatedText(DocumentEditResult updated, string operationName, FilePathWrapper filePath, string? recoveryHint = null)
     {
         if (updated.Outcome == EditOutcome.AlreadyInTargetState)
         {
@@ -83,7 +84,7 @@ public static class RefactoringToolHelpers
         {
             IsError = true,
             ErrorData = new ResultError(ErrorCodeFor(updated),
-                $"{operationName}: no change produced for '{filePath}' ({updated.Outcome}). {SummarizeEngineMessage(updated.Message, MaxEngineGuidanceLength)}")
+                $"{operationName}: no change produced for '{filePath}' ({updated.Outcome}). {SummarizeEngineMessage(updated.Message, MaxEngineGuidanceLength)}{(string.IsNullOrEmpty(recoveryHint) ? string.Empty : " " + recoveryHint)}")
         };
     }
 

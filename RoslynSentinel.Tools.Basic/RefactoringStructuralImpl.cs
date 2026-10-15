@@ -586,7 +586,7 @@ public class RefactoringStructuralImpl
                 if (replaceEnumName != null)
                 {
                     var enumReplaced = await _memberRefactoringEngine.ReplaceEnumMemberAsync(filePathResolved, replaceEnumName, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                    if (RefactoringToolHelpers.RequireUpdatedText(enumReplaced, "Member", filePathResolved) is { } enumReplaceError)
+                    if (RefactoringToolHelpers.RequireUpdatedText(enumReplaced, "Member", filePathResolved, recoveryHint: $"Retry using ModifyEnum(enumName: \"{replaceEnumName}\", values: ...) directly with the full desired member list if this keeps failing.") is { } enumReplaceError)
                         return enumReplaceError;
 
                     var enumReplaceChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumReplaced.UpdatedText! };
@@ -658,7 +658,7 @@ public class RefactoringStructuralImpl
                 if (removeEnumName != null)
                 {
                     var enumRemoved = await _memberRefactoringEngine.RemoveEnumMemberAsync(filePathResolved, removeEnumName, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                    if (RefactoringToolHelpers.RequireUpdatedText(enumRemoved, "Member", filePathResolved) is { } enumRemoveError)
+                    if (RefactoringToolHelpers.RequireUpdatedText(enumRemoved, "Member", filePathResolved, recoveryHint: $"Retry using ModifyEnum(enumName: \"{removeEnumName}\", values: ...) directly with the full desired member list if this keeps failing.") is { } enumRemoveError)
                         return enumRemoveError;
 
                     var enumRemoveChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumRemoved.UpdatedText! };
@@ -806,7 +806,7 @@ public class RefactoringStructuralImpl
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
 
                 var enumAdded = await _memberRefactoringEngine.AddEnumMemberAsync(filePathResolved, containerName, newMemberSource!, afterName, beforeName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                var enumAddError = RefactoringToolHelpers.RequireUpdatedText(enumAdded, "Member", filePathResolved);
+                var enumAddError = RefactoringToolHelpers.RequireUpdatedText(enumAdded, "Member", filePathResolved, recoveryHint: $"Retry using ModifyEnum(enumName: \"{containerName}\", values: ...) directly with the full desired member list if this keeps failing.");
                 if (enumAddError is not null)
                     return enumAddError;
 
