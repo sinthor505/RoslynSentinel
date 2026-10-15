@@ -94,7 +94,7 @@ public sealed record SnippetFilterStep(string Selector, int Removed);
 
 /// <summary>
 /// Result of looking a snippet up in a text. Carries data only (no message text): wording lives
-/// in <see cref="ContextErrorBuilder"/>. Build one with <see cref="Create"/>, which enforces:
+/// in the legacy ContextErrorBuilder (removed). Build one with <see cref="Create"/>, which enforces:
 /// <see cref="NearMatches"/> is non-empty only when <see cref="Matches"/> is empty, and
 /// <see cref="ClosestWindows"/> is non-empty only when both are empty. A violation throws
 /// <see cref="ArgumentException"/> (an internal programming error, not a tool error).
