@@ -114,6 +114,16 @@ public static class ToolErrorCode
     public const string EolChangeRefused = "EolChangeRefused";
 
     /// <summary>
+    /// The write-path tripwire refused a change because, for a file whose producing operation declared its text
+    /// edits, the text about to be written is not exactly the file's pre-image plus those edits (see
+    /// <c>CollateralChangeGuard</c>). Nothing was written. This is the fingerprint of a step that ran after the
+    /// edits were built and rewrote more than the operation intended (for example a whole-file reformat); the
+    /// message names each file and its first differing line. Distinct from <see cref="EolChangeRefused"/> (only a
+    /// line-ending style changed), <see cref="ValidationFailed"/> (compiler errors) and <see cref="Exception"/>.
+    /// </summary>
+    public const string CollateralChangeRefused = "CollateralChangeRefused";
+
+    /// <summary>
     /// The operation was cancelled before it finished.
     /// </summary>
     public const string Cancelled = "Cancelled";
