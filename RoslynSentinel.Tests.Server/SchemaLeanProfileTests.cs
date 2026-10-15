@@ -25,7 +25,7 @@ public class SchemaLeanProfileTests
 {
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace", "Refactor" };
 
-    private static readonly string[] LeanHidden = ["autoStage", "returnDiff", "validateOnApply", "lineBefore", "lineAfter"];
+    private static readonly string[] LeanHidden = ["returnDiff", "validateOnApply", "lineBefore", "lineAfter"];
 
     [SetUp]
     public void SetUp() => ResetStatics();
@@ -109,7 +109,7 @@ public class SchemaLeanProfileTests
     [TestCase("ReplaceSnippet")]
     [TestCase("Member")]
     [TestCase("MethodSignature")]
-    public async Task Lean_TopLevelProperties_LackTheFiveBoilerplateNames(string toolName)
+    public async Task Lean_TopLevelProperties_LackTheFourBoilerplateNames(string toolName)
     {
         var schemas = await ListInputSchemasAsync("--schema-profile=lean");
 
@@ -166,7 +166,7 @@ public class SchemaLeanProfileTests
 
         foreach (var schema in SchemasFor(schemas, "Member"))
         {
-            Assert.That(TopLevelProperties(schema), Is.SupersetOf(new[] { "autoStage", "returnDiff", "lineBefore", "lineAfter" }));
+            Assert.That(TopLevelProperties(schema), Is.SupersetOf(new[] { "returnDiff", "lineBefore", "lineAfter" }));
         }
 
         foreach (var schema in SchemasFor(schemas, "MethodSignature"))
@@ -210,7 +210,7 @@ public class SchemaLeanProfileTests
         Assert.That(HiddenSchemaParams.IsHidden("replacesnippet", "validateOnApply"), Is.True, "Tool names match case-insensitively.");
         // ReplaceSnippet has no autoStage parameter, so it must not be registered for it.
         Assert.That(HiddenSchemaParams.IsHidden("ReplaceSnippet", "autoStage"), Is.False);
-        Assert.That(HiddenSchemaParams.IsHidden("Member", "autoStage"), Is.True);
+        Assert.That(HiddenSchemaParams.IsHidden("Member", "returnDiff"), Is.True);
         // Never registers names that stay in the schema.
         Assert.That(HiddenSchemaParams.IsHidden("ReplaceSnippet", "dryRun"), Is.False);
         Assert.That(HiddenSchemaParams.IsHidden("ReplaceSnippet", "reason"), Is.False);

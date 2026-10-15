@@ -27,11 +27,16 @@ public class RefactoringExtractionDocsTools
         [Description("Required for add/remove. For static usings, prefix with \"static \" (e.g. \"static System.Math\").")]
         [Consumes(DataTag.SymbolName, required: false)] string? namespaceName = null,
         [Description("add only. After inserting, runs Roslyn's Simplifier over the file to shorten now-redundant fully-qualified references.")] bool simplifyExisting = false,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
+        // [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        CancellationToken cancellationToken = default) =>
-        _impl.UsingDirective(reason, filePath, operation, namespaceName, simplifyExisting, autoStage, dryRun, returnDiff, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
+        bool autoStage = true;
+        return _impl.UsingDirective(reason, filePath, operation, namespaceName, simplifyExisting, autoStage, dryRun, returnDiff, cancellationToken);
+    }
 
     [McpServerTool(Name = "SummaryComment")]
     [Produces(DataTag.ChangeId)]
@@ -48,11 +53,16 @@ public class RefactoringExtractionDocsTools
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.ContainingTypeName)] string? containingTypeName = null,
-        [Description(ToolParams.AutoStage)] bool autoStage = true,
+        // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
+        // [Description(ToolParams.AutoStage)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        CancellationToken cancellationToken = default) =>
-        _impl.SummaryComment(reason, filePath, operation, targetName, summaryText, contextSnippet, lineBefore, lineAfter, containingTypeName, autoStage, dryRun, returnDiff, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
+        bool autoStage = true;
+        return _impl.SummaryComment(reason, filePath, operation, targetName, summaryText, contextSnippet, lineBefore, lineAfter, containingTypeName, autoStage, dryRun, returnDiff, cancellationToken);
+    }
 
     [McpServerTool(Name = "ExtractLocalVariable")]
     [Produces(DataTag.ChangeId)]
@@ -82,9 +92,14 @@ public class RefactoringExtractionDocsTools
         [Consumes(DataTag.ContextSnippet, required: true)] string exactSourceBlock,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
+        // [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        CancellationToken cancellationToken = default) =>
-        _impl.ExtractMethodSafe(reason, filePath, newMethodName, exactSourceBlock, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
+        bool autoStage = true;
+        return _impl.ExtractMethodSafe(reason, filePath, newMethodName, exactSourceBlock, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
+    }
 }

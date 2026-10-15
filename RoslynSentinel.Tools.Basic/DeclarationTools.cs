@@ -58,11 +58,14 @@ public class DeclarationTools
         [Description("modifier. " + ToolParams.ModifierEdits)] List<ModifierEdit>? modifierBatchEdits = null,
         [Description("attribute. " + ToolParams.AttributeEdits)] List<AttributeEdit>? attributeBatchEdits = null,
         [Description("baseType. " + ToolParams.BaseTypeEdits)] List<BaseTypeEdit>? baseTypeBatchEdits = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
+        // [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default)
     {
+        // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
+        bool autoStage = true;
         switch (operation)
         {
             case DeclarationOperation.modifier:

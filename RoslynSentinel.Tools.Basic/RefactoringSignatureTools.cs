@@ -47,12 +47,17 @@ public class RefactoringSignatureTools
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
+        // [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default,
-        [Description(ToolParams.NullDefaultLead + " (use instead of defaultValue:\"null\")." + ToolParams.NullDefaultTail)] bool nullDefault = false) =>
-        _impl.MethodSignature(reason, filePath, operation, methodName, paramName, paramType, defaultValue, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, nullDefault);
+        [Description(ToolParams.NullDefaultLead + " (use instead of defaultValue:\"null\")." + ToolParams.NullDefaultTail)] bool nullDefault = false)
+    {
+        // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
+        bool autoStage = true;
+        return _impl.MethodSignature(reason, filePath, operation, methodName, paramName, paramType, defaultValue, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, nullDefault);
+    }
 
     [McpServerTool(Name = "ChangeAccessibility")]
     [Produces(DataTag.ChangeId)]
@@ -65,11 +70,16 @@ public class RefactoringSignatureTools
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
+        // [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        CancellationToken cancellationToken = default) =>
-        _impl.ChangeAccessibility(reason, filePath, targetName, accessibility, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
+        bool autoStage = true;
+        return _impl.ChangeAccessibility(reason, filePath, targetName, accessibility, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
+    }
 
     [McpServerTool(Name = "ConstructorParameter")]
     [Produces(DataTag.ChangeId)]
@@ -91,11 +101,16 @@ public class RefactoringSignatureTools
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
+        // [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         CancellationToken cancellationToken = default,
         [Description(ToolParams.NullDefaultLead + " (use instead of defaultValue:\"null\")." + ToolParams.NullDefaultTail)] bool nullDefault = false,
-        [Description("add only. Supplies the new parameter's argument at existing constructor call sites " + ToolParams.CallSiteTargets + " " + ToolParams.CallSiteKeys + " an exact line beats FilePath:*, which beats *. Value: the argument expression for that site (e.g. \"config\", \"_config\" or \"new SentinelConfiguration()\"); appended as a named argument when the site uses named arguments or omits trailing optional parameters. " + ToolParams.CallSiteFallback + " exact key.")] Dictionary<string, string>? callSiteFixups = null) =>
-        _impl.ConstructorParameter(reason, filePath, operation, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, defaultValue, nullDefault, callSiteFixups);
+        [Description("add only. Supplies the new parameter's argument at existing constructor call sites " + ToolParams.CallSiteTargets + " " + ToolParams.CallSiteKeys + " an exact line beats FilePath:*, which beats *. Value: the argument expression for that site (e.g. \"config\", \"_config\" or \"new SentinelConfiguration()\"); appended as a named argument when the site uses named arguments or omits trailing optional parameters. " + ToolParams.CallSiteFallback + " exact key.")] Dictionary<string, string>? callSiteFixups = null)
+    {
+        // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
+        bool autoStage = true;
+        return _impl.ConstructorParameter(reason, filePath, operation, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, defaultValue, nullDefault, callSiteFixups);
+    }
 }

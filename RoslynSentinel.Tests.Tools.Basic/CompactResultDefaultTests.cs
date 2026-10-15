@@ -59,14 +59,13 @@ public class CompactResultDefaultTests
     }
 
     private static Task<SentinelCallToolResult<AppliedChangeSummary>> AddVirtualAsync(
-        RefactoringStructuralTools tools, InMemoryWorkspace workspace, bool dryRun = false, bool autoStage = true) =>
+        RefactoringStructuralTools tools, InMemoryWorkspace workspace, bool dryRun = false) =>
         tools.ModifyModifier(
             reason: "test compact result default",
             filePath: workspace.PathOf(FixtureRelativePath),
             targetName: "Target",
             modifier: NonAccessibilityModifier.@virtual,
             action: AddRemoveAction.add,
-            autoStage: autoStage,
             dryRun: dryRun);
 
     [Test]
@@ -131,27 +130,6 @@ public class CompactResultDefaultTests
             Assert.That(summary.ChangedContent!.Values.Single(), Does.Contain("public virtual int Target()"));
         });
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a dry run must not write");
-    }
-
-    [Test]
-    public async Task ModifyModifier_NoStage_StillReturnsChangedContentAndStatusNotWrittenAsync()
-    {
-        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
-        var tools = BuildTools(workspace.Manager);
-        var before = workspace.ReadText(FixtureRelativePath);
-
-        var result = await AddVirtualAsync(tools, workspace, autoStage: false);
-
-        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
-        var summary = result.SuccessData!;
-        Assert.Multiple(() =>
-        {
-            Assert.That(summary.Status, Is.EqualTo("not_written"));
-            Assert.That(summary.ChangedContent, Is.Not.Null.And.Not.Empty);
-            Assert.That(summary.ChangedContent!.Values.Single(), Does.Contain("public virtual int Target()"));
-            Assert.That(summary.Note, Does.Contain("Nothing was written"));
-        });
-        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "autoStage=false must not write");
     }
 
     [Test]

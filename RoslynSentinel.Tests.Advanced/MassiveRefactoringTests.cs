@@ -73,23 +73,6 @@ public class MassiveRefactoringTests
         _workspaceManager.SetTestSolution(solution);
     }
 
-    [Test]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
-    [TestCase(4)]
-    [TestCase(5)]
-    public async Task ExtractInterface_ShouldCreateInterface(int id)
-    {
-        SetSource($"public class C{id} {{ public void M{id}() {{}} }}", $"C{id}.cs");
-        var result = await _advancedRefactoringTools.ExtractMembers(reason: "test message", $"C{id}.cs", $"C{id}", ExtractAsType.@interface, $"IC{id}", autoStage: false);
-
-        // With autoStage:false the tool returns SuccessDetails = AppliedChangeSummary { ChangedContent = Dictionary<FilePathWrapper, string> }.
-        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-        var changes = ((AppliedChangeSummary)result.SuccessData!).ChangedContent;
-        Assert.That(changes, Is.Not.Null.And.Not.Empty);
-    }
-
     // ── Bug 62: ExtractMembersToPartial -> Missing Namespace + Usings ─────────
     [Test]
     [Category("StructuralRefactoringEngine")] // sentinel:auto-category
@@ -146,22 +129,5 @@ namespace MyApp.Services
         Assert.That(!result.IsError, Is.True);
         var json = System.Text.Json.JsonSerializer.Serialize(result);
         Assert.That(json, Contains.Substring($"NewM{id}"));
-    }
-
-    [Test]
-    [TestCase(1)]
-    [TestCase(2)]
-    [TestCase(3)]
-    [TestCase(4)]
-    [TestCase(5)]
-    public async Task MoveTypeToFile_ShouldSeparateTypes(int id)
-    {
-        SetSource($"public class C{id} {{}} public class D{id} {{}}", $"C{id}.cs");
-        var result = await _advancedRefactoringTools.MoveType(reason: "test message", $"C{id}.cs", $"D{id}", "ownFile", autoStage: false);
-
-        // Dictionary keys are FilePathWrapper, not string, since the server split.
-        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-        var data = result.SuccessData?.ChangedContent;
-        Assert.That(data?.Count, Is.GreaterThan(1));
     }
 }

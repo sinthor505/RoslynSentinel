@@ -56,7 +56,7 @@ public class MemberAddResultSizeTests
     }
 
     private static Task<SentinelCallToolResult<object>> AddMemberAsync(
-        RefactoringStructuralTools tools, InMemoryWorkspace workspace, bool dryRun = false, bool autoStage = true) =>
+        RefactoringStructuralTools tools, InMemoryWorkspace workspace, bool dryRun = false) =>
         tools.Member(
             reason: "test add member result size",
             operation: MemberAction.addMember,
@@ -64,7 +64,6 @@ public class MemberAddResultSizeTests
             containerName: "MemberAddTarget",
             position: "end",
             newMemberSource: "public int Added() => 42;",
-            autoStage: autoStage,
             dryRun: dryRun);
 
     private static Task<SentinelCallToolResult<object>> AddTopLevelTypeAsync(
@@ -136,25 +135,5 @@ public class MemberAddResultSizeTests
             Assert.That(result.LargeResult, Is.Null);
         });
         Assert.That(workspace.ReadText(FixtureRelativePath), Does.Contain("class AddedTopLevelType"), "the type must have landed");
-    }
-
-    [Test]
-    public async Task Member_AddMember_NoAutoStageStillReturnsChangedContentAsync()
-    {
-        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
-        var tools = BuildTools(workspace.Manager);
-        var before = workspace.ReadText(FixtureRelativePath);
-
-        var result = await AddMemberAsync(tools, workspace, autoStage: false);
-
-        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
-        var summary = (AppliedChangeSummary)result.SuccessData!;
-        Assert.Multiple(() =>
-        {
-            Assert.That(summary.Status, Is.EqualTo("not_written"));
-            Assert.That(summary.ChangedContent, Is.Not.Null.And.Not.Empty, "nothing was written, so the content is the result");
-            Assert.That(summary.ChangedContent!.Values.Single(), Does.Contain("public int Added() => 42;"));
-        });
-        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "autoStage=false must not write");
     }
 }

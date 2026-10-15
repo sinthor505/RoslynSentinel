@@ -270,15 +270,6 @@ public enum Status { Active = 1, Pending = 2 }
 
     [Test]
     [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
-    public async Task UsingDirective_AutoStageFalse_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringExtractionDocsTools.UsingDirective(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq", autoStage: false);
-        Assert.That(result, Is.Not.Null);
-    }
-
-    [Test]
-    [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
     public async Task UsingDirective_Add_ChangedContentReflectsActualDiffNotFabricatedString()
     {
         // The engine's AddUsingDirectiveAsync reformats the whole document (Formatter.FormatAsync)

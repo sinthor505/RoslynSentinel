@@ -143,14 +143,19 @@ public class RefactoringStructuralTools
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
+        // [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
         RequestContext<CallToolRequestParams>? requestParams = null,
-        CancellationToken cancellationToken = default) =>
-        _impl.Member(reason, filePath, operation, containerName, namespaceName, memberName, newMemberSource, position, typedKind, typedName, typedType,
+        CancellationToken cancellationToken = default)
+    {
+        // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
+        bool autoStage = true;
+        return _impl.Member(reason, filePath, operation, containerName, namespaceName, memberName, newMemberSource, position, typedKind, typedName, typedType,
             accessibility, hasSetter, isInit, isReadonly, isStatic, initializer, skipPrecheck, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff,
             requestParams, cancellationToken);
+    }
 
     [McpServerTool(Name = "ModifyEnum")]
     [Produces(DataTag.ChangeId)]
@@ -164,11 +169,16 @@ public class RefactoringStructuralTools
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
+        // [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        CancellationToken cancellationToken = default) =>
-        _impl.ModifyEnum(reason, filePath, enumName, values, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
+        bool autoStage = true;
+        return _impl.ModifyEnum(reason, filePath, enumName, values, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
+    }
 
     [McpServerTool(Name = "ModifyAttribute")]
     [SupportsBatching]
@@ -192,11 +202,16 @@ public class RefactoringStructuralTools
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.AttributeEdits)] List<AttributeEdit>? batchEdits = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
+        // [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        CancellationToken cancellationToken = default) =>
-        _impl.ModifyAttribute(reason, filePath, targetName, existingAttribute, action, newAttribute, attribute, contextSnippet, lineBefore, lineAfter, batchEdits, autoStage, dryRun, returnDiff, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
+        bool autoStage = true;
+        return _impl.ModifyAttribute(reason, filePath, targetName, existingAttribute, action, newAttribute, attribute, contextSnippet, lineBefore, lineAfter, batchEdits, autoStage, dryRun, returnDiff, cancellationToken);
+    }
 
     [McpServerTool(Name = "ModifyModifier", UseStructuredContent = false, OutputSchemaType = typeof(ModifyModifierResultEnvelope))]
     [SupportsBatching]
@@ -213,11 +228,16 @@ public class RefactoringStructuralTools
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.ModifierEdits)] List<ModifierEdit>? batchEdits = null,
-        [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
+        // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
+        // [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        CancellationToken cancellationToken = default) =>
-        _impl.ModifyModifier(reason, filePath, targetName, modifier, action, contextSnippet, lineBefore, lineAfter, batchEdits, autoStage, dryRun, returnDiff, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
+        bool autoStage = true;
+        return _impl.ModifyModifier(reason, filePath, targetName, modifier, action, contextSnippet, lineBefore, lineAfter, batchEdits, autoStage, dryRun, returnDiff, cancellationToken);
+    }
 
     [McpServerTool(Name = "ModifyBaseType")]
     [SupportsBatching]
@@ -235,11 +255,16 @@ public class RefactoringStructuralTools
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
         [Description(ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter, required: false)] string? lineAfter = null,
         [Description(ToolParams.BaseTypeEdits)] List<BaseTypeEdit>? batchEdits = null,
-        [Description(ToolParams.AutoStage)] bool autoStage = true,
+        // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
+        // [Description(ToolParams.AutoStage)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false,
         [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false,
-        CancellationToken cancellationToken = default) =>
-        _impl.ModifyBaseType(reason, filePath, typeName, baseTypeName, action, contextSnippet, lineBefore, lineAfter, batchEdits, autoStage, dryRun, returnDiff, cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
+        bool autoStage = true;
+        return _impl.ModifyBaseType(reason, filePath, typeName, baseTypeName, action, contextSnippet, lineBefore, lineAfter, batchEdits, autoStage, dryRun, returnDiff, cancellationToken);
+    }
 
     [McpServerTool(Name = "SyncTypeAndFilename")]
     [Produces(DataTag.ResultOnly)]

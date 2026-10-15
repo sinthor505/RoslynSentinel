@@ -57,7 +57,7 @@ public class MergedToolDescriptionSyncTests
     public static IEnumerable<TestCaseData> IdenticalDescriptionCases()
     {
         // Params every merged tool shares with each of its source tools by name.
-        foreach (var name in new[] { "reason", "contextSnippet", "lineBefore", "lineAfter", "autoStage", "dryRun", "returnDiff" })
+        foreach (var name in new[] { "reason", "contextSnippet", "lineBefore", "lineAfter", "dryRun", "returnDiff" })
         {
             string constant = name switch
             {
@@ -65,7 +65,6 @@ public class MergedToolDescriptionSyncTests
                 "contextSnippet" => nameof(ToolParams.ContextSnippet),
                 "lineBefore" => nameof(ToolParams.LineBefore),
                 "lineAfter" => nameof(ToolParams.LineAfter),
-                "autoStage" => nameof(ToolParams.AutoStage),
                 "dryRun" => nameof(ToolParams.DryRun),
                 _ => nameof(ToolParams.ReturnDiff),
             };
