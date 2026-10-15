@@ -1180,6 +1180,81 @@ public enum Status { Active = 1, Pending = 2 }
 
     [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task RemoveMember_UnreferencedMethod_ReportsVerifiedRemovalAndKeepsSibling()
+    {
+        SetSource("""
+            namespace TestProj;
+
+            public class Greeter
+            {
+                public string Hello() => "hello";
+                public string Goodbye() => "bye";
+            }
+            """, "Greeter.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Hello");
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.Description, Does.Contain("Verified"), "A successful non-dry-run removal must report that the repeat lookup found no declaration.");
+        Assert.That(summary.Description, Does.Contain("'Hello'"), "The message must name the removed method.");
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var doc = solution.Projects.SelectMany(p => p.Documents).SingleOrDefault(d => d.Name == "Greeter.cs");
+        var text = doc is null ? string.Empty : (await doc.GetTextAsync()).ToString();
+        Assert.That(text, Does.Not.Contain("Hello()"), "The removed method must no longer be in the file text.");
+        Assert.That(text, Does.Contain("Goodbye()"), "The sibling method must still be in the file text.");
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task RemoveMember_OverloadSelectedByContextSnippet_RemovesOnlyThatOverload()
+    {
+        SetSource("""
+            namespace TestProj;
+
+            public class Printer
+            {
+                public void Print(string text) { }
+                public void Print(int number) { }
+            }
+            """, "Printer.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Printer.cs", MemberAction.remove, memberName: "Print", contextSnippet: "public void Print(int number)");
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.Description, Does.Contain("'Print'"), "The message must name the removed member.");
+        Assert.That(summary.Description, Does.Contain("Verified"), "The snippet no longer matches after removal, so the repeat lookup must find no declaration.");
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var doc = solution.Projects.SelectMany(p => p.Documents).SingleOrDefault(d => d.Name == "Printer.cs");
+        var text = doc is null ? string.Empty : (await doc.GetTextAsync()).ToString();
+        Assert.That(text, Does.Not.Contain("Print(int number)"), "The overload selected by the snippet must be removed.");
+        Assert.That(text, Does.Contain("Print(string text)"), "The other overload must still be in the file text.");
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task RemoveMember_DryRun_DoesNotClaimVerified()
+    {
+        SetSource("""
+            namespace TestProj;
+
+            public class Greeter
+            {
+                public string Hello() => "hello";
+                public string Goodbye() => "bye";
+            }
+            """, "Greeter.cs");
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Greeter.cs", MemberAction.remove, memberName: "Hello", dryRun: true);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.DryRun, Is.True);
+        Assert.That(summary.Description, Does.Not.Contain("Verified"), "A dry run writes nothing, so it must not claim the removal was verified.");
+        Assert.That(summary.Description, Is.EqualTo("Removed 'Hello' from Greeter.cs."));
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var doc = solution.Projects.SelectMany(p => p.Documents).SingleOrDefault(d => d.Name == "Greeter.cs");
+        var text = doc is null ? string.Empty : (await doc.GetTextAsync()).ToString();
+        Assert.That(text, Does.Contain("Hello()"), "A dry run must leave the committed file unchanged.");
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task ReplaceMember_InterfaceMethod_NoImplementerInFile_Succeeds()
     {
         SetSource("""

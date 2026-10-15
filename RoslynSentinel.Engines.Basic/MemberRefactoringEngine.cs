@@ -3299,6 +3299,42 @@ public class MemberRefactoringEngine
     }
 
     /// <summary>
+    /// Repeats the name lookup used by RemoveMemberAsync against the committed document after a
+    /// removal. Returns false when the lookup finds no declaration (removed), true when a
+    /// declaration still resolves (possibly an overload or another same-named member), or null
+    /// when the check cannot run. Uses all candidate kinds so removed type declarations are seen.
+    /// </summary>
+    public async Task<bool?> IsDeclarationStillPresentAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default)
+    {
+        var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
+        if (document == null)
+        {
+            return null;
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        if (root == null || sourceText == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var allCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken);
+            var filtered = SyntaxTargetResolver.FilterByContainingType(allCandidates, containerName);
+            var node = SyntaxTargetResolver.ResolveBySnippetOrThrow(filtered, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
+            return node != null;
+        }
+        catch (ToolException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Moves named members from a class into a target class atomically -> one combined change set,
     /// so it validates and writes as a single unit instead of the remove-then-add sequence that
     /// otherwise fails the write-path chokepoint's per-write compiler check (source ends up with

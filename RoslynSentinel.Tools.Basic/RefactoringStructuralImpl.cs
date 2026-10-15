@@ -675,7 +675,22 @@ public class RefactoringStructuralImpl
                 var apply = await ValidateAndApplyAsync(changes, $"Remove member '{memberName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (apply.Error is not null)
                     return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
-                return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Removed '{memberName}' from {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContentResultId: apply.ChangedContentResultId) };
+                var removeMessage = $"Removed '{memberName}' from {Path.GetFileName(filePathResolved)}.";
+                string? removeWarning = null;
+                if (!apply.DryRun)
+                {
+                    var stillPresent = await _memberRefactoringEngine.IsDeclarationStillPresentAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+                    if (stillPresent == false)
+                    {
+                        removeMessage += $" Verified: a repeat lookup for '{memberName}' finds no declaration. To double-check, call GetFileOutline on the file.";
+                    }
+                    else if (stillPresent == true)
+                    {
+                        removeWarning = $"A declaration named '{memberName}' still resolves after removal (possibly an overload or another member of the same name); check with GetFileOutline on the file.";
+                        removeMessage += " " + removeWarning;
+                    }
+                }
+                return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], removeMessage, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContentResultId: apply.ChangedContentResultId), WarningDetails = removeWarning };
             }
 
             // operation is addMember, addTopLevelType, or addTypedMember below.

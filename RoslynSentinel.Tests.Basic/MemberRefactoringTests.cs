@@ -2435,6 +2435,26 @@ public class Helper
         Assert.That(result.Message, Does.Contain("ERROR") | Does.Contain("usages"), "Should error when trying to remove a used member");
     }
 
+    [Test]
+    public async Task IsDeclarationStillPresentAsync_ExistingMethod_ReturnsTrue_MissingName_ReturnsFalse()
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Helper.cs", """
+            namespace TestProj;
+
+            public class Helper
+            {
+                public string UnusedMethod() => "test";
+            }
+            """)]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var present = await _memberRefactoringEngine.IsDeclarationStillPresentAsync("Helper.cs", "UnusedMethod");
+        Assert.That(present, Is.True, "An existing method must still resolve before any removal.");
+
+        var missing = await _memberRefactoringEngine.IsDeclarationStillPresentAsync("Helper.cs", "NoSuchMember");
+        Assert.That(missing, Is.False, "A name with no declaration must report that nothing resolves.");
+    }
+
     // All four spellings of the same one-type-parameter type. "EngineResultWrapper<T>" is the
     // literal that failed in run 398; the backtick form is the metadata spelling a caller reading
     // a Roslyn/reflection name would supply; the bare form is what already worked.
