@@ -3178,8 +3178,10 @@ public class MemberRefactoringEngine
 
             // Member(remove) only ever operates on class-level members (methods, properties,
             // fields, etc.) -- Class/Interface/Struct/Record/Enum/EnumMember are excluded from
-            // memberCandidates above by design (type-level removal is done by SafeDeleteUnusedSymbol, not Member(remove);
-            // see docs/current/blockers/blocking_error_member_remove_skipprecheck_targetnotfound_ambiguous_symbol.md).
+            // memberCandidates above by design. Type-level declarations are routed in the member == null
+            // branch below: Member(remove) sends Class/Interface/Struct/Record/Enum to
+            // StructuralRefinementEngine.SafeDeleteSymbolAsync (EnumMember is still refused);
+            // see docs/current/blockers/blocking_error_member_remove_skipprecheck_targetnotfound_ambiguous_symbol.md.
             // When the exclusion is *why* nothing resolved, surface that explicitly instead of
             // the generic "Member not found" -- the name did resolve, just to a kind this
             // operation cannot touch, and this holds regardless of skipPrecheck since both the
@@ -3208,6 +3210,42 @@ public class MemberRefactoringEngine
         {
             if (typeKindCandidatesForHint is { Count: > 0 })
             {
+                var deletableTypeCandidates = typeKindCandidatesForHint
+                    .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                    .ToList();
+                if (deletableTypeCandidates.Count > 0)
+                {
+                    try
+                    {
+                        var deletableNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(
+                            SyntaxTargetResolver.FilterByContainingType(deletableTypeCandidates, containerName),
+                            sourceText, contextSnippet, lineBefore, lineAfter,
+                            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
+                        if (deletableNode != null)
+                        {
+                            var deleteSemanticModel = await document.GetSemanticModelAsync(cancellationToken);
+                            var typeSymbol = deleteSemanticModel?.GetDeclaredSymbol(deletableNode, cancellationToken);
+                            if (typeSymbol != null)
+                            {
+                                var structuralEngine = _config is null
+                                    ? new StructuralRefinementEngine(_workspaceManager)
+                                    : new StructuralRefinementEngine(_workspaceManager, _config);
+                                return await structuralEngine.SafeDeleteSymbolAsync(filePath, typeSymbol, cancellationToken);
+                            }
+                        }
+                    }
+                    catch (ToolException ex)
+                    {
+                        return new DocumentEditResult
+                        {
+                            Outcome = EditOutcome.CannotEdit,
+                            FilePath = filePath,
+                            Message = ex.Message,
+                            ErrorCode = ex.ErrorCode
+                        };
+                    }
+                }
+
                 var kindNames = string.Join(", ", typeKindCandidatesForHint.Select(c => c.Kind).Distinct());
                 return new DocumentEditResult
                 {

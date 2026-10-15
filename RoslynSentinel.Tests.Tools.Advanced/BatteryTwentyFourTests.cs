@@ -1056,19 +1056,13 @@ public enum Status { Active = 1, Pending = 2 }
 
     [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
-    public async Task RemoveMember_OnNamespaceLevelRecord_SkipPrecheckTrue_ReturnsActionableTypeKindMessage()
+    public async Task RemoveMember_OnNamespaceLevelRecord_SkipPrecheckTrue_ReferencedRecord_ReturnsSafeDeleteRefusal()
     {
         // Regression test for blocking_error_member_remove_skipprecheck_targetnotfound_ambiguous_symbol.md.
-        // Root cause: RemoveMemberAsync's candidate resolution deliberately excludes type-level
-        // declarations (Class/Interface/Struct/Record/Enum/EnumMember) from its member pool - this
-        // is by design (Member(remove) only ever operates on class-level members), not something
-        // skipPrecheck changes. Without skipPrecheck, a record with callers is caught first by the
-        // tool-level precheck (FindCallersAsync, which DOES resolve type declarations) and refused
-        // with a caller list - masking the fact that the removal itself could never have succeeded.
-        // With skipPrecheck: true, that precheck is bypassed and the removal falls through to the
-        // always-doomed type-kind exclusion, which previously reported a misleading generic
-        // "Member not found" (TargetNotFound) even though GetFileOutline shows the record present
-        // and unchanged. The fix makes that failure name the actual cause instead.
+        // Member(remove) routes type-level declarations to StructuralRefinementEngine.SafeDeleteSymbolAsync.
+        // Without skipPrecheck, a record with callers is refused first by the tool-level precheck
+        // (FindCallersAsync) with a caller list. With skipPrecheck: true, that precheck is bypassed and
+        // SafeDeleteSymbolAsync's own usage check refuses the still-referenced record with CannotEdit.
         SetMultiFile(
             ("Chain.cs", """
             namespace TestProj;
@@ -1089,20 +1083,17 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(withPrecheck.ErrorData!.Message, Does.Contain("caller"), "Default refusal must come from the tool-level precheck, listing the caller.");
 
         var skipPrecheck = await _refactoringStructuralTools.Member(reason: "test message", "Chain.cs", MemberAction.remove, memberName: "CircularDependencyChain", skipPrecheck: true);
-        Assert.That(!skipPrecheck.IsError, Is.False, "Member(remove) cannot remove a type-level declaration regardless of skipPrecheck.");
-        Assert.That(skipPrecheck.ErrorData!.Message, Does.Contain("type-level declaration"), "The failure must name the actual cause (a type-level declaration Member(remove) structurally excludes), not a generic 'Member not found'.");
-        Assert.That(skipPrecheck.ErrorData!.Message, Does.Contain("Record"), "The message must name the specific excluded kind found under this name.");
-        Assert.That(skipPrecheck.ErrorData!.Message, Does.Contain("SafeDeleteUnusedSymbol"), "The message must point at SafeDeleteUnusedSymbol, the tool that removes unreferenced type declarations.");
+        Assert.That(skipPrecheck.IsError, Is.True, "Member(remove) with skipPrecheck must still refuse a referenced type declaration.");
+        Assert.That(skipPrecheck.ErrorData!.Message, Does.Contain("usages").Or.Contain("cannot be safely deleted"), "The refusal must come from SafeDeleteSymbolAsync's usage check, not a generic 'Member not found'.");
     }
 
     [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
-    public async Task RemoveMember_OnUnreferencedRecord_MessageNamesSafeDeleteUnusedSymbol()
+    public async Task RemoveMember_OnUnreferencedRecord_RemovesRecord()
     {
         // Regression test for docs/current/blockers/blocking_error_member_remove_refuses_record_types.md.
-        // The type-level refusal previously told the caller there was no tool for removing a type
-        // declaration and pointed at raw-text edits. SafeDeleteUnusedSymbol does remove unreferenced
-        // type declarations, so the message must name it.
+        // Member(remove) routes type-level declarations to StructuralRefinementEngine.SafeDeleteSymbolAsync,
+        // so an unreferenced record is removed rather than refused.
         SetMultiFile(
             ("Orphan.cs", """
             namespace TestProj;
@@ -1111,11 +1102,30 @@ public enum Status { Active = 1, Pending = 2 }
             """));
 
         var result = await _refactoringStructuralTools.Member(reason: "test message", "Orphan.cs", MemberAction.remove, memberName: "OrphanRecord");
-        Assert.That(result.IsError, Is.True, "Member(remove) must refuse a type-level declaration.");
-        Assert.That(result.ErrorData!.Message, Does.Contain("SafeDeleteUnusedSymbol"), "The refusal must name SafeDeleteUnusedSymbol.");
-        Assert.That(result.ErrorData!.Message, Does.Contain("type-level declaration"), "The refusal must name the actual cause.");
-        Assert.That(result.ErrorData!.Message, Does.Contain("Record"), "The refusal must name the excluded kind.");
-        Assert.That(result.ErrorData!.Message, Does.Not.Contain("no tool"), "The refusal must not claim there is no tool for type removal.");
+        Assert.That(result.IsError, Is.False, "Member(remove) must remove an unreferenced type-level declaration.");
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var doc = solution.Projects.SelectMany(p => p.Documents).SingleOrDefault(d => d.Name == "Orphan.cs");
+        var text = doc is null ? string.Empty : (await doc.GetTextAsync()).ToString();
+        Assert.That(text, Does.Not.Contain("OrphanRecord"), "The resulting file text must no longer contain the record.");
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task RemoveMember_OnUnreferencedInterface_RemovesInterface()
+    {
+        SetMultiFile(
+            ("IOrphan.cs", """
+            namespace TestProj;
+
+            public interface IOrphan { void M(); }
+            """));
+
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "IOrphan.cs", MemberAction.remove, memberName: "IOrphan");
+        Assert.That(result.IsError, Is.False, "Member(remove) must remove an unreferenced interface declaration.");
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var doc = solution.Projects.SelectMany(p => p.Documents).SingleOrDefault(d => d.Name == "IOrphan.cs");
+        var text = doc is null ? string.Empty : (await doc.GetTextAsync()).ToString();
+        Assert.That(text, Does.Not.Contain("IOrphan"), "The resulting file text must no longer contain the interface.");
     }
 
     [Test]

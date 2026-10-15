@@ -1,6 +1,6 @@
 # `Member(operation: remove)` refuses record (and other type-level) declarations
 
-**Status:** PARTIALLY FIXED 2026-10-14. Direction 1 (message names `SafeDeleteUnusedSymbol`) landed with regression tests in `BatteryTwentyFourTests` (`RemoveMember_OnUnreferencedRecord_MessageNamesSafeDeleteUnusedSymbol`). Direction 2 (route type-level kinds from `Member(remove)` to `StructuralRefinementEngine.SafeDeleteSymbolAsync(FilePathWrapper, ISymbol, ct)`) is NOT done; scoped in `.claude/handoff/`. Move to `resolved/` once routing lands. Original text: root cause traced to source: type-level kinds are excluded from the remove path by design, and the refusal message does not point at the tool that can remove an unreferenced type.
+**Status:** RESOLVED 2026-10-14. See "Resolution" at the end. Original text: root cause traced to source: type-level kinds are excluded from the remove path by design, and the refusal message does not point at the tool that can remove an unreferenced type.
 
 ## What was being attempted
 Slice 5f-D4b (2026-10-13): delete the now-unreferenced nested record `ContextHelper.SnippetSpan`, using `Member(operation: remove, memberName: SnippetSpan)`.
@@ -32,3 +32,10 @@ A weak model told "no tool exists" will fall back to raw-text edits (`ReplaceSni
 1. Cheapest: change the refusal message to name `SafeDeleteUnusedSymbol` for unreferenced type declarations and `MoveType`/`ReplaceSnippet` only for the referenced case.
 2. Or route type-level kinds from `Member(remove)` to the `SafeDeleteUnusedSymbol` engine and return its result.
 3. Add a regression test asserting the message names the right tool.
+
+## Resolution (2026-10-14)
+- **Root cause:** `MemberRefactoringEngine.RemoveMemberAsync` excluded Class/Interface/Struct/Record/Enum from `memberCandidates` by design and its refusal message claimed no tool exists for type removal.
+- **Fix, step 1 (commit a06ccf16):** the refusal message names `SafeDeleteUnusedSymbol`.
+- **Fix, step 2 (routing, the commit that moves this doc):** when the name resolves only to type-level kinds, `RemoveMemberAsync` resolves the declaration and returns `StructuralRefinementEngine.SafeDeleteSymbolAsync(filePath, symbol, ct)` unchanged. An unreferenced type is removed; a referenced type gets the safe-delete refusal ("Symbol 'X' has N usages and cannot be safely deleted."). EnumMember-only names keep the old "type-level declaration" TargetNotFound message.
+- **Tests (`BatteryTwentyFourTests`):** `RemoveMember_OnUnreferencedRecord_RemovesRecord`, `RemoveMember_OnUnreferencedInterface_RemovesInterface`, `RemoveMember_OnNamespaceLevelRecord_SkipPrecheckTrue_ReferencedRecord_ReturnsSafeDeleteRefusal`. Tools.Advanced Member/BatteryTwentyFour filter: 114/114 pass. Tests.Basic MemberRefactoring/RemoveMember/SafeDelete filter: 132/132 pass.
+- **Known limits:** a class with an explicit constructor resolves to the constructor in `Member(remove)` and never reaches the type path; safe delete also refuses on reflection-risk string literals and when its feature flag is off; it edits one file only (no file deletion, no using/namespace cleanup).
