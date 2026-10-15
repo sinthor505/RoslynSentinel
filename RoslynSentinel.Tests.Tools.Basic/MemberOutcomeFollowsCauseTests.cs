@@ -1,0 +1,135 @@
+using Microsoft.Extensions.Logging.Abstractions;
+
+using RoslynSentinel.Common;
+using RoslynSentinel.Engines.Basic;
+using RoslynSentinel.Tests.Fakes;
+using RoslynSentinel.Tools.Basic;
+
+namespace RoslynSentinel.Tests.Battery.Basic;
+
+/// <summary>
+/// Tool-level regression tests for plan_error_codes_follow_cause slice A: the tool result follows the engine's
+/// real outcome. A failure is IsError with the outcome-derived code and writes nothing; AlreadyInTargetState is
+/// a success. Runs on an InMemoryWorkspace, so the file on disk is the workspace text.
+/// autoStage is exposed only on the Impl classes, so the autoStage:false cases call them directly.
+/// </summary>
+[TestFixture]
+[Category("RefactoringStructuralTools")] // sentinel:auto-category
+public class MemberOutcomeFollowsCauseTests
+{
+    private const string FixtureRelativePath = "ContosoOrders.Core/MemberOutcomeFollowsCauseFixture.cs";
+
+    private const string FixtureSource =
+        "namespace ContosoOrders.Core;\n\npublic enum OrderState\n{\n    Pending,\n    Shipped\n}\n\npublic class OrderTarget\n{\n    public int Existing() => 1;\n}\n";
+
+    private static RefactoringStructuralImpl BuildStructuralImpl(IWorkspaceManager workspaceManager)
+    {
+        var config = new SentinelConfiguration();
+        var diffEngine = new DiffEngine();
+        return new RefactoringStructuralImpl(
+            new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
+            new MemberRefactoringEngine(workspaceManager, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), config),
+            new StructuralRefinementEngine(workspaceManager, config),
+            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            workspaceManager,
+            new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
+            NullLogger<RefactoringStructuralImpl>.Instance);
+    }
+
+    private static RefactoringExtractionDocsImpl BuildExtractionDocsImpl(IWorkspaceManager workspaceManager)
+    {
+        var config = new SentinelConfiguration();
+        var diffEngine = new DiffEngine();
+        return new RefactoringExtractionDocsImpl(
+            new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
+            new MsToolAugmentEngine(workspaceManager),
+            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
+            workspaceManager,
+            new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
+            NullLogger<RefactoringExtractionDocsImpl>.Instance);
+    }
+
+    [Test]
+    public async Task Member_AddTopLevelType_NonTypeSourceWithoutAutoStage_ReturnsInvalidArgumentAndWritesNothingAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var impl = BuildStructuralImpl(workspace.Manager);
+        var before = workspace.ReadText(FixtureRelativePath);
+
+        var result = await impl.Member(
+            reason: "test addTopLevelType non-type source outcome",
+            filePath: workspace.PathOf(FixtureRelativePath),
+            operation: MemberAction.addTopLevelType,
+            newMemberSource: "public int Value => 7;",
+            autoStage: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsError, Is.True, "a SourceInvalid engine outcome must be an error even with autoStage false");
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        });
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a failed add must not write");
+    }
+
+    [Test]
+    public async Task Member_Replace_EnumMemberIdenticalSource_IsSuccessAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
+        var before = workspace.ReadText(FixtureRelativePath);
+
+        var result = await tools.Member(
+            reason: "test enum replace identical source outcome",
+            operation: MemberAction.replace,
+            filePath: workspace.PathOf(FixtureRelativePath),
+            memberName: "Pending",
+            newMemberSource: "Pending");
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "an already-in-state replace must not write");
+    }
+
+    [Test]
+    public async Task Member_Replace_EnumMemberInvalidValue_ReturnsTargetIneligibleAndWritesNothingAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
+        var before = workspace.ReadText(FixtureRelativePath);
+
+        var result = await tools.Member(
+            reason: "test enum replace invalid value outcome",
+            operation: MemberAction.replace,
+            filePath: workspace.PathOf(FixtureRelativePath),
+            memberName: "Pending",
+            newMemberSource: "Pending = notanint");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsError, Is.True, "a CannotEdit engine outcome must be an error, not a success");
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        });
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a failed replace must not write");
+    }
+
+    [Test]
+    public async Task UsingDirective_AddUnknownFileWithoutAutoStage_ReturnsNotFoundAndWritesNothingAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var impl = BuildExtractionDocsImpl(workspace.Manager);
+        var before = workspace.ReadText(FixtureRelativePath);
+
+        var result = await impl.UsingDirective(
+            reason: "test using add unknown file outcome",
+            filePath: workspace.PathOf("ContosoOrders.Core/MissingFile.cs"),
+            operation: AddRemoveViewAction.add,
+            namespaceName: "System.Text",
+            autoStage: false);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsError, Is.True, "a DocumentNotFound engine outcome must be an error even with autoStage false");
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        });
+        Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "the existing fixture must be untouched");
+    }
+}

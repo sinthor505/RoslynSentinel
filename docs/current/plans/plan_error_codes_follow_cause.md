@@ -219,3 +219,13 @@ Remaining claude-lean defects, by likely hit rate:
 Recommended slice A (3 files, ~9 edits + tests): RefactoringToolHelpers.cs (RequireUpdatedText runs updated.Message through SummarizeEngineMessage), RefactoringStructuralImpl.cs (enum branches use engine code and treat AlreadyInTargetState as success; RequireUpdatedText before the !autoStage blocks at ~722/~877; delete dead ~798), RefactoringExtractionDocsImpl.cs (same reorder at ~100).
 Recommended slice B (1 file, ~4 edits): MemberRefactoringEngine.cs SourceInvalid relabels at ~2975, ~3068, ~3076, ~2465/~2567; check tests asserting those outcomes first.
 Unchecked: whether lean exposes autoStage:false (rows 2, 3, 5 only live if so), Declaration/ParameterEdit delegation, existing Member/UsingDirective outcome tests.
+
+## Slice A implemented 2026-10-15
+
+Done via Haiku 5.5 implementer (A1, A2, A3, cap fix) and test-writer. Defects 2-6 are closed for the claude-lean core; defect 1 gets only the AlreadyInTargetState early return.
+- RefactoringToolHelpers.RequireUpdatedText: both message sites go through SummarizeEngineMessage with a 1000-char guidance cap (MaxEngineGuidanceLength). The default 200-char cap cut the multi-member "Recovery: call Member(operation: ...) once per member" text and failed MemberSingleDeclarationTests.AddMember_WithTwoMembers_*; the first-line rule, not the cap, is what stops source dumps.
+- RefactoringStructuralImpl.Member: RequireUpdatedText now runs before the `!autoStage` early return (addTopLevelType, addMember/insert); the three enum branches use RequireUpdatedText (engine-derived code, AlreadyInTargetState is success); the non-enum replace branch returns early on AlreadyInTargetState and keeps its specific outcome switch. These hunks were committed inside 7d6efb82 (another session's dry-run commit swept the file in).
+- RefactoringExtractionDocsImpl.cs (UsingDirective): guard moved above the `!autoStage` block.
+- Tests: Tests.Tools.Basic/MemberOutcomeFollowsCauseTests.cs (4 tests).
+- Known leftovers: the enum error text lost its "Retry using ModifyEnum(...)" hint; ReplaceMemberAsync never produces AlreadyInTargetState, so the non-enum early return is unreachable today; the Member/UsingDirective tool wrappers do not expose autoStage, so the autoStage:false cases are reachable only through the Impl classes (answers the "Unchecked" item above); no test for the addMember/insert failure path.
+- Full suite 2026-10-15: 4469 tests, 1 failure (T5_GetLargeResult_ReadsFile_PagingWorks_TotalRecordsMatchesT4 NullReferenceException, pre-existing, see plan_scoped_operation_ledger.md).

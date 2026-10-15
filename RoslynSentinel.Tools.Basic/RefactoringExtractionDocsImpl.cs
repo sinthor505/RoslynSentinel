@@ -92,6 +92,9 @@ public class RefactoringExtractionDocsImpl
                 opName = "Remove";
             }
 
+            if (RefactoringToolHelpers.RequireUpdatedText(updated, "UsingDirective", filePathResolved) is { } guardResult)
+                return guardResult;
+
             if (!autoStage)
             {
                 var noStageDescription = operation == AddRemoveViewAction.add
@@ -113,9 +116,6 @@ public class RefactoringExtractionDocsImpl
                         Validated: false)
                 };
             }
-
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "UsingDirective", filePathResolved) is { } guardResult)
-                return guardResult;
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
             // returnDiff is forced to true here regardless of the caller's own returnDiff flag:

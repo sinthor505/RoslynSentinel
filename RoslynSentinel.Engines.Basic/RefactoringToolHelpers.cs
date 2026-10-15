@@ -65,7 +65,7 @@ public static class RefactoringToolHelpers
     {
         if (updated.Outcome == EditOutcome.AlreadyInTargetState)
         {
-            var description = AlreadyInStateMessage(operationName, $"'{filePath}'", updated.Message);
+            var description = AlreadyInStateMessage(operationName, $"'{filePath}'", SummarizeEngineMessage(updated.Message, MaxEngineGuidanceLength));
             return new SentinelCallToolResult<object>
             {
                 IsError = false,
@@ -83,7 +83,7 @@ public static class RefactoringToolHelpers
         {
             IsError = true,
             ErrorData = new ResultError(ErrorCodeFor(updated),
-                $"{operationName}: no change produced for '{filePath}' ({updated.Outcome}). {updated.Message}")
+                $"{operationName}: no change produced for '{filePath}' ({updated.Outcome}). {SummarizeEngineMessage(updated.Message, MaxEngineGuidanceLength)}")
         };
     }
 
@@ -186,6 +186,9 @@ public static class RefactoringToolHelpers
     private static string EndSentence(string text) => text.EndsWith('.') || text.EndsWith('!') || text.EndsWith('?') ? text : text + ".";
 
     private const int MaxEngineReasonLength = 200;
+
+    // Single-line engine guidance (recovery instructions) must survive intact; the first-line rule, not the cap, is what stops source dumps.
+    private const int MaxEngineGuidanceLength = 1000;
 
     private static readonly System.Text.RegularExpressions.Regex CommentMarkerPrefix = new(
         @"^//+\s*(?:(?:ErrorDetails|Error|Info|Warning)\b\s*:?\s*)?",
