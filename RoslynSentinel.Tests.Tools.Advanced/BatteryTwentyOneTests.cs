@@ -495,6 +495,42 @@ public class Worker
         Assert.That(result, Is.Not.Null);
     }
 
+    [Test]
+    [Category("ModernizationTools")]
+    public async Task InvertBooleanLogic_MissingFile_ReturnsNotFoundError()
+    {
+        const string src = "namespace TestProj; public class Flags { public bool IsActive; }";
+        SetSource(src, "Flags.cs");
+        var result = await _tools.InvertBooleanLogic(reason: "test message", "Missing.cs", "IsActive");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    [Category("ModernizationTools")]
+    public async Task InvertBooleanLogic_UnknownBoolName_ReturnsNotFoundError()
+    {
+        const string src = "namespace TestProj; public class Flags { public bool IsActive; }";
+        SetSource(src, "Flags.cs");
+        var result = await _tools.InvertBooleanLogic(reason: "test message", "Flags.cs", "NoSuchBool");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    [Category("ModernizationTools")]
+    public async Task InvertBooleanLogic_ValidBool_ReturnsUnwrappedSuccessData()
+    {
+        const string src = "namespace TestProj; public class Flags { public bool IsActive; public void Toggle() { IsActive = !IsActive; } }";
+        SetSource(src, "Flags.cs");
+        var result = await _tools.InvertBooleanLogic(reason: "test message", "Flags.cs", "IsActive");
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.SuccessData, Is.Not.Null);
+        Assert.That(result.SuccessData!.GetType().Name, Does.Not.Contain("EngineResultWrapper"));
+    }
+
     // --- OptimizeToValueTask (via AsyncOptimizationEngine) ---
     [Test]
     [Category("AsyncOptimizationEngine")] // sentinel:auto-category
