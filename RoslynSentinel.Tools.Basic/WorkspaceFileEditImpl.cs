@@ -516,7 +516,7 @@ public class WorkspaceFileEditImpl
     /// <summary>
     /// Resolves oldContent to the single span a ReplaceSnippet edit may splice, shared by the single and batch
     /// paths. The request tier is IgnoreLineEndings with case-sensitive comparison: the ordinal stage, then the
-    /// CR/LF/CRLF-interchangeable stage, exactly what ContextHelper.FindExactSnippetPosition did, so the returned
+    /// CR/LF/CRLF-interchangeable stage, exactly what the removed legacy ReplaceSnippet matcher did, so the returned
     /// span is always the real removable span (see project_replacesnippet_silent_splice_corruption_adjacent_lines).
     /// Only <see cref="SnippetMatchOutcome.Matched"/> yields a match. Every other outcome, including a snippet that
     /// matches only at a looser tier (its near-matches are never edit candidates), is thrown through

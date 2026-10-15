@@ -7,13 +7,11 @@ using RoslynSentinel.Common.SnippetMatching;
 namespace RoslynSentinel.Common;
 
 /// <summary>
-/// Locates a position in source code using a contextSnippet (verbatim substring) instead of line/column.
-/// An AI can extract this snippet from the code it already sees, requiring zero coordinate calculation.
-/// When a snippet could be ambiguous, provide lineBefore and/or lineAfter for disambiguation.
+/// Shared helpers for the snippet-editing tools: identifier advancement, unique variable naming,
+/// the added-by provenance comment, and the Generate*/describe documentation helpers.
 /// </summary>
 public static class ContextHelper
 {
-
     /// <summary>
     /// Prepends a <c>// Added by <toolName></c> leading-trivia comment to a freshly synthesized
     /// member declaration, on its own line above any trivia the member already carries (e.g. a
