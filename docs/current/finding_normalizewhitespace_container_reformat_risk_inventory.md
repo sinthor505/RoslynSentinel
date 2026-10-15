@@ -13,6 +13,41 @@ occurrences" entry: same underlying `NormalizeWhitespace()`-pattern problem trac
 file-count level. Treat this doc's inventory as the working checklist for that TODO.md follow-up,
 not a separate/redundant tracking artifact.
 
+### Update 2026-10-13
+
+Re-traced against master. The history below is unchanged; this section amends it.
+
+- **`MemberRefactoringEngine.cs` move paths: were Risky, now fixed.** The former `RefactoringEngine.cs` was never in the Risky list, but every `MoveMember` path (existing class, base type, new class, instance, instance preview) normalized whole roots. Fixed by the text-edit design in 4dedc78, a23c581, 4aa2dc2 and 389ae1b (see `blockers/resolved/blocking_error_movemember_reformats_entire_source_and_caller_files.md`). No move path calls `NormalizeWholeSubtreeWhitespace` any more.
+- **`MemberRefactoringEngine.cs` `ExtractMethodAsync`: Safe.** Its two remaining calls (lines 4334 and 4398) normalize newly built nodes (a synthesized `MethodDeclaration` and a synthesized `callStatement`), not an existing root.
+- **`AdvancedStructuralEngine.cs` entry was stale.** The file exists at `RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs` with 16 hits. The Advanced-side sweep is still not done; treat it as Risky until read through.
+- **Enforcement still advisory.** No overload of `NormalizeWholeSubtreeWhitespace` enforces the "synthesized node only" rule (doc comment only, `RoslynFormattingHelper.cs:328`).
+
+Current remaining sites, repo-wide non-test (81 hits in 19 files; the helper's own definition in `Common/RoslynFormattingHelper.cs` is 1 of them):
+
+| Project | File | Hits |
+| --- | --- | --- |
+| Engines.Advanced | AdvancedStructuralEngine | 16 |
+| Engines.Advanced | AsyncOptimizationEngine | 12 |
+| Engines.Advanced | LogicOptimizationEngine | 12 |
+| Engines.Advanced | ModernizationEngine | 8 |
+| Engines.Advanced | CodeStyleEngine | 6 |
+| Engines.Advanced | AdvancedRefactoringEngine | 3 |
+| Engines.Advanced | CodeHealingEngine | 3 |
+| Engines.Advanced | AsyncBatchEngine | 2 |
+| Engines.Advanced | CodeGenerationEngine | 2 |
+| Engines.Advanced | DocumentationEngine | 2 |
+| Engines.Advanced | IDEStyleEngine | 2 |
+| Engines.Advanced | ApiGenerationEngine | 1 |
+| Engines.Advanced | MappingEngine | 1 |
+| Engines.Basic | SyntaxUpgradeEngine | 4 (lines 72, 117, 162, 365) |
+| Engines.Basic | MemberRefactoringEngine | 2 (4334, 4398; Safe) |
+| Engines.Basic | MsToolAugmentEngine | 2 (1155, 1327) |
+| Engines.Basic | BasicRefactoringEngine | 1 (793) |
+| Engines.Basic | ProjectStructureEngine | 1 (570) |
+| Common | RoslynFormattingHelper | 1 (definition) |
+
+Several files in the Risky list below have moved or been renamed since this was written (for example `AdvancedLogicEngine` is not in the counts above). Use this table, not the list below, as the working checklist.
+
 ### Path corrections (2026-09-26)
 
 - The helper is `RoslynSentinel.Common/RoslynFormattingHelper.cs` (not `FormattingHelper.cs` as

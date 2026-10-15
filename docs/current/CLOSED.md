@@ -5,6 +5,16 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## `MoveMember` follow-ups: full text returned on success, and `MethodSignature` whole-file CRLF rewrite - resolved 2026-10-13
+
+**Resolved 2026-10-13** (verified against master source). Two items from the "`MoveMember` follow-ups left open by the whole-file reformat fix" TODO entry, plus one related item from the resolved blocker's "Not done" list:
+
+- **Full text still returned on success: fixed in effect by 8c987c97 (2026-10-08).** `AppliedChangeSummary.ChangedContent` is null on a real apply (`Validated && !DryRun && !InlineOnApply`); the stored text comes back as `ChangedContentResultId`. It stays inline for dry runs and `autoStage:false`. `AdvancedRefactoringTools.cs:538` still passes `ChangedContent: result.Changes`, but it is dropped on a real apply. The misleading comment at `AdvancedRefactoringTools.cs` (now ~543-547) was rewritten on 2026-10-15 to say the text is not echoed on a real apply and how to fetch it.
+- **`MethodSignature` rewrote whole caller files as CRLF: fixed by d89cc95f (2026-10-09).** `RemoveMethodParameterAsync` in `MemberRefactoringEngine.cs` (about lines 1548-1647) now restores the file's dominant EOL; commit 276aface covers the neighbouring signature tools. Still tree-based, and files with mixed EOL are untested.
+- **Two `ExtractMethodAsync` `NormalizeWholeSubtreeWhitespace` calls: classified safe.** Lines 4334 and 4398 of `MemberRefactoringEngine.cs` normalize newly synthesized nodes, not an existing tree root.
+
+Source: `blockers/resolved/blocking_error_movemember_reformats_entire_source_and_caller_files.md` ("Follow-up status (2026-10-13)").
+
 ## Result and status types used independent vocabularies; MCP `isError` was re-parsed from JSON - resolved 2026-10-11
 
 **Resolved 2026-10-11** (24499e55 phase 1, b406f44a, 333f3147, 4c82fa12, 68502897, 2e428075, 10018cdd, f2642445, 770748d2, 70322b91, 1122f2c3, a4c733c7, 00abfd09, 527a7287, 18ce4ef0, 018e9436, 9c92ae51, 0d692829; ModelEval DI fix 5e36871c). Every status-carrying type now implements `IResultStatus` (`IsError`, `Status`, `Code`, `Message`, all `[JsonIgnore]`); the envelope serializes `isError` and `isSuccess` is gone from the wire; agent-side consumers read `isError`. See `plans/plan_shared_result_status_interface.md` and `proposals/proposal_shared_result_status_interface.md`. Deferred: JSON-text read of build `outcome` in `SubAgentEvalResult.cs` (~94-95); dead `RenameSymbolResult.ToToolResponse` (`BasicRefactoringEngine.cs:58`, anonymous `success` key, 0 callers); `ClassEdit` `AlreadyInTargetState` reports Success.

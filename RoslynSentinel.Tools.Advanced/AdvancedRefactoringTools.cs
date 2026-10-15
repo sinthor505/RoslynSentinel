@@ -542,7 +542,9 @@ public class AdvancedRefactoringTools
                 summaryNote += $" {result.SkippedCallSites.Count} call site(s) could not be automatically rewritten and must be fixed manually: " + string.Join("; ", result.SkippedCallSites.Select(s => $"{Path.GetFileName(s.FilePath)}:{s.LineNumber} ({s.Reason})"));
             // Not wired into MemberChangedContentResult: this can touch 2-3 files (source, target,
             // and any rewritten call-site files) with no single "the new text" the way Member's
-            // single-file operations do -> the moved member's text is already visible in the diff.
+            // single-file operations do. The moved text is NOT echoed on a real apply: returnDiff
+            // defaults to false and AppliedChangeSummary drops ChangedContent unless InlineOnApply is
+            // on. Fetch it via ChangedContentResultId, or pass returnDiff: true.
             return new SentinelCallToolResult<AppliedChangeSummary>()
             {
                 IsError = false,

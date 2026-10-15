@@ -238,3 +238,19 @@ Not done, tracked in `docs/current/TODO.md`:
 - **Instance moves leave crefs behind.** A cref to the moved member still names the old class. Static moves retarget it.
 - **Wrapped call sites can be misclassified.** The instance preview matches diagnostics to references by start line. A wrapped call whose error lands on a later line, such as on a named argument, is classified `Valid` and left unrewritten. The compile gate is the only thing that stops the result. Line shifts in the source and target after the removal skew the same comparison.
 - **New files are LF.** `MoveMemberTextEdits.cs`, `EolChangeGuard.cs`, `FileLineChange.cs` and both new test files are LF, because no MCP tool can write CRLF. See `blocking_error_no_tool_can_write_or_preserve_crlf_line_endings.md`.
+
+## Follow-up status (2026-10-13)
+
+Each "Not done" item above, re-checked against master. Open items are tracked in `docs/current/TODO.md`.
+
+- **Collateral-change check: still open.** Only the EOL guard and the compile gate exist in `ValidateAndApplyHelper`; no changed-line-count check. In TODO.md.
+- **Full text still returned: fixed in effect.** 8c987c97 (2026-10-08) makes `AppliedChangeSummary.ChangedContent` null on a real apply (`Validated && !DryRun && !InlineOnApply`); the text comes back as `ChangedContentResultId`. It stays inline for dry runs and `autoStage:false`. `AdvancedRefactoringTools.cs:538` still passes `ChangedContent: result.Changes`, but it is dropped on a real apply. **The misleading comment is still open**, now at `AdvancedRefactoringTools.cs:531-533` (not 551). In TODO.md.
+- **Guard still advisory: still open.** No enforcing overload of `NormalizeWholeSubtreeWhitespace`; doc comment only (`RoslynFormattingHelper.cs:328`). In TODO.md (sweep entry).
+- **Inventory not updated: fixed.** The 2026-10-13 update in `finding_normalizewhitespace_container_reformat_risk_inventory.md` covers the move paths, `ExtractMethodAsync` (lines 4334 and 4398, both on synthesized nodes, so Safe), the stale `AdvancedStructuralEngine` entry and per-file counts. The "Basic side fully closed" text in TODO.md carries a 2026-10-13 update.
+- **Line counts not wired up: partly fixed.** 8c987c97 also copies `apply.LineChanges` in the Advanced and Structural tools. 30 of 83 `new AppliedChangeSummary(` sites now pass `LineChanges` (14/41 `AdvancedRefactoringTools`, 9/25 `RefactoringStructuralImpl`, 4/8 `RefactoringExtractionDocsImpl`, 3/6 `RefactoringSignatureImpl`). `GenerationTools`, `RefactoringToolHelpers` and `WorkspaceProjectManagementImpl` pass none. Remaining sites are in TODO.md.
+- **MethodSignature still re-serializes callers: fixed.** d89cc95f (2026-10-09): `RemoveMethodParameterAsync` (`MemberRefactoringEngine.cs` about 1548-1647) restores the file's dominant EOL; 276aface covers the neighbouring signature tools. Still tree-based and mixed-EOL files are untested.
+- **Instance moves leave crefs behind: still open.** Only the static path handles crefs (`MoveMemberTextEdits.cs:75-81`). In TODO.md.
+- **Wrapped call sites can be misclassified: still open.** `PreviewInstanceMoveCallSitesAsync` still matches diagnostics by start line (`MemberRefactoringEngine.cs:4527`). In TODO.md.
+- **New files are LF: not re-checked.** Still governed by `blocking_error_no_tool_can_write_or_preserve_crlf_line_endings.md`.
+
+Also confirmed: no move path calls `NormalizeWholeSubtreeWhitespace`; the two remaining `MemberRefactoringEngine.cs` calls (4334, 4398) are in `ExtractMethodAsync` and operate on synthesized nodes.
