@@ -230,6 +230,11 @@ Load the `failure-analysis` skill before analysing or writing up a failure.
 ## Working conventions
 
 - Build (0 errors) before committing.
+- **Run one `RunTest`, `dotnet test` or `Build` at a time, never several in parallel** (subagents
+  included; a dispatcher must not run its own while a subagent is mid-test). They share the solution's
+  `bin/`/`obj/` folders and build dependencies, so concurrent runs block each other or fail on file
+  locks. Run the next one only after the previous returns; to cover several projects, use one
+  solution-scope `RunTest` or run project-scoped ones sequentially.
 - Tests use **NUnit 5.0, not 4.6**: `Assert.ThrowsAsync`/`CatchAsync`/`DoesNotThrowAsync` must be
   `await`ed (an un-awaited one silently asserts nothing), and `TestDelegate`/`AsyncTestDelegate` are
   gone. Details: memory `reference_nunit5_test_conventions.md`.
