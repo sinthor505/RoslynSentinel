@@ -4,7 +4,7 @@ namespace RoslynSentinel.Common.SnippetMatching;
 
 /// <summary>
 /// Shared plumbing for the matchers: argument checks and conversion from the legacy
-/// <see cref="ContextHelper.SnippetMatch"/> (start and length only) to the new
+/// <see cref="ContextHelper.SnippetSpan"/> (start and length only) to the new
 /// <see cref="SnippetMatch"/> (adds the 1-based line, tier and matcher name).
 /// </summary>
 internal static class SnippetMatcherSupport
@@ -17,7 +17,7 @@ internal static class SnippetMatcherSupport
     /// Start and Length are copied as they are; the line is derived from Start.
     /// </summary>
     public static IReadOnlyList<SnippetMatch> Convert(
-        SourceText sourceText, IEnumerable<ContextHelper.SnippetMatch> legacyMatches,
+        SourceText sourceText, IEnumerable<ContextHelper.SnippetSpan> legacyMatches,
         WhitespaceTolerance tier, string matcherName)
     {
         var converted = new List<SnippetMatch>();

@@ -5,7 +5,7 @@ namespace RoslynSentinel.Common.SnippetMatching;
 /// <summary>
 /// The four match stages that the matchers and the legacy <see cref="ContextHelper"/> snippet helpers share,
 /// moved here unchanged from <see cref="ContextHelper"/>. They still return the legacy
-/// <see cref="ContextHelper.SnippetMatch"/> (start and length only); the matchers convert to the new
+/// <see cref="ContextHelper.SnippetSpan"/> (start and length only); the matchers convert to the new
 /// <see cref="SnippetMatch"/>. Stage logic must not change here without a behaviour-change slice.
 /// </summary>
 internal static class SnippetStages
@@ -17,13 +17,13 @@ internal static class SnippetStages
     /// <c>contextSnippet.Length</c>, which is the real length because the comparison is ordinal. The caller
     /// must pass a non-whitespace snippet (an empty snippet would match at every offset).
     /// </summary>
-    internal static List<ContextHelper.SnippetMatch> FindOrdinalStage(string source, string contextSnippet)
+    internal static List<ContextHelper.SnippetSpan> FindOrdinalStage(string source, string contextSnippet)
     {
-        var matches = new List<ContextHelper.SnippetMatch>();
+        var matches = new List<ContextHelper.SnippetSpan>();
         int idx = 0;
         while ((idx = source.IndexOf(contextSnippet, idx, StringComparison.Ordinal)) >= 0)
         {
-            matches.Add(new ContextHelper.SnippetMatch(idx, contextSnippet.Length));
+            matches.Add(new ContextHelper.SnippetSpan(idx, contextSnippet.Length));
             idx++;
         }
 
@@ -37,9 +37,9 @@ internal static class SnippetStages
     /// snippet). Each span is the real regex match, so its length can differ from <c>contextSnippet.Length</c>
     /// when the file's line endings differ from the snippet's.
     /// </summary>
-    internal static List<ContextHelper.SnippetMatch> FindLineEndingStage(string source, string contextSnippet)
+    internal static List<ContextHelper.SnippetSpan> FindLineEndingStage(string source, string contextSnippet)
     {
-        var matches = new List<ContextHelper.SnippetMatch>();
+        var matches = new List<ContextHelper.SnippetSpan>();
         if (!contextSnippet.Contains('\n'))
         {
             return matches;
@@ -58,7 +58,7 @@ internal static class SnippetStages
         foreach (System.Text.RegularExpressions.Match m in
                  System.Text.RegularExpressions.Regex.Matches(source, pattern))
         {
-            matches.Add(new ContextHelper.SnippetMatch(m.Index, m.Length));
+            matches.Add(new ContextHelper.SnippetSpan(m.Index, m.Length));
         }
 
         return matches;
@@ -71,10 +71,10 @@ internal static class SnippetStages
     /// mapped back to the real line text, so its length is NOT <c>contextSnippet.Length</c>. Today's callers pass
     /// <see cref="StringComparison.OrdinalIgnoreCase"/>.
     /// </summary>
-    internal static List<ContextHelper.SnippetMatch> FindCollapsedSingleLineStage(
+    internal static List<ContextHelper.SnippetSpan> FindCollapsedSingleLineStage(
         SourceText sourceText, string contextSnippet, StringComparison comparison)
     {
-        var matches = new List<ContextHelper.SnippetMatch>();
+        var matches = new List<ContextHelper.SnippetSpan>();
 
         // Fallback: try matching with collapsed whitespace. This handles a single-line
         // snippet whose indentation doesn't match the source (common when an AI caller
@@ -105,7 +105,7 @@ internal static class SnippetStages
                 // ReplaceSnippet (see project_replacesnippet_silent_splice_corruption_adjacent_lines).
                 var realStart = MapNormalizedOffsetToRaw(lineText, normIndex);
                 var realEnd = MapNormalizedOffsetToRaw(lineText, normIndex + snippetNorm.Length);
-                matches.Add(new ContextHelper.SnippetMatch(lines[i].Start + realStart, realEnd - realStart));
+                matches.Add(new ContextHelper.SnippetSpan(lines[i].Start + realStart, realEnd - realStart));
             }
         }
 
@@ -120,10 +120,10 @@ internal static class SnippetStages
     /// last line's end excluding its line break; its length is NOT <c>contextSnippet.Length</c>. Today's callers pass
     /// <see cref="StringComparison.OrdinalIgnoreCase"/>.
     /// </summary>
-    internal static List<ContextHelper.SnippetMatch> FindCollapsedWindowStage(
+    internal static List<ContextHelper.SnippetSpan> FindCollapsedWindowStage(
         SourceText sourceText, string contextSnippet, StringComparison comparison)
     {
-        var matches = new List<ContextHelper.SnippetMatch>();
+        var matches = new List<ContextHelper.SnippetSpan>();
         if (!contextSnippet.Contains('\n'))
         {
             return matches;
@@ -166,7 +166,7 @@ internal static class SnippetStages
                 // contextSnippet.Length -> the two diverge whenever indentation/spacing differs
                 // between the caller's snippet and the real file content.
                 var realEnd = lines[i + windowSize - 1].End;
-                matches.Add(new ContextHelper.SnippetMatch(windowStart, realEnd - windowStart));
+                matches.Add(new ContextHelper.SnippetSpan(windowStart, realEnd - windowStart));
             }
         }
 

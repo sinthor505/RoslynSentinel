@@ -22,7 +22,7 @@ public static class ContextHelper
     /// real source text (as opposed to merely using <c>Start</c> as an entry point into a
     /// Roslyn node/token lookup) MUST use <c>Length</c>, not <c>contextSnippet.Length</c>.
     /// </summary>
-    public readonly record struct SnippetMatch(int Start, int Length);
+    public readonly record struct SnippetSpan(int Start, int Length);
 
     /// <summary>
     /// Prepends a <c>// Added by <toolName></c> leading-trivia comment to a freshly synthesized
