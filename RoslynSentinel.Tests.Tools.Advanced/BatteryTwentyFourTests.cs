@@ -1092,6 +1092,30 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(!skipPrecheck.IsError, Is.False, "Member(remove) cannot remove a type-level declaration regardless of skipPrecheck.");
         Assert.That(skipPrecheck.ErrorData!.Message, Does.Contain("type-level declaration"), "The failure must name the actual cause (a type-level declaration Member(remove) structurally excludes), not a generic 'Member not found'.");
         Assert.That(skipPrecheck.ErrorData!.Message, Does.Contain("Record"), "The message must name the specific excluded kind found under this name.");
+        Assert.That(skipPrecheck.ErrorData!.Message, Does.Contain("SafeDeleteUnusedSymbol"), "The message must point at SafeDeleteUnusedSymbol, the tool that removes unreferenced type declarations.");
+    }
+
+    [Test]
+    [Category("RefactoringStructuralTools")] // sentinel:auto-category
+    public async Task RemoveMember_OnUnreferencedRecord_MessageNamesSafeDeleteUnusedSymbol()
+    {
+        // Regression test for docs/current/blockers/blocking_error_member_remove_refuses_record_types.md.
+        // The type-level refusal previously told the caller there was no tool for removing a type
+        // declaration and pointed at raw-text edits. SafeDeleteUnusedSymbol does remove unreferenced
+        // type declarations, so the message must name it.
+        SetMultiFile(
+            ("Orphan.cs", """
+            namespace TestProj;
+
+            public record OrphanRecord(string Name);
+            """));
+
+        var result = await _refactoringStructuralTools.Member(reason: "test message", "Orphan.cs", MemberAction.remove, memberName: "OrphanRecord");
+        Assert.That(result.IsError, Is.True, "Member(remove) must refuse a type-level declaration.");
+        Assert.That(result.ErrorData!.Message, Does.Contain("SafeDeleteUnusedSymbol"), "The refusal must name SafeDeleteUnusedSymbol.");
+        Assert.That(result.ErrorData!.Message, Does.Contain("type-level declaration"), "The refusal must name the actual cause.");
+        Assert.That(result.ErrorData!.Message, Does.Contain("Record"), "The refusal must name the excluded kind.");
+        Assert.That(result.ErrorData!.Message, Does.Not.Contain("no tool"), "The refusal must not claim there is no tool for type removal.");
     }
 
     [Test]

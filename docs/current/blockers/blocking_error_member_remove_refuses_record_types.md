@@ -1,6 +1,6 @@
 # `Member(operation: remove)` refuses record (and other type-level) declarations
 
-**Status:** OPEN 2026-10-14. Root cause traced to source: type-level kinds are excluded from the remove path by design, and the refusal message does not point at the tool that can remove an unreferenced type.
+**Status:** PARTIALLY FIXED 2026-10-14. Direction 1 (message names `SafeDeleteUnusedSymbol`) landed with regression tests in `BatteryTwentyFourTests` (`RemoveMember_OnUnreferencedRecord_MessageNamesSafeDeleteUnusedSymbol`). Direction 2 (route type-level kinds from `Member(remove)` to `StructuralRefinementEngine.SafeDeleteSymbolAsync(FilePathWrapper, ISymbol, ct)`) is NOT done; scoped in `.claude/handoff/`. Move to `resolved/` once routing lands. Original text: root cause traced to source: type-level kinds are excluded from the remove path by design, and the refusal message does not point at the tool that can remove an unreferenced type.
 
 ## What was being attempted
 Slice 5f-D4b (2026-10-13): delete the now-unreferenced nested record `ContextHelper.SnippetSpan`, using `Member(operation: remove, memberName: SnippetSpan)`.

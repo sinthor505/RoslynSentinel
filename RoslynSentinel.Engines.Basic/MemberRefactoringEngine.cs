@@ -3178,8 +3178,8 @@ public class MemberRefactoringEngine
 
             // Member(remove) only ever operates on class-level members (methods, properties,
             // fields, etc.) -- Class/Interface/Struct/Record/Enum/EnumMember are excluded from
-            // memberCandidates above by design (type-level removal has no supported operation
-            // yet; see docs/current/blockers/blocking_error_member_remove_skipprecheck_targetnotfound_ambiguous_symbol.md).
+            // memberCandidates above by design (type-level removal is done by SafeDeleteUnusedSymbol, not Member(remove);
+            // see docs/current/blockers/blocking_error_member_remove_skipprecheck_targetnotfound_ambiguous_symbol.md).
             // When the exclusion is *why* nothing resolved, surface that explicitly instead of
             // the generic "Member not found" -- the name did resolve, just to a kind this
             // operation cannot touch, and this holds regardless of skipPrecheck since both the
@@ -3217,8 +3217,8 @@ public class MemberRefactoringEngine
                         "Member(remove) only removes class-level members (methods, properties, fields, constructors, " +
                         "events, indexers) -- it does not support removing type declarations (classes, interfaces, " +
                         "structs, records, enums, or enum members), and skipPrecheck does not change this. " +
-                        "There is currently no tool for removing a type declaration that still has callers; " +
-                        "use ReplaceSnippet or ApplyDiff to edit the file's raw text instead."
+                        "To remove an unreferenced type declaration, use SafeDeleteUnusedSymbol. If it still has callers, update or remove those callers first and then use SafeDeleteUnusedSymbol; " +
+                        "edit the file's raw text with ReplaceSnippet or ApplyDiff only as a last resort."
                 };
             }
 
