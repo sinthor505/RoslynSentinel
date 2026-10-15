@@ -20,8 +20,8 @@ namespace RoslynSentinel.Common.SnippetMatching;
 public sealed record SnippetSelectors(
     string? WithinMember = null, int? MatchLine = null, string? LineBefore = null, string? LineAfter = null);
 /// <summary>
-/// The selector post-filter behind <see cref="SnippetResolver"/>'s selector overload: a port of the selector logic in
-/// the exact ReplaceSnippet matcher this replaced that reports every outcome as data instead of throwing.
+/// The selector post-filter behind <see cref="SnippetResolver"/>'s selector overload: the selector logic of the
+/// exact ReplaceSnippet matcher it replaced, reporting every outcome as data instead of throwing.
 /// </summary>
 internal static class SnippetSelectorFilter
 {
@@ -153,7 +153,7 @@ internal static class SnippetSelectorFilter
 
     /// <summary>
     /// Checks if a source line contains the pattern. Falls back to a quote-normalized comparison to handle snippets
-    /// whose escaped quotes were not unescaped (e.g. from JSON context). Same rule as ContextHelper's private MatchLine.
+    /// whose escaped quotes were not unescaped (e.g. from JSON context). Same rule as the removed legacy matcher's private MatchLine.
     /// </summary>
     private static bool LineContains(string sourceLine, string pattern)
     {

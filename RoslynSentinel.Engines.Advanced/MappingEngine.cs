@@ -141,7 +141,7 @@ public class MappingEngine
 
     /// <summary>
     /// Inverts all assignment expressions within a code snippet (identified via contextSnippet, lineBefore/lineAfter).
-    /// Uses ContextHelper.FindSnippetPosition to locate the snippet, then inverts assignments near that position.
+    /// Uses SnippetLookup.ResolveOrThrow to locate the snippet, then inverts assignments near that position.
     /// </summary>
     public async Task<DocumentEditResult> InvertAssignmentsAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken = default)
     {

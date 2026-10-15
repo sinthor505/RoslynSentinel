@@ -62,7 +62,7 @@ namespace RoslynSentinel.Common.SnippetMatching
 
         /// <summary>
         /// Builds the exception for a failed result. Throws <see cref="InvalidOperationException"/> for
-        /// <see cref="SnippetMatchOutcome.Matched"/> (a success has no error), like <c>ContextErrorBuilder.Build</c>.
+        /// <see cref="SnippetMatchOutcome.Matched"/> (a success has no error), like the removed legacy ContextErrorBuilder.
         /// </summary>
         /// <param name="result">The failed result from <see cref="SnippetResolver"/>.</param>
         /// <param name="sourceText">The text the lookup ran against; the source of every candidate line.</param>
