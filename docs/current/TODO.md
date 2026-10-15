@@ -4,6 +4,10 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## `MoveType` cannot lift a nested type to top level (2026-10-14) - not started
+
+`MoveType(typeName: SnippetSpan, destination: ownFile)` on a nested type (`ContextHelper.SnippetSpan`) moves the declaration but leaves the qualified `ContextHelper.SnippetSpan` references, so the compile gate rejects it with 13 `CS0426`. Suggested change: when the moved type was nested, rewrite `Outer.Nested` references solution-wide to the new top-level name in the same atomic change. Worked around in slice 5f-D4 with migration-first: add the top-level type beside the nested one, retarget references, then remove the nested one.
+
 ## `MoveType(destination: ownFile)` has no target-folder parameter (2026-10-14) - not started
 
 Found moving `SnippetMatchOutcome` out of `ContextErrorBuilder.cs` (commit d9a2ff90). `MoveType` can only create the new file beside the source file, so a type cannot be moved into a subfolder such as `SnippetMatching/`. It also adds an unused `using Microsoft.CodeAnalysis.Text;` to the new file and drops the type-level doc summary. Suggested change: add an optional `targetFolder` (or `targetPath`) parameter, copy the source file's usings only where the moved type needs them, and carry the type's doc comment across. Workaround used: accept the source folder and fix the using and summary with one `ReplaceSnippet`.
