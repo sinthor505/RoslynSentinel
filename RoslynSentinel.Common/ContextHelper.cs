@@ -13,16 +13,6 @@ namespace RoslynSentinel.Common;
 /// </summary>
 public static class ContextHelper
 {
-    /// <summary>
-    /// A snippet match's location AND real length in the source text. The length is not always
-    /// <c>contextSnippet.Length</c> -> the whitespace-collapsing fallback paths in
-    /// FindAllSnippetMatchesWithLength match content that is equivalent once
-    /// whitespace is normalized, but whose raw span in the source can be a different length
-    /// (different indentation, extra spaces, etc.). Any caller that removes/replaces a span of the
-    /// real source text (as opposed to merely using <c>Start</c> as an entry point into a
-    /// Roslyn node/token lookup) MUST use <c>Length</c>, not <c>contextSnippet.Length</c>.
-    /// </summary>
-    public readonly record struct SnippetSpan(int Start, int Length);
 
     /// <summary>
     /// Prepends a <c>// Added by <toolName></c> leading-trivia comment to a freshly synthesized
