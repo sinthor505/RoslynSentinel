@@ -384,10 +384,7 @@ public static class SyntaxTargetResolver
         var outcome = result.Outcome == SnippetMatchOutcome.StillAmbiguous
             ? SnippetMatchOutcome.StillAmbiguous
             : SnippetMatchOutcome.Ambiguous;
-        SnippetMatchResult Ambiguity(IReadOnlyList<SnippetMatch> matches) => SnippetMatchResult.Create(
-            result.RequestedTolerance, result.RequestedCaseMode, outcome, matches, Array.Empty<SnippetNearMatch>(), 0,
-            Array.Empty<SnippetClosestWindow>(), result.CandidatesBeforeSelectors, result.CandidatesAfterSelectors, matches.Count,
-            filterTrail: result.FilterTrail, tiersProbed: result.TiersProbed);
+        SnippetMatchResult Ambiguity(IReadOnlyList<SnippetMatch> matches) => SnippetMatchResult.WithAmbiguity(result, outcome, matches);
 
         if (survivors.Count == 0)
         {
@@ -504,12 +501,7 @@ public static class SyntaxTargetResolver
         }
 
         var ranked = windows.OrderByDescending(w => w.Score).ThenBy(w => w.StartLine).Take(MaxScopedWindows).ToList();
-        var scoped = SnippetMatchResult.Create(
-            fileResult.RequestedTolerance, fileResult.RequestedCaseMode, SnippetMatchOutcome.NoMatch,
-            Array.Empty<SnippetMatch>(), Array.Empty<SnippetNearMatch>(), 0, ranked,
-            candidatesBeforeSelectors: 0, candidatesAfterSelectors: 0, candidatesAfterAdjacentLines: 0,
-            tiersProbed: fileResult.TiersProbed, closestWindowTotalCount: Math.Max(qualifying, ranked.Count),
-            linesExamined: linesExamined, windowsExamined: windowsExamined);
+        var scoped = SnippetMatchResult.WithScopedClosestWindows(fileResult, ranked, Math.Max(qualifying, ranked.Count), linesExamined, windowsExamined);
         return (scoped, $"The closest windows above come only from inside the {candidates.Count} candidate declaration(s) that were considered ({ranges}).");
     }
 
