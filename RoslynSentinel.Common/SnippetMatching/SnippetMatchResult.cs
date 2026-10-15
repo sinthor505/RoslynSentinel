@@ -255,7 +255,7 @@ public sealed record SnippetMatchResult
     /// near-matches are supplied alongside accepted matches, when closest windows are supplied
     /// alongside matches or near-matches, or when a count is inconsistent.
     /// </summary>
-    public static SnippetMatchResult Create(
+    internal static SnippetMatchResult Create(
         WhitespaceTolerance requestedTolerance, SnippetCaseMode requestedCaseMode, SnippetMatchOutcome outcome,
         IReadOnlyList<SnippetMatch> matches, IReadOnlyList<SnippetNearMatch> nearMatches, int nearMatchTotalCount,
         IReadOnlyList<SnippetClosestWindow> closestWindows,
