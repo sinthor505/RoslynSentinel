@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
 namespace RoslynSentinel.Common;
@@ -26,7 +27,8 @@ public static class ValidateAndApplyHelper
         IReadOnlyCollection<FilePathWrapper>? removePaths = null,
         CancellationToken cancellationToken = default,
         IReadOnlyCollection<FilePathWrapper>? deletePaths = null,
-        Func<DiagnosticReport, CancellationToken, Task<string>>? describeValidationFailure = null)
+        Func<DiagnosticReport, CancellationToken, Task<string>>? describeValidationFailure = null,
+        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null)
     {
         // Write-path guardrail, run before the compile gate so a dry run reports it too: refuse a
         // change that alters an existing file's line-ending style. No tool converts EOLs on purpose,
@@ -52,6 +54,43 @@ public static class ValidateAndApplyHelper
                 ToolErrorCode.EolChangeRefused,
                 EolChangeGuard.BuildMessage(operationName, eolViolations),
                 StructuredDetail: eolViolations.Cast<object>().ToList()), dryRun);
+        }
+
+        // Write-path tripwire for post-edit reformatting, run before the compile gate so a dry run
+        // reports it too: when a caller passes expectedEdits, the edits it proposed must explain the
+        // proposed text of each existing file. A mismatch means text the edits did not touch was
+        // rewritten (see docs/current/plans/plan_movemember_collateral_change_tripwire.md).
+        if (expectedEdits != null)
+        {
+            var collateralViolations = new List<CollateralChangeViolation>();
+            foreach (var (key, edits) in expectedEdits)
+            {
+                if (!changes.TryGetValue(key, out var proposedText))
+                {
+                    continue;
+                }
+
+                var preImage = beforeTexts.GetValueOrDefault((string)key);
+                if (preImage == null)
+                {
+                    continue;
+                }
+
+                var violation = CollateralChangeGuard.Check((string)key, preImage, proposedText, edits);
+                if (violation != null)
+                {
+                    collateralViolations.Add(violation);
+                }
+            }
+
+            if (collateralViolations.Count > 0)
+            {
+                logger.LogWarning("{OperationName} refused: edits do not explain the proposed text of {Count} file(s)", operationName, collateralViolations.Count);
+                return new ApplyOutcome(null, new ResultError(
+                    ToolErrorCode.CollateralChangeRefused,
+                    CollateralChangeGuard.BuildMessage(operationName, collateralViolations),
+                    StructuredDetail: collateralViolations.Cast<object>().ToList()), dryRun);
+            }
         }
 
         DiagnosticReport validation;

@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
@@ -18,11 +19,13 @@ public class WriteChokepointGuardrailTests
     private const string CrlfSource = "namespace T;\r\npublic class A\r\n{\r\n    public int X() => 1;\r\n}\r\n";
 
     private static async Task<ApplyOutcome> ApplyAsync(
-        InMemoryWorkspace workspace, Dictionary<FilePathWrapper, string> changes, bool dryRun = false)
+        InMemoryWorkspace workspace, Dictionary<FilePathWrapper, string> changes, bool dryRun = false,
+        IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? expectedEdits = null)
     {
         var validation = new ValidationEngine(workspace.Manager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
         return await ValidateAndApplyHelper.ValidateAndApplyAsync(
-            validation, workspace.Manager, NullLogger.Instance, changes, "GuardrailTest", dryRun: dryRun);
+            validation, workspace.Manager, NullLogger.Instance, changes, "GuardrailTest", dryRun: dryRun,
+            expectedEdits: expectedEdits);
     }
 
     [Test]
@@ -257,5 +260,94 @@ public class WriteChokepointGuardrailTests
         Assert.That(result.UpdatedText, Does.Contain("/// <summary>"));
         var after = EolChangeGuard.Count(result.UpdatedText!);
         Assert.That(after.IsSingleStyle && after.Dominant == expectedStyle, Is.True, after.Describe());
+    }
+
+    // Collateral-change tripwire (docs/current/plans/plan_movemember_collateral_change_tripwire.md, step B2): when a
+    // caller declares the TextChanges it applied, the text about to be written must be exactly the pre-image plus
+    // those edits. LF throughout, so the EOL guard stays out of the way.
+    private const string TripwireSource = "namespace T;\npublic class A\n{\n    public int X() => 1;\n}\n";
+
+    private static IReadOnlyList<TextChange> OneToTwoEdit(string source) =>
+        [new TextChange(new TextSpan(source.IndexOf("=> 1;", StringComparison.Ordinal) + 3, 1), "2")];
+
+    private static Dictionary<FilePathWrapper, IReadOnlyList<TextChange>> ExpectedFor(
+        FilePathWrapper path, IReadOnlyList<TextChange> edits) => new() { [path] = edits };
+
+    [Test]
+    public async Task CollateralTripwire_MismatchedEditSet_IsRefusedAndNothingWrittenAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create(("A.cs", TripwireSource));
+        var path = workspace.PathOf("A.cs");
+        // The declared edit only changes 1 to 2; the proposed text also carries an extra blank line it never declared.
+        var proposed = TripwireSource.Replace("=> 1;", "=> 2;").Replace("public class A\n", "public class A\n\n");
+
+        var outcome = await ApplyAsync(
+            workspace, new() { [path] = proposed }, expectedEdits: ExpectedFor(path, OneToTwoEdit(TripwireSource)));
+
+        Assert.That(outcome.Error, Is.Not.Null);
+        Assert.That(outcome.Error!.ErrorCode, Is.EqualTo(ToolErrorCode.CollateralChangeRefused));
+        Assert.That(outcome.Error.Message, Does.Contain(path));
+        Assert.That(workspace.ReadText("A.cs"), Is.EqualTo(TripwireSource), "a refused change must not be written");
+    }
+
+    [Test]
+    public async Task CollateralTripwire_MatchingEditSet_PassesAndAppliesAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create(("A.cs", TripwireSource));
+        var path = workspace.PathOf("A.cs");
+        var proposed = TripwireSource.Replace("=> 1;", "=> 2;");
+
+        var outcome = await ApplyAsync(
+            workspace, new() { [path] = proposed }, expectedEdits: ExpectedFor(path, OneToTwoEdit(TripwireSource)));
+
+        Assert.That(outcome.Error, Is.Null);
+        Assert.That(workspace.ReadText("A.cs"), Is.EqualTo(proposed));
+    }
+
+    [Test]
+    public async Task CollateralTripwire_DryRun_AlsoReportsTheRefusalAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create(("A.cs", TripwireSource));
+        var path = workspace.PathOf("A.cs");
+        var proposed = TripwireSource.Replace("=> 1;", "=> 2;").Replace("public class A\n", "public class A\n\n");
+
+        var outcome = await ApplyAsync(
+            workspace, new() { [path] = proposed }, dryRun: true, expectedEdits: ExpectedFor(path, OneToTwoEdit(TripwireSource)));
+
+        Assert.That(outcome.Error?.ErrorCode, Is.EqualTo(ToolErrorCode.CollateralChangeRefused));
+        Assert.That(workspace.ReadText("A.cs"), Is.EqualTo(TripwireSource), "a dry run must not write");
+    }
+
+    [Test]
+    public async Task CollateralTripwire_NullExpectedEdits_LeavesExistingBehaviourUnchangedAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create(("A.cs", TripwireSource));
+        var path = workspace.PathOf("A.cs");
+        var proposed = TripwireSource.Replace("=> 1;", "=> 2;").Replace("public class A\n", "public class A\n\n");
+
+        var outcome = await ApplyAsync(workspace, new() { [path] = proposed });
+
+        Assert.That(outcome.Error, Is.Null, "without expectedEdits the tripwire is not run");
+        Assert.That(workspace.ReadText("A.cs"), Is.EqualTo(proposed));
+    }
+
+    [Test]
+    public async Task CollateralTripwire_FileWithoutExpectedEntry_IsUncheckedEvenWhenReformattedAsync()
+    {
+        const string sourceB = "namespace T;\npublic class B\n{\n    public int X() => 1;\n}\n";
+        using var workspace = InMemoryWorkspace.Create(("A.cs", TripwireSource), ("B.cs", sourceB));
+        var pathA = workspace.PathOf("A.cs");
+        var pathB = workspace.PathOf("B.cs");
+        var proposedA = TripwireSource.Replace("=> 1;", "=> 2;");
+        // B.cs is reformatted (extra blank line) but has no expectedEdits entry, so it is not checked.
+        var proposedB = sourceB.Replace("=> 1;", "=> 2;").Replace("public class B\n", "public class B\n\n");
+
+        var outcome = await ApplyAsync(
+            workspace,
+            new() { [pathA] = proposedA, [pathB] = proposedB },
+            expectedEdits: ExpectedFor(pathA, OneToTwoEdit(TripwireSource)));
+
+        Assert.That(outcome.Error, Is.Null, "B.cs has no expectedEdits entry, so it must not be checked");
+        Assert.That(workspace.ReadText("B.cs"), Is.EqualTo(proposedB));
     }
 }
