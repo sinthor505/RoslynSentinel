@@ -2037,7 +2037,7 @@ public class BasicRefactoringEngine
 
     /// <summary>
     /// Wraps a code snippet (identified via contextSnippet, lineBefore/lineAfter) in a try/catch block.
-    /// Uses ContextHelper.FindSnippetPosition to locate the snippet, then wraps the enclosing statements.
+    /// Uses SnippetLookup.ResolveOrThrow to locate the snippet, then wraps the enclosing statements.
     /// </summary>
     public async Task<DocumentEditResult> WrapInTryCatchAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore, string? lineAfter, string exceptionType = "Exception", string catchVariableName = "ex", string? catchBody = null, CancellationToken cancellationToken = default)
     {
@@ -2202,7 +2202,7 @@ public class BasicRefactoringEngine
 
     /// <summary>
     /// Wraps a code snippet (identified via contextSnippet, lineBefore/lineAfter) in a #region block.
-    /// Uses ContextHelper.FindSnippetPosition to locate the snippet, then derives the line number.
+    /// Uses SnippetLookup.ResolveOrThrow to locate the snippet, then derives the line number.
     /// </summary>
     public async Task<DocumentEditResult> WrapInRegionAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore, string? lineAfter, string regionName, CancellationToken cancellationToken = default)
     {

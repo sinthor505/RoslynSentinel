@@ -8,7 +8,7 @@ namespace RoslynSentinel.Engines.Basic;
 
 /// <summary>
 /// Resolves the symbol a contextSnippet points at. The Roslyn-bound successor of
-/// <c>ContextHelper.FindSymbolAtSnippetAsync</c> (slice 4b of the whitespace-tolerance proposal): the text lookup goes
+/// the removed legacy ContextHelper symbol locator (slice 4b of the whitespace-tolerance proposal): the text lookup goes
 /// through <see cref="SnippetLookup"/> (the loosest tier, case-insensitive, never a best-guess near-match, failures list
 /// the file's candidates) instead of the legacy tolerant helpers.
 /// </summary>

@@ -278,7 +278,7 @@ public class SemanticRefactoringEngine
 
     /// <summary>
     /// Wraps a code snippet (identified via contextSnippet, lineBefore/lineAfter) in a using statement.
-    /// Uses ContextHelper.FindSnippetPosition to locate the snippet, then wraps the enclosing statements.
+    /// Uses SnippetLookup.ResolveOrThrow to locate the snippet, then wraps the enclosing statements.
     /// </summary>
     public async Task<DocumentEditResult> WrapInUsingAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore, string? lineAfter, string disposalName, CancellationToken cancellationToken = default)
     {
