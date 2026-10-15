@@ -97,7 +97,7 @@ public class MemberAddResultSizeTests
     }
 
     [Test]
-    public async Task Member_AddMember_DryRunStillReturnsChangedContentAsync()
+    public async Task Member_AddMember_DryRunReturnsDiffNotChangedContentAsync()
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
@@ -110,8 +110,8 @@ public class MemberAddResultSizeTests
         Assert.Multiple(() =>
         {
             Assert.That(summary.DryRun, Is.True);
-            Assert.That(summary.ChangedContent, Is.Not.Null.And.Not.Empty);
-            Assert.That(summary.ChangedContent!.Values.Single(), Does.Contain("public int Added() => 42;"));
+            Assert.That(summary.ChangedContent, Is.Null, "a dry run must not echo the whole file");
+            Assert.That(summary.Diff, Is.Not.Null.And.Not.Empty);
         });
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a dry run must not write");
     }

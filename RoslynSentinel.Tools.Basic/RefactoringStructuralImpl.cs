@@ -586,8 +586,8 @@ public class RefactoringStructuralImpl
                 if (replaceEnumName != null)
                 {
                     var enumReplaced = await _memberRefactoringEngine.ReplaceEnumMemberAsync(filePathResolved, replaceEnumName, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                    if (string.IsNullOrEmpty(enumReplaced.UpdatedText))
-                        return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"Member: {enumReplaced.Message} Retry using ModifyEnum(enumName: \"{replaceEnumName}\", values: ...) directly with the full desired member list if this keeps failing.") };
+                    if (RefactoringToolHelpers.RequireUpdatedText(enumReplaced, "Member", filePathResolved) is { } enumReplaceError)
+                        return enumReplaceError;
 
                     var enumReplaceChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumReplaced.UpdatedText! };
                     var enumReplaceApply = await ValidateAndApplyAsync(enumReplaceChanges, $"Replaced '{memberName}' in enum '{replaceEnumName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
@@ -600,6 +600,8 @@ public class RefactoringStructuralImpl
                 }
 
                 var result = await _memberRefactoringEngine.ReplaceMemberAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
+                if (result.Outcome == EditOutcome.AlreadyInTargetState && RefactoringToolHelpers.RequireUpdatedText(result, "Member", filePathResolved) is { } replaceAlreadyInStateResult)
+                    return replaceAlreadyInStateResult;
                 if (string.IsNullOrEmpty(result.UpdatedText))
                 {
                     string errorReason = result.Outcome switch
@@ -656,8 +658,8 @@ public class RefactoringStructuralImpl
                 if (removeEnumName != null)
                 {
                     var enumRemoved = await _memberRefactoringEngine.RemoveEnumMemberAsync(filePathResolved, removeEnumName, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                    if (string.IsNullOrEmpty(enumRemoved.UpdatedText))
-                        return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"Member: {enumRemoved.Message} Retry using ModifyEnum(enumName: \"{removeEnumName}\", values: ...) directly with the full desired member list if this keeps failing.") };
+                    if (RefactoringToolHelpers.RequireUpdatedText(enumRemoved, "Member", filePathResolved) is { } enumRemoveError)
+                        return enumRemoveError;
 
                     var enumRemoveChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumRemoved.UpdatedText! };
                     var enumRemoveApply = await ValidateAndApplyAsync(enumRemoveChanges, $"Removed '{memberName}' from enum '{removeEnumName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
@@ -732,6 +734,8 @@ public class RefactoringStructuralImpl
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is required for operation 'addTopLevelType'. {RequiredParamsHint(operation)}") };
 
                 var topLevelResult = await _memberRefactoringEngine.AddTopLevelTypeAsync(filePathResolved, newMemberSource, namespaceName, cancellationToken);
+                if (RefactoringToolHelpers.RequireUpdatedText(topLevelResult, "Member", filePathResolved) is { } topLevelGuardResult)
+                    return topLevelGuardResult;
                 if (!autoStage)
                 {
                     var topLevelNoStageDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
@@ -751,20 +755,17 @@ public class RefactoringStructuralImpl
                             Validated: false)
                     };
                 }
-                if (RefactoringToolHelpers.RequireUpdatedText(topLevelResult, "Member", filePathResolved) is { } topLevelGuardResult)
-                    return topLevelGuardResult;
-
                 var topLevelDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
                 var topLevelNote = IgnoredNonDefaultTypedOnlyParamsNote(operation, accessibility, hasSetter, isInit, isReadonly, isStatic, initializer);
                 if (topLevelNote != null)
                     topLevelDescription += " " + topLevelNote;
 
                 var topLevelChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText! };
-                var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
+                var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
                 if (topLevelApply.Error is not null)
                     return new SentinelCallToolResult<object> { IsError = true, ErrorData = topLevelApply.Error };
                 return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                    new AppliedChangeSummary(topLevelApply.ChangeId, [filePathResolved], topLevelDescription, topLevelApply.DryRun, topLevelApply.Diff, ChangedContent: topLevelChanges, Validated: true, LineChanges: topLevelApply.LineChanges, ChangedContentResultId: topLevelApply.ChangedContentResultId),
+                    new AppliedChangeSummary(topLevelApply.ChangeId, [filePathResolved], topLevelDescription, topLevelApply.DryRun, topLevelApply.Diff, Validated: true, LineChanges: topLevelApply.LineChanges, ChangedContentResultId: topLevelApply.ChangedContentResultId),
                     _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
                     workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: topLevelDescription, cancellationToken: cancellationToken);
             }
@@ -805,8 +806,9 @@ public class RefactoringStructuralImpl
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
 
                 var enumAdded = await _memberRefactoringEngine.AddEnumMemberAsync(filePathResolved, containerName, newMemberSource!, afterName, beforeName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (string.IsNullOrEmpty(enumAdded.UpdatedText))
-                    return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"Member: {enumAdded.Message} Retry using ModifyEnum(enumName: \"{containerName}\", values: ...) directly with the full desired member list if this keeps failing.") };
+                var enumAddError = RefactoringToolHelpers.RequireUpdatedText(enumAdded, "Member", filePathResolved);
+                if (enumAddError is not null)
+                    return enumAddError;
 
                 if (!autoStage)
                 {
@@ -833,11 +835,11 @@ public class RefactoringStructuralImpl
                 if (enumAddNote != null)
                     enumAddDescription += " " + enumAddNote;
                 var enumAddChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText! };
-                var enumAddApply = await ValidateAndApplyAsync(enumAddChanges, enumAddDescription, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
+                var enumAddApply = await ValidateAndApplyAsync(enumAddChanges, enumAddDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
                 if (enumAddApply.Error is not null)
                     return new SentinelCallToolResult<object> { IsError = true, ErrorData = enumAddApply.Error };
                 return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                    new AppliedChangeSummary(enumAddApply.ChangeId, [filePathResolved], enumAddDescription, enumAddApply.DryRun, enumAddApply.Diff, ChangedContent: enumAddChanges, Validated: true, LineChanges: enumAddApply.LineChanges, ChangedContentResultId: enumAddApply.ChangedContentResultId),
+                    new AppliedChangeSummary(enumAddApply.ChangeId, [filePathResolved], enumAddDescription, enumAddApply.DryRun, enumAddApply.Diff, Validated: true, LineChanges: enumAddApply.LineChanges, ChangedContentResultId: enumAddApply.ChangedContentResultId),
                     _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
                     workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: enumAddDescription, cancellationToken: cancellationToken);
             }
@@ -888,6 +890,8 @@ public class RefactoringStructuralImpl
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
             }
 
+            if (RefactoringToolHelpers.RequireUpdatedText(updated, "Member", filePathResolved) is { } guardResult)
+                return guardResult;
             if (!autoStage)
             {
                 var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
@@ -906,19 +910,16 @@ public class RefactoringStructuralImpl
                         Validated: false)
                 };
             }
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "Member", filePathResolved) is { } guardResult)
-                return guardResult;
-
             var addNote = IgnoredNonDefaultTypedOnlyParamsNote(operation, accessibility, hasSetter, isInit, isReadonly, isStatic, initializer);
             if (addNote != null)
                 description += " " + addNote;
 
             var addChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
-            var addApply = await ValidateAndApplyAsync(addChanges, description, "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
+            var addApply = await ValidateAndApplyAsync(addChanges, description, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
             if (addApply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = addApply.Error };
             return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                new AppliedChangeSummary(addApply.ChangeId, [filePathResolved], description, addApply.DryRun, addApply.Diff, ChangedContent: addChanges, Validated: true, LineChanges: addApply.LineChanges, ChangedContentResultId: addApply.ChangedContentResultId),
+                new AppliedChangeSummary(addApply.ChangeId, [filePathResolved], description, addApply.DryRun, addApply.Diff, Validated: true, LineChanges: addApply.LineChanges, ChangedContentResultId: addApply.ChangedContentResultId),
                 _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
                 workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description, cancellationToken: cancellationToken);
         }
