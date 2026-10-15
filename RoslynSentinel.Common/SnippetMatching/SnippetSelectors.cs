@@ -8,7 +8,7 @@ namespace RoslynSentinel.Common.SnippetMatching;
 /// after tier resolution, to the matches at the winning tier. A blank selector means "not supplied": a null, empty or
 /// whitespace <see cref="WithinMember"/> and a <see cref="MatchLine"/> of 0 or less are ignored, because weak models send
 /// "" or 0 for an unused parameter and that must not filter out every match (the same rule as
-/// <c>ContextHelper.FindExactSnippetPosition</c>). <see cref="LineBefore"/> and <see cref="LineAfter"/> are different: any
+/// the exact ReplaceSnippet matcher this replaced). <see cref="LineBefore"/> and <see cref="LineAfter"/> are different: any
 /// non-null value, including an empty string, is a supplied selector.
 /// <para>Precedence rule: <see cref="WithinMember"/> and <see cref="MatchLine"/> act first and are intersected; only the
 /// matches that survive them are then filtered by <see cref="LineBefore"/> and <see cref="LineAfter"/>.</para>
@@ -21,7 +21,7 @@ public sealed record SnippetSelectors(
     string? WithinMember = null, int? MatchLine = null, string? LineBefore = null, string? LineAfter = null);
 /// <summary>
 /// The selector post-filter behind <see cref="SnippetResolver"/>'s selector overload: a port of the selector logic in
-/// <c>ContextHelper.FindExactSnippetPosition</c> that reports every outcome as data instead of throwing.
+/// the exact ReplaceSnippet matcher this replaced that reports every outcome as data instead of throwing.
 /// </summary>
 internal static class SnippetSelectorFilter
 {

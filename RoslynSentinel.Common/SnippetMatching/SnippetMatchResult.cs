@@ -6,11 +6,10 @@ namespace RoslynSentinel.Common.SnippetMatching;
 /// <see cref="SnippetClosestWindow"/> are deliberately unrelated types, so passing a looser-tier
 /// hit or a guess to an edit is a compile error.
 /// <para>Which <c>SnippetMatch</c> to use: this type, obtained from <see cref="SnippetResolver.Resolve"/>, is the
-/// one for new code (it adds the 1-based line, the tier and the matcher name). It has the same simple name as the
-/// legacy nested <c>ContextHelper.SnippetMatch(Start, Length)</c>, which the older <c>ContextHelper.FindAll...</c>
-/// helpers still return and which is removed in the final migration slice. Inside the
-/// <c>RoslynSentinel.Common.SnippetMatching</c> namespace the simple name means this type; refer to the legacy
-/// one as <c>ContextHelper.SnippetMatch</c>.</para>
+/// one for new code (it adds the 1-based line, the tier and the matcher name). The legacy nested
+/// <c>ContextHelper.SnippetMatch(Start, Length)</c> record and the legacy <c>ContextHelper.FindAll...</c> matchers were
+/// removed in the final migration slice; the (Start, Length) pair is now the top-level <see cref="SnippetSpan"/>.
+/// Inside the <c>RoslynSentinel.Common.SnippetMatching</c> namespace the simple name means this type.</para>
 /// <para>Like the legacy type, <see cref="Length"/> is the true length of the span in the file, not the snippet's
 /// length, so a caller that replaces or removes the span must use it.</para>
 /// </summary>
@@ -94,7 +93,7 @@ public sealed record SnippetFilterStep(string Selector, int Removed);
 
 /// <summary>
 /// Result of looking a snippet up in a text. Carries data only (no message text): wording lives
-/// in the legacy ContextErrorBuilder (removed). Build one with <see cref="Create"/>, which enforces:
+/// in the removed legacy ContextErrorBuilder. Build one with <see cref="Create"/>, which enforces:
 /// <see cref="NearMatches"/> is non-empty only when <see cref="Matches"/> is empty, and
 /// <see cref="ClosestWindows"/> is non-empty only when both are empty. A violation throws
 /// <see cref="ArgumentException"/> (an internal programming error, not a tool error).
