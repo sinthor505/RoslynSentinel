@@ -309,7 +309,7 @@ public class ContextHelperTests
         // whitespace/indentation as the cause, not the generic "arrangement" wording that fires
         // when lines match verbatim but are merely non-contiguous. Uses INTERNAL spacing
         // differences (not leading indentation), since leading/trailing whitespace is already
-        // absorbed by DiagnoseNoMatch's pre-existing .Trim() and would never reach the new
+        // absorbed by the removed legacy diagnostic's pre-existing .Trim() and would never reach the new
         // collapse fallback this test targets.
         var source = "public class C {\n    int M() {\n        var  x = 1;\n        var  y = 2;\n    }\n}";
         var snippet = "var x = 1;\nvar y = 2;";

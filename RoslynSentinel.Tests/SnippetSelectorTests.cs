@@ -6,7 +6,7 @@ namespace RoslynSentinel.Tests;
 /// <summary>
 /// Tests for the selector post-filter of <see cref="SnippetResolver"/> (slice 2e of the whitespace-tolerance proposal):
 /// withinMember, matchLine, lineBefore and lineAfter narrow the matches at the winning tier, every failure is an outcome
-/// and never an exception, and the chosen match agrees with <c>ContextHelper.FindExactSnippetPosition</c>.
+/// and never an exception, and the chosen match agrees with the removed legacy ReplaceSnippet matcher (the expectations are fixed values).
 /// </summary>
 [Parallelizable(ParallelScope.All)]
 public class SnippetSelectorTests
@@ -464,7 +464,7 @@ public class SnippetSelectorTests
         });
     }
 
-    // ---- fixed expectations (formerly parity with ContextHelper.FindExactSnippetPosition) over the selector corpus ----
+    // ---- fixed expectations (formerly parity with the removed legacy ReplaceSnippet matcher) over the selector corpus ----
     // The trailing three TestCase arguments are what the removed legacy helper returned for that case, captured once in
     // slice 5e: a (start, length) match, or an error kind ("Ambiguous" = ToolAmbiguousMatchException, "NotFound" =
     // ToolNotFoundException).
