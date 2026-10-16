@@ -240,6 +240,19 @@ public class ClaudeLeanModeTests
         Assert.That(ToolsetCatalog.AllToolNames, Does.Contain("TagTestCategories"));
     }
 
+    [Test]
+    public void QualifyCrefs_IsRegisteredInBothModeMaps_AndOnDemandOnlyInClaudeLean()
+    {
+        Assert.That(ToolClassRegistry.BasicModeToToolClasses["QualifyCrefs"], Is.EqualTo(new[] { "QualifyCrefsTools" }));
+        Assert.That(ToolClassRegistry.AdvancedModeToToolClasses["QualifyCrefs"], Is.EqualTo(new[] { "QualifyCrefsTools" }));
+        Assert.That(ToolClassRegistry.ClaudeLeanOnDemandToolClasses, Does.Contain("QualifyCrefsTools"));
+
+        // Off by default in claude-lean: the class is active but the tool is not allow-listed; the toolset switches it on.
+        Assert.That(ToolClassRegistry.ClaudeLeanToolNames, Does.Not.Contain("QualifyCrefs"));
+        Assert.That(ToolsetCatalog.FindSet("QualifyCrefs"), Is.EqualTo(ToolSetName.moveExtract));
+        Assert.That(ToolsetCatalog.AllToolNames, Does.Contain("QualifyCrefs"));
+    }
+
     // ---- escape-hatch advice must not name tools the allow-list removed ----
 
     [Test]

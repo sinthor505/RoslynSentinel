@@ -263,7 +263,7 @@ public class McpToolsetControlTests
             service.SetEnabled(set, true);
         }
 
-        // Declaration, ParameterEdit, SemanticFindReplace, NamedArguments and TagTestCategories are the catalog tools --mode claude does not register (they exist
+        // Declaration, ParameterEdit, SemanticFindReplace, NamedArguments, TagTestCategories and QualifyCrefs are the catalog tools --mode claude does not register (they exist
         // only as on-demand claude-lean tools or behind their own mode, see DeclarationToolTests, ParameterEditToolTests,
         // SemanticFindReplaceToolTests and NamedArgumentsToolTests), so there is no startup instance to compare them with.
         foreach (var name in ToolsetCatalog.AllToolNames.Where(n => n is not ("Declaration" or "ParameterEdit" or "SemanticFindReplace" or "NamedArguments" or "TagTestCategories" or "QualifyCrefs")))
