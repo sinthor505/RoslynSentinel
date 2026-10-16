@@ -10,8 +10,9 @@ namespace RoslynSentinel.Tests.Advanced;
 /// Byte-exact pins for <c>MappingEngine.InvertAssignmentsAsync</c>, an annotated-container site routed onto
 /// <c>RoslynFormattingHelper.FormatAnnotatedSpansAsync</c>. The source carries irregular spacing, comments and blank
 /// lines in code the engine does not touch, so a regression that formats the whole document shows up as a diff.
-/// Written against the unmodified call (plain <c>Formatter.FormatAsync(doc, annotation)</c>) and kept unchanged
-/// across the routing, except where a test comment says the expectation is the corrected end-of-line output.
+/// Written against the unmodified call (plain <c>Formatter.FormatAsync(doc, annotation)</c>). The CRLF tests are
+/// byte-identical to the pre-routing behaviour; the LF and mixed-EOL tests encode the corrected output (the old code
+/// leaked formatter-inserted CRLF).
 /// </summary>
 [TestFixture]
 [Category("MappingEngine")] // sentinel:auto-category
@@ -46,7 +47,8 @@ public class MappingEngineInvertAssignmentsCharacterizationTests
     // Lines 15-16 hold the assignments the tests invert; everything else is untouched. The comment and the blank
     // lines sit before a non-assignment statement on purpose: the engine swaps whole operands including their
     // leading trivia, so a comment or blank line directly in front of an inverted assignment travels to its right-hand
-    // side (a defect of the swap, not of the format step; see the C5b-1 report).
+    // side (a defect of the swap, not of the format step; see the docs/current/TODO.md entry on InvertAssignments
+    // leading trivia).
     private static string[] Input() =>
     [
         "using System;",
@@ -125,16 +127,24 @@ public class MappingEngineInvertAssignmentsCharacterizationTests
         Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
+    // The stray CRLF goes on the method's opening brace, the "{" line before the first inverted assignment, so it
+    // sits as close to the edit as it can without being a changed line.
+    private static string WithStrayCrlf(string lfText)
+    {
+        var mixed = lfText.Replace("    {\n", "    {\r\n");
+        Assert.That(mixed.Count(c => c == '\r'), Is.EqualTo(1), "Precondition: exactly one stray CRLF, on the method's opening brace line.");
+        Assert.That(mixed, Does.Contain("    {\r\n        // keep   this   comment"));
+        return mixed;
+    }
+
     [Test]
     public async Task InvertAssignments_MixedEol_StrayCrlfLineOutsideTheEditKeepsItsTerminator()
     {
-        var source = Src(false, Input()).Replace("    private int   b = 2;\n", "    private int   b = 2;\r\n");
-        SetSource(source);
+        SetSource(WithStrayCrlf(Src(false, Input())));
 
         var result = await _engine.InvertAssignmentsAsync("Test.cs", 15, 16);
 
-        var expected = Src(false, Expected()).Replace("    private int   b = 2;\n", "    private int   b = 2;\r\n");
-        Assert.That(result.UpdatedText, Is.EqualTo(expected));
+        Assert.That(result.UpdatedText, Is.EqualTo(WithStrayCrlf(Src(false, Expected()))));
     }
 
     // ---- snippet overload: InvertAssignmentsAsync(filePath, contextSnippet, lineBefore, lineAfter) ----
@@ -188,12 +198,10 @@ public class MappingEngineInvertAssignmentsCharacterizationTests
     [Test]
     public async Task InvertAssignmentsBySnippet_MixedEol_StrayCrlfLineOutsideTheEditKeepsItsTerminator()
     {
-        var source = Src(false, Input()).Replace("    private int   b = 2;\n", "    private int   b = 2;\r\n");
-        SetSource(source);
+        SetSource(WithStrayCrlf(Src(false, Input())));
 
         var result = await _engine.InvertAssignmentsAsync("Test.cs", "a  =  x;", null, null);
 
-        var expected = Src(false, SnippetExpected()).Replace("    private int   b = 2;\n", "    private int   b = 2;\r\n");
-        Assert.That(result.UpdatedText, Is.EqualTo(expected));
+        Assert.That(result.UpdatedText, Is.EqualTo(WithStrayCrlf(Src(false, SnippetExpected()))));
     }
 }

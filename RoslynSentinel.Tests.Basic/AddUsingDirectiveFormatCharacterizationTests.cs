@@ -10,8 +10,9 @@ namespace RoslynSentinel.Tests.Basic;
 /// Byte-exact pins for <c>BasicRefactoringEngine.AddUsingDirectiveAsync</c>, an annotated-container site routed onto
 /// <c>RoslynFormattingHelper.FormatAnnotatedSpansAsync</c>. The source carries irregular spacing, comments and blank
 /// lines in code the engine does not touch, so a regression that formats the whole document shows up as a diff.
-/// Written against the unmodified call (plain <c>Formatter.FormatAsync(doc, annotation)</c>) and kept unchanged
-/// across the routing, except where a test comment says the expectation is the corrected end-of-line output.
+/// Written against the unmodified call (plain <c>Formatter.FormatAsync(doc, annotation)</c>). The CRLF tests are
+/// byte-identical to the pre-routing behaviour; the LF and mixed-EOL tests encode the corrected output (the old code
+/// leaked formatter-inserted CRLF).
 /// The <c>simplifyExisting: true</c> tests pin the second, whole-document format that path runs; that call is not an
 /// annotated-container site and is deliberately left in place by C5b-1.
 /// </summary>
@@ -46,6 +47,14 @@ public class AddUsingDirectiveFormatCharacterizationTests
     {
         var text = string.Join("\n", lines);
         return crlf ? text.Replace("\n", "\r\n") : text;
+    }
+
+    private static string WithStrayCrlf(string lfText)
+    {
+        var mixed = lfText.Replace("using System;\n", "using System;\r\n");
+        Assert.That(mixed.Count(c => c == '\r'), Is.EqualTo(1), "Precondition: exactly one stray CRLF, on the `using System;` line.");
+        Assert.That(mixed, Does.StartWith("using System;\r\n"));
+        return mixed;
     }
 
     private static string[] WithUsingsInput() =>
@@ -173,15 +182,15 @@ public class AddUsingDirectiveFormatCharacterizationTests
     [Test]
     public async Task AddUsingDirective_MixedEol_StrayCrlfLineOutsideTheEditKeepsItsTerminator()
     {
-        // An LF document with one CRLF terminator on a line the engine does not touch. Mixed documents are the only
-        // case whose bytes can differ across the routing: the old tail normalized only single-style documents.
-        var source = Src(false, WithUsingsInput()).Replace("        private int   _x=1;\n", "        private int   _x=1;\r\n");
+        // An LF document with one CRLF terminator, on the `using System;` line directly above the inserted using
+        // (the line the edit sits next to, but does not change). Mixed documents are the only case whose bytes can
+        // differ across the routing: the old tail normalized only single-style documents.
+        var source = WithStrayCrlf(Src(false, WithUsingsInput()));
         SetSource(source);
 
         var result = await _engine.AddUsingDirectiveAsync("Test.cs", "System.Linq");
 
-        var expected = Src(false, WithUsingsExpected()).Replace("        private int   _x=1;\n", "        private int   _x=1;\r\n");
-        Assert.That(result.UpdatedText, Is.EqualTo(expected));
+        Assert.That(result.UpdatedText, Is.EqualTo(WithStrayCrlf(Src(false, WithUsingsExpected()))));
     }
 
     [TestCase(false)]

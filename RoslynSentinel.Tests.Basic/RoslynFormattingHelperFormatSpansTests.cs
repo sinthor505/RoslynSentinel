@@ -75,6 +75,15 @@ public class RoslynFormattingHelperFormatSpansTests
         "    }",
         "}");
 
+    // The opening braces sit on the signature lines, so a format must insert line breaks (and so must pick an ending).
+    private static string BraceOnSignatureLineSource(bool crlf) => Src(crlf,
+        "public class C",
+        "{",
+        "    public void First() {",
+        "        var   a=1;",
+        "    }",
+        "}");
+
     private static MethodDeclarationSyntax NewSynthesizedMethod()
         => SyntaxFactory.MethodDeclaration(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword)), "Added")
             .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
@@ -209,7 +218,7 @@ public class RoslynFormattingHelperFormatSpansTests
 
     [TestCase(false)]
     [TestCase(true)]
-    public async Task FormatAnnotatedSpans_NoAnnotation_ReturnsRewrittenTextUnformatted_InDominantEol(bool crlf)
+    public async Task FormatAnnotatedSpans_NoAnnotation_ReturnsRewrittenTextUnchanged(bool crlf)
     {
         var source = TwoMethodSource(crlf);
         var document = MakeDocument(source);
@@ -288,7 +297,12 @@ public class RoslynFormattingHelperFormatSpansTests
     [Test]
     public async Task FormatWholeDocument_LfStaysLf()
     {
-        var document = MakeDocument(TwoMethodSource(false));
+        // The opening brace sits on the signature line, so the formatter inserts a line break; its NewLine option
+        // is pinned to the OPPOSITE ending (CRLF) so the leak is possible, and the test can fail, on any host.
+        var document = MakeDocument(BraceOnSignatureLineSource(false), formatterNewLine: "crlf");
+
+        var raw = await TextOf(await Formatter.FormatAsync(document));
+        Assert.That(raw, Does.Contain("\r"), "Raw formatter output has no CR, so the test would not exercise the leak.");
 
         var result = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(document));
 
@@ -325,7 +339,11 @@ public class RoslynFormattingHelperFormatSpansTests
     [Test]
     public async Task FormatWholeDocument_CrlfStaysCrlf()
     {
-        var document = MakeDocument(TwoMethodSource(true));
+        // Formatter NewLine pinned to LF, the opposite of the document, so a bare LF can leak on any host.
+        var document = MakeDocument(BraceOnSignatureLineSource(true), formatterNewLine: "lf");
+
+        var raw = await TextOf(await Formatter.FormatAsync(document));
+        Assert.That(raw.Replace("\r\n", ""), Does.Contain("\n"), "Raw formatter output has no bare LF, so the test would not exercise the leak.");
 
         var result = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(document));
 

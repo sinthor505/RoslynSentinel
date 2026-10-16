@@ -308,7 +308,7 @@ public static class RoslynFormattingHelper
     /// <see cref="Formatter.Annotation"/> to the nodes it created or changed and calls this instead of
     /// <c>NormalizeWholeSubtreeWhitespace</c> or a whole-document format, so code the rewrite did not touch is not
     /// re-spaced (the one exception is the whitespace and line break immediately before an annotated node, which the
-    /// formatter owns and may re-space) and line numbers below the edit do not move.
+    /// formatter owns and may re-space) and lines the edit did not touch keep their text.
     /// <para>
     /// Only the annotated spans are formatted, but the formatter also rewrites the whitespace and line break
     /// directly in front of an annotated node. It uses its own NewLine option for that (the host default, CRLF on
@@ -344,8 +344,8 @@ public static class RoslynFormattingHelper
     /// formatted (a format-document operation, or a file the tool just scaffolded and fully owns). To format what a
     /// rewrite changed, annotate the changed nodes with <see cref="Formatter.Annotation"/> and call
     /// <see cref="FormatAnnotatedSpansAsync"/>; to replace one node, use <see cref="ReplaceNodeAndFormatReplacementAsync"/>.
-    /// This is the one place a whole-document <c>Formatter.FormatAsync</c> is allowed (the ratchet test watches for
-    /// others).
+    /// This is the one place a whole-document <c>Formatter.FormatAsync</c> is allowed (a ratchet test is planned;
+    /// see the proposal).
     /// <para>
     /// The result is put in the line ending of <paramref name="eolReference"/> when given, otherwise of
     /// <paramref name="document"/> as it is passed in (so a caller that builds the document with
@@ -356,7 +356,9 @@ public static class RoslynFormattingHelper
     /// The formatter's own NewLine option (the host default, CRLF on Windows, unless an .editorconfig says otherwise)
     /// therefore never leaks into an LF document. No formatting options are passed, so the formatter resolves them
     /// from the document (workspace options and any .editorconfig). The returned document carries the full result
-    /// text.
+    /// text. The encoding and checksum algorithm of <paramref name="eolReference"/> are applied only when the text is
+    /// rewritten (some changed line needed its ending corrected); when the formatted text already has the right
+    /// endings the formatted document is returned as it is, with its own text and encoding.
     /// </para>
     /// </summary>
     /// <param name="document">The document to format (possibly already carrying an edited root).</param>

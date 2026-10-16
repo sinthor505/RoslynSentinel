@@ -8,6 +8,14 @@ actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outr
 
 `InvertAssignments` swaps the operands together with their leading trivia, so a comment or blank lines directly before an inverted assignment end up on the right-hand side of the result. Found in the C5b-1 review; swap the operands but keep each side's own leading trivia in place.
 
+## `AddUsingDirective` simplifyExisting: `Simplifier.ReduceAsync` simplifies nothing (2026-10-16) - not started
+
+With `simplifyExisting: true`, `BasicRefactoringEngine.AddUsingDirectiveAsync` calls `Simplifier.ReduceAsync(doc, Simplifier.Annotation)`, but no node in the document carries `Simplifier.Annotation` at that point (only the new using has `Formatter.Annotation`), so the reduce step is a no-op and the option shortens no names. Found in the C5b-1 review; annotate the qualified names to reduce (or reduce the whole root) before the call.
+
+## `AddUsingDirective` simplifyExisting whole-document format can leak the formatter NewLine into mixed-EOL files (2026-10-16) - not started
+
+The `simplifyExisting` path (`BasicRefactoringEngine` ~:1555) runs a whole-document `Formatter.FormatAsync`, and its end-of-line guard (~:1571) only normalizes single-style documents, so in a mixed-EOL document the formatter's own NewLine option can leak in. Found in the C5b-1 review; route it via `RoslynFormattingHelper.FormatWholeDocumentAsync` with the pre-edit text as `eolReference` in C5c.
+
 ## `IDEStyleEngine.SimplifyMemberAccess` drops the leading trivia of the `this` token (2026-10-16) - not started
 
 Replacing `this.x` with `x` drops the leading trivia of the `this` token, so a comment, `#region` or blank line directly before a statement that starts with `this.` is lost. Found in the C5a review; carry the `this` token's leading trivia onto the replacement name.

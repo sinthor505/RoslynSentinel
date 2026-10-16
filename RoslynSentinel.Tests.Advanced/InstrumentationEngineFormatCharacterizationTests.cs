@@ -11,8 +11,8 @@ namespace RoslynSentinel.Tests.Advanced;
 /// the annotated-container sites routed onto <c>RoslynFormattingHelper.FormatAnnotatedSpansAsync</c>. The source
 /// carries irregular spacing, comments and blank lines in code the engine does not touch (the sibling members), so a
 /// regression that formats the whole document shows up as a diff. Written against the unmodified call (plain
-/// <c>Formatter.FormatAsync(doc, annotation)</c>) and kept unchanged across the routing, except where a test comment
-/// says the expectation is the corrected end-of-line output.
+/// <c>Formatter.FormatAsync(doc, annotation)</c>). The CRLF tests are byte-identical to the pre-routing behaviour; the
+/// LF and mixed-EOL tests encode the corrected output (the old code leaked formatter-inserted CRLF).
 /// </summary>
 [TestFixture]
 [Category("InstrumentationEngine")] // sentinel:auto-category
@@ -160,17 +160,25 @@ public class InstrumentationEngineFormatCharacterizationTests
         Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
+    // An LF document with one CRLF terminator, on the opening brace of the method the engine rewrites (`Run`): the
+    // line right next to the annotated, formatter-owned region. The expected bytes are the LF expectation with that
+    // same one terminator kept.
+    private static string WithStrayCrlf(string lfText)
+    {
+        var mixed = lfText.Replace("\n    {\n", "\n    {\r\n");
+        Assert.That(mixed.Count(c => c == '\r'), Is.EqualTo(1), "Precondition: exactly one stray CRLF, on the opening brace of Run.");
+        Assert.That(mixed, Does.Contain("\n    {\r\n"));
+        return mixed;
+    }
+
     [Test]
     public async Task AddTryCatchToClass_MixedEol_StrayCrlfLineOutsideTheEditKeepsItsTerminator()
     {
-        // An LF document with one CRLF terminator on a line the engine does not touch.
-        var source = Src(false, Input()).Replace("    private   int _count;\n", "    private   int _count;\r\n");
-        SetSource(source);
+        SetSource(WithStrayCrlf(Src(false, Input())));
 
         var result = await _engine.AddTryCatchToClassAsync("Test.cs", "Worker");
 
-        var expected = Src(false, TryCatchExpected()).Replace("    private   int _count;\n", "    private   int _count;\r\n");
-        Assert.That(result.UpdatedText, Is.EqualTo(expected));
+        Assert.That(result.UpdatedText, Is.EqualTo(WithStrayCrlf(Src(false, TryCatchExpected()))));
     }
 
     // ---- AddStopwatchDiagnosticsAsync ----
@@ -210,12 +218,10 @@ public class InstrumentationEngineFormatCharacterizationTests
     [Test]
     public async Task AddStopwatchDiagnostics_MixedEol_StrayCrlfLineOutsideTheEditKeepsItsTerminator()
     {
-        var source = Src(false, Input()).Replace("    private   int _count;\n", "    private   int _count;\r\n");
-        SetSource(source);
+        SetSource(WithStrayCrlf(Src(false, Input())));
 
         var result = await _engine.AddStopwatchDiagnosticsAsync("Test.cs", "Run");
 
-        var expected = Src(false, StopwatchExpected()).Replace("    private   int _count;\n", "    private   int _count;\r\n");
-        Assert.That(result.UpdatedText, Is.EqualTo(expected));
+        Assert.That(result.UpdatedText, Is.EqualTo(WithStrayCrlf(Src(false, StopwatchExpected()))));
     }
 }
