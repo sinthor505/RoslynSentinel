@@ -8,8 +8,8 @@ namespace RoslynSentinel.Engines.Basic;
 /// <summary>
 /// The cref retarget edits collected for an instance move. <paramref name = "EditsByDocument"/> holds, per document,
 /// the edits sorted by span start, each computed against that document's ORIGINAL text. <paramref name = "Retargeted"/>
-/// is the total number of edits; <paramref name = "SkippedCandidates"/> counts candidate (ambiguous) matches that sit
-/// inside crefs and were therefore not edited.
+/// is the total number of edits; <paramref name = "SkippedCandidates"/> counts distinct crefs that match only as
+/// candidates (ambiguous) and were therefore not edited.
 /// </summary>
 public sealed record InstanceMoveCrefEditsResult(IReadOnlyDictionary<DocumentId, IReadOnlyList<TextChange>> EditsByDocument, int Retargeted, int SkippedCandidates);
 
@@ -38,6 +38,7 @@ public static class InstanceMoveCrefEdits
         var editsByDocument = new Dictionary<DocumentId, List<TextChange>>();
         var rootsByDocument = new Dictionary<DocumentId, SyntaxNode?>();
         var skippedCandidates = 0;
+        var countedCandidateCrefs = new HashSet<(DocumentId, int)>();
         foreach (var symbol in movedSymbols)
         {
             var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -65,7 +66,7 @@ public static class InstanceMoveCrefEdits
                 var isCref = refToken.Parent?.AncestorsAndSelf().Any(n => n is CrefSyntax) == true;
                 if (location.IsCandidateLocation)
                 {
-                    if (isCref)
+                    if (isCref && countedCandidateCrefs.Add((document.Id, span.Start)))
                     {
                         skippedCandidates++;
                     }
