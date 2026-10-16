@@ -208,7 +208,7 @@ public static class RoslynFormattingHelper
             var problems = CheckPostWriteInvariants(normalizedText, TriviaEditIntent.PreserveOld, null);
             foreach (var problem in problems)
             {
-                logger.LogWarning("RemoveNodeFormattedAsync post-write invariant violation: {Problem}", problem);
+                logger.LogWarning("RemoveNodePreservingTriviaAsync post-write invariant violation: {Problem}", problem);
             }
         }
 
@@ -328,5 +328,104 @@ public static class RoslynFormattingHelper
     public static SyntaxNode NormalizeWholeSubtreeWhitespace(SyntaxNode node, string indentation = "    ", string eol = "\n", bool elasticTrivia = true)
     {
         return node.NormalizeWhitespace(indentation, eol, elasticTrivia);
+    }
+
+    /// <summary>
+    /// Rebuilds the canonical whitespace layout of a NEWLY BUILT member, statement or other child node
+    /// (one made from scratch with <see cref="SyntaxFactory"/>, never part of a user file), using the
+    /// caller's <paramref name="eol"/>. <c>NormalizeWhitespace</c> discards all existing formatting, so the
+    /// node is first checked by <c>EnsureNodeIsNew</c> and an <see cref="ArgumentException"/> is thrown
+    /// when it looks like existing code (or is a <see cref="CompilationUnitSyntax"/>, which belongs to
+    /// <see cref="NormalizeNewRootWhitespace"/>). <paramref name="eol"/> has no default: pass the target
+    /// file's or project's line ending.
+    /// </summary>
+    public static T NormalizeNewChildWhitespace<T>(T node, string eol, string indentation = "    ", bool elasticTrivia = true)
+        where T : SyntaxNode
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        if (node is CompilationUnitSyntax)
+        {
+            throw new ArgumentException(
+                "NormalizeNewChildWhitespace does not accept a CompilationUnitSyntax; use NormalizeNewRootWhitespace for a file root built from scratch.",
+                nameof(node));
+        }
+
+        EnsureNodeIsNew(node);
+        return node.NormalizeWhitespace(indentation, eol, elasticTrivia);
+    }
+
+    /// <summary>
+    /// Rebuilds the canonical whitespace layout of a NEWLY BUILT <see cref="CompilationUnitSyntax"/> (the
+    /// root of a file that does not exist yet), using the caller's <paramref name="eol"/>. A compilation
+    /// unit has the same CLR type whether it is new or the root of an existing file, so the node is
+    /// checked by <c>EnsureNodeIsNew</c> and an <see cref="ArgumentException"/> is thrown when it looks
+    /// like an existing file's root. <paramref name="eol"/> has no default: pass the target file's or
+    /// project's line ending.
+    /// </summary>
+    public static CompilationUnitSyntax NormalizeNewRootWhitespace(CompilationUnitSyntax root, string eol, string indentation = "    ", bool elasticTrivia = true)
+    {
+        EnsureNodeIsNew(root);
+        return root.NormalizeWhitespace(indentation, eol, elasticTrivia);
+    }
+
+    /// <summary>
+    /// Shared guard for <see cref="NormalizeNewChildWhitespace{T}"/> and <see cref="NormalizeNewRootWhitespace"/>.
+    /// Rejects, in order: (2) a node attached to a tree (<see cref="SyntaxNode.Parent"/> is not null),
+    /// (3) a node whose <see cref="SyntaxTree.FilePath"/> is non-empty (it came from a file), and
+    /// (4) a subtree that carries user formatting (non-elastic whitespace, end-of-line or comment
+    /// trivia), because <c>NormalizeWhitespace</c> would discard it. Check 1 (a
+    /// <see cref="CompilationUnitSyntax"/> passed to the child method) is made by the child method itself.
+    /// </summary>
+    private static void EnsureNodeIsNew(SyntaxNode node)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+
+        const string ExistingCodeHint = "This looks like existing code; use ReplaceNodeAndFormatReplacementAsync, or annotate the changed nodes with Formatter.Annotation and call FormatAnnotatedSpansAsync.";
+
+        // Check 2: attached to a tree, so it is not new.
+        if (node.Parent is not null)
+        {
+            throw new ArgumentException(
+                $"The node is attached to a syntax tree (its parent is a {node.Parent.Kind()}), so it is not a newly built node. {ExistingCodeHint}",
+                nameof(node));
+        }
+
+        // Check 3: its tree came from a file.
+        var filePath = node.SyntaxTree.FilePath;
+        if (!string.IsNullOrEmpty(filePath))
+        {
+            throw new ArgumentException(
+                $"The node belongs to a syntax tree loaded from '{Path.GetFileName(filePath)}', so it is part of an existing file. {ExistingCodeHint}",
+                nameof(node));
+        }
+
+        // Check 4: user formatting present. Elastic trivia is what SyntaxFactory synthesizes, so it is fine.
+        var formattingTriviaCount = 0;
+        foreach (var trivia in node.DescendantTrivia(descendIntoTrivia: false))
+        {
+            if (trivia.HasAnnotation(SyntaxAnnotation.ElasticAnnotation))
+            {
+                continue;
+            }
+
+            switch (trivia.Kind())
+            {
+                case SyntaxKind.WhitespaceTrivia:
+                case SyntaxKind.EndOfLineTrivia:
+                case SyntaxKind.SingleLineCommentTrivia:
+                case SyntaxKind.MultiLineCommentTrivia:
+                case SyntaxKind.SingleLineDocumentationCommentTrivia:
+                case SyntaxKind.MultiLineDocumentationCommentTrivia:
+                    formattingTriviaCount++;
+                    break;
+            }
+        }
+
+        if (formattingTriviaCount > 0)
+        {
+            throw new ArgumentException(
+                $"The node contains {formattingTriviaCount} piece(s) of non-elastic whitespace, end-of-line or comment trivia, which is existing formatting that NormalizeWhitespace would discard. {ExistingCodeHint}",
+                nameof(node));
+        }
     }
 }
