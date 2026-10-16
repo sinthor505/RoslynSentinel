@@ -12,9 +12,10 @@ namespace RoslynSentinel.Tests.Basic;
 /// <see cref="RoslynFormattingHelper.NormalizeNewChildWhitespace{T}"/> and
 /// <see cref="RoslynFormattingHelper.NormalizeNewRootWhitespace"/> with the shared EnsureNodeIsNew guard.
 /// The "SafeSite_" fixtures mirror how the engines build nodes at the call sites the proposal lists as
-/// safe (NewChild/NewRoot); the "KnownFalsePositive_" tests pin where the content check (4) rejects such a
-/// site today (proposal open question 1). They document behaviour and must be revisited when that
-/// question is decided; they are not an endorsement of the rejection.
+/// safe (NewChild/NewRoot). Check 4 exempts single-space whitespace trivia (slice C2b), so most of those
+/// sites are accepted. The "PinnedNeedsC3_" tests pin the sites that are still rejected: each needs a
+/// detach/parse step or elastic trivia at the call site in slice C3 (or, for the ElasticWhitespace(text)
+/// case, cannot be told apart from user indentation). They document behaviour and must be revisited in C3.
 /// </summary>
 public class RoslynFormattingHelperNormalizeNewTests
 {
@@ -159,13 +160,18 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void KnownFalsePositive_ElasticWhitespaceWithText_IsNotAnnotatedElastic_AndIsRejected()
+    public void PinnedNeedsC3_ElasticWhitespaceWithText_IsNotAnnotatedElastic_AndIsRejected()
     {
+        // Not a false positive of the content check: ElasticWhitespace(text) is indistinguishable from
+        // Whitespace(text) through the public API, so it cannot be exempted without also accepting real
+        // indentation (see ContentCheck_RejectsNonElasticWhitespace). A call site that builds multi-character
+        // whitespace with ElasticWhitespace(text) needs elastic trivia (ElasticSpace/ElasticMarker/
+        // ElasticCarriageReturnLineFeed) or no trivia at all in slice C3.
         var probe = ElasticWhitespace("    ");
         var attached = NewVoidMethod().WithLeadingTrivia(probe).GetLeadingTrivia()[0];
         // Observed Roslyn behaviour: SyntaxFactory.ElasticWhitespace(text) does not carry
         // SyntaxAnnotation.ElasticAnnotation (only ElasticMarker and the cached elastic EOL/space do),
-        // so the content check counts it. Pinned as a false positive, not endorsed.
+        // so the content check counts it. Pinned: needs a call-site change in C3.
         Assert.Multiple(() =>
         {
             Assert.That(probe.HasAnnotation(Microsoft.CodeAnalysis.SyntaxAnnotation.ElasticAnnotation), Is.False, "probe detached");
@@ -190,13 +196,21 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void KnownFalsePositive_ParseMemberDeclaration_IsRejected()
+    public void ParseMemberDeclaration_SingleLineSnippet_IsAccepted()
     {
-        // Proposal hypothesis confirmed: a node parsed from a string keeps its source spacing, which the
-        // content check cannot tell apart from user formatting.
+        // A single-line snippet only carries single-space trivia, which check 4 exempts.
         var node = ParseMemberDeclaration("public void Run() { }")!;
         Assert.That(node.Parent, Is.Null);
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), "parsed member");
+        Assert.DoesNotThrow(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"));
+    }
+
+    [Test]
+    public void ParseMemberDeclaration_MultiLineSnippet_IsStillRejected()
+    {
+        // A snippet with newlines and indentation is what a hand-written or formatted tree carries.
+        var node = ParseMemberDeclaration("public void Run()\n{\n    Go();\n}\n")!;
+        Assert.That(node.Parent, Is.Null);
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), "parsed multi-line member");
     }
 
     // ---- EOL comes from the parameter ----
@@ -262,11 +276,11 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void KnownFalsePositive_CodeGeneration_ImplementInterface_Method_972_WithParameter_IsRejected()
+    public void SafeSite_CodeGeneration_ImplementInterface_Method_972_WithParameter_IsAccepted()
     {
-        // Cause: the site gives each parameter type SyntaxFactory.Space, a non-elastic single space.
+        // The site gives each parameter type SyntaxFactory.Space, a non-elastic single space that check 4 exempts.
         var node = BuildImplementInterfaceMethod(parameterCount: 1);
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), "parameter type with Space trivia");
+        Assert.DoesNotThrow(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"));
     }
 
     private static MethodDeclarationSyntax BuildImplementInterfaceMethod(int parameterCount)
@@ -302,10 +316,11 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void KnownFalsePositive_AdvancedRefactoring_SyncInterface_Method_335_IsRejected()
+    public void SafeSite_AdvancedRefactoring_SyncInterface_Method_335_ReusedSingleSpaceTrivia_IsAccepted()
     {
-        // Cause: ReturnType, ParameterList and constraint clauses are reused from the existing method,
-        // so they carry the user's spacing ("string ", ", ", " where ").
+        // ReturnType, ParameterList and constraint clauses are reused from the existing method, so they carry
+        // its single-space spacing ("string ", ", ", " where "), which check 4 exempts. A reused part with
+        // newlines or indentation would still be rejected.
         var method = ParseClass("public class Svc { public string Find<T>(int id, T hint) where T : class { return null; } }")
             .Members.OfType<MethodDeclarationSyntax>().First();
         var node = MethodDeclaration(method.ReturnType, method.Identifier)
@@ -316,13 +331,13 @@ public class RoslynFormattingHelperNormalizeNewTests
             .WithModifiers(TokenList());
 
         Assert.That(node.Parent, Is.Null);
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), "type taken from existing method");
+        Assert.DoesNotThrow(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"));
     }
 
     [Test]
-    public void KnownFalsePositive_AdvancedRefactoring_SyncInterface_Property_366_IsRejected()
+    public void SafeSite_AdvancedRefactoring_SyncInterface_Property_366_ReusedSingleSpaceTrivia_IsAccepted()
     {
-        // Cause: prop.Type and prop.Identifier are reused from the existing property and keep their trailing space.
+        // prop.Type and prop.Identifier are reused from the existing property and keep their single trailing space.
         var prop = ParseClass("public class Svc { public int Count { get; set; } }").Members.OfType<PropertyDeclarationSyntax>().First();
         var accessors = new List<AccessorDeclarationSyntax>
         {
@@ -333,13 +348,13 @@ public class RoslynFormattingHelperNormalizeNewTests
             .WithAccessorList(AccessorList(List(accessors)))
             .WithModifiers(TokenList());
 
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), "type taken from existing property");
+        Assert.DoesNotThrow(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"));
     }
 
     [Test]
-    public void KnownFalsePositive_MemberRefactoring_ExtractMethod_4569_IsRejected()
+    public void SafeSite_MemberRefactoring_ExtractMethod_4569_IsAccepted()
     {
-        // Causes: parameter types carry SyntaxFactory.Space, and the extracted statements keep their interior spacing.
+        // Parameter types carry SyntaxFactory.Space, and the extracted statements keep their interior single-space spacing.
         var statement = ParseStatement("var total = a + b;");
         var bodyStatements = new List<StatementSyntax>
         {
@@ -354,13 +369,14 @@ public class RoslynFormattingHelperNormalizeNewTests
             .WithParameterList(ParameterList(SeparatedList(parameters)))
             .WithBody(Block(bodyStatements));
 
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), "extracted method");
+        Assert.DoesNotThrow(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"));
     }
 
     [Test]
-    public void KnownFalsePositive_MemberRefactoring_ExtractMethod_CallSite_4633_IsRejected()
+    public void PinnedNeedsC3_MemberRefactoring_ExtractMethod_CallSite_4633_CopiedIndentation_IsRejected()
     {
-        // Cause: the site copies the original statement's leading trivia (the user's indentation) onto the call.
+        // The site copies the original statement's leading trivia (the user's indentation) onto the call.
+        // Rejection is correct; C3 must drop the copied trivia (see the SafeSite_ twin below).
         var original = ParseStatement("        var total = a + b;\n");
         var node = BuildCallSite().WithLeadingTrivia(original.GetLeadingTrivia());
         AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), "call site with copied indentation");
@@ -385,8 +401,9 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void KnownFalsePositive_AttributeTextEditBuilder_49_ParsedListStillAttached_IsRejectedByCheck2()
+    public void PinnedNeedsC3_AttributeTextEditBuilder_49_ParsedListStillAttached_IsRejectedByCheck2()
     {
+        // Needs a detach step (WithoutTrivia() or equivalent) at the call site in C3.
         var list = ParseAttributeList("Obsolete");
         Assert.That(list.Parent, Is.Not.Null);
 
@@ -403,27 +420,27 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void KnownFalsePositive_AttributeTextEditBuilder_49_DetachedListWithArguments_IsRejected()
+    public void SafeSite_AttributeTextEditBuilder_49_DetachedListWithArguments_IsAccepted()
     {
-        // Cause: the parsed list keeps the user-style spacing inside its argument list (", ").
+        // Once detached, the parsed list only keeps single-space spacing inside its argument list (", ").
         var list = ParseAttributeList("Obsolete(\"use X\", true)").WithoutTrivia();
         Assert.That(list.Parent, Is.Null);
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(list, "\n"), "parsed attribute with arguments");
+        Assert.DoesNotThrow(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(list, "\n"));
     }
 
     [Test]
-    public void KnownFalsePositive_AttributeTextEditBuilder_94_ParsedAttributeWithArguments_IsRejected()
+    public void SafeSite_AttributeTextEditBuilder_94_DetachedAttributeWithArguments_IsAccepted()
     {
         var attribute = ParseAttributeList("Obsolete(\"use X\", true)").Attributes.First().WithoutTrivia();
         Assert.That(attribute.Parent, Is.Null);
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(attribute, "\n"), "parsed attribute with arguments");
+        Assert.DoesNotThrow(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(attribute, "\n"));
     }
 
     [Test]
-    public void KnownFalsePositive_BasicRefactoring_ExtractInterface_795_NewRoot_IsRejected()
+    public void PinnedNeedsC3_BasicRefactoring_ExtractInterface_795_NewRoot_IsRejected()
     {
-        // Causes: the site deliberately sets non-elastic CRLF + indentation trivia on each interface member
-        // (MemberTrivia) and reuses the original using directives and method parts with their own spacing.
+        // Needs elastic trivia (or none) instead of MemberTrivia at the call site in C3: the site deliberately
+        // sets non-elastic CRLF + indentation trivia on each interface member (MemberTrivia).
         var root = Parse("using System;\nusing System.Linq;\n\nnamespace Demo;\n\npublic class Svc\n{\n    public int Total(int a, int b) => a + b;\n}\n");
         var m = root.DescendantNodes().OfType<MethodDeclarationSyntax>().First();
         static SyntaxTriviaList MemberTrivia() => TriviaList(CarriageReturnLineFeed, Whitespace("    "));
@@ -441,9 +458,10 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void KnownFalsePositive_AdvancedStructural_ExtractSuperclass_126_MixedRoot_IsRejected()
+    public void PinnedNeedsC3_AdvancedStructural_ExtractSuperclass_126_MixedRoot_IsRejected()
     {
-        // Provenance of this site is unverified (proposal open question 4): the new root embeds the existing
+        // Needs a detach/rebuild step for the embedded properties in C3. Provenance of this site is unverified
+        // (proposal open question 4): the new root embeds the existing
         // class's property declarations, so the content check correctly sees user formatting here.
         var root = Parse("using System;\n\nnamespace Demo;\n\npublic class Customer\n{\n    public string Name { get; set; }\n    public int Age { get; set; }\n}\n");
         var properties = root.DescendantNodes().OfType<ClassDeclarationSyntax>().First().Members.OfType<PropertyDeclarationSyntax>().ToArray();

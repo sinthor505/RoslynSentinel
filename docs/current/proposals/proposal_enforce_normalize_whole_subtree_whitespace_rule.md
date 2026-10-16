@@ -307,6 +307,16 @@ Whether every engine's tool wrapper already does this is **[unverified]**.
   - each rejection message (checks 1-3);
   - the content check (4) run against fixtures copied from the ~11 known safe sites;
   - the EOL comes from the parameter.
+- **C2b (done, follow-up to C2):** check 4 now exempts a whitespace trivia that is exactly one space
+  (`SyntaxFactory.Space`, parsed single-line snippets). `ElasticWhitespace(text)` carries no elastic annotation and
+  cannot be told from `Whitespace(text)`, so longer whitespace is still counted. Newlines, comments and indentation
+  are still rejected. Of the 12 fixtures first pinned as false positives, 7 are now accepted (CodeGeneration :972
+  with parameters, AdvancedRefactoring :335/:366, MemberRefactoring :4569, AttributeTextEditBuilder detached :49
+  and :94, `ParseMemberDeclaration` single-line). Still rejected, so C3 must change the call site (pinned as
+  `PinnedNeedsC3_*`): MemberRefactoring ExtractMethod call site :4633 (drop the copied indentation trivia),
+  AttributeTextEditBuilder :49 (the parsed list is still attached to the dummy class; detach it), BasicRefactoring
+  :795 (non-elastic `MemberTrivia`; use elastic trivia), AdvancedStructural :126 (embeds existing properties; detach
+  or rebuild), and any site that builds multi-character whitespace with `ElasticWhitespace(text)`.
 - **C3 (implementer, <=3 Engines files per dispatch):** migrate the NewChild sites (CodeGeneration
   :972/:997, AdvancedRefactoring :335/:366, MemberRefactoring :4423/:4487, Mapping :91, and the raw
   `NormalizeWhitespace` calls on synthesized attributes at `AttributeTextEditBuilder.cs:49/:94`) and NewRoot sites
@@ -350,7 +360,8 @@ Whether every engine's tool wrapper already does this is **[unverified]**.
 
 ## Open questions (slice-scoped)
 
-1. Does the content check (4) hold up without false positives? Decided by the C2 tests.
+1. Does the content check (4) hold up without false positives? Decided by the C2 tests; C2b exempts single-space
+   whitespace, the remaining rejections are listed under C2b.
 2. Which `Formatter` options apply when `null` is passed (13 sites)? Trace before C5.
 3. Are the ~65 legacy root sites reachable? (C6, first step.)
 4. What is the provenance of AdvancedStructuralEngine :126, :1108 and :1674? AdvancedStructuralEngine

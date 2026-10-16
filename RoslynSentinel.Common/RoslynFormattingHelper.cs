@@ -338,6 +338,11 @@ public static class RoslynFormattingHelper
     /// when it looks like existing code (or is a <see cref="CompilationUnitSyntax"/>, which belongs to
     /// <see cref="NormalizeNewRootWhitespace"/>). <paramref name="eol"/> has no default: pass the target
     /// file's or project's line ending.
+    /// <para>
+    /// Content-check exemption: a whitespace trivia that is exactly one space (what <c>SyntaxFactory.Space</c>
+    /// and a parsed single-line snippet carry) is not counted as user formatting. End-of-line, comment and
+    /// longer whitespace (indentation) trivia that is not elastic are still rejected.
+    /// </para>
     /// </summary>
     public static T NormalizeNewChildWhitespace<T>(T node, string eol, string indentation = "    ", bool elasticTrivia = true)
         where T : SyntaxNode
@@ -360,7 +365,8 @@ public static class RoslynFormattingHelper
     /// unit has the same CLR type whether it is new or the root of an existing file, so the node is
     /// checked by <c>EnsureNodeIsNew</c> and an <see cref="ArgumentException"/> is thrown when it looks
     /// like an existing file's root. <paramref name="eol"/> has no default: pass the target file's or
-    /// project's line ending.
+    /// project's line ending. The content check exempts single-space whitespace trivia, exactly as
+    /// described on <see cref="NormalizeNewChildWhitespace{T}"/>.
     /// </summary>
     public static CompilationUnitSyntax NormalizeNewRootWhitespace(CompilationUnitSyntax root, string eol, string indentation = "    ", bool elasticTrivia = true)
     {
@@ -372,8 +378,8 @@ public static class RoslynFormattingHelper
     /// Shared guard for <see cref="NormalizeNewChildWhitespace{T}"/> and <see cref="NormalizeNewRootWhitespace"/>.
     /// Rejects, in order: (2) a node attached to a tree (<see cref="SyntaxNode.Parent"/> is not null),
     /// (3) a node whose <see cref="SyntaxTree.FilePath"/> is non-empty (it came from a file), and
-    /// (4) a subtree that carries user formatting (non-elastic whitespace, end-of-line or comment
-    /// trivia), because <c>NormalizeWhitespace</c> would discard it. Check 1 (a
+    /// (4) a subtree that carries user formatting (non-elastic whitespace other than a single space,
+    /// end-of-line or comment trivia), because <c>NormalizeWhitespace</c> would discard it. Check 1 (a
     /// <see cref="CompilationUnitSyntax"/> passed to the child method) is made by the child method itself.
     /// </summary>
     private static void EnsureNodeIsNew(SyntaxNode node)
@@ -400,10 +406,21 @@ public static class RoslynFormattingHelper
         }
 
         // Check 4: user formatting present. Elastic trivia is what SyntaxFactory synthesizes, so it is fine.
+        // Exemption: a whitespace trivia that is exactly one space is not counted. SyntaxFactory.Space and
+        // a parsed single-line snippet produce it, and it is harmless because NormalizeWhitespace rebuilds
+        // inter-token spacing anyway. This is the narrowest rule the public API allows: SyntaxFactory.
+        // ElasticWhitespace(text) carries no elastic annotation and is indistinguishable from
+        // SyntaxFactory.Whitespace(text), so multi-character whitespace (indentation) is still counted.
+        // End-of-line and comment trivia are always counted.
         var formattingTriviaCount = 0;
         foreach (var trivia in node.DescendantTrivia(descendIntoTrivia: false))
         {
             if (trivia.HasAnnotation(SyntaxAnnotation.ElasticAnnotation))
+            {
+                continue;
+            }
+
+            if (trivia.IsKind(SyntaxKind.WhitespaceTrivia) && trivia.ToString() == " ")
             {
                 continue;
             }
@@ -424,7 +441,7 @@ public static class RoslynFormattingHelper
         if (formattingTriviaCount > 0)
         {
             throw new ArgumentException(
-                $"The node contains {formattingTriviaCount} piece(s) of non-elastic whitespace, end-of-line or comment trivia, which is existing formatting that NormalizeWhitespace would discard. {ExistingCodeHint}",
+                $"The node contains {formattingTriviaCount} piece(s) of non-elastic whitespace (other than a single space), end-of-line or comment trivia, which is existing formatting that NormalizeWhitespace would discard. {ExistingCodeHint}",
                 nameof(node));
         }
     }
