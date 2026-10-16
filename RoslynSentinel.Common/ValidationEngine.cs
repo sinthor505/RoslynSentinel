@@ -88,10 +88,21 @@ public class ValidationEngine
     /// </param>
     public async Task<DiagnosticReport> ValidateChangesAsync(Dictionary<FilePathWrapper, string> fileChanges,
         IReadOnlyCollection<FilePathWrapper>? removePaths, CancellationToken cancellationToken = default)
+        => (await ValidateChangesWithCandidateAsync(fileChanges, removePaths, cancellationToken)).Report;
+
+    /// <summary>
+    /// Instance form of <see cref="ValidateChangesWithCandidateAsync(Solution, Dictionary{FilePathWrapper, string}, IReadOnlyCollection{FilePathWrapper}?, CancellationToken)"/>:
+    /// validates against the committed workspace snapshot, writes the failure blob exactly as
+    /// <see cref="ValidateChangesAsync(Dictionary{FilePathWrapper, string}, IReadOnlyCollection{FilePathWrapper}?, CancellationToken)"/>
+    /// does, and also returns the candidate Solution that was compiled.
+    /// </summary>
+    public async Task<ValidationCandidateResult> ValidateChangesWithCandidateAsync(Dictionary<FilePathWrapper, string> fileChanges,
+        IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see ValidateDiffAsync above for rationale (55-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var report = await ValidateChangesAsync(solution, fileChanges, removePaths, cancellationToken);
+        var outcome = await ValidateChangesWithCandidateAsync(solution, fileChanges, removePaths, cancellationToken);
+        var report = outcome.Report;
 
         if (report.IsError && report.Diagnostics.Count > 0)
         {
@@ -101,7 +112,7 @@ public class ValidationEngine
                 _workspaceManager.GetSolutionRoot());
         }
 
-        return report;
+        return outcome;
     }
 
     /// <summary>
@@ -123,6 +134,19 @@ public class ValidationEngine
     /// diagnostic on the otherwise-normal case of renaming a file to match its unique type).
     /// </summary>
     public static async Task<DiagnosticReport> ValidateChangesAsync(
+        Solution baseline, Dictionary<FilePathWrapper, string> fileChanges,
+        IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default)
+        => (await ValidateChangesWithCandidateAsync(baseline, fileChanges, removePaths, cancellationToken)).Report;
+
+    /// <summary>
+    /// Same validation as <see cref="ValidateChangesAsync(Solution, Dictionary{FilePathWrapper, string}, IReadOnlyCollection{FilePathWrapper}?, CancellationToken)"/>,
+    /// but also returns the candidate Solution that was compiled, so a caller can bind symbols in the exact text
+    /// that was validated (instance-move preview classification) without building a second candidate. The
+    /// candidate's compilations are the ones the diagnostics came from, so asking it for a SemanticModel reuses
+    /// the already-built compilation. When no file could be mapped to a document the candidate is the baseline
+    /// with any <paramref name="removePaths"/> removals applied.
+    /// </summary>
+    public static async Task<ValidationCandidateResult> ValidateChangesWithCandidateAsync(
         Solution baseline, Dictionary<FilePathWrapper, string> fileChanges,
         IReadOnlyCollection<FilePathWrapper>? removePaths = null, CancellationToken cancellationToken = default)
     {
@@ -174,7 +198,7 @@ public class ValidationEngine
         if (affectedProjectIds.Count == 0)
         {
             Debug.WriteLine("No files could be mapped to solution documents, nothing to validate.");
-            return new DiagnosticReport(false, new List<DiagnosticInfo>());
+            return new ValidationCandidateResult(new DiagnosticReport(false, new List<DiagnosticInfo>()), candidate);
         }
 
         // A change can compile cleanly within its own project (e.g. removing a public member
@@ -235,7 +259,7 @@ public class ValidationEngine
         }
 
         Debug.WriteLine($"Validation complete. Introduced errors: {introducedDiagnostics.Count}");
-        return new DiagnosticReport(!(introducedDiagnostics.Count == 0), introducedDiagnostics);
+        return new ValidationCandidateResult(new DiagnosticReport(!(introducedDiagnostics.Count == 0), introducedDiagnostics), candidate);
     }
 
     private static string DiagnosticKey(Diagnostic d)
@@ -247,3 +271,10 @@ public class ValidationEngine
         return $"{d.Id}|{d.GetMessage()}|{location.Path}";
     }
 }
+/// <summary>
+/// Outcome of <see cref="ValidationEngine.ValidateChangesWithCandidateAsync(Solution, Dictionary{FilePathWrapper, string}, IReadOnlyCollection{FilePathWrapper}?, CancellationToken)"/>:
+/// the delta diagnostics plus the candidate Solution (baseline with the proposed texts applied) they were computed from.
+/// </summary>
+/// <param name="Report">The newly introduced errors, identical to what <c>ValidateChangesAsync</c> returns.</param>
+/// <param name="Candidate">The candidate Solution that was compiled; its text for each changed path equals the validated text.</param>
+public sealed record ValidationCandidateResult(DiagnosticReport Report, Solution Candidate);

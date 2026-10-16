@@ -4615,7 +4615,11 @@ public class MemberRefactoringEngine
         var previewEdits = new Dictionary<DocumentId, List<TextChange>>();
         var (previewTexts, _) = await AddInstanceMoveStructuralEditsAsync(previewEdits, document, root, classNode, membersToMove, targetClassName, destinationDoc, destinationClassNode, false, cancellationToken);
         var previewChanges = await MaterializeDocumentEditsAsync(solution, previewEdits, previewTexts, cancellationToken);
-        var validation = await _validationEngine.ValidateChangesAsync(previewChanges, cancellationToken);
+        var validationOutcome = await _validationEngine.ValidateChangesWithCandidateAsync(previewChanges, cancellationToken: cancellationToken);
+        var validation = validationOutcome.Report;
+        // The candidate Solution the diagnostics were computed from: its text for each previewChanges path is exactly the
+        // validated text. Slice D2.3 binds each reference in it (MoveBindCheck) instead of matching diagnostic lines; unused until then.
+        var trialSolution = validationOutcome.Candidate;
         var results = new List<PreviewCallSite>();
         var movingMemberDeclarationSpans = new HashSet<TextSpan>(membersToMove.Select(m => m.Span));
         foreach (var symbol in memberSymbols)
