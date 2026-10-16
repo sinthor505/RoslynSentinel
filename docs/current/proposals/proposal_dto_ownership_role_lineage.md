@@ -227,7 +227,10 @@ rename can change `LargeResultInfo.resultType`):
   - `layer` and `role` enums;
   - a `domain` enum kept in sync with the namespaces by a test (from name prefixes until Phase 3);
   - `shapeLike` (property names, ranked by overlap).
-- **Result shapes:** the hybrid from `findings/finding_engine_result_shapes_primitives_and_wrapper_usage.md`.
+- **Result shapes:** every operation result implements the status interface, per
+  `findings/finding_engine_result_shapes_primitives_and_wrapper_usage.md`. The interface `IResultStatus` is renamed
+  to `IOperationResult` (73 implementers across Common, Engines and Tools.Basic). The rename is the first slice of
+  Phase 2, done with `RenameSymbol`.
 - **Domain namespaces:** survey first. No convention is fixed until a codebase-wide survey of types and
   dependencies is done.
 
