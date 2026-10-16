@@ -424,7 +424,7 @@ public class MsToolAugmentEngine
             return MsAugmentResult.Fail("Could not determine replacement form (return/assignment). Manual conversion required.");
         }
 
-        return MsAugmentResult.Ok(await RoslynFormattingHelper.ReplaceNodeFormattedAsync(doc, root, sw, replacement, cancellationToken));
+        return MsAugmentResult.Ok(await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(doc, root, sw, replacement, cancellationToken));
     }
 
     // ── 4. ConvertStringFormatToInterpolatedSmart ─────────────────────────────
@@ -571,7 +571,7 @@ public class MsToolAugmentEngine
             SyntaxFactory.Token(SyntaxKind.InterpolatedStringEndToken))
             .WithTriviaFrom(invocation);
 
-        return MsAugmentResult.Ok(await RoslynFormattingHelper.ReplaceNodeFormattedAsync(doc, root, invocation, interpolated, cancellationToken));
+        return MsAugmentResult.Ok(await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(doc, root, invocation, interpolated, cancellationToken));
     }
 
     // ── 5. SortAndDeduplicateUsings ───────────────────────────────────────────

@@ -320,7 +320,7 @@ public class MemberRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, classDecl, newClassNode, cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, classDecl, newClassNode, cancellationToken),
             Message = $"// paramName='{paramName}', fieldName='{derivedFieldName}'"
         };
     }
@@ -615,7 +615,7 @@ public class MemberRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, classDecl, newClassNode, cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, classDecl, newClassNode, cancellationToken),
             Message = fieldDecl != null ? $"// paramName='{paramName}', fieldName='{candidateFieldName}', fieldRemoved='{newMembers.All(m => m != fieldDecl)}'" : $"// paramName='{paramName}'"
         };
     }
@@ -874,7 +874,7 @@ public class MemberRefactoringEngine
         }
 
         var newEnumNode = enumDecl.WithMembers(SyntaxFactory.SeparatedList(newMembers));
-        var updatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, enumDecl, newEnumNode, cancellationToken);
+        var updatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, enumDecl, newEnumNode, cancellationToken);
         var summary = new List<string>();
         if (added.Count > 0)
         {
@@ -1457,7 +1457,7 @@ public class MemberRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, methodDecl, newMethodDecl, cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, methodDecl, newMethodDecl, cancellationToken),
             Message = $"// paramName='{paramName}'"
         };
     }
@@ -1908,7 +1908,7 @@ public class MemberRefactoringEngine
         var remaining = target.Modifiers.Where(m => !accessModifierKinds.Contains(m.Kind())).ToList();
         var newTokens = newKinds.Select(k => SyntaxFactory.Token(k).WithTrailingTrivia(SyntaxFactory.Space));
         var newModifiers = SyntaxFactory.TokenList(newTokens.Concat(remaining));
-        var updatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken);
+        var updatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -1996,7 +1996,7 @@ public class MemberRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
         };
     }
 
@@ -2078,7 +2078,7 @@ public class MemberRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, target, target.WithModifiers(newModifiers), cancellationToken)
         };
     }
 
@@ -2311,7 +2311,7 @@ public class MemberRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, oldAttr, newAttr, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, oldAttr, newAttr, cancellationToken)
         };
     }
 
@@ -2394,7 +2394,7 @@ public class MemberRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, memberTarget, newMember, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, memberTarget, newMember, cancellationToken)
         };
     }
 
@@ -2739,7 +2739,7 @@ public class MemberRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 
@@ -2796,7 +2796,7 @@ public class MemberRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Params keyword toggled.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, lastParam, newParam, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, lastParam, newParam, cancellationToken)
         };
     }
 
@@ -2904,7 +2904,7 @@ public class MemberRefactoringEngine
             };
         }
 
-        var replacedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, member, newMember, cancellationToken);
+        var replacedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, member, newMember, cancellationToken);
         if (string.Equals(replacedText, root.ToFullString(), StringComparison.Ordinal))
         {
             return new DocumentEditResult
@@ -3132,12 +3132,12 @@ public class MemberRefactoringEngine
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
                 Message = $"// Added {DescribeParsedMember(newType)}.",
-                UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, targetNamespace, newNamespace, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, targetNamespace, newNamespace, cancellationToken)
             };
         }
 
         // No namespace in the file at all -> append directly to the compilation unit.
-        // ReplaceNodeFormattedAsync needs oldNode to be a strict descendant of the tracked root,
+        // ReplaceNodeAndFormatReplacementAsync needs oldNode to be a strict descendant of the tracked root,
         // which the root itself never is, so format the freshly-built root directly instead.
         var newRoot = root.AddMembers(newType);
         var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), cancellationToken: cancellationToken);
@@ -4328,7 +4328,7 @@ public class MemberRefactoringEngine
                 {
                     Outcome = EditOutcome.Modified,
                     FilePath = filePath,
-                    UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, methodNode, propertyNode, cancellationToken)
+                    UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, methodNode, propertyNode, cancellationToken)
                 };
             }
         }
@@ -4402,7 +4402,7 @@ public class MemberRefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, methodNode, newMethodNode, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, methodNode, newMethodNode, cancellationToken)
             };
         }
 
@@ -5163,7 +5163,7 @@ public class MemberRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 
@@ -5240,7 +5240,7 @@ public class MemberRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, container, newContainer, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, container, newContainer, cancellationToken)
         };
     }
 

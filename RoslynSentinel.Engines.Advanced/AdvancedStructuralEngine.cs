@@ -620,7 +620,7 @@ public class StructuralRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, method, indexer, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, method, indexer, cancellationToken)
         };
     }
 
@@ -701,7 +701,7 @@ public class StructuralRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentClass, newClass, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, newRoot, currentClass, newClass, cancellationToken)
         };
     }
 
@@ -842,7 +842,7 @@ public class StructuralRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentMethod, updatedMethod, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, newRoot, currentMethod, updatedMethod, cancellationToken)
         };
     }
 
@@ -954,7 +954,7 @@ public class StructuralRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Local variable introduced.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
         };
     }
 

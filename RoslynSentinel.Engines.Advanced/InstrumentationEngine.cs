@@ -49,7 +49,7 @@ public class InstrumentationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Try/catch added to method.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, methodNode, newMethodNode, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, methodNode, newMethodNode, cancellationToken)
         };
     }
 

@@ -164,7 +164,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, classNode, newClass, cancellationToken)
         };
     }
 

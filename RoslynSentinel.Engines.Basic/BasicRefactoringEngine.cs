@@ -1023,7 +1023,7 @@ public class BasicRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Indexer converted to method.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, indexer, getter, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, indexer, getter, cancellationToken)
         };
     }
 
@@ -1123,7 +1123,7 @@ public class BasicRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, trackedRoot, currentType, newType, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, trackedRoot, currentType, newType, cancellationToken)
         };
     }
 
@@ -1320,7 +1320,7 @@ public class BasicRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, newRoot, currentBlock, newBlock, cancellationToken)
         };
     }
 
@@ -1896,7 +1896,7 @@ public class BasicRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, target, target.WithLeadingTrivia(SyntaxFactory.TriviaList(stripped)), cancellationToken, RoslynFormattingHelper.TriviaEditIntent.ReplaceLeading)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, target, target.WithLeadingTrivia(SyntaxFactory.TriviaList(stripped)), cancellationToken, RoslynFormattingHelper.TriviaEditIntent.ReplaceLeading)
         };
     }
 
@@ -2031,7 +2031,7 @@ public class BasicRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, block, newBlock, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, block, newBlock, cancellationToken)
         };
     }
 
@@ -2144,7 +2144,7 @@ public class BasicRefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, block, newBlock, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, block, newBlock, cancellationToken)
             };
         }
         catch (ToolException ex)

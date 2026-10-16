@@ -9,7 +9,7 @@ namespace RoslynSentinel.Common;
 public static class RoslynFormattingHelper
 {
     /// <summary>
-    /// Controls which side wins when <see cref="ReplaceNodeFormattedAsync"/>'s shared "replace a node, then
+    /// Controls which side wins when <see cref="ReplaceNodeAndFormatReplacementAsync"/>'s shared "replace a node, then
     /// format" helper decides whose leading trivia (blank lines, doc comments, etc.) to keep on the
     /// replacement node.
     /// </summary>
@@ -49,7 +49,7 @@ public static class RoslynFormattingHelper
     /// <paramref name = "newNode"/>'s leading trivia on purpose (e.g. stripping a doc comment) -> then
     /// <paramref name = "newNode"/>'s leading trivia wins unconditionally, even if it looks empty.
     /// </summary>
-    public static async Task<string> ReplaceNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld, ILogger? logger = null)
+    public static async Task<string> ReplaceNodeAndFormatReplacementAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld, ILogger? logger = null)
     {
         var originalSourceText = await document.GetTextAsync(cancellationToken);
         var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
@@ -71,7 +71,7 @@ public static class RoslynFormattingHelper
             var problems = CheckPostWriteInvariants(normalizedText, triviaIntent, oldNode);
             foreach (var problem in problems)
             {
-                logger.LogWarning("ReplaceNodeFormattedAsync post-write invariant violation: {Problem}", problem);
+                logger.LogWarning("ReplaceNodeAndFormatReplacementAsync post-write invariant violation: {Problem}", problem);
             }
         }
 
@@ -102,7 +102,7 @@ public static class RoslynFormattingHelper
     }
 
     /// <summary>
-    /// Batch form of <see cref="ReplaceNodeFormattedAsync"/>: replaces every old->new pair in
+    /// Batch form of <see cref="ReplaceNodeAndFormatReplacementAsync"/>: replaces every old->new pair in
     /// <paramref name="replacements"/> against one evolving root and formats the whole set in a
     /// single <see cref="Formatter.FormatAsync"/> pass, instead of one call per pair. Needed because
     /// after the first <c>ReplaceNode</c> call, every other pending old node reference is stale -> the
@@ -300,7 +300,7 @@ public static class RoslynFormattingHelper
     /// behavior -> this method exists purely as a single, greppable chokepoint for the whole-subtree
     /// form of whitespace normalization, not as a safety fix.
     /// <para>
-    /// Unlike <see cref="ReplaceNodeFormattedAsync"/>, <see cref="RemoveNodePreservingTriviaAsync"/>, and
+    /// Unlike <see cref="ReplaceNodeAndFormatReplacementAsync"/>, <see cref="RemoveNodePreservingTriviaAsync"/>, and
     /// <see cref="InsertMemberDeclarationAndFormatInsertionAsync"/> -> which are narrowly scoped to just the node being
     /// edited via a tracking annotation, and are safe by construction regardless of what the caller
     /// passes -> this method's safety depends entirely on what <paramref name="node"/> is:
@@ -317,7 +317,7 @@ public static class RoslynFormattingHelper
     /// </list>
     /// <para>
     /// For an edit-then-format use case on an existing tree, prefer
-    /// <see cref="InsertMemberDeclarationAndFormatInsertionAsync"/>/<see cref="ReplaceNodeFormattedAsync"/>/
+    /// <see cref="InsertMemberDeclarationAndFormatInsertionAsync"/>/<see cref="ReplaceNodeAndFormatReplacementAsync"/>/
     /// <see cref="RemoveNodePreservingTriviaAsync"/> instead of this method -> they scope the formatting
     /// annotation to just the changed node so siblings are left untouched. Reach for this method only
     /// when the node truly has no siblings to protect (a synthesized standalone node), or as a

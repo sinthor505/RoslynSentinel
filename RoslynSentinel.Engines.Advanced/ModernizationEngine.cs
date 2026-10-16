@@ -851,7 +851,7 @@ public class SyntaxModernizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Class made immutable.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, classNode, newClass, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, classNode, newClass, cancellationToken)
         };
     }
 

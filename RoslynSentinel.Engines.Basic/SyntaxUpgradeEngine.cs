@@ -212,7 +212,7 @@ public class SyntaxUpgradeEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, node, nameofExpr, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, node, nameofExpr, cancellationToken)
             };
         }
         return new DocumentEditResult
@@ -286,7 +286,7 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root!, switchStmt, newReturn, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, switchStmt, newReturn, cancellationToken)
         };
     }
 
@@ -781,7 +781,7 @@ public class SyntaxUpgradeEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Class converted to primary constructor.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, classNode, newClassNode, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, classNode, newClassNode, cancellationToken)
         };
     }
 
@@ -845,7 +845,7 @@ public class SyntaxUpgradeEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Converted to file-scoped namespace.",
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, nsDecl, fileScopedNs, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, nsDecl, fileScopedNs, cancellationToken)
         };
     }
 

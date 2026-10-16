@@ -2957,7 +2957,7 @@ public class AntiPatternEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
-                UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, classNode, newClassForBlock, cancellationToken),
+                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, classNode, newClassForBlock, cancellationToken),
                 FilePath = filePath
             };
         }
@@ -2967,7 +2967,7 @@ public class AntiPatternEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, classNode, newClass, cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, classNode, newClass, cancellationToken),
             FilePath = filePath
         };
     }

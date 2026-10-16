@@ -386,7 +386,7 @@ public class AdvancedRefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = updatedPath,
-                UpdatedText = "// Updated file: " + updatedPath + "\n" + await RoslynFormattingHelper.ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
+                UpdatedText = "// Updated file: " + updatedPath + "\n" + await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
             };
         }
 
@@ -394,7 +394,7 @@ public class AdvancedRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = interfaceDocument.FilePath ?? interfaceDocument.Name,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
         };
     }
 }

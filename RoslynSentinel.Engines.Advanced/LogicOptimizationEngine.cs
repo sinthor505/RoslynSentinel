@@ -1438,7 +1438,7 @@ public class LogicSimplificationEngine
                     return new DocumentEditResult
                     {
                         Outcome = EditOutcome.Modified,
-                        UpdatedText = await RoslynFormattingHelper.ReplaceNodeFormattedAsync(document, root, methodNode, newMethodNode, cancellationToken),
+                        UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, methodNode, newMethodNode, cancellationToken),
                         FilePath = filePath
                     };
                 }
