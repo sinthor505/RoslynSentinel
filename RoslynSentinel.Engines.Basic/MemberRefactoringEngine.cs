@@ -4193,6 +4193,48 @@ public class MemberRefactoringEngine
             notes.Add($"{crefEdits.SkippedCandidates} ambiguous (candidate) cref(s) were not retargeted.");
         }
 
+        // Doc-comment crefs that use a bare name for a member of the source class would stop resolving once the member
+        // moves, so the moved members' own docs are qualified with the source class name. The collector returns edits
+        // only for the moved members' docs; the same skip rule as the retarget loop applies (receiver and retarget edits win).
+        // A null semantic model or symbol skips qualification: there is no declared source type to qualify against.
+        var qualified = 0;
+        var sourceType = semanticModel?.GetDeclaredSymbol(classNode, cancellationToken);
+        if (sourceType is not null)
+        {
+            var qualifyResult = await InstanceMoveCrefQualifyEdits.CollectMovedDocQualifyEditsAsync(document, sourceType, movedSymbols, membersToMove, cancellationToken);
+            foreach (var qualifyEdit in qualifyResult.Edits)
+            {
+                if (!editsByDocument.TryGetValue(document.Id, out var docEdits))
+                {
+                    docEdits = new List<TextChange>();
+                    editsByDocument[document.Id] = docEdits;
+                }
+
+                if (docEdits.Any(e => e.Span == qualifyEdit.Span || e.Span.OverlapsWith(qualifyEdit.Span)))
+                {
+                    continue;
+                }
+
+                docEdits.Add(qualifyEdit);
+                qualified++;
+            }
+
+            if (qualified > 0)
+            {
+                notes.Add($"Qualified {qualified} doc-comment cref(s) in the moved member(s) with '{className}.' so they still resolve at '{targetClassName}'.");
+            }
+
+            if (qualifyResult.DroppedByRebind > 0)
+            {
+                notes.Add($"{qualifyResult.DroppedByRebind} cref qualification(s) were dropped because the qualified form did not rebind to the same member.");
+            }
+        }
+
+        if (InstanceMoveCrefQualifyEdits.HasBareCrefInMovedDocs(membersToMove))
+        {
+            notes.Add("Bare doc-comment crefs in the moved member(s) to inherited members of the source class were not checked.");
+        }
+
         var (texts, newFiles, _) = await AddInstanceMoveStructuralEditsAsync(editsByDocument, document, root, classNode, membersToMove, targetClassName, existingTargetDoc, existingTargetClassNode, true, cancellationToken);
         // AppliedEdits covers every existing file the move touches (source, target and caller documents); the brand-new
         // class file in newFiles has no original text, so it is added to the result below but gets no edit entry.
