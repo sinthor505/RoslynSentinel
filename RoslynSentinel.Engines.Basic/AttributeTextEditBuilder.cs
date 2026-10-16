@@ -5,6 +5,8 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Engines.Basic;
 
 /// <summary>
@@ -46,7 +48,7 @@ public static class AttributeTextEditBuilder
     {
         var existing = GetAttributeLists(target);
         var anchor = existing.Count > 0 ? existing[existing.Count - 1].GetLastToken().GetNextToken() : target.GetFirstToken();
-        var attributeText = newList.NormalizeWhitespace().ToString();
+        var attributeText = RoslynFormattingHelper.NormalizeNewChildWhitespace(DetachWithoutFormatting(newList), eol).ToString();
 
         var line = text.Lines.GetLineFromPosition(anchor.SpanStart);
         var prefix = text.ToString(TextSpan.FromBounds(line.Start, anchor.SpanStart));
@@ -91,7 +93,9 @@ public static class AttributeTextEditBuilder
     /// <summary>Builds the in-place replacement of one attribute (the text between its brackets/commas only).</summary>
     public static TextEdit BuildReplaceEdit(int editIndex, AttributeSyntax oldAttribute, AttributeSyntax newAttribute)
     {
-        return new TextEdit(oldAttribute.SpanStart, oldAttribute.Span.End, newAttribute.NormalizeWhitespace().ToString(), editIndex);
+        var eol = EolUtilities.DetectDominantEol(oldAttribute.SyntaxTree.GetText());
+        var attributeText = RoslynFormattingHelper.NormalizeNewChildWhitespace(DetachWithoutFormatting(newAttribute), eol).ToString();
+        return new TextEdit(oldAttribute.SpanStart, oldAttribute.Span.End, attributeText, editIndex);
     }
 
     /// <summary>
@@ -131,6 +135,23 @@ public static class AttributeTextEditBuilder
         builder.Append(text.ToString(TextSpan.FromBounds(position, text.Length)));
         error = null;
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// Returns a parentless copy of a node parsed from caller-supplied attribute text, with its whitespace and
+    /// end-of-line trivia removed. The text never came from a file, so there is no user formatting to preserve;
+    /// <c>NormalizeWhitespace</c> rebuilds the spacing. Comments are kept (and rejected by the new-node guard).
+    /// <c>WithoutTrivia</c> is applied first because it always rebuilds the node, which detaches it from the
+    /// dummy class it was parsed inside.
+    /// </summary>
+    private static T DetachWithoutFormatting<T>(T node)
+        where T : SyntaxNode
+    {
+        var detached = node.WithoutTrivia();
+        var formatting = detached.DescendantTrivia(descendIntoTrivia: false)
+            .Where(t => t.IsKind(SyntaxKind.WhitespaceTrivia) || t.IsKind(SyntaxKind.EndOfLineTrivia))
+            .ToList();
+        return formatting.Count == 0 ? detached : detached.ReplaceTrivia(formatting, (_, _) => default);
     }
 
     private static SyntaxList<AttributeListSyntax> GetAttributeLists(SyntaxNode target)

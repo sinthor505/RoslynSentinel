@@ -951,6 +951,7 @@ public class CodeGenerationEngine
             };
         }
 
+        var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
         var newMembers = new List<MemberDeclarationSyntax>();
         foreach (var member in unimplemented)
         {
@@ -969,10 +970,10 @@ public class CodeGenerationEngine
                         SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("NotImplementedException"))
                             .WithArgumentList(SyntaxFactory.ArgumentList())));
 
-                var methodDecl = (MemberDeclarationSyntax)RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.MethodDeclaration(returnType, method.Name)
+                MemberDeclarationSyntax methodDecl = RoslynFormattingHelper.NormalizeNewChildWhitespace(SyntaxFactory.MethodDeclaration(returnType, method.Name)
                     .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
                     .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(methodParams)))
-                    .WithBody(body));
+                    .WithBody(body), eol);
                 newMembers.Add(methodDecl);
             }
             else if (member is IPropertySymbol prop)
@@ -994,9 +995,9 @@ public class CodeGenerationEngine
                     accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithBody(throwBody));
                 }
 
-                var propDecl = (MemberDeclarationSyntax)RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.PropertyDeclaration(propType, prop.Name)
+                MemberDeclarationSyntax propDecl = RoslynFormattingHelper.NormalizeNewChildWhitespace(SyntaxFactory.PropertyDeclaration(propType, prop.Name)
                     .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
-                    .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))));
+                    .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))), eol);
                 newMembers.Add(propDecl);
             }
         }

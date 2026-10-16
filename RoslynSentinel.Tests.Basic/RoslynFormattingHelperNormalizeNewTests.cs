@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using RoslynSentinel.Common;
+using RoslynSentinel.Engines.Basic;
 using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace RoslynSentinel.Tests.Basic;
@@ -408,14 +409,50 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void PinnedNeedsC3_AttributeTextEditBuilder_49_ParsedListStillAttached_IsRejectedByCheck2()
+    public void SafeSite_AttributeTextEditBuilder_49_ParsedAttachedList_BuildAddEdit_IsAcceptedAndUsesPassedEol()
     {
-        // Needs a detach step (WithoutTrivia() or equivalent) at the call site in C3.
-        var list = ParseAttributeList("Obsolete");
-        Assert.That(list.Parent, Is.Not.Null);
+        // Slice C3-G1: the parsed list is still attached to the dummy class (the raw shape the pin used to reject);
+        // the engine detaches it and strips the user's inner formatting before normalizing.
+        var list = AttributeTextEditBuilder.ParseAttributeList("Obsolete(\"use X\",\r\n      true)");
+        Assert.That(list, Is.Not.Null);
+        Assert.That(list!.Parent, Is.Not.Null);
 
-        var ex = Assert.Throws<ArgumentException>(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(list, "\n"));
-        Assert.That(ex!.Message, Does.Contain("attached to a syntax tree"));
+        var text = Microsoft.CodeAnalysis.Text.SourceText.From("public class C\r\n{\r\n}\r\n");
+        var target = CSharpSyntaxTree.ParseText(text).GetCompilationUnitRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().First();
+
+        var edit = AttributeTextEditBuilder.BuildAddEdit(0, target, list, text, "\r\n");
+
+        Assert.That(edit.NewText, Is.EqualTo("[Obsolete(\"use X\", true)]\r\n"));
+    }
+
+    [Test]
+    public void SafeSite_AttributeTextEditBuilder_94_ParsedAttachedAttribute_BuildReplaceEdit_IsAccepted()
+    {
+        // BuildReplaceEdit has no eol parameter: it derives the document's dominant EOL from the old attribute's tree.
+        var text = Microsoft.CodeAnalysis.Text.SourceText.From("[Obsolete]\r\npublic class C\r\n{\r\n}\r\n");
+        var oldAttribute = CSharpSyntaxTree.ParseText(text).GetCompilationUnitRoot().DescendantNodes().OfType<AttributeSyntax>().First();
+        var newAttribute = AttributeTextEditBuilder.ParseAttributeList("Obsolete(\"y\",   true)")!.Attributes.First();
+        Assert.That(newAttribute.Parent, Is.Not.Null);
+
+        var edit = AttributeTextEditBuilder.BuildReplaceEdit(0, oldAttribute, newAttribute);
+
+        Assert.That(edit.NewText, Is.EqualTo("Obsolete(\"y\", true)"));
+        Assert.That(edit.Start, Is.EqualTo(oldAttribute.SpanStart));
+        Assert.That(edit.End, Is.EqualTo(oldAttribute.Span.End));
+    }
+
+    [Test]
+    public void Pinned_AttributeTextEditBuilder_AttributeWithInnerComment_IsRejectedByCheck4()
+    {
+        // Known edge after C3-G1: the guard keeps comments out of the "new node" contract, so a caller-supplied
+        // attribute carrying an inner comment now throws ArgumentException instead of being rewritten with the
+        // comment kept. The guard is deliberately not weakened; revisit if comments in attribute arguments matter.
+        var list = AttributeTextEditBuilder.ParseAttributeList("Obsolete(\"x\" /* why */)");
+        var text = Microsoft.CodeAnalysis.Text.SourceText.From("public class C\n{\n}\n");
+        var target = CSharpSyntaxTree.ParseText(text).GetCompilationUnitRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().First();
+
+        var ex = Assert.Throws<ArgumentException>(() => AttributeTextEditBuilder.BuildAddEdit(0, target, list!, text, "\n"));
+        Assert.That(ex!.Message, Does.Match(@"contains \d+ piece\(s\) of non-elastic"));
     }
 
     [Test]
