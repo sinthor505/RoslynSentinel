@@ -2,6 +2,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
+using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tests.Basic;
@@ -10,7 +11,8 @@ namespace RoslynSentinel.Tests.Basic;
 /// Slice C5a of docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md:
 /// <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/> (annotated-container sites) and
 /// <see cref="RoslynFormattingHelper.FormatWholeDocumentAsync"/> (the one named whole-document chokepoint).
-/// Both must leave untouched code byte-identical and keep the document's own line-ending style.
+/// Both must leave code the edit did not touch alone (apart from the whitespace and line break the formatter owns
+/// directly in front of an annotated node) and keep the document's own line-ending style.
 /// </summary>
 public class RoslynFormattingHelperFormatSpansTests
 {
@@ -25,7 +27,9 @@ public class RoslynFormattingHelperFormatSpansTests
         return crlf ? text.Replace("\n", "\r\n") : text;
     }
 
-    private Document MakeDocument(string content)
+    // formatterNewLine: when set ("crlf" or "lf"), a global analyzer config pins the formatter's own NewLine option
+    // (end_of_line) so a test does not depend on the host's default line ending.
+    private Document MakeDocument(string content, string? formatterNewLine = null)
     {
         _workspace?.Dispose();
         _workspace = new AdhocWorkspace();
@@ -33,8 +37,22 @@ public class RoslynFormattingHelperFormatSpansTests
         var documentId = DocumentId.CreateNewId(projectId);
         var solution = _workspace.CurrentSolution
             .AddProject(projectId, "Test", "Test", LanguageNames.CSharp)
-            .AddMetadataReference(projectId, MetadataReference.CreateFromFile(typeof(object).Assembly.Location))
-            .AddDocument(documentId, "Test.cs", content);
+            .AddMetadataReference(projectId, MetadataReference.CreateFromFile(typeof(object).Assembly.Location));
+        if (formatterNewLine is null)
+        {
+            solution = solution.AddDocument(documentId, "Test.cs", content);
+        }
+        else
+        {
+            solution = solution
+                .AddDocument(documentId, "Test.cs", content, filePath: "/Test.cs")
+                .AddAnalyzerConfigDocument(
+                    DocumentId.CreateNewId(projectId),
+                    ".globalconfig",
+                    SourceText.From($"is_global = true\nend_of_line = {formatterNewLine}\n"),
+                    filePath: "/.globalconfig");
+        }
+
         return solution.GetDocument(documentId)!;
     }
 
@@ -71,7 +89,7 @@ public class RoslynFormattingHelperFormatSpansTests
     // ---- FormatAnnotatedSpansAsync ----
 
     [Test]
-    public async Task FormatAnnotatedSpans_UntouchedCodeStaysByteIdentical_OnlyAnnotatedNodeIsFormatted()
+    public async Task FormatAnnotatedSpans_UntouchedCodeIsLeftAlone_OnlyAnnotatedNodeIsFormatted()
     {
         var source = Src(false,
             "public class C",
@@ -87,10 +105,43 @@ public class RoslynFormattingHelperFormatSpansTests
 
         var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten));
 
-        Assert.That(result, Does.Contain("    private   int _a=1;\n"));
-        Assert.That(result, Does.Contain("    public void Other(  ) { var   q=2; }\n"));
-        Assert.That(result, Does.Not.Contain("Target(  )"), "The annotated method is formatted.");
-        Assert.That(result, Does.Contain("var z = 3;"));
+        var expected = Src(false,
+            "public class C",
+            "{",
+            "    private   int _a=1;",
+            "    public void Other(  ) { var   q=2; }",
+            "    public void Target() { var z = 3; }",
+            "}");
+        Assert.That(result, Is.EqualTo(expected));
+    }
+
+    [Test]
+    public async Task FormatAnnotatedSpans_AnnotatedNodeAfterBlankLineAtWrongIndent_FormatterOwnsTheWhitespaceInFrontOfIt()
+    {
+        var source = Src(false,
+            "public class C",
+            "{",
+            "    private   int _a=1;",
+            "",
+            "          public void Target(  ) { var   z=3; }",
+            "}");
+        var document = MakeDocument(source);
+        var root = (await document.GetSyntaxRootAsync())!;
+        var target = Method(root, "Target");
+        var rewritten = root.ReplaceNode(target, target.WithAdditionalAnnotations(Formatter.Annotation));
+
+        var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten));
+
+        // Pins the boundary: the un-annotated field line is untouched, while the annotated method's indentation
+        // (the whitespace directly in front of it) is re-spaced and the blank line before it is kept.
+        var expected = Src(false,
+            "public class C",
+            "{",
+            "    private   int _a=1;",
+            "",
+            "    public void Target() { var z = 3; }",
+            "}");
+        Assert.That(result, Is.EqualTo(expected));
     }
 
     [Test]
@@ -104,24 +155,40 @@ public class RoslynFormattingHelperFormatSpansTests
         var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten));
 
         Assert.That(result, Does.Contain("var a = 1;"));
-        Assert.That(result, Does.Contain("var   b=2;"), "The un-annotated method must stay byte-identical.");
+        Assert.That(result, Does.Contain("var   b=2;"), "The un-annotated method must stay unformatted.");
     }
 
     [Test]
     public async Task FormatAnnotatedSpans_LfDocumentWithSynthesizedBlock_EndsWithNoCarriageReturn()
     {
-        var document = MakeDocument(TwoMethodSource(false));
+        // The formatter's NewLine option is pinned to CRLF through a global analyzer config, so the leak scenario
+        // is exercised on every host, not only a Windows one.
+        var document = MakeDocument(TwoMethodSource(false), formatterNewLine: "crlf");
         var root = (await document.GetSyntaxRootAsync())!;
         var rewritten = AddAnnotatedMethod(root);
 
-        // Precondition: the raw formatter leaks its own NewLine option (CRLF on a Windows host) into the LF document.
+        // Precondition: the raw formatter leaks its own NewLine option (CRLF) into the LF document.
         var raw = await TextOf(await Formatter.FormatAsync(document.WithSyntaxRoot(rewritten), Formatter.Annotation));
-        Assume.That(raw, Does.Contain("\r"), "Raw formatter output has no CR on this host, so there is no leak to correct.");
+        Assert.That(raw, Does.Contain("\r"), "Raw formatter output has no CR, so the test would not exercise the leak (is the pinned NewLine option being honoured?).");
 
         var result = await TextOf(await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewritten));
 
         Assert.That(result, Does.Not.Contain("\r"));
         Assert.That(result, Does.Contain("public void Added()"));
+    }
+
+    [TestCase("lf", false)]
+    [TestCase("crlf", true)]
+    public async Task MakeDocument_FormatterNewLinePin_IsHonouredByTheRawFormatter(string newLine, bool expectCarriageReturn)
+    {
+        // Guards the pin used by the leak test above: if a Roslyn upgrade stopped honouring the analyzer config,
+        // the pinned-CRLF scenario would silently fall back to the host default.
+        var document = MakeDocument(TwoMethodSource(false), formatterNewLine: newLine);
+        var root = (await document.GetSyntaxRootAsync())!;
+
+        var raw = await TextOf(await Formatter.FormatAsync(document.WithSyntaxRoot(AddAnnotatedMethod(root)), Formatter.Annotation));
+
+        Assert.That(raw.Contains('\r'), Is.EqualTo(expectCarriageReturn));
     }
 
     [Test]
@@ -227,6 +294,32 @@ public class RoslynFormattingHelperFormatSpansTests
 
         Assert.That(result, Does.Not.Contain("\r"));
         Assert.That(result, Does.Contain("var a = 1;"));
+    }
+
+    [Test]
+    public async Task FormatWholeDocument_LfDocumentWithSynthesizedCrlfBlock_EolReferenceKeepsLf()
+    {
+        var original = TwoMethodSource(false);
+        var document = MakeDocument(original, formatterNewLine: "crlf");
+        var originalText = await document.GetTextAsync();
+        var root = (await document.GetSyntaxRootAsync())!;
+        var cls = root.DescendantNodes().OfType<ClassDeclarationSyntax>().First();
+
+        // A synthesized member of many CRLF lines: enough that the edited text is CRLF-dominant, which is the case
+        // that flips the dominant ending when it is detected from the edited text.
+        var body = string.Concat(Enumerable.Range(0, 30).Select(i => $"    Go{i}();\r\n"));
+        var crlfMember = SyntaxFactory.ParseMemberDeclaration("public void Added()\r\n{\r\n" + body + "}\r\n")!;
+        var edited = document.WithSyntaxRoot(root.ReplaceNode(cls, cls.AddMembers(crlfMember)));
+
+        // Precondition: without a reference the edited text decides, so the synthesized CRLF block wins.
+        var withoutReference = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(edited));
+        Assert.That(withoutReference, Does.Contain("Go29();\r\n"), "Without eolReference the edited text is CRLF-dominant and keeps the synthesized CRLF.");
+
+        var result = await TextOf(await RoslynFormattingHelper.FormatWholeDocumentAsync(edited, originalText));
+
+        Assert.That(result, Does.Not.Contain("\r"));
+        Assert.That(result, Does.Contain("public void Added()"));
+        Assert.That(result, Does.Contain("    Go29();\n"));
     }
 
     [Test]

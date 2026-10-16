@@ -122,11 +122,14 @@ public class IDEStyleSimplifyMemberAccessCharacterizationTests
     }
 
     [Test]
-    public async Task SimplifyMemberAccess_MixedEol_StrayCrlfLineOutsideTheEditKeepsItsTerminator()
+    public async Task SimplifyMemberAccess_MixedEol_StrayCrlfOnTheBraceLineBeforeTheEditKeepsItsTerminator()
     {
-        // An LF document with one CRLF terminator on a line the engine does not touch. The routed helper keeps the
-        // terminators of surviving lines, so the stray CRLF must survive; the edited lines keep their own terminators.
-        var source = Src(false, Input()).Replace("    private int   _other=5;\n", "    private int   _other=5;\r\n");
+        // An LF document with one CRLF terminator on the "{" line of the edited method: the very line whose
+        // terminator the formatter rewrites with its own NewLine option (the line break in front of the first
+        // annotated statement), so this discriminates. The routed helper keeps the terminator of a line that
+        // survives, so the stray CRLF must stay, while every edited line takes the document's dominant (LF) ending.
+        var source = Src(false, Input()).Replace("    {\n        this._count++;", "    {\r\n        this._count++;");
+        Assert.That(source, Does.Contain("    {\r\n        this._count++;"), "Precondition: the stray CRLF is on the brace line.");
         SetSource(source);
 
         var result = await _engine.SimplifyMemberAccessAsync("Test.cs");

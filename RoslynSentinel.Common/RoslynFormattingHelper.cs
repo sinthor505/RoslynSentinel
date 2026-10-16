@@ -307,7 +307,8 @@ public static class RoslynFormattingHelper
     /// rewrite). This is the existing-root path of the whole-subtree-whitespace rule: the rewriter adds
     /// <see cref="Formatter.Annotation"/> to the nodes it created or changed and calls this instead of
     /// <c>NormalizeWholeSubtreeWhitespace</c> or a whole-document format, so code the rewrite did not touch is not
-    /// re-spaced and line numbers below the edit do not move.
+    /// re-spaced (the one exception is the whitespace and line break immediately before an annotated node, which the
+    /// formatter owns and may re-space) and line numbers below the edit do not move.
     /// <para>
     /// Only the annotated spans are formatted, but the formatter also rewrites the whitespace and line break
     /// directly in front of an annotated node. It uses its own NewLine option for that (the host default, CRLF on
@@ -346,20 +347,25 @@ public static class RoslynFormattingHelper
     /// This is the one place a whole-document <c>Formatter.FormatAsync</c> is allowed (the ratchet test watches for
     /// others).
     /// <para>
-    /// The result is put in the line ending of <paramref name="document"/> as it is passed in (so a caller that
-    /// builds the document with <c>WithSyntaxRoot</c> first gets the dominant ending of that edited text): lines that
-    /// survive the format unchanged keep their own terminator, and every line the formatter added or changed takes
-    /// the dominant ending (<see cref="EolUtilities.NormalizeEolOfChangedLines"/>). The formatter's own NewLine option
-    /// (the host default, CRLF on Windows, unless an .editorconfig says otherwise) therefore never leaks into an LF
-    /// document. No formatting options are passed, so the formatter resolves them from the document (workspace
-    /// options and any .editorconfig). The returned document carries the full result text.
+    /// The result is put in the line ending of <paramref name="eolReference"/> when given, otherwise of
+    /// <paramref name="document"/> as it is passed in (so a caller that builds the document with
+    /// <c>WithSyntaxRoot</c> and passes no reference gets the dominant ending of that edited text, which a
+    /// synthesized block of the other ending can flip; pass the pre-edit text as <paramref name="eolReference"/> to
+    /// avoid that): lines that survive the format unchanged keep their own terminator, and every line the
+    /// formatter added or changed takes the dominant ending (<see cref="EolUtilities.NormalizeEolOfChangedLines"/>).
+    /// The formatter's own NewLine option (the host default, CRLF on Windows, unless an .editorconfig says otherwise)
+    /// therefore never leaks into an LF document. No formatting options are passed, so the formatter resolves them
+    /// from the document (workspace options and any .editorconfig). The returned document carries the full result
+    /// text.
     /// </para>
     /// </summary>
-    public static async Task<Document> FormatWholeDocumentAsync(Document document, CancellationToken cancellationToken = default)
+    /// <param name="document">The document to format (possibly already carrying an edited root).</param>
+    /// <param name="eolReference">Optional pre-edit text of the document. When given it supplies the dominant line ending, the pre-image for the changed-lines comparison, the encoding and the checksum algorithm, so lines the edit or the formatter changed take the original document's ending even if the edited text is dominated by another one. Null means <paramref name="document"/>'s own text.</param>
+    public static async Task<Document> FormatWholeDocumentAsync(Document document, Microsoft.CodeAnalysis.Text.SourceText? eolReference = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        var originalSourceText = await document.GetTextAsync(cancellationToken);
+        var originalSourceText = eolReference ?? await document.GetTextAsync(cancellationToken);
         var formattedDoc = await Formatter.FormatAsync(document, cancellationToken: cancellationToken);
         return await WithChangedLinesInDominantEolAsync(formattedDoc, originalSourceText, cancellationToken);
     }

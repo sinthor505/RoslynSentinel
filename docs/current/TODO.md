@@ -4,6 +4,18 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## `MappingEngine.InvertAssignments` leaks leading trivia onto the right-hand side (2026-10-16) - not started
+
+`InvertAssignments` swaps the operands together with their leading trivia, so a comment or blank lines directly before an inverted assignment end up on the right-hand side of the result. Found in the C5b-1 review; swap the operands but keep each side's own leading trivia in place.
+
+## `IDEStyleEngine.SimplifyMemberAccess` drops the leading trivia of the `this` token (2026-10-16) - not started
+
+Replacing `this.x` with `x` drops the leading trivia of the `this` token, so a comment, `#region` or blank line directly before a statement that starts with `this.` is lost. Found in the C5a review; carry the `this` token's leading trivia onto the replacement name.
+
+## `NormalizeEolOfChangedLines` matches by line text, so repeated identical lines can take the wrong terminator (2026-10-16) - low risk, not started
+
+`EolUtilities.NormalizeEolOfChangedLines` matches lines by text with an LCS, so repeated identical lines (for example `}` or a blank line) inside a changed region of a mixed-EOL file can be matched to the wrong pre-image line and take its terminator. Only affects files that already mix endings; fix with position-aware matching if it ever shows up.
+
 ## ExtractInterface drops comments and cannot warn (2026-10-16) - not started
 
 ExtractInterface now silently drops comments inside copied signatures and trailing comments after the parameter list (the old `NormalizeWhitespace` output kept them). The engine returns only a file dictionary, so it cannot warn. Consider a warnings field on the engine result or a comment-keeping variant. See `proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md` (C3-G3a).
