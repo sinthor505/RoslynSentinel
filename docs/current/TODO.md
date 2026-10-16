@@ -4,6 +4,10 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## `Search(mode: references)` cannot resolve a type by name unless `filePath` is pinned (2026-10-16) - not started
+
+`Search(mode: references, query: "BlobWriteResult")` returns NotFound "could not be resolved anywhere in the solution" while `mode: symbol` finds it at `RoslynSentinel.Common/OperationBlobWriter.cs:20`; the same call with `filePath` returns 12 hits. Cause: the by-name path in `SymbolNavigationEngine.FindCallersAsync` filters out every type (`.Where(c => c.Symbol is not INamedTypeSymbol)`, ~:1581-1583). The error also tells the caller to use `Search(failureMode: symbol)`, a parameter that does not exist (~:1680). Fix: resolve types in the by-name path (or say "types need filePath" in the message) and correct the hint. Matters for any DTO usage survey or migration (see `proposals/proposal_dto_ownership_role_lineage.md`).
+
 ## `StructuralRefactoringEngine.MoveTypeToOuterScopeAsync` drops the nested type instead of moving it (2026-10-16) - not started
 
 Found while characterizing C5b-2a (read-only probe, LF and CRLF alike): the nested type is removed but never re-added at the outer scope. In the namespace branch the new namespace node is built from the old `ns` and applied with `newRoot.ReplaceNode(ns, newNs)`, which is probably a silent no-op because `ns` is not in `newRoot`; the compilation-unit fallback adds to the old `root` and discards the removal. Existing MoveTypeToOuterScope tests assert only non-null. Data-loss bug: fix and add byte-exact tests before routing the `Formatter.FormatAsync` at ~:1058 (it is irrelevant until the type survives).
