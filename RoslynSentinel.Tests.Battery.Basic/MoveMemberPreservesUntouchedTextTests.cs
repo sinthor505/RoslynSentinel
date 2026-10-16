@@ -792,7 +792,7 @@ public class MoveMemberPreservesUntouchedTextTests
         var membersToMove = classNode.Members.Where(m => m is MethodDeclarationSyntax method && method.Identifier.Text == "Count").ToList();
 
         var previewEdits = new Dictionary<DocumentId, List<TextChange>>();
-        var (previewTexts, previewNewFiles) = await MemberRefactoringEngine.AddInstanceMoveStructuralEditsAsync(previewEdits, sourceDocument, root, classNode, membersToMove, "B", targetDocument, targetClassNode, false, CancellationToken.None);
+        var (previewTexts, previewNewFiles, _) = await MemberRefactoringEngine.AddInstanceMoveStructuralEditsAsync(previewEdits, sourceDocument, root, classNode, membersToMove, "B", targetDocument, targetClassNode, false, CancellationToken.None);
         var preview = await MemberRefactoringEngine.MaterializeDocumentEditsAsync(solution, previewEdits, previewTexts, CancellationToken.None);
 
         var applied = await engine.MoveMemberAsync(workspace.PathOf("Source.cs"), "A", new[] { "Count" }, "B", null, CancellationToken.None);

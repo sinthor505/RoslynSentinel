@@ -3941,13 +3941,16 @@ public class MemberRefactoringEngine
     /// target class (same file or not), or - only when <paramref name = "createNewClassFile"/> is set and there is no
     /// existing target - written into a brand-new class file returned in NewFiles. Everything is a TextChange against
     /// the original text, so apply and preview share one definition of "what a move edits".
-    /// Texts returns the original text of every document that has edits.
+    /// Texts returns the original text of every document that has edits. MovedRegions lists one region per moved member
+    /// written into an existing target (empty for a brand-new class file): the data MovePositionMap needs to map
+    /// source positions into the trial text.
     /// </summary>
-    public static async Task<(Dictionary<DocumentId, SourceText> Texts, Dictionary<FilePathWrapper, string> NewFiles)> AddInstanceMoveStructuralEditsAsync(Dictionary<DocumentId, List<TextChange>> editsByDocument, Document sourceDocument, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string targetClassName, Document? targetDocument, ClassDeclarationSyntax? targetClassNode, bool createNewClassFile, CancellationToken cancellationToken)
+    public static async Task<(Dictionary<DocumentId, SourceText> Texts, Dictionary<FilePathWrapper, string> NewFiles, List<MovedMemberRegion> MovedRegions)> AddInstanceMoveStructuralEditsAsync(Dictionary<DocumentId, List<TextChange>> editsByDocument, Document sourceDocument, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string targetClassName, Document? targetDocument, ClassDeclarationSyntax? targetClassNode, bool createNewClassFile, CancellationToken cancellationToken)
     {
         var sourceText = await sourceDocument.GetTextAsync(cancellationToken);
         var texts = new Dictionary<DocumentId, SourceText> { [sourceDocument.Id] = sourceText };
         var newFiles = new Dictionary<FilePathWrapper, string>();
+        var movedRegions = new List<MovedMemberRegion>();
         var sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, editsByDocument.TryGetValue(sourceDocument.Id, out var existingSourceEdits) ? existingSourceEdits : new List<TextChange>(), out var insideMovedMemberEdits);
         editsByDocument[sourceDocument.Id] = sourceEdits;
         if (targetDocument?.FilePath != null && targetClassNode != null)
@@ -3959,6 +3962,17 @@ public class MemberRefactoringEngine
             var targetIndent = MoveMemberTextEdits.GetTargetMemberIndentation(targetText, targetClassNode);
             var blocks = membersToMove.Select(m => MoveMemberTextEdits.BuildMovedMemberText(sourceText, m, insideMovedMemberEdits.Where(e => m.FullSpan.Contains(e.Span)).ToList(), MoveMemberTextEdits.GetMemberIndentation(sourceText, m), targetIndent, targetEol)).ToList();
             var insertion = MoveMemberTextEdits.BuildInsertion(targetText, targetClassNode, MoveMemberTextEdits.JoinMovedMembers(membersToMove, blocks, targetEol), targetEol);
+            if (sourceDocument.FilePath != null)
+            {
+                // One region per moved member, in insertion order, each carrying the same block text and in-member edits the
+                // builders just used, so MovePositionMap sees exactly what the engine wrote.
+                for (var i = 0; i < membersToMove.Count; i++)
+                {
+                    var member = membersToMove[i];
+                    movedRegions.Add(new MovedMemberRegion(sourceDocument.FilePath, member.FullSpan, targetDocument.FilePath, insertion.Span.Start, blocks[i], insideMovedMemberEdits.Where(e => member.FullSpan.Contains(e.Span)).ToList()));
+                }
+            }
+
             if (sameFile)
             {
                 sourceEdits.Add(insertion);
@@ -3981,7 +3995,7 @@ public class MemberRefactoringEngine
             newFiles[newFilePath] = MoveMemberTextEdits.BuildNewClassFileText(root.Usings.Select(u => u.ToString()).ToList(), ns?.Name.ToString(), ns is FileScopedNamespaceDeclarationSyntax, targetClassName, sourceText, membersToMove, insideMovedMemberEdits, EolUtilities.DetectDominantEol(sourceText));
         }
 
-        return (texts, newFiles);
+        return (texts, newFiles, movedRegions);
     }
 
     /// <summary>
@@ -4092,10 +4106,13 @@ public class MemberRefactoringEngine
             }
 
             var linesToFix = group.ToDictionary(kv => kv.Key.Line, kv => kv.Value);
-            var memberAccesses = docRoot.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Where(ma => memberNames.Contains(ma.Name.Identifier.Text) && linesToFix.ContainsKey(ma.GetLocation().GetLineSpan().StartLinePosition.Line + 1)).ToList();
+            // A preview row's line is the line of the referenced member NAME (the reference identifier), so sites are matched by
+            // the name's line, not the member access's start line: for a wrapped call (`a` on one line, `.Count(x)` on the next)
+            // those differ and the receiver would never be rewritten.
+            var memberAccesses = docRoot.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Where(ma => memberNames.Contains(ma.Name.Identifier.Text) && linesToFix.ContainsKey(ma.Name.GetLocation().GetLineSpan().StartLinePosition.Line + 1)).ToList();
             foreach (var memberAccess in memberAccesses)
             {
-                var line = memberAccess.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                var line = memberAccess.Name.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
                 var receiverExpr = linesToFix[line];
                 var newReceiver = receiverExpr == CallSiteFixupMap.NewKeyword ? $"new {targetClassName}()" : receiverExpr;
                 var receiverSpan = memberAccess.Expression.Span;
@@ -4119,7 +4136,7 @@ public class MemberRefactoringEngine
             }
         }
 
-        var (texts, newFiles) = await AddInstanceMoveStructuralEditsAsync(editsByDocument, document, root, classNode, membersToMove, targetClassName, existingTargetDoc, existingTargetClassNode, true, cancellationToken);
+        var (texts, newFiles, _) = await AddInstanceMoveStructuralEditsAsync(editsByDocument, document, root, classNode, membersToMove, targetClassName, existingTargetDoc, existingTargetClassNode, true, cancellationToken);
         // AppliedEdits covers every existing file the move touches (source, target and caller documents); the brand-new
         // class file in newFiles has no original text, so it is added to the result below but gets no edit entry.
         var (result, appliedEdits) = await MaterializeDocumentEditsWithAppliedEditsAsync(solution, editsByDocument, texts, cancellationToken);
@@ -4521,10 +4538,13 @@ public class MemberRefactoringEngine
     /// docs/current/proposal_movemember_instance_callsite_resolution.md sections 1, 5, 6.
     ///
     /// For each call site of the member(s) being moved: builds an in-memory trial change set with the
-    /// member relocated but that call site NOT rewritten, runs it through ValidationEngine so the
-    /// compiler's own diagnostics decide whether the site breaks (rather than a hand-rolled prediction),
-    /// then classifies broken sites by scanning for in-scope fields/properties/parameters of the
-    /// destination type via SemanticModel.LookupSymbols (which already respects C# shadowing).
+    /// member relocated but that call site NOT rewritten, maps each reference's position into that trial text
+    /// (MovePositionMap, built from the engine's own edits and validated line by line) and binds it there
+    /// (MoveBindCheck), so the compiler's own binder decides whether the site still resolves (rather than a
+    /// hand-rolled prediction or a diagnostic line match). Sites that no longer bind are classified by scanning for
+    /// in-scope fields/properties/parameters of the destination type via SemanticModel.LookupSymbols (which already
+    /// respects C# shadowing). A site whose position cannot be mapped, or that binds to something unexpected, is
+    /// reported Ambiguous with a note and never silently Valid.
     /// </summary>
     public async Task<List<PreviewCallSite>> PreviewInstanceMoveCallSitesAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default)
     {
@@ -4613,18 +4633,57 @@ public class MemberRefactoringEngine
         // Built from the same text-edit definition the apply path uses (no new class file is previewed), so the
         // trial compile sees exactly the structural edits a real move would write.
         var previewEdits = new Dictionary<DocumentId, List<TextChange>>();
-        var (previewTexts, _) = await AddInstanceMoveStructuralEditsAsync(previewEdits, document, root, classNode, membersToMove, targetClassName, destinationDoc, destinationClassNode, false, cancellationToken);
-        var previewChanges = await MaterializeDocumentEditsAsync(solution, previewEdits, previewTexts, cancellationToken);
+        var (previewTexts, _, movedRegions) = await AddInstanceMoveStructuralEditsAsync(previewEdits, document, root, classNode, membersToMove, targetClassName, destinationDoc, destinationClassNode, false, cancellationToken);
+        var (previewChanges, previewAppliedEdits) = await MaterializeDocumentEditsWithAppliedEditsAsync(solution, previewEdits, previewTexts, cancellationToken);
         var validationOutcome = await _validationEngine.ValidateChangesWithCandidateAsync(previewChanges, cancellationToken: cancellationToken);
-        var validation = validationOutcome.Report;
-        // The candidate Solution the diagnostics were computed from: its text for each previewChanges path is exactly the
-        // validated text. Slice D2.3 binds each reference in it (MoveBindCheck) instead of matching diagnostic lines; unused until then.
+        // The candidate Solution the trial diagnostics were computed from: its text for each previewChanges path is exactly the
+        // trial text. Each reference is bound in it (MoveBindCheck); the diagnostics themselves are deliberately not consulted.
         var trialSolution = validationOutcome.Candidate;
+
+        // Source-to-trial position map from the engine's own edits. If it cannot be built or fails line-text validation it is
+        // dropped and every reference becomes Ambiguous with the reason (never silently Valid).
+        MovePositionMap? positionMap = null;
+        string? positionMapNote = null;
+        if (destinationType != null)
+        {
+            var originalTexts = new Dictionary<FilePathWrapper, SourceText>();
+            foreach (var (previewDocumentId, previewText) in previewTexts)
+            {
+                var previewPath = solution.GetDocument(previewDocumentId)?.FilePath;
+                if (previewPath != null)
+                {
+                    originalTexts[previewPath] = previewText;
+                }
+            }
+
+            if (movedRegions.Count != membersToMove.Count)
+            {
+                positionMapNote = "the moved members' positions in the trial text are unavailable";
+            }
+            else if (!MovePositionMap.TryBuild(originalTexts, previewAppliedEdits, movedRegions, out var builtMap, out var buildError))
+            {
+                positionMapNote = $"the position map for the trial text could not be built ({buildError})";
+            }
+            else
+            {
+                var mapValidation = builtMap!.Validate(previewChanges);
+                if (mapValidation.IsTrusted)
+                {
+                    positionMap = builtMap;
+                }
+                else
+                {
+                    positionMapNote = $"the position map failed validation ({mapValidation.FirstMismatch?.Describe() ?? "no detail"})";
+                }
+            }
+        }
+
         var results = new List<PreviewCallSite>();
         var movingMemberDeclarationSpans = new HashSet<TextSpan>(membersToMove.Select(m => m.Span));
         foreach (var symbol in memberSymbols)
         {
             var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
+            var movedIdentity = destinationType == null ? null : MovedMemberIdentity.From(symbol, destinationType);
             var locations = references.SelectMany(r => r.Locations).Where(l => l.Document.FilePath != null).ToList();
             foreach (var refLocation in locations)
             {
@@ -4642,11 +4701,53 @@ public class MemberRefactoringEngine
                 // testing). Only the source document's own span comparisons are meaningful.
                 bool isSameDocAsSource = string.Equals(refDoc.FilePath, document.FilePath, StringComparison.OrdinalIgnoreCase);
                 var isMoveOrderDependent = isSameDocAsSource && refNode != null && movingMemberDeclarationSpans.Any(span => span.Contains(refNode.Span));
-                var brokenHere = validation.Diagnostics.Any(d => string.Equals(d.FilePath, refDoc.FilePath, StringComparison.OrdinalIgnoreCase) && d.StartLine == lineSpan.StartLinePosition.Line + 1);
-                if (!brokenHere)
+                // A reference inside a documentation comment (cref) is not a call site and is never rewritten by this move; binding
+                // it in the trial text would only report it as broken and turn it into a blocking ledger entry. It is deliberately
+                // left Valid with an explanatory note: retargeting stale crefs is a separate step (see plan_cref_qualifier_helper_and_tool.md).
+                var refToken = refRoot?.FindToken(refLocation.Location.SourceSpan.Start, findInsideTrivia: true);
+                if (refToken?.Parent?.AncestorsAndSelf().Any(n => n is CrefSyntax) == true)
                 {
-                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Valid, null, null, []));
+                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Valid, "Documentation reference (cref): not a call site, not rewritten by this move.", null, []));
                     continue;
+                }
+
+                if (movedIdentity != null)
+                {
+                    string? unverifiableReason = null;
+                    if (positionMap == null)
+                    {
+                        unverifiableReason = positionMapNote;
+                    }
+                    else
+                    {
+                        var mapped = positionMap.MapOffset(refDoc.FilePath!, refLocation.Location.SourceSpan.Start);
+                        if (!mapped.IsMapped)
+                        {
+                            unverifiableReason = $"its position cannot be mapped into the trial text ({mapped.Reason})";
+                        }
+                        else
+                        {
+                            var bind = await MoveBindCheck.CheckAsync(trialSolution, mapped.Document, mapped.Offset, movedIdentity, cancellationToken);
+                            if (bind.Outcome == MoveBindOutcome.BindsToMovedMember)
+                            {
+                                // Still resolves to the moved member on the destination type: nothing to rewrite.
+                                results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Valid, null, null, []));
+                                continue;
+                            }
+
+                            // BindFailed falls through to the receiver-candidate classification below; anything else is not trusted.
+                            if (bind.Outcome != MoveBindOutcome.BindFailed)
+                            {
+                                unverifiableReason = $"after the move it is classified {bind.Outcome} ({bind.Note})";
+                            }
+                        }
+                    }
+
+                    if (unverifiableReason != null)
+                    {
+                        results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Ambiguous, $"Could not confirm how this call site resolves after the move ({Path.GetFileName(refDoc.FilePath!)} line {lineSpan.StartLinePosition.Line + 1}): {unverifiableReason}. Specify the receiver via callSiteFixups if it needs one.", null, []));
+                        continue;
+                    }
                 }
 
                 if (isMoveOrderDependent)

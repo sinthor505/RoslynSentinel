@@ -1065,12 +1065,159 @@ public class PreviewInstanceMoveCallSitesTests
         });
     }
 
-    // NOTE: no test here for MoveOrderDependent (a call site inside a member that's itself being
-    // moved in the same batch). Tried the obvious fixture -- Foo() called unqualified from Baz(),
-    // both in memberNames -- and it classifies as Valid, not MoveOrderDependent: when both members
-    // move together, the call site's line is removed from the trial compile along with its container,
-    // so no diagnostic ever fires there and brokenHere is false. isMoveOrderDependent is checked only
-    // after brokenHere is true (see PreviewInstanceMoveCallSitesAsync), so this path may be
-    // unreachable for a same-batch caller+callee pair as currently written -- flagged in the Decision 3
-    // plan update rather than forcing a fixture that doesn't match the real semantics.
+    [Test]
+    public async Task MoveMemberAsync_ReceiverOnPreviousLine_RewritesReceiverAsync()
+    {
+        // The call is wrapped so the receiver sits on the line BEFORE the member name:
+        //     a
+        //         .Foo();
+        // The preview row's line is the member-name line; the receiver rewrite must find the same site.
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/WrapSource.cs", """
+                namespace ContosoOrders.Core;
+
+                public class WrapSource
+                {
+                    public void Foo()
+                    {
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/WrapTarget.cs", """
+                namespace ContosoOrders.Core;
+
+                public class WrapTarget
+                {
+                }
+                """),
+            ("ContosoOrders.Core/WrapCaller.cs", """
+                namespace ContosoOrders.Core;
+
+                public class WrapCaller
+                {
+                    private readonly WrapTarget _target = new WrapTarget();
+
+                    public void Do()
+                    {
+                        var a = new WrapSource();
+                        a
+                            .Foo();
+                    }
+                }
+                """));
+
+        var rows = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/WrapSource.cs"),
+            "WrapSource", ["Foo"], "WrapTarget");
+        var row = rows.Single(r => r.FilePath.ToString().Contains("WrapCaller"));
+        Assert.That(row.Status, Is.EqualTo(CallSiteStatus.Valid));
+        Assert.That(row.SuggestedFix, Is.EqualTo("_target"));
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/WrapSource.cs"),
+            "WrapSource", ["Foo"], "WrapTarget");
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.SkippedCallSites, Is.Empty);
+            var callerContent = result.Changes.Single(kv => kv.Key.ToString().Contains("WrapCaller")).Value;
+            Assert.That(callerContent, Does.Match(@"_target\s*\.Foo\(\);"), "The receiver on the previous line must be rewritten, keeping the wrapped layout.");
+            Assert.That(callerContent, Does.Not.Match(@"\ba\s*\.Foo"), "The old receiver 'a' must be replaced.");
+        });
+    }
+
+    [Test]
+    public async Task PreviewInstanceMoveCallSites_QualifiedCallInsideMovedBody_IsMoveOrderDependentAsync()
+    {
+        // Baz is moved together with Foo and reaches Foo through a typed receiver (a.Foo()). After the move that receiver
+        // (type MoveOrderSource) no longer has Foo, and the original-scope receiver lookup would be wrong for a body that now lives
+        // on the destination, so the row is MoveOrderDependent rather than Valid or a guessed candidate.
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/MoveOrderSource.cs", """
+                namespace ContosoOrders.Core;
+
+                public class MoveOrderSource
+                {
+                    public void Foo()
+                    {
+                    }
+
+                    public void Baz(MoveOrderSource a)
+                    {
+                        a.Foo();
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/MoveOrderTarget.cs", """
+                namespace ContosoOrders.Core;
+
+                public class MoveOrderTarget
+                {
+                }
+                """));
+
+        var rows = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/MoveOrderSource.cs"),
+            "MoveOrderSource", ["Foo", "Baz"], "MoveOrderTarget");
+
+        var fooSite = rows.Single(r => r.CallExpression == "a.Foo");
+        Assert.That(fooSite.Status, Is.EqualTo(CallSiteStatus.MoveOrderDependent));
+    }
+
+    [Test]
+    public async Task PreviewInstanceMoveCallSites_DocCommentCref_IsNotClassifiedAsBrokenCallSiteAsync()
+    {
+        // A cref to the moved member is not a call site: it must never become a blocking Ambiguous/NoCandidate row.
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/CrefSource.cs", """
+                namespace ContosoOrders.Core;
+
+                public class CrefSource
+                {
+                    public void Foo()
+                    {
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/CrefTarget.cs", """
+                namespace ContosoOrders.Core;
+
+                public class CrefTarget
+                {
+                }
+                """),
+            ("ContosoOrders.Core/CrefCaller.cs", """
+                namespace ContosoOrders.Core;
+
+                public class CrefCaller
+                {
+                    private readonly CrefTarget _target = new CrefTarget();
+
+                    /// <summary>Calls <see cref="CrefSource.Foo"/>.</summary>
+                    public void Do()
+                    {
+                        new CrefSource().Foo();
+                    }
+                }
+                """));
+
+        var rows = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/CrefSource.cs"),
+            "CrefSource", ["Foo"], "CrefTarget");
+
+        // SymbolFinder reports the cref as a reference (line 7) alongside the real call (line 10).
+        Assert.That(rows, Has.Count.EqualTo(2));
+        var crefRow = rows.Single(r => r.Line == 7);
+        Assert.That(crefRow.Status, Is.EqualTo(CallSiteStatus.Valid));
+        Assert.That(crefRow.SuggestedFix, Is.Null, "A cref is never rewritten.");
+        Assert.That(crefRow.BlockReason, Does.Contain("cref"));
+        var callRow = rows.Single(r => r.Line == 10);
+        Assert.That(callRow.Status, Is.EqualTo(CallSiteStatus.Valid));
+        Assert.That(callRow.SuggestedFix, Is.EqualTo("_target"));
+    }
+
+    // NOTE: MoveOrderDependent (a call site inside a member that is itself being moved in the same batch) is
+    // reached when the site no longer binds in the trial text, e.g. a typed receiver `a.Foo()` inside the moved
+    // Baz (PreviewInstanceMoveCallSites_QualifiedCallInsideMovedBody_IsMoveOrderDependentAsync). An unqualified
+    // Foo() or this.Foo() inside the moved Baz binds to the moved Foo on the destination and stays Valid.
 }
