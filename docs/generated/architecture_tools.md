@@ -70,6 +70,7 @@
 | GitTools | Git | Claude, claude-lean, Workspace | Allowed | Unified git tool. |
 | NamedArgumentsTools | NamedArguments | claude-lean (on demand), NamedArguments | - | Convert positional call arguments to named arguments (M(1, 2) -> M(a: 1, b: 2)) using the compiler's binding, for... |
 | ParameterEditTools | ParameterEdit | claude-lean (on demand) | - | Add, remove, or view parameters of a method (operation method, any method) or of a class's DI constructor (operation... |
+| QualifyCrefsTools | QualifyCrefs | claude-lean (on demand), QualifyCrefs | - | Qualify bare member crefs in XML doc comments: rewrites a bare member cref such as <see cref="Foo"/> to its qualified... |
 | RefactoringExtractionDocsTools | ExtractLocalVariable | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Extracts an inline expression into a named local variable declaration. exactExpressionText must be the WHOLE... |
 | RefactoringExtractionDocsTools | ExtractMethodSafe | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Extracts selected statements into a new method with the return type inferred from the selection. |
 | RefactoringExtractionDocsTools | SummaryComment | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Add, remove, or view a /// <summary> XML doc comment on a type or member. |

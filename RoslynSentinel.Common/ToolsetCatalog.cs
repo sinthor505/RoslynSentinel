@@ -43,7 +43,7 @@ public static class ToolsetCatalog
                 "ExtractMethodSafe", "Inline", "InlineClass", "Introduce", "IntroduceParameterObject", "WrapRange",
                 "InvertAssignments", "ConvertAnonymousToNamed", "SyncInterface", "SummaryComment",
                 "SafeDeleteUnusedSymbol", "PreviewRenameImpact", "ApplyDiff", "ApplyUnifiedDiff", "SemanticFindReplace",
-                "NamedArguments",
+                "NamedArguments", "QualifyCrefs",
             ],
             [ToolSetName.projectAdmin] =
             [
@@ -62,7 +62,7 @@ public static class ToolsetCatalog
         new Dictionary<ToolSetName, string>
         {
             [ToolSetName.declarations] = "change declarations: modifiers, accessibility, attributes, base types, signatures, constructor parameters, enums, sync type and filename",
-            [ToolSetName.moveExtract] = "move/extract/inline/introduce refactors, interface and doc sync, safe delete, rename preview, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments",
+            [ToolSetName.moveExtract] = "move/extract/inline/introduce refactors, interface and doc sync, safe delete, rename preview, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments, QualifyCrefs",
             [ToolSetName.projectAdmin] = "projects and workspace: create/split projects, solution and framework listings, Features, ProjectDoc, workspace health, operation details, retry, type info, symbol relationships",
             [ToolSetName.testCategories] = "plan test-category attributes (NUnit/xUnit/MSTest) from the production types each test references (TagTestCategories, dry run by default, dryRun: false applies)",
         };
