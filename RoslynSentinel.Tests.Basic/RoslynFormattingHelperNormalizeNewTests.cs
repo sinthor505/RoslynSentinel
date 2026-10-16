@@ -579,37 +579,100 @@ public class RoslynFormattingHelperNormalizeNewTests
         Assert.DoesNotThrow(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(attribute, "\n"));
     }
 
-    [Test]
-    public void PinnedNeedsC3_BasicRefactoring_ExtractInterface_795_NewRoot_IsRejected()
+    private static CompilationUnitSyntax BuildExtractInterfaceRoot(string source)
     {
-        // C3 should add a SafeSite_ twin of this test (the same root built with elastic trivia or none) and
-        // delete this pin once the call site is migrated.
-        // Needs elastic trivia (or none) instead of MemberTrivia at the call site in C3: the site deliberately
-        // sets non-elastic CRLF + indentation trivia on each interface member (MemberTrivia).
-        var root = Parse("using System;\nusing System.Linq;\n\nnamespace Demo;\n\npublic class Svc\n{\n    public int Total(int a, int b) => a + b;\n}\n");
+        // Mirrors BasicRefactoringEngine.ExtractInterfaceAsync: signature parts and usings are stripped of all trivia
+        // (the usings keep their leading header), the interface members carry no hand-set trivia.
+        var root = Parse(source);
         var m = root.DescendantNodes().OfType<MethodDeclarationSyntax>().First();
-        static SyntaxTriviaList MemberTrivia() => TriviaList(CarriageReturnLineFeed, Whitespace("    "));
-        var ifaceMethod = (MemberDeclarationSyntax)MethodDeclaration(m.ReturnType.WithoutTrivia(), m.Identifier)
-            .WithParameterList(m.ParameterList)
-            .WithSemicolonToken(Token(SyntaxKind.SemicolonToken))
-            .WithLeadingTrivia(MemberTrivia())
-            .WithTrailingTrivia(TriviaList(CarriageReturnLineFeed));
+        var ifaceMethod = (MemberDeclarationSyntax)MethodDeclaration(RoslynFormattingHelper.StripAllTriviaForNormalize(m.ReturnType), m.Identifier.WithoutTrivia())
+            .WithParameterList(RoslynFormattingHelper.StripAllTriviaForNormalize(m.ParameterList))
+            .WithSemicolonToken(Token(SyntaxKind.SemicolonToken));
         var iface = InterfaceDeclaration("ISvc").AddModifiers(Token(SyntaxKind.PublicKeyword)).AddMembers(ifaceMethod);
-        var cleanUsings = List(root.Usings.Select(u => u.WithoutTrailingTrivia().WithTrailingTrivia(ElasticCarriageReturnLineFeed)));
-        var ns = FileScopedNamespaceDeclaration(ParseName("Demo")).AddMembers(iface);
-        var ifaceCompUnit = CompilationUnit().WithUsings(cleanUsings).AddMembers(ns);
+        var usings = List(root.Usings.Select(u => RoslynFormattingHelper.StripAllTriviaForNormalize(u).WithLeadingTrivia(u.GetLeadingTrivia())));
+        var ns = FileScopedNamespaceDeclaration(RoslynFormattingHelper.StripAllTriviaForNormalize(root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().First().Name)).AddMembers(iface);
+        return CompilationUnit().WithUsings(usings).AddMembers(ns);
+    }
 
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(ifaceCompUnit, "\r\n", elasticTrivia: false), "extract-interface new root", "root");
+    private const string ExtractInterfaceSource = "using System;\nusing System.Linq;\n\nnamespace Demo;\n\npublic class Svc\n{\n    public int Total(int a, int b) => a + b;\n}\n";
+
+    [Test]
+    public void SafeSite_BasicRefactoring_ExtractInterface_795_NewRoot_IsAccepted()
+    {
+        var ifaceCompUnit = BuildExtractInterfaceRoot(ExtractInterfaceSource);
+
+        var result = RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(ifaceCompUnit, "\r\n", elasticTrivia: false);
+
+        Assert.That(result.ToFullString(), Is.EqualTo("using System;\r\nusing System.Linq;\r\n\r\nnamespace Demo;\r\npublic interface ISvc\r\n{\r\n    int Total(int a, int b);\r\n}"));
+    }
+
+    [Test]
+    public void NormalizeNewRoot_ExtractInterfaceShapeWithUsingHeader_IsRejectedByPlainRootMethod()
+    {
+        // The plain root method keeps rejecting a copied using header; only the KeepingUsingHeaders variant exempts it.
+        var ifaceCompUnit = BuildExtractInterfaceRoot("// Copyright\nusing System;\n\nnamespace Demo;\n\npublic class Svc\n{\n    public int Total(int a) => a;\n}\n");
+
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(ifaceCompUnit, "\n", elasticTrivia: false), "using header is existing trivia", "root");
+    }
+
+    [Test]
+    public void NormalizeNewRootKeepingUsingHeaders_KeepsHeaderCommentAndDirective()
+    {
+        var ifaceCompUnit = BuildExtractInterfaceRoot("// Copyright (c) Acme\n#nullable enable\nusing System;\n\nnamespace Demo;\n\npublic class Svc\n{\n    public int Total(int a) => a;\n}\n");
+
+        var result = RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(ifaceCompUnit, "\n", elasticTrivia: false).ToFullString();
+
+        Assert.That(result, Does.StartWith("// Copyright (c) Acme\n#nullable enable\nusing System;\n"));
+    }
+
+    [Test]
+    public void NormalizeNewRootKeepingUsingHeaders_UsesTheGivenEolForTheHeaderAndTheBody()
+    {
+        var ifaceCompUnit = BuildExtractInterfaceRoot("// Copyright (c) Acme\r\nusing System;\r\n\r\nnamespace Demo;\r\n\r\npublic class Svc\r\n{\r\n    public int Total(int a) => a;\r\n}\r\n");
+
+        var result = RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(ifaceCompUnit, "\r\n", elasticTrivia: false).ToFullString();
+
+        Assert.That(result.Replace("\r\n", string.Empty), Does.Not.Contain("\n"));
+        Assert.That(result, Does.StartWith("// Copyright (c) Acme\r\nusing System;\r\n"));
+    }
+
+    [Test]
+    public void NormalizeNewRootKeepingUsingHeaders_StillRejectsCommentOnAMember()
+    {
+        var iface = InterfaceDeclaration("ISvc").AddMembers(
+            MethodDeclaration(PredefinedType(Token(SyntaxKind.VoidKeyword)), "Run")
+                .WithSemicolonToken(Token(SyntaxKind.SemicolonToken))
+                .WithLeadingTrivia(Comment("// existing")));
+        var root = CompilationUnit().WithUsings(Parse("// Copyright\nusing System;\n").Usings).AddMembers(iface);
+
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(root, "\n"), "member comment is not a using header", "root");
+    }
+
+    [Test]
+    public void NormalizeNewRootKeepingUsingHeaders_StillRejectsFormattingInsideAUsing()
+    {
+        var root = CompilationUnit().WithUsings(Parse("using   System;\n").Usings);
+
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(root, "\n"), "inner using formatting must be stripped by the caller", "root");
+    }
+
+    [Test]
+    public void NormalizeNewRootKeepingUsingHeaders_RejectsBadEolAndNullRoot()
+    {
+        var eolEx = Assert.Throws<ArgumentException>(() => RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(CompilationUnit(), "\r"));
+        Assert.That(eolEx!.ParamName, Is.EqualTo("eol"));
+        var nullEx = Assert.Throws<ArgumentNullException>(() => RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(null!, "\n"));
+        Assert.That(nullEx!.ParamName, Is.EqualTo("root"));
     }
 
     [Test]
     public void PinnedNeedsC3_AdvancedStructural_ExtractSuperclass_126_MixedRoot_IsRejected()
     {
-        // C3 should add a SafeSite_ twin of this test (the properties detached or rebuilt before embedding)
-        // and delete this pin once the call site is migrated.
-        // Needs a detach/rebuild step for the embedded properties in C3. Provenance of this site is unverified
-        // (proposal open question 4): the new root embeds the existing
-        // class's property declarations, so the content check correctly sees user formatting here.
+        // Slice C3-G3a deliberately left this call site on the raw NormalizeWholeSubtreeWhitespace (C6 owns it):
+        // the new root embeds the existing class's WHOLE property declarations (XML docs, attributes, comments),
+        // so the guard correctly rejects them, and stripping them would silently lose user comments. Migrating
+        // needs a comment-preserving variant of NormalizeNewRootWhitespace or an annotate-and-format rewrite.
+        // Delete this pin and add a SafeSite_ twin when it is migrated.
         var root = Parse("using System;\n\nnamespace Demo;\n\npublic class Customer\n{\n    public string Name { get; set; }\n    public int Age { get; set; }\n}\n");
         var properties = root.DescendantNodes().OfType<ClassDeclarationSyntax>().First().Members.OfType<PropertyDeclarationSyntax>().ToArray();
         var baseClass = ClassDeclaration("PersonBase")

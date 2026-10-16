@@ -377,6 +377,28 @@ public static class RoslynFormattingHelper
     }
 
     /// <summary>
+    /// Variant of <see cref="NormalizeNewRootWhitespace"/> for a NEWLY BUILT <see cref="CompilationUnitSyntax"/> whose
+    /// using directives were copied from an existing file and so carry that file's header: a copyright comment,
+    /// a <c>#nullable</c> or <c>#pragma</c> directive, or a disabled <c>#if</c> region. The LEADING trivia of each
+    /// using directive is exempt from the content check and is kept (<c>NormalizeWhitespace</c> keeps comments,
+    /// directives and disabled text, and discards only the whitespace and end-of-line trivia around them).
+    /// Everything else is checked exactly as <see cref="NormalizeNewRootWhitespace"/> checks it, so the caller must
+    /// first strip the inner trivia of each using directive (for example
+    /// <c>StripAllTriviaForNormalize(u).WithLeadingTrivia(u.GetLeadingTrivia())</c>) and must not embed other
+    /// existing code in the root. <paramref name="eol"/> has no default: pass the target file's line ending.
+    /// </summary>
+    public static CompilationUnitSyntax NormalizeNewRootWhitespaceKeepingUsingHeaders(CompilationUnitSyntax root, string eol, string indentation = "    ", bool elasticTrivia = true)
+    {
+        ValidateEol(eol);
+        ArgumentNullException.ThrowIfNull(root);
+
+        // The guard sees a copy whose using headers are removed; the unchanged root is what gets normalized.
+        var headerlessCopy = root.WithUsings(SyntaxFactory.List(root.Usings.Select(u => u.WithLeadingTrivia(SyntaxTriviaList.Empty))));
+        EnsureNodeIsNew(headerlessCopy, nameof(root));
+        return root.NormalizeWhitespace(indentation, eol, elasticTrivia);
+    }
+
+    /// <summary>
     /// Returns a parentless copy of <paramref name="node"/> (taken from existing source, or parsed from caller text
     /// inside a dummy container) with EVERY piece of trivia removed: whitespace, end-of-line, comments and directives.
     /// Use it to embed a reused or parsed part in a newly built node so the node passes the
