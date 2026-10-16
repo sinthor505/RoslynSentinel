@@ -102,6 +102,19 @@ public class TargetModel
             "Target-only field without a source match should not be assigned.");
     }
 
+    [Test]
+    public async Task GenerateMapping_CrLfDocument_GeneratedMethodUsesCrLf()
+    {
+        // The generated method takes its line ending from the document, not from a fixed default.
+        SetSource("public class SourceDto\r\n{\r\n    public string Name { get; set; }\r\n}\r\n\r\npublic class DestEntity\r\n{\r\n    public string Name { get; set; }\r\n}\r\n", "Crlf.cs");
+
+        var result = await _engine.GenerateMappingAsync("Crlf.cs", "SourceDto", "DestEntity");
+
+        Assert.That(result.UpdatedText, Does.Contain("dest.Name = source.Name"));
+        Assert.That(result.UpdatedText, Does.Contain("\r\n"), "A multi-line method should be emitted.");
+        Assert.That(System.Text.RegularExpressions.Regex.IsMatch(result.UpdatedText!, "(?<!\r)\n"), Is.False, "Every line ending must be CRLF.");
+    }
+
     // ══════════════════════════════════════════════════════════════
     // InvertAssignmentsAsync
     // ══════════════════════════════════════════════════════════════

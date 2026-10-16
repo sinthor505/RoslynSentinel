@@ -4630,7 +4630,10 @@ public class MemberRefactoringEngine
         var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), null, cancellationToken);
         var updatedContent = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
         var beforeSnippet = string.Concat(selectedStatements.Select(s => s.ToFullString())).Trim();
-        var callSiteText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(callStatement).ToFullString().Trim();
+        // callStatement carries the original statement's leading trivia (the user's indentation, and any comment
+        // above it) for the in-place edit above. The standalone snippet is a new node, so drop that copied trivia
+        // before normalizing it; NormalizeNewChildWhitespace rejects existing formatting.
+        var callSiteText = RoslynFormattingHelper.NormalizeNewChildWhitespace(callStatement.WithoutLeadingTrivia(), EolUtilities.DetectDominantEol(text)).ToFullString().Trim();
         var extractedMethodText = extractedMethod.ToFullString().Trim();
         return new ExtractMethodResult(false, null, beforeSnippet, callSiteText, extractedMethodText, updatedContent);
     }

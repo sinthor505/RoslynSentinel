@@ -231,6 +231,23 @@ public class AdvancedRefactoringEngine
 
     private static bool IsTaskReturnType(TypeSyntax type) => (type is IdentifierNameSyntax id && id.Identifier.Text is "Task" or "ValueTask") || (type is GenericNameSyntax gn && gn.Identifier.Text is "Task" or "ValueTask");
 
+    /// <summary>
+    /// Returns a parentless copy of a node taken from existing source with every piece of trivia removed
+    /// (whitespace, end-of-line and comments), so it can be embedded in a newly built node and pass the
+    /// <see cref="RoslynFormattingHelper.NormalizeNewChildWhitespace{T}"/> guard. Used for the signature parts
+    /// of a class member that are reused in a generated interface member: the original spacing (for example
+    /// the newline after <c>)</c> in Allman-style code) is rebuilt by <c>NormalizeWhitespace</c>, and a comment
+    /// inside a signature is not carried onto the generated interface member.
+    /// <c>WithoutTrivia</c> is applied first because it always rebuilds the node, which detaches it from the tree.
+    /// </summary>
+    private static T StripAllTrivia<T>(T node)
+        where T : SyntaxNode
+    {
+        var detached = node.WithoutTrivia();
+        var trivia = detached.DescendantTrivia(descendIntoTrivia: false).ToList();
+        return trivia.Count == 0 ? detached : detached.ReplaceTrivia(trivia, (_, _) => default);
+    }
+
     public async Task<DocumentEditResult> SyncInterfaceToImplementationAsync(FilePathWrapper filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -322,6 +339,8 @@ public class AdvancedRefactoringEngine
         // Collect existing interface member signatures (for deduplication)
         var existingMethodSigs = interfaceNode.Members.OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text + "|" + string.Join(",", m.ParameterList.Parameters.Select(p => p.Type?.ToString().Trim()))).ToHashSet(StringComparer.Ordinal);
         var existingPropertyNames = interfaceNode.Members.OfType<PropertyDeclarationSyntax>().Select(p => p.Identifier.Text).ToHashSet(StringComparer.Ordinal);
+        // The new members are inserted into the interface's document, so its line ending is the target EOL.
+        var eol = EolUtilities.DetectDominantEol(await interfaceDocument.GetTextAsync(cancellationToken));
         var newMembers = new List<MemberDeclarationSyntax>();
         foreach (var method in publicMethods)
         {
@@ -332,7 +351,7 @@ public class AdvancedRefactoringEngine
             }
 
             // Build interface method: return type + name + params, no body
-            var ifaceMethod = (MemberDeclarationSyntax)RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.MethodDeclaration(method.ReturnType, method.Identifier).WithParameterList(method.ParameterList).WithTypeParameterList(method.TypeParameterList).WithConstraintClauses(method.ConstraintClauses).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()));
+            var ifaceMethod = (MemberDeclarationSyntax)RoslynFormattingHelper.NormalizeNewChildWhitespace(SyntaxFactory.MethodDeclaration(StripAllTrivia(method.ReturnType), method.Identifier.WithoutTrivia()).WithParameterList(StripAllTrivia(method.ParameterList)).WithTypeParameterList(method.TypeParameterList is null ? null : StripAllTrivia(method.TypeParameterList)).WithConstraintClauses(SyntaxFactory.List(method.ConstraintClauses.Select(c => StripAllTrivia(c)))).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()), eol);
             newMembers.Add(ifaceMethod);
         }
 
@@ -363,7 +382,7 @@ public class AdvancedRefactoringEngine
                 accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.InitAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
             }
 
-            var ifaceProp = (MemberDeclarationSyntax)RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.PropertyDeclaration(prop.Type, prop.Identifier).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))).WithModifiers(SyntaxFactory.TokenList()));
+            var ifaceProp = (MemberDeclarationSyntax)RoslynFormattingHelper.NormalizeNewChildWhitespace(SyntaxFactory.PropertyDeclaration(StripAllTrivia(prop.Type), prop.Identifier.WithoutTrivia()).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))).WithModifiers(SyntaxFactory.TokenList()), eol);
             newMembers.Add(ifaceProp);
         }
 

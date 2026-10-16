@@ -249,6 +249,45 @@ public class Service : IService {
         Assert.That(result.UpdatedText, Does.Contain("get;"));
     }
 
+    [Test]
+    [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
+    public async Task SyncInterfaceToImplementation_AllmanStyleSignatureWithComment_IsAcceptedAndUsesCrLf()
+    {
+        // The reused return type, parameter list and constraint clause carry the class member's own line breaks,
+        // indentation and a comment. They must be stripped before the NormalizeNewChildWhitespace guard sees
+        // them, and the new interface members take the interface document's CRLF line ending.
+        var source = string.Join("\r\n", new[]
+        {
+            "public interface IService { void DoA(); }",
+            "public class Service : IService",
+            "{",
+            "    public void DoA() { }",
+            "    public string Find<T>(",
+            "        int id, // the identifier",
+            "        T hint)",
+            "        where T : class",
+            "    {",
+            "        return null;",
+            "    }",
+            "    public int Count",
+            "    {",
+            "        get;",
+            "        set;",
+            "    }",
+            "}",
+        });
+        SetSource(source, "Service.cs");
+
+        var result = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("Find<T>(int id, T hint)"));
+        Assert.That(result.UpdatedText, Does.Contain("int Count"));
+        var interfaceText = result.UpdatedText![..result.UpdatedText.IndexOf("public class Service", StringComparison.Ordinal)];
+        Assert.That(interfaceText, Does.Not.Contain("the identifier"), "A comment inside a reused signature is not carried onto the interface member.");
+        Assert.That(System.Text.RegularExpressions.Regex.IsMatch(result.UpdatedText!, "(?<!\r)\n"), Is.False, "Every line ending must stay CRLF.");
+    }
+
     // ===== Tool 5: IntroduceParameterObject =====
     [Test]
     [Category("StructuralRefactoringEngine")] // sentinel:auto-category
