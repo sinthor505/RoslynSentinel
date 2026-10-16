@@ -83,9 +83,6 @@ does not exist yet, add the factory and use it.
 
 ## 7. The dto-justification hook
 
-**Status: designed, not yet installed** (tracked in `docs/current/TODO.md`). Until it lands, follow
-sections 1-2 voluntarily; the rules below describe its behaviour once installed.
-
 A `PreToolUse` hook (`.claude/hooks/enforce-dto-justification.ps1`) inspects type-creating MCP calls
 (`Member` addTopLevelType/addMember, `CreateFile`, `WriteFile`) on production `.cs` files. When the call
 declares a new record, or a non-static class/struct whose name does not look like a service (Engine,

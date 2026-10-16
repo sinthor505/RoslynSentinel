@@ -38,6 +38,22 @@
             ]
           }
         ]
+      },
+      {
+        "matcher": ".*__Member|.*__CreateFile|.*__WriteFile",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell.exe",
+            "args": [
+              "-NoProfile",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/enforce-dto-justification.ps1"
+            ]
+          }
+        ]
       }
     ],
     "PostToolUse": [
