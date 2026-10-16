@@ -8,8 +8,8 @@ namespace RoslynSentinel.Engines.Basic;
 /// <summary>
 /// The cref retarget edits collected for an instance move. <paramref name = "EditsByDocument"/> holds, per document,
 /// the edits sorted by span start, each computed against that document's ORIGINAL text. <paramref name = "Retargeted"/>
-/// is the total number of edits; <paramref name = "SkippedCandidates"/> counts reference locations that SymbolFinder
-/// reported as candidate (ambiguous) matches and that were therefore not edited.
+/// is the total number of edits; <paramref name = "SkippedCandidates"/> counts candidate (ambiguous) matches that sit
+/// inside crefs and were therefore not edited.
 /// </summary>
 public sealed record InstanceMoveCrefEditsResult(IReadOnlyDictionary<DocumentId, IReadOnlyList<TextChange>> EditsByDocument, int Retargeted, int SkippedCandidates);
 
@@ -20,6 +20,7 @@ public sealed record InstanceMoveCrefEditsResult(IReadOnlyDictionary<DocumentId,
 /// </summary>
 public static class InstanceMoveCrefEdits
 {
+    // TODO: share the reference loop with MemberRefactoringEngine.CollectStaticMoveReferenceEditsAsync
     /// <summary>
     /// Collects one minimal cref edit per reference location of the moved symbols that lies inside a cref, grouped by
     /// document. Bare-name insertions inside the moved members themselves are skipped: those members move together,
