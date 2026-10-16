@@ -2496,7 +2496,7 @@ public class MemberRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Added {insertedDescription}.",
-            UpdatedText = await RoslynFormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
         };
     }
 
@@ -2598,7 +2598,7 @@ public class MemberRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Added {insertedDescription}.",
-            UpdatedText = await RoslynFormattingHelper.InsertMemberFormattedAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeDecl, insertIndex, newMember, cancellationToken)
         };
     }
 
@@ -3032,7 +3032,7 @@ public class MemberRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Added {addedDescription}.",
-            UpdatedText = await RoslynFormattingHelper.InsertMemberFormattedAsync(document, root!, typeContainer, typeContainer.Members.Count, newMember, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(document, root!, typeContainer, typeContainer.Members.Count, newMember, cancellationToken)
         };
     }
 

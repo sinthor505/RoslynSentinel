@@ -232,7 +232,7 @@ public static class RoslynFormattingHelper
     /// zero-blank-line request, and formatting the whole container to resolve that ambiguity is exactly
     /// what caused both symptoms this helper exists to avoid.
     /// </summary>
-    public static async Task<string> InsertMemberFormattedAsync(Document document, SyntaxNode root, TypeDeclarationSyntax container, int insertIndex, MemberDeclarationSyntax newMember, CancellationToken cancellationToken = default)
+    public static async Task<string> InsertMemberDeclarationAndFormatInsertionAsync(Document document, SyntaxNode root, TypeDeclarationSyntax container, int insertIndex, MemberDeclarationSyntax newMember, CancellationToken cancellationToken = default)
     {
         var originalSourceText = await document.GetTextAsync(cancellationToken);
         var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
@@ -301,7 +301,7 @@ public static class RoslynFormattingHelper
     /// form of whitespace normalization, not as a safety fix.
     /// <para>
     /// Unlike <see cref="ReplaceNodeFormattedAsync"/>, <see cref="RemoveNodePreservingTriviaAsync"/>, and
-    /// <see cref="InsertMemberFormattedAsync"/> -> which are narrowly scoped to just the node being
+    /// <see cref="InsertMemberDeclarationAndFormatInsertionAsync"/> -> which are narrowly scoped to just the node being
     /// edited via a tracking annotation, and are safe by construction regardless of what the caller
     /// passes -> this method's safety depends entirely on what <paramref name="node"/> is:
     /// </para>
@@ -312,12 +312,12 @@ public static class RoslynFormattingHelper
     /// <item>Risky: an existing tree root or container (e.g. a whole file's <c>root</c>/<c>newRoot</c>
     /// or a <c>CompilationUnitSyntax</c>) that already contains untouched code -> normalizing it
     /// reformats every sibling's whitespace as a side effect, which is exactly the bug class fixed in
-    /// <c>MemberRefactoringEngine.AddMemberAsync</c> by introducing <see cref="InsertMemberFormattedAsync"/>
+    /// <c>MemberRefactoringEngine.AddMemberAsync</c> by introducing <see cref="InsertMemberDeclarationAndFormatInsertionAsync"/>
     /// (see docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md).</item>
     /// </list>
     /// <para>
     /// For an edit-then-format use case on an existing tree, prefer
-    /// <see cref="InsertMemberFormattedAsync"/>/<see cref="ReplaceNodeFormattedAsync"/>/
+    /// <see cref="InsertMemberDeclarationAndFormatInsertionAsync"/>/<see cref="ReplaceNodeFormattedAsync"/>/
     /// <see cref="RemoveNodePreservingTriviaAsync"/> instead of this method -> they scope the formatting
     /// annotation to just the changed node so siblings are left untouched. Reach for this method only
     /// when the node truly has no siblings to protect (a synthesized standalone node), or as a
