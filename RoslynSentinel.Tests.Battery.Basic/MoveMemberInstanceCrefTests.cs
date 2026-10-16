@@ -7,14 +7,19 @@ using RoslynSentinel.Tests.Fakes;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 /// <summary>
-/// End-to-end tests for the cref RETARGET behaviour of MemberRefactoringEngine.MoveMemberAsync on the instance-move
-/// route. Doc-comment crefs elsewhere that name a moved member are retargeted from the source class to the target
-/// class; bare crefs inside the moved members are left alone; ambiguous (candidate) crefs are counted, not edited.
+/// End-to-end tests for the cref RETARGET and QUALIFY behaviour of MemberRefactoringEngine.MoveMemberAsync on the
+/// instance-move route. Doc-comment crefs elsewhere that name a moved member are retargeted from the source class to
+/// the target class; bare crefs inside the moved members are left alone (they move with the member and are not
+/// counted); crefs inside moved members that name a non-moved source member are qualified with the source class;
+/// ambiguous (candidate) crefs elsewhere are counted, not edited.
 /// Notes strings are asserted exactly, including the informational notes the move emits for a cross-file target.
+/// Not covered end to end: a receiver edit and a cref edit on equal spans. A receiver span is a code expression and a
+/// cref span lies in doc-comment trivia, so the two cannot be equal.
 /// </summary>
 [TestFixture]
 [Category("MemberRefactoringEngine")]
 [Category("InstanceMoveCrefRetarget")]
+[Category("InstanceMoveCrefQualify")]
 public class MoveMemberInstanceCrefTests
 {
     private const string DifferentFileNote =
@@ -210,6 +215,8 @@ public class MoveMemberInstanceCrefTests
             "    public int Count(string input) => input.Length;",
             "}")));
         // Neither a retarget nor an ambiguous-candidate note: only the informational notes for this move.
+        // BareInheritedNote pins the documented over-approximation in HasBareCrefInMovedDocs: the note fires for any
+        // bare name-style cref in a moved doc. A future refinement is not a regression.
         Assert.That(result.Notes, Is.EqualTo(new[] { DifferentFileNote, BareInheritedNote }),
             "A bare cref inside the moved member is neither retargeted nor counted");
     }
@@ -267,6 +274,108 @@ public class MoveMemberInstanceCrefTests
         {
             "Retargeted 1 doc-comment cref(s) from 'A' to 'B'.",
             "1 ambiguous (candidate) cref(s) were not retargeted.",
+            DifferentFileNote,
+        }));
+    }
+
+    [Test]
+    public async Task BareCrefInMovedOverloadDoc_WithBothOverloadsMoved_IsNotCountedAsCandidate()
+    {
+        const string eol = "\n";
+        // Both overloads move, so the bare cref in the moved Count(int) doc is ambiguous between them. It moves with
+        // its member and is not a candidate: it must not appear in the ambiguous-candidate note.
+        var source = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class A",
+            "{",
+            "    /// <summary>Counts strings.</summary>",
+            "    public int Count(string input) => input.Length;",
+            "",
+            "    /// <summary>Counts ints, see <see cref=\"Count\"/>.</summary>",
+            "    public int Count(int input) => input;",
+            "",
+            "    /// <summary>Other method.</summary>",
+            "    public int Process(string x) => x.Length;",
+            "}");
+        var target = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class B",
+            "{",
+            "    /// <summary>Existing member on target.</summary>",
+            "    public int Size() => 0;",
+            "}");
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Target.cs", target));
+
+        // Vacuity guard: the bare cref sits inside an overload that moves, and the other overload moves too.
+        Assert.That(source, Does.Contain("    /// <summary>Counts ints, see <see cref=\"Count\"/>.</summary>"));
+
+        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count" });
+
+        Assert.That(NewText(result, "Target.cs"), Does.Contain("    /// <summary>Counts ints, see <see cref=\"Count\"/>.</summary>"));
+        var notes = result.Notes ?? Array.Empty<string>();
+        Assert.That(notes.Any(n => n.Contains("ambiguous (candidate)", StringComparison.Ordinal)), Is.False,
+            "A bare cref inside a moved overload must not be counted as an ambiguous candidate");
+    }
+
+    [Test]
+    public async Task AmbiguousCrefsAtSameOffsetInTwoDocuments_AreCountedSeparately()
+    {
+        const string eol = "\n";
+        const string ambiguousNote = "2 ambiguous (candidate) cref(s) were not retargeted.";
+        // Source.cs and Caller.cs hold the same qualified ambiguous cref at the same character offset. The class names
+        // are both one character, so the text before the doc line is identical in both files. The count must key on
+        // the document as well as the offset, or one of the two crefs is dropped.
+        var source = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class A",
+            "{",
+            "    /// <summary>See <see cref=\"A.Count\"/>.</summary>",
+            "    public int Process(string x) => x.Length;",
+            "",
+            "    /// <summary>Counts strings.</summary>",
+            "    public int Count(string input) => input.Length;",
+            "",
+            "    /// <summary>Counts ints.</summary>",
+            "    public int Count(int input) => input;",
+            "}");
+        var target = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class B",
+            "{",
+            "    /// <summary>Existing member on target.</summary>",
+            "    public int Size() => 0;",
+            "}");
+        var caller = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class C",
+            "{",
+            "    /// <summary>See <see cref=\"A.Count\"/>.</summary>",
+            "    public int Run() => 0;",
+            "}");
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Target.cs", target),
+            ("Caller.cs", caller));
+
+        // Vacuity guard: both qualified ambiguous crefs exist, at the same character offset in their documents.
+        var sourceOffset = source.IndexOf("<see cref=\"A.Count\"/>", StringComparison.Ordinal);
+        Assert.That(sourceOffset, Is.GreaterThan(0));
+        Assert.That(caller.IndexOf("<see cref=\"A.Count\"/>", StringComparison.Ordinal), Is.EqualTo(sourceOffset));
+
+        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count" });
+
+        Assert.That(result.Notes, Is.EqualTo(new[]
+        {
+            ambiguousNote,
             DifferentFileNote,
         }));
     }
@@ -568,9 +677,14 @@ public class MoveMemberInstanceCrefTests
         var targetNew = NewText(result, "Target.cs");
         Assert.That(targetNew, Does.Contain("    /// <summary>Counts, see <see cref=\"Helper\"/>.</summary>"));
         Assert.That(targetNew, Does.Not.Contain("A.Helper"), "A cref to a moved sibling must not be qualified with the source class");
+        Assert.That(targetNew, Does.Contain("    public int Count(string input) => input.Length;"), "Count must arrive in B");
+        Assert.That(targetNew, Does.Contain("    public int Helper() => 1;"), "Helper must arrive in B");
 
         var notes = result.Notes ?? Array.Empty<string>();
         Assert.That(notes.Any(n => n.StartsWith("Qualified", StringComparison.Ordinal)), Is.False, "No Qualified note when no cref names a non-moved member");
+        // BareInheritedNote pins the documented over-approximation in HasBareCrefInMovedDocs: the note fires for any
+        // bare name-style cref in a moved doc, including one that names a sibling which also moves. A future
+        // refinement is not a regression.
         Assert.That(notes, Does.Contain(BareInheritedNote));
     }
 
@@ -709,7 +823,7 @@ public class MoveMemberInstanceCrefTests
             "    /// <summary>Counts, see <see cref=\"Other\"/>.</summary>",
             "    public int Count(string input) => input.Length;",
             "",
-            "    /// <summary>Other method.</summary>",
+            "    /// <summary>Other method, see <see cref=\"A.Count\"/>.</summary>",
             "    public int Other() => 0;",
             "}");
         var target = Lines(eol,
@@ -720,21 +834,31 @@ public class MoveMemberInstanceCrefTests
             "    /// <summary>Existing member on target.</summary>",
             "    public int Size() => 0;",
             "}");
+        var caller = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class Caller",
+            "{",
+            "    /// <summary>Documents <see cref=\"A.Count\"/>.</summary>",
+            "    public int Run() => 0;",
+            "}");
         var originals = new Dictionary<string, string>
         {
             ["Source.cs"] = source,
             ["Target.cs"] = target,
+            ["Caller.cs"] = caller,
         };
 
         var (workspace, engine) = CreateInMemoryTestFixture(
             ("Source.cs", source),
-            ("Target.cs", target));
+            ("Target.cs", target),
+            ("Caller.cs", caller));
 
         var result = await MoveInstanceAsync(workspace, engine, new[] { "Count" });
 
         Assert.That(result.AppliedEdits, Is.Not.Null, "The route must report the edits it applied");
         var editedNames = result.AppliedEdits!.Keys.Select(k => Path.GetFileName(k.ToString())).ToArray();
-        Assert.That(editedNames, Is.EquivalentTo(new[] { "Source.cs", "Target.cs" }));
+        Assert.That(editedNames, Is.EquivalentTo(new[] { "Source.cs", "Target.cs", "Caller.cs" }));
 
         foreach (var (path, edits) in result.AppliedEdits!)
         {

@@ -64,9 +64,21 @@ public static class InstanceMoveCrefEdits
                 var span = location.Location.SourceSpan;
                 var refToken = documentRoot.FindToken(span.Start, findInsideTrivia: true);
                 var isCref = refToken.Parent?.AncestorsAndSelf().Any(n => n is CrefSyntax) == true;
+                TextChange? edit = null;
+                var insideMovedMember = false;
+                if (isCref)
+                {
+                    edit = MoveMemberTextEdits.BuildReferenceEdit(documentRoot, span, targetClassName);
+                    insideMovedMember = sourceFilePath != null
+                        && string.Equals(document.FilePath, sourceFilePath, StringComparison.OrdinalIgnoreCase)
+                        && movedSpans.Any(s => s.Contains(span));
+                }
+
                 if (location.IsCandidateLocation)
                 {
-                    if (isCref && countedCandidateCrefs.Add((document.Id, span.Start)))
+                    // Bare crefs inside moved members move with them and still resolve; not a skip.
+                    var bareInsideMovedMember = insideMovedMember && edit != null && edit.Value.Span.Length == 0;
+                    if (isCref && !bareInsideMovedMember && countedCandidateCrefs.Add((document.Id, span.Start)))
                     {
                         skippedCandidates++;
                     }
@@ -74,20 +86,11 @@ public static class InstanceMoveCrefEdits
                     continue;
                 }
 
-                if (!isCref)
-                {
-                    continue;
-                }
-
-                var edit = MoveMemberTextEdits.BuildReferenceEdit(documentRoot, span, targetClassName);
                 if (edit == null)
                 {
                     continue;
                 }
 
-                var insideMovedMember = sourceFilePath != null
-                    && string.Equals(document.FilePath, sourceFilePath, StringComparison.OrdinalIgnoreCase)
-                    && movedSpans.Any(s => s.Contains(span));
                 if (insideMovedMember && edit.Value.Span.Length == 0)
                 {
                     continue;
