@@ -1,6 +1,6 @@
 # Finding: about a quarter of engine methods return primitive or untyped shapes, and EngineResultWrapper<T> is barely used
 
-**Status:** OPEN 2026-10-14. Measurement done; the direction (hybrid: `IResultStatus` as the standard, DTOs for structure, exceptions for primitive failures, wrapper narrowed or removed) is recommended but not decided.
+**Status:** DECISION 2026-10-16. Hybrid chosen: `IResultStatus` is the standard, DTOs carry structure, primitives that fail throw coded exceptions, and the wrapper is narrowed or removed (rule set below). It feeds Phase 2 of `proposals/proposal_dto_ownership_role_lineage.md`.
 
 ## Context
 Raised during slice 4d of the snippet-matching migration (`proposals/proposal_internal_whitespace_tolerance_contract_for_snippet_helpers.md`). `ResolveBySnippetOrThrow` (`Engines.Basic/SyntaxTargetResolver.cs`) needs to tell a caller "the snippet matched nothing, but the edit proceeded on the name alone" (decision 2026-10-14: single candidate with a non-matching snippet proceeds with a warning). No warning channel is reachable from the helper. `IResultStatus` (`Common/IResultStatus.cs`, adopted per `plans/plan_shared_result_status_interface.md`) has `IsError`, `Status`, `Code` and `Message`, where `Message` is documented as a failure explanation. The only warning field is `SentinelCallToolResult.WarningDetails` (`Common/SentinelCallToolResult.cs:249`), set by hand in `Tools.Basic`.

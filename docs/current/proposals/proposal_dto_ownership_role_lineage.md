@@ -218,10 +218,20 @@ rename can change `LargeResultInfo.resultType`):
   expressible in them.
 - A big-bang move of DTOs out of Common: blocked by layer inversion and the cross-project relocation bug.
 
-## Open questions
+## Decisions (2026-10-16)
 
-- Should the catalog also be an MCP tool mode, or is the generated doc enough for agents?
-- Domain naming: adopt the name-prefix domains as-is, or define a fixed list first?
+- **Suffix convention:** the table above, as drafted.
+- **Rule format:** agents report a structured `NEW-DTO:` block (name, role, layer.domain, DTOs evaluated with
+  reasons, wire impact). Where the rule lives (CLAUDE.md, agent definitions, or a skill) is still open.
+- **Catalog:** a generated doc plus an MCP read mode. Filters:
+  - `layer` and `role` enums;
+  - a `domain` enum kept in sync with the namespaces by a test (from name prefixes until Phase 3);
+  - `shapeLike` (property names, ranked by overlap).
+- **Result shapes:** the hybrid from `findings/finding_engine_result_shapes_primitives_and_wrapper_usage.md`.
+- **Domain namespaces:** survey first. No convention is fixed until a codebase-wide survey of types and
+  dependencies is done.
+
+## Open questions
 - Are the 52 orphans all schema mirrors or wire types? This was not verified per type.
 - Should existing `Info`, `Entry` and `Report` names ever be renamed, given the `resultType` wire effect?
 
