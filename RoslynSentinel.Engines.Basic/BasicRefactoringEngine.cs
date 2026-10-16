@@ -1541,10 +1541,8 @@ public class BasicRefactoringEngine
             newUsing = SyntaxFactory.UsingDirective(SyntaxFactory.ParseName(namespaceName)).WithTrailingTrivia(SyntaxFactory.EndOfLine(eol));
         }
 
-        var annotation = new SyntaxAnnotation();
-        var newRoot = root.AddUsings(newUsing.WithAdditionalAnnotations(annotation));
-        var editedDocument = document.WithSyntaxRoot(newRoot);
-        var formattedDoc = await Formatter.FormatAsync(editedDocument, annotation, cancellationToken: cancellationToken);
+        var newRoot = root.AddUsings(newUsing.WithAdditionalAnnotations(Formatter.Annotation));
+        var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         if (simplifyExisting)
         {
             // Semantic-safe shortening of now-redundant fully-qualified names, via Roslyn's own

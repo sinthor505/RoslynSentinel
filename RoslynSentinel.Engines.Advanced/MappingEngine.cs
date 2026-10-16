@@ -125,11 +125,11 @@ public class MappingEngine
             };
         }
 
-        var annotation = new SyntaxAnnotation();
+        var annotation = Formatter.Annotation;
         var newRoot = root!.ReplaceNodes(nodes, (oldNode, newNode) =>
             newNode.WithLeft(oldNode.Right).WithRight(oldNode.Left).WithAdditionalAnnotations(annotation));
 
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -206,11 +206,11 @@ public class MappingEngine
                 };
             }
 
-            var annotation = new SyntaxAnnotation();
+            var annotation = Formatter.Annotation;
             var newRoot = root.ReplaceNodes(nodes, (oldNode, newNode) =>
                 newNode.WithLeft(oldNode.Right).WithRight(oldNode.Left).WithAdditionalAnnotations(annotation));
 
-            var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+            var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,

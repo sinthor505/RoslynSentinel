@@ -66,7 +66,7 @@ public class InstrumentationEngine
             .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)) && m.Body != null)
             .ToList();
 
-        var annotation = new SyntaxAnnotation();
+        var annotation = Formatter.Annotation;
         var newRoot = root!.ReplaceNodes(publicMethods, (oldMethod, newMethod) =>
         {
             var catchBlock = SyntaxFactory.CatchClause(
@@ -84,7 +84,7 @@ public class InstrumentationEngine
             return newMethod.WithBody(SyntaxFactory.Block(tryStatement)).WithAdditionalAnnotations(annotation);
         });
 
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -112,7 +112,7 @@ public class InstrumentationEngine
         // Shared annotation for every node introduced below (the added using directive, if any, and
         // the rewritten method) -> lets the final Formatter.FormatAsync pass reformat just these
         // edited spans instead of reflowing the whole file.
-        var annotation = new SyntaxAnnotation();
+        var annotation = Formatter.Annotation;
 
         if (!root.Usings.Any(u => u.Name?.ToString() == "System.Diagnostics"))
         {
@@ -141,7 +141,7 @@ public class InstrumentationEngine
         var newMethodNode = methodNode.WithBody(newBody).WithAdditionalAnnotations(annotation);
 
         var newRoot = root.ReplaceNode(methodNode, newMethodNode);
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
