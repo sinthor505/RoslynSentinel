@@ -660,10 +660,11 @@ public class MoveMemberPreservesUntouchedTextTests
             Assert.That(text, Does.Not.Contain("cref = "), "cref attributes must not gain spaces around equals");
         }
 
-        // Source: only the member (with its doc comment and one blank line) is removed; the cref outside it is untouched.
+        // Source: the member (with its doc comment and one blank line) is removed, and the cref to it in Process's doc is retargeted.
         AssertOnlySpansChanged(source, sourceNewText, new[]
         {
-            new ContentSpan(movedMember + eol, string.Empty)
+            new ContentSpan(movedMember + eol, string.Empty),
+            new ContentSpan("A.Count", "B.Count")
         });
 
         // Target: only the moved member is appended after the last existing member.
@@ -674,10 +675,11 @@ public class MoveMemberPreservesUntouchedTextTests
                 "    public string Describe() => \"target\";" + eol + eol + movedMember)
         });
 
-        // Caller: only the receiver expression of the call site changes.
+        // Caller: the receiver expression of the call site changes, and the doc cref is retargeted.
         AssertOnlySpansChanged(caller, callerNewText, new[]
         {
-            new ContentSpan("a.Count(", "_b.Count(")
+            new ContentSpan("a.Count(", "_b.Count("),
+            new ContentSpan("A.Count", "B.Count")
         });
     }
 
@@ -748,18 +750,20 @@ public class MoveMemberPreservesUntouchedTextTests
             Assert.That(text, Does.Not.Contain("cref = "), "cref attributes must not gain spaces around equals");
         }
 
-        // Source file: the member is cut out of A and appended to B, nothing else moves.
+        // Source file: the member is cut out of A and appended to B, and the cref to it in Process's doc is retargeted.
         AssertOnlySpansChanged(source, sourceNewText, new[]
         {
             new ContentSpan(movedMember + eol, string.Empty),
             new ContentSpan(
                 "        public int Size() => 0;" + eol,
-                "        public int Size() => 0;" + eol + eol + movedMember)
+                "        public int Size() => 0;" + eol + eol + movedMember),
+            new ContentSpan("A.Count", "B.Count")
         });
 
         AssertOnlySpansChanged(caller, callerNewText, new[]
         {
-            new ContentSpan("a.Count(", "_b.Count(")
+            new ContentSpan("a.Count(", "_b.Count("),
+            new ContentSpan("A.Count", "B.Count")
         });
     }
 
@@ -792,13 +796,22 @@ public class MoveMemberPreservesUntouchedTextTests
         var membersToMove = classNode.Members.Where(m => m is MethodDeclarationSyntax method && method.Identifier.Text == "Count").ToList();
 
         var previewEdits = new Dictionary<DocumentId, List<TextChange>>();
+
+        // Production (MoveInstanceMembersAsync) merges the cref retarget edits into the same edit set before materializing.
+        var semanticModel = await sourceDocument.GetSemanticModelAsync();
+        var movedSymbols = membersToMove.Select(m => semanticModel!.GetDeclaredSymbol(m)).OfType<ISymbol>().ToList();
+        var crefEdits = await InstanceMoveCrefEdits.CollectRetargetEditsAsync(solution, sourceDocument.Id, membersToMove, movedSymbols, "B", CancellationToken.None);
+        foreach (var (crefDocId, crefDocEdits) in crefEdits.EditsByDocument)
+        {
+            previewEdits[crefDocId] = crefDocEdits.ToList();
+        }
         var (previewTexts, previewNewFiles, _) = await MemberRefactoringEngine.AddInstanceMoveStructuralEditsAsync(previewEdits, sourceDocument, root, classNode, membersToMove, "B", targetDocument, targetClassNode, false, CancellationToken.None);
         var preview = await MemberRefactoringEngine.MaterializeDocumentEditsAsync(solution, previewEdits, previewTexts, CancellationToken.None);
 
         var applied = await engine.MoveMemberAsync(workspace.PathOf("Source.cs"), "A", new[] { "Count" }, "B", null, CancellationToken.None);
 
         Assert.That(previewNewFiles, Is.Empty, "The preview never synthesizes a new class file");
-        Assert.That(preview.Count, Is.EqualTo(2), "The preview touches only the source and target documents - never callers");
+        Assert.That(preview.Count, Is.EqualTo(3), "The preview touches the source, the target and the caller whose doc cref is retargeted");
         foreach (var fileName in new[] { "Source.cs", "Target.cs" })
         {
             var previewText = preview[preview.Keys.Single(k => Path.GetFileName(k.ToString()) == fileName)];
@@ -809,7 +822,8 @@ public class MoveMemberPreservesUntouchedTextTests
         // And the preview text carries no collateral changes either.
         AssertOnlySpansChanged(source, preview[preview.Keys.Single(k => Path.GetFileName(k.ToString()) == "Source.cs")], new[]
         {
-            new ContentSpan(movedMember + eol, string.Empty)
+            new ContentSpan(movedMember + eol, string.Empty),
+            new ContentSpan("A.Count", "B.Count")
         });
         AssertOnlySpansChanged(target, preview[preview.Keys.Single(k => Path.GetFileName(k.ToString()) == "Target.cs")], new[]
         {

@@ -4136,6 +4136,63 @@ public class MemberRefactoringEngine
             }
         }
 
+        // Doc-comment crefs that name a moved member go stale once it leaves this class, so they are retargeted here.
+        // The collector skips bare crefs inside the moved members (they move together and still resolve at the destination).
+        // Receiver rewrites above win: a collector edit that equals or overlaps one is dropped.
+        // A null semantic model yields no moved symbols, so retargeting is skipped (the collector gets an empty list).
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        var movedSymbols = new List<ISymbol>();
+        foreach (var member in membersToMove)
+        {
+            if (member is BaseFieldDeclarationSyntax field)
+            {
+                foreach (var variable in field.Declaration.Variables)
+                {
+                    if (semanticModel?.GetDeclaredSymbol(variable, cancellationToken) is { } fieldSymbol)
+                    {
+                        movedSymbols.Add(fieldSymbol);
+                    }
+                }
+            }
+            else if (semanticModel?.GetDeclaredSymbol(member, cancellationToken) is { } memberSymbol)
+            {
+                movedSymbols.Add(memberSymbol);
+            }
+        }
+
+        var crefEdits = await InstanceMoveCrefEdits.CollectRetargetEditsAsync(solution, document.Id, membersToMove, movedSymbols, targetClassName, cancellationToken);
+        var notes = new List<string>();
+        var retargeted = 0;
+        foreach (var (crefDocId, crefDocEdits) in crefEdits.EditsByDocument)
+        {
+            if (!editsByDocument.TryGetValue(crefDocId, out var docEdits))
+            {
+                docEdits = new List<TextChange>();
+                editsByDocument[crefDocId] = docEdits;
+            }
+
+            foreach (var crefEdit in crefDocEdits)
+            {
+                if (docEdits.Any(e => e.Span == crefEdit.Span || e.Span.OverlapsWith(crefEdit.Span)))
+                {
+                    continue;
+                }
+
+                docEdits.Add(crefEdit);
+                retargeted++;
+            }
+        }
+
+        if (retargeted > 0)
+        {
+            notes.Add($"Retargeted {retargeted} doc-comment cref(s) from '{className}' to '{targetClassName}'.");
+        }
+
+        if (crefEdits.SkippedCandidates > 0)
+        {
+            notes.Add($"{crefEdits.SkippedCandidates} ambiguous (candidate) cref(s) were not retargeted.");
+        }
+
         var (texts, newFiles, _) = await AddInstanceMoveStructuralEditsAsync(editsByDocument, document, root, classNode, membersToMove, targetClassName, existingTargetDoc, existingTargetClassNode, true, cancellationToken);
         // AppliedEdits covers every existing file the move touches (source, target and caller documents); the brand-new
         // class file in newFiles has no original text, so it is added to the result below but gets no edit entry.
@@ -4162,7 +4219,7 @@ public class MemberRefactoringEngine
             appliedFixups.Add(new AppliedCallSiteFixup(site.ReportPath, finalLine, source.Key, source.Value));
         }
 
-        return new MoveMemberResult(result, skippedCallSites, pendingLedgerEntries, pendingLedgerOperationName, appliedFixups, AppliedEdits: appliedEdits);
+        return new MoveMemberResult(result, skippedCallSites, pendingLedgerEntries, pendingLedgerOperationName, appliedFixups, AppliedEdits: appliedEdits, Notes: notes.Count > 0 ? notes : null);
     }
 
     /// <summary>
