@@ -1216,6 +1216,133 @@ public class PreviewInstanceMoveCallSitesTests
         Assert.That(callRow.SuggestedFix, Is.EqualTo("_target"));
     }
 
+    [Test]
+    public async Task PreviewInstanceMoveCallSites_WrappedCallWithNamedArgumentNoReceiverInScope_IsNotValidAsync()
+    {
+        // The invocation is wrapped across lines with a named argument on its own line. The caller has no WrapNamedTarget
+        // in scope, so after the move the site must be explained by binding/candidate scan, never Valid with a null fix.
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/WrapNamedSource.cs", """
+                namespace ContosoOrders.Core;
+
+                public class WrapNamedSource
+                {
+                    public void Foo(int x)
+                    {
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/WrapNamedTarget.cs", """
+                namespace ContosoOrders.Core;
+
+                public class WrapNamedTarget
+                {
+                }
+                """),
+            ("ContosoOrders.Core/WrapNamedCaller.cs", """
+                namespace ContosoOrders.Core;
+
+                public class WrapNamedCaller
+                {
+                    public void Do()
+                    {
+                        new WrapNamedSource()
+                            .Foo(
+                                x: 1);
+                    }
+                }
+                """));
+
+        var rows = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/WrapNamedSource.cs"),
+            "WrapNamedSource", ["Foo"], "WrapNamedTarget");
+        var row = rows.Single(r => r.FilePath.ToString().Contains("WrapNamedCaller"));
+        Assert.That(row.Status, Is.EqualTo(CallSiteStatus.NoCandidateIntroducible));
+        Assert.That(row.SuggestedFix, Does.Contain("Add a field of type WrapNamedTarget"));
+    }
+
+    [Test]
+    public async Task PreviewInstanceMoveCallSites_ReferenceBelowMovedMemberInSameFile_ClassifiesWithOriginalLineAsync()
+    {
+        // The reference sits BELOW Foo in the same file, so removing Foo shifts its line. The row must still classify as
+        // Valid with the receiver fix, and its Line must be the original-text line (17), not the post-removal line.
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/ShiftSource.cs", """
+                namespace ContosoOrders.Core;
+
+                public class ShiftSource
+                {
+                    public void Foo()
+                    {
+                    }
+                }
+
+                public class ShiftCaller
+                {
+                    private readonly ShiftTarget _target = new ShiftTarget();
+
+                    public void Do()
+                    {
+                        var a = new ShiftSource();
+                        a.Foo();
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/ShiftTarget.cs", """
+                namespace ContosoOrders.Core;
+
+                public class ShiftTarget
+                {
+                }
+                """));
+
+        var rows = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/ShiftSource.cs"),
+            "ShiftSource", ["Foo"], "ShiftTarget");
+
+        var row = rows.Single(r => r.CallExpression == "a.Foo");
+        Assert.Multiple(() =>
+        {
+            Assert.That(row.Status, Is.EqualTo(CallSiteStatus.Valid));
+            Assert.That(row.SuggestedFix, Is.EqualTo("_target"));
+            Assert.That(row.Line, Is.EqualTo(17));
+        });
+    }
+
+    [Test]
+    public async Task PreviewInstanceMoveCallSites_RecursiveSelfCall_ClassifiesAsValidNotAmbiguousAsync()
+    {
+        // Count calls itself unqualified inside its own body. After the move that call binds to the moved member on the
+        // destination, so the row must be Valid and never Ambiguous.
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/RecurSource.cs", """
+                namespace ContosoOrders.Core;
+
+                public class RecurSource
+                {
+                    public int Count(int n)
+                    {
+                        return n == 0 ? 0 : Count(n - 1);
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/RecurTarget.cs", """
+                namespace ContosoOrders.Core;
+
+                public class RecurTarget
+                {
+                }
+                """));
+
+        var rows = await engine.PreviewInstanceMoveCallSitesAsync(
+            workspace.PathOf("ContosoOrders.Core/RecurSource.cs"),
+            "RecurSource", ["Count"], "RecurTarget");
+
+        Assert.That(rows.Select(r => r.Status), Does.Not.Contain(CallSiteStatus.Ambiguous));
+        var selfRow = rows.Single(r => r.Line == 7);
+        Assert.That(selfRow.Status, Is.EqualTo(CallSiteStatus.Valid));
+    }
+
     // NOTE: MoveOrderDependent (a call site inside a member that is itself being moved in the same batch) is
     // reached when the site no longer binds in the trial text, e.g. a typed receiver `a.Foo()` inside the moved
     // Baz (PreviewInstanceMoveCallSites_QualifiedCallInsideMovedBody_IsMoveOrderDependentAsync). An unqualified
