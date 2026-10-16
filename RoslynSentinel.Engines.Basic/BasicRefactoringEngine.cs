@@ -1616,7 +1616,7 @@ public class BasicRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RoslynFormattingHelper.RemoveNodePreservingTriviaAsync(document, root, existing, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.RemoveNodePreservingTriviaAsync(document, root, existing, cancellationToken: cancellationToken)
         };
     }
 

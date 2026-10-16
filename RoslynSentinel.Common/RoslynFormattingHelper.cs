@@ -162,7 +162,14 @@ public static class RoslynFormattingHelper
     /// avoids the whole-container/whole-sibling formatting this helper used previously, which
     /// normalized untouched members' internal spacing as a side effect.
     /// </summary>
-    public static async Task<string> RemoveNodePreservingTriviaAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, CancellationToken cancellationToken = default, ILogger? logger = null)
+    /// <param name="removeOptions">
+    /// Passed to <c>SyntaxNode.RemoveNode</c>. The default preserves the historical behaviour. Note that the
+    /// boundary-token trivia restore runs regardless of this value, so directive-keeping flags
+    /// (<see cref="SyntaxRemoveOptions.KeepUnbalancedDirectives"/>, <see cref="SyntaxRemoveOptions.KeepDirectives"/>)
+    /// do not survive it: a directive that sat in the removed node's leading trivia is dropped, which can orphan
+    /// its matching <c>#endregion</c>/<c>#endif</c>. Not yet safe for callers that need directives kept (C4 slice C4a finding).
+    /// </param>
+    public static async Task<string> RemoveNodePreservingTriviaAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions = SyntaxRemoveOptions.KeepExteriorTrivia, CancellationToken cancellationToken = default, ILogger? logger = null)
     {
         var originalSourceText = await document.GetTextAsync(cancellationToken);
         var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
@@ -186,7 +193,7 @@ public static class RoslynFormattingHelper
         }
 
         var trackedNodeToRemove = annotatedRoot.DescendantNodesAndSelf().Single(n => n.IsEquivalentTo(nodeToRemove) && n.Span == nodeToRemove.Span);
-        var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, SyntaxRemoveOptions.KeepExteriorTrivia)!;
+        var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, removeOptions)!;
 
         if (beforeAnnotation != null)
         {
