@@ -4,6 +4,18 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## ExtractInterface drops comments and cannot warn (2026-10-16) - not started
+
+ExtractInterface now silently drops comments inside copied signatures and trailing comments after the parameter list (the old `NormalizeWhitespace` output kept them). The engine returns only a file dictionary, so it cannot warn. Consider a warnings field on the engine result or a comment-keeping variant. See `proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md` (C3-G3a).
+
+## TOOL-GAP: `NormalizeNewRootWhitespaceKeepingComments` (2026-10-16) - not started
+
+No helper formats a newly built root that embeds existing code with its comments kept (needed by the `PinnedC6_*` sites: ExtractSuperclass :126, ExtractMembersToPartial :1108, ConvertTupleToClass :1625, ExtractMethod :4600/:4569; also the ExtractInterface comment loss above). Suggested change: a new `RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingComments` that exempts comments from the guard but still rejects non-elastic whitespace, or move those sites to annotate-and-format in C6. See `proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md` (C3 status, C6).
+
+## `NormalizeNewRootWhitespaceKeepingUsingHeaders` limitations (2026-10-16) - not started
+
+A directive opened in a using's leading trivia and closed after the last using (the `#endif` on the namespace token) gives CS1027 in the output, and a header on a file with no usings is not carried. Both are documented on the method and pinned by `KnownLimitation_*` tests in `RoslynFormattingHelperNormalizeNewTests`. Fix only if the C6 comment-keeping variant does not subsume it.
+
 ## `MoveType` cannot lift a nested type to top level (2026-10-14) - not started
 
 `MoveType(typeName: SnippetSpan, destination: ownFile)` on a nested type (`ContextHelper.SnippetSpan`) moves the declaration but leaves the qualified `ContextHelper.SnippetSpan` references, so the compile gate rejects it with 13 `CS0426`. Suggested change: when the moved type was nested, rewrite `Outer.Nested` references solution-wide to the new top-level name in the same atomic change. Worked around in slice 5f-D4 with migration-first: add the top-level type beside the nested one, retarget references, then remove the nested one.

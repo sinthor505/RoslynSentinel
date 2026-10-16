@@ -1617,7 +1617,7 @@ public class StructuralRefactoringEngine
         // namespace name and tuple element types, and NormalizeWhitespace keeps the comments inside them (a trailing comment
         // on a using, "int /* id */ Id"). NormalizeNewRootWhitespace* rejects every comment and stripping would lose them
         // silently, so migrating needs a comment-preserving new-root variant. Pinned by
-        // PinnedNeedsC3_AdvancedStructural_ConvertTupleToClass_* in RoslynFormattingHelperNormalizeNewTests.
+        // PinnedC6_AdvancedStructural_ConvertTupleToClass_* in RoslynFormattingHelperNormalizeNewTests.
         var newMethodNode = methodNode.WithReturnType(SyntaxFactory.ParseTypeName(newClassName));
         var updatedRoot = root.ReplaceNode(methodNode, newMethodNode);
         return new Dictionary<FilePathWrapper, string>

@@ -312,8 +312,8 @@ Whether every engine's tool wrapper already does this is **[unverified]**.
   cannot be told from `Whitespace(text)`, so longer whitespace is still counted. Newlines, comments and indentation
   are still rejected. Of the 12 fixtures first pinned as false positives, 7 are now accepted (CodeGeneration :972
   with parameters, AdvancedRefactoring :335/:366, MemberRefactoring :4569, AttributeTextEditBuilder detached :49
-  and :94, `ParseMemberDeclaration` single-line). Still rejected, so C3 must change the call site (pinned as
-  `PinnedNeedsC3_*`): MemberRefactoring ExtractMethod call site :4633 (drop the copied indentation trivia),
+  and :94, `ParseMemberDeclaration` single-line). Still rejected, so C3 had to change the call site (first pinned as
+  `PinnedNeedsC3_*`; the sites that embed existing code are now `PinnedC6_*`, see the C3 status): MemberRefactoring ExtractMethod call site :4633 (drop the copied indentation trivia),
   AttributeTextEditBuilder :49 (the parsed list is still attached to the dummy class; detach it), BasicRefactoring
   :795 (non-elastic `MemberTrivia`; use elastic trivia), AdvancedStructural :126 (embeds existing properties; detach
   or rebuild), and any site that builds multi-character whitespace with `ElasticWhitespace(text)`.
@@ -327,6 +327,12 @@ Whether every engine's tool wrapper already does this is **[unverified]**.
   (BasicRefactoring :795, AdvancedStructural :126/:1108, verify provenance first). Pick one NewRoot
   approach and fold MoveTypeToFile/MoveAllTypesToFiles into it; remove the :1108 string hack. Then add
   `[Obsolete]`.
+  **C3 status: done for every migratable new-node site** (G1, G1b, G2, G2b, G3a, G3b; BasicRefactoring ExtractInterface
+  uses `NormalizeNewRootWhitespaceKeepingUsingHeaders` with the shared `StripUsingKeepingLeadingTrivia`). The raw
+  new-root sites that embed existing code with comments are carried into C6 (annotate-and-format or a comment-keeping
+  new-root variant), pinned as `PinnedC6_*`: ExtractSuperclass :126, ExtractMembersToPartial :1108 (with its string
+  hack), ConvertTupleToClass classRoot :1625, and the ExtractMethod body :4600/:4569. `[Obsolete]` on
+  `NormalizeWholeSubtreeWhitespace` is deferred until C6 empties the list (73 call sites in 16 files remain).
 - **C4 (implementer, behaviour-changing):** consolidate the drifted copies into the shared helpers: the
   three private removes (needs a `SyntaxRemoveOptions` parameter on `RemoveNodePreservingTriviaAsync`)
   and the ~15 inline replace copies. Each needs a byte-exact test showing that untouched lines stay

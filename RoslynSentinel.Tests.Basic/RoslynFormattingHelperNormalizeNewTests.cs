@@ -14,9 +14,10 @@ namespace RoslynSentinel.Tests.Basic;
 /// <see cref="RoslynFormattingHelper.NormalizeNewRootWhitespace"/> with the shared EnsureNodeIsNew guard.
 /// The "SafeSite_" fixtures mirror how the engines build nodes at the call sites the proposal lists as
 /// safe (NewChild/NewRoot). Check 4 exempts single-space whitespace trivia (slice C2b), so most of those
-/// sites are accepted. The "PinnedNeedsC3_" tests pin the sites that are still rejected: each needs a
-/// detach/parse step or elastic trivia at the call site in slice C3 (or, for the ElasticWhitespace(text)
-/// case, cannot be told apart from user indentation). They document behaviour and must be revisited in C3.
+/// sites are accepted. The "PinnedC6_" tests pin the raw-NormalizeWhitespace sites that stay rejected until
+/// slice C6 (annotate-and-format or a comment-keeping new-root variant): their new roots embed existing code
+/// with comments. "PinnedNeedsC3_" pins the ElasticWhitespace(text) case, which cannot be told apart from user
+/// indentation. They document behaviour and must be revisited when the owning slice lands.
 /// </summary>
 public class RoslynFormattingHelperNormalizeNewTests
 {
@@ -38,10 +39,15 @@ public class RoslynFormattingHelperNormalizeNewTests
         => CompilationUnit().AddMembers(
             ClassDeclaration("Gen").AddModifiers(Token(SyntaxKind.PublicKeyword)).AddMembers(NewVoidMethod()));
 
-    private static void AssertContentCheckRejected(Action act, string because, string paramName = "node")
+    private static void AssertContentCheckRejected(Action act, string because, string paramName = "node", int? expectedPieces = null)
     {
         var ex = Assert.Throws<ArgumentException>(() => act(), because);
         Assert.That(ex!.Message, Does.Match(@"contains \d+ piece\(s\) of non-elastic"), because);
+        if (expectedPieces is not null)
+        {
+            Assert.That(ex.Message, Does.Contain($"contains {expectedPieces} piece(s) of non-elastic"), because + " (offending piece count)");
+        }
+
         Assert.That(ex.Message, Does.Contain(ReplaceHint));
         Assert.That(ex.ParamName, Is.EqualTo(paramName));
     }
@@ -589,7 +595,7 @@ public class RoslynFormattingHelperNormalizeNewTests
             .WithParameterList(RoslynFormattingHelper.StripAllTriviaForNormalize(m.ParameterList))
             .WithSemicolonToken(Token(SyntaxKind.SemicolonToken));
         var iface = InterfaceDeclaration("ISvc").AddModifiers(Token(SyntaxKind.PublicKeyword)).AddMembers(ifaceMethod);
-        var usings = List(root.Usings.Select(u => RoslynFormattingHelper.StripAllTriviaForNormalize(u).WithLeadingTrivia(u.GetLeadingTrivia())));
+        var usings = List(root.Usings.Select(RoslynFormattingHelper.StripUsingKeepingLeadingTrivia));
         var ns = FileScopedNamespaceDeclaration(RoslynFormattingHelper.StripAllTriviaForNormalize(root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().First().Name)).AddMembers(iface);
         return CompilationUnit().WithUsings(usings).AddMembers(ns);
     }
@@ -643,17 +649,61 @@ public class RoslynFormattingHelperNormalizeNewTests
             MethodDeclaration(PredefinedType(Token(SyntaxKind.VoidKeyword)), "Run")
                 .WithSemicolonToken(Token(SyntaxKind.SemicolonToken))
                 .WithLeadingTrivia(Comment("// existing")));
-        var root = CompilationUnit().WithUsings(Parse("// Copyright\nusing System;\n").Usings).AddMembers(iface);
+        // Usings are built the way the engine builds them (inner and trailing trivia stripped, header kept), so the
+        // member comment is the ONLY offending piece.
+        var usings = List(Parse("// Copyright\nusing System;\n").Usings.Select(RoslynFormattingHelper.StripUsingKeepingLeadingTrivia));
+        var root = CompilationUnit().WithUsings(usings).AddMembers(iface);
 
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(root, "\n"), "member comment is not a using header", "root");
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(root, "\n"), "member comment is not a using header", "root", expectedPieces: 1);
     }
 
     [Test]
     public void NormalizeNewRootKeepingUsingHeaders_StillRejectsFormattingInsideAUsing()
     {
-        var root = CompilationUnit().WithUsings(Parse("using   System;\n").Usings);
+        // The trailing end-of-line is removed (as the engine does) so the inner multi-space whitespace between the
+        // keyword and the name is the ONLY offending piece.
+        var usings = List(Parse("using   System;\n").Usings.Select(u => u.WithTrailingTrivia(SyntaxTriviaList.Empty)));
+        var root = CompilationUnit().WithUsings(usings);
 
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(root, "\n"), "inner using formatting must be stripped by the caller", "root");
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(root, "\n"), "inner using formatting must be stripped by the caller", "root", expectedPieces: 1);
+    }
+
+    [Test]
+    public void NormalizeNewRootKeepingUsingHeaders_StripUsingKeepingLeadingTrivia_KeepsOnlyTheHeader()
+    {
+        var u = Parse("// Copyright\n#nullable enable\nusing   System; // trailing\n").Usings.Single();
+
+        var stripped = RoslynFormattingHelper.StripUsingKeepingLeadingTrivia(u);
+
+        Assert.That(stripped.Parent, Is.Null);
+        Assert.That(stripped.GetLeadingTrivia().ToFullString(), Is.EqualTo(u.GetLeadingTrivia().ToFullString()));
+        Assert.That(stripped.DescendantTokens().Last().TrailingTrivia, Is.Empty);
+        Assert.That(stripped.UsingKeyword.TrailingTrivia, Is.Empty);
+        Assert.Throws<ArgumentNullException>(() => RoslynFormattingHelper.StripUsingKeepingLeadingTrivia(null!));
+    }
+
+    [Test]
+    public void NormalizeNewRootKeepingUsingHeaders_KnownLimitation_DirectiveClosedAfterTheLastUsingIsUnbalanced()
+    {
+        // Pins a documented limitation: the #endif is leading trivia of the namespace token, which the engine rebuilds,
+        // so the carried #if has no #endif (CS1027). Delete this pin if the variant ever carries that trivia.
+        var ifaceCompUnit = BuildExtractInterfaceRoot("#if true\nusing System;\n#endif\nnamespace Demo;\n\npublic class Svc\n{\n    public int Total(int a) => a;\n}\n");
+
+        var result = RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(ifaceCompUnit, "\n", elasticTrivia: false).ToFullString();
+
+        Assert.That(result, Does.Contain("#if true"));
+        Assert.That(result, Does.Not.Contain("#endif"));
+        Assert.That(Parse(result).GetDiagnostics().Select(d => d.Id), Does.Contain("CS1027"));
+    }
+
+    [Test]
+    public void NormalizeNewRootKeepingUsingHeaders_KnownLimitation_HeaderOnAFileWithNoUsingsIsNotCarried()
+    {
+        var ifaceCompUnit = BuildExtractInterfaceRoot("// Copyright (c) Acme\nnamespace Demo;\n\npublic class Svc\n{\n    public int Total(int a) => a;\n}\n");
+
+        var result = RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(ifaceCompUnit, "\n", elasticTrivia: false).ToFullString();
+
+        Assert.That(result, Does.Not.Contain("Copyright"));
     }
 
     [Test]
@@ -666,7 +716,7 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void PinnedNeedsC3_AdvancedStructural_ExtractSuperclass_126_MixedRoot_IsRejected()
+    public void PinnedC6_AdvancedStructural_ExtractSuperclass_126_MixedRoot_IsRejected()
     {
         // Slice C3-G3a deliberately left this call site on the raw NormalizeWholeSubtreeWhitespace (C6 owns it):
         // the new root embeds the existing class's WHOLE property declarations (XML docs, attributes, comments),
@@ -685,7 +735,7 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void PinnedNeedsC3_AdvancedStructural_ExtractMembersToPartial_1108_MixedRoot_IsRejected()
+    public void PinnedC6_AdvancedStructural_ExtractMembersToPartial_1108_MixedRoot_IsRejected()
     {
         // Slice C3-G3b deliberately left this call site on the raw NormalizeWholeSubtreeWhitespace (C6 owns it), like :126:
         // the new root embeds the existing class's WHOLE members (comments, bodies, indentation) and the file's using
@@ -727,7 +777,7 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void PinnedNeedsC3_AdvancedStructural_ConvertTupleToClass_1625_CommentInsideTupleElementType_IsRejected()
+    public void PinnedC6_AdvancedStructural_ConvertTupleToClass_1625_CommentInsideTupleElementType_IsRejected()
     {
         // Slice C3-G3b left this site on the raw helper (C6 owns it). NormalizeWhitespace keeps the comment between a tuple
         // element's type and its name ("public int /* id */ Id"), so the old output kept it; the guard rejects every comment
@@ -739,7 +789,7 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void PinnedNeedsC3_AdvancedStructural_ConvertTupleToClass_1625_TrailingCommentOnUsing_IsRejected()
+    public void PinnedC6_AdvancedStructural_ConvertTupleToClass_1625_TrailingCommentOnUsing_IsRejected()
     {
         // Only the LEADING trivia of a using (the file header) is exempt from the guard. A trailing comment on a using
         // ("using System; // for Console") was kept by the old output and is rejected here.

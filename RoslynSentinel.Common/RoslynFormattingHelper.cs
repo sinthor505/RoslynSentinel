@@ -378,14 +378,23 @@ public static class RoslynFormattingHelper
 
     /// <summary>
     /// Variant of <see cref="NormalizeNewRootWhitespace"/> for a NEWLY BUILT <see cref="CompilationUnitSyntax"/> whose
-    /// using directives were copied from an existing file and so carry that file's header: a copyright comment,
-    /// a <c>#nullable</c> or <c>#pragma</c> directive, or a disabled <c>#if</c> region. The LEADING trivia of each
-    /// using directive is exempt from the content check and is kept (<c>NormalizeWhitespace</c> keeps comments,
-    /// directives and disabled text, and discards only the whitespace and end-of-line trivia around them).
-    /// Everything else is checked exactly as <see cref="NormalizeNewRootWhitespace"/> checks it, so the caller must
-    /// first strip the inner trivia of each using directive (for example
-    /// <c>StripAllTriviaForNormalize(u).WithLeadingTrivia(u.GetLeadingTrivia())</c>) and must not embed other
-    /// existing code in the root. <paramref name="eol"/> has no default: pass the target file's line ending.
+    /// using directives were copied from an existing file and so carry that file's header. The LEADING trivia of each
+    /// using directive is exempt from the content check and is kept (<c>NormalizeWhitespace</c> keeps comments and
+    /// directives and discards only the whitespace and end-of-line trivia around them).
+    /// <para>
+    /// Supported header: comments, <c>#nullable</c> and <c>#pragma</c> directives, and conditional or region
+    /// directives that are balanced wholly inside the leading trivia of the usings (an <c>#if</c> and its
+    /// <c>#endif</c> both in using leading trivia). Everything else is checked exactly as
+    /// <see cref="NormalizeNewRootWhitespace"/> checks it, so the caller must first strip the inner trivia of each
+    /// using directive with <see cref="StripUsingKeepingLeadingTrivia"/> and must not embed other existing code in the
+    /// root. <paramref name="eol"/> has no default: pass the target file's line ending.
+    /// </para>
+    /// <para>
+    /// Known limitations: only the trivia on the usings is carried. (1) A directive pair that is opened in a using's
+    /// leading trivia but closed after the last using (the <c>#endif</c> sits on the following namespace or member
+    /// token, which is rebuilt) yields an unbalanced directive (CS1027) in the output. (2) A header on a file with no
+    /// usings is not carried at all, because it lives on the first member's token.
+    /// </para>
     /// </summary>
     public static CompilationUnitSyntax NormalizeNewRootWhitespaceKeepingUsingHeaders(CompilationUnitSyntax root, string eol, string indentation = "    ", bool elasticTrivia = true)
     {
@@ -412,6 +421,19 @@ public static class RoslynFormattingHelper
     {
         ArgumentNullException.ThrowIfNull(node);
         return DetachForNormalize(node, keepComments: false);
+    }
+
+    /// <summary>
+    /// Returns a parentless copy of a using directive taken from an existing file, with all of its trivia removed except
+    /// its LEADING trivia (the file header: a copyright comment, a <c>#nullable</c> or <c>#pragma</c> directive).
+    /// This is the exact shape <see cref="NormalizeNewRootWhitespaceKeepingUsingHeaders"/> expects for every using of a
+    /// newly built root: inner whitespace, trailing comments and the trailing end-of-line are dropped (so the guard sees
+    /// only the exempt header), and the header is kept. Engines and tests share this method so they cannot drift.
+    /// </summary>
+    public static UsingDirectiveSyntax StripUsingKeepingLeadingTrivia(UsingDirectiveSyntax usingDirective)
+    {
+        ArgumentNullException.ThrowIfNull(usingDirective);
+        return StripAllTriviaForNormalize(usingDirective).WithLeadingTrivia(usingDirective.GetLeadingTrivia());
     }
 
     /// <summary>

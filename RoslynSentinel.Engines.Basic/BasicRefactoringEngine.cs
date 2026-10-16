@@ -778,7 +778,7 @@ public class BasicRefactoringEngine
         var ifaceNode = SyntaxFactory.InterfaceDeclaration(interfaceName).AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)).AddMembers(ifaceMembers);
         // Wrap in namespace + usings to produce a compilable file
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
-        var cleanUsings = SyntaxFactory.List(root!.Usings.Select(u => RoslynFormattingHelper.StripAllTriviaForNormalize(u).WithLeadingTrivia(u.GetLeadingTrivia())));
+        var cleanUsings = SyntaxFactory.List(root!.Usings.Select(RoslynFormattingHelper.StripUsingKeepingLeadingTrivia));
         CompilationUnitSyntax ifaceCompUnit;
         if (ns != null)
         {
