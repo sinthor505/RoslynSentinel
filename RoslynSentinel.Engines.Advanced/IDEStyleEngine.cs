@@ -46,9 +46,8 @@ public class IDEStyleEngine
             };
         }
 
-        var annotation = new SyntaxAnnotation();
-        var newRoot = root!.ReplaceNodes(thisAccesses, (oldNode, _) => oldNode.Name.WithAdditionalAnnotations(annotation));
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        var newRoot = root!.ReplaceNodes(thisAccesses, (oldNode, _) => oldNode.Name.WithAdditionalAnnotations(Formatter.Annotation));
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,

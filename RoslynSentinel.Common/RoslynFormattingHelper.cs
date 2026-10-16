@@ -302,6 +302,88 @@ public static class RoslynFormattingHelper
     }
 
     /// <summary>
+    /// Formats only the nodes of <paramref name="rewrittenRoot"/> that carry <see cref="Formatter.Annotation"/>,
+    /// then puts the result in the line ending of <paramref name="document"/> (the document as it was BEFORE the
+    /// rewrite). This is the existing-root path of the whole-subtree-whitespace rule: the rewriter adds
+    /// <see cref="Formatter.Annotation"/> to the nodes it created or changed and calls this instead of
+    /// <c>NormalizeWholeSubtreeWhitespace</c> or a whole-document format, so code the rewrite did not touch is not
+    /// re-spaced and line numbers below the edit do not move.
+    /// <para>
+    /// Only the annotated spans are formatted, but the formatter also rewrites the whitespace and line break
+    /// directly in front of an annotated node. It uses its own NewLine option for that (the host default, CRLF on
+    /// Windows, unless an .editorconfig says otherwise), which would put a bare CRLF into an LF document. Line
+    /// endings are therefore normalized with <see cref="EolUtilities.NormalizeEolOfChangedLines"/> against the
+    /// pre-rewrite text: a line that survives unchanged keeps its own terminator (so a stray CRLF in an LF file is
+    /// left alone), and every line the rewrite or the formatter added or changed takes the document's dominant
+    /// ending. For a single-ending document the result is that ending throughout.
+    /// </para>
+    /// <para>
+    /// No annotation in <paramref name="rewrittenRoot"/> means nothing is formatted: the result is the rewritten
+    /// text in the dominant ending. The returned document carries the full result text; callers read it with
+    /// <c>GetTextAsync</c>. No formatting options are passed, so the formatter resolves them from the document
+    /// (workspace options and any .editorconfig).
+    /// </para>
+    /// </summary>
+    /// <param name="document">The document before the rewrite. Supplies the dominant line ending, the encoding and the pre-image for line matching.</param>
+    /// <param name="rewrittenRoot">The root after the rewrite, with <see cref="Formatter.Annotation"/> on the changed nodes.</param>
+    public static async Task<Document> FormatAnnotatedSpansAsync(Document document, SyntaxNode rewrittenRoot, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(rewrittenRoot);
+
+        var originalSourceText = await document.GetTextAsync(cancellationToken);
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(rewrittenRoot), Formatter.Annotation, cancellationToken: cancellationToken);
+        return await WithChangedLinesInDominantEolAsync(formattedDoc, originalSourceText, cancellationToken);
+    }
+
+    /// <summary>
+    /// Formats the WHOLE of <paramref name="document"/>: every token's spacing, indentation and line breaks, not just
+    /// what an edit touched. "Whole" is in the name because it is the risky scope: it re-spaces unrelated code and can
+    /// shift every line number below the first change. Call it only when the whole document really is being
+    /// formatted (a format-document operation, or a file the tool just scaffolded and fully owns). To format what a
+    /// rewrite changed, annotate the changed nodes with <see cref="Formatter.Annotation"/> and call
+    /// <see cref="FormatAnnotatedSpansAsync"/>; to replace one node, use <see cref="ReplaceNodeAndFormatReplacementAsync"/>.
+    /// This is the one place a whole-document <c>Formatter.FormatAsync</c> is allowed (the ratchet test watches for
+    /// others).
+    /// <para>
+    /// The result is put in the line ending of <paramref name="document"/> as it is passed in (so a caller that
+    /// builds the document with <c>WithSyntaxRoot</c> first gets the dominant ending of that edited text): lines that
+    /// survive the format unchanged keep their own terminator, and every line the formatter added or changed takes
+    /// the dominant ending (<see cref="EolUtilities.NormalizeEolOfChangedLines"/>). The formatter's own NewLine option
+    /// (the host default, CRLF on Windows, unless an .editorconfig says otherwise) therefore never leaks into an LF
+    /// document. No formatting options are passed, so the formatter resolves them from the document (workspace
+    /// options and any .editorconfig). The returned document carries the full result text.
+    /// </para>
+    /// </summary>
+    public static async Task<Document> FormatWholeDocumentAsync(Document document, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var originalSourceText = await document.GetTextAsync(cancellationToken);
+        var formattedDoc = await Formatter.FormatAsync(document, cancellationToken: cancellationToken);
+        return await WithChangedLinesInDominantEolAsync(formattedDoc, originalSourceText, cancellationToken);
+    }
+
+    /// <summary>
+    /// Shared tail of <see cref="FormatAnnotatedSpansAsync"/> and <see cref="FormatWholeDocumentAsync"/>: puts the
+    /// formatted text in the dominant line ending of <paramref name="originalSourceText"/> without touching the
+    /// terminator of any line that survived unchanged (<see cref="EolUtilities.NormalizeEolOfChangedLines"/>), and keeps
+    /// the original encoding and checksum algorithm. Returns <paramref name="formattedDoc"/> itself when nothing changed.
+    /// </summary>
+    private static async Task<Document> WithChangedLinesInDominantEolAsync(Document formattedDoc, Microsoft.CodeAnalysis.Text.SourceText originalSourceText, CancellationToken cancellationToken)
+    {
+        var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
+        var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+        var normalizedText = EolUtilities.NormalizeEolOfChangedLines(originalSourceText.ToString(), formattedText, dominantEol);
+        if (normalizedText == formattedText)
+        {
+            return formattedDoc;
+        }
+
+        return formattedDoc.WithText(Microsoft.CodeAnalysis.Text.SourceText.From(normalizedText, originalSourceText.Encoding, originalSourceText.ChecksumAlgorithm));
+    }
+
+    /// <summary>
     /// Pure pass-through to <see cref="SyntaxNodeExtensions.NormalizeWhitespace{TNode}"/> (via
     /// <see cref="SyntaxNode.NormalizeWhitespace"/>) with identical arguments and identical
     /// behavior -> this method exists purely as a single, greppable chokepoint for the whole-subtree
@@ -509,7 +591,7 @@ public static class RoslynFormattingHelper
     {
         ArgumentNullException.ThrowIfNull(node, paramName);
 
-        const string ExistingCodeHint = "This looks like existing code; use ReplaceNodeAndFormatReplacementAsync, or annotate the new node with Formatter.Annotation and format that span.";
+        const string ExistingCodeHint = "This looks like existing code; use ReplaceNodeAndFormatReplacementAsync, or annotate the changed nodes with Formatter.Annotation and call FormatAnnotatedSpansAsync.";
 
         // Check 2: attached to a tree, so it is not new.
         if (node.Parent is not null)
