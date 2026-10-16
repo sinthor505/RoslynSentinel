@@ -3312,7 +3312,7 @@ public class MemberRefactoringEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Member removed.",
-            UpdatedText = await RoslynFormattingHelper.RemoveNodeFormattedAsync(document, root, member, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.RemoveNodePreservingTriviaAsync(document, root, member, cancellationToken)
         };
     }
 

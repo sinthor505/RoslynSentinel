@@ -162,7 +162,7 @@ public static class RoslynFormattingHelper
     /// avoids the whole-container/whole-sibling formatting this helper used previously, which
     /// normalized untouched members' internal spacing as a side effect.
     /// </summary>
-    public static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, CancellationToken cancellationToken = default, ILogger? logger = null)
+    public static async Task<string> RemoveNodePreservingTriviaAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, CancellationToken cancellationToken = default, ILogger? logger = null)
     {
         var originalSourceText = await document.GetTextAsync(cancellationToken);
         var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
@@ -300,7 +300,7 @@ public static class RoslynFormattingHelper
     /// behavior -> this method exists purely as a single, greppable chokepoint for the whole-subtree
     /// form of whitespace normalization, not as a safety fix.
     /// <para>
-    /// Unlike <see cref="ReplaceNodeFormattedAsync"/>, <see cref="RemoveNodeFormattedAsync"/>, and
+    /// Unlike <see cref="ReplaceNodeFormattedAsync"/>, <see cref="RemoveNodePreservingTriviaAsync"/>, and
     /// <see cref="InsertMemberFormattedAsync"/> -> which are narrowly scoped to just the node being
     /// edited via a tracking annotation, and are safe by construction regardless of what the caller
     /// passes -> this method's safety depends entirely on what <paramref name="node"/> is:
@@ -318,7 +318,7 @@ public static class RoslynFormattingHelper
     /// <para>
     /// For an edit-then-format use case on an existing tree, prefer
     /// <see cref="InsertMemberFormattedAsync"/>/<see cref="ReplaceNodeFormattedAsync"/>/
-    /// <see cref="RemoveNodeFormattedAsync"/> instead of this method -> they scope the formatting
+    /// <see cref="RemoveNodePreservingTriviaAsync"/> instead of this method -> they scope the formatting
     /// annotation to just the changed node so siblings are left untouched. Reach for this method only
     /// when the node truly has no siblings to protect (a synthesized standalone node), or as a
     /// mechanical drop-in during centralization, per docs/current/proposal_batch_replacesnippet.md-adjacent
