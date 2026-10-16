@@ -60,6 +60,21 @@ public static class EolUtilities
             .FirstOrDefault() ?? Environment.NewLine;
     }
 
+    /// <summary>
+    /// The line ending to hand to <c>RoslynFormattingHelper.NormalizeNewChildWhitespace</c> /
+    /// <c>NormalizeNewRootWhitespace</c> for a node that will be inserted into <paramref name="sourceText"/>:
+    /// "\r\n" when the text's dominant line ending is CRLF, otherwise "\n". Those helpers accept only "\n" or
+    /// "\r\n", while <see cref="DetectDominantEol(SourceText)"/> can also return a lone CR, U+0085 or U+2028 (a
+    /// legacy or unusual file), which they reject; the write path then normalizes the changed lines to the
+    /// file's own dominant ending (see <see cref="NormalizeEolOfChangedLines"/>), so the new node only needs a
+    /// style the helpers accept.
+    /// An empty text (no line breaks) yields the platform default when that is CRLF, else "\n".
+    /// </summary>
+    public static string DetectNormalizableEol(SourceText sourceText)
+    {
+        return DetectDominantEol(sourceText) == "\r\n" ? "\r\n" : "\n";
+    }
+
     public static string NormalizeEol(string content, string dominantEol)
     {
         var normalized = content.Replace("\r\n", "\n").Replace("\r", "\n");

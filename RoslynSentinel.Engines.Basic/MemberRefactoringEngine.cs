@@ -1749,7 +1749,7 @@ public class MemberRefactoringEngine
             return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
         }
 
-        var eol = EolUtilities.DetectDominantEol(sourceText);
+        var eol = EolUtilities.DetectNormalizableEol(sourceText);
         var textEdits = new List<AttributeTextEditBuilder.TextEdit>();
         var appliedIndexes = new List<int>();
         foreach (var edit in edits)
@@ -2215,7 +2215,7 @@ public class MemberRefactoringEngine
         AttributeTextEditBuilder.TextEdit addEdit;
         try
         {
-            addEdit = AttributeTextEditBuilder.BuildAddEdit(0, targetNode, attrList, sourceText, EolUtilities.DetectDominantEol(sourceText));
+            addEdit = AttributeTextEditBuilder.BuildAddEdit(0, targetNode, attrList, sourceText, EolUtilities.DetectNormalizableEol(sourceText));
         }
         catch (ToolInvalidArgumentException ex)
         {
@@ -4664,7 +4664,7 @@ public class MemberRefactoringEngine
         // callStatement carries the original statement's leading trivia (the user's indentation, and any comment
         // above it) for the in-place edit above. The standalone snippet is a new node, so drop that copied trivia
         // before normalizing it; NormalizeNewChildWhitespace rejects existing formatting.
-        var callSiteText = RoslynFormattingHelper.NormalizeNewChildWhitespace(callStatement.WithoutLeadingTrivia(), EolUtilities.DetectDominantEol(text)).ToFullString().Trim();
+        var callSiteText = RoslynFormattingHelper.NormalizeNewChildWhitespace(callStatement.WithoutLeadingTrivia(), EolUtilities.DetectNormalizableEol(text)).ToFullString().Trim();
         var extractedMethodText = extractedMethod.ToFullString().Trim();
         return new ExtractMethodResult(false, null, beforeSnippet, callSiteText, extractedMethodText, updatedContent);
     }

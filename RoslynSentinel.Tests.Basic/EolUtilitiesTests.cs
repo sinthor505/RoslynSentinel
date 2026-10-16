@@ -13,7 +13,41 @@ public class EolUtilitiesTests
         var dominant = EolUtilities.DetectDominantEol(sourceText);
         Assert.That(dominant, Is.EqualTo("\n"));
     }
-       [Test]
+
+    [TestCase("a\rb\rc\r", "\n", TestName = "DetectNormalizableEol_CrOnly_ReturnsLf")]
+    [TestCase("a\nb\nc\n", "\n", TestName = "DetectNormalizableEol_Lf_ReturnsLf")]
+    [TestCase("a\r\nb\r\nc\r\n", "\r\n", TestName = "DetectNormalizableEol_Crlf_ReturnsCrlf")]
+    [TestCase("a\r\nb\r\nc\n", "\r\n", TestName = "DetectNormalizableEol_MixedCrlfDominant_ReturnsCrlf")]
+    [TestCase("a\nb\nc\r\n", "\n", TestName = "DetectNormalizableEol_MixedLfDominant_ReturnsLf")]
+    public void DetectNormalizableEol_ReturnsOnlyAStyleNormalizeNewChildAccepts(string content, string expected)
+    {
+        var result = EolUtilities.DetectNormalizableEol(Microsoft.CodeAnalysis.Text.SourceText.From(content));
+
+        Assert.That(result, Is.EqualTo(expected));
+        Assert.That(result, Is.AnyOf("\n", "\r\n"));
+    }
+
+    [TestCase(0x2028, TestName = "DetectNormalizableEol_LineSeparatorU2028_ReturnsLf")]
+    [TestCase(0x0085, TestName = "DetectNormalizableEol_NextLineU0085_ReturnsLf")]
+    public void DetectNormalizableEol_UnicodeLineTerminator_ReturnsLf(int terminatorCodePoint)
+    {
+        // Built from a code point so the terminator cannot be altered by an encoding round trip of this file.
+        var terminator = ((char)terminatorCodePoint).ToString();
+        var text = Microsoft.CodeAnalysis.Text.SourceText.From("a" + terminator + "b" + terminator + "c" + terminator);
+
+        Assert.That(EolUtilities.DetectDominantEol(text), Is.EqualTo(terminator), "Precondition: the dominant EOL is the unusual terminator.");
+        Assert.That(EolUtilities.DetectNormalizableEol(text), Is.EqualTo("\n"));
+    }
+
+    [Test]
+    public void DetectNormalizableEol_EmptyText_ReturnsAnAcceptedStyle()
+    {
+        var result = EolUtilities.DetectNormalizableEol(Microsoft.CodeAnalysis.Text.SourceText.From(string.Empty));
+
+        Assert.That(result, Is.EqualTo(Environment.NewLine == "\r\n" ? "\r\n" : "\n"));
+    }
+
+    [Test]
     public async Task ReplaceNodeFormattedAsync_PreservesLfDominant_ForLfFixture()
     {
         var lfContent = "namespace Scratch;\n\npublic class ScratchCrlf2\n{\n    public void DoWork()\n    {\n    }\n}\n";

@@ -323,7 +323,7 @@ public class AdvancedRefactoringEngine
         var existingMethodSigs = interfaceNode.Members.OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text + "|" + string.Join(",", m.ParameterList.Parameters.Select(p => p.Type?.ToString().Trim()))).ToHashSet(StringComparer.Ordinal);
         var existingPropertyNames = interfaceNode.Members.OfType<PropertyDeclarationSyntax>().Select(p => p.Identifier.Text).ToHashSet(StringComparer.Ordinal);
         // The new members are inserted into the interface's document, so its line ending is the target EOL.
-        var eol = EolUtilities.DetectDominantEol(await interfaceDocument.GetTextAsync(cancellationToken));
+        var eol = EolUtilities.DetectNormalizableEol(await interfaceDocument.GetTextAsync(cancellationToken));
         var newMembers = new List<MemberDeclarationSyntax>();
         foreach (var method in publicMethods)
         {
@@ -333,7 +333,9 @@ public class AdvancedRefactoringEngine
                 continue;
             }
 
-            // Build interface method: return type + name + params, no body
+            // Build interface method: return type + name + params, no body. The parts reused from the class method are
+            // stripped of ALL trivia (comments and newlines included) so the new member passes the NormalizeNewChild guard,
+            // which rejects existing formatting; the doc comment or an inline comment on the class method is dropped on purpose.
             var ifaceMethod = (MemberDeclarationSyntax)RoslynFormattingHelper.NormalizeNewChildWhitespace(SyntaxFactory.MethodDeclaration(RoslynFormattingHelper.StripAllTriviaForNormalize(method.ReturnType), method.Identifier.WithoutTrivia()).WithParameterList(RoslynFormattingHelper.StripAllTriviaForNormalize(method.ParameterList)).WithTypeParameterList(method.TypeParameterList is null ? null : RoslynFormattingHelper.StripAllTriviaForNormalize(method.TypeParameterList)).WithConstraintClauses(SyntaxFactory.List(method.ConstraintClauses.Select(c => RoslynFormattingHelper.StripAllTriviaForNormalize(c)))).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()), eol);
             newMembers.Add(ifaceMethod);
         }

@@ -381,18 +381,19 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void PinnedNeedsDesign_MemberRefactoring_ExtractMethod_4569_EmbeddedUserStatementWithComment_IsRejected()
+    public void PinnedNeedsDesign_MemberRefactoring_ExtractMethod_4569_EmbeddedUserStatementWithNestedComment_IsRejected()
     {
         // Site 4569 is deliberately NOT migrated in slice C3-G2: the extracted body embeds the user's own
-        // statements, which can carry comments and multi-line formatting. The guard rightly rejects them and
-        // stripping the trivia would drop the comments, so the engine keeps the raw NormalizeWholeSubtreeWhitespace
-        // call until a helper exists that formats a new shell around existing statements. This pin records
-        // why; flip it when that helper lands.
-        var statement = ParseStatement("var total = a + b; // running total\n");
+        // statements, which can carry comments and multi-line formatting nested inside child blocks (the engine
+        // already strips the top-level leading/trailing trivia of each statement, so only nested trivia remains).
+        // This pin and the multi-line one below pin the GUARD's rejection of such nested trivia; they do not
+        // describe engine behaviour. The engine keeps the raw NormalizeWholeSubtreeWhitespace call until a helper
+        // exists that formats a new shell around existing statements; flip these pins when that helper lands.
+        var statement = ParseStatement("if (a > b)\n{\n    total = a; // pick the larger\n}\n");
         var node = MethodDeclaration(ParseTypeName("int"), "ExtractedSum")
             .WithBody(Block(statement.WithoutLeadingTrivia(), ReturnStatement(IdentifierName("total"))));
 
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), "embedded user statement with a comment");
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), "embedded user statement with a nested comment");
     }
 
     [Test]
@@ -404,24 +405,6 @@ public class RoslynFormattingHelperNormalizeNewTests
 
         AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), "embedded multi-line user statement");
     }
-
-    [Test]
-    public void SafeSite_MemberRefactoring_ExtractMethod_CallSite_4633_WithCopiedLeadingTriviaDropped_IsAccepted()
-    {
-        // Mirrors the engine: the call statement first receives the original statement's leading trivia (the
-        // user's indentation) for the in-place edit, and the standalone snippet drops it before normalizing.
-        var original = ParseStatement("        // note\n        var total = a + b;\n");
-        var callStatement = BuildCallSite().WithLeadingTrivia(original.GetLeadingTrivia());
-
-        var normalized = RoslynFormattingHelper.NormalizeNewChildWhitespace(callStatement.WithoutLeadingTrivia(), "\n");
-
-        Assert.That(normalized.ToFullString().Trim(), Is.EqualTo("ExtractedSum(a, b);"));
-    }
-
-    private static StatementSyntax BuildCallSite()
-        => ExpressionStatement(InvocationExpression(
-            IdentifierName("ExtractedSum"),
-            ArgumentList(SeparatedList(new[] { Argument(IdentifierName("a")), Argument(IdentifierName("b")) }))));
 
     private static AttributeListSyntax ParseAttributeList(string attributeSource)
     {

@@ -951,7 +951,7 @@ public class CodeGenerationEngine
             };
         }
 
-        var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
+        var eol = EolUtilities.DetectNormalizableEol(await document.GetTextAsync(cancellationToken));
         var newMembers = new List<MemberDeclarationSyntax>();
         foreach (var member in unimplemented)
         {

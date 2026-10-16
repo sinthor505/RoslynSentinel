@@ -548,6 +548,19 @@ public enum ToolScope
     }
 
     [Test]
+    public async Task ExtractMethod_IndentedStatementWithLeadingComment_CallSiteReplacementHasNoCommentOrIndentation()
+    {
+        // The in-place edit keeps the original statement's leading trivia (indentation and the comment above it), but
+        // the standalone CallSiteReplacement snippet is a new node: it must carry neither the comment nor the indentation.
+        SetSource("public class Calc\n{\n    public int Process(int a, int b)\n    {\n        // add them up\n        int sum = a + b;\n        return sum;\n    }\n}\n", "ExtractCallSite.cs");
+
+        var result = await _memberRefactoringEngine.ExtractMethodAsync("ExtractCallSite.cs", 6, "int sum = a + b;", 6, "int sum = a + b;", "ComputeSum");
+
+        Assert.That(result.IsError, Is.False, result.ErrorMessage);
+        Assert.That(result.CallSiteReplacement, Is.EqualTo("var sum = ComputeSum(a, b);"));
+    }
+
+    [Test]
     public async Task ExtractConstantSafe_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
     {
         var path = Path.Combine(Path.GetTempPath(), $"extract-constant-miss-{Guid.NewGuid():N}.cs");

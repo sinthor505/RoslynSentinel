@@ -410,9 +410,12 @@ public static class RoslynFormattingHelper
 
     /// <summary>
     /// Shared core of <see cref="StripAllTriviaForNormalize{T}"/> and <see cref="StripFormattingTriviaForNormalize{T}"/>.
-    /// <c>WithoutTrivia</c> is applied first because it always rebuilds the node, which detaches it from its tree; it
-    /// also drops the leading trivia of the first token and the trailing trivia of the last token, so when comments are
-    /// kept the non-formatting boundary trivia is captured beforehand and put back on the detached copy.
+    /// <c>WithoutTrivia</c> is applied first because it drops the leading trivia of the first token and the trailing
+    /// trivia of the last token (which the descendant-trivia pass below does not reach), so when comments are kept the
+    /// non-formatting boundary trivia is captured beforehand and put back on the copy. The copy is parentless as a side
+    /// effect, but that is not the purpose: a node a caller embeds in a new member becomes part of that member's fresh
+    /// root anyway. The strip exists to remove comments, newlines and indentation so the
+    /// <see cref="NormalizeNewChildWhitespace{T}"/> guard accepts the result.
     /// </summary>
     private static T DetachForNormalize<T>(T node, bool keepComments)
         where T : SyntaxNode

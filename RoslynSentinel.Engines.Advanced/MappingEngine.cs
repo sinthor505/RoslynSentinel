@@ -88,7 +88,7 @@ public class MappingEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Mapping method generated for {fromSymbol.Name} to {toSymbol.Name}",
-            UpdatedText = RoslynFormattingHelper.NormalizeNewChildWhitespace(mappingMethod, EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken))).ToFullString()
+            UpdatedText = RoslynFormattingHelper.NormalizeNewChildWhitespace(mappingMethod, EolUtilities.DetectNormalizableEol(await document.GetTextAsync(cancellationToken))).ToFullString()
         };
     }
 

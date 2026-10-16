@@ -115,6 +115,20 @@ public class TargetModel
         Assert.That(System.Text.RegularExpressions.Regex.IsMatch(result.UpdatedText!, "(?<!\r)\n"), Is.False, "Every line ending must be CRLF.");
     }
 
+    [Test]
+    public async Task GenerateMapping_CrOnlyDocument_DoesNotThrow()
+    {
+        // A legacy CR-only file's dominant EOL is a lone CR, which NormalizeNewChildWhitespace rejects; the engine must
+        // hand it a normalizable style instead of failing.
+        SetSource("public class SourceDto\r{\r    public string Name { get; set; }\r}\r\rpublic class DestEntity\r{\r    public string Name { get; set; }\r}\r", "Cr.cs");
+
+        DocumentEditResult? result = null;
+        await Assert.DoesNotThrowAsync(async () => result = await _engine.GenerateMappingAsync("Cr.cs", "SourceDto", "DestEntity"));
+
+        Assert.That(result!.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("dest.Name = source.Name"));
+    }
+
     // ══════════════════════════════════════════════════════════════
     // InvertAssignmentsAsync
     // ══════════════════════════════════════════════════════════════
