@@ -247,6 +247,14 @@ public static class RoslynSentinelServiceExtensionsBasic
             mcpBuilder.WithSentinelTools<TestCategoryTaggingTools>();
         }
 
+        // QualifyCrefs: opt-in via --mode=QualifyCrefs, or on demand in claude-lean (the QualifyCrefsTools class is in the lean lists in ToolClassRegistry).
+        if (activeToolClasses.Contains("QualifyCrefsTools"))
+        {
+            services.AddSingleton<QualifyCrefsImpl>();
+            services.AddSingleton<QualifyCrefsTools>();
+            mcpBuilder.WithSentinelTools<QualifyCrefsTools>();
+        }
+
         if (activeToolClasses.Contains("WorkspaceTools"))
         {
             services.AddSingleton<WorkspaceReadNavigationImpl>();

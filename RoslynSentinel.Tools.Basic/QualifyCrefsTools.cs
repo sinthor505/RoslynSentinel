@@ -28,7 +28,8 @@ public class QualifyCrefsTools
         "compile is reported and left unchanged while the others still apply. Never commits. " +
         "Skips type crefs, crefs that are already qualified, and crefs that do not resolve, and reports counts for each (qualified, " +
         "skippedAlreadyQualified, skippedTypeOrPredefined, skippedUnresolved, droppedByRebind). " +
-        "Idempotent: re-running after an apply produces no further edits.")]
+        "Idempotent: re-running after an apply produces no further edits. " +
+        "Returns one changeId per project batch (revertible with UndoLastApply) and a status of dry_run_ok, applied, partially_applied or no_changes.")]
     public async Task<SentinelCallToolResult<object>> QualifyCrefs(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.Scope)] ToolScope scope,

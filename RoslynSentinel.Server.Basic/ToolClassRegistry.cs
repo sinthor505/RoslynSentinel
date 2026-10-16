@@ -60,7 +60,7 @@ public static class ToolClassRegistry
         "WorkspaceTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
         "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
         "AdminTools", "WholeFileWriteTools", "ToolsetControlTools", "DeclarationTools", "ParameterEditTools",
-        "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools", "SubAgentTools",
+        "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools", "QualifyCrefsTools", "SubAgentTools",
     ];
 
     /// <summary>
@@ -76,7 +76,7 @@ public static class ToolClassRegistry
             "WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
             "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
             "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools", "DeclarationTools", "ParameterEditTools",
-            "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools", "SubAgentTools",
+            "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools", "QualifyCrefsTools", "SubAgentTools",
         ],
         StringComparer.Ordinal);
 
@@ -116,6 +116,7 @@ public static class ToolClassRegistry
             ["SymbolRelationship"] = ["SymbolRelationshipTools"],
             ["NamedArguments"] = ["NamedArgumentsTools"],
             ["TestCategories"] = ["TestCategoryTaggingTools"],
+            ["QualifyCrefs"] = ["QualifyCrefsTools"],
         };
 
     /// <summary>
@@ -144,6 +145,7 @@ public static class ToolClassRegistry
             ["SubAgent"] = ["SubAgentTools"],
             ["NamedArguments"] = ["NamedArgumentsTools"],
             ["TestCategories"] = ["TestCategoryTaggingTools"],
+            ["QualifyCrefs"] = ["QualifyCrefsTools"],
             ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
             [ClaudeLeanMode] = ClaudeLeanToolClasses,
             [ExperimentalMode] = ["CodeTransformTools"],
