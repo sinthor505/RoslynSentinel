@@ -4,6 +4,10 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## DTO-justification PreToolUse hook (2026-10-16) - designed, not built
+
+Behaviour and block-message guidance: `.claude/skills/dto-conventions/SKILL.md` section 7. Build `.claude/hooks/enforce-dto-justification.ps1` + `.Tests.ps1` (Pester, mirror `enforce-dogfood.Tests.ps1`) and a separate `settings.json` PreToolUse entry, matcher `.*__Member|.*__CreateFile|.*__WriteFile` (command/args form as the existing entries). Detection: `Member` addTopLevelType/addMember (`newMemberSource`), `CreateFile` typeKind class/record/struct, `WriteFile` content minus types already in the on-disk file; production `.cs` in the repo only (skip bin/obj/Worktree/test and fixture projects). Records always trigger; class/struct unless static, abstract or a service-like suffix (Engine, Tools, Impl, Helper(s), Extensions, Service, Manager, Factory, Exception, Attribute, ...). Allow when `reason` has `DTO-EXEMPT: <text>`, or `NEW-DTO: <Name>` for every triggering type plus `Evaluated:`. Log every trigger to `.claude/journal/dto-hook.jsonl`; fail open on any internal error. Copy stdin parsing, repo-root resolution, `exit 2` deny and jsonl append from `enforce-dogfood.ps1` without modifying it. Known gap: `Member replace`, `ReplaceSnippet` and `ApplyDiff` are not inspected. When installed, remove the "not yet installed" note in the skill.
+
 ## `Search(mode: references)` cannot resolve a type by name unless `filePath` is pinned (2026-10-16) - not started
 
 Tracked as a blocker: `blockers/blocking_error_search_references_by_name_excludes_types.md` (root cause traced to `SymbolNavigationEngine.cs:1581-1583`; workaround: pass `filePath`). Prerequisite for the DTO proposal phases.

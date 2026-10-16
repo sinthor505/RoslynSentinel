@@ -39,6 +39,8 @@ Symbols: exact types/members to change
 Call sites: pre-measured list (file:line), or "none"
 Operation: (sweep only) the exact tool call or repeated edit pattern
 Acceptance: a clean Build, or one named test/diagnostic (a second check only where the tier allows it)
+DTOs: (only when the slice adds or reshapes a data type) "reuse <ExistingName>" or the full NEW-DTO:
+  block from the dto-conventions skill; the agent copies it into the creating call's reason
 Out of scope: what not to touch (e.g. "do not commit", "items 5-7") - always include "edit nothing
   outside the named symbols/branches; if a test seems to need another change, reply RESCOPE:"
   and "no Write/Edit/shell writes on .cs files"
