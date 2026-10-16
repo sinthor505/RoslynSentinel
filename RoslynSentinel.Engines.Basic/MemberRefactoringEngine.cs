@@ -4221,18 +4221,23 @@ public class MemberRefactoringEngine
 
             if (qualified > 0)
             {
-                notes.Add($"Qualified {qualified} doc-comment cref(s) in the moved member(s) with '{className}.' so they still resolve at '{targetClassName}'.");
+                notes.Add($"Qualified {qualified} doc-comment cref(s) in the moved member(s) with the source class name so they still resolve at '{targetClassName}'.");
             }
 
             if (qualifyResult.DroppedByRebind > 0)
             {
-                notes.Add($"{qualifyResult.DroppedByRebind} cref qualification(s) were dropped because the qualified form did not rebind to the same member.");
+                notes.Add($"{qualifyResult.DroppedByRebind} cref qualification(s) in the source file were dropped because the qualified form did not rebind to the same member.");
             }
+        }
+
+        if (existingTargetDoc is not null && !string.Equals(existingTargetDoc.FilePath, document.FilePath, StringComparison.OrdinalIgnoreCase))
+        {
+            notes.Add("The target class is in a different file; doc-comment crefs were not re-verified against its namespace and using directives.");
         }
 
         if (InstanceMoveCrefQualifyEdits.HasBareCrefInMovedDocs(membersToMove))
         {
-            notes.Add("Bare doc-comment crefs in the moved member(s) to inherited members of the source class were not checked.");
+            notes.Add("Bare doc-comment crefs in the moved member(s) could not be verified against inherited members of the source class; check any that name one.");
         }
 
         var (texts, newFiles, _) = await AddInstanceMoveStructuralEditsAsync(editsByDocument, document, root, classNode, membersToMove, targetClassName, existingTargetDoc, existingTargetClassNode, true, cancellationToken);
