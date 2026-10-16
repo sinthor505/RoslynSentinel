@@ -5,6 +5,10 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Instance moves left doc-comment crefs behind - resolved 2026-10-15
+
+**Resolved 2026-10-15** (Q1 `CrefQualifier`, Q2a/Q2b `QualifyCrefs` tool in toolset `moveExtract`, Q3-1 to Q3-6c on the instance route: ab552200, 42a10387, 080fd140, d631e3cb, bd05e5d0, 8805b5e2). Entry was: after an instance move, a cref to the moved member still named the old class, while static moves retargeted it. The instance route now (1) retargets crefs to the moved member in the source, caller and other documents, counting ambiguous (candidate) crefs once and leaving them alone, and (2) qualifies bare crefs inside a moved member's own doc that name a non-moved source member (`A.Other`, `A{T}.Other` for a generic source class). Both report notes. Tests: `MoveMemberInstanceCrefTests`, `InstanceMoveCrefEditsTests`, `InstanceMoveCrefQualifyEditsTests`. Plan: `plans/plan_cref_qualifier_helper_and_tool.md`. Remaining limitations are in TODO.md ("Instance-move cref limitations").
+
 ## `MoveMember` follow-ups: full text returned on success, and `MethodSignature` whole-file CRLF rewrite - resolved 2026-10-13
 
 **Resolved 2026-10-13** (verified against master source). Two items from the "`MoveMember` follow-ups left open by the whole-file reformat fix" TODO entry, plus one related item from the resolved blocker's "Not done" list:

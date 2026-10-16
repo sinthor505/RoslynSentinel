@@ -4811,7 +4811,7 @@ public class MemberRefactoringEngine
                 var refToken = refRoot?.FindToken(refLocation.Location.SourceSpan.Start, findInsideTrivia: true);
                 if (refToken?.Parent?.AncestorsAndSelf().Any(n => n is CrefSyntax) == true)
                 {
-                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Valid, "Documentation reference (cref): not a call site, not rewritten by this move.", null, []));
+                    results.Add(new PreviewCallSite(refDoc.FilePath!, lineSpan.StartLinePosition.Line + 1, callExpression, CallSiteStatus.Valid, "Documentation reference (cref): not a call site. A MoveMember instance move retargets or qualifies doc-comment crefs itself; this preview does not list those edits.", null, []));
                     continue;
                 }
 

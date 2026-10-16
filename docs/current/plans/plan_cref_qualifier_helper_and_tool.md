@@ -1,6 +1,6 @@
 # Plan: CrefQualifier helper and gated QualifyCrefs tool
 
-**Status:** DRAFT 2026-10-15. Design agreed with the user; slices Q1-Q3 not dispatched. Q3 waits for item B3 and the D2 design.
+**Status:** DONE 2026-10-15 except optional Q3-7 (reword the preview's cref row). Q1, Q2a, Q2b and Q3 (Q3-1 to Q3-6c, last commit 8805b5e2) landed; the `QualifyCrefs` tool needs a fresh session to be live. Limitations are in TODO.md ("Instance-move cref limitations").
 
 ## Problem
 
