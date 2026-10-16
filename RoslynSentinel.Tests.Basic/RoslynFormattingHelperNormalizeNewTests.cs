@@ -684,6 +684,71 @@ public class RoslynFormattingHelperNormalizeNewTests
         AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(baseUnit, "\n"), "mixed new root", "root");
     }
 
+    [Test]
+    public void PinnedNeedsC3_AdvancedStructural_ExtractMembersToPartial_1108_MixedRoot_IsRejected()
+    {
+        // Slice C3-G3b deliberately left this call site on the raw NormalizeWholeSubtreeWhitespace (C6 owns it), like :126:
+        // the new root embeds the existing class's WHOLE members (comments, bodies, indentation) and the file's using
+        // directives, so the guard correctly rejects them, and stripping them would silently lose user comments. The site
+        // also patches the output with a ";namespace" string replace that C6 should drop. Migrating needs a
+        // comment-preserving variant of NormalizeNewRootWhitespace or an annotate-and-format rewrite.
+        // Delete this pin and add a SafeSite_ twin when it is migrated.
+        var root = Parse("using System;\n\nnamespace Demo;\n\npublic partial class Customer\n{\n    // the name\n    public string Name { get; set; }\n    public int Total(int a) => a;\n}\n");
+        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().First();
+        var membersToMove = classNode.Members.Where(m => m is MethodDeclarationSyntax || m is PropertyDeclarationSyntax).ToList();
+        var newClassNode = ClassDeclaration("Customer")
+            .WithModifiers(TokenList(Token(SyntaxKind.PublicKeyword), Token(SyntaxKind.PartialKeyword)))
+            .WithMembers(List(membersToMove));
+        var namespaceDecl = NamespaceDeclaration(ParseName("Demo")).WithMembers(SingletonList<MemberDeclarationSyntax>(newClassNode));
+        var newCompilationUnit = CompilationUnit()
+            .WithUsings(List(root.ChildNodes().OfType<UsingDirectiveSyntax>()))
+            .WithMembers(SingletonList<MemberDeclarationSyntax>(namespaceDecl));
+
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(newCompilationUnit, "\n"), "mixed new root", "root");
+    }
+
+    // The class file root of StructuralRefactoringEngine.ConvertTupleToClassAsync (AdvancedStructuralEngine :1625): new class,
+    // but it embeds the existing file's using directives, namespace name and tuple element types.
+    private static CompilationUnitSyntax BuildConvertTupleClassRoot(string source)
+    {
+        var root = Parse(source);
+        var tuple = root.DescendantNodes().OfType<TupleTypeSyntax>().First();
+        var properties = tuple.Elements.Select(e => (MemberDeclarationSyntax)PropertyDeclaration(e.Type, e.Identifier.Text)
+            .AddModifiers(Token(SyntaxKind.PublicKeyword))
+            .AddAccessorListAccessors(
+                AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithSemicolonToken(Token(SyntaxKind.SemicolonToken)),
+                AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithSemicolonToken(Token(SyntaxKind.SemicolonToken)))).ToArray();
+        var newClass = ClassDeclaration("DataResult").AddModifiers(Token(SyntaxKind.PublicKeyword)).AddMembers(properties);
+        var ns = root.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
+        var classRoot = CompilationUnit().WithUsings(root.Usings);
+        return ns is null
+            ? classRoot.AddMembers(newClass)
+            : classRoot.AddMembers(FileScopedNamespaceDeclaration(ns.Name).AddMembers(newClass));
+    }
+
+    [Test]
+    public void PinnedNeedsC3_AdvancedStructural_ConvertTupleToClass_1625_CommentInsideTupleElementType_IsRejected()
+    {
+        // Slice C3-G3b left this site on the raw helper (C6 owns it). NormalizeWhitespace keeps the comment between a tuple
+        // element's type and its name ("public int /* id */ Id"), so the old output kept it; the guard rejects every comment
+        // and stripping the embedded type would lose it silently.
+        // Delete this pin and add a SafeSite_ twin when it is migrated.
+        var classRoot = BuildConvertTupleClassRoot("public class Svc\n{\n    public (int /* id */ Id, string Name) GetData() => default;\n}\n");
+
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(classRoot, "\n"), "tuple element type comment", "root");
+    }
+
+    [Test]
+    public void PinnedNeedsC3_AdvancedStructural_ConvertTupleToClass_1625_TrailingCommentOnUsing_IsRejected()
+    {
+        // Only the LEADING trivia of a using (the file header) is exempt from the guard. A trailing comment on a using
+        // ("using System; // for Console") was kept by the old output and is rejected here.
+        // Delete this pin and add a SafeSite_ twin when it is migrated.
+        var classRoot = BuildConvertTupleClassRoot("using System; // for Console\n\npublic class Svc\n{\n    public (int Id, string Name) GetData() => default;\n}\n");
+
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(classRoot, "\n"), "using trailing comment", "root");
+    }
+
     // ---- Null arguments and parameter names ----
 
     [Test]

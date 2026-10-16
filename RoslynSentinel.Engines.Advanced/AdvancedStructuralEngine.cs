@@ -1612,6 +1612,12 @@ public class StructuralRefactoringEngine
             classRoot = classRoot.AddMembers(newClass);
         }
 
+        // classRoot stays on the raw NormalizeWholeSubtreeWhitespace (slice C6 owns it, see
+        // proposal_enforce_normalize_whole_subtree_whitespace_rule.md): it embeds the existing file's using directives,
+        // namespace name and tuple element types, and NormalizeWhitespace keeps the comments inside them (a trailing comment
+        // on a using, "int /* id */ Id"). NormalizeNewRootWhitespace* rejects every comment and stripping would lose them
+        // silently, so migrating needs a comment-preserving new-root variant. Pinned by
+        // PinnedNeedsC3_AdvancedStructural_ConvertTupleToClass_* in RoslynFormattingHelperNormalizeNewTests.
         var newMethodNode = methodNode.WithReturnType(SyntaxFactory.ParseTypeName(newClassName));
         var updatedRoot = root.ReplaceNode(methodNode, newMethodNode);
         return new Dictionary<FilePathWrapper, string>
@@ -1667,11 +1673,13 @@ public class StructuralRefactoringEngine
                 return SyntaxFactory.PropertyDeclaration(SyntaxFactory.ParseTypeName("object"), char.ToUpper(name[0]) + name.Substring(1)).AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)).AddAccessorListAccessors(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)), SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
             });
             var newClass = SyntaxFactory.ClassDeclaration(newClassName).AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)).AddMembers(properties.ToArray());
+            // The class is built from scratch (NewChild), so it carries no user formatting; it takes the line ending of the document it was extracted from.
+            var eol = EolUtilities.DetectNormalizableEol(await document.GetTextAsync(cancellationToken));
             return new Dictionary<FilePathWrapper, string>
             {
                 {
                     Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"),
-                    RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newClass).ToFullString()
+                    RoslynFormattingHelper.NormalizeNewChildWhitespace(newClass, eol).ToFullString()
                 }
             };
         }
