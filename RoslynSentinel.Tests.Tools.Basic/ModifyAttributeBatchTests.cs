@@ -149,6 +149,61 @@ public class ModifyAttributeBatchTests
     }
 
     [Test]
+    public async Task ModifyAttribute_BatchAddWithComment_ReturnsStructuredInvalidArgumentAndWritesNothingAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var path = workspace.PathOf(FixtureRelativePath);
+        var beforeContent = workspace.ReadText(FixtureRelativePath);
+
+        // The first edit is valid; the whole batch must still be rejected before any write.
+        var result = await tools.ModifyAttribute(
+            reason: "batch test comment in added attribute",
+            batchEdits:
+            [
+                new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetA", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" },
+                new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetB", Action = AttributeModifyAction.add, ExistingAttribute = "Obsolete(\"x\" /* why */)" },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.InvalidArgument));
+            Assert.That(result.ErrorData.Message, Does.Contain("attribute text must not contain comments; remove the comment and retry"));
+            Assert.That(result.ErrorData.Message, Does.Contain("batchEdits[1]"));
+            Assert.That(result.ErrorData.Message, Does.Not.Contain("NormalizeWhitespace"));
+            Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(beforeContent));
+        });
+    }
+
+    [Test]
+    public async Task ModifyAttribute_BatchReplaceWithComment_ReturnsStructuredInvalidArgumentAndWritesNothingAsync()
+    {
+        using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
+        var tools = BuildTools(workspace.Manager);
+        var path = workspace.PathOf(FixtureRelativePath);
+        var beforeContent = workspace.ReadText(FixtureRelativePath);
+
+        var result = await tools.ModifyAttribute(
+            reason: "batch test comment in replacement attribute",
+            batchEdits:
+            [
+                new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetA", ExistingAttribute = "Obsolete", Action = AttributeModifyAction.replace, NewAttribute = "Obsolete(\"v2\")" },
+                new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetB", ExistingAttribute = "Obsolete", Action = AttributeModifyAction.replace, NewAttribute = "[Obsolete] // why" },
+            ],
+            dryRun: false, returnDiff: false, cancellationToken: default);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.InvalidArgument));
+            Assert.That(result.ErrorData.Message, Does.Contain("attribute text must not contain comments; remove the comment and retry"));
+            Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(beforeContent));
+        });
+    }
+
+    [Test]
     public async Task ModifyAttribute_BothEditsAndSingularParamsSupplied_RejectsAsInvalidArgumentAsync()
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));

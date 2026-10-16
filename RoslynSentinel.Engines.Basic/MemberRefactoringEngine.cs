@@ -1765,7 +1765,17 @@ public class MemberRefactoringEngine
                     errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): invalid attribute source.");
                     continue;
                 }
-                textEdits.Add(AttributeTextEditBuilder.BuildAddEdit(edit.Index, targetNode, attrList, sourceText, eol));
+                try
+                {
+                    textEdits.Add(AttributeTextEditBuilder.BuildAddEdit(edit.Index, targetNode, attrList, sourceText, eol));
+                }
+                catch (ToolInvalidArgumentException ex)
+                {
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
+                    errorCodes.Add(ex.ErrorCode);
+                    continue;
+                }
+
                 appliedIndexes.Add(edit.Index);
             }
             else if (edit.Action == AttributeModifyAction.replace)
@@ -1787,7 +1797,17 @@ public class MemberRefactoringEngine
                     errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): attribute '{edit.ExistingAttribute}' not found on target.");
                     continue;
                 }
-                textEdits.Add(AttributeTextEditBuilder.BuildReplaceEdit(edit.Index, oldAttr, newAttrList.Attributes.First()));
+                try
+                {
+                    textEdits.Add(AttributeTextEditBuilder.BuildReplaceEdit(edit.Index, oldAttr, newAttrList.Attributes.First(), eol));
+                }
+                catch (ToolInvalidArgumentException ex)
+                {
+                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
+                    errorCodes.Add(ex.ErrorCode);
+                    continue;
+                }
+
                 appliedIndexes.Add(edit.Index);
             }
             else
@@ -1814,7 +1834,9 @@ public class MemberRefactoringEngine
 
         if (errors.Count > 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+            // errorCodes only holds the per-edit failures that carry a code (comment rejection); a code is reported only
+            // when EVERY collected error has one and they agree. Nothing has been written at this point: the batch aborts.
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors), ErrorCode = errorCodes.Count == errors.Count ? SharedErrorCode(errorCodes) : null };
         }
 
         var updatedText = AttributeTextEditBuilder.TryApply(sourceText, textEdits, out var applyError);
@@ -2190,7 +2212,16 @@ public class MemberRefactoringEngine
 
         // Insert only the attribute list as a text edit: replacing the target node and formatting it would re-format
         // every member of a type that merely needed one attribute line (see AttributeTextEditBuilder).
-        var addEdit = AttributeTextEditBuilder.BuildAddEdit(0, targetNode, attrList, sourceText, EolUtilities.DetectDominantEol(sourceText));
+        AttributeTextEditBuilder.TextEdit addEdit;
+        try
+        {
+            addEdit = AttributeTextEditBuilder.BuildAddEdit(0, targetNode, attrList, sourceText, EolUtilities.DetectDominantEol(sourceText));
+        }
+        catch (ToolInvalidArgumentException ex)
+        {
+            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = ex.Message, ErrorCode = ex.ErrorCode };
+        }
+
         var updatedText = AttributeTextEditBuilder.TryApply(sourceText, [addEdit], out var applyError);
         if (updatedText == null)
         {

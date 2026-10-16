@@ -43,12 +43,13 @@ public static class AttributeTextEditBuilder
     /// Builds the insertion of <paramref name="newList"/> as a new attribute list on <paramref name="target"/>, after any
     /// existing attribute lists and after any doc comment. When the declaration keyword starts its own line the new
     /// list gets its own line at the same indentation; otherwise it is inserted inline in front of the keyword.
+    /// Throws <see cref="ToolInvalidArgumentException"/> when the attribute text contains comments.
     /// </summary>
     public static TextEdit BuildAddEdit(int editIndex, SyntaxNode target, AttributeListSyntax newList, SourceText text, string eol)
     {
         var existing = GetAttributeLists(target);
         var anchor = existing.Count > 0 ? existing[existing.Count - 1].GetLastToken().GetNextToken() : target.GetFirstToken();
-        var attributeText = RoslynFormattingHelper.NormalizeNewChildWhitespace(DetachWithoutFormatting(newList), eol).ToString();
+        var attributeText = NormalizeAttributeText(newList, eol);
 
         var line = text.Lines.GetLineFromPosition(anchor.SpanStart);
         var prefix = text.ToString(TextSpan.FromBounds(line.Start, anchor.SpanStart));
@@ -90,11 +91,22 @@ public static class AttributeTextEditBuilder
         return edits;
     }
 
-    /// <summary>Builds the in-place replacement of one attribute (the text between its brackets/commas only).</summary>
-    public static TextEdit BuildReplaceEdit(int editIndex, AttributeSyntax oldAttribute, AttributeSyntax newAttribute)
+    /// <summary>
+    /// Builds the in-place replacement of one attribute (the text between its brackets/commas only), using the
+    /// document's line ending <paramref name="eol"/> (detect it once per document, not per edit). Throws
+    /// <see cref="ToolInvalidArgumentException"/> when the new attribute text contains comments. When
+    /// <paramref name="newAttribute"/> still sits in the list it was parsed from, the whole list is checked, because a
+    /// comment on the list's brackets or on a sibling attribute is not part of the attribute node and would otherwise
+    /// be dropped silently.
+    /// </summary>
+    public static TextEdit BuildReplaceEdit(int editIndex, AttributeSyntax oldAttribute, AttributeSyntax newAttribute, string eol)
     {
-        var eol = EolUtilities.DetectDominantEol(oldAttribute.SyntaxTree.GetText());
-        var attributeText = RoslynFormattingHelper.NormalizeNewChildWhitespace(DetachWithoutFormatting(newAttribute), eol).ToString();
+        if (newAttribute.Parent is AttributeListSyntax parsedList)
+        {
+            _ = NormalizeAttributeText(parsedList, eol);
+        }
+
+        var attributeText = NormalizeAttributeText(newAttribute, eol);
         return new TextEdit(oldAttribute.SpanStart, oldAttribute.Span.End, attributeText, editIndex);
     }
 
@@ -137,21 +149,28 @@ public static class AttributeTextEditBuilder
         return builder.ToString();
     }
 
+    private const string CommentsNotAllowedMessage = "attribute text must not contain comments; remove the comment and retry";
+
     /// <summary>
-    /// Returns a parentless copy of a node parsed from caller-supplied attribute text, with its whitespace and
-    /// end-of-line trivia removed. The text never came from a file, so there is no user formatting to preserve;
-    /// <c>NormalizeWhitespace</c> rebuilds the spacing. Comments are kept (and rejected by the new-node guard).
-    /// <c>WithoutTrivia</c> is applied first because it always rebuilds the node, which detaches it from the
-    /// dummy class it was parsed inside.
+    /// Renders caller-supplied attribute text (parsed inside a dummy class) with canonical whitespace. The text never
+    /// came from a file, so its whitespace and end-of-line trivia are discarded and <c>NormalizeWhitespace</c> rebuilds
+    /// the spacing. Comments are kept by <see cref="RoslynFormattingHelper.StripFormattingTriviaForNormalize{T}"/>
+    /// wherever they sit (boundary and inner alike), so the new-node guard rejects every one of them; the guard's
+    /// <see cref="ArgumentException"/> is turned into a <see cref="ToolInvalidArgumentException"/> with an actionable
+    /// message, so no internal API name reaches the caller. Only the guard's own rejection (parameter <c>node</c>) is
+    /// translated; a bad <paramref name="eol"/> still surfaces as the programming error it is.
     /// </summary>
-    private static T DetachWithoutFormatting<T>(T node)
-        where T : SyntaxNode
+    private static string NormalizeAttributeText(SyntaxNode node, string eol)
     {
-        var detached = node.WithoutTrivia();
-        var formatting = detached.DescendantTrivia(descendIntoTrivia: false)
-            .Where(t => t.IsKind(SyntaxKind.WhitespaceTrivia) || t.IsKind(SyntaxKind.EndOfLineTrivia))
-            .ToList();
-        return formatting.Count == 0 ? detached : detached.ReplaceTrivia(formatting, (_, _) => default);
+        var detached = RoslynFormattingHelper.StripFormattingTriviaForNormalize(node);
+        try
+        {
+            return RoslynFormattingHelper.NormalizeNewChildWhitespace(detached, eol).ToString();
+        }
+        catch (ArgumentException ex) when (ex.ParamName == "node")
+        {
+            throw new ToolInvalidArgumentException(CommentsNotAllowedMessage);
+        }
     }
 
     private static SyntaxList<AttributeListSyntax> GetAttributeLists(SyntaxNode target)

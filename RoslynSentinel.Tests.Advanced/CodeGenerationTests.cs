@@ -737,4 +737,58 @@ public class SomeClass { }", "SomeClass.cs");
         Assert.That(idBlock, Does.Not.Contain("set"),
             "Read-only interface property must NOT generate a setter");
     }
+
+    private static readonly System.Text.RegularExpressions.Regex BareLf = new(@"(?<!\r)\n");
+
+    [Test]
+    public async Task ImplementInterfaceSafe_CrlfDocument_GeneratedMembersUseCrlfOnly()
+    {
+        // The generated stubs go through NormalizeNewChildWhitespace with the document's detected EOL; a CRLF document
+        // must not pick up a bare LF anywhere (not even in a multi-line method body).
+        var source = string.Join("\r\n",
+            "namespace App;",
+            "",
+            "public interface IWorker",
+            "{",
+            "    void Start();",
+            "    int Count { get; set; }",
+            "    string Describe(int id, string name);",
+            "}",
+            "",
+            "public class Worker : IWorker",
+            "{",
+            "}",
+            "");
+        SetSource(source, "WorkerCrlf.cs");
+
+        var result = await _codeGenerationEngine.ImplementInterfaceAsync("WorkerCrlf.cs", "Worker", "IWorker");
+
+        Assert.That(result.UpdatedText, Does.Contain("public void Start"));
+        Assert.That(result.UpdatedText, Does.Contain("public int Count"));
+        Assert.That(result.UpdatedText, Does.Contain("public string Describe"));
+        Assert.That(BareLf.IsMatch(result.UpdatedText!), Is.False,
+            "A CRLF document must stay CRLF-only after ImplementInterface.");
+    }
+
+    [Test]
+    public async Task ImplementInterfaceSafe_DocumentWithoutLineBreaks_UsesEnvironmentNewLineConsistently()
+    {
+        // No line break to detect: EolUtilities falls back to Environment.NewLine, and the generated members must
+        // use it consistently rather than mixing in a hard-coded LF.
+        const string source = "namespace App { public interface IWorker { void Start(); int Count { get; set; } } public class Worker : IWorker { } }";
+        SetSource(source, "WorkerFlat.cs");
+
+        var result = await _codeGenerationEngine.ImplementInterfaceAsync("WorkerFlat.cs", "Worker", "IWorker");
+
+        Assert.That(result.UpdatedText, Does.Contain("public void Start"));
+        Assert.That(result.UpdatedText, Does.Contain("public int Count"));
+        if (Environment.NewLine == "\r\n")
+        {
+            Assert.That(BareLf.IsMatch(result.UpdatedText!), Is.False, "Generated line breaks must be CRLF on this platform.");
+        }
+        else
+        {
+            Assert.That(result.UpdatedText, Does.Not.Contain("\r"), "Generated line breaks must be LF on this platform.");
+        }
+    }
 }

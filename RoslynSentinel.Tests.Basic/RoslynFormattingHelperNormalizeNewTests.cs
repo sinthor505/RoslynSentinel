@@ -434,12 +434,14 @@ public class RoslynFormattingHelperNormalizeNewTests
     public void SafeSite_AttributeTextEditBuilder_49_ParsedAttachedList_BuildAddEdit_IsAcceptedAndUsesPassedEol()
     {
         // Slice C3-G1: the parsed list is still attached to the dummy class (the raw shape the pin used to reject);
-        // the engine detaches it and strips the user's inner formatting before normalizing.
+        // the engine detaches it and strips the user's inner formatting before normalizing. The document is LF but
+        // the caller passes CRLF, so the trailing line break proves the PASSED eol is used (BuildAddEdit does not
+        // detect one); the attribute text itself is single-line, so only the appended break can show it.
         var list = AttributeTextEditBuilder.ParseAttributeList("Obsolete(\"use X\",\r\n      true)");
         Assert.That(list, Is.Not.Null);
         Assert.That(list!.Parent, Is.Not.Null);
 
-        var text = Microsoft.CodeAnalysis.Text.SourceText.From("public class C\r\n{\r\n}\r\n");
+        var text = Microsoft.CodeAnalysis.Text.SourceText.From("public class C\n{\n}\n");
         var target = CSharpSyntaxTree.ParseText(text).GetCompilationUnitRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().First();
 
         var edit = AttributeTextEditBuilder.BuildAddEdit(0, target, list, text, "\r\n");
@@ -448,15 +450,16 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void SafeSite_AttributeTextEditBuilder_94_ParsedAttachedAttribute_BuildReplaceEdit_IsAccepted()
+    public void SafeSite_AttributeTextEditBuilder_94_ParsedAttachedAttribute_BuildReplaceEdit_IsAcceptedAndNormalizesSpacing()
     {
-        // BuildReplaceEdit has no eol parameter: it derives the document's dominant EOL from the old attribute's tree.
+        // The replacement is a single-line attribute, so the eol argument cannot show up in the output; this pins
+        // only that an attached parsed attribute is accepted, its spacing normalized and the span preserved.
         var text = Microsoft.CodeAnalysis.Text.SourceText.From("[Obsolete]\r\npublic class C\r\n{\r\n}\r\n");
         var oldAttribute = CSharpSyntaxTree.ParseText(text).GetCompilationUnitRoot().DescendantNodes().OfType<AttributeSyntax>().First();
         var newAttribute = AttributeTextEditBuilder.ParseAttributeList("Obsolete(\"y\",   true)")!.Attributes.First();
         Assert.That(newAttribute.Parent, Is.Not.Null);
 
-        var edit = AttributeTextEditBuilder.BuildReplaceEdit(0, oldAttribute, newAttribute);
+        var edit = AttributeTextEditBuilder.BuildReplaceEdit(0, oldAttribute, newAttribute, "\n");
 
         Assert.That(edit.NewText, Is.EqualTo("Obsolete(\"y\", true)"));
         Assert.That(edit.Start, Is.EqualTo(oldAttribute.SpanStart));
@@ -464,18 +467,109 @@ public class RoslynFormattingHelperNormalizeNewTests
     }
 
     [Test]
-    public void Pinned_AttributeTextEditBuilder_AttributeWithInnerComment_IsRejectedByCheck4()
+    public void AttributeTextEditBuilder_BuildAddEdit_InnerBlockComment_IsRejectedWithStructuredError()
     {
-        // Known edge after C3-G1: the guard keeps comments out of the "new node" contract, so a caller-supplied
-        // attribute carrying an inner comment now throws ArgumentException instead of being rewritten with the
-        // comment kept. The guard is deliberately not weakened; revisit if comments in attribute arguments matter.
         var list = AttributeTextEditBuilder.ParseAttributeList("Obsolete(\"x\" /* why */)");
-        var text = Microsoft.CodeAnalysis.Text.SourceText.From("public class C\n{\n}\n");
-        var target = CSharpSyntaxTree.ParseText(text).GetCompilationUnitRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().First();
+        var (text, target) = ParseClassTarget("public class C\n{\n}\n");
 
-        var ex = Assert.Throws<ArgumentException>(() => AttributeTextEditBuilder.BuildAddEdit(0, target, list!, text, "\n"));
-        Assert.That(ex!.Message, Does.Match(@"contains \d+ piece\(s\) of non-elastic"));
+        AssertCommentsRejected(() => AttributeTextEditBuilder.BuildAddEdit(0, target, list!, text, "\n"), "inner block comment");
     }
+
+    [Test]
+    public void AttributeTextEditBuilder_BuildAddEdit_InnerLineComment_IsRejectedWithStructuredError()
+    {
+        var list = AttributeTextEditBuilder.ParseAttributeList("Obsolete(\"x\", // why\n true)");
+        var (text, target) = ParseClassTarget("public class C\n{\n}\n");
+
+        AssertCommentsRejected(() => AttributeTextEditBuilder.BuildAddEdit(0, target, list!, text, "\n"), "inner // comment");
+    }
+
+    [Test]
+    public void AttributeTextEditBuilder_BuildAddEdit_LeadingBoundaryComment_IsRejectedLikeInnerComment()
+    {
+        // A comment before the first token used to be dropped silently by WithoutTrivia while an inner one threw;
+        // both must now behave the same way.
+        var list = AttributeTextEditBuilder.ParseAttributeList("[/* lead */ Obsolete]");
+        var (text, target) = ParseClassTarget("public class C\n{\n}\n");
+
+        AssertCommentsRejected(() => AttributeTextEditBuilder.BuildAddEdit(0, target, list!, text, "\n"), "leading boundary comment");
+    }
+
+    [Test]
+    public void AttributeTextEditBuilder_BuildAddEdit_TrailingBoundaryComment_IsRejectedLikeInnerComment()
+    {
+        var list = AttributeTextEditBuilder.ParseAttributeList("[Obsolete] // trailing");
+        var (text, target) = ParseClassTarget("public class C\n{\n}\n");
+
+        AssertCommentsRejected(() => AttributeTextEditBuilder.BuildAddEdit(0, target, list!, text, "\n"), "trailing boundary comment");
+    }
+
+    [Test]
+    public void AttributeTextEditBuilder_BuildReplaceEdit_InnerComment_IsRejectedWithStructuredError()
+    {
+        var oldAttribute = ParseClassWithAttribute().DescendantNodes().OfType<AttributeSyntax>().First();
+        var newAttribute = AttributeTextEditBuilder.ParseAttributeList("Obsolete(\"y\" /* why */)")!.Attributes.First();
+
+        AssertCommentsRejected(() => AttributeTextEditBuilder.BuildReplaceEdit(0, oldAttribute, newAttribute, "\n"), "inner comment on an attached attribute");
+    }
+
+    [Test]
+    public void AttributeTextEditBuilder_BuildReplaceEdit_CommentOnList_IsRejectedWithStructuredError()
+    {
+        // The comment sits outside the AttributeSyntax node (on the list), so only the list-level check sees it.
+        var oldAttribute = ParseClassWithAttribute().DescendantNodes().OfType<AttributeSyntax>().First();
+        var newAttribute = AttributeTextEditBuilder.ParseAttributeList("[Obsolete] /* why */")!.Attributes.First();
+
+        AssertCommentsRejected(() => AttributeTextEditBuilder.BuildReplaceEdit(0, oldAttribute, newAttribute, "\n"), "comment on the list");
+    }
+
+    [Test]
+    public void AttributeTextEditBuilder_BuildReplaceEdit_DetachedCommentFreeAttribute_KeepsEditIndexAndSpan()
+    {
+        var oldAttribute = ParseClassWithAttribute().DescendantNodes().OfType<AttributeSyntax>().First();
+        var newAttribute = AttributeTextEditBuilder.ParseAttributeList("Obsolete(\"z\")")!.Attributes.First().WithoutTrivia();
+
+        var edit = AttributeTextEditBuilder.BuildReplaceEdit(3, oldAttribute, newAttribute, "\r\n");
+
+        Assert.That(edit.NewText, Is.EqualTo("Obsolete(\"z\")"));
+        Assert.That(edit.EditIndex, Is.EqualTo(3));
+        Assert.That(edit.Start, Is.EqualTo(oldAttribute.SpanStart));
+    }
+
+    [Test]
+    public void StripFormattingTriviaForNormalize_KeepsBoundaryComments_StripAllTriviaForNormalize_DropsThem()
+    {
+        var list = AttributeTextEditBuilder.ParseAttributeList("[/* lead */ Obsolete] // trailing")!;
+
+        var kept = RoslynFormattingHelper.StripFormattingTriviaForNormalize(list);
+        var dropped = RoslynFormattingHelper.StripAllTriviaForNormalize(list);
+
+        Assert.That(kept.ToFullString(), Does.Contain("/* lead */").And.Contain("// trailing"));
+        Assert.That(dropped.ToFullString(), Does.Not.Contain("/*").And.Not.Contain("//"));
+        Assert.That(kept.Parent, Is.Null);
+        Assert.That(dropped.Parent, Is.Null);
+    }
+
+    private const string CommentsRejectedMessage = "attribute text must not contain comments; remove the comment and retry";
+
+    private static (Microsoft.CodeAnalysis.Text.SourceText Text, ClassDeclarationSyntax Target) ParseClassTarget(string source)
+    {
+        var text = Microsoft.CodeAnalysis.Text.SourceText.From(source);
+        var target = CSharpSyntaxTree.ParseText(text).GetCompilationUnitRoot().DescendantNodes().OfType<ClassDeclarationSyntax>().First();
+        return (text, target);
+    }
+
+    private static void AssertCommentsRejected(Action act, string because)
+    {
+        var ex = Assert.Throws<ToolInvalidArgumentException>(() => act(), because);
+        Assert.That(ex!.Message, Is.EqualTo(CommentsRejectedMessage), because);
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument), because);
+        Assert.That(ex.Message, Does.Not.Contain("NormalizeWhitespace"), because);
+        Assert.That(ex.Message, Does.Not.Contain(ReplaceHint), because);
+    }
+
+    private static CompilationUnitSyntax ParseClassWithAttribute()
+        => Parse("[Obsolete]\npublic class C\n{\n}\n");
 
     [Test]
     public void SafeSite_AttributeTextEditBuilder_49_DetachedListWithoutArguments_IsAccepted()

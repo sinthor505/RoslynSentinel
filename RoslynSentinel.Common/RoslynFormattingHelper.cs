@@ -377,6 +377,73 @@ public static class RoslynFormattingHelper
     }
 
     /// <summary>
+    /// Returns a parentless copy of <paramref name="node"/> (taken from existing source, or parsed from caller text
+    /// inside a dummy container) with EVERY piece of trivia removed: whitespace, end-of-line, comments and directives.
+    /// Use it to embed a reused or parsed part in a newly built node so the node passes the
+    /// <see cref="NormalizeNewChildWhitespace{T}"/> guard; <c>NormalizeWhitespace</c> then rebuilds all spacing.
+    /// Comments are dropped silently, so call this only where losing them is acceptable (for example signature parts
+    /// reused in a generated interface member). To reject comments instead, use
+    /// <see cref="StripFormattingTriviaForNormalize{T}"/>.
+    /// </summary>
+    public static T StripAllTriviaForNormalize<T>(T node)
+        where T : SyntaxNode
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        return DetachForNormalize(node, keepComments: false);
+    }
+
+    /// <summary>
+    /// Returns a parentless copy of <paramref name="node"/> with only its whitespace and end-of-line trivia removed.
+    /// Every other trivia kind (comments, documentation comments, directives, disabled text, skipped tokens) is kept
+    /// wherever it sits, including on the node's first and last token, so the
+    /// <see cref="NormalizeNewChildWhitespace{T}"/> guard rejects it with an <see cref="ArgumentException"/> instead of it
+    /// being dropped silently at the boundary yet kept (and rejected) in the middle. Use it for text a caller
+    /// supplied, where there is no user formatting to preserve but a comment must not vanish unnoticed. To drop
+    /// comments as well, use <see cref="StripAllTriviaForNormalize{T}"/>.
+    /// </summary>
+    public static T StripFormattingTriviaForNormalize<T>(T node)
+        where T : SyntaxNode
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        return DetachForNormalize(node, keepComments: true);
+    }
+
+    /// <summary>
+    /// Shared core of <see cref="StripAllTriviaForNormalize{T}"/> and <see cref="StripFormattingTriviaForNormalize{T}"/>.
+    /// <c>WithoutTrivia</c> is applied first because it always rebuilds the node, which detaches it from its tree; it
+    /// also drops the leading trivia of the first token and the trailing trivia of the last token, so when comments are
+    /// kept the non-formatting boundary trivia is captured beforehand and put back on the detached copy.
+    /// </summary>
+    private static T DetachForNormalize<T>(T node, bool keepComments)
+        where T : SyntaxNode
+    {
+        static bool IsFormatting(SyntaxTrivia trivia) => trivia.IsKind(SyntaxKind.WhitespaceTrivia) || trivia.IsKind(SyntaxKind.EndOfLineTrivia);
+
+        var keptLeading = keepComments
+            ? node.GetFirstToken(includeZeroWidth: true).LeadingTrivia.Where(t => !IsFormatting(t)).ToList()
+            : [];
+        var keptTrailing = keepComments
+            ? node.GetLastToken(includeZeroWidth: true).TrailingTrivia.Where(t => !IsFormatting(t)).ToList()
+            : [];
+
+        var detached = node.WithoutTrivia();
+        if (keptLeading.Count > 0)
+        {
+            detached = detached.WithLeadingTrivia(keptLeading);
+        }
+
+        if (keptTrailing.Count > 0)
+        {
+            detached = detached.WithTrailingTrivia(keptTrailing);
+        }
+
+        var removable = detached.DescendantTrivia(descendIntoTrivia: false)
+            .Where(t => !keepComments || IsFormatting(t))
+            .ToList();
+        return removable.Count == 0 ? detached : detached.ReplaceTrivia(removable, (_, _) => default);
+    }
+
+    /// <summary>
     /// Shared guard for <see cref="NormalizeNewChildWhitespace{T}"/> and <see cref="NormalizeNewRootWhitespace"/>.
     /// Rejects, in order: (2) a node attached to a tree (<see cref="SyntaxNode.Parent"/> is not null),
     /// (3) a node whose <see cref="SyntaxTree.FilePath"/> is non-empty (it came from a file), and

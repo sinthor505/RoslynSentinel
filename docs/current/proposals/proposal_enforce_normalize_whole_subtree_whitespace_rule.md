@@ -321,7 +321,9 @@ Whether every engine's tool wrapper already does this is **[unverified]**.
   :972/:997, AdvancedRefactoring :335/:366, MemberRefactoring :4569/:4633, Mapping :91, and the raw
   `NormalizeWhitespace` calls on synthesized attributes at `AttributeTextEditBuilder.cs:49/:94`; **G1 done**:
   CodeGeneration :972/:997 and AttributeTextEditBuilder :49/:94 migrated, EOL from the document, the parsed attribute
-  list detached and stripped of inner formatting by a private `DetachWithoutFormatting` helper) and NewRoot sites
+  list detached and stripped of inner formatting by the shared `RoslynFormattingHelper.StripFormattingTriviaForNormalize`,
+  which keeps comments so the guard rejects them; AdvancedRefactoring uses the comment-dropping twin
+  `StripAllTriviaForNormalize`) and NewRoot sites
   (BasicRefactoring :795, AdvancedStructural :126/:1108, verify provenance first). Pick one NewRoot
   approach and fold MoveTypeToFile/MoveAllTypesToFiles into it; remove the :1108 string hack. Then add
   `[Obsolete]`.
@@ -378,14 +380,28 @@ Whether every engine's tool wrapper already does this is **[unverified]**.
      generic code `ToolErrorCode.Exception` ("... failed unexpectedly (ArgumentException). Data: <message>"), with no
      stack trace. It is structured but not `InvalidArgument`.
    - The **batch** path (`ModifyAttribute(batchEdits: ...)` -> `ModifyAttributeBatch` -> `ApplyAttributeBatchAsync`)
-     is NOT inside any try/catch: `ModifyAttribute` returns `await ModifyAttributeBatch(...)` before its own `try`
-     (~:1035), `RefactoringStructuralTools.ModifyAttribute` is a bare pass-through, and there is no pipeline-level
-     mapper (`ToResultError` is only called from tool bodies and `ValidateAndApplyHelper`). A guard rejection there
-     escapes as a raw exception to the MCP SDK. The only realistic trigger is a caller-supplied attribute containing a
+     has no try/catch of its own: `ModifyAttribute` returns `await ModifyAttributeBatch(...)` before its own `try`
+     (~:1035) and `RefactoringStructuralTools.ModifyAttribute` is a bare pass-through. It is not left raw, though: a
+     pipeline-level catch-all call-tool filter (`AddWorkspaceNotLoadedFilter` in
+     `RoslynSentinel.Server.Basic/ServiceRegistrationExtensionsBasic.cs`, ~:410-445) catches every exception that
+     escapes a tool and returns `CallToolResult { IsError = true }` with the text "Tool call failed unexpectedly
+     (ArgumentException): <message>". That result is unstructured (no `ResultError`, so no error code), and nothing
+     is written, because the guard runs while the edits are built, before `TryApply`. `Server.Advanced` registers the
+     same filter: `AddRoslynSentinelToolsAdvanced` calls `AddRoslynSentinelToolsBasic` (`ServiceRegistrationExtensionsAdvanced.cs`
+     :173), which calls `AddWorkspaceNotLoadedFilter` (:105). The `AttributeTextEditBuilder` `BuildReplaceEdit` site
+     (:94) is batch-only (single-edit `ReplaceAttributeAsync` uses `ReplaceNodeAndFormatReplacementAsync`), so it had
+     only this unstructured route.
+     **Resolved in the C3-G1 fix slice:** the only realistic trigger is a caller-supplied attribute containing a
      comment (for example `Obsolete("x" /* why */)`); formatting-only whitespace is stripped by the call site first.
-     Pinned by `Pinned_AttributeTextEditBuilder_AttributeWithInnerComment_IsRejectedByCheck4`. Follow-up (not done in
-     C3-G1, out of the file limit): add a try/catch with `ToolErrorMapper` around the batch path, or catch
-     `ArgumentException` in `ApplyAttributeBatchAsync` and return `InvalidArgument`.
+     Decision: comments in attribute text are rejected, with a structured error. `AttributeTextEditBuilder` now
+     translates the guard's rejection into `ToolInvalidArgumentException("attribute text must not contain comments;
+     remove the comment and retry")` (no internal API name in the message). Boundary comments (before the first or
+     after the last token) and inner comments behave the same way: the shared helper
+     `RoslynFormattingHelper.StripFormattingTriviaForNormalize` keeps every comment so the guard sees it, whereas the
+     old private detach step silently dropped boundary comments and only inner ones threw. `ApplyAttributeBatchAsync`
+     and `AddAttributeAsync` catch it and return `CannotEdit` with `ErrorCode = InvalidArgument` before any write.
+     Pinned by the `AttributeTextEditBuilder_Build*Comment*` tests and by
+     `ModifyAttribute_BatchAddWithComment_...` / `ModifyAttribute_BatchReplaceWithComment_...` at the tool level.
    - Other callers must be traced as they migrate; do not assume a wrapper catches.
 6. Does the test project that will host the ratchet already reference `Microsoft.CodeAnalysis.CSharp`
    for `CSharpSyntaxTree.ParseText`? (C5.)
