@@ -20,7 +20,7 @@ namespace RoslynSentinel.Tests.Basic;
 public class RoslynFormattingHelperNormalizeNewTests
 {
     private const string ReplaceHint = "ReplaceNodeAndFormatReplacementAsync";
-    private const string AnnotateHint = "FormatAnnotatedSpansAsync";
+    private const string AnnotateHint = "Formatter.Annotation";
 
     private static CompilationUnitSyntax Parse(string source, string path = "")
         => CSharpSyntaxTree.ParseText(source, path: path).GetCompilationUnitRoot();
@@ -37,12 +37,12 @@ public class RoslynFormattingHelperNormalizeNewTests
         => CompilationUnit().AddMembers(
             ClassDeclaration("Gen").AddModifiers(Token(SyntaxKind.PublicKeyword)).AddMembers(NewVoidMethod()));
 
-    private static void AssertContentCheckRejected(Action act, string because)
+    private static void AssertContentCheckRejected(Action act, string because, string paramName = "node")
     {
         var ex = Assert.Throws<ArgumentException>(() => act(), because);
         Assert.That(ex!.Message, Does.Match(@"contains \d+ piece\(s\) of non-elastic"), because);
         Assert.That(ex.Message, Does.Contain(ReplaceHint));
-        Assert.That(ex.ParamName, Is.EqualTo("node"));
+        Assert.That(ex.ParamName, Is.EqualTo(paramName));
     }
 
     // ---- Check 1: CompilationUnitSyntax passed to the child method ----
@@ -84,7 +84,9 @@ public class RoslynFormattingHelperNormalizeNewTests
         var ex = Assert.Throws<ArgumentException>(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(root, "\n"));
 
         // The root also carries non-elastic trivia, so this proves check 3 runs before check 4.
-        Assert.That(ex!.Message, Does.Contain("Existing.cs"));
+        Assert.That(ex!.Message, Does.Contain("has a file path"));
+        Assert.That(ex.Message, Does.Not.Contain("Existing.cs"));
+        Assert.That(ex.ParamName, Is.EqualTo("root"));
         Assert.That(ex.Message, Does.Contain("existing file"));
         Assert.That(ex.Message, Does.Not.Contain(@"C:\repo"));
         Assert.That(ex.Message, Does.Contain(ReplaceHint));
@@ -100,7 +102,9 @@ public class RoslynFormattingHelperNormalizeNewTests
 
         var ex = Assert.Throws<ArgumentException>(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(method, "\n"));
 
-        Assert.That(ex!.Message, Does.Contain("Existing.cs"));
+        Assert.That(ex!.Message, Does.Contain("has a file path"));
+        Assert.That(ex.Message, Does.Not.Contain("Existing.cs"));
+        Assert.That(ex.ParamName, Is.EqualTo("node"));
         Assert.That(ex.Message, Does.Contain("existing file"));
     }
 
@@ -127,7 +131,7 @@ public class RoslynFormattingHelperNormalizeNewTests
     {
         var root = Parse("public class C\n{\n}\n");
         Assert.That(root.SyntaxTree.FilePath, Is.Empty);
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(root, "\n"), "parsed root with no path");
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(root, "\n"), "parsed root with no path", "root");
     }
 
     // ---- Check 4: content check ----
@@ -155,6 +159,9 @@ public class RoslynFormattingHelperNormalizeNewTests
     [Test]
     public void ContentCheck_RejectsDocumentationComment()
     {
+        // Deliberate trade-off: a synthesized node that carries generated documentation comments is rejected,
+        // because check 4 cannot tell generated doc comments from a user's. A caller that needs generated docs
+        // must add them after normalizing. An escape hatch (for example an opt-in flag) is to be decided later.
         var node = NewVoidMethod().WithLeadingTrivia(ParseLeadingTrivia("/// <summary>Runs.</summary>\n"));
         AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), "doc comment");
     }
@@ -439,6 +446,8 @@ public class RoslynFormattingHelperNormalizeNewTests
     [Test]
     public void PinnedNeedsC3_BasicRefactoring_ExtractInterface_795_NewRoot_IsRejected()
     {
+        // C3 should add a SafeSite_ twin of this test (the same root built with elastic trivia or none) and
+        // delete this pin once the call site is migrated.
         // Needs elastic trivia (or none) instead of MemberTrivia at the call site in C3: the site deliberately
         // sets non-elastic CRLF + indentation trivia on each interface member (MemberTrivia).
         var root = Parse("using System;\nusing System.Linq;\n\nnamespace Demo;\n\npublic class Svc\n{\n    public int Total(int a, int b) => a + b;\n}\n");
@@ -454,12 +463,14 @@ public class RoslynFormattingHelperNormalizeNewTests
         var ns = FileScopedNamespaceDeclaration(ParseName("Demo")).AddMembers(iface);
         var ifaceCompUnit = CompilationUnit().WithUsings(cleanUsings).AddMembers(ns);
 
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(ifaceCompUnit, "\r\n", elasticTrivia: false), "extract-interface new root");
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(ifaceCompUnit, "\r\n", elasticTrivia: false), "extract-interface new root", "root");
     }
 
     [Test]
     public void PinnedNeedsC3_AdvancedStructural_ExtractSuperclass_126_MixedRoot_IsRejected()
     {
+        // C3 should add a SafeSite_ twin of this test (the properties detached or rebuilt before embedding)
+        // and delete this pin once the call site is migrated.
         // Needs a detach/rebuild step for the embedded properties in C3. Provenance of this site is unverified
         // (proposal open question 4): the new root embeds the existing
         // class's property declarations, so the content check correctly sees user formatting here.
@@ -471,6 +482,319 @@ public class RoslynFormattingHelperNormalizeNewTests
         var baseUnit = CompilationUnit().WithUsings(root.Usings)
             .AddMembers(FileScopedNamespaceDeclaration(ParseName("Demo")).AddMembers(baseClass));
 
-        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(baseUnit, "\n"), "mixed new root");
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(baseUnit, "\n"), "mixed new root", "root");
+    }
+
+    // ---- Null arguments and parameter names ----
+
+    [Test]
+    public void NormalizeNewChild_NullNode_ThrowsArgumentNullException_WithNodeParamName()
+    {
+        var ex = Assert.Throws<ArgumentNullException>(() => RoslynFormattingHelper.NormalizeNewChildWhitespace<MethodDeclarationSyntax>(null!, "\n"));
+        Assert.That(ex!.ParamName, Is.EqualTo("node"));
+    }
+
+    [Test]
+    public void NormalizeNewRoot_NullRoot_ThrowsArgumentNullException_WithRootParamName()
+    {
+        var ex = Assert.Throws<ArgumentNullException>(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(null!, "\n"));
+        Assert.That(ex!.ParamName, Is.EqualTo("root"));
+    }
+
+    [Test]
+    public void NormalizeNewRoot_RejectionsCarryRootParamName_ForCheck3()
+    {
+        var root = Parse("public class C { }", @"C:\repo\Existing.cs");
+        var ex = Assert.Throws<ArgumentException>(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(root, "\n"));
+        Assert.That(ex!.ParamName, Is.EqualTo("root"));
+    }
+
+    // ---- eol validation (first check in both public methods) ----
+
+    [Test]
+    public void NormalizeNewChild_NullEol_ThrowsArgumentNullException_BeforeAnyOtherCheck()
+    {
+        // The node is null as well, so this only passes if eol is validated first.
+        var ex = Assert.Throws<ArgumentNullException>(() => RoslynFormattingHelper.NormalizeNewChildWhitespace<MethodDeclarationSyntax>(null!, null!));
+        Assert.That(ex!.ParamName, Is.EqualTo("eol"));
+    }
+
+    [Test]
+    public void NormalizeNewRoot_NullEol_ThrowsArgumentNullException_BeforeAnyOtherCheck()
+    {
+        var ex = Assert.Throws<ArgumentNullException>(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(null!, null!));
+        Assert.That(ex!.ParamName, Is.EqualTo("eol"));
+    }
+
+    [TestCase("")]
+    [TestCase("\r")]
+    [TestCase("\n\n")]
+    [TestCase("\r\n\r\n")]
+    [TestCase("\n\r")]
+    [TestCase(" ")]
+    [TestCase("<br>")]
+    public void NormalizeNewChild_InvalidEol_ThrowsArgumentException_WithEolParamName(string eol)
+    {
+        // Assert.Throws is exact-type, so this also proves the result is not an ArgumentNullException.
+        var ex = Assert.Throws<ArgumentException>(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(NewVoidMethod(), eol));
+        Assert.That(ex!.ParamName, Is.EqualTo("eol"));
+    }
+
+    [TestCase("")]
+    [TestCase("\r")]
+    [TestCase("\n\n")]
+    [TestCase("\r\n\r\n")]
+    [TestCase("\n\r")]
+    [TestCase(" ")]
+    [TestCase("<br>")]
+    public void NormalizeNewRoot_InvalidEol_ThrowsArgumentException_WithEolParamName(string eol)
+    {
+        var ex = Assert.Throws<ArgumentException>(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(NewRoot(), eol));
+        Assert.That(ex!.ParamName, Is.EqualTo("eol"));
+    }
+
+    [Test]
+    public void NormalizeNewChild_InvalidEol_IsReportedBeforeCompilationUnitAndTreeChecks()
+    {
+        var attached = ParseClass("public class C { public void M() { } }").Members.OfType<MethodDeclarationSyntax>().First();
+
+        var unitEx = Assert.Throws<ArgumentException>(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(CompilationUnit(), "x"));
+        var attachedEx = Assert.Throws<ArgumentException>(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(attached, "x"));
+
+        Assert.That(unitEx!.ParamName, Is.EqualTo("eol"));
+        Assert.That(attachedEx!.ParamName, Is.EqualTo("eol"));
+    }
+
+    [Test]
+    public void NormalizeNewRoot_InvalidEol_IsReportedBeforeTreeChecks()
+    {
+        var root = Parse("public class C { }", @"C:\repo\Existing.cs");
+        var ex = Assert.Throws<ArgumentException>(() => RoslynFormattingHelper.NormalizeNewRootWhitespace(root, "x"));
+        Assert.That(ex!.ParamName, Is.EqualTo("eol"));
+    }
+
+    // ---- Check 4: directives, disabled text, skipped tokens, conflict markers; scope of the elastic skip ----
+
+    [Test]
+    public void ContentCheck_RejectsRegionDirective_WhoseEndOfLineIsHiddenInsideTheDirective()
+    {
+        // DescendantTrivia(descendIntoTrivia: false) yields a directive as ONE trivia. Its line break lives in the
+        // directive's end-of-directive token and is never enumerated, so the directive itself has to be counted.
+        var directive = ParseLeadingTrivia("#region Generated\n");
+        Assert.That(directive.Count, Is.EqualTo(1));
+        Assert.That(directive[0].IsDirective, Is.True);
+        var node = NewVoidMethod().WithLeadingTrivia(directive);
+        Assert.That(
+            node.DescendantTrivia(descendIntoTrivia: false).Count(t => t.IsKind(SyntaxKind.EndOfLineTrivia)),
+            Is.Zero,
+            "premise: no end-of-line trivia is visible, so only the directive can trigger the rejection");
+
+        var ex = Assert.Throws<ArgumentException>(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"));
+
+        Assert.That(ex!.Message, Does.Contain("contains 1 piece(s)"));
+        Assert.That(ex.Message, Does.Contain(ReplaceHint));
+        Assert.That(ex.ParamName, Is.EqualTo("node"));
+    }
+
+    [Test]
+    public void ContentCheck_RejectsParsedRegionMember()
+    {
+        var node = ParseMemberDeclaration("#region R\npublic void Run() { }\n#endregion\n")!;
+        Assert.That(node.Parent, Is.Null);
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), "parsed #region member");
+    }
+
+    [Test]
+    public void ContentCheck_RejectsDisabledText()
+    {
+        var node = NewVoidMethod().WithLeadingTrivia(DisabledText("int x;"));
+        var ex = Assert.Throws<ArgumentException>(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"));
+        Assert.That(ex!.Message, Does.Contain("contains 1 piece(s)"));
+    }
+
+    [Test]
+    public void ContentCheck_RejectsSkippedTokensTrivia()
+    {
+        var skipped = Trivia(SkippedTokensTrivia(TokenList(Token(SyntaxKind.SemicolonToken))));
+        var node = NewVoidMethod().WithLeadingTrivia(skipped);
+        Assert.That(node.GetLeadingTrivia()[0].IsKind(SyntaxKind.SkippedTokensTrivia), Is.True, "premise");
+        var ex = Assert.Throws<ArgumentException>(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"));
+        Assert.That(ex!.Message, Does.Contain("contains 1 piece(s)"));
+    }
+
+    [Test]
+    public void ContentCheck_RejectsConflictMarkerTrivia()
+    {
+        var marker = ParseLeadingTrivia("<<<<<<< HEAD\n");
+        Assert.That(marker.Any(t => t.IsKind(SyntaxKind.ConflictMarkerTrivia)), Is.True, "premise");
+        var node = NewVoidMethod().WithLeadingTrivia(marker);
+        AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), "conflict marker");
+    }
+
+    [Test]
+    public void ContentCheck_ElasticAnnotationDoesNotExemptCommentsOrDirectives()
+    {
+        var candidates = new[]
+        {
+            Comment("// kept").WithAdditionalAnnotations(SyntaxAnnotation.ElasticAnnotation),
+            ParseLeadingTrivia("#region R\n")[0].WithAdditionalAnnotations(SyntaxAnnotation.ElasticAnnotation),
+            DisabledText("x").WithAdditionalAnnotations(SyntaxAnnotation.ElasticAnnotation),
+        };
+
+        foreach (var trivia in candidates)
+        {
+            var node = NewVoidMethod().WithLeadingTrivia(trivia);
+            Assert.That(node.GetLeadingTrivia()[0].HasAnnotation(SyntaxAnnotation.ElasticAnnotation), Is.True, $"premise: {trivia.Kind()} is annotated elastic");
+            AssertContentCheckRejected(() => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n"), $"elastic {trivia.Kind()}");
+        }
+    }
+
+    // ---- Nodes derived from a file-backed tree: check 3 only sees the tree the node now lives in ----
+
+    private const string ExistingFilePath = @"C:\repo\Existing.cs";
+
+    private const string ExistingMultiLineSource =
+        "using System;\n\nnamespace Demo;\n\npublic class Svc\n{\n    public int Total(int a, int b)\n    {\n        return a + b;\n    }\n}\n";
+
+    private static MethodDeclarationSyntax ExistingMultiLineMethod(out CompilationUnitSyntax root)
+    {
+        root = Parse(ExistingMultiLineSource, ExistingFilePath);
+        Assert.That(root.SyntaxTree.FilePath, Is.EqualTo(ExistingFilePath), "control: the source tree has a file path");
+        return root.DescendantNodes().OfType<MethodDeclarationSyntax>().First();
+    }
+
+    private static TypeSyntax LongType() => PredefinedType(Token(SyntaxKind.LongKeyword)).WithTrailingTrivia(Space);
+
+    // Observed Roslyn behaviour (falsifies the hypothesis that a derived node loses the file path): ReplaceNode and
+    // With* on a node of a file-backed tree return a parentless node whose SyntaxTree.FilePath is still the source
+    // file's path, so check 3 already rejects them. The path is only lost when the node is re-rooted through
+    // CSharpSyntaxTree.Create, reparsed from text, or rebuilt with SyntaxFactory from reused parts; the second half
+    // of this helper covers that case so check 4 is proven to be an independent safety net.
+    private static void AssertDerivedNodeRejected(SyntaxNode produced, Action<SyntaxNode> normalize, string paramName, string because)
+    {
+        Assert.That(produced.Parent, Is.Null, "derived node is parentless");
+        Assert.That(produced.SyntaxTree.FilePath, Is.EqualTo(ExistingFilePath), "derived node keeps the source tree's file path");
+        var ex = Assert.Throws<ArgumentException>(() => normalize(produced), because);
+        Assert.That(ex!.Message, Does.Contain("has a file path"), because);
+        Assert.That(ex.ParamName, Is.EqualTo(paramName), because);
+
+        var pathless = PathlessCopy(produced);
+        AssertContentCheckRejected(() => normalize(pathless), $"{because} (path lost)", paramName);
+    }
+
+    private static SyntaxNode PathlessCopy(SyntaxNode node)
+    {
+        var copy = CSharpSyntaxTree.Create((CSharpSyntaxNode)node).GetRoot();
+        Assert.That(copy.Parent, Is.Null, "pathless copy is parentless");
+        Assert.That(copy.SyntaxTree.FilePath, Is.Empty, "pathless copy has no file path");
+        return copy;
+    }
+
+    private static void NormalizeChild(SyntaxNode node) => RoslynFormattingHelper.NormalizeNewChildWhitespace(node, "\n");
+
+    private static void NormalizeRoot(SyntaxNode node) => RoslynFormattingHelper.NormalizeNewRootWhitespace((CompilationUnitSyntax)node, "\n");
+
+    [Test]
+    public void FileBackedMember_ProducedWithReplaceNode_IsRejected()
+    {
+        var method = ExistingMultiLineMethod(out _);
+        var produced = method.ReplaceNode(method.ReturnType, LongType());
+        AssertDerivedNodeRejected(produced, NormalizeChild, "node", "member via ReplaceNode");
+    }
+
+    [Test]
+    public void FileBackedMember_ProducedWithWithoutLeadingTrivia_IsRejected()
+    {
+        var method = ExistingMultiLineMethod(out _);
+        var produced = method.WithoutLeadingTrivia();
+        AssertDerivedNodeRejected(produced, NormalizeChild, "node", "member via WithoutLeadingTrivia");
+    }
+
+    [Test]
+    public void FileBackedRoot_ProducedWithReplaceNode_IsRejected()
+    {
+        var method = ExistingMultiLineMethod(out var root);
+        var produced = root.ReplaceNode(method.ReturnType, LongType());
+        AssertDerivedNodeRejected(produced, NormalizeRoot, "root", "root via ReplaceNode");
+    }
+
+    [Test]
+    public void FileBackedRoot_ProducedWithWithoutLeadingTrivia_IsRejected()
+    {
+        ExistingMultiLineMethod(out var root);
+        var produced = root.WithoutLeadingTrivia();
+        AssertDerivedNodeRejected(produced, NormalizeRoot, "root", "root via WithoutLeadingTrivia");
+    }
+
+    [Test]
+    public void FileBackedSingleLineMember_WithoutTrivia_IsRejectedByCheck3_ButAcceptedOncePathIsLost_DocumentedResidualRisk()
+    {
+        var root = Parse("public class Svc { public int Total(int a, int b) { return a + b; } }", ExistingFilePath);
+        Assert.That(root.SyntaxTree.FilePath, Is.EqualTo(ExistingFilePath), "control");
+        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().First();
+        var produced = method.WithoutTrivia();
+
+        var ex = Assert.Throws<ArgumentException>(() => NormalizeChild(produced));
+        Assert.That(ex!.Message, Does.Contain("has a file path"));
+
+        // Documented residual risk: once the file path is lost (re-rooted with CSharpSyntaxTree.Create, reparsed from
+        // text, or rebuilt with SyntaxFactory from reused parts), a genuinely single-line member carries only
+        // single-space trivia, so check 4 has nothing to reject and existing code is accepted. No public API can tell
+        // it from a freshly built node, and normalizing it is harmless because it has no layout to lose. A multi-line
+        // member is still caught by check 4 (see the FileBackedMember_ tests above).
+        var pathless = PathlessCopy(produced);
+        Assert.DoesNotThrow(() => NormalizeChild(pathless));
+    }
+
+    // ---- indentation and elasticTrivia are forwarded ----
+
+    [Test]
+    public void NormalizeNewChild_HonoursTabIndentation()
+    {
+        var tabs = RoslynFormattingHelper.NormalizeNewChildWhitespace(NewVoidMethod(), "\n", indentation: "\t").ToFullString();
+        var spaces = RoslynFormattingHelper.NormalizeNewChildWhitespace(NewVoidMethod(), "\n").ToFullString();
+
+        Assert.That(tabs, Does.Contain("\n\tGo();"));
+        Assert.That(tabs, Does.Not.Contain("    "));
+        Assert.That(spaces, Does.Contain("\n    Go();"), "control: the default indentation is four spaces");
+    }
+
+    [Test]
+    public void NormalizeNewRoot_HonoursTabIndentation()
+    {
+        var text = RoslynFormattingHelper.NormalizeNewRootWhitespace(NewRoot(), "\n", indentation: "\t").ToFullString();
+
+        Assert.That(text, Does.Contain("\n\tpublic void Run()"));
+        Assert.That(text, Does.Contain("\n\t\tGo();"));
+        Assert.That(text, Does.Not.Contain("    "));
+    }
+
+    [Test]
+    public void NormalizeNewChild_ElasticTriviaFalse_IsForwarded()
+    {
+        var elastic = RoslynFormattingHelper.NormalizeNewChildWhitespace(NewVoidMethod(), "\n");
+        var plain = RoslynFormattingHelper.NormalizeNewChildWhitespace(NewVoidMethod(), "\n", elasticTrivia: false);
+
+        const string Expected = "public void Run()\n{\n    Go();\n}";
+        Assert.That(elastic.ToFullString(), Is.EqualTo(Expected));
+        Assert.That(plain.ToFullString(), Is.EqualTo(Expected));
+
+        var elasticEols = elastic.DescendantTrivia().Where(t => t.IsKind(SyntaxKind.EndOfLineTrivia)).ToList();
+        var plainEols = plain.DescendantTrivia().Where(t => t.IsKind(SyntaxKind.EndOfLineTrivia)).ToList();
+        Assert.That(elasticEols, Is.Not.Empty);
+        Assert.That(elasticEols.All(t => t.HasAnnotation(SyntaxAnnotation.ElasticAnnotation)), Is.True, "default elasticTrivia: true");
+        Assert.That(plainEols, Is.Not.Empty);
+        Assert.That(plainEols.Any(t => t.HasAnnotation(SyntaxAnnotation.ElasticAnnotation)), Is.False, "elasticTrivia: false");
+    }
+
+    [Test]
+    public void NormalizeNewRoot_ElasticTriviaFalse_IsForwarded()
+    {
+        var elastic = RoslynFormattingHelper.NormalizeNewRootWhitespace(NewRoot(), "\n");
+        var plain = RoslynFormattingHelper.NormalizeNewRootWhitespace(NewRoot(), "\n", elasticTrivia: false);
+
+        Assert.That(plain.ToFullString(), Is.EqualTo(elastic.ToFullString()));
+        Assert.That(elastic.DescendantTrivia().Where(t => t.IsKind(SyntaxKind.EndOfLineTrivia)).All(t => t.HasAnnotation(SyntaxAnnotation.ElasticAnnotation)), Is.True);
+        Assert.That(plain.DescendantTrivia().Where(t => t.IsKind(SyntaxKind.EndOfLineTrivia)).Any(t => t.HasAnnotation(SyntaxAnnotation.ElasticAnnotation)), Is.False);
     }
 }

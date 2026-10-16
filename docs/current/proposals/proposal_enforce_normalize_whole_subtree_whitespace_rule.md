@@ -89,7 +89,7 @@ asked us to change one line in.
    LogicOptimizationEngine 12, ModernizationEngine 8 and CodeStyleEngine 6. The rest are SyntaxUpgrade,
    AsyncBatch, CodeHealing, Documentation, IDEStyle, ApiGeneration, ProjectStructure and MsToolAugment.
    About 8 sites are genuinely NewChild: CodeGeneration :972/:997, AdvancedRefactoring :335/:366,
-   MemberRefactoring :4423/:4487 and Mapping :91.
+   MemberRefactoring :4569/:4633 and Mapping :91.
 2. **Whole-document `Formatter.FormatAsync` on an existing file: about 21 sites, 13 of them with `null`
    options.** These are BasicRefactoring x8, CodeGeneration x3, AdvancedStructural :1462 and
    MemberRefactoring :4484. Whole-tree `Formatter.Format` appears in `MsToolAugmentEngine.FormatDocumentSafeAsync`
@@ -318,7 +318,7 @@ Whether every engine's tool wrapper already does this is **[unverified]**.
   :795 (non-elastic `MemberTrivia`; use elastic trivia), AdvancedStructural :126 (embeds existing properties; detach
   or rebuild), and any site that builds multi-character whitespace with `ElasticWhitespace(text)`.
 - **C3 (implementer, <=3 Engines files per dispatch):** migrate the NewChild sites (CodeGeneration
-  :972/:997, AdvancedRefactoring :335/:366, MemberRefactoring :4423/:4487, Mapping :91, and the raw
+  :972/:997, AdvancedRefactoring :335/:366, MemberRefactoring :4569/:4633, Mapping :91, and the raw
   `NormalizeWhitespace` calls on synthesized attributes at `AttributeTextEditBuilder.cs:49/:94`) and NewRoot sites
   (BasicRefactoring :795, AdvancedStructural :126/:1108, verify provenance first). Pick one NewRoot
   approach and fold MoveTypeToFile/MoveAllTypesToFiles into it; remove the :1108 string hack. Then add
@@ -367,7 +367,9 @@ Whether every engine's tool wrapper already does this is **[unverified]**.
 4. What is the provenance of AdvancedStructuralEngine :126, :1108 and :1674? AdvancedStructuralEngine
    :1460 normalizes a node derived from an existing one and then formats the whole document at :1462.
    Migrate it to `ReplaceNodeAndFormatReplacementAsync` in C4 or C5.
-5. Do all engine tool wrappers map an `ArgumentException` to a structured error? (C2.)
+5. Do all engine tool wrappers map an `ArgumentException` to a structured error? **Still open after C2/C2c.**
+   The new helpers throw `ArgumentException` (and `ArgumentNullException`) for a rejected node or a bad `eol`; answer
+   this in C3, when the first caller migrates, by tracing that caller's tool wrapper and adding a test.
 6. Does the test project that will host the ratchet already reference `Microsoft.CodeAnalysis.CSharp`
    for `CSharpSyntaxTree.ParseText`? (C5.)
 7. Rename `EolUtilities.NormalizeEol` (e.g. to `ApplyDominantEol`)? Optional, deferred.

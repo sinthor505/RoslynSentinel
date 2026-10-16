@@ -347,6 +347,7 @@ public static class RoslynFormattingHelper
     public static T NormalizeNewChildWhitespace<T>(T node, string eol, string indentation = "    ", bool elasticTrivia = true)
         where T : SyntaxNode
     {
+        ValidateEol(eol);
         ArgumentNullException.ThrowIfNull(node);
         if (node is CompilationUnitSyntax)
         {
@@ -355,7 +356,7 @@ public static class RoslynFormattingHelper
                 nameof(node));
         }
 
-        EnsureNodeIsNew(node);
+        EnsureNodeIsNew(node, nameof(node));
         return node.NormalizeWhitespace(indentation, eol, elasticTrivia);
     }
 
@@ -370,7 +371,8 @@ public static class RoslynFormattingHelper
     /// </summary>
     public static CompilationUnitSyntax NormalizeNewRootWhitespace(CompilationUnitSyntax root, string eol, string indentation = "    ", bool elasticTrivia = true)
     {
-        EnsureNodeIsNew(root);
+        ValidateEol(eol);
+        EnsureNodeIsNew(root, nameof(root));
         return root.NormalizeWhitespace(indentation, eol, elasticTrivia);
     }
 
@@ -382,67 +384,93 @@ public static class RoslynFormattingHelper
     /// end-of-line or comment trivia), because <c>NormalizeWhitespace</c> would discard it. Check 1 (a
     /// <see cref="CompilationUnitSyntax"/> passed to the child method) is made by the child method itself.
     /// </summary>
-    private static void EnsureNodeIsNew(SyntaxNode node)
+    private static void EnsureNodeIsNew(SyntaxNode node, string paramName)
     {
-        ArgumentNullException.ThrowIfNull(node);
+        ArgumentNullException.ThrowIfNull(node, paramName);
 
-        const string ExistingCodeHint = "This looks like existing code; use ReplaceNodeAndFormatReplacementAsync, or annotate the changed nodes with Formatter.Annotation and call FormatAnnotatedSpansAsync.";
+        const string ExistingCodeHint = "This looks like existing code; use ReplaceNodeAndFormatReplacementAsync, or annotate the new node with Formatter.Annotation and format that span.";
 
         // Check 2: attached to a tree, so it is not new.
         if (node.Parent is not null)
         {
             throw new ArgumentException(
                 $"The node is attached to a syntax tree (its parent is a {node.Parent.Kind()}), so it is not a newly built node. {ExistingCodeHint}",
-                nameof(node));
+                paramName);
         }
 
-        // Check 3: its tree came from a file.
+        // Check 3: its tree came from a file. The file name is deliberately not echoed.
         var filePath = node.SyntaxTree.FilePath;
         if (!string.IsNullOrEmpty(filePath))
         {
             throw new ArgumentException(
-                $"The node belongs to a syntax tree loaded from '{Path.GetFileName(filePath)}', so it is part of an existing file. {ExistingCodeHint}",
-                nameof(node));
+                $"The node belongs to a syntax tree that has a file path, so it is part of an existing file. {ExistingCodeHint}",
+                paramName);
         }
 
-        // Check 4: user formatting present. Elastic trivia is what SyntaxFactory synthesizes, so it is fine.
-        // Exemption: a whitespace trivia that is exactly one space is not counted. SyntaxFactory.Space and
-        // a parsed single-line snippet produce it, and it is harmless because NormalizeWhitespace rebuilds
-        // inter-token spacing anyway. This is the narrowest rule the public API allows: SyntaxFactory.
-        // ElasticWhitespace(text) carries no elastic annotation and is indistinguishable from
-        // SyntaxFactory.Whitespace(text), so multi-character whitespace (indentation) is still counted.
-        // End-of-line and comment trivia are always counted.
+        // Check 4: user formatting present.
+        // Whitespace and end-of-line trivia: elastic trivia is what SyntaxFactory synthesizes, so it is fine,
+        // and so is a whitespace trivia that is exactly one space. SyntaxFactory.Space and a parsed
+        // single-line snippet produce it, and it is harmless because NormalizeWhitespace rebuilds inter-token
+        // spacing anyway. This is the narrowest rule the public API allows: SyntaxFactory.ElasticWhitespace(text)
+        // carries no elastic annotation and is indistinguishable from SyntaxFactory.Whitespace(text), so
+        // multi-character whitespace (indentation) is still counted.
+        // Every other trivia kind (comments, documentation comments, directives, disabled text, skipped tokens,
+        // conflict markers) is always counted, whatever its annotations: the elastic skip must not hide it.
+        // DescendantTrivia(descendIntoTrivia: false) yields a directive as one trivia, so an end-of-line that
+        // lives inside a directive's end-of-directive token is covered by counting the directive itself.
         var formattingTriviaCount = 0;
         foreach (var trivia in node.DescendantTrivia(descendIntoTrivia: false))
         {
-            if (trivia.HasAnnotation(SyntaxAnnotation.ElasticAnnotation))
+            if (trivia.IsKind(SyntaxKind.WhitespaceTrivia) || trivia.IsKind(SyntaxKind.EndOfLineTrivia))
             {
+                if (trivia.HasAnnotation(SyntaxAnnotation.ElasticAnnotation))
+                {
+                    continue;
+                }
+
+                if (trivia.IsKind(SyntaxKind.WhitespaceTrivia) && trivia.ToString() == " ")
+                {
+                    continue;
+                }
+
+                formattingTriviaCount++;
                 continue;
             }
 
-            if (trivia.IsKind(SyntaxKind.WhitespaceTrivia) && trivia.ToString() == " ")
+            if (trivia.IsDirective
+                || trivia.IsKind(SyntaxKind.SingleLineCommentTrivia)
+                || trivia.IsKind(SyntaxKind.MultiLineCommentTrivia)
+                || trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)
+                || trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia)
+                || trivia.IsKind(SyntaxKind.DisabledTextTrivia)
+                || trivia.IsKind(SyntaxKind.SkippedTokensTrivia)
+                || trivia.IsKind(SyntaxKind.ConflictMarkerTrivia))
             {
-                continue;
-            }
-
-            switch (trivia.Kind())
-            {
-                case SyntaxKind.WhitespaceTrivia:
-                case SyntaxKind.EndOfLineTrivia:
-                case SyntaxKind.SingleLineCommentTrivia:
-                case SyntaxKind.MultiLineCommentTrivia:
-                case SyntaxKind.SingleLineDocumentationCommentTrivia:
-                case SyntaxKind.MultiLineDocumentationCommentTrivia:
-                    formattingTriviaCount++;
-                    break;
+                formattingTriviaCount++;
             }
         }
 
         if (formattingTriviaCount > 0)
         {
             throw new ArgumentException(
-                $"The node contains {formattingTriviaCount} piece(s) of non-elastic whitespace (other than a single space), end-of-line or comment trivia, which is existing formatting that NormalizeWhitespace would discard. {ExistingCodeHint}",
-                nameof(node));
+                $"The node contains {formattingTriviaCount} piece(s) of non-elastic whitespace (other than a single space), end-of-line, comment or directive trivia, which is existing formatting that NormalizeWhitespace would discard. {ExistingCodeHint}",
+                paramName);
+        }
+    }
+
+    /// <summary>
+    /// Shared guard for the public <c>NormalizeNew*Whitespace</c> methods: <paramref name="eol"/> must be
+    /// exactly "\n" or "\r\n". Null throws <see cref="ArgumentNullException"/>; an empty or any other string
+    /// throws <see cref="ArgumentException"/>. Both carry the parameter name <c>eol</c>.
+    /// </summary>
+    private static void ValidateEol(string eol)
+    {
+        ArgumentNullException.ThrowIfNull(eol, nameof(eol));
+        if (eol != "\n" && eol != "\r\n")
+        {
+            throw new ArgumentException(
+                "The end-of-line sequence must be exactly \"\\n\" or \"\\r\\n\"; pass the target file's or project's line ending.",
+                nameof(eol));
         }
     }
 }
