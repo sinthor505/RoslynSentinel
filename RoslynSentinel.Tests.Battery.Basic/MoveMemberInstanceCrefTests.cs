@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 
@@ -463,6 +464,386 @@ public class MoveMemberInstanceCrefTests
             "Retargeted 2 doc-comment cref(s) from 'A' to 'B'.",
             DifferentFileNote,
         }));
+    }
+
+    [Test]
+    public async Task BareCrefToNonMovedSourceMember_IsQualifiedInMovedDocAndNoted()
+    {
+        const string eol = "\n";
+        const string qualifiedNote = "Qualified 1 doc-comment cref(s) in the moved member(s) with the source class name so they still resolve at 'B'.";
+        var source = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class A",
+            "{",
+            "    /// <summary>Counts, see <see cref=\"Other\"/>.</summary>",
+            "    public int Count(string input) => input.Length;",
+            "",
+            "    /// <summary>Other method.</summary>",
+            "    public int Other() => 0;",
+            "}");
+        var target = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class B",
+            "{",
+            "    /// <summary>Existing member on target.</summary>",
+            "    public int Size() => 0;",
+            "}");
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Target.cs", target));
+
+        // Vacuity guard: the bare cref names a member that stays in A.
+        Assert.That(source, Does.Contain("<see cref=\"Other\"/>"));
+
+        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count" });
+
+        Assert.That(NewText(result, "Source.cs"), Is.EqualTo(Lines(eol,
+            "namespace Example;",
+            "",
+            "public class A",
+            "{",
+            "    /// <summary>Other method.</summary>",
+            "    public int Other() => 0;",
+            "}")));
+        Assert.That(NewText(result, "Target.cs"), Is.EqualTo(Lines(eol,
+            "namespace Example;",
+            "",
+            "public class B",
+            "{",
+            "    /// <summary>Existing member on target.</summary>",
+            "    public int Size() => 0;",
+            "",
+            "    /// <summary>Counts, see <see cref=\"A.Other\"/>.</summary>",
+            "    public int Count(string input) => input.Length;",
+            "}")));
+
+        var notes = result.Notes ?? Array.Empty<string>();
+        Assert.That(notes.Count(n => n == qualifiedNote), Is.EqualTo(1), "Exactly one Qualified note for the one qualified cref");
+        Assert.That(notes, Does.Contain(DifferentFileNote));
+    }
+
+    [Test]
+    public async Task BareCrefToMovedSiblingMember_StaysBareAndIsNotQualified()
+    {
+        const string eol = "\n";
+        var source = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class A",
+            "{",
+            "    /// <summary>Counts, see <see cref=\"Helper\"/>.</summary>",
+            "    public int Count(string input) => input.Length;",
+            "",
+            "    /// <summary>Helper.</summary>",
+            "    public int Helper() => 1;",
+            "",
+            "    /// <summary>Keeps.</summary>",
+            "    public int Keep() => 0;",
+            "}");
+        var target = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class B",
+            "{",
+            "    /// <summary>Existing member on target.</summary>",
+            "    public int Size() => 0;",
+            "}");
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Target.cs", target));
+
+        // Vacuity guard: the bare cref names a member that is moved together with the doc owner.
+        Assert.That(source, Does.Contain("<see cref=\"Helper\"/>"));
+
+        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count", "Helper" });
+
+        var sourceNew = NewText(result, "Source.cs");
+        Assert.That(sourceNew, Does.Contain("    public int Keep() => 0;"), "The non-moved member must stay in A");
+        Assert.That(sourceNew, Does.Not.Contain("Count("), "Count must leave A");
+        Assert.That(sourceNew, Does.Not.Contain("Helper("), "Helper must leave A");
+        var targetNew = NewText(result, "Target.cs");
+        Assert.That(targetNew, Does.Contain("    /// <summary>Counts, see <see cref=\"Helper\"/>.</summary>"));
+        Assert.That(targetNew, Does.Not.Contain("A.Helper"), "A cref to a moved sibling must not be qualified with the source class");
+
+        var notes = result.Notes ?? Array.Empty<string>();
+        Assert.That(notes.Any(n => n.StartsWith("Qualified", StringComparison.Ordinal)), Is.False, "No Qualified note when no cref names a non-moved member");
+        Assert.That(notes, Does.Contain(BareInheritedNote));
+    }
+
+    [Test]
+    public async Task BareCrefToNonMovedMember_SameFileTarget_IsQualifiedWithoutDifferentFileNote()
+    {
+        const string eol = "\n";
+        const string qualifiedNote = "Qualified 1 doc-comment cref(s) in the moved member(s) with the source class name so they still resolve at 'B'.";
+        var source = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class A",
+            "{",
+            "    /// <summary>Counts, see <see cref=\"Other\"/>.</summary>",
+            "    public int Count(string input) => input.Length;",
+            "",
+            "    /// <summary>Other method.</summary>",
+            "    public int Other() => 0;",
+            "}",
+            "",
+            "public class B",
+            "{",
+            "    /// <summary>Existing member on target.</summary>",
+            "    public int Size() => 0;",
+            "}");
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source));
+
+        // Vacuity guard: the bare cref names a member that stays in A.
+        Assert.That(source, Does.Contain("<see cref=\"Other\"/>"));
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("Source.cs"), "A", new[] { "Count" }, "B", workspace.PathOf("Source.cs"), CancellationToken.None);
+
+        var text = NewText(result, "Source.cs");
+        var classBStart = text.IndexOf("public class B", StringComparison.Ordinal);
+        Assert.That(classBStart, Is.GreaterThan(0), "Class B must remain in the same file");
+        var classA = text[..classBStart];
+        var classB = text[classBStart..];
+        Assert.That(classA, Does.Not.Contain("Count("), "The member must leave A");
+        Assert.That(classB, Does.Contain("    /// <summary>Counts, see <see cref=\"A.Other\"/>.</summary>"));
+        Assert.That(classB, Does.Contain("    public int Count(string input) => input.Length;"));
+
+        var notes = result.Notes ?? Array.Empty<string>();
+        Assert.That(notes.Count(n => n == qualifiedNote), Is.EqualTo(1), "Exactly one Qualified note for the one qualified cref");
+        Assert.That(notes, Does.Not.Contain(DifferentFileNote), "Same-file target must not carry the different-file note");
+    }
+
+    [Test]
+    public async Task BareCrefToNonMovedMember_NewClassTarget_IsQualifiedInNewFile()
+    {
+        const string eol = "\n";
+        const string qualifiedNote = "Qualified 1 doc-comment cref(s) in the moved member(s) with the source class name so they still resolve at 'NewHelper'.";
+        var source = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class A",
+            "{",
+            "    /// <summary>Counts, see <see cref=\"Other\"/>.</summary>",
+            "    public int Count(string input) => input.Length;",
+            "",
+            "    /// <summary>Other method.</summary>",
+            "    public int Other() => 0;",
+            "}");
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source));
+
+        // Vacuity guard: the bare cref names a member that stays in A.
+        Assert.That(source, Does.Contain("<see cref=\"Other\"/>"));
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("Source.cs"), "A", new[] { "Count" }, "NewHelper", null, CancellationToken.None);
+
+        var newFile = NewText(result, "NewHelper.cs");
+        Assert.That(newFile, Does.Contain("public class NewHelper"));
+        Assert.That(newFile, Does.Contain("    /// <summary>Counts, see <see cref=\"A.Other\"/>.</summary>"));
+        Assert.That(newFile, Does.Contain("    public int Count(string input) => input.Length;"));
+
+        var notes = result.Notes ?? Array.Empty<string>();
+        Assert.That(notes.Count(n => n == qualifiedNote), Is.EqualTo(1), "Exactly one Qualified note for the one qualified cref");
+    }
+
+    [Test]
+    public async Task BareCrefToNonMovedMember_GenericSourceClass_UsesGenericPrefix()
+    {
+        const string eol = "\n";
+        const string qualifiedNote = "Qualified 1 doc-comment cref(s) in the moved member(s) with the source class name so they still resolve at 'B'.";
+        var source = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class A<T>",
+            "{",
+            "    /// <summary>Counts, see <see cref=\"Other\"/>.</summary>",
+            "    public int Count(string input) => input.Length;",
+            "",
+            "    /// <summary>Other method.</summary>",
+            "    public int Other() => 0;",
+            "}");
+        var target = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class B",
+            "{",
+            "    /// <summary>Existing member on target.</summary>",
+            "    public int Size() => 0;",
+            "}");
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Target.cs", target));
+
+        // Vacuity guard: the bare cref names a member that stays in A<T>.
+        Assert.That(source, Does.Contain("<see cref=\"Other\"/>"));
+
+        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count" });
+
+        var targetNew = NewText(result, "Target.cs");
+        Assert.That(targetNew, Does.Contain("    /// <summary>Counts, see <see cref=\"A{T}.Other\"/>.</summary>"));
+        Assert.That(targetNew, Does.Not.Contain("<see cref=\"A.Other\"/>"));
+
+        var notes = result.Notes ?? Array.Empty<string>();
+        Assert.That(notes.Count(n => n == qualifiedNote), Is.EqualTo(1), "Exactly one Qualified note for the one qualified cref");
+    }
+
+    [Test]
+    public async Task QualifiedCrefRetarget_AppliedEditsReplayToEngineTextOnEveryEditedFile()
+    {
+        const string eol = "\n";
+        var source = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class A",
+            "{",
+            "    /// <summary>Counts, see <see cref=\"Other\"/>.</summary>",
+            "    public int Count(string input) => input.Length;",
+            "",
+            "    /// <summary>Other method.</summary>",
+            "    public int Other() => 0;",
+            "}");
+        var target = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class B",
+            "{",
+            "    /// <summary>Existing member on target.</summary>",
+            "    public int Size() => 0;",
+            "}");
+        var originals = new Dictionary<string, string>
+        {
+            ["Source.cs"] = source,
+            ["Target.cs"] = target,
+        };
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Target.cs", target));
+
+        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count" });
+
+        Assert.That(result.AppliedEdits, Is.Not.Null, "The route must report the edits it applied");
+        var editedNames = result.AppliedEdits!.Keys.Select(k => Path.GetFileName(k.ToString())).ToArray();
+        Assert.That(editedNames, Is.EquivalentTo(new[] { "Source.cs", "Target.cs" }));
+
+        foreach (var (path, edits) in result.AppliedEdits!)
+        {
+            var name = Path.GetFileName(path.ToString());
+            Assert.That(edits.Count, Is.GreaterThan(0), $"{name} must carry at least one recorded edit");
+            Assert.That(CollateralChangeGuard.ApplyEdits(originals[name], edits), Is.EqualTo(result.Changes[path]),
+                $"Replaying the recorded edits on the original {name} must reproduce the engine's text");
+        }
+    }
+
+    [Test]
+    public async Task QualifiedCrefRetarget_CrlfSourceAndTarget_StayCrlf()
+    {
+        const string eol = "\r\n";
+        var source = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class A",
+            "{",
+            "    /// <summary>Counts, see <see cref=\"Other\"/>.</summary>",
+            "    public int Count(string input) => input.Length;",
+            "",
+            "    /// <summary>Other method.</summary>",
+            "    public int Other() => 0;",
+            "}");
+        var target = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class B",
+            "{",
+            "    /// <summary>Existing member on target.</summary>",
+            "    public int Size() => 0;",
+            "}");
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Target.cs", target));
+
+        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count" });
+
+        var targetNew = NewText(result, "Target.cs");
+        Assert.That(targetNew, Is.EqualTo(Lines(eol,
+            "namespace Example;",
+            "",
+            "public class B",
+            "{",
+            "    /// <summary>Existing member on target.</summary>",
+            "    public int Size() => 0;",
+            "",
+            "    /// <summary>Counts, see <see cref=\"A.Other\"/>.</summary>",
+            "    public int Count(string input) => input.Length;",
+            "}")));
+        Assert.That(targetNew.EndsWith(eol), Is.True, "Final newline must be kept");
+        Assert.That(targetNew.Replace("\r\n", string.Empty), Does.Not.Contain("\n"), "No bare LF may appear in a CRLF target");
+        Assert.That(NewText(result, "Source.cs").Replace("\r\n", string.Empty), Does.Not.Contain("\n"), "No bare LF may appear in a CRLF source");
+    }
+
+    [Test]
+    public async Task NoBareCrefInMovedDoc_HasNoVerificationOrQualifiedNote()
+    {
+        const string eol = "\n";
+        var source = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class A",
+            "{",
+            "    /// <summary>",
+            "    /// Counts the characters.",
+            "    /// </summary>",
+            "    public int Count(string input) => input.Length;",
+            "",
+            "    /// <summary>Other method.</summary>",
+            "    public int Other() => 0;",
+            "}");
+        var target = Lines(eol,
+            "namespace Example;",
+            "",
+            "public class B",
+            "{",
+            "    /// <summary>Existing member on target.</summary>",
+            "    public int Size() => 0;",
+            "}");
+
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("Source.cs", source),
+            ("Target.cs", target));
+
+        // Vacuity guard: the moved doc carries no cref at all.
+        Assert.That(source, Does.Not.Contain("<see cref"));
+
+        var result = await MoveInstanceAsync(workspace, engine, new[] { "Count" });
+
+        Assert.That(NewText(result, "Target.cs"), Is.EqualTo(Lines(eol,
+            "namespace Example;",
+            "",
+            "public class B",
+            "{",
+            "    /// <summary>Existing member on target.</summary>",
+            "    public int Size() => 0;",
+            "",
+            "    /// <summary>",
+            "    /// Counts the characters.",
+            "    /// </summary>",
+            "    public int Count(string input) => input.Length;",
+            "}")));
+
+        var notes = result.Notes ?? Array.Empty<string>();
+        Assert.That(notes, Does.Not.Contain(BareInheritedNote), "No bare cref means no could-not-verify note");
+        Assert.That(notes.Any(n => n.StartsWith("Qualified", StringComparison.Ordinal)), Is.False, "No Qualified note when nothing was qualified");
     }
 
     private static async Task<MoveMemberResult> MoveInstanceAsync(
