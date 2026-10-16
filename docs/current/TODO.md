@@ -4,6 +4,14 @@ Running list of confirmed-but-deferred issues found during tool development/grad
 should have enough detail to pick back up without re-discovering the root cause. Once an entry is
 actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
 
+## `StructuralRefactoringEngine.MoveTypeToOuterScopeAsync` drops the nested type instead of moving it (2026-10-16) - not started
+
+Found while characterizing C5b-2a (read-only probe, LF and CRLF alike): the nested type is removed but never re-added at the outer scope. In the namespace branch the new namespace node is built from the old `ns` and applied with `newRoot.ReplaceNode(ns, newNs)`, which is probably a silent no-op because `ns` is not in `newRoot`; the compilation-unit fallback adds to the old `root` and discards the removal. Existing MoveTypeToOuterScope tests assert only non-null. Data-loss bug: fix and add byte-exact tests before routing the `Formatter.FormatAsync` at ~:1058 (it is irrelevant until the type survives).
+
+## C5b-2a state (2026-10-16) - paused at the weekly usage limit
+
+Read-only findings, nothing edited. `IntroduceParameterObjectAsync` main path (~:1302) and interface-warning branch (~:1258, it returns `UpdatedText`, so it affects output) both leak the formatter's CRLF into LF input (after the method `{` and around the added record). Plan: swap the existing annotation for `Formatter.Annotation`, call `FormatAnnotatedSpansAsync`, characterization tests first (LF, CRLF, mixed with stray CRLF on the method `{` line). Leave :126, :1108, :1462 and the parked private remove (:293).
+
 ## `MappingEngine.InvertAssignments` leaks leading trivia onto the right-hand side (2026-10-16) - not started
 
 `InvertAssignments` swaps the operands together with their leading trivia, so a comment or blank lines directly before an inverted assignment end up on the right-hand side of the result. Found in the C5b-1 review; swap the operands but keep each side's own leading trivia in place.
