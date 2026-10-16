@@ -1,6 +1,6 @@
 # Make DTO ownership, role and lineage visible before restructuring DTOs
 
-**Status:** PROPOSED 2026-10-16. Survey done and approaches assessed; awaiting a decision on Phase 1.
+**Status:** APPROVED 2026-10-16. The four phases are approved; the namespace work is widened to the whole codebase (see Phase 3). An implementation plan is pending.
 
 ## Motivation
 
@@ -194,7 +194,9 @@ pressure across features drops because each slice owns its contracts.
    - decide the open `finding_engine_result_shapes_primitives_and_wrapper_usage.md` (result envelope
      standard), because it sets the canonical output shape.
 4. **Phase 3 (deferred, evidence-gated).**
-   - Feature sub-namespaces (approach B) one domain at a time.
+   - Feature sub-namespaces (approach B) one domain at a time. Decided 2026-10-16: this covers every type
+     (engines, tools, `*Impl`, helpers), not only DTOs. The goal is finer-grained answers to "what does this belong
+     to" and "what does it depend on" than the current one-namespace-per-project layout gives.
    - Move the about 35-45 single-consumer Common DTOs only after cross-project relocation works.
    - Add a `[Dto]` role attribute only if the catalog leaves the mixed and orphan types ambiguous.
 
@@ -236,7 +238,7 @@ rename can change `LargeResultInfo.resultType`):
 
 - `docs/current/findings/finding_engine_result_shapes_primitives_and_wrapper_usage.md` (OPEN, result envelope standard)
 - `docs/current/proposals/proposal_parallel_change_deprecated_wrappers.md` (migration-first)
-- `docs/current/TODO.md` entry "`Search(mode: references)` cannot resolve a type by name ..." (2026-10-16)
+- `docs/current/blockers/blocking_error_search_references_by_name_excludes_types.md` (prerequisite for Phase 1)
 - Memory `project_engine_reorg_final_closeout_bugs_1_2_3` (Bug 2: cross-project type relocation)
 - Survey script: `DtoInventory.cs` (file-based `dotnet run` over `Server.Advanced/bin`); not committed. Phase 1
   replaces it.

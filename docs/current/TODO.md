@@ -6,7 +6,7 @@ actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outr
 
 ## `Search(mode: references)` cannot resolve a type by name unless `filePath` is pinned (2026-10-16) - not started
 
-`Search(mode: references, query: "BlobWriteResult")` returns NotFound "could not be resolved anywhere in the solution" while `mode: symbol` finds it at `RoslynSentinel.Common/OperationBlobWriter.cs:20`; the same call with `filePath` returns 12 hits. Cause: the by-name path in `SymbolNavigationEngine.FindCallersAsync` filters out every type (`.Where(c => c.Symbol is not INamedTypeSymbol)`, ~:1581-1583). The error also tells the caller to use `Search(failureMode: symbol)`, a parameter that does not exist (~:1680). Fix: resolve types in the by-name path (or say "types need filePath" in the message) and correct the hint. Matters for any DTO usage survey or migration (see `proposals/proposal_dto_ownership_role_lineage.md`).
+Tracked as a blocker: `blockers/blocking_error_search_references_by_name_excludes_types.md` (root cause traced to `SymbolNavigationEngine.cs:1581-1583`; workaround: pass `filePath`). Prerequisite for the DTO proposal phases.
 
 ## `StructuralRefactoringEngine.MoveTypeToOuterScopeAsync` drops the nested type instead of moving it (2026-10-16) - not started
 
