@@ -29,6 +29,10 @@ These came out of the fix in 4dedc78, a23c581, 4aa2dc2 and 389ae1b. The details 
   - Q1: `CrefQualifier`'s re-bind DROP path (`DroppedByRebind`) has no test. Q1f tried a natural fixture (a property named like the containing type); cref container lookup ignores it, so no mismatch is reachable from plain source. Needs a test seam (injectable re-bind resolver) or removal of the branch.
   - Q1: bare crefs to inherited members do not bind in the in-memory fixture (observed twice); not re-checked under `MSBuildWorkspace`. `CrefQualifier` counts them as unresolved. Q3 and the tool should say "not checked" for them.
   - Q1: `CrefQualifier` verifies per document only; cross-document edits applied together are not re-bound together.
+  - Q2a: `QualifyCrefsImpl` returns `InvalidArgument` ("matched no documents") for an existing project or solution with zero documents (or null-path documents dropped by the dedupe); the argument is valid, so return a `no_changes` summary instead and add a test. Unknown project/file already return `NotFound` from `DocumentLookup`, which is fine.
+  - Q2a: if `ValidateAndApplyAsync` itself writes then throws, that project's ChangeId is lost (per-project try/catch only keeps earlier projects').
+  - Q2a: no multi-project solution-scope apply test and no `partially_applied`/all-rejected test (no natural trigger found for a rejected project).
+  - Q2a: `QualifyCrefs` tool description does not mention `changeId`s (one per project, revertible with `UndoLastApply`) or the statuses `dry_run_ok`, `applied`, `partially_applied`, `no_changes`; add one sentence (fold into Q2b).
 
 ## `SyntaxTargetResolver` extraction follow-ups (2026-10-03) - not started
 
