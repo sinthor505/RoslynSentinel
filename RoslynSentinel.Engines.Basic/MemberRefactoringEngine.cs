@@ -1060,7 +1060,7 @@ public class MemberRefactoringEngine
     /// <summary>
     /// Batch form of <see cref="AddModifierAsync"/>/<see cref="RemoveModifierAsync"/>: applies every
     /// edit in <paramref name="edits"/> to <paramref name="filePath"/> against ONE original syntax root,
-    /// then folds all replacements into a single <see cref="RoslynFormattingHelper.ReplaceNodesFormattedAsync"/>
+    /// then folds all replacements into a single <see cref="RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync"/>
     /// call. Calling the single-edit methods N times independently would be wrong for a multi-edit batch
     /// targeting the same file: each call resolves against its own fresh GetCurrentSolutionAsync root, so
     /// the second call's UpdatedText would silently discard the first edit instead of compounding it.
@@ -1173,7 +1173,7 @@ public class MemberRefactoringEngine
             return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
         }
 
-        var replaced = await RoslynFormattingHelper.ReplaceNodesFormattedAsync(document, root, replacements, cancellationToken);
+        var replaced = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(document, root, replacements, cancellationToken);
         if (!replaced.AllReplacementsApplied)
         {
             // A replacement whose target could not be located in the evolving tree used to be skipped silently, so the
@@ -1669,7 +1669,7 @@ public class MemberRefactoringEngine
     /// Batch form of <see cref="AddAttributeAsync"/>/<see cref="ReplaceAttributeAsync"/>/
     /// <see cref="RemoveAttributeAsync"/>: same execution model as <see cref="ApplyModifierBatchAsync"/> ->
     /// resolve every edit's target against ONE original root, reject same-node collisions, fold all
-    /// replacements into one <see cref="RoslynFormattingHelper.ReplaceNodesFormattedAsync"/> call.
+    /// replacements into one <see cref="RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync"/> call.
     /// </summary>
     public async Task<DocumentEditResult> ApplyAttributeBatchAsync(FilePathWrapper filePath, IReadOnlyList<(int Index, string TargetName, string ExistingAttribute, AttributeModifyAction Action, string? NewAttribute, string? ContextSnippet, string? LineBefore, string? LineAfter)> edits, CancellationToken cancellationToken = default)
     {

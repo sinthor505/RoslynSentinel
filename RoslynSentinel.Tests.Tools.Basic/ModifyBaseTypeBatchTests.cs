@@ -391,7 +391,7 @@ public class ModifyBaseTypeBatchTests
         var outer = classes.Single(c => c.Identifier.Text == "Outer");
         var inner = classes.Single(c => c.Identifier.Text == "Inner");
 
-        var result = await RoslynFormattingHelper.ReplaceNodesFormattedAsync(
+        var result = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(
             document,
             root,
             new Dictionary<SyntaxNode, SyntaxNode>
@@ -416,7 +416,7 @@ public class ModifyBaseTypeBatchTests
         var first = root.DescendantNodes().OfType<ClassDeclarationSyntax>().Single(c => c.Identifier.Text == "First");
         var second = root.DescendantNodes().OfType<ClassDeclarationSyntax>().Single(c => c.Identifier.Text == "Second");
 
-        var result = await RoslynFormattingHelper.ReplaceNodesFormattedAsync(
+        var result = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(
             document,
             root,
             new Dictionary<SyntaxNode, SyntaxNode>

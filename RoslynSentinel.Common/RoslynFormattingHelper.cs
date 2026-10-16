@@ -119,7 +119,7 @@ public static class RoslynFormattingHelper
     /// one original snapshot instead (see <c>AttributeTextEditBuilder</c>).
     /// </para>
     /// </summary>
-    public static async Task<ReplaceNodesResult> ReplaceNodesFormattedAsync(Document document, SyntaxNode root, Dictionary<SyntaxNode, SyntaxNode> replacements, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld)
+    public static async Task<ReplaceNodesResult> ReplaceNodesAndFormatReplacementsAsync(Document document, SyntaxNode root, Dictionary<SyntaxNode, SyntaxNode> replacements, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld)
     {
         var originalSourceText = await document.GetTextAsync(cancellationToken);
         var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
