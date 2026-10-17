@@ -579,9 +579,19 @@ public class DiscoveryEngine
     /// Finds all usages of a named attribute across the solution, optionally scoped to a
     /// project or file. Matches both "Foo" and "FooAttribute" spelling variants.
     /// </summary>
-    public async Task<List<AttributeUsageSite>> FindAttributeUsagesAsync(string attributeName, string? projectName = null, string? filePath = null, bool includeTests = true, CancellationToken cancellationToken = default)
+    public async Task<List<AttributeUsageSite>> FindAttributeUsagesAsync(string attributeName, string? projectName = null, string? filePath = null, bool includeTests = true, string? hasAttribute = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        // Optional co-attribute filter: the owning declaration must ALSO carry hasAttribute, matched
+        // exactly like attributeName (last dotted segment, trailing "Attribute" optional).
+        string? hasBare = null;
+        if (!string.IsNullOrWhiteSpace(hasAttribute))
+        {
+            var hasName = hasAttribute.Trim('[', ']');
+            var hasLast = hasName.Contains('.') ? hasName[(hasName.LastIndexOf('.') + 1)..] : hasName;
+            hasBare = hasLast.EndsWith("Attribute", StringComparison.Ordinal) ? hasLast[..^9] : hasLast;
+        }
+
         // Normalise: strip leading [ / trailing ] if user typed e.g. "[Authorize]"
         var name = attributeName.Trim('[', ']');
         // Build both canonical forms: "Authorize" and "AuthorizeAttribute"
@@ -632,6 +642,15 @@ public class DiscoveryEngine
 
                     // What is the attribute applied to?
                     var parent = attrList.Parent;
+                    if (hasBare is not null && !(parent?.ChildNodes().OfType<AttributeListSyntax>().SelectMany(l => l.Attributes).Any(a =>
+                    {
+                        var t = a.Name.ToString().Split('.').Last();
+                        return string.Equals(t, hasBare, StringComparison.OrdinalIgnoreCase) || string.Equals(t, hasBare + "Attribute", StringComparison.OrdinalIgnoreCase);
+                    }) ?? false))
+                    {
+                        continue;
+                    }
+
                     var(kind, targetName, containingType) = parent switch
                     {
                         MethodDeclarationSyntax m => ("Method", m.Identifier.Text, m.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? ""),

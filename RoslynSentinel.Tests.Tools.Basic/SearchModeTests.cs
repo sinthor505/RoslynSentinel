@@ -34,7 +34,14 @@ public class SearchModeTests
         "}" + "\n" +
         "public sealed class ProbeMarkerAttribute : System.Attribute { }" + "\n" +
         "[ProbeMarker]" + "\n" +
-        "public class MarkedProbe { }" + "\n";
+        "public class MarkedProbe { }" + "\n" +
+        "public sealed class CoFooAttribute : System.Attribute { }" + "\n" +
+        "public sealed class CoBarAttribute : System.Attribute { }" + "\n" +
+        "[CoFoo]" + "\n" +
+        "[CoBar]" + "\n" +
+        "public class CoBothMarked { }" + "\n" +
+        "[CoFoo]" + "\n" +
+        "public class CoFooOnly { }" + "\n";
 
     // Lives in a test project of the sample solution; must be excluded when includeTests is false.
     private const string TestProjectFile = "ContosoOrders.Tests/SearchModeTestProjectUsage.cs";
@@ -42,7 +49,10 @@ public class SearchModeTests
     private const string TestProjectSource =
         "namespace ContosoOrders.Tests;" + "\n" +
         "[ProbeMarker]" + "\n" +
-        "public class TestMarkedProbe { }" + "\n";
+        "public class TestMarkedProbe { }" + "\n" +
+        "public sealed class TestOnlyMarkerAttribute : System.Attribute { }" + "\n" +
+        "[TestOnlyMarker]" + "\n" +
+        "public class TestOnlyUsage { }" + "\n";
 
     private sealed record Harness(TestSolutionFixture Fixture, PersistentWorkspaceManager Workspace, WorkspaceTools Tools) : IDisposable
     {
@@ -236,5 +246,117 @@ public class SearchModeTests
         Assert.That(withTests.IsError, Is.Not.True, withTests.ErrorData?.Message);
         Assert.That(Serialize(withTests.SuccessData), Does.Contain("TestMarkedProbe"),
             "includeTests=true must include the occurrence in the test project.");
+    }
+
+    [Test]
+    public async Task Search_AttributeMode_HasAttribute_KeepsOnlyOwnersCarryingBothAttributes()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search attribute hasAttribute co-attribute filter regression",
+            SearchMode.attribute,
+            query: "CoFoo",
+            hasAttribute: "CoBar");
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        var json = Serialize(result.SuccessData);
+        Assert.That(json, Does.Contain("CoBothMarked"), "The class carrying both CoFoo and CoBar must be reported.");
+        Assert.That(json, Does.Not.Contain("CoFooOnly"), "A class carrying only CoFoo must be excluded by hasAttribute CoBar.");
+    }
+
+    [TestCase("CoBar")]
+    [TestCase("CoBarAttribute")]
+    [TestCase("ContosoOrders.Core.CoBar")]
+    [TestCase("ContosoOrders.Core.CoBarAttribute")]
+    public async Task Search_AttributeMode_HasAttribute_MatchesSpellingVariants(string hasAttribute)
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search attribute hasAttribute spelling variants regression",
+            SearchMode.attribute,
+            query: "CoFoo",
+            hasAttribute: hasAttribute);
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        var json = Serialize(result.SuccessData);
+        Assert.That(json, Does.Contain("CoBothMarked"), $"hasAttribute '{hasAttribute}' must match CoBar, with or without the Attribute suffix or namespace.");
+        Assert.That(json, Does.Not.Contain("CoFooOnly"));
+    }
+
+    [Test]
+    public async Task Search_AttributeMode_HasAttributeNoMatch_ReturnsEmptySuccessAndSkipsBroadening()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search attribute hasAttribute no match regression",
+            SearchMode.attribute,
+            query: "CoFoo",
+            hasAttribute: "NoSuchCoAttribute");
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        var json = Serialize(result.SuccessData);
+        Assert.That(json, Does.Not.Contain("CoBothMarked"));
+        Assert.That(json, Does.Not.Contain("CoFooOnly"));
+        Assert.That(result.StatusMessage, Does.Contain("Broaden-on-empty was skipped"),
+            "An empty hasAttribute result must say broaden-on-empty was skipped, because it cannot honor the filter.");
+    }
+
+    [Test]
+    public async Task Search_SymbolMode_WithHasAttribute_SucceedsAndWarnsIgnoredParameter()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search symbol ignored hasAttribute warning regression",
+            SearchMode.symbol,
+            query: "SearchModeProbeImpl",
+            hasAttribute: "CoBar");
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        Assert.That(result.WarningDetails, Does.Contain("Ignored parameter"));
+        Assert.That(result.WarningDetails, Does.Contain("hasAttribute"));
+    }
+
+    [Test]
+    public async Task Search_AttributeMode_AttributeOnlyInTestProject_IncludeTestsFalseFindsNothing()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var withoutTests = await h.Tools.SearchSolutionTool(
+            reason: "search attribute test-only attribute excluded regression",
+            SearchMode.attribute,
+            query: "TestOnlyMarker",
+            includeTests: false);
+
+        Assert.That(withoutTests.IsError, Is.Not.True, withoutTests.ErrorData?.Message);
+        Assert.That(Serialize(withoutTests.SuccessData), Does.Not.Contain("TestOnlyUsage"),
+            "includeTests=false must find nothing for an attribute used only in a test project.");
+
+        var withTests = await h.Tools.SearchSolutionTool(
+            reason: "search attribute test-only attribute included regression",
+            SearchMode.attribute,
+            query: "TestOnlyMarker",
+            includeTests: true);
+
+        Assert.That(withTests.IsError, Is.Not.True, withTests.ErrorData?.Message);
+        Assert.That(Serialize(withTests.SuccessData), Does.Contain("TestOnlyUsage"),
+            "includeTests=true must find the attribute used in the test project.");
+    }
+
+    [Test]
+    public async Task FindTypesByAttribute_AttributeOnlyInTestProject_IncludeTestsFalseFindsNothing()
+    {
+        using var h = await CreateHarnessAsync();
+        var engine = new DiscoveryEngine(h.Workspace);
+
+        var withoutTests = await engine.FindTypesByAttributeAsync("TestOnlyMarker", includeTests: false);
+        Assert.That(withoutTests, Is.Empty, "includeTests=false must skip the test project when resolving typesWithAttribute.");
+
+        var withTests = await engine.FindTypesByAttributeAsync("TestOnlyMarker", includeTests: true);
+        Assert.That(withTests.Select(r => r.MemberName), Does.Contain("TestOnlyUsage"),
+            "includeTests=true must report the type decorated in the test project.");
     }
 }

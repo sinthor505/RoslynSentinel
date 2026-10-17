@@ -31,13 +31,13 @@ public class SymbolRelationshipImpl
         _logger = logger;
     }
 
-    private async Task<List<object>> RunRelationshipQueryAsync(FindUsagesSearchKind searchKind, string name, string? projectName, string filePath, bool sortByFrequency, bool includeTests, CancellationToken cancellationToken)
+    private async Task<List<object>> RunRelationshipQueryAsync(FindUsagesSearchKind searchKind, string name, string? projectName, string filePath, bool sortByFrequency, bool includeTests, string? hasAttribute, CancellationToken cancellationToken)
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         object result = searchKind switch
         {
             FindUsagesSearchKind.implementorsOf => await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName, cancellationToken),
-            FindUsagesSearchKind.attributeUsages => await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePathResolved, includeTests: includeTests, cancellationToken: cancellationToken),
+            FindUsagesSearchKind.attributeUsages => await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePathResolved, includeTests: includeTests, hasAttribute: hasAttribute, cancellationToken: cancellationToken),
             FindUsagesSearchKind.objectCreations => await _discoveryEngine.FindObjectCreationSitesAsync(name, filePathResolved, projectName, sortByFrequency, cancellationToken),
             FindUsagesSearchKind.extensionsFor => await _symbolNavigationEngine.FindExtensionMethodsAsync(name, projectName, cancellationToken),
             FindUsagesSearchKind.typesWithAttribute => await _discoveryEngine.FindTypesByAttributeAsync(name, includeTests, projectName, cancellationToken),
@@ -50,7 +50,7 @@ public class SymbolRelationshipImpl
         return ((System.Collections.IEnumerable)result).Cast<object>().ToList();
     }
 
-    public async Task<SentinelCallToolResult<object>> QuerySymbolRelationships(ToolCallReason reason, string name, FindUsagesSearchKind searchKind, string? projectName = null, string? filePath = null, bool sortByFrequency = false, bool includeTests = true, CancellationToken cancellationToken = default)
+    public async Task<SentinelCallToolResult<object>> QuerySymbolRelationships(ToolCallReason reason, string name, FindUsagesSearchKind searchKind, string? projectName = null, string? filePath = null, bool sortByFrequency = false, bool includeTests = true, string? hasAttribute = null, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -69,10 +69,22 @@ public class SymbolRelationshipImpl
                 }
             }
 
-            var results = await RunRelationshipQueryAsync(searchKind, name, projectName, filePathResolved, sortByFrequency, includeTests, cancellationToken);
+            var results = await RunRelationshipQueryAsync(searchKind, name, projectName, filePathResolved, sortByFrequency, includeTests, hasAttribute, cancellationToken);
             if (results.Count > 0)
             {
                 return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(results, _workspaceManager.GetSolutionRoot(), nameof(FindUsagesSearchKind), ResultWrapperType.SymbolRelationshipResultList, totalRecords: results.Count, cancellationToken: cancellationToken);
+            }
+
+            if (!string.IsNullOrWhiteSpace(hasAttribute))
+            {
+                // Broaden-on-empty cannot honor the hasAttribute filter, so skip it.
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = false,
+                    SuccessData = results,
+                    TotalRecords = 0,
+                    StatusMessage = $"0 results for '{searchKind}' with hasAttribute '{hasAttribute}'. Broaden-on-empty was skipped because it cannot apply the hasAttribute filter; drop hasAttribute to broaden."
+                };
             }
 
             // Broaden-on-empty: the targeted kind genuinely ran and came back empty (and, for
@@ -85,7 +97,7 @@ public class SymbolRelationshipImpl
             {
                 try
                 {
-                    var otherResults = await RunRelationshipQueryAsync(otherKind, name, projectName, filePathResolved, sortByFrequency, includeTests, cancellationToken);
+                    var otherResults = await RunRelationshipQueryAsync(otherKind, name, projectName, filePathResolved, sortByFrequency, includeTests, null, cancellationToken);
                     if (otherResults.Count > 0)
                     {
                         broadened[otherKind.ToString()] = otherResults;

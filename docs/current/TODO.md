@@ -683,6 +683,6 @@ ChangeSignature, RenameSymbol conflicts) do not use it.
 
 
 
-## Open follow-ups from the type-by-name fix (2026-10-17) - mostly closed
+## Schema budget headroom is ~2 chars (2026-10-17)
 
-The other items moved to CLOSED.md. Remaining: `Search(mode: attribute)` could gain a `hasAttribute` filter (semantics undefined: sibling attribute on the same declaration?); add an `includeTests=false` attribute-search test once a test fixture can mark a project as a test project (`TestProjectDetector` needs a csproj referencing Microsoft.NET.Test.Sdk).
+The claude-lean Search/Git schemas sit at the `CoreSurface` budget limits (Basic total ~40498/40500). The next added parameter or description must trim existing wording first; consider reviewing whether the budgets or the longest descriptions (Git `operation`, Search tool-level text) should be restructured.

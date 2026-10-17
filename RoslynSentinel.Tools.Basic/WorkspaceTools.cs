@@ -619,7 +619,7 @@ public class WorkspaceTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.ProjectName)]
-    [Description("Unified search. mode selects what's searched: text (free-text/regex scan), symbol (declaration lookup by name), references (callers and/or implementations of a symbol: use mode callers for call sites, implementations for overrides/interface implementers, references for both), attribute (every place an attribute is applied, matched by name: use query TestFixture or TestFixtureAttribute; returns decorated symbol, target kind, arguments, file and line), or a declaration-kind listing (all, namespace, class, interface, method, property, struct, record, enum, enum member, constructor, field). query: mode text = pattern matched as both a literal and a regex (use fileGlob, not a path parameter, to restrict files); symbol/references = symbol name; declaration-kind modes = optional case-insensitive name filter (exact name unless exactMatch is false). Declaration-kind listings return at most 30 rows: when more match, totalRecords holds the full match count, hasMoreData is true, listSummary gives per-project (byProject) and top-10 per-file (byFile, truncatedFileCount) match counts over ALL matches, and warningDetails says the list was truncated - narrow with query or projectName, or use mode: symbol. Zero matches is not an error: it returns an empty result (isError false, totalRecords 0) whose statusMessage says what to try next.")]
+    [Description("Unified search. mode selects what's searched: text (free-text/regex scan), symbol (declaration lookup by name), references (callers and/or implementations of a symbol: use mode callers for call sites, implementations for overrides/interface implementers, references for both), attribute (every place an attribute is applied, by name e.g. TestFixture or TestFixtureAttribute; returns decorated symbol, target kind, arguments, file, line), or a declaration-kind listing (all, namespace, class, interface, method, property, struct, record, enum, enum member, constructor, field). query: mode text = pattern matched as both a literal and a regex (use fileGlob, not a path parameter, to restrict files); symbol/references = symbol name; declaration-kind modes = optional case-insensitive name filter (exact name unless exactMatch is false). Declaration-kind listings return at most 30 rows: when more match, totalRecords holds the full match count, hasMoreData is true, listSummary gives per-project (byProject) and top-10 per-file (byFile, truncatedFileCount) match counts over ALL matches, and warningDetails says the list was truncated - narrow with query or projectName, or use mode: symbol. Zero matches is not an error: it returns an empty result (isError false, totalRecords 0) whose statusMessage says what to try next.")]
     public Task<SentinelCallToolResult<object>> SearchSolutionTool(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     SearchMode mode,
@@ -650,8 +650,9 @@ public class WorkspaceTools
     [Description("mode: references/callers/implementations only. " + ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
     [Description("mode: references/callers/implementations only. " + ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
     [Description("false (default) = skip test projects in every mode, including symbol; true = include them. Naming a test project in projectName/filePath always includes it.")] bool includeTests = false,
+    [Description("mode: attribute only. Owner must also carry this attribute.")] string? hasAttribute = null,
     CancellationToken cancellationToken = default)
-    => DispatchSearch(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, cancellationToken);
+    => DispatchSearch(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, cancellationToken);
 
     /// <summary>
     /// Hard cap on rows returned by Search in declaration-kind modes; extra matches are counted in totalRecords and flagged via hasMoreData/warningDetails.
@@ -679,7 +680,7 @@ public class WorkspaceTools
     ToolCallReason reason, SearchMode mode, string? query, string? fileGlob, int maxResults,
     SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName,
     bool exactMatch, string? filePath, string? contextSnippet,
-    string? lineBefore, string? lineAfter, bool includeTests, CancellationToken cancellationToken)
+    string? lineBefore, string? lineAfter, bool includeTests, string? hasAttribute, CancellationToken cancellationToken)
     {
         switch (mode)
         {
@@ -694,7 +695,7 @@ public class WorkspaceTools
             case SearchMode.implementations:
                 return _symbolRelationship.FindReferences(reason, query ?? string.Empty, FindReferencesKind.implementations, filePath, contextSnippet, lineBefore, lineAfter, includeTests: includeTests, cancellationToken: cancellationToken);
             case SearchMode.attribute:
-                return _symbolRelationship.QuerySymbolRelationships(reason, query ?? string.Empty, FindUsagesSearchKind.attributeUsages, projectName, filePath, includeTests: includeTests, cancellationToken: cancellationToken);
+                return _symbolRelationship.QuerySymbolRelationships(reason, query ?? string.Empty, FindUsagesSearchKind.attributeUsages, projectName, filePath, includeTests: includeTests, hasAttribute: hasAttribute, cancellationToken: cancellationToken);
             default:
                 return _readNav.ListAll(reason, SearchModeToListAllKind(mode), projectName, query, exactMatch, KindListingMaxItems, includeTests: includeTests, cancellationToken: cancellationToken);
         }
@@ -704,7 +705,7 @@ public class WorkspaceTools
     ToolCallReason reason, SearchMode mode, string? query, string? fileGlob, int maxResults,
     SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName,
     bool exactMatch, string? filePath, string? contextSnippet,
-    string? lineBefore, string? lineAfter, bool includeTests, CancellationToken cancellationToken)
+    string? lineBefore, string? lineAfter, bool includeTests, string? hasAttribute, CancellationToken cancellationToken)
     {
         if (mode is SearchMode.text or SearchMode.symbol or SearchMode.references or SearchMode.callers or SearchMode.implementations or SearchMode.attribute
             && string.IsNullOrWhiteSpace(query))
@@ -722,9 +723,9 @@ public class WorkspaceTools
             };
         }
 
-        var result = await DispatchSearchCore(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, cancellationToken);
+        var result = await DispatchSearchCore(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, cancellationToken);
 
-        var ignored = FindIgnoredSearchParameters(mode, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter);
+        var ignored = FindIgnoredSearchParameters(mode, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, hasAttribute);
         if (ignored.Count == 0)
         {
             return result;
@@ -734,14 +735,14 @@ public class WorkspaceTools
         return result with { WarningDetails = priorWarning + $"Ignored parameter(s) for mode {mode}: {string.Join(", ", ignored)}." };
     }
 
-    private static List<string> FindIgnoredSearchParameters(SearchMode mode, string? fileGlob, int maxResults, SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName, bool exactMatch, string? filePath, string? contextSnippet, string? lineBefore, string? lineAfter)
+    private static List<string> FindIgnoredSearchParameters(SearchMode mode, string? fileGlob, int maxResults, SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName, bool exactMatch, string? filePath, string? contextSnippet, string? lineBefore, string? lineAfter, string? hasAttribute)
     {
         var used = mode switch
         {
             SearchMode.text => new[] { "fileGlob", "maxResults" },
             SearchMode.symbol => new[] { "symbolKind", "containingType", "containingNamespace", "projectName", "exactMatch", "filePath" },
             SearchMode.references or SearchMode.callers or SearchMode.implementations => new[] { "filePath", "contextSnippet", "lineBefore", "lineAfter" },
-            SearchMode.attribute => new[] { "projectName", "filePath" },
+            SearchMode.attribute => new[] { "projectName", "filePath", "hasAttribute" },
             _ => new[] { "projectName", "exactMatch" }
         };
 
@@ -765,6 +766,7 @@ public class WorkspaceTools
         Check("contextSnippet", contextSnippet is not null);
         Check("lineBefore", lineBefore is not null);
         Check("lineAfter", lineAfter is not null);
+        Check("hasAttribute", hasAttribute is not null);
         return ignored;
     }
 

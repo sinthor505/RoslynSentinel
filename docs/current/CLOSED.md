@@ -11,7 +11,7 @@ be moved here going forward, not deleted.
 - `DescribeNearMissCandidatesAsync` scans `TypeAndMember`; global-namespace types render without `()`.
 - `typesWithAttribute` (`FindTypesByAttributeAsync`) resolves bare names across namespaces and referenced assemblies (hypothesis confirmed: `Search(attribute, "TestFixture")` found nothing while the qualified name found 397); `attributeUsages` matches qualified queries on the last segment; `includeTests`/`projectName` honored; XML-doc cref hits skipped; the broaden-on-empty message no longer claims "not found anywhere" when only non-test projects were searched.
 - `Git(operation: log)` gained `pickaxe` (-S), `pickaxeRegex` (-G) and `follow` (--follow, one path). To fit the claude-lean schema budget, wording of other Git parameter descriptions was tightened.
-- Still open: `Search(mode: attribute)` `hasAttribute` filter (semantics undefined); `includeTests=false` attribute test needs a fixture that can mark a project as a test project.
+- `Search(mode: attribute)` gained `hasAttribute` (usage's declaration must also carry that attribute; matched like `query`; skips the broaden-on-empty fallback; ignored-parameter warning in other modes). The `includeTests=false` attribute tests use the existing ContosoOrders.Tests csproj (TestProjectDetector only checks for the text Microsoft.NET.Test.Sdk), so no fixture change was needed.
 
 ## DTO-justification PreToolUse hook - resolved 2026-10-16
 
