@@ -1662,7 +1662,7 @@ public class SymbolNavigationEngine
                         "This is NOT a confirmed result for any single symbol - resolution stopped before " +
                         "the lookup ran. " + DescribeCandidateLocations(narrowed, memberMatches.Where(m => narrowed.All(n => !SymbolEqualityComparer.Default.Equals(n.Symbol, m.Symbol))).ToList()) +
                         "Supply contextSnippet (a verbatim substring near the intended declaration) or " +
-                        "filePath to pin resolution to the one you mean.");
+                        "filePath to pin resolution to the one you mean.", BuildAmbiguousCandidates(narrowed, memberMatches.Where(m => narrowed.All(n => !SymbolEqualityComparer.Default.Equals(n.Symbol, m.Symbol))).ToList()));
                 }
 
                 symbol = narrowed.FirstOrDefault()?.Symbol;
@@ -1938,7 +1938,7 @@ public class SymbolNavigationEngine
                         "disambiguate. This is NOT a confirmed result for any single symbol - resolution " +
                         "stopped before the lookup ran. " + DescribeCandidateLocations(narrowed, memberMatches.Where(m => narrowed.All(n => !SymbolEqualityComparer.Default.Equals(n.Symbol, m.Symbol))).ToList()) +
                         "Supply contextSnippet (a verbatim substring near the intended declaration) or " +
-                        "filePath to pin resolution to the one you mean.");
+                        "filePath to pin resolution to the one you mean.", BuildAmbiguousCandidates(narrowed, memberMatches.Where(m => narrowed.All(n => !SymbolEqualityComparer.Default.Equals(n.Symbol, m.Symbol))).ToList()));
                 }
 
                 symbol = narrowed.FirstOrDefault()?.Symbol;
@@ -2890,6 +2890,50 @@ public class SymbolNavigationEngine
     }
 
     /// <summary>
+    /// Structured form of the candidate hint used in ambiguity errors: up to 10 listed candidates
+    /// (Counted=true), then up to 10 narrowed-away candidates (Counted=false). Fields come from the same
+    /// data DescribeCandidateLocations renders.
+    /// </summary>
+    public static IReadOnlyList<AmbiguousCandidate> BuildAmbiguousCandidates(
+        List<SemanticSymbolCandidate> candidates,
+        IReadOnlyList<SemanticSymbolCandidate>? excluded = null)
+    {
+        const int maxCounted = 10;
+        const int maxExcluded = 10;
+
+        static AmbiguousCandidate Describe(SemanticSymbolCandidate c, bool counted)
+        {
+            var site = ResolveDeclarationSite(c);
+            var signature = c.Symbol is IMethodSymbol m
+                ? m.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat)
+                : c.Symbol.Name;
+            var containingType = c.Symbol.ContainingType?.Name ?? c.Symbol.ContainingNamespace?.Name ?? "?";
+            var kind = !counted && c.Symbol.ContainingType?.TypeKind == TypeKind.Interface
+                ? "interface member"
+                : DescribeKind(c.Symbol);
+            return new AmbiguousCandidate(
+                site.File, site.Line, kind, signature, containingType, site.Snippet,
+                site.IsUnique ? null : site.LineBefore, counted);
+        }
+
+        var result = new List<AmbiguousCandidate>();
+        foreach (var c in candidates.Take(maxCounted))
+        {
+            result.Add(Describe(c, counted: true));
+        }
+
+        if (excluded is { Count: > 0 })
+        {
+            foreach (var c in excluded.Take(maxExcluded))
+            {
+                result.Add(Describe(c, counted: false));
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
     /// Solution-wide counterpart to DescribeNameOnlyCandidates: given a list of SemanticSymbolCandidate
     /// (ISymbol-backed matches spanning every project, not one file's syntax nodes), builds a
     /// "retry with one of these" hint - per candidate: kind, short signature, containing type, file:line,
@@ -2911,18 +2955,13 @@ public class SymbolNavigationEngine
 
         const int maxListed = 10;
         var sb = new System.Text.StringBuilder("Candidates (retry with filePath + contextSnippet of the one you mean):");
-        foreach (var c in candidates.Take(maxListed))
+        foreach (var a in BuildAmbiguousCandidates(candidates))
         {
-            var site = ResolveDeclarationSite(c);
-            var signature = c.Symbol is IMethodSymbol m
-                ? m.ToDisplayString(SymbolDisplayFormat.CSharpShortErrorMessageFormat)
-                : c.Symbol.Name;
-            var containingType = c.Symbol.ContainingType?.Name ?? c.Symbol.ContainingNamespace?.Name ?? "?";
-            sb.Append($"\n  - {DescribeKind(c.Symbol)} {signature} in {containingType} at {site.File}:{site.Line}");
-            sb.Append($", contextSnippet=\"{site.Snippet}\"");
-            if (!site.IsUnique)
+            sb.Append($"\n  - {a.Kind} {a.Signature} in {a.ContainingType} at {a.FilePath}:{a.Line}");
+            sb.Append($", contextSnippet=\"{a.ContextSnippet}\"");
+            if (a.LineBefore is not null)
             {
-                sb.Append($", lineBefore=\"{site.LineBefore}\"");
+                sb.Append($", lineBefore=\"{a.LineBefore}\"");
             }
         }
 

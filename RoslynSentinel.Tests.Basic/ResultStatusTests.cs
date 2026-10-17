@@ -174,6 +174,42 @@ public class ResultStatusTests
     }
 
     [Test]
+    public void ToResultError_AmbiguousWithCandidates_CarriesCandidatesAsStructuredDetail()
+    {
+        var candidates = new[]
+        {
+            new AmbiguousCandidate("A.cs", 3, "Method", "void Run()", "A", "public void Run()", null, true),
+            new AmbiguousCandidate("B.cs", 7, "Method", "void Run()", "B", "public void Run()", "// b", true),
+        };
+
+        ResultError error = ToolErrorMapper.ToResultError(new ToolAmbiguousMatchException("two matches", candidates), null!, "Op");
+
+        Assert.That(error.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(error.Message, Is.EqualTo("Op failed: two matches"));
+        Assert.That(error.Detail, Is.EqualTo("two matches"));
+        Assert.That(error.StructuredDetail, Is.Not.Null);
+        Assert.That(error.StructuredDetail!, Has.Count.EqualTo(2));
+        Assert.That(error.StructuredDetail![0], Is.InstanceOf<AmbiguousCandidate>());
+        Assert.That(error.StructuredDetail![1], Is.InstanceOf<AmbiguousCandidate>());
+        Assert.That(((AmbiguousCandidate)error.StructuredDetail![0]).FilePath, Is.EqualTo("A.cs"));
+        Assert.That(((AmbiguousCandidate)error.StructuredDetail![0]).ContextSnippet, Is.EqualTo("public void Run()"));
+        Assert.That(((AmbiguousCandidate)error.StructuredDetail![1]).FilePath, Is.EqualTo("B.cs"));
+        Assert.That(((AmbiguousCandidate)error.StructuredDetail![1]).ContextSnippet, Is.EqualTo("public void Run()"));
+    }
+
+    [Test]
+    public void ToResultError_AmbiguousWithoutCandidates_LeavesStructuredDetailNull()
+    {
+        ResultError noList = ToolErrorMapper.ToResultError(new ToolAmbiguousMatchException("no list"), null!, "Op");
+        ResultError emptyList = ToolErrorMapper.ToResultError(new ToolAmbiguousMatchException("empty", Array.Empty<AmbiguousCandidate>()), null!, "Op");
+
+        Assert.That(noList.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(noList.StructuredDetail, Is.Null);
+        Assert.That(emptyList.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(emptyList.StructuredDetail, Is.Null);
+    }
+
+    [Test]
     public void FromFlag_NotError_IsSuccess_AndErrorWithoutOrNonErrorCode_IsFailed()
     {
         Assert.That(ResultStatusExtensions.FromFlag(false, ToolErrorCode.NotFound), Is.EqualTo(ResultStatus.Success));

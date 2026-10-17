@@ -1481,6 +1481,32 @@ public class Second { public void Run() { } }";
             Assert.That(ex.Message, Does.Contain("interface member"));
         }
 
+        [Test]
+        public async Task FindCallersAsync_NoFilePath_AmbiguityAttachesStructuredCandidates()
+        {
+            SetMultipleFiles(
+                ("First.cs", "public class First\r\n{\r\n    public void Run() { }\r\n}"),
+                ("Second.cs", "public class Second\r\n{\r\n    public void Run() { }\r\n}"));
+            var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _navigationEngine.FindCallersAsync(null, "Run", contextSnippet: null));
+            Assert.That(ex!.Candidates, Is.Not.Null);
+            Assert.That(ex.Candidates!.Count(c => c.Counted), Is.EqualTo(2));
+            Assert.That(ex.Candidates.Where(c => c.Counted).Select(c => c.ContextSnippet), Has.All.Not.Empty);
+        }
+
+        [Test]
+        public async Task FindCallersAsync_NoFilePath_AmbiguityDroppedInterfaceMember_IsStructuredAsNotCounted()
+        {
+            SetMultipleFiles(
+                ("IRunner.cs", "public interface IRunner\r\n{\r\n    void Run();\r\n}"),
+                ("Impl.cs", "public class Impl : IRunner\r\n{\r\n    public void Run() { }\r\n}"),
+                ("Other.cs", "public class Other\r\n{\r\n    public void Run() { }\r\n}"));
+            var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _navigationEngine.FindCallersAsync(null, "Run", contextSnippet: null));
+            Assert.That(ex!.Candidates, Is.Not.Null);
+            Assert.That(ex.Candidates!.Count(c => c.Counted), Is.EqualTo(2));
+            Assert.That(ex.Candidates.Count(c => !c.Counted), Is.EqualTo(1));
+            Assert.That(ex.Candidates.Single(c => !c.Counted).FilePath, Is.EqualTo("IRunner.cs"));
+        }
+
         // -- Repro: by-name contextSnippet that resolves to a different symbol must not silently resolve to the wrong one --
         [Test]
         public async Task FindCallersAsync_BySnippet_SnippetResolvesToDifferentSymbolName_DoesNotResolveWrongSymbol()
@@ -1505,6 +1531,18 @@ public class Second { public void Run() { } }";
             Assert.That(ex.Message, Does.Contain("is ambiguous"));
             Assert.That(ex.Message, Does.Contain("contextSnippet=\""));
             Assert.That(ex.Message, Does.Not.Contain("FindImplementations:"));
+        }
+
+        [Test]
+        public async Task FindImplementationsForMemberAsync_NoFilePath_OverloadedAcrossClasses_AttachesStructuredCandidates()
+        {
+            SetMultipleFiles(
+                ("Alpha.cs", "public class Alpha\r\n{\r\n    public virtual void Run() { }\r\n}"),
+                ("Beta.cs", "public class Beta\r\n{\r\n    public virtual void Run() { }\r\n}"));
+            var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _navigationEngine.FindImplementationsForMemberAsync(null, "Run", contextSnippet: null));
+            Assert.That(ex!.Candidates, Is.Not.Null);
+            Assert.That(ex.Candidates!.Count(c => c.Counted), Is.EqualTo(2));
+            Assert.That(ex.Candidates.Where(c => c.Counted).Select(c => c.ContextSnippet), Has.All.Not.Empty);
         }
 
         [Test]

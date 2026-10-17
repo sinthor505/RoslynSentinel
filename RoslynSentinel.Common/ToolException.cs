@@ -91,9 +91,13 @@ public sealed class ToolAmbiguousMatchException : ToolException
 {
     public override string ErrorCode => ToolErrorCode.Ambiguous;
 
-    public ToolAmbiguousMatchException(string message) : base(message)
+    public ToolAmbiguousMatchException(string message, IReadOnlyList<AmbiguousCandidate>? candidates = null) : base(message)
     {
+        Candidates = candidates;
     }
+
+    /// <summary>Candidates that made the lookup ambiguous, for structured retry hints; null when the throw site did not supply them.</summary>
+    public IReadOnlyList<AmbiguousCandidate>? Candidates { get; }
 }
 
 /// <summary>
@@ -177,6 +181,10 @@ public static class ToolErrorMapper
     public static ResultError ToResultError(Exception ex, ISolutionProvider workspaceManager, string context)
     {
         var (code, message) = ToCodeAndMessage(ex, workspaceManager, context);
+        // The candidate list is capped by the engine (<=10 plus a dropped count), far under the offload
+        // threshold, and ToResultError is synchronous, so it is inlined rather than offloaded.
+        if (ex is ToolAmbiguousMatchException { Candidates: { Count: > 0 } c })
+            return new ResultError(code, message, ex.Message, StructuredDetail: c.Cast<object>().ToList());
         return new ResultError(code, message, ex.Message);
     }
 
