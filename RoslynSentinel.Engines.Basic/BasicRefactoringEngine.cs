@@ -497,18 +497,16 @@ public class BasicRefactoringEngine
 
             var newRoot = rootByPath[path].ReplaceNodes(nodes, (original, rewritten) => rewritten switch
             {
-                ParameterListSyntax => newParameterList,
-                InvocationExpressionSyntax inv => inv.WithArgumentList(inv.ArgumentList.WithArguments(RebuildArguments(inv.ArgumentList.Arguments, plans[original]))),
-                BaseObjectCreationExpressionSyntax obj => obj.WithArgumentList(obj.ArgumentList!.WithArguments(RebuildArguments(obj.ArgumentList.Arguments, plans[original]))),
+                ParameterListSyntax => newParameterList.WithAdditionalAnnotations(Formatter.Annotation),
+                InvocationExpressionSyntax inv => inv.WithArgumentList(inv.ArgumentList.WithArguments(RebuildArguments(inv.ArgumentList.Arguments, plans[original]))).WithAdditionalAnnotations(Formatter.Annotation),
+                BaseObjectCreationExpressionSyntax obj => obj.WithArgumentList(obj.ArgumentList!.WithArguments(RebuildArguments(obj.ArgumentList.Arguments, plans[original]))).WithAdditionalAnnotations(Formatter.Annotation),
                 _ => rewritten
             });
-            var changedDoc = documentByPath[path].WithSyntaxRoot(newRoot);
-            var formatted = await Formatter.FormatAsync(changedDoc, null, cancellationToken);
-            var originalText = await documentByPath[path].GetTextAsync(cancellationToken);
+            // Only the rewritten parameter list and call sites are formatted (C5c-3); the rest of the file keeps its text and
+            // line endings, and every line the rewrite changed takes the document's dominant ending.
+            var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(documentByPath[path], newRoot, cancellationToken);
             var formattedText = (await formatted.GetTextAsync(cancellationToken)).ToString();
-            // Formatter output uses the platform EOL; restore the file's own dominant EOL so an LF file stays LF.
-            var normalizedText = EolUtilities.NormalizeEol(formattedText, EolUtilities.DetectDominantEol(originalText));
-            result[path.Equals(declPath) ? filePath : path] = normalizedText;
+            result[path.Equals(declPath) ? filePath : path] = formattedText;
         }
 
         return new ChangeSignatureResult(result, skippedCallSites);
@@ -558,10 +556,13 @@ public class BasicRefactoringEngine
 
         var updatedOrig = RemoveOrphanedRegionDirectives(root!.RemoveNode(typeNode, SyntaxRemoveOptions.KeepNoTrivia)!);
         var newDoc = document.Project.AddDocument($"{typeName}.cs", newRoot);
-        var formattedNewDoc = await Formatter.FormatAsync(newDoc, null, cancellationToken);
+        // The new file and the trimmed original are both fully owned by this tool, so both are formatted whole; the source
+        // document's text supplies the line ending (C5c-3), so an LF source no longer gets a CRLF scaffolded file.
+        var sourceText = await document.GetTextAsync(cancellationToken);
+        var formattedNewDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(newDoc, sourceText, cancellationToken);
         var newContent = (await formattedNewDoc.GetTextAsync(cancellationToken)).ToString();
         var updatedOrigDoc = document.WithSyntaxRoot(updatedOrig);
-        var formattedOrigDoc = await Formatter.FormatAsync(updatedOrigDoc, null, cancellationToken);
+        var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(updatedOrigDoc, sourceText, cancellationToken);
         var updatedOrigContent = (await formattedOrigDoc.GetTextAsync(cancellationToken)).ToString();
         return new Dictionary<FilePathWrapper, string>
         {
@@ -599,6 +600,7 @@ public class BasicRefactoringEngine
         }
 
         var changes = new Dictionary<FilePathWrapper, string>();
+        var sourceText = await document.GetTextAsync(cancellationToken);
         var sourceDirectory = Path.GetDirectoryName(document.FilePath) ?? "";
         foreach (var typeNode in typesToMove)
         {
@@ -618,13 +620,13 @@ public class BasicRefactoringEngine
             var typeName = typeNode.Identifier.Text;
             var newPath = string.IsNullOrEmpty(sourceDirectory) ? $"{typeName}.cs" : Path.Combine(sourceDirectory, $"{typeName}.cs");
             var newDoc = document.Project.AddDocument($"{typeName}.cs", newRoot);
-            var formattedNewDoc = await Formatter.FormatAsync(newDoc, null, cancellationToken);
+            var formattedNewDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(newDoc, sourceText, cancellationToken);
             changes[newPath] = (await formattedNewDoc.GetTextAsync(cancellationToken)).ToString();
         }
 
         var updatedRoot = RemoveOrphanedRegionDirectives(root.RemoveNodes(typesToMove, SyntaxRemoveOptions.KeepNoTrivia)!);
         var updatedOrigDoc = document.WithSyntaxRoot(updatedRoot);
-        var formattedOrigDoc = await Formatter.FormatAsync(updatedOrigDoc, null, cancellationToken);
+        var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(updatedOrigDoc, sourceText, cancellationToken);
         changes[document.FilePath ?? document.Name] = (await formattedOrigDoc.GetTextAsync(cancellationToken)).ToString();
         return changes;
     }
@@ -800,7 +802,7 @@ public class BasicRefactoringEngine
         var ifaceContent = RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(ifaceCompUnit, eol, elasticTrivia: false).ToFullString();
         // Format the original file
         var origDoc = document.WithSyntaxRoot(updatedOrig);
-        var formattedOrigDoc = await Formatter.FormatAsync(origDoc, null, cancellationToken);
+        var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(origDoc, await document.GetTextAsync(cancellationToken), cancellationToken);
         var origContent = (await formattedOrigDoc.GetTextAsync(cancellationToken)).ToString();
         return new Dictionary<FilePathWrapper, string>
         {
@@ -1550,7 +1552,7 @@ public class BasicRefactoringEngine
             // only reduces a qualified name when doing so introduces no ambiguity in this file.
             formattedDoc = await Simplifier.ReduceAsync(formattedDoc, Simplifier.Annotation, cancellationToken: cancellationToken);
             var simplifiedRoot = await formattedDoc.GetSyntaxRootAsync(cancellationToken);
-            formattedDoc = await Formatter.FormatAsync(formattedDoc.WithSyntaxRoot(simplifiedRoot!.WithAdditionalAnnotations(Simplifier.Annotation)), cancellationToken: cancellationToken);
+            formattedDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(formattedDoc.WithSyntaxRoot(simplifiedRoot!.WithAdditionalAnnotations(Simplifier.Annotation)), originalText, cancellationToken);
         }
 
         // Roslyn's Formatter emits the platform newline for any line break it creates or re-flows, so

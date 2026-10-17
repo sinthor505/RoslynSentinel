@@ -696,3 +696,7 @@ The claude-lean Search/Git schemas sit at the `CoreSurface` budget limits (Basic
 ## Battery tests with bare relative file names leak files into the working directory (2026-10-17) - not started
 
 Found fixing BatteryTwentyFourTests.MethodSignature_Remove_LastParameter_UpdatesCallSite: a stale CRLF Order.cs in the test bin dir (left by another test) was read by the chokepoint's disk pre-image check (PersistentWorkspaceManager ~:1582) and tripped EolChangeGuard. Only BatteryTwentyFourTests got a Setup/TearDown cleanup; other battery classes using bare names can leak the same way. Consider a shared test-base cleanup.
+
+## ExtractInterfaceAsync base-list layout defect and moved-type files lack trailing newline (2026-10-17) - not started
+
+Found in C5c-3. ExtractInterfaceAsync (BasicRefactoringEngine) AddBaseListTypes leaves the colon on its own line at column 0 (class Svc / : ISvc / {); fix by moving the class-identifier trailing trivia, then the site can use an annotated route instead of FormatWholeDocumentAsync. Files scaffolded by MoveTypeToFileAsync end at the closing brace with no trailing newline. Both are pinned as-is in BasicRefactoringEngineFormatCharacterizationTests.
