@@ -1235,9 +1235,10 @@ public class StructuralRefactoringEngine
         var classNode = methodNode.Parent as ClassDeclarationSyntax;
         var interfaceNode = methodNode.Parent as InterfaceDeclarationSyntax;
         // Shared annotation for every node introduced/replaced below (the rewritten method and,
-        // further down, the newly-appended record declaration) -> lets the final Formatter.FormatAsync
-        // pass reformat just these edited spans instead of reflowing the whole file.
-        var editAnnotation = new SyntaxAnnotation();
+        // further down, the newly-appended record declaration) -> lets the final
+        // RoslynFormattingHelper.FormatAnnotatedSpansAsync pass reformat just these edited spans instead of
+        // reflowing the whole file, in the document's own line ending.
+        var editAnnotation = Formatter.Annotation;
         var annotatedNewMethodNode = newMethodNode.WithAdditionalAnnotations(editAnnotation);
         SyntaxNode newRoot = root;
         if (interfaceNode != null && methodSymbol?.ExplicitInterfaceImplementations.Length == 0)
@@ -1255,7 +1256,7 @@ public class StructuralRefactoringEngine
                 newRoot = root.ReplaceNode(methodNode, annotatedNewMethodNode);
                 // Append warning comment
                 var warning = $"// WARNING: This method implements an interface. Update the interface signature in the corresponding interface file.\n";
-                var warningFormattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), editAnnotation, cancellationToken: cancellationToken);
+                var warningFormattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
                 return new DocumentEditResult
                 {
                     Outcome = EditOutcome.Modified,
@@ -1299,7 +1300,7 @@ public class StructuralRefactoringEngine
             }
         }
 
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), editAnnotation, cancellationToken: cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
