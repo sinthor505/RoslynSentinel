@@ -1530,7 +1530,7 @@ public class SymbolNavigationEngine
 
             if (contextSnippet != null)
             {
-                symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken) ?? throw new ToolNotFoundException(
+                symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, symbolName, lineBefore, lineAfter, cancellationToken) ?? throw new ToolNotFoundException(
                         $"FindCallers: contextSnippet did not resolve to a symbol in '{filePath}'. " +
                         $"This is NOT a confirmed zero-references result for '{symbolName}' - the lookup " +
                         "never ran. " + DescribeNameOnlyCandidates(decls, symbolName) +
@@ -1578,11 +1578,21 @@ public class SymbolNavigationEngine
             var anyRoot = (await anyDoc.GetSyntaxRootAsync(cancellationToken))!;
             var anyText = await anyDoc.GetTextAsync(cancellationToken);
             var byNameCandidate = await ResolveCandidatesWithSemanticAsync(anyRoot, anyText, symbolName, includeSemantic: true, cancellationToken);
-            var memberMatches = (byNameCandidate.SemanticMatches ?? [])
+            var allMatches = byNameCandidate.SemanticMatches ?? [];
+            var memberMatches = allMatches
                 .Where(c => c.Symbol is not INamedTypeSymbol)
                 .ToList();
 
-            if (contextSnippet != null)
+            // Types are valid targets ("who uses record Foo"), not noise: a lone type match, or a type plus
+            // its own constructors, resolves to the type. A type plus an unrelated same-named member is
+            // ambiguous. PreferClassMember narrows the member subset only. The contextSnippet scan below
+            // stays member-only (snippet-based type resolution is a separate path).
+            var (typeMatches, otherMembers) = SplitTypeAndMemberMatches(allMatches, symbolName);
+            if (contextSnippet == null && typeMatches.Count > 0)
+            {
+                symbol = ResolveTypeNameMatch(symbolName, typeMatches, otherMembers, PreferClassMember);
+            }
+            else if (contextSnippet != null)
             {
                 ToolAmbiguousMatchException? firstAmbiguous = null;
                 foreach (var candidate in memberMatches)
@@ -1601,7 +1611,7 @@ public class SymbolNavigationEngine
 
                     try
                     {
-                        symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(doc, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                        symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(doc, contextSnippet, symbolName, lineBefore, lineAfter, cancellationToken);
                         // A snippet can land on a neighbouring declaration or call site; only accept a symbol whose name matches symbolName.
                         if (symbol != null && symbol.Name != symbolName
                             && !(symbol is IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor } ctorSymbol && ctorSymbol.ContainingType.Name == symbolName))
@@ -1642,7 +1652,7 @@ public class SymbolNavigationEngine
                         $"FindCallers: contextSnippet did not resolve to a symbol for symbolName " +
                         $"'{symbolName}' in any of the {memberMatches.Count} candidate location(s) found " +
                         "across the solution. This is NOT a confirmed zero-references result - the lookup " +
-                        "never ran. " + DescribeCandidateLocations(memberMatches) +
+                        "never ran. " + DescribeCandidateLocations(memberMatches) + DescribeTypeMatchHint(allMatches, symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output for the " +
                         "specific candidate you meant, or supply filePath to pin resolution to one file.");
                 }
@@ -1796,7 +1806,7 @@ public class SymbolNavigationEngine
                 }
                 else if (contextSnippet != null)
                 {
-                    symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, symbolName, lineBefore, lineAfter, cancellationToken);
                     if (symbol == null)
                     {
                         // Same name-only lookup as the no-snippet branch below, used purely to
@@ -1855,11 +1865,20 @@ public class SymbolNavigationEngine
             var anyRoot = (await anyDoc.GetSyntaxRootAsync(cancellationToken))!;
             var anyText = await anyDoc.GetTextAsync(cancellationToken);
             var byNameCandidate = await ResolveCandidatesWithSemanticAsync(anyRoot, anyText, symbolName, includeSemantic: true, cancellationToken);
-            var memberMatches = (byNameCandidate.SemanticMatches ?? [])
+            var allMatches = byNameCandidate.SemanticMatches ?? [];
+            var memberMatches = allMatches
                 .Where(c => c.Symbol is not INamedTypeSymbol)
                 .ToList();
 
-            if (contextSnippet != null)
+            // Same type-aware split as FindCallersAsync: a lone type (or a type plus its own constructors)
+            // resolves to the type; a type plus an unrelated same-named member is ambiguous.
+            // PreferImplementableMember narrows the member subset only; the contextSnippet scan stays member-only.
+            var (typeMatches, otherMembers) = SplitTypeAndMemberMatches(allMatches, symbolName);
+            if (contextSnippet == null && typeMatches.Count > 0)
+            {
+                symbol = ResolveTypeNameMatch(symbolName, typeMatches, otherMembers, PreferImplementableMember);
+            }
+            else if (contextSnippet != null)
             {
                 ToolAmbiguousMatchException? firstAmbiguous = null;
                 foreach (var candidate in memberMatches)
@@ -1878,7 +1897,7 @@ public class SymbolNavigationEngine
 
                     try
                     {
-                        symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(doc, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                        symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(doc, contextSnippet, symbolName, lineBefore, lineAfter, cancellationToken);
                         // A snippet can land on a neighbouring declaration or call site; only accept a symbol whose name matches symbolName.
                         if (symbol != null && symbol.Name != symbolName
                             && !(symbol is IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor } ctorSymbol && ctorSymbol.ContainingType.Name == symbolName))
@@ -1918,7 +1937,7 @@ public class SymbolNavigationEngine
                         $"FindImplementations: contextSnippet did not resolve to a symbol for symbolName " +
                         $"'{symbolName}' in any of the {memberMatches.Count} candidate location(s) found " +
                         "across the solution. This is NOT a confirmed zero-implementations result - the " +
-                        "lookup never ran. " + DescribeCandidateLocations(memberMatches) +
+                        "lookup never ran. " + DescribeCandidateLocations(memberMatches) + DescribeTypeMatchHint(allMatches, symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output for the " +
                         "specific candidate you meant, or supply filePath to pin resolution to one file.");
                 }
@@ -1989,8 +2008,22 @@ public class SymbolNavigationEngine
         // with zero implementations is a trustworthy, non-ambiguous "confirmed zero" answer, not a
         // symptom of the wrong-candidate disambiguation problem this check exists to catch.
         var skipStructuralCheck = !string.IsNullOrWhiteSpace(filePath);
-        var isImplementable = symbol.IsAbstract || symbol.IsVirtual || symbol.IsOverride
-            || symbol.ContainingType?.TypeKind == TypeKind.Interface;
+        // A type is implementable when something can derive from / implement it: an interface, an abstract
+        // class or any non-sealed, non-static class. Sealed classes, structs, enums, delegates and static
+        // classes cannot have implementations.
+        var isImplementable = symbol is INamedTypeSymbol namedTarget
+            ? namedTarget.TypeKind is TypeKind.Class or TypeKind.Interface && !namedTarget.IsSealed && !namedTarget.IsStatic
+            : symbol.IsAbstract || symbol.IsVirtual || symbol.IsOverride
+                || symbol.ContainingType?.TypeKind == TypeKind.Interface;
+        if (!skipStructuralCheck && !isImplementable && symbol is INamedTypeSymbol ineligibleType)
+        {
+            throw new ToolTargetIneligibleException(
+                $"FindImplementations: symbolName '{symbolName}' resolved to {DescribeKind(ineligibleType)} " +
+                $"'{ineligibleType.ToDisplayString()}', which is sealed, static or not a class/interface - nothing can " +
+                "derive from or implement it, so this is NOT a confirmed zero-implementations result for any " +
+                "other symbol of that name. For usages of the type itself use references with kind callers.");
+        }
+
         if (!skipStructuralCheck && !isImplementable)
         {
             throw new ToolTargetIneligibleException(
@@ -3006,6 +3039,100 @@ public class SymbolNavigationEngine
         IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor } => "constructor",
         _ => symbol.Kind.ToString().ToLowerInvariant()
     };
+
+    /// <summary>
+    /// Splits a by-name semantic match list into type matches and the remaining member matches.
+    /// A constructor whose containing type is named <paramref name="symbolName"/> counts as that type
+    /// (it is dropped from the member list, and its containing type is added to the type list when no
+    /// type match already covers it), so "usages of Foo" covers <c>new Foo(...)</c> without the ctor
+    /// being reported as an unrelated same-named member.
+    /// </summary>
+    private static (List<SemanticSymbolCandidate> Types, List<SemanticSymbolCandidate> Members) SplitTypeAndMemberMatches(
+        IReadOnlyList<SemanticSymbolCandidate> matches, string symbolName)
+    {
+        var types = new List<SemanticSymbolCandidate>();
+        var members = new List<SemanticSymbolCandidate>();
+        var ownConstructors = new List<SemanticSymbolCandidate>();
+        foreach (var match in matches)
+        {
+            if (match.Symbol is INamedTypeSymbol)
+            {
+                types.Add(match);
+            }
+            else if (match.Symbol is IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor } ctor
+                && ctor.ContainingType.Name == symbolName)
+            {
+                ownConstructors.Add(match);
+            }
+            else
+            {
+                members.Add(match);
+            }
+        }
+
+        foreach (var ctorMatch in ownConstructors)
+        {
+            var owner = ctorMatch.Symbol.ContainingType.OriginalDefinition;
+            if (types.Any(t => SymbolEqualityComparer.Default.Equals(t.Symbol.OriginalDefinition, owner)))
+            {
+                continue;
+            }
+
+            var loc = owner.Locations.FirstOrDefault(l => l.IsInSource);
+            types.Add(new SemanticSymbolCandidate(owner, ctorMatch.ContainingAssembly, loc?.SourceTree?.FilePath ?? ctorMatch.FilePath, loc != null));
+        }
+
+        return (types, members);
+    }
+
+    /// <summary>
+    /// Resolves a by-name lookup in which at least one type matched. A single type with no unrelated
+    /// same-named member resolves to that type; otherwise (several types, or a type plus an unrelated
+    /// same-named member) the existing ambiguity error lists every candidate. <paramref name="preferMember"/>
+    /// (PreferClassMember / PreferImplementableMember) narrows the member subset only.
+    /// </summary>
+    private static ISymbol ResolveTypeNameMatch(
+        string symbolName,
+        List<SemanticSymbolCandidate> typeMatches,
+        List<SemanticSymbolCandidate> otherMembers,
+        Func<List<SemanticSymbolCandidate>, List<SemanticSymbolCandidate>> preferMember)
+    {
+        var narrowedMembers = otherMembers.Count > 0 ? preferMember(otherMembers) : otherMembers;
+        var candidates = typeMatches.Concat(narrowedMembers).ToList();
+        if (candidates.Count == 1)
+        {
+            return candidates[0].Symbol;
+        }
+
+        var excluded = otherMembers
+            .Where(m => narrowedMembers.All(n => !SymbolEqualityComparer.Default.Equals(n.Symbol, m.Symbol)))
+            .ToList();
+        throw new ToolAmbiguousMatchException(
+            $"symbolName '{symbolName}' is ambiguous - it matches {typeMatches.Count} type(s) and " +
+            $"{narrowedMembers.Count} unrelated member(s) across the solution. This is NOT a confirmed " +
+            "result for any single symbol - resolution stopped before the lookup ran. " +
+            DescribeCandidateLocations(candidates, excluded) +
+            "Supply filePath (plus contextSnippet when the target is a member) to pin resolution to the one you mean.",
+            BuildAmbiguousCandidates(candidates, excluded));
+    }
+
+    /// <summary>
+    /// Returns "'X' is a type ..." when the by-name semantic search found a type that the member-only
+    /// contextSnippet scan could not use, so a not-found message says why instead of implying the name
+    /// does not exist. Empty when no type matched.
+    /// </summary>
+    private static string DescribeTypeMatchHint(IReadOnlyList<SemanticSymbolCandidate> matches, string symbolName)
+    {
+        var typeMatch = matches.FirstOrDefault(c => c.Symbol is INamedTypeSymbol);
+        if (typeMatch == null)
+        {
+            return string.Empty;
+        }
+
+        var site = ResolveDeclarationSite(typeMatch);
+        return $"'{symbolName}' is a type ({DescribeKind(typeMatch.Symbol)} at {site.File}:{site.Line}); a type resolves " +
+            "by name alone, so omit contextSnippet, or pass filePath of its declaration. ";
+    }
 
     private static (string File, int Line, string Snippet, string LineBefore, bool IsUnique) ResolveDeclarationSite(SemanticSymbolCandidate c)
     {

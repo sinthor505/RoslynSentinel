@@ -127,14 +127,14 @@ public class SearchModeTests
     [Test]
     public async Task Search_CallersMode_FindsCallerOfInterfaceMethod()
     {
-        // contextSnippet starting at a return-type keyword resolves to System.Void (pre-existing bug, see docs/current/TODO.md), so no snippet is passed; the first Target in the file is the interface declaration.
         using var h = await CreateHarnessAsync();
 
         var result = await h.Tools.SearchSolutionTool(
             reason: "search callers mode regression",
             SearchMode.callers,
             query: "Target",
-            filePath: ProbeFilePath(h));
+            filePath: ProbeFilePath(h),
+            contextSnippet: "void Target();");
 
         Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
         Assert.That(Serialize(result.SuccessData), Does.Contain("Invoke"),
@@ -144,18 +144,56 @@ public class SearchModeTests
     [Test]
     public async Task Search_ImplementationsMode_FindsImplementerOfInterfaceMethod()
     {
-        // contextSnippet starting at a return-type keyword resolves to System.Void (pre-existing bug, see docs/current/TODO.md), so no snippet is passed; the first Target in the file is the interface declaration.
         using var h = await CreateHarnessAsync();
 
         var result = await h.Tools.SearchSolutionTool(
             reason: "search implementations mode regression",
             SearchMode.implementations,
             query: "Target",
-            filePath: ProbeFilePath(h));
+            filePath: ProbeFilePath(h),
+            contextSnippet: "void Target();");
 
         Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
         Assert.That(Serialize(result.SuccessData), Does.Contain("SearchModeProbeImpl"),
             "Implementations of ISearchModeProbe.Target must include SearchModeProbeImpl.Target.");
+    }
+
+    [Test]
+    public async Task Search_CallersMode_SnippetStartsAtReturnType_ResolvesEnclosingMethod()
+    {
+        // A snippet beginning at a return-type keyword must resolve the enclosing method, not System.Void.
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search callers snippet return type regression",
+            SearchMode.callers,
+            query: "Target",
+            filePath: ProbeFilePath(h),
+            contextSnippet: "void Target();");
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        var json = Serialize(result.SuccessData);
+        Assert.That(json, Does.Contain("Invoke"),
+            "The snippet 'void Target();' must resolve ISearchModeProbe.Target, so its real caller SearchModeProbeCaller.Invoke is reported.");
+        Assert.That(json, Does.Not.Contain("System.Void"),
+            "A return-type keyword snippet must not resolve to System.Void.");
+    }
+
+    [Test]
+    public async Task Search_CallersMode_SnippetNameMismatch_ReturnsNotFoundNotSystemVoid()
+    {
+        // The snippet resolves to Invoke, which does not match the query Target: must be NotFound, not a wrong symbol.
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search callers snippet name mismatch regression",
+            SearchMode.callers,
+            query: "Target",
+            filePath: ProbeFilePath(h),
+            contextSnippet: "public void Invoke(ISearchModeProbe probe) { probe.Target(); }");
+
+        Assert.That(result.IsError, Is.True, "A snippet resolving to a differently named symbol must return an error.");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

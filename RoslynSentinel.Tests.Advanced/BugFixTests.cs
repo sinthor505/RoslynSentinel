@@ -1731,6 +1731,69 @@ public class Startup
             Assert.That(results, Is.Not.Empty, "Regular repeated strings (not starting with @) should still be detected");
             Assert.That(results.Any(r => r.Value == "production-key"), Is.True, "Should find 'production-key' as a magic value");
         }
+
+        // -- Fix B1: by-name lookup of a record type (no member of that name) resolves to the type, not NotFound --
+        [Test]
+        public async Task FindCallers_ByName_RecordTypeWithNoSameNamedMember_Resolves()
+        {
+            const string src = @"public record Point(int X, int Y);
+public class Consumer
+{
+    public Point Make() => new Point(1, 2);
+}";
+            SetSource(src, "Point.cs");
+            var results = await _navigationEngine.FindCallersAsync(null, "Point", contextSnippet: null);
+            Assert.That(results, Is.Not.Null, "A by-name FindCallers on a record type with no same-named member must resolve to the type");
+        }
+
+        // -- Fix B1: a type with only constructors resolves to the type (constructors are not a competing candidate) --
+        [Test]
+        public async Task FindCallers_ByName_TypeWithConstructors_ResolvesToType()
+        {
+            const string src = @"public class Widget
+{
+    public Widget() { }
+    public Widget(int size) { }
+}
+public class Consumer
+{
+    public Widget Make() => new Widget(3);
+}";
+            SetSource(src, "Widget.cs");
+            var results = await _navigationEngine.FindCallersAsync(null, "Widget", contextSnippet: null);
+            Assert.That(results, Is.Not.Null, "A by-name FindCallers on a type whose only same-named symbols are its constructors must resolve to the type");
+        }
+
+        // -- Fix B1: a type plus an unrelated same-named method is ambiguous, and the error lists both candidates --
+        [Test]
+        public async Task FindCallers_ByName_TypeAndUnrelatedSameNamedMethod_ThrowsAmbiguousListingBoth()
+        {
+            SetMultipleFiles(
+                ("Widget.cs", "public class Widget\r\n{\r\n    public void Run() { }\r\n}"),
+                ("Other.cs", "public class Other\r\n{\r\n    public void Widget() { }\r\n}"));
+            var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _navigationEngine.FindCallersAsync(null, "Widget", contextSnippet: null));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+            Assert.That(ex.Candidates, Is.Not.Null);
+            Assert.That(ex.Candidates!.Count, Is.EqualTo(2), "Both the type and the unrelated same-named method must be listed as candidates");
+            Assert.That(ex.Candidates.Select(c => c.FilePath).ToList(), Is.EquivalentTo(new[] { "Widget.cs", "Other.cs" }));
+        }
+
+        // -- Fix B1: by-name FindImplementations on an interface type resolves to the interface and returns its implementers --
+        [Test]
+        public async Task FindImplementations_ByName_Interface_Resolves()
+        {
+            const string src = @"public interface IFoo
+{
+    void Run();
+}
+public class Foo : IFoo
+{
+    public void Run() { }
+}";
+            SetSource(src, "Foo.cs");
+            var results = await _navigationEngine.FindImplementationsForMemberAsync(null, "IFoo", contextSnippet: null);
+            Assert.That(results, Is.Not.Empty, "A by-name FindImplementations on an interface type must resolve to the interface and return its implementers");
+        }
     }
 
     [TestFixture]

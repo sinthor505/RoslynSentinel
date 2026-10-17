@@ -97,4 +97,29 @@ public class FindReferencesAmbiguityToolTests
 
         Assert.That(retry.IsError, Is.False, retry.ErrorData?.ErrorCode + ": " + retry.ErrorData?.Message);
     }
+
+    // Fix B1: a by-name kind:all lookup of a sealed type (no same-named member) resolves to the type; the
+    // implementations half is skipped with a status message instead of throwing ToolTargetIneligibleException.
+    [Test]
+    public async Task FindReferences_AllMode_SealedTypeByName_ReturnsCallersWithoutThrowing()
+    {
+        const string sealedSource = "public sealed class Gadget\n{\n    public void Spin() { }\n}\npublic class Consumer\n{\n    public void Use(Gadget g) { g.Spin(); }\n}";
+        var gadgetPath = Path.Combine(_dir, "AmbigProj", "Gadget.cs");
+        var csprojPath = Path.Combine(_dir, "AmbigProj", "AmbigProj.csproj");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "AmbigProj",
+            csprojPath,
+            [("Gadget.cs", sealedSource, gadgetPath)]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _impl.FindReferences(
+            reason: "sealed type by-name kind all regression: implementations must be skipped, not thrown",
+            symbolName: "Gadget",
+            kind: FindReferencesKind.all);
+
+        Assert.That(result.IsError, Is.False, result.ErrorData?.ErrorCode + ": " + result.ErrorData?.Message);
+        var json = System.Text.Json.JsonSerializer.Serialize(result);
+        Assert.That(json, Does.Contain("Use"), "Callers of Gadget (Consumer.Use) must be returned");
+        Assert.That(json, Does.Contain("Implementations skipped"), "The implementations half must be reported as skipped for a sealed type");
+    }
 }

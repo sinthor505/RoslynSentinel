@@ -277,7 +277,21 @@ public class SymbolRelationshipImpl
             if (kind == FindReferencesKind.all)
             {
                 var callers = await _symbolNavigationEngine.FindCallersAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
-                var implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                // The implementations half is structurally inapplicable for a concrete target (sealed type,
+                // struct, non-virtual member): that is "nothing to implement", not a failure of the whole
+                // all-query, so the callers half must still be returned.
+                var implementationsSkipped = false;
+                List<ImplementationInfo> implementations;
+                try
+                {
+                    implementations = await _symbolNavigationEngine.FindImplementationsForMemberAsync(filePathResolved, symbolName, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                }
+                catch (ToolTargetIneligibleException)
+                {
+                    implementations = [];
+                    implementationsSkipped = true;
+                }
+
                 callers = ExcludeTestHits(callers, c => c.FilePath, testDocProjects, droppedProjectNames);
                 implementations = ExcludeTestHits(implementations, i => i.FilePath, testDocProjects, droppedProjectNames);
                 var combinedPaths = callers.Select(c => c.FilePath).Concat(implementations.Select(i => i.FilePath ?? "(unknown)")).ToList();
@@ -291,7 +305,8 @@ public class SymbolRelationshipImpl
                         implementations,
                         summary
                     },
-                    StatusMessage = summary.ToSummaryMessage("hit") + DroppedTestHitsNote(droppedProjectNames),
+                    StatusMessage = summary.ToSummaryMessage("hit") + DroppedTestHitsNote(droppedProjectNames)
+                        + (implementationsSkipped ? " Implementations skipped: the target cannot have implementations (sealed/static type or non-virtual member)." : string.Empty),
                     ListSummary = summary
                 };
             }

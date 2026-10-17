@@ -49,4 +49,84 @@ public static class SnippetSymbolLocator
                       .Select(v => model.GetDeclaredSymbol(v, cancellationToken))
                       .FirstOrDefault(s => s != null);
     }
+
+    /// <summary>
+    /// Walks from node up through its ancestors and returns the first member, type, variable declarator or parameter
+    /// whose header (everything before its body, arrow expression, accessor list or type member list) contains pos.
+    /// Returns null when no such declaration encloses the position.
+    /// </summary>
+    private static IEnumerable<SyntaxNode> FindHeaderDeclarations(SyntaxNode node, int pos)
+    {
+        foreach (var candidate in node.AncestorsAndSelf())
+        {
+            if (candidate is not (MemberDeclarationSyntax or BaseTypeDeclarationSyntax or VariableDeclaratorSyntax or ParameterSyntax))
+            {
+                continue;
+            }
+
+            int headerEnd = candidate is BaseTypeDeclarationSyntax type
+                ? (type.OpenBraceToken.Span.IsEmpty ? candidate.Span.End : type.OpenBraceToken.SpanStart)
+                : (candidate.ChildNodes().FirstOrDefault(c => c is BlockSyntax or ArrowExpressionClauseSyntax or AccessorListSyntax)?.SpanStart
+                   ?? candidate.Span.End);
+
+            if (pos >= candidate.SpanStart && pos <= headerEnd)
+            {
+                yield return candidate;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Resolves the symbol at the contextSnippet like the overload above, but accepts it only when its name matches
+    /// expectedName (compared on the last dotted segment of expectedName; a constructor matches on its containing
+    /// type's name). When the first resolution does not match (for example snippet <c>void Target();</c> resolving to
+    /// System.Void), climbs from the snippet position to the enclosing declaration whose header contains it and returns
+    /// that declaration's symbol if it matches. Returns null when nothing matches; never returns a symbol whose name
+    /// differs from expectedName.
+    /// </summary>
+    public static async Task<ISymbol?> FindSymbolAtSnippetAsync(
+        Document document, string contextSnippet, string expectedName,
+        string? lineBefore, string? lineAfter, CancellationToken cancellationToken)
+    {
+        static bool Matches(ISymbol symbol, string segment) =>
+            symbol is IMethodSymbol { MethodKind: MethodKind.Constructor } ctor
+                ? ctor.ContainingType?.Name == segment
+                : symbol.Name == segment;
+
+        var segment = expectedName.Split('.')[^1];
+
+        var resolved = await FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
+        if (resolved != null && Matches(resolved, segment))
+        {
+            return resolved;
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var model = await document.GetSemanticModelAsync(cancellationToken);
+        var text = await document.GetTextAsync(cancellationToken);
+        if (root == null || model == null)
+        {
+            return null;
+        }
+
+        var pos = SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter).Start;
+        var node = root.FindNode(new TextSpan(pos, 0));
+        foreach (var declaration in FindHeaderDeclarations(node, pos))
+        {
+            ISymbol? declared = declaration switch
+            {
+                BaseFieldDeclarationSyntax field => field.Declaration.Variables.Count > 0
+                    ? model.GetDeclaredSymbol(field.Declaration.Variables[0], cancellationToken)
+                    : null,
+                _ => model.GetDeclaredSymbol(declaration, cancellationToken),
+            };
+
+            if (declared != null && Matches(declared, segment))
+            {
+                return declared;
+            }
+        }
+
+        return null;
+    }
 }
