@@ -1655,3 +1655,8 @@ Implemented by `plans/plan_git_tool_tag_stash_worktree_hunks.md` (steps 1-15): `
 `hunks` / `stage` with `hunkIds`+`hunkFingerprint` or `lineRange`. Commits f209e84 .. 4a9c1f9 (tool), 1f71ced (live smoke + `enforce-dogfood.ps1` now denies
 shell tag/stash/worktree). Full suite 3734 total / 0 failed / 26 skipped; the eight-call live smoke passed on two restarted servers. `stash drop`/`clear`,
 tag push and worktree prune/lock/move stay shell-only by decision (D-16, D-17).
+
+## `contextSnippet` starting at a return-type keyword resolved to `System.Void` (closed 2026-10-17)
+
+Fixed in bb9c477848d2f939dcfd1210ad0ed75013824709: name-directed `SnippetSymbolLocator.FindSymbolAtSnippetAsync` overload climbs to the enclosing declaration and returns null on a name mismatch (NotFound instead of a silent empty result). Tests in `SearchModeTests`/`RegressionTests`.
+

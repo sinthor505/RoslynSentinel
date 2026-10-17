@@ -8,10 +8,6 @@ actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outr
 
 `enforce-dto-justification.ps1` only inspects `Member` addTopLevelType/addMember, `CreateFile` and `WriteFile`. A new DTO added through `Member replace`, `ReplaceSnippet` or `ApplyDiff` is covered by the skill's wording only. Unverified: whether `tool_input.reason` reaches PreToolUse as a plain string for MCP calls (inferred from `ToolCallReason.cs:23-41`; check `.claude/journal/dto-hook.jsonl` after the first live trigger).
 
-## `contextSnippet` starting at a return-type keyword resolves to `System.Void` in callers/implementations (2026-10-17) - not started
-
-`SnippetSymbolLocator.FindSymbolAtSnippetAsync` (lines ~44-49) takes the node at the snippet start; for `void Target();` that is the `PredefinedTypeSyntax`, so `GetSymbolInfo` returns `System.Void` and `Search(mode: implementations)` returns `implementations: []` with `isError: false`. The `filePath` branch of `FindImplementationsForMemberAsync` (~line 1799) has no `symbol.Name != symbolName` check (the no-`filePath` branch has one at ~line 1883); `FindCallersAsync` (~line 1533) likely the same, so `callers` may silently search the wrong symbol too. Fix: resolve to the enclosing declaration (or add the name check and return not-found). Static trace only, not run. Workaround: omit `contextSnippet` and pass `filePath` + `query`. Related: `attribute` mode could gain a `hasAttribute` filter, and `typesWithAttribute` is suspected to fail for namespaced attributes (hypothesis).
-
 ## `Search(mode: references)` cannot resolve a type by name unless `filePath` is pinned (2026-10-16) - not started
 
 Tracked as a blocker: `blockers/blocking_error_search_references_by_name_excludes_types.md` (root cause traced to `SymbolNavigationEngine.cs:1581-1583`; workaround: pass `filePath`). Prerequisite for the DTO proposal phases.
@@ -686,3 +682,7 @@ ChangeSignature, RenameSymbol conflicts) do not use it.
   `BuildEngineParseTests.cs` and the B4/B7 test files).
 
 
+
+## Open follow-ups from the type-by-name fix (2026-10-17) - not started
+
+`FindImplementationsForMemberAsync` with `filePath` + a type name ignores `filePath` (its filePath branch matches only method/property/field declarations; falls back to the first same-named type in the solution). `DescribeNearMissCandidatesAsync` scans `SymbolFilter.Member` only (one-token change to `TypeAndMember`). `Git(operation: log)` lacks pickaxe (`-S`/`-G`) and `--follow` (TOOL-GAP found while tracing why the type filter existed). Also: `attribute` mode could gain a `hasAttribute` filter; `typesWithAttribute` is suspected to fail for namespaced attributes (hypothesis).

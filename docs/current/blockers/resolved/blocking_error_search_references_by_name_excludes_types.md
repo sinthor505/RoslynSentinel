@@ -1,6 +1,6 @@
 # `Search(mode: references)` reports a type as unresolvable unless `filePath` is pinned
 
-**Status:** OPEN 2026-10-16. Root cause traced to source: the by-name resolution path drops every named type.
+**Status:** RESOLVED 2026-10-17 (bb9c4778). Root cause traced to source: the by-name resolution path dropped every named type.
 
 ## What was being attempted
 
@@ -94,3 +94,10 @@ Phases 1-3 of the DTO proposal depend on this lookup.
    - a type with constructors;
    - a type whose name also matches an unrelated method;
    - an interface with `referencesKind: implementations`.
+
+## Resolution (2026-10-17)
+
+- **Root cause:** the by-name branches of `FindCallersAsync` and `FindImplementationsForMemberAsync` filtered `SemanticMatches` with `c.Symbol is not INamedTypeSymbol`; no rationale found in code or comments. The hint naming `failureMode` was already fixed in c64ccef6.
+- **Fix (bb9c477848d2f939dcfd1210ad0ed75013824709):** types are kept as candidates; one type (or a type plus its constructors) resolves to the type; a type plus an unrelated same-named member raises `ToolAmbiguousMatchException` listing both; interface/abstract/non-sealed types are valid for implementations; `FindReferences(kind: all)` treats an ineligible implementations half as empty. Same commit fixed the related `contextSnippet` -> `System.Void` bug via a name-directed `SnippetSymbolLocator` overload.
+- **Tests:** `Bug9BatchRegressionTests` (4 new), `FindReferencesAmbiguityToolTests` (all-mode on a sealed type), `SearchModeTests` (snippet cases). Baseline comparison: affected classes green (Bug9 32/32, RegressionTests+SearchModeTests 69/69, BatteryTwentyFour 107/107).
+- **Left open:** `FindImplementationsForMemberAsync` with `filePath` + a type name ignores `filePath` (its filePath branch only matches method/property/field declarations); `DescribeNearMissCandidatesAsync` still scans `SymbolFilter.Member` only.
