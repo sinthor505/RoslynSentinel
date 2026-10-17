@@ -288,6 +288,29 @@ public class RefactoringEngineFormatCharacterizationTests
         Assert.That(result.UpdatedText, Is.EqualTo(WithStrayCrlf(Src(false, RemoveParamExpected()), anchor)));
     }
 
+    // The mirror shape: a CRLF document with one bare-LF terminator. The LF sits on an UNCHANGED line (the blank line
+    // right after the rewritten method, or a line far from any edit), so it must survive byte-for-byte while the
+    // rewritten line takes the dominant CRLF. This is the shape MethodSignature(remove) produces from a fixture that
+    // splices "\n\n" into a CRLF file; the result is legitimately mixed, with the same dominant EOL as before.
+    [TestCase("    public int Compute( int  a, int  b ) { return  a +  _count ; }\r\n\r\n", "    public int Compute(int a) { return a + _count; }\r\n\r\n")]
+    [TestCase("    private int   Helper( ) { return  1; }\r\n", "    private int   Helper( ) { return  1; }\r\n")]
+    public async Task RemoveMethodParameter_CrlfDocument_StrayBareLfOnUnchangedLineIsKept(string inputAnchor, string expectedAnchor)
+    {
+        var input = Src(true, RemoveParamInput());
+        var expected = Src(true, RemoveParamExpected());
+        Assert.That(input.Split(inputAnchor).Length, Is.EqualTo(2), "Precondition: the input anchor is unique.");
+        Assert.That(expected.Split(expectedAnchor).Length, Is.EqualTo(2), "Precondition: the expected anchor is unique.");
+
+        // The stray LF replaces the LAST CRLF of the anchor, so for the first case it is the blank line's terminator.
+        static string WithBareLfAtEnd(string anchor) => anchor.Substring(0, anchor.Length - 2) + "\n";
+        SetFiles(("Test.cs", input.Replace(inputAnchor, WithBareLfAtEnd(inputAnchor))));
+
+        var result = await _memberEngine.RemoveMethodParameterAsync("Test.cs", "Compute", "b");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Is.EqualTo(expected.Replace(expectedAnchor, WithBareLfAtEnd(expectedAnchor))));
+    }
+
     // ================================================================ SemanticRefactoringEngine.InlineVariableAsync (usage replacement)
 
     private static string[] InlineInput() =>

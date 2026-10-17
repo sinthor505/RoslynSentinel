@@ -104,6 +104,7 @@ public enum Status { Active = 1, Pending = 2 }
     [SetUp]
     public void Setup()
     {
+        DeleteLeakedRelativeFiles();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
@@ -133,7 +134,27 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        DeleteLeakedRelativeFiles();
+    }
+
+    /// <summary>
+    /// Fixture documents use bare relative names ("Order.cs"), so the write chokepoint resolves them against the
+    /// process working directory and a tool that applies an edit leaves the file behind. The next test that
+    /// reuses the name then sees that file as its on-disk pre-image (the chokepoint's EOL guard reads disk, not
+    /// the workspace), so its result is judged against a previous test's output. Clearing the working
+    /// directory's .cs files before and after each test makes every test start from "no file on disk".
+    /// </summary>
+    private static void DeleteLeakedRelativeFiles()
+    {
+        foreach (var leaked in System.IO.Directory.GetFiles(System.IO.Directory.GetCurrentDirectory(), "*.cs", System.IO.SearchOption.TopDirectoryOnly))
+        {
+            System.IO.File.Delete(leaked);
+        }
+    }
+
     private void SetSource(string source, string fileName = "Test.cs")
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
