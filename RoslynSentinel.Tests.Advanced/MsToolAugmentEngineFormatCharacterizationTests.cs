@@ -1,0 +1,316 @@
+using Microsoft.Extensions.Logging.Abstractions;
+
+using RoslynSentinel.Engines.Basic;
+
+#pragma warning disable CS8618
+namespace RoslynSentinel.Tests.Advanced;
+
+/// <summary>
+/// C5b-2c characterization tests (docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
+/// Byte-exact pins for three span-scoped <c>Formatter.FormatAsync(doc, annotation)</c> sites in
+/// <see cref="MsToolAugmentEngine"/> routed onto <c>RoslynFormattingHelper.FormatAnnotatedSpansAsync</c>:
+/// <c>EncapsulateFieldSafeAsync</c>, <c>SortAndDeduplicateUsingsAsync</c> (called with <c>writeToFile: false</c>)
+/// and <c>ExtractMethodSafeAsync</c>. The source carries irregular spacing, comments and blank lines in code the
+/// engine does not touch, so a regression that formats the whole document shows up as a diff. Written against
+/// the unmodified calls (plain <c>Formatter.FormatAsync(doc, annotation)</c>). The CRLF tests are byte-identical
+/// to the pre-routing behaviour; the LF and mixed-EOL tests encode the corrected output (the old code leaked
+/// hard-coded or formatter-inserted CRLF into LF documents, or flattened a stray CRLF line to LF).
+/// <para>
+/// Exception: the <c>ExtractMethod</c> CRLF pin is NOT byte-identical to the pre-routing behaviour. That engine
+/// hard-codes LF trivia on the call statement and on the new method, so a CRLF document came back with two bare
+/// LF terminators; the pin (and the no-bare-LF test) encode the corrected all-CRLF output. The Encapsulate and
+/// SortUsings CRLF pins are unchanged by the routing.
+/// </para>
+/// </summary>
+[TestFixture]
+[Category("MsToolAugmentEngine")] // sentinel:auto-category
+public class MsToolAugmentEngineFormatCharacterizationTests
+{
+    private IWorkspaceManager _workspaceManager;
+    private MsToolAugmentEngine _engine;
+
+    [SetUp]
+    public void Setup()
+    {
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        _engine = new MsToolAugmentEngine(_workspaceManager);
+    }
+
+    [TearDown]
+    public void TearDown() => _workspaceManager?.Dispose();
+
+    private void SetFiles(params (string name, string content)[] files) =>
+        _workspaceManager.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", files));
+
+    /// <summary>Joins lines with LF (a trailing newline only if the last line is empty), then converts to CRLF when requested.</summary>
+    private static string Src(bool crlf, params string[] lines)
+    {
+        var text = string.Join("\n", lines);
+        return crlf ? text.Replace("\n", "\r\n") : text;
+    }
+
+    /// <summary>An LF text with exactly one CRLF terminator: the last character of <paramref name="anchor"/>.</summary>
+    private static string WithStrayCrlf(string lfText, string anchor)
+    {
+        Assert.That(lfText, Does.Contain(anchor), "Precondition: the anchor line is present.");
+        Assert.That(lfText.Split(anchor).Length, Is.EqualTo(2), "Precondition: the anchor line is unique.");
+        var mixed = lfText.Replace(anchor, anchor.Substring(0, anchor.Length - 1) + "\r\n");
+        Assert.That(mixed.Count(c => c == '\r'), Is.EqualTo(1), "Precondition: exactly one stray CRLF.");
+        return mixed;
+    }
+
+    // ================================================================ EncapsulateFieldSafeAsync
+
+    private static string[] EncapsulateInput() =>
+    [
+        "public class C",
+        "{",
+        "    // keep   this   comment",
+        "    private   int _other;",
+        "",
+        "    public int   Count;",
+        "",
+        "    public int Use() { return  Count  +  1; }",
+        "",
+        "    private int   Helper( ) { return  1; }",
+        "}",
+        "",
+    ];
+
+    // Pre-existing quirk pinned as-is (not part of this slice): the backing field and the property are separated by
+    // two blank lines (the property carries two leading line breaks on top of the backing field's own).
+    private static string[] EncapsulateExpected() =>
+    [
+        "public class C",
+        "{",
+        "    // keep   this   comment",
+        "    private   int _other;",
+        "",
+        "    private int _count;",
+        "",
+        "",
+        "    public int Count { get => _count; set => _count = value; }",
+        "",
+        "    public int Use() { return  _count  +  1; }",
+        "",
+        "    private int   Helper( ) { return  1; }",
+        "}",
+        "",
+    ];
+
+    private async Task<string> EncapsulateAsync()
+    {
+        var result = await _engine.EncapsulateFieldSafeAsync("Test.cs", "Count");
+        Assert.That(result.IsError, Is.False, result.Error);
+        return result.UpdatedContent!;
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task EncapsulateField_UntouchedCodeKeepsIrregularSpacing_ByteExact(bool crlf)
+    {
+        SetFiles(("Test.cs", Src(crlf, EncapsulateInput())));
+
+        Assert.That(await EncapsulateAsync(), Is.EqualTo(Src(crlf, EncapsulateExpected())));
+    }
+
+    [Test]
+    public async Task EncapsulateField_LfDocument_ResultHasNoCarriageReturn()
+    {
+        SetFiles(("Test.cs", Src(false, EncapsulateInput())));
+
+        Assert.That(await EncapsulateAsync(), Does.Not.Contain("\r"));
+    }
+
+    [Test]
+    public async Task EncapsulateField_CrlfDocument_ResultHasNoBareLineFeed()
+    {
+        SetFiles(("Test.cs", Src(true, EncapsulateInput())));
+
+        Assert.That((await EncapsulateAsync()).Replace("\r\n", ""), Does.Not.Contain("\n"));
+    }
+
+    // Stray CRLF on: a comment line far from the edit, the line before the field (its break is formatter-owned),
+    // the blank line right before the field (leading trivia of the replaced node) and an untouched member. Not on
+    // the `Use` line: its text changes (`Count` becomes `_count`), so it counts as a changed line and takes the
+    // dominant ending by design (see FormatAnnotatedSpansAsync).
+    [TestCase("    // keep   this   comment\n")]
+    [TestCase("    private   int _other;\n")]
+    [TestCase("    private   int _other;\n\n")]
+    [TestCase("    private int   Helper( ) { return  1; }\n")]
+    public async Task EncapsulateField_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
+    {
+        SetFiles(("Test.cs", WithStrayCrlf(Src(false, EncapsulateInput()), anchor)));
+
+        Assert.That(await EncapsulateAsync(), Is.EqualTo(WithStrayCrlf(Src(false, EncapsulateExpected()), anchor)));
+    }
+
+    // ================================================================ SortAndDeduplicateUsingsAsync
+
+    private static string[] UsingsInput() =>
+    [
+        "// header   comment",
+        "using System.Text;",
+        "using   System;",
+        "using System.Linq;",
+        "using System;",
+        "",
+        "namespace   N",
+        "{",
+        "    public class   C { }",
+        "}",
+        "",
+    ];
+
+    private static string[] UsingsExpected() =>
+    [
+        "// header   comment",
+        "using System;",
+        "using System.Linq;",
+        "using System.Text;",
+        "",
+        "namespace   N",
+        "{",
+        "    public class   C { }",
+        "}",
+        "",
+    ];
+
+    private async Task<string> SortUsingsAsync()
+    {
+        var result = await _engine.SortAndDeduplicateUsingsAsync("Test.cs", writeToFile: false);
+        Assert.That(result.RemovedDuplicates, Is.EqualTo(1));
+        return result.UpdatedContent;
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task SortUsings_UntouchedCodeKeepsIrregularSpacing_ByteExact(bool crlf)
+    {
+        SetFiles(("Test.cs", Src(crlf, UsingsInput())));
+
+        Assert.That(await SortUsingsAsync(), Is.EqualTo(Src(crlf, UsingsExpected())));
+    }
+
+    [Test]
+    public async Task SortUsings_LfDocument_ResultHasNoCarriageReturn()
+    {
+        SetFiles(("Test.cs", Src(false, UsingsInput())));
+
+        Assert.That(await SortUsingsAsync(), Does.Not.Contain("\r"));
+    }
+
+    [Test]
+    public async Task SortUsings_CrlfDocument_ResultHasNoBareLineFeed()
+    {
+        SetFiles(("Test.cs", Src(true, UsingsInput())));
+
+        Assert.That((await SortUsingsAsync()).Replace("\r\n", ""), Does.Not.Contain("\n"));
+    }
+
+    // Stray CRLF on: the header comment (leading trivia of the first using), the blank line after the usings, an
+    // untouched namespace line and an untouched member line.
+    [TestCase("// header   comment\n", "// header   comment\n")]
+    [TestCase("using System;\n\n", "using System.Text;\n\n")]
+    [TestCase("namespace   N\n", "namespace   N\n")]
+    [TestCase("    public class   C { }\n", "    public class   C { }\n")]
+    public async Task SortUsings_MixedEol_StrayCrlfLineKeepsItsTerminator(string inputAnchor, string expectedAnchor)
+    {
+        SetFiles(("Test.cs", WithStrayCrlf(Src(false, UsingsInput()), inputAnchor)));
+
+        Assert.That(await SortUsingsAsync(), Is.EqualTo(WithStrayCrlf(Src(false, UsingsExpected()), expectedAnchor)));
+    }
+
+    // ================================================================ ExtractMethodSafeAsync
+
+    private static string[] ExtractInput() =>
+    [
+        "public class C",
+        "{",
+        "    // keep   this   comment",
+        "    private   int _n;",
+        "",
+        "    public void Run(int a)",
+        "    {",
+        "        // before",
+        "        _n  =  a  +  1;",
+        "        _n  =  _n * 2;",
+        "    }",
+        "",
+        "    private int   Helper( ) { return  1; }",
+        "}",
+        "",
+    ];
+
+    // Pre-existing quirk pinned as-is (not part of this slice): the new method lands after the last member behind
+    // two blank lines, and the whole annotated block is re-spaced (`_n  =  _n * 2;` loses its double spaces).
+    private static string[] ExtractExpected() =>
+    [
+        "public class C",
+        "{",
+        "    // keep   this   comment",
+        "    private   int _n;",
+        "",
+        "    public void Run(int a)",
+        "    {",
+        "        // before",
+        "        Step(a);",
+        "        _n = _n * 2;",
+        "    }",
+        "",
+        "    private int   Helper( ) { return  1; }",
+        "",
+        "",
+        "    private void Step(int a)",
+        "    {",
+        "        _n = a + 1;",
+        "    }",
+        "}",
+        "",
+    ];
+
+    private async Task<string> ExtractAsync()
+    {
+        var result = await _engine.ExtractMethodSafeAsync("Test.cs", "Step", "_n  =  a  +  1;");
+        Assert.That(result.IsError, Is.False, result.Error);
+        return result.UpdatedContent!;
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task ExtractMethod_UntouchedCodeKeepsIrregularSpacing_ByteExact(bool crlf)
+    {
+        SetFiles(("Test.cs", Src(crlf, ExtractInput())));
+
+        Assert.That(await ExtractAsync(), Is.EqualTo(Src(crlf, ExtractExpected())));
+    }
+
+    [Test]
+    public async Task ExtractMethod_LfDocument_ResultHasNoCarriageReturn()
+    {
+        SetFiles(("Test.cs", Src(false, ExtractInput())));
+
+        Assert.That(await ExtractAsync(), Does.Not.Contain("\r"));
+    }
+
+    [Test]
+    public async Task ExtractMethod_CrlfDocument_ResultHasNoBareLineFeed()
+    {
+        SetFiles(("Test.cs", Src(true, ExtractInput())));
+
+        Assert.That((await ExtractAsync()).Replace("\r\n", ""), Does.Not.Contain("\n"));
+    }
+
+    // Stray CRLF on: a field line far from the edit, the method signature line before the annotated block, a
+    // comment line inside the block, and an untouched member after the new method.
+    [TestCase("    private   int _n;\n")]
+    [TestCase("    public void Run(int a)\n")]
+    [TestCase("        // before\n")]
+    [TestCase("    private int   Helper( ) { return  1; }\n")]
+    public async Task ExtractMethod_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
+    {
+        SetFiles(("Test.cs", WithStrayCrlf(Src(false, ExtractInput()), anchor)));
+
+        Assert.That(await ExtractAsync(), Is.EqualTo(WithStrayCrlf(Src(false, ExtractExpected()), anchor)));
+    }
+}

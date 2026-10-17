@@ -215,14 +215,14 @@ public class MsToolAugmentEngine
             .WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.CarriageReturnLineFeed, SyntaxFactory.CarriageReturnLineFeed))
             .WithTrailingTrivia(currentField.GetTrailingTrivia());
 
-        var annotation = new SyntaxAnnotation();
+        var annotation = Formatter.Annotation;
         var annotatedReplacements = new SyntaxNode[]
         {
             backingField.WithAdditionalAnnotations(annotation),
             property.WithAdditionalAnnotations(annotation)
         };
         var finalRoot = renamedRoot.ReplaceNode(currentField, annotatedReplacements);
-        var formattedDoc = await Formatter.FormatAsync(doc.WithSyntaxRoot(finalRoot), annotation, cancellationToken: cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(doc, finalRoot, cancellationToken);
         return MsAugmentResult.Ok((await formattedDoc.GetTextAsync(cancellationToken)).ToString());
     }
 
@@ -607,7 +607,7 @@ public class MsToolAugmentEngine
             .OrderBy(u => !IsSystemUsing(u))     // System.* first
             .ThenBy(u => u.Name?.ToString() ?? u.ToString(), StringComparer.OrdinalIgnoreCase);
 
-        var annotation = new SyntaxAnnotation();
+        var annotation = Formatter.Annotation;
         var newUsings = SyntaxFactory.List(sorted.Select((u, idx) =>
         {
             // Clean up trivia -> each using on its own line, no extra blanks
@@ -620,7 +620,7 @@ public class MsToolAugmentEngine
         }));
 
         var newRoot = root.WithUsings(newUsings);
-        var formattedDoc = await Formatter.FormatAsync(doc.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(doc, newRoot, cancellationToken);
         var updatedContent = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
 
         if (writeToFile)
@@ -1803,7 +1803,7 @@ public class MsToolAugmentEngine
         newStmts.Add(callStmt);
         newStmts.AddRange(stmtList.Skip(firstIdx + stmtsInSelection.Count));
 
-        var editAnnotation = new SyntaxAnnotation();
+        var editAnnotation = Formatter.Annotation;
         var newBlock = block.WithStatements(SyntaxFactory.List(newStmts)).WithAdditionalAnnotations(editAnnotation);
         var newRoot1 = root.ReplaceNode(block, newBlock);
 
@@ -1825,7 +1825,7 @@ public class MsToolAugmentEngine
         var updatedType = newContainingType.AddMembers(methodWithTrivia);
         var finalRoot = newRoot1.ReplaceNode(newContainingType, updatedType);
 
-        var formattedDoc = await Formatter.FormatAsync(doc.WithSyntaxRoot(finalRoot), editAnnotation, cancellationToken: cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(doc, finalRoot, cancellationToken);
         return MsAugmentResult.Ok((await formattedDoc.GetTextAsync(cancellationToken)).ToString());
     }
 }
