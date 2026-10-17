@@ -8,10 +8,10 @@ namespace RoslynSentinel.Tests.Asyncify;
 
 /// <summary>
 /// Tests for <see cref="AsyncOptimizationEngine.ConvertToAsyncBridgeAsync"/>.
-/// Verifies the three-step Asyncify-bridge transformation:
+/// Verifies the three-step AsyncifyTool-bridge transformation:
 ///   1. async overload created with original body + CancellationToken + async modifier
 ///   2. original sync method body replaced with bridge call (.GetAwaiter().GetResult())
-///   3. [Obsolete("Asyncify-bridge: call XxxAsync instead.", false)] added to original
+///   3. [Obsolete("AsyncifyTool-bridge: call XxxAsync instead.", false)] added to original
 /// </summary>
 [TestFixture]
 [Category("AsyncOptimizationEngine")] // sentinel:auto-category

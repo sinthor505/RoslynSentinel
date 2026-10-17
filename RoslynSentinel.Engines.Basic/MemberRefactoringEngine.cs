@@ -3304,7 +3304,7 @@ public class MemberRefactoringEngine
                         "Member(remove) only removes class-level members (methods, properties, fields, constructors, " +
                         "events, indexers) -- it does not support removing type declarations (classes, interfaces, " +
                         "structs, records, enums, or enum members), and skipPrecheck does not change this. " +
-                        "To remove an unreferenced type declaration, use SafeDeleteUnusedSymbol. If it still has callers, update or remove those callers first and then use SafeDeleteUnusedSymbol; " +
+                        "To remove an unreferenced type declaration, use DeleteUnusedSymbol. If it still has callers, update or remove those callers first and then use DeleteUnusedSymbol; " +
                         "edit the file's raw text with ReplaceSnippet or ApplyDiff only as a last resort."
                 };
             }

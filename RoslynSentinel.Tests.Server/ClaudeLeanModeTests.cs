@@ -1,5 +1,5 @@
 // Coverage for proposal_reduce_tool_schema_token_cost.md Step 4b, slice 4b-1: the opt-in, exclusive
-// "claude-lean" mode exposes exactly the proposal's Core tools plus McpToolsetControl, slice 4b-2
+// "claude-lean" mode exposes exactly the proposal's Core tools plus McpToolsetControlTool, slice 4b-2
 // (a per-tool allow-list on top of the
 // class registry), "claude" keeps its pre-existing tool set, and "all" never expands to claude-lean.
 // Counts are never hand-copied: CoreTools below is the one explicit oracle for the claude-lean surface and every
@@ -42,7 +42,7 @@ public class ClaudeLeanModeTests
         "McpToolsetControl", "SubAgent",
     ];
 
-    /// <summary>CoreTools minus SubAgent, which is declared in Tools.Advanced and never registered by the Basic server.</summary>
+    /// <summary>CoreTools minus SubAgentTool, which is declared in Tools.Advanced and never registered by the Basic server.</summary>
     private static readonly string[] BasicCoreTools = CoreTools.Where(t => t != "SubAgent").ToArray();
 
     /// <summary>The Advanced server's tool set for --mode claude, captured before claude-lean existed.</summary>
@@ -50,7 +50,7 @@ public class ClaudeLeanModeTests
     [
         "ApplyDiff", "ApplyUnifiedDiff", "Build", "ChangeAccessibility",
         "ChangeSignature", "ConstructorParameter", "ConvertAnonymousToNamed", "CreateFile", "CreateProject",
-        "DeleteFile", "ExtractLocalVariable", "ExtractMembers", "ExtractMethodSafe", "ExternalFileDrift", "Features",
+        "DeleteFile", "ExtractLocalVariable", "ExtractMembers", "ExtractMethod", "ExternalFileDrift", "Features",
         "FindReferences", "GetBestInsertionPoint", "GetDiagnostics", "GetFileOutline", "GetLargeResult",
         "GetMethodSource", "GetOperationDetail", "GetTypeInfo", "GetWorkspaceHealth", "Git",
         "Inline", "InlineClass", "InspectSymbol", "Introduce", "IntroduceParameterObject",
@@ -59,7 +59,7 @@ public class ClaudeLeanModeTests
         "McpServerStatus", "Member", "MethodSignature", "ModifyAttribute", "ModifyBaseType",
         "ModifyEnum", "ModifyModifier", "MoveAllTypesToFiles", "MoveMember", "MoveType",
         "PreviewRenameImpact", "ProjectDoc", "QuerySymbolRelationships", "ReadFile", "RenameSymbol",
-        "ReplaceSnippet", "RetryFailedChanges", "RunTest", "SafeDeleteUnusedSymbol", "Search",
+        "ReplaceSnippet", "RetryFailedChanges", "RunTest", "DeleteUnusedSymbol", "Search",
         "SplitProjectByFolder", "SummaryComment", "SyncInterface", "SyncTypeAndFilename", "UndoLastApply",
         "UsingDirective", "WrapRange", "WriteFile",
     ];
@@ -119,7 +119,7 @@ public class ClaudeLeanModeTests
     [TestCase(false)]
     public async Task ClaudeLean_ExposesExactlyTheCoreToolsForItsFlavor(bool advanced)
     {
-        // SubAgent is Advanced-only, so the Basic claude-lean surface is one tool smaller (see BasicCoreTools).
+        // SubAgentTool is Advanced-only, so the Basic claude-lean surface is one tool smaller (see BasicCoreTools).
         var expected = advanced ? CoreTools : BasicCoreTools;
         var names = await ListToolNamesAsync(advanced, "claude-lean");
 

@@ -3,7 +3,7 @@ namespace RoslynSentinel.Tests.Server;
 /// <summary>
 /// Guards the one invariant that matters here: advice never names a tool the server didn't
 /// register. Run 20260910-013550-398 livelocked for 24 turns on a size error whose only stated
-/// escape hatch was WriteFile, which that run had gated off -> the advice was unfollowable.
+/// escape hatch was WriteFileTool, which that run had gated off -> the advice was unfollowable.
 /// </summary>
 /// <remarks>
 /// Plain unit tests with no server bootstrap: <see cref="WriteToolAdviceHelper"/> takes its tool
@@ -29,8 +29,8 @@ public class WriteToolAdviceHelperTests
     [Test]
     public void AdviseForOversizedEdit_AllToolsExposed_NamesMemberReplaceFirst()
     {
-        // An oversized snippet is almost always a whole-member rewrite, so Member(replace) must
-        // lead - the old WriteFile-first order steered agents to a whole-file rewrite instead.
+        // An oversized snippet is almost always a whole-member rewrite, so MemberTool(replace) must
+        // lead - the old WriteFileTool-first order steered agents to a whole-file rewrite instead.
         var helper = new WriteToolAdviceHelper([WholeFileWriteClass, RefactoringClass]);
 
         var advice = helper.AdviseForOversizedEdit("ReplaceSnippet");
@@ -85,8 +85,8 @@ public class WriteToolAdviceHelperTests
     [Test]
     public void AdviseForOversizedEdit_NoWholeFileWriteClass_FallsBackToStructuralTools()
     {
-        // The exact run-398 gating: WholeFileWriteTools is off, so all four of WriteFile,
-        // DeleteFile, ApplyDiff and ApplyUnifiedDiff are unmentionable at once.
+        // The exact run-398 gating: WholeFileWriteTools is off, so all four of WriteFileTool,
+        // DeleteFileTool, ApplyDiffTool and ApplyUnifiedDiffTool are unmentionable at once.
         var helper = new WriteToolAdviceHelper([RefactoringClass]);
 
         var advice = helper.AdviseForOversizedEdit("ReplaceSnippet");

@@ -89,7 +89,7 @@ public sealed class WriteToolAdviceHelper
             ["Member"] = "RefactoringStructuralTools",
             ["RenameSymbol"] = "RefactoringStructuralTools",
             ["ChangeSignature"] = "RefactoringStructuralTools",
-            ["ExtractMethodSafe"] = "RefactoringStructuralTools",
+            ["ExtractMethod"] = "RefactoringStructuralTools",
         };
 
     private readonly HashSet<string> _activeToolClasses;
@@ -153,7 +153,7 @@ public sealed class WriteToolAdviceHelper
             primaryRoute = WriteEscapeRoute.StructuredEdit;
         }
 
-        var otherStructuralTools = new[] { "RenameSymbol", "ChangeSignature", "ExtractMethodSafe" }
+        var otherStructuralTools = new[] { "RenameSymbol", "ChangeSignature", "ExtractMethod" }
             .Where(IsExposed).ToArray();
         if (otherStructuralTools.Length > 0)
         {

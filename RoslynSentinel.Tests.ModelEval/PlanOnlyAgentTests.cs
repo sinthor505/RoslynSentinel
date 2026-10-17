@@ -19,8 +19,8 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 
 /// <summary>
 /// Same fixture/bug/prompt ambiguity as <see cref="WholeFileRewriteAgentTests"/>'s
-/// MinimalGuidanceDisambiguated test, but ApplyDiff/ChangeAccessibility/ModifyModifier/CreateFile/
-/// DeleteFile are blocked by a request filter -> the model can only read, search, and list, then must
+/// MinimalGuidanceDisambiguated test, but ApplyDiffTool/ChangeAccessibilityTool/ModifyModifierTool/CreateFileTool/
+/// DeleteFileTool are blocked by a request filter -> the model can only read, search, and list, then must
 /// state its plan in its final response instead of executing it. Cheaper (fewer turns, no build/edit
 /// round-trips) than the full execute-and-verify tests, and isolates whether the "private" fork found
 /// in project_minimalguidance_reasoning_pattern_analysis already exists at planning time, before any
@@ -38,7 +38,7 @@ public class PlanOnlyAgentTests
     // Same task framing as WholeFileRewriteAgentTests.DisambiguatedMinimalGuidanceUserPromptTemplate,
     // but asks for a plan instead of a fix, and is explicit that no edit tools exist -> without this,
     // the shared AgentSystemPrompts.CodingAgent's workflow step 5 ("report what you changed") plus the
-    // model's own instinct to just try ApplyDiff would otherwise produce confused turns where it
+    // model's own instinct to just try ApplyDiffTool would otherwise produce confused turns where it
     // repeatedly attempts a blocked tool instead of answering the question actually being asked here.
     private const string PlanOnlyUserPromptTemplate = """
         # Task: Plan a fix for a bug in FixtureHelpers/BlockConverter.cs
@@ -70,8 +70,8 @@ public class PlanOnlyAgentTests
     // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
     // AddRoslynSentinelToolsBasic checks -> see WholeFileRewriteAgentTests.ActiveModes for why both
     // modes are needed even though this fixture blocks every mutating tool they'd otherwise expose:
-    // ApplyDiff/Build/ReadFile/ListAll/Search all live in SentinelWorkspaceTools (gated by
-    // "Workspace"), so there is no mode combination that yields read-only tools without ApplyDiff ->
+    // ApplyDiffTool/BuildTool/ReadFileTool/ListAllTool/Search all live in SentinelWorkspaceTools (gated by
+    // "Workspace"), so there is no mode combination that yields read-only tools without ApplyDiffTool ->
     // the BlockedToolFilter below is what actually enforces "no edits", not the mode selection.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -80,8 +80,8 @@ public class PlanOnlyAgentTests
 
     // Tool names blocked for this fixture. Matches WholeFileRewriteAgentTests's fixture (BlockConverter/
     // BlockEditHelpers/Shape.cs) so the same investigation surface is available read-only; blocks every
-    // mutating tool exposed by ActiveModes above, not just ApplyDiff/ApplyUnifiedDiff, so the model
-    // can't route around the restriction via ChangeAccessibility/ModifyModifier/WriteFile/DeleteFile
+    // mutating tool exposed by ActiveModes above, not just ApplyDiffTool/ApplyUnifiedDiffTool, so the model
+    // can't route around the restriction via ChangeAccessibilityTool/ModifyModifierTool/WriteFileTool/DeleteFileTool
     // either.
     private static readonly HashSet<string> BlockedToolNames = new(StringComparer.Ordinal)
     {
@@ -228,7 +228,7 @@ public class PlanOnlyAgentTests
     }
 
     /// <summary>
-    /// The model investigates and states a plan, but never calls ApplyDiff -> scores the plan's own
+    /// The model investigates and states a plan, but never calls ApplyDiffTool -> scores the plan's own
     /// text for the same "private"/"public"/"call" vs. "copy"/"pattern" fork found in
     /// project_minimalguidance_reasoning_pattern_analysis. Per WholeFileRewriteAgentTests.
     /// AssertFixApplied's flipped scoring, "make it public and call it" is now the CORRECT plan

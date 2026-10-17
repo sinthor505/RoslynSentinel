@@ -1,5 +1,5 @@
 // Coverage for the includeTests parameter of SymbolNavigationEngine.LocateSymbolAsync (engine layer)
-// and SymbolNavigationImpl.LocateSymbol (impl layer). With includeTests: false and no projectName or
+// and SymbolNavigationImpl.LocateSymbolTool (impl layer). With includeTests: false and no projectName or
 // filePath, symbols declared in test projects (TestProjectDetector.IsTestProject) are not searched; an
 // explicit projectName naming a test project still finds its symbols.
 

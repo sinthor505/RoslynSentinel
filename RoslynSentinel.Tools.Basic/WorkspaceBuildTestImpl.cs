@@ -123,7 +123,7 @@ public class WorkspaceBuildTestImpl
     // them for every run on purpose - other consumers of the engine result may want them, and the
     // engine should not need to change for that - so the decision to drop them is made here, at the
     // tool boundary, where response size is what matters. On a clean run they only restate the
-    // summary: for a solution-wide RunTest they were ~17 KB of dotnet output (40 lines x 10 projects)
+    // summary: for a solution-wide RunTestTool they were ~17 KB of dotnet output (40 lines x 10 projects)
     // and alone pushed the response over LargeResultHelper.OffloadThresholdBytes, forcing the
     // caller to page a saved file just to read the totals.
     private static TestRunResult WithoutTailsWhenClean(TestRunResult run)
@@ -147,7 +147,7 @@ public class WorkspaceBuildTestImpl
 
     // Short inline headline. The generic offload filter relays StatusMessage into its pointer
     // envelope, so even a response too large to inline (hundreds of failures) still carries the
-    // totals without a GetLargeResult round trip.
+    // totals without a GetLargeResultTool round trip.
     public static string SummarizeTestRun(TestRunResult run)
     {
         var headline =
@@ -206,7 +206,7 @@ public class WorkspaceBuildTestImpl
         }
     }
 
-    // Stores the uncapped error/warning lists for GetLargeResult. A storage failure must not turn a finished
+    // Stores the uncapped error/warning lists for GetLargeResultTool. A storage failure must not turn a finished
     // build report into a tool error, so it degrades to "no id".
     private async Task<string?> StoreFullDiagnosticsAsync(BuildFullDiagnostics fullDiagnostics, CancellationToken cancellationToken)
     {
@@ -270,7 +270,7 @@ public class WorkspaceBuildTestImpl
                 // Surface external drift: a failed build may be caused by a file changed on disk under us.
                 var driftHint = DriftMessages.BuildHint(_workspaceManager.GetExternalFileChanges());
                 var failureMessage = driftHint is not null ? buildSummary + " " + driftHint : buildSummary;
-                // The build ran and failed: report isError:true like RunTest does for an incomplete run, but keep the
+                // The build ran and failed: report isError:true like RunTestTool does for an incomplete run, but keep the
                 // BuildResult payload (inline or offloaded) so the caller still gets the error details.
                 return buildToolResult with { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, failureMessage), Findings = result.Findings, StatusMessage = failureMessage };
             }

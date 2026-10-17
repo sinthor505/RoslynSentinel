@@ -16,8 +16,8 @@ namespace RoslynSentinel.Tests.Advanced;
 
 /// <summary>
 /// Extends the harness proven in <see cref="McpTasksHarnessTests"/> (see
-/// [[project_mcp_tasks_test_harness_plan]]) to <c>BulkComment</c> -> a task-eligible tool that does
-/// real work (LLM-generated doc comments applied to real files), rather than <c>Features</c>' pure
+/// [[project_mcp_tasks_test_harness_plan]]) to <c>BulkCommentTool</c> -> a task-eligible tool that does
+/// real work (LLM-generated doc comments applied to real files), rather than <c>McpServerFeaturesControlTool</c>' pure
 /// delay. Uses <see cref="RoslynSentinel.Tests.TestSolutionFixture"/> (a temp-directory copy of
 /// Samples/ContosoOrders) loaded through a real <c>PersistentWorkspaceManager.LoadSolutionAsync</c>,
 /// and a <see cref="FakeLlmClient"/> DI override so no real LM Studio process is required and the
@@ -133,11 +133,11 @@ public class McpTasksHarnessBulkCommentTests
     {
         // Scoped to ContosoOrders.Core only: ContosoOrders.Tests references xunit via NuGet, and
         // TestSolutionFixture copies only .sln/.csproj/.cs/.md files (no restore), so that project
-        // always has pre-existing unresolved-reference errors. BulkComment's line-shifting edits
+        // always has pre-existing unresolved-reference errors. BulkCommentTool's line-shifting edits
         // (inserting [ContentHash] attributes/doc comments) then make ValidationEngine's diagnostic
         // delta miscount those pre-existing errors as newly introduced (its dedup key includes line
         // number, which every edit above a diagnostic shifts) -> a real latent bug in the delta
-        // comparison, but orthogonal to this harness. A real (non-dryRun) BulkComment run scoped to
+        // comparison, but orthogonal to this harness. A real (non-dryRun) BulkCommentTool run scoped to
         // a project that already compiles cleanly is what a realistic caller would do, and sidesteps
         // it entirely.
         var requestParams = new CallToolRequestParams
@@ -159,7 +159,7 @@ public class McpTasksHarnessBulkCommentTests
     [Test]
     public async Task RealRun_FilenameCollisionWithGeneratorHelper_StillInjectsRealAttributeAndComments()
     {
-        // Reproduces the "BulkComment fails to apply any comments" incident: a file literally named
+        // Reproduces the "BulkCommentTool fails to apply any comments" incident: a file literally named
         // ContentHashAttribute.cs sitting in the target project, but declaring an unrelated type
         // (mirroring RoslynSentinel.Common's own ContentHashAttributeGenerator.cs, which used to be
         // misnamed ContentHashAttribute.cs). The old filename-based "already has the attribute" check

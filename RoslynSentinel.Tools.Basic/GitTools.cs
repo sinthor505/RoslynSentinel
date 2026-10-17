@@ -3,8 +3,6 @@ using System.ComponentModel;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
-using RoslynSentinel;
-
 namespace RoslynSentinel.Tools.Basic;
 
 [McpServerToolType]
@@ -25,7 +23,7 @@ public class GitTools
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
     [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state. tag/stash/worktree take an action. stage accepts hunkIds+hunkFingerprint or lineRange to stage part of one file.")]
-    public async Task<SentinelCallToolResult<object>> Git(
+    public async Task<SentinelCallToolResult<object>> GitTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters). tag: needs action (list|create|delete); create needs tagName. stash: needs action (list|push|apply|pop); apply/pop need stashIndex. worktree: needs action (list|add|remove); add needs worktreePath and branchName; remove needs worktreePath. hunks: list the unstaged hunks of one file (files: one path) with ids and a fingerprint, to feed stage's hunkIds.")]
         GitOperation operation,

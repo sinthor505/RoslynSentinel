@@ -25,8 +25,8 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// <see cref="WholeFileRewriteAgentTests"/>/<see cref="SizeThresholdAgentTests"/>'s single bug-fix
 /// scenario. The prompt states the three outcomes and constraints, not exact tool calls or exact
 /// parameters, matching the flexibility <c>MinimalGuidance</c>/<c>Disambiguated</c> give elsewhere ->
-/// the model may use dedicated refactor tools (ExtractMethodSafe, RenameSymbol, ChangeAccessibility/
-/// ModifyModifier) or ApplyDiff for any step, its choice.
+/// the model may use dedicated refactor tools (ExtractMethodTool, RenameSymbolTool, ChangeAccessibilityTool/
+/// ModifyModifierTool) or ApplyDiffTool for any step, its choice.
 ///
 /// Updated 2026-09-05 after 2/2 runs in a batch independently produced the same wrong-but-plausible
 /// extraction: step 1's original wording ("extract that duplicated discount-amount calculation")
@@ -111,17 +111,17 @@ public class OrderPricingRefactorAgentTests
         """;
 
     // "Refactor" and "Workspace" are the exact mode strings AddRoslynSentinelToolsBasic checks ->
-    // together they register ApplyDiff/Build/ReadFile/Search/ListSolutionItems plus
-    // SentinelRefactoringTools (ExtractMethodSafe, RenameSymbol, ChangeAccessibility,
-    // ModifyModifier), without pulling in Advanced's larger tool catalog.
+    // together they register ApplyDiffTool/BuildTool/ReadFileTool/Search/ListSolutionItemsTool plus
+    // SentinelRefactoringTools (ExtractMethodTool, RenameSymbolTool, ChangeAccessibilityTool,
+    // ModifyModifierTool), without pulling in Advanced's larger tool catalog.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
         "Refactor", "Workspace", "WorkspaceFileContent",
     };
 
     // See OrderPricingRefactorChainAgentTests' identical toggle for the rationale -> an isolation
-    // experiment comparing this rung with and without the WriteFile whole-file-rewrite escape
-    // hatch available, keeping ApplyDiff/ApplyUnifiedDiff/RenameSymbol/ChangeSignature exposed.
+    // experiment comparing this rung with and without the WriteFileTool whole-file-rewrite escape
+    // hatch available, keeping ApplyDiffTool/ApplyUnifiedDiffTool/RenameSymbolTool/ChangeSignatureTool exposed.
     private static readonly bool BlockWriteFile = false;
 
     private IHost _host = null!;

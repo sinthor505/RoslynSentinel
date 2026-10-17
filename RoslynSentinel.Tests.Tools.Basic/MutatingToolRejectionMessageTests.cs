@@ -1,10 +1,10 @@
 // Regression coverage for the write-path chokepoint (ApplyProposedChangesAsync, shared by
-// WriteFile/ApplyDiff/ApplyUnifiedDiff -> see docs/current/project_write_path_chokepoint_unified.md):
+// WriteFileTool/ApplyDiffTool/ApplyUnifiedDiffTool -> see docs/current/project_write_path_chokepoint_unified.md):
 // when a pre-apply compile check rejects a change, the returned error message must go through
-// CompilerErrorLookupHelper, not leak the raw ValidationResult.Diagnostics.ToJson() blob. WriteFile
+// CompilerErrorLookupHelper, not leak the raw ValidationResult.Diagnostics.ToJson() blob. WriteFileTool
 // shipped with the raw-JSON message for a while (fixed 2026-09-05, commit 3a4c521) because nothing
 // asserted on rejection-message *content* -> CompilerErrorLookupHelperTests.cs unit-tests the helper
-// itself but never calls a tool, and CreateFileDeleteFileTests.cs calls WriteFile but every
+// itself but never calls a tool, and CreateFileDeleteFileTests.cs calls WriteFileTool but every
 // validation-adjacent case there uses validateOnApply:false or only asserts on ErrorCode. This file
 // closes that gap for all three mutating tools sharing the chokepoint.
 
@@ -97,7 +97,7 @@ public class MutatingToolRejectionMessageTests
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
         var helperPath = Path.Combine(fixture.SolutionDirectory, "ContosoOrders.Core", "Helper.cs");
-        var result = await wholeFileWriteTools.WriteFile(reason: "test message", WriteFileOperation.ReplaceFile, helperPath, HelperFileContentRenamed);
+        var result = await wholeFileWriteTools.WriteFileTool(reason: "test message", WriteFileOperation.ReplaceFile, helperPath, HelperFileContentRenamed);
 
         AssertRoutedThroughLookupHelper(result);
     }
@@ -120,7 +120,7 @@ public class MutatingToolRejectionMessageTests
         {
             [helperPath] = HelperFileContentRenamed
         };
-        var result = await wholeFileWriteTools.ApplyDiff(reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply, changes: changes);
+        var result = await wholeFileWriteTools.ApplyDiffTool(reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply, changes: changes);
 
         AssertRoutedThroughLookupHelper(result);
     }
@@ -151,7 +151,7 @@ public class MutatingToolRejectionMessageTests
             "+    public static string FormatValue(string value) => value;\n" +
             " }\n";
 
-        var result = await wholeFileWriteTools.ApplyUnifiedDiff(reason: "test message", ProposedChangeAction.apply, filePath: helperPath, unifiedDiff: unifiedDiff);
+        var result = await wholeFileWriteTools.ApplyUnifiedDiffTool(reason: "test message", ProposedChangeAction.apply, filePath: helperPath, unifiedDiff: unifiedDiff);
 
         AssertRoutedThroughLookupHelper(result);
     }

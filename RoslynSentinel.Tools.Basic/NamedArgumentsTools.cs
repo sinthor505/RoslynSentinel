@@ -1,6 +1,7 @@
 using System.ComponentModel;
+
 using Microsoft.Extensions.Logging;
-using RoslynSentinel.Common;
+
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
@@ -44,7 +45,7 @@ public class NamedArgumentsTools
         "Skipped by design: params methods, expression trees (CS0853), delegate invokes, generated code, already-named arguments. " +
         "mode: preview reports per-file counts without writing; apply writes through the compile gate. Mode is mandatory - use preview first. " +
         "Returns per-file call-site and argument counts, plus changeId on apply, or a structured error naming the parameter and a correct value.")]
-    public async Task<SentinelCallToolResult<object>> NamedArguments(
+    public async Task<SentinelCallToolResult<object>> NamedArgumentsTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("solution: all projects. project: the project named by scopeName. file: the file named by scopeName.")] NamedArgumentsScope scope,
         [Description("Project name (scope: project) or file path (scope: file). Must be omitted for scope: solution.")] string? scopeName,

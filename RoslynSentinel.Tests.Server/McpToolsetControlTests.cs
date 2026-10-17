@@ -1,4 +1,4 @@
-// Coverage for proposal_reduce_tool_schema_token_cost.md Step 4b, slice 4b-2: McpToolsetControl switches
+// Coverage for proposal_reduce_tool_schema_token_cost.md Step 4b, slice 4b-2: McpToolsetControlTool switches
 // on-demand toolsets on and off at runtime, only in claude-lean. Three layers:
 //   1. ToolsetService unit tests against a bare McpServerOptions (no host).
 //   2. Schema parity: a tool the service builds is identical to the same tool registered at startup.
@@ -233,14 +233,14 @@ public class McpToolsetControlTests
         var declared = McpToolSchemaPatcher.DiscoverToolMethods(ToolAssemblies).Select(t => t.ToolName).ToHashSet(StringComparer.Ordinal);
         Assert.That(declared, Is.SupersetOf(ToolsetCatalog.AllToolNames));
 
-        var tool = typeof(ToolsetControlTools).GetMethod(nameof(ToolsetControlTools.McpToolsetControl))!;
+        var tool = typeof(ToolsetControlTools).GetMethod(nameof(ToolsetControlTools.McpToolsetControlTool))!;
         string description = ((System.ComponentModel.DescriptionAttribute)Attribute.GetCustomAttribute(tool, typeof(System.ComponentModel.DescriptionAttribute))!).Description;
         foreach (var set in Enum.GetValues<ToolSetName>())
         {
             Assert.That(description, Does.Contain(set.ToString()));
         }
 
-        // Extract*/Inline*/Introduce* are spelled as wildcards in the description; everything else by exact name.
+        // Extract*/InlineSymbolTool*/IntroduceSymbolTool* are spelled as wildcards in the description; everything else by exact name.
         foreach (var name in ToolsetCatalog.AllToolNames.Where(n => !n.StartsWith("Extract") && !n.StartsWith("Inline") && !n.StartsWith("Introduce")))
         {
             Assert.That(description, Does.Contain(name), $"description should list {name}");
@@ -263,7 +263,7 @@ public class McpToolsetControlTests
             service.SetEnabled(set, true);
         }
 
-        // Declaration, ParameterEdit, SemanticFindReplace, NamedArguments, TagTestCategories and QualifyCrefs are the catalog tools --mode claude does not register (they exist
+        // DeclarationTool, ParameterEditTool, SemanticFindReplaceTool, NamedArgumentsTool, TagTestCategoriesTool and QualifyCrefsTool are the catalog tools --mode claude does not register (they exist
         // only as on-demand claude-lean tools or behind their own mode, see DeclarationToolTests, ParameterEditToolTests,
         // SemanticFindReplaceToolTests and NamedArgumentsToolTests), so there is no startup instance to compare them with.
         foreach (var name in ToolsetCatalog.AllToolNames.Where(n => n is not ("Declaration" or "ParameterEdit" or "SemanticFindReplace" or "NamedArguments" or "TagTestCategories" or "QualifyCrefs")))
@@ -441,7 +441,7 @@ public class McpToolsetControlTests
     public async Task Lean_ClientOn20260728_GetsListChangedOnlyOverASubscription()
     {
         // A client on the 2026-07-28 revision is notified only through a subscriptions/listen stream it
-        // opened; without one the server must not broadcast. So McpToolsetControl still works there (the tools are
+        // opened; without one the server must not broadcast. So McpToolsetControlTool still works there (the tools are
         // callable and a re-list shows them), and a client that subscribes is told.
         await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean", protocolVersion: null);
         Assert.That(live.Client.NegotiatedProtocolVersion, Is.EqualTo("2026-07-28"));
@@ -481,7 +481,7 @@ public class McpToolsetControlTests
     {
         await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean");
 
-        // GetWorkspaceHealth lives in a class whose dependencies are registered for dynamic use only. It was not listed before the enable.
+        // GetWorkspaceHealthTool lives in a class whose dependencies are registered for dynamic use only. It was not listed before the enable.
         await live.ToggleAsync("projectAdmin", enabled: true);
 
         var health = await live.CallAsync("GetWorkspaceHealth", new() { ["reason"] = Reason });
@@ -587,7 +587,7 @@ public class McpToolsetControlTests
         Assert.That(live.ListChangedCount, Is.Zero);
     }
 
-    // ---- Declaration (step 4a-1): merges ModifyModifier, ChangeAccessibility, ModifyAttribute and ModifyBaseType; on-demand in claude-lean only ----
+    // ---- DeclarationTool (step 4a-1): merges ModifyModifierTool, ChangeAccessibilityTool, ModifyAttributeTool and ModifyBaseTypeTool; on-demand in claude-lean only ----
 
     private static readonly string[] DeclarationOriginals = ["ModifyModifier", "ChangeAccessibility", "ModifyAttribute", "ModifyBaseType"];
 
@@ -661,18 +661,18 @@ public class McpToolsetControlTests
         int Size(Type type, string method) =>
             Json(McpToolSchemaPatcher.CreateSentinelTool(type.GetMethod(method)!, type, services)).Length;
 
-        int declaration = Size(typeof(DeclarationTools), nameof(DeclarationTools.Declaration));
-        int modifier = Size(typeof(RefactoringStructuralTools), nameof(RefactoringStructuralTools.ModifyModifier));
-        int accessibility = Size(typeof(RefactoringSignatureTools), nameof(RefactoringSignatureTools.ChangeAccessibility));
-        int attribute = Size(typeof(RefactoringStructuralTools), nameof(RefactoringStructuralTools.ModifyAttribute));
-        int baseType = Size(typeof(RefactoringStructuralTools), nameof(RefactoringStructuralTools.ModifyBaseType));
+        int declaration = Size(typeof(DeclarationTools), nameof(DeclarationTools.DeclarationTool));
+        int modifier = Size(typeof(RefactoringStructuralTools), nameof(RefactoringStructuralTools.ModifyModifierTool));
+        int accessibility = Size(typeof(RefactoringSignatureTools), nameof(RefactoringSignatureTools.ChangeAccessibilityTool));
+        int attribute = Size(typeof(RefactoringStructuralTools), nameof(RefactoringStructuralTools.ModifyAttributeTool));
+        int baseType = Size(typeof(RefactoringStructuralTools), nameof(RefactoringStructuralTools.ModifyBaseTypeTool));
         int originals = modifier + accessibility + attribute + baseType;
         TestContext.Out.WriteLine($"Emitted schema chars: Declaration={declaration}, ModifyModifier={modifier}, ChangeAccessibility={accessibility}, ModifyAttribute={attribute}, ModifyBaseType={baseType}, originals={originals}");
 
         Assert.That(declaration, Is.LessThan(originals));
     }
 
-    // ---- ParameterEdit (step 4a-2): merges MethodSignature and ConstructorParameter; on-demand in claude-lean only ----
+    // ---- ParameterEditTool (step 4a-2): merges MethodSignatureTool and ConstructorParameterTool; on-demand in claude-lean only ----
 
     private static readonly string[] ParameterEditOriginals = ["MethodSignature", "ConstructorParameter"];
 
@@ -745,9 +745,9 @@ public class McpToolsetControlTests
         int Size(Type type, string method) =>
             Json(McpToolSchemaPatcher.CreateSentinelTool(type.GetMethod(method)!, type, services)).Length;
 
-        int parameterEdit = Size(typeof(ParameterEditTools), nameof(ParameterEditTools.ParameterEdit));
-        int methodSignature = Size(typeof(RefactoringSignatureTools), nameof(RefactoringSignatureTools.MethodSignature));
-        int constructorParameter = Size(typeof(RefactoringSignatureTools), nameof(RefactoringSignatureTools.ConstructorParameter));
+        int parameterEdit = Size(typeof(ParameterEditTools), nameof(ParameterEditTools.ParameterEditTool));
+        int methodSignature = Size(typeof(RefactoringSignatureTools), nameof(RefactoringSignatureTools.MethodSignatureTool));
+        int constructorParameter = Size(typeof(RefactoringSignatureTools), nameof(RefactoringSignatureTools.ConstructorParameterTool));
         int originals = methodSignature + constructorParameter;
         TestContext.Out.WriteLine($"Emitted schema chars: ParameterEdit={parameterEdit}, MethodSignature={methodSignature}, ConstructorParameter={constructorParameter}, originals={originals}");
 

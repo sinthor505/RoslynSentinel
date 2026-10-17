@@ -38,7 +38,7 @@ public class ToolArgumentCaseNormalizationTests
 
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace" };
 
-    // Only this test fixture's target: a single method for FindReferences to resolve, so a
+    // Only this test fixture's target: a single method for FindReferencesTool to resolve, so a
     // successful lookup is unambiguous proof the renamed argument actually reached the tool.
     private const string TargetMethodName = "Target";
 
@@ -124,7 +124,7 @@ public class ToolArgumentCaseNormalizationTests
         // "filepath" instead of the declared "filePath" - the exact mistake from the live
         // transcript that prompted this fix. If normalization did not reach the SDK's binder, this
         // call would either be rejected as an unknown parameter (post-Validate) or silently ignored
-        // and FindReferences would run with filePath unset, both distinguishable from the
+        // and FindReferencesTool would run with filePath unset, both distinguishable from the
         // assertions below.
         var result = await _client.CallToolAsync(
             "FindReferences",

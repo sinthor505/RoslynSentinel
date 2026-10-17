@@ -231,7 +231,7 @@ public static class ToolArgumentValidator
     /// </para>
     /// <para>
     /// Only case-only differences are normalized. Any other near-miss (a genuine typo, or a
-    /// same-length name like the "paths"/"files" Git incident - see docs/current/blockers -
+    /// same-length name like the "paths"/"files" GitTool incident - see docs/current/blockers -
     /// where the caller reached for a plausible but wrong parameter) is left for
     /// <see cref="Validate"/> to reject with a suggestion, because guessing past anything more than
     /// a case difference risks silently applying the wrong parameter rather than the misspelled
@@ -309,7 +309,7 @@ public static class ToolArgumentValidator
     /// only for pairs that mean the same thing and take the same type: an alias that merely
     /// resembles the right parameter would silently run the tool with a different meaning, which is
     /// the failure the unknown-parameter rejection exists to prevent. Per-tool on purpose - the same
-    /// word is a real, different parameter elsewhere (e.g. "memberName" is declared on Member).
+    /// word is a real, different parameter elsewhere (e.g. "memberName" is declared on MemberTool).
     /// Applied by <see cref="ApplyParameterAliases"/>; alias keys match case-insensitively.
     /// </summary>
     public static readonly System.Collections.Generic.IReadOnlyDictionary<string, System.Collections.Generic.IReadOnlyDictionary<string, string>> ParameterAliases =
@@ -658,7 +658,7 @@ public static class ToolArgumentValidator
     /// name is simply never read. The tool then runs on its defaults and returns
     /// <c>success:true</c> with the wrong result. That silent-wrong-behaviour class is the hardest
     /// of all for a weak model to recover from: there is no error to react to. Confirmed live ->
-    /// <c>Git(operation:"stage", paths:"…")</c> quietly staged tracked files only, because
+    /// <c>GitTool(operation:"stage", paths:"…")</c> quietly staged tracked files only, because
     /// <c>stage</c> reads <c>files</c> and <c>paths</c> belonged to <c>diff</c>.
     /// </description></item>
     /// <item><description>
@@ -670,9 +670,9 @@ public static class ToolArgumentValidator
     /// </description></item>
     /// <item><description>
     /// A <b>type-mismatched or invalid-enum argument throws a raw <c>JsonException</c>.</b> Passing
-    /// an array where the schema declares a scalar <c>string</c> (e.g. <c>Git(operation:"stage",
+    /// an array where the schema declares a scalar <c>string</c> (e.g. <c>GitTool(operation:"stage",
     /// files:["a","b"])</c> -> the plural parameter name invites this), or a string that isn't one of
-    /// the schema's declared <c>enum</c> members (e.g. <c>Git(operation:"show")</c>, not a real
+    /// the schema's declared <c>enum</c> members (e.g. <c>GitTool(operation:"show")</c>, not a real
     /// <c>GitOperation</c>), both crash during framework-level deserialization before the tool
     /// method body ever runs -> no tool-level try/catch can intercept it. Confirmed live for both
     /// shapes; see docs/current/finding_git_tool_array_param_and_invalid_operation_crash.md.

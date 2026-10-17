@@ -51,7 +51,7 @@ public class ConvertToClassNewNodeTests
         return result.Single(kv => kv.Key.Contains("ItemDto.cs")).Value;
     }
 
-    // ---- ConvertAnonymousToNamed ----
+    // ---- ConvertAnonymousToNamedTool ----
 
     private const string AnonymousLfSource = "public class Factory\n{\n    public void Build()\n    {\n        var item = new { Name = \"widget\", Quantity = 10 };\n    }\n}\n";
     private const string AnonymousLfExpected = "public class ItemDto\n{\n    public object Name { get; set; }\n    public object Quantity { get; set; }\n}";

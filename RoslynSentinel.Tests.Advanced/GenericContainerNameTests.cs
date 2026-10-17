@@ -7,7 +7,7 @@
 // (cf. docs/current/project_qwen36_35b_smoketest_and_member_containername_gap.md).
 //
 // Driven through BasicRefactoringEngine rather than the RefactoringStructuralTools surface: the fix is one
-// engine-level chokepoint shared by 13 call sites across Member, ModifyEnum and ModifyBaseType, and
+// engine-level chokepoint shared by 13 call sites across MemberTool, ModifyEnumTool and ModifyBaseTypeTool, and
 // the engine needs three constructor arguments where the tool class needs sixteen.
 
 using Microsoft.CodeAnalysis.CSharp.Syntax;

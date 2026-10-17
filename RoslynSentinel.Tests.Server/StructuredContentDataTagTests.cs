@@ -1,9 +1,9 @@
 // Structured-content + DataTag-chaining POC coverage for proposal_structuredcontent_rollout.md
-// and proposal_datatag_chaining_contract.md. Exercises LocateSymbol (SymbolNavigationTools) and
-// ModifyModifier (RefactoringTools) end to end through the real MCP dispatch pipeline
+// and proposal_datatag_chaining_contract.md. Exercises LocateSymbolTool (SymbolNavigationTools) and
+// ModifyModifierTool (RefactoringTools) end to end through the real MCP dispatch pipeline
 // (McpClient over an in-process pipe transport), following the pattern established by
 // McpServerStatusStructuredContentTests.cs and LargeResultOffloadFilterTests.cs. Both tools need
-// a real loaded solution (unlike McpServerStatus), so this uses TestSolutionFixture the same way
+// a real loaded solution (unlike McpServerStatusTool), so this uses TestSolutionFixture the same way
 // LargeResultOffloadFilterTests.cs does.
 using System.IO.Pipelines;
 using System.Text.Json;
@@ -26,7 +26,7 @@ public class StructuredContentDataTagTests
     private McpClient _client = null!;
     private TestSolutionFixture _fixture = null!;
 
-    // LocateSymbol lives in SymbolNavigationTools (Workspace mode); ModifyModifier lives in
+    // LocateSymbolTool lives in SymbolNavigationTools (Workspace mode); ModifyModifierTool lives in
     // RefactoringStructuralTools (Refactor mode) - see ToolClassRegistry.cs. Both modes are needed.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace", "Refactor" };
 
@@ -94,7 +94,7 @@ public class DataTagProbe
         _fixture.Dispose();
     }
 
-    // --- LocateSymbol ---
+    // --- LocateSymbolTool ---
 
     [Explicit("StructuredContent is currently not implemented")]
     [Test]
@@ -152,14 +152,14 @@ public class DataTagProbe
         Assert.That(first.GetProperty("docCommentId").GetString(), Does.Contain("Target"));
 
         // Cross-check against the legacy TextContentBlock so this proves both channels describe the
-        // same underlying call, matching the McpServerStatus spike's cross-check discipline.
+        // same underlying call, matching the McpServerStatusTool spike's cross-check discipline.
         var textBlock = result.Content.OfType<TextContentBlock>().Single();
         using var textDoc = JsonDocument.Parse(textBlock.Text);
         Assert.That(textDoc.RootElement.GetProperty("successData")[0].GetProperty("symbolName").GetString(),
             Is.EqualTo(first.GetProperty("symbolName").GetString()));
     }
 
-    // --- ModifyModifier ---
+    // --- ModifyModifierTool ---
 
     [Explicit("StructuredContent is currently not implemented")]
     [Test]

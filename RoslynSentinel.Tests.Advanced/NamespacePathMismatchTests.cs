@@ -113,7 +113,7 @@ public class NamespacePathMismatchTests
     [Test]
     public async Task ProjectScope_FiltersToNamedProject()
     {
-        // Build two separate projects and manually compose a solution.
+        // BuildTool two separate projects and manually compose a solution.
         var projectRoot = Path.Combine(Path.GetTempPath(), "ProjectA");
         var workspace = new AdhocWorkspace();
         static Solution BuildProjectInSolution(Solution sln, string projName, string relFile, string content)

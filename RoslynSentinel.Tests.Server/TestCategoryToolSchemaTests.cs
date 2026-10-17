@@ -1,4 +1,4 @@
-// TagTestCategories' `framework` parameter is the closed TestCategoryFramework enum. These tests run the real MCP
+// TagTestCategoriesTool' `framework` parameter is the closed TestCategoryFramework enum. These tests run the real MCP
 // dispatch pipeline (McpClient over an in-process pipe transport, same host shape as SchemaDataTagOptionTests) and check
 // (1) the EMITTED input schema lists the enum as string names (never integers) with default "Auto", and
 // (2) how a wrong-case value is treated by the argument-validation filter. No solution load is needed.

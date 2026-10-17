@@ -3,7 +3,7 @@ using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
 
-/// <summary>One test project's apply outcome as reported by <c>TagTestCategories(dryRun: false)</c>.</summary>
+/// <summary>One test project's apply outcome as reported by <c>TagTestCategoriesTool(dryRun: false)</c>.</summary>
 /// <param name="Project">The test project.</param>
 /// <param name="Status">"applied", "no_changes" or "failed" (a failed project wrote nothing).</param>
 /// <param name="ClassLevelAdded">Class-level attributes written.</param>
@@ -61,7 +61,7 @@ public sealed record TestCategoryProjectOutcome(
 public sealed record TestCategorySkippedEdit(string Kind, string Level, string File, int Line, string Category, string Reason);
 
 /// <summary>
-/// Result of <c>TagTestCategories(dryRun: false)</c>: the standard applied-change summary fields (changeId, affectedFiles,
+/// Result of <c>TagTestCategoriesTool(dryRun: false)</c>: the standard applied-change summary fields (changeId, affectedFiles,
 /// description, dryRun, validated, workspaceVersion, status, note) plus totals and per-project counts. One write batch
 /// (and so one undo changeId) exists per test project, so <see cref="ChangeIds"/> lists them all; <see cref="ChangeId"/>
 /// is set only when exactly one batch was written.

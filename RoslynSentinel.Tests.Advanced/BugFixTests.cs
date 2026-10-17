@@ -253,7 +253,7 @@ public class Svc { public void Foo() {} }";
     [Category("ExistingParameterSpec")] // sentinel:auto-category
     public async Task ChangeSignature_WithSkippedCallSite_RefusesWithError()
     {
-        // Test that ChangeSignature refuses when call sites cannot be rewritten, rather than
+        // Test that ChangeSignatureTool refuses when call sites cannot be rewritten, rather than
         // applying a partial change. The call site is in the same file and omits 'a' (a required
         // parameter with no default); reordering places 'a' at a position where it cannot be omitted.
         SetMultipleFiles((
@@ -475,7 +475,7 @@ public class Calculator
         Assert.That(result.UpdatedText, Does.Contain("/// <param name=\"b\"") | Does.Contain("<param name=\"b\""), "Should generate param documentation for parameter b");
     }
 
-    // ── Bug 61: SyncTypeAndFilename -> Picks Primary Type, Uses Staging ──────────────
+    // ── Bug 61: SyncTypeAndFilenameTool -> Picks Primary Type, Uses Staging ──────────────
     [Test]
     [Category("StructuralRefinementEngine")] // sentinel:auto-category
     public async Task BUG_61_SyncTypeAndFilename_PicksPrimaryType_UsesStaging()
@@ -1198,7 +1198,7 @@ public class MyTests
     /// <summary>
     /// Bug 9 regression tests (batch 6 grading pass):
     /// 9a: ExtractInterface -> members must be on separate lines, not all on one line
-    /// 9b: GetCallGraph -> prefers class method over interface method in same file
+    /// 9b: GetCallGraphTool -> prefers class method over interface method in same file
     /// 9c: GetReverseCallGraph -> prefers class method over interface method in same file
     /// 9d: FindCallersAsync -> prefers class method when no contextSnippet given
     /// 9e: FindServicesNotRegistered -> should not flag IWebHostEnvironment, IServiceScopeFactory, etc.
@@ -1285,7 +1285,7 @@ public class OrderService
             Assert.That(ifaceContent, Does.Contain("int Subtract"), "Generated interface must include Subtract method");
         }
 
-        // ── 9b: GetCallGraph -> prefers class method over interface ───────────────
+        // ── 9b: GetCallGraphTool -> prefers class method over interface ───────────────
         [Test]
         public async Task GetCallGraph_WithInterfaceAndClassInSameFile_UsesClassMethod()
         {
@@ -2216,7 +2216,7 @@ public class ProductsController
             }
 
             // ──────────────────────────────────────────────────────────────────────────
-            // BUG-71: InterpolateStringSafe -> Server Crash on Named Const Format Strings
+            // BUG-71: InterpolateStringSafeTool -> Server Crash on Named Const Format Strings
             // ──────────────────────────────────────────────────────────────────────────
             [Test]
             [Category("CodeGenerationEngine")] // sentinel:auto-category
@@ -2783,7 +2783,7 @@ public class Processor
         /// Regression tests for 8 Priority 2 bugs in uncompilable output:
         /// Bug 55: OptimizeToValueTask -> Interface/Implementation Mismatch
         /// Bug 56: ConvertStaticToExtension -> Missing static on Extension Class
-        /// Bug 57: IntroduceParameterObject -> Interface Updated but Implementation Not
+        /// Bug 57: IntroduceParameterObjectTool -> Interface Updated but Implementation Not
         /// Bug 60: RemoveMember -> Doesn't Check for Usages
         /// Bug 62: ExtractMembersToPartial -> Missing Namespace + Usings
         /// Bug 64: ConvertLockToSemaphoreSlim -> Doesn't Update Call Sites
@@ -2871,7 +2871,7 @@ public class StringExtensions
                 Assert.That(result.UpdatedText, Does.Contain("this string input"), "Method should be converted to extension (this parameter)");
             }
 
-            // ── Bug 57: IntroduceParameterObject -> Interface + All Implementations ────
+            // ── Bug 57: IntroduceParameterObjectTool -> Interface + All Implementations ────
             [Test]
             [Category("StructuralRefactoringEngine")] // sentinel:auto-category
             public async Task BUG_57_IntroduceParameterObject_UpdatesInterfaceAndAllImplementations()
@@ -3171,7 +3171,7 @@ public class Service
 
         /// <summary>
         /// Regression tests for call graph null-return bug:
-        /// GetCallGraph/GetReverseCallGraph returned null (serialized as empty output)
+        /// GetCallGraphTool/GetReverseCallGraph returned null (serialized as empty output)
         /// when the method was not found. Now throws InvalidOperationException with
         /// actionable guidance.
         /// </summary>
@@ -3568,7 +3568,7 @@ namespace MyApp
         [TearDown]
         public void TearDown() => _workspaceManager?.Dispose();
         private BasicRefactoringEngine CreateTools() => new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
-        // SyncInterface moved to AdvancedRefactoringTools in the Basic/Advanced server split.
+        // SyncInterfaceTool moved to AdvancedRefactoringTools in the Basic/Advanced server split.
         private AdvancedRefactoringTools CreateAdvancedTools() => new AdvancedRefactoringTools(_workspaceManager);
         [Test]
         [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
@@ -3591,7 +3591,7 @@ namespace MyApp
             // does NOT fire. The tool returns the engine's content to the caller.
             var tools = CreateAdvancedTools();
             object? result = null;
-            await Assert.DoesNotThrowAsync(async () => result = await tools.SyncInterface(reason: "test message", "nonexistent.cs", "IGhost", SyncInterfaceAction.sync, "Ghost"));
+            await Assert.DoesNotThrowAsync(async () => result = await tools.SyncInterfaceTool(reason: "test message", "nonexistent.cs", "IGhost", SyncInterfaceAction.sync, "Ghost"));
             Assert.That(result, Is.Not.Null, "Tool returns engine content when engine signals no-changes-needed");
         }
 

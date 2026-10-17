@@ -1,6 +1,6 @@
 // Regression coverage for finding_batch_edit_errors_lose_tool_exception_code.
 //
-// A ReplaceSnippet batch whose oldContent matched several places answered errorCode
+// A ReplaceSnippetTool batch whose oldContent matched several places answered errorCode
 // "InvalidArgument" even though the message said "ambiguous": the batch loop caught the
 // ToolAmbiguousMatchException and kept only its text. The code must follow the cause.
 //
@@ -95,7 +95,7 @@ public class ReplaceSnippetErrorCodeTests
         using var h = CreateHarness();
         var original = h.DupHolderText;
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "error code regression ambiguous batch",
             ProposedChangeAction.apply,
             batchEdits: [new SnippetEdit { FilePath = h.DupHolderPath, OldContent = "Run();", NewContent = "Run(1);" }]);
@@ -112,7 +112,7 @@ public class ReplaceSnippetErrorCodeTests
     {
         using var h = CreateHarness();
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "error code regression missing batch",
             ProposedChangeAction.apply,
             batchEdits: [new SnippetEdit { FilePath = h.DupHolderPath, OldContent = "ThisTextIsNotInTheFile();", NewContent = "x" }]);
@@ -126,7 +126,7 @@ public class ReplaceSnippetErrorCodeTests
     {
         using var h = CreateHarness();
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "error code regression mixed batch",
             ProposedChangeAction.apply,
             batchEdits:
@@ -145,7 +145,7 @@ public class ReplaceSnippetErrorCodeTests
     {
         using var h = CreateHarness();
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "error code regression ambiguous single",
             ProposedChangeAction.apply,
             filePath: h.DupHolderPath,
@@ -163,7 +163,7 @@ public class ReplaceSnippetErrorCodeTests
         using var h = CreateHarness();
         var original = h.Workspace.ReadText(MemberDupRelativePath);
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "member names in ambiguity error single",
             ProposedChangeAction.apply,
             filePath: h.Workspace.PathOf(MemberDupRelativePath),
@@ -182,7 +182,7 @@ public class ReplaceSnippetErrorCodeTests
         using var h = CreateHarness();
         var original = h.Workspace.ReadText(MemberDupRelativePath);
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "member names in ambiguity error batch",
             ProposedChangeAction.apply,
             batchEdits:
@@ -223,7 +223,7 @@ public class ReplaceSnippetErrorCodeTests
     {
         using var h = CreateHarness();
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "unique match unchanged",
             ProposedChangeAction.apply,
             filePath: h.Workspace.PathOf(MemberDupRelativePath),
@@ -242,7 +242,7 @@ public class ReplaceSnippetErrorCodeTests
         const string replacement = "        Log(Compute());";
         var (firstOffset, _) = LocateRepeatedBlock(original, 0);
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "withinMember selects first match",
             ProposedChangeAction.apply,
             filePath: h.Workspace.PathOf(MemberDupRelativePath),
@@ -263,7 +263,7 @@ public class ReplaceSnippetErrorCodeTests
         const string replacement = "        Log(Compute());";
         var (secondOffset, secondLine) = LocateRepeatedBlock(original, 1);
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "matchLine selects second match",
             ProposedChangeAction.apply,
             filePath: h.Workspace.PathOf(MemberDupRelativePath),
@@ -284,7 +284,7 @@ public class ReplaceSnippetErrorCodeTests
         var (_, firstLine) = LocateRepeatedBlock(original, 0);
         var staleLine = firstLine - 1;
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "stale matchLine",
             ProposedChangeAction.apply,
             filePath: h.Workspace.PathOf(MemberDupRelativePath),
@@ -312,7 +312,7 @@ public class ReplaceSnippetErrorCodeTests
 
         // The first edit shrinks two lines to one; the second edit's matchLine is still the line
         // in the ORIGINAL file, which only works if every batch edit is anchored against one snapshot.
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "batch matchLine against original",
             ProposedChangeAction.apply,
             batchEdits:
@@ -341,7 +341,7 @@ public class ReplaceSnippetErrorCodeTests
 
         // Both edits shrink two lines to one, so the second hunk's new-side start is one line
         // earlier than its old-side start; the second edit's matchLine is an ORIGINAL-file line.
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "batch returnDiff hunk shape",
             ProposedChangeAction.apply,
             batchEdits:
@@ -398,12 +398,12 @@ public class ReplaceSnippetErrorCodeTests
             new() { FilePath = path, OldContent = "int Compute() => 1;", NewContent = "int Compute() => 2;" },
         };
 
-        var withMember = await h.Tools.ReplaceSnippet(
+        var withMember = await h.Tools.ReplaceSnippetTool(
             reason: "top-level withinMember with batchEdits",
             ProposedChangeAction.apply,
             withinMember: "FirstMethod",
             batchEdits: batch);
-        var withLine = await h.Tools.ReplaceSnippet(
+        var withLine = await h.Tools.ReplaceSnippetTool(
             reason: "top-level matchLine with batchEdits",
             ProposedChangeAction.apply,
             matchLine: 5,
@@ -428,7 +428,7 @@ public class ReplaceSnippetErrorCodeTests
         const string replacement = "        Log(Compute());";
         var (secondOffset, secondLine) = LocateRepeatedBlock(original, 1);
 
-        var ambiguous = await h.Tools.ReplaceSnippet(
+        var ambiguous = await h.Tools.ReplaceSnippetTool(
             reason: "read selectors off the ambiguity error",
             ProposedChangeAction.apply,
             filePath: path,
@@ -443,7 +443,7 @@ public class ReplaceSnippetErrorCodeTests
         var copiedLine = int.Parse(listed.Groups[1].Value);
         Assert.That(copiedLine, Is.EqualTo(secondLine));
 
-        var retry = await h.Tools.ReplaceSnippet(
+        var retry = await h.Tools.ReplaceSnippetTool(
             reason: "retry with the copied matchLine",
             ProposedChangeAction.apply,
             filePath: path,
@@ -463,7 +463,7 @@ public class ReplaceSnippetErrorCodeTests
         var path = h.Workspace.PathOf(MemberDupRelativePath);
         var original = h.Workspace.ReadText(MemberDupRelativePath);
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "mixed looser-tier and missing batch",
             ProposedChangeAction.apply,
             batchEdits:

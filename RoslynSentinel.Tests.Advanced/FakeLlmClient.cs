@@ -3,7 +3,7 @@ namespace RoslynSentinel.Tests.Advanced;
 /// <summary>
 /// Test double for <see cref="ILlmClient"/> that returns a fixed summary without calling any real
 /// LLM endpoint. Optional <see cref="Delay"/> gives cancellation tests a controllable window during
-/// which <c>BulkComment</c>'s work phase is guaranteed to still be in flight.
+/// which <c>BulkCommentTool</c>'s work phase is guaranteed to still be in flight.
 /// </summary>
 public sealed class FakeLlmClient : ILlmClient
 {

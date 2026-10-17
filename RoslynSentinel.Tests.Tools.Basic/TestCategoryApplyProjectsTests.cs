@@ -143,7 +143,7 @@ namespace FixturesP
         bool dryRun = true,
         string? reportProject = null,
         string? applyProjects = null) =>
-        _tool.TagTestCategories(
+        _tool.TagTestCategoriesTool(
             new ToolCallReason("testing the TagTestCategories tool"),
             "Targets",
             testScope: testScope,

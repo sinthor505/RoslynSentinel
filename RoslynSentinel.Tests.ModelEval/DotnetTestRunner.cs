@@ -17,8 +17,8 @@ internal sealed record DotnetTestResult(int Passed, int Failed, int Skipped, int
 /// real test run, the same way a developer would actually check "did I break anything."
 ///
 /// Deliberately a separate process invocation rather than routing through this repo's own
-/// RunTest MCP tool, so a bug in RunTest can't mask a real fixture failure -> the agent under
-/// test already exercises RunTest live during its own run.
+/// RunTestTool MCP tool, so a bug in RunTestTool can't mask a real fixture failure -> the agent under
+/// test already exercises RunTestTool live during its own run.
 /// </summary>
 internal static class DotnetTestRunner
 {

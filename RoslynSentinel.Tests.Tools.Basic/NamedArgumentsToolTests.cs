@@ -62,7 +62,7 @@ public class NamedArgumentsToolTests
         using var fixture = new TestSolutionFixture();
         var targetFile = await LoadFixtureAsync(fixture);
 
-        var result = await _tool.NamedArguments(
+        var result = await _tool.NamedArgumentsTool(
             new ToolCallReason("testing preview mode"),
             NamedArgumentsScope.file, scopeName: targetFile, targetSymbol: null, minParameters: null,
             literalArgumentsOnly: false, SemanticReplaceMode.preview);
@@ -81,7 +81,7 @@ public class NamedArgumentsToolTests
         using var fixture = new TestSolutionFixture();
         var targetFile = await LoadFixtureAsync(fixture);
 
-        var result = await _tool.NamedArguments(
+        var result = await _tool.NamedArgumentsTool(
             new ToolCallReason("testing apply mode"),
             NamedArgumentsScope.file, scopeName: targetFile, targetSymbol: null, minParameters: null,
             literalArgumentsOnly: false, SemanticReplaceMode.apply);
@@ -99,7 +99,7 @@ public class NamedArgumentsToolTests
         using var fixture = new TestSolutionFixture();
         var targetFile = await LoadFixtureAsync(fixture);
 
-        var result = await _tool.NamedArguments(
+        var result = await _tool.NamedArgumentsTool(
             new ToolCallReason("testing targetSymbol"),
             NamedArgumentsScope.solution, scopeName: null, targetSymbol: "M:C.N(System.Int32)", minParameters: null,
             literalArgumentsOnly: false, SemanticReplaceMode.apply);
@@ -114,7 +114,7 @@ public class NamedArgumentsToolTests
     [Description("scopeName is rejected for solution scope with an actionable message")]
     public async Task NamedArguments_SolutionScopeWithScopeName_ReturnsInvalidArgument()
     {
-        var result = await _tool.NamedArguments(
+        var result = await _tool.NamedArgumentsTool(
             new ToolCallReason("testing validation"),
             NamedArgumentsScope.solution, scopeName: "Some.Project", targetSymbol: null, minParameters: null,
             literalArgumentsOnly: false, SemanticReplaceMode.preview);
@@ -128,7 +128,7 @@ public class NamedArgumentsToolTests
     [Description("project and file scope require scopeName")]
     public async Task NamedArguments_ProjectScopeWithoutScopeName_ReturnsInvalidArgument()
     {
-        var result = await _tool.NamedArguments(
+        var result = await _tool.NamedArgumentsTool(
             new ToolCallReason("testing validation"),
             NamedArgumentsScope.project, scopeName: null, targetSymbol: null, minParameters: null,
             literalArgumentsOnly: false, SemanticReplaceMode.preview);
@@ -142,7 +142,7 @@ public class NamedArgumentsToolTests
     [Description("minParameters below 1 is rejected")]
     public async Task NamedArguments_MinParametersZero_ReturnsInvalidArgument()
     {
-        var result = await _tool.NamedArguments(
+        var result = await _tool.NamedArgumentsTool(
             new ToolCallReason("testing validation"),
             NamedArgumentsScope.solution, scopeName: null, targetSymbol: null, minParameters: 0,
             literalArgumentsOnly: false, SemanticReplaceMode.preview);

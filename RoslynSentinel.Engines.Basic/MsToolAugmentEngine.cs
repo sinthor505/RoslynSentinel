@@ -1329,7 +1329,7 @@ public class MsToolAugmentEngine
         return MsAugmentResult.Ok(RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString());
     }
 
-    // ── 12. ExtractMethodSafe ─────────────────────────────────────────────────
+    // ── 12. ExtractMethod ─────────────────────────────────────────────────
     // MS Bug: extract_method generates `private void MethodName(...)` when the
     // Selected block ends with `return <expression>`, producing a compile error
     // because the extracted method has the wrong (void) return type.
@@ -1394,7 +1394,7 @@ public class MsToolAugmentEngine
     // incomplete* extraction. When adding new heuristics/guards, prefer refusing
     // with a specific, actionable error (naming the ambiguity and what a wider
     // contextSnippet should cover) over guessing a narrower scope than the caller
-    // likely intended. When diagnosing a NEW report of "ExtractMethodSafe did
+    // likely intended. When diagnosing a NEW report of "ExtractMethod did
     // something weird," reproduce with a real dotnet build first -> GetDiagnostics'
     // error *count* is not enough, and neither is the tool's own IsError flag.
 
@@ -1819,7 +1819,7 @@ public class MsToolAugmentEngine
         var methodWithTrivia = newMethodDecl
             .WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed, SyntaxFactory.LineFeed))
             .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed))
-            //.WithAddedByComment("ExtractMethodSafe")
+            //.WithAddedByComment("ExtractMethod")
             .WithAdditionalAnnotations(editAnnotation);
 
         var updatedType = newContainingType.AddMembers(methodWithTrivia);

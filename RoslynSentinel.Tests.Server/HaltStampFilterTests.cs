@@ -34,7 +34,7 @@ public class HaltStampFilterTests
     private IHost? _probeHost;
     private McpClient? _probeClient;
 
-    // Workspace carries GetWorkspaceHealth/FindReferences; Admin carries ExternalFileDrift.
+    // Workspace carries GetWorkspaceHealthTool/FindReferencesTool; Admin carries ExternalFileDriftTool.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace", "Admin" };
 
     [SetUp]
@@ -178,7 +178,7 @@ public class HaltStampFilterTests
         ((IUnrecoverableBreaker)manager).Trip("T", "id", "diag");
         var refusal = ((IUnrecoverableBreaker)manager).StateMessage();
 
-        // FindReferences is not on the unrecoverable allow-list.
+        // FindReferencesTool is not on the unrecoverable allow-list.
         var (result, text) = await CallAsync(_client, "FindReferences", new()
         {
             ["reason"] = "test message",
@@ -251,7 +251,7 @@ public class HaltStampFilterTests
         var stateMessage = ((IAutomaticCircuitBreaker)manager).StateMessage();
         Assert.That(stateMessage, Is.Not.Null.And.Not.Empty);
 
-        // GetWorkspaceHealth is not on the orienting allow-list, so the orientation filter refuses it
+        // GetWorkspaceHealthTool is not on the orienting allow-list, so the orientation filter refuses it
         // (and, being a refusal, does not reset the breaker before the stamp reads its state).
         var (result, text) = await CallHealthAsync(_client);
         Assert.That(result.IsError, Is.True, $"Got: {text}");
@@ -264,7 +264,7 @@ public class HaltStampFilterTests
 }
 
 /// <summary>
-/// Test-only stand-in for the Advanced <c>ResetMutationBreaker</c> tool, so a second host can prove the halt stamp
+/// Test-only stand-in for the Advanced <c>ResetAsyncifyMutationBreakerTool</c> tool, so a second host can prove the halt stamp
 /// asks the live tool collection (not a static list) whether that recovery call exists.
 /// </summary>
 [McpServerToolType]

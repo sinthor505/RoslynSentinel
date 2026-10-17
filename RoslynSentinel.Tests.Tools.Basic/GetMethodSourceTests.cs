@@ -1,4 +1,4 @@
-// GetMethodSource -> WorkspaceTools. Zero coverage before this file (GetTestCoverageMap
+// GetMethodSourceTool -> WorkspaceTools. Zero coverage before this file (GetTestCoverageMap
 // flagged branches: document == null, method == null, methodBytes > threshold, plus happy path).
 // root == null is not exercised here -> GetSyntaxRootAsync only returns null for non-source
 // documents, which TestSolutionBuilder never produces, so that branch is effectively unreachable
@@ -62,7 +62,7 @@ public class GetMethodSourceTests
     [Test]
     public async Task GetMethodSource_ExistingMethod_ReturnsSourceAndSignatureAsync()
     {
-        var result = await _tools.GetMethodSource(reason: "test message", _documentPath, "Bar");
+        var result = await _tools.GetMethodSourceTool(reason: "test message", _documentPath, "Bar");
 
         Assert.That(!result.IsError, Is.True);
         var data = (MethodSourceResult)result.SuccessData!;
@@ -90,7 +90,7 @@ public class GetMethodSourceTests
             });
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _tools.GetMethodSource(reason: "test message", ctorDocPath, "WithCtor");
+        var result = await _tools.GetMethodSourceTool(reason: "test message", ctorDocPath, "WithCtor");
 
         Assert.That(!result.IsError, Is.True);
         var data = (MethodSourceResult)result.SuccessData!;
@@ -102,7 +102,7 @@ public class GetMethodSourceTests
     {
         var missingPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "DoesNotExist.cs");
 
-        var result = await _tools.GetMethodSource(reason: "test message", missingPath, "Bar");
+        var result = await _tools.GetMethodSourceTool(reason: "test message", missingPath, "Bar");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("FileNotFound"));
@@ -111,7 +111,7 @@ public class GetMethodSourceTests
     [Test]
     public async Task GetMethodSource_MethodNameNotInFile_ReturnsMethodNotFoundAsync()
     {
-        var result = await _tools.GetMethodSource(reason: "test message", _documentPath, "NoSuchMethod");
+        var result = await _tools.GetMethodSourceTool(reason: "test message", _documentPath, "NoSuchMethod");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("MethodNotFound"));
@@ -120,7 +120,7 @@ public class GetMethodSourceTests
     [Test]
     public async Task GetMethodSource_MethodNameCaseMismatch_FallsBackToCaseInsensitiveMatchAsync()
     {
-        var result = await _tools.GetMethodSource(reason: "test message", _documentPath, "bar");
+        var result = await _tools.GetMethodSourceTool(reason: "test message", _documentPath, "bar");
 
         Assert.That(!result.IsError, Is.True);
         var data = (MethodSourceResult)result.SuccessData!;
@@ -138,11 +138,11 @@ public class GetMethodSourceTests
             Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
             new[] { ("Big.cs", bigSource, bigDocPath) });
         _workspaceManager.SetTestSolution(solution);
-        // GetMethodSource only offloads when GetSolutionRoot() is non-empty; the fake derives that
+        // GetMethodSourceTool only offloads when GetSolutionRoot() is non-empty; the fake derives that
         // from SolutionPath since the AdhocWorkspace solution here has no FilePathWrapper of its own.
         _workspaceManager.SolutionPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Test.sln");
 
-        var result = await _tools.GetMethodSource(reason: "test message", bigDocPath, "Huge");
+        var result = await _tools.GetMethodSourceTool(reason: "test message", bigDocPath, "Huge");
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.LargeResult, Is.Not.Null);

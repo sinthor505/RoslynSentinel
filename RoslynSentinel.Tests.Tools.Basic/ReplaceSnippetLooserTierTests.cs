@@ -1,4 +1,4 @@
-// Slice 4a of the whitespace-tolerance proposal: ReplaceSnippet and its batch form resolve oldContent through
+// Slice 4a of the whitespace-tolerance proposal: ReplaceSnippetTool and its batch form resolve oldContent through
 // SnippetResolver (tier IgnoreLineEndings, case-sensitive) and report failures through SnippetErrorFormatter.
 // An oldContent that differs from the file only by indentation matches at a looser tier than the edit path
 // accepts: it must fail with MatchedLooserThanRequested, show the file's own lines, and write nothing.
@@ -87,7 +87,7 @@ public class ReplaceSnippetLooserTierTests
     {
         using var h = CreateHarness();
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "indentation-only difference",
             ProposedChangeAction.apply,
             filePath: h.Path,
@@ -107,7 +107,7 @@ public class ReplaceSnippetLooserTierTests
     {
         using var h = CreateHarness();
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "resend the file's own lines",
             ProposedChangeAction.apply,
             filePath: h.Path,
@@ -123,7 +123,7 @@ public class ReplaceSnippetLooserTierTests
     {
         using var h = CreateHarness();
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "no match anywhere",
             ProposedChangeAction.apply,
             filePath: h.Path,
@@ -143,7 +143,7 @@ public class ReplaceSnippetLooserTierTests
     {
         using var h = CreateHarness();
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "batch indentation-only difference",
             ProposedChangeAction.apply,
             batchEdits: [new SnippetEdit { FilePath = h.Path, OldContent = WronglyIndentedBlock, NewContent = Replacement }]);
@@ -159,7 +159,7 @@ public class ReplaceSnippetLooserTierTests
     {
         using var h = CreateHarness();
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "batch resend the file's own lines",
             ProposedChangeAction.apply,
             batchEdits: [new SnippetEdit { FilePath = h.Path, OldContent = FileBlock, NewContent = Replacement }]);

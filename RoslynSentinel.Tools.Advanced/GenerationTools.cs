@@ -75,7 +75,7 @@ public class GenerationTools
     [McpServerTool(Name = "GenerateClassesFromJson")]
     [Produces(DataTag.ResultOnly)]
     [Description("Generates C# class declarations from a JSON string using rootClassName as the top-level type name under the specified namespace.")]
-    public object GenerateClassesFromJson(
+    public object GenerateClassesFromJsonTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.Json)] string json,
         [ExternalInputRequired(DataTag.ClassName)] string rootClassName,
@@ -98,7 +98,7 @@ public class GenerationTools
     [McpServerTool(Name = "GenerateHttpClient")]
     [Produces(DataTag.ResultOnly)]
     [Description("Generates a typed HttpClient wrapper for a Web API controller.")]
-    public async Task<string> GenerateHttpClient(
+    public async Task<string> GenerateHttpClientTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [ExternalInputRequired(DataTag.ClassName)] string controllerName,
@@ -142,7 +142,7 @@ public class GenerationTools
     [McpServerTool(Name = "GenerateDefaultConfigJson")]
     [Produces(DataTag.ResultOnly)]
     [Description("Scans a project for all config[\"Key\"] and IConfiguration.GetValue<T>(\"Key\") usages and returns a JSON skeleton with all keys and inferred default values.")]
-    public async Task<string> GenerateDefaultConfigJson(
+    public async Task<string> GenerateDefaultConfigJsonTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.ProjectName, required: true)] string projectName,
         // RequestContext<CallToolRequestParams> requestParams = null,
@@ -188,10 +188,10 @@ public class GenerationTools
         }
     }
 
-    [McpServerTool(Name = "InterpolateStringSafe")]
+    [McpServerTool(Name = "InterpolateString")]
     [Produces(DataTag.ResultOnly)]
     [Description("Converts a string.Format(...) call to an interpolated string. Resolves const string format arguments via the semantic model (works even when the format string is a named const, not just a literal) and handles {0:format} specifiers correctly.")]
-    public async Task<string> InterpolateStringSafe(
+    public async Task<string> InterpolateStringSafeTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Verbatim substring identifying the string.Format call to convert.")]

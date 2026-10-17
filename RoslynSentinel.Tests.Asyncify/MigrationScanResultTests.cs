@@ -219,7 +219,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", summarize: true);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", summarize: true);
 
         var result = Wrap<MigrationScanSummary>(rawResult);
         Assert.That(result, Is.Not.Null, "Should return MigrationEnvelope<MigrationScanSummary> when summarize=true.");
@@ -267,7 +267,7 @@ public class Svc
         // 10 candidates -> request page of 3 starting at offset 2.
         SetSource(BuildManyFlaggedMethods(10));
 
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", limit: 3, offset: 2);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", limit: 3, offset: 2);
 
         var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
         Assert.That(result, Is.Not.Null);
@@ -293,7 +293,7 @@ public class Svc
         // The server threshold is 15 KB KB. This must stay inline.
         SetSource(BuildManyFlaggedMethods(55));
 
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message"); // default limit=50, offset=0
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message"); // default limit=50, offset=0
 
         var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
         Assert.That(result, Is.Not.Null);
@@ -312,14 +312,14 @@ public class Svc
     [Test, CancelAfter(60000)]
     public async Task T4_LargeResult_WrittenToFile_DataNull()
     {
-        // Build ~500 methods, each with a 300-char Reason string.
+        // BuildTool ~500 methods, each with a 300-char Reason string.
         // Per finding JSON ≈ 200 (base) + 300 (Reason field) + ~350 (Summary field) ≈ 850 bytes.
         // 500 × 850 = ~425 KB > 15 KB -> must trigger the file-write path.
         var reason = new string('x', 300);
         SetSource(BuildManyFlaggedMethods(500, reason));
 
         // Use a large limit to capture all findings in one page.
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", limit: 5000, offset: 0);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", limit: 5000, offset: 0);
 
         var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
         Assert.That(result, Is.Not.Null);
@@ -347,7 +347,7 @@ public class Svc
         SetSource(BuildManyFlaggedMethods(500, reason));
 
         // Run the scan to produce the spill file (same as T4).
-        var scanRaw = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", limit: 5000, offset: 0);
+        var scanRaw = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", limit: 5000, offset: 0);
         var scanResult = Wrap<List<MigrationCandidateFinding>>(scanRaw);
         Assert.That(scanResult?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
 
@@ -355,7 +355,7 @@ public class Svc
         var totalFromT4 = scanResult.LargeResult.TotalRecords;
 
         // ── page 1 (limit=10, offset=0) ───────────────────────────────────────
-        var page1Result = Wrap<List<MigrationCandidateFinding>>(await _workspaceTools.GetLargeResult(reason: "test message", resultId: operationId, limit: 10, offset: 0));
+        var page1Result = Wrap<List<MigrationCandidateFinding>>(await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: operationId, limit: 10, offset: 0));
         Assert.That(!page1Result.IsError, Is.True);
         Assert.That(page1Result.SuccessData, Is.Not.Null);
         Assert.That(page1Result.SuccessData!.Count, Is.EqualTo(10));
@@ -371,7 +371,7 @@ public class Svc
         Assert.That(first.Score, Is.EqualTo(75));
 
         // ── page 2 (limit=10, offset=10) -> must be disjoint from page 1 ──────
-        var page2Result = Wrap<List<MigrationCandidateFinding>>(await _workspaceTools.GetLargeResult(reason: "test message", resultId: operationId, limit: 10, offset: 10));
+        var page2Result = Wrap<List<MigrationCandidateFinding>>(await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: operationId, limit: 10, offset: 10));
         Assert.That(!page2Result.IsError, Is.True);
         var page1Names = page1Result.SuccessData!.Select(f => f.MethodName).ToHashSet();
         var page2Names = page2Result.SuccessData!.Select(f => f.MethodName).ToHashSet();
@@ -401,13 +401,13 @@ public class Svc
         _workspaceManager.SetTestSolution(solution);
 
         // Query using only the filename (suffix match).
-        var rawSuffix = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", filePath: "Service.cs");
+        var rawSuffix = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", filePath: "Service.cs");
         var suffixResult = Wrap<List<MigrationCandidateFinding>>(rawSuffix);
         Assert.That(suffixResult?.IsError, Is.False, "Suffix-only filePath should succeed.");
         Assert.That(suffixResult!.SuccessData?.Count, Is.EqualTo(1));
 
         // Query using the full absolute path -> should yield the same finding.
-        var rawAbs = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", filePath: AbsPath);
+        var rawAbs = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", filePath: AbsPath);
         var absResult = Wrap<List<MigrationCandidateFinding>>(rawAbs);
         Assert.That(absResult?.IsError, Is.False, "Full absolute filePath should succeed.");
         Assert.That(absResult!.SuccessData?.Count, Is.EqualTo(1));
@@ -439,7 +439,7 @@ public class Svc
 }}
 {AttrStub}", "RealFile.cs");
 
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(
             reason: "test message", scope: ToolScope.file, filePath: "NonExistent.cs");
 
         var result = Wrap<object>(rawResult);
@@ -457,7 +457,7 @@ public class Svc
     public async Task T8_GetAsyncMigrationProgress_NoSolution_ReturnsSolutionNotLoaded()
     {
         // Intentionally do NOT set a solution.
-        var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test message");
+        var result = await _asyncifyTools.GetAsyncMigrationProgressTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -478,7 +478,7 @@ public class Svc
         using var cts = new CancellationTokenSource();
         cts.Cancel(); // already cancelled
 
-        var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test message",
+        var result = await _asyncifyTools.GetAsyncMigrationProgressTool(reason: "test message",
             cancellationToken: cts.Token);
 
         Assert.That(!result.IsError, Is.False);
@@ -509,7 +509,7 @@ public class Svc
         sb.AppendLine(AttrStub);
         SetSource(sb.ToString());
 
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", summarize: true, topN: 5, minScore: 70);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", summarize: true, topN: 5, minScore: 70);
         var result = Wrap<MigrationScanSummary>(rawResult);
 
         Assert.That(result, Is.Not.Null);
@@ -546,7 +546,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", summarize: true);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", summarize: true);
         var result = Wrap<MigrationScanSummary>(rawResult);
 
         Assert.That(result, Is.Not.Null);
@@ -591,7 +591,7 @@ public class Svc
     public async Task<int> GetVal(System.Threading.CancellationToken ct) { return await Task.FromResult(1); }
 }");
 
-        var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test message");
+        var result = await _asyncifyTools.GetAsyncMigrationProgressTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.True, "Should succeed with a loaded solution.");
         Assert.That(result.ErrorData, Is.Null);
@@ -613,7 +613,7 @@ public class Svc
     public async Task DoWork() { await Task.Delay(1); }
 }");
 
-        var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test message", projectName: "TestProj");
+        var result = await _asyncifyTools.GetAsyncMigrationProgressTool(reason: "test message", projectName: "TestProj");
 
         Assert.That(!result.IsError, Is.True, "Scoped project query should succeed.");
         Assert.That(result.ErrorData, Is.Null);
@@ -640,7 +640,7 @@ public class Svc
             new SentinelHostOptions(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger<DocumentationTools>.Instance);
 
-        var result = docTools.ProjectDoc(reason: "Test message", action: DocAction.read, docType: DocType.state) as DocReadResult;
+        var result = docTools.ProjectDocTool(reason: "Test message", action: DocAction.read, docType: DocType.state) as DocReadResult;
 
         Assert.That(result, Is.Not.Null);
         Assert.That(result!.Error, Is.Null,
@@ -671,7 +671,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message");
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message");
         var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
 
         Assert.That(result, Is.Not.Null);
@@ -697,7 +697,7 @@ public class Svc
 
     // T17 removed: it asserted that the `async_migrate` string-dispatch tool rejected an
     // unknown operation name. That dispatcher no longer exists -> the operations it routed to
-    // are now separate tools (Asyncify, PropagateCancellationToken, …), so an invalid
+    // are now separate tools (AsyncifyTool, PropagateCancellationTokenTool, …), so an invalid
     // operation name is a compile error rather than a runtime InvalidArgument.
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -708,7 +708,7 @@ public class Svc
     public async Task T18_Asyncify_NoSolution_ReturnsSolutionNotLoaded()
     {
         // Intentionally do NOT set a solution.
-        var result = await _asyncifyTools.Asyncify(reason: "test message");
+        var result = await _asyncifyTools.AsyncifyTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -716,10 +716,10 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T19 – large-result offload message contains GetLargeResult and OperationId; no ReadFile
+    // T19 – large-result offload message contains GetLargeResultTool and OperationId; no ReadFileTool
     // ══════════════════════════════════════════════════════════════════════════
 
-    // Flaky under full/parallel test runs (fails intermittently in the full Asyncify suite,
+    // Flaky under full/parallel test runs (fails intermittently in the full AsyncifyTool suite,
     // passes every time when run in isolation, 2026-08-25) -> likely timing/threshold-sensitive
     // due to the large synthetic payload used to force the offload spill. Not a regression from
     // any single change; retriage if it starts failing in isolation too.
@@ -730,7 +730,7 @@ public class Svc
         var reason = new string('x', 300);
         SetSource(BuildManyFlaggedMethods(500, reason));
 
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", limit: 5000, offset: 0);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", limit: 5000, offset: 0);
         var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
 
         Assert.That(result?.LargeResult, Is.Not.Null, "Precondition: scan must have spilled to file.");
@@ -774,7 +774,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", summarize: true, minScore: 80);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", summarize: true, minScore: 80);
         var result = Wrap<MigrationScanSummary>(rawResult);
 
         Assert.That(result, Is.Not.Null);
@@ -826,7 +826,7 @@ public class Svc
 }}
 {AttrStub}");
 
-        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", minScore: 85, limit: 20);
+        var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", minScore: 85, limit: 20);
         var result = Wrap<List<MigrationCandidateFinding>>(rawResult);
 
         Assert.That(result, Is.Not.Null);

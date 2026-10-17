@@ -2,7 +2,7 @@ using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tools.Basic;
 
-/// <summary>One project's QualifyCrefs outcome.</summary>
+/// <summary>One project's QualifyCrefsTool outcome.</summary>
 /// <param name="Project">The project.</param>
 /// <param name="Status">"dry_run_ok" (edits would be written), "applied", "no_changes" or "failed" (a failed project wrote nothing).</param>
 /// <param name="Qualified">Bare member crefs qualified in this project.</param>
@@ -59,7 +59,7 @@ public sealed record QualifyCrefsProjectOutcome(
 }
 
 /// <summary>
-/// Result of QualifyCrefs: the applied-change summary fields (changeId, affectedFiles, description, dryRun, validated,
+/// Result of QualifyCrefsTool: the applied-change summary fields (changeId, affectedFiles, description, dryRun, validated,
 /// workspaceVersion, status, note) plus totals and per-project outcomes. One write batch (and so one undo changeId)
 /// exists per project, so <see cref="ChangeIds"/> lists them all; <see cref="ChangeId"/> is set only when exactly one
 /// batch was written.

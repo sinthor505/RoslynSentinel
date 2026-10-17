@@ -12,7 +12,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
-/// Tests for TestCategoryTaggingTools (TagTestCategories): the dry-run summary, the reportProject paging,
+/// Tests for TestCategoryTaggingTools (TagTestCategoriesTool): the dry-run summary, the reportProject paging,
 /// the dryRun: false apply summary, and the structured errors (missing targets, unknown project, bad share).
 /// </summary>
 [TestFixture]
@@ -102,7 +102,7 @@ namespace Fixtures
         string? reportProject = null,
         double maxTestShare = 1.0)
     {
-        return _tool.TagTestCategories(
+        return _tool.TagTestCategoriesTool(
             new ToolCallReason("testing the TagTestCategories tool"),
             targets,
             testScope: null,
@@ -258,7 +258,7 @@ namespace Fixtures
     [Category("TestCategoryTaggingTools")] // sentinel:auto-category
     public void FrameworkParameter_IsAStringNamedEnumDefaultingToAuto()
     {
-        var parameter = typeof(TestCategoryTaggingTools).GetMethod(nameof(TestCategoryTaggingTools.TagTestCategories))!
+        var parameter = typeof(TestCategoryTaggingTools).GetMethod(nameof(TestCategoryTaggingTools.TagTestCategoriesTool))!
             .GetParameters().Single(p => p.Name == "framework");
 
         Assert.That(parameter.ParameterType, Is.EqualTo(typeof(TestCategoryFramework)));
@@ -300,7 +300,7 @@ namespace Fixtures
     [Category("TestCategoryTaggingTools")] // sentinel:auto-category
     public void Tool_IsDeclaredAndCatalogued()
     {
-        var method = typeof(TestCategoryTaggingTools).GetMethod(nameof(TestCategoryTaggingTools.TagTestCategories));
+        var method = typeof(TestCategoryTaggingTools).GetMethod(nameof(TestCategoryTaggingTools.TagTestCategoriesTool));
         var attribute = (ModelContextProtocol.Server.McpServerToolAttribute?)Attribute.GetCustomAttribute(
             method!, typeof(ModelContextProtocol.Server.McpServerToolAttribute));
 

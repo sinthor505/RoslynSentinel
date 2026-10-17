@@ -62,7 +62,7 @@ public static class TestServiceProviderBuilder
     {
         var services = new ServiceCollection();
 
-        // See the comment in Build() above: a bare ServiceCollection needs AddLogging()
+        // See the comment in BuildTool() above: a bare ServiceCollection needs AddLogging()
         // for PersistentWorkspaceManager's ILogger<IWorkspaceManager> dependency to resolve.
         services.AddLogging();
         services.AddRoslynSentinelEnginesBasic();

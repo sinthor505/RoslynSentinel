@@ -1,4 +1,4 @@
-// ApplyDiff whole-file-rewrite size guard (changesetFormat=files, action=apply): a files-format
+// ApplyDiffTool whole-file-rewrite size guard (changesetFormat=files, action=apply): a files-format
 // apply that would shrink a file by more than 50% -> either by raw line count, or by active
 // (non-comment) C# code lines -> is rejected with errorCode=ConfirmationRequired instead of being
 // applied. The raw line-count check guards against an agent submitting only a changed fragment as
@@ -8,15 +8,15 @@
 // the same intent expressed differently: commenting out every line of the file one-for-one, which
 // leaves the raw line count unchanged (so the first check alone misses it) but leaves the file with
 // no working code (see ModelTestingResults/113/Model_FixesWholeFileRewriteBug_PlanImplementVerify/
-// 20260902-062730-159, where ApplyDiff replaced BlockConverter.cs with every line prefixed "//" and
-// reported success because the line count and compile both looked fine). ApplyDiff itself no longer offers a
+// 20260902-062730-159, where ApplyDiffTool replaced BlockConverter.cs with every line prefixed "//" and
+// reported success because the line count and compile both looked fine). ApplyDiffTool itself no longer offers a
 // confirmationCode replay path -> that mechanism reliably caused model hallucination (agents would
 // fabricate a confirmationCode and call action=confirmationCode even when the true problem was
 // something else entirely; see docs/current/overnight-run-2026-08-30.md section 5b for the traced
 // root cause) and was never used correctly in practice. The rejected caller is expected to just
 // re-submit the complete file content. The old replay mechanism is preserved, unregistered, on
 // ApplyDiffWithConfirmationCode in case it's wanted again -> the confirmationCode-specific tests
-// below target that method directly rather than ApplyDiff.
+// below target that method directly rather than ApplyDiffTool.
 //
 // The percentage check reads "old content" from disk via FileIoHelper.ReadAllTextIfExistsAsync
 // (same helper ApplyProposedChangesAsync uses for pre-image capture), so these tests need a real
@@ -75,7 +75,7 @@ public class ApplyDiffSizeGuardTests
         Assert.That(originalContent.Split('\n').Length, Is.GreaterThan(4), "fixture file must have enough lines for a >50% shrink to be meaningful");
 
         var fragment = "using System;\n";
-        var result = await wholeFileWriteTools.ApplyDiff(
+        var result = await wholeFileWriteTools.ApplyDiffTool(
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [targetFile] = fragment });
 
@@ -104,7 +104,7 @@ public class ApplyDiffSizeGuardTests
         var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
         WholeFileWriteTools wholeFileWriteTools = new WholeFileWriteTools(workspaceManager, workspaceTools, validationEngine, diffEngine, NullLogger<WholeFileWriteTools>.Instance, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance));
 
-        var result = await wholeFileWriteTools.ApplyDiff(
+        var result = await wholeFileWriteTools.ApplyDiffTool(
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [targetFile] = commentedOut });
 
@@ -115,7 +115,7 @@ public class ApplyDiffSizeGuardTests
     }
 
     // The following confirmationCode-replay tests targeted ApplyDiffWithConfirmationCode directly ->
-    // that mechanism was removed from the registered ApplyDiff tool (see comment at top of file).
+    // that mechanism was removed from the registered ApplyDiffTool tool (see comment at top of file).
     // ApplyDiffWithConfirmationCode and ProposedChangeAction.confirmationCode are now both
     // block-commented out (WorkspaceTools.cs / ToolEnums.cs) rather than deleted, so these
     // tests are commented out alongside them -> un-comment all three together if the mechanism is
@@ -223,7 +223,7 @@ public class ApplyDiffSizeGuardTests
         // Use LF content - it will be normalized to CRLF (the file's dominant EOL)
         var lfContent = originalContent + "\n// small trailing comment\n";
 
-        var result = await wholeFileWriteTools.ApplyDiff(
+        var result = await wholeFileWriteTools.ApplyDiffTool(
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [targetFile] = lfContent });
 
@@ -248,7 +248,7 @@ public class ApplyDiffSizeGuardTests
             Directory.EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories).First())!, "BrandNewFile.cs");
         var content = "namespace ContosoOrders;\npublic class BrandNewFile { }\n";
 
-        var result = await wholeFileWriteTools.ApplyDiff(
+        var result = await wholeFileWriteTools.ApplyDiffTool(
             reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply,
             changes: new Dictionary<string, string> { [newFilePath] = content });
 

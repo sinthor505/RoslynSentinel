@@ -541,7 +541,7 @@ public class ShoppingService
 
     [Test]
     [Description("Pattern from ShoppingOptimizationService: extract validation block with early return")]
-    public async Task ExtractMethodSafe_ValidationWithEarlyReturn_ExtractsCorrectly()
+    public async Task ExtractMethod_ValidationWithEarlyReturn_ExtractsCorrectly()
     {
         // Pattern: guard clause / early return -> common in service methods
         const string source = @"
@@ -573,7 +573,7 @@ public class Optimizer
 
     [Test]
     [Description("Pattern from InventoryItemService: extract cache lookup logic (async Task<T> return)")]
-    public async Task ExtractMethodSafe_AsyncCacheLogic_ExtractedWithCorrectReturnType()
+    public async Task ExtractMethod_AsyncCacheLogic_ExtractedWithCorrectReturnType()
     {
         // Simplified version of the GetUserInventoryAsync cache pattern
         const string source = @"
@@ -600,7 +600,7 @@ public class InventoryService
 
     [Test]
     [Description("Pattern from MealSuggestionService: extract scoring calculation (decimal arithmetic)")]
-    public async Task ExtractMethodSafe_DecimalArithmetic_HasDecimalReturnType()
+    public async Task ExtractMethod_DecimalArithmetic_HasDecimalReturnType()
     {
         // Pattern from ScoringWeights usage in MealSuggestionService
         const string source = @"
@@ -816,12 +816,12 @@ public class ShoppingOptimizationService : IShoppingOptimizationService
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 10. ExtractMethodSafe -> Additional realistic patterns from ExpressRecipe
+    // 10. ExtractMethodTool -> Additional realistic patterns from ExpressRecipe
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
     [Description("Pattern from AllergenDetectionService: extract HashSet duplicate-check logic")]
-    public async Task ExtractMethodSafe_HashSetDuplicateCheck_ExtractedWithBoolReturnType()
+    public async Task ExtractMethod_HashSetDuplicateCheck_ExtractedWithBoolReturnType()
     {
         const string source = @"
 using System;
@@ -845,7 +845,7 @@ public class AllergenProcessor
 
     [Test]
     [Description("Pattern from NutritionSummaryService: extract string.Format cache key construction")]
-    public async Task ExtractMethodSafe_StringFormatCacheKey_ExtractedWithStringReturnType()
+    public async Task ExtractMethod_StringFormatCacheKey_ExtractedWithStringReturnType()
     {
         // From: string planKey = string.Format("nutrition-plan:{0}:{1:yyyy-MM-dd}", userId, date)
         const string source = @"

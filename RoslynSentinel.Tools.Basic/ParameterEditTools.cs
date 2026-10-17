@@ -3,8 +3,8 @@ using System.ComponentModel;
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
-/// <c>ParameterEdit</c>: one tool for adding, removing or viewing parameters, merging MethodSignature and
-/// ConstructorParameter behind a closed <see cref="ParameterEditOperation"/> enum.
+/// <c>ParameterEditTool</c>: one tool for adding, removing or viewing parameters, merging MethodSignatureTool and
+/// ConstructorParameterTool behind a closed <see cref="ParameterEditOperation"/> enum.
 /// Opt-in and additive: exposed only in claude-lean, through the <c>declarations</c> toolset
 /// (see ToolsetCatalog and ServiceRegistrationExtensionsBasic); the two original tools are untouched and stay
 /// available in the other modes. Each operation delegates to the same Impl method its original tool calls, so
@@ -26,7 +26,7 @@ public class ParameterEditTools
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view parameters of a method (operation method, any method) or of a class's DI constructor (operation constructor, with a backing field). " +
         "For overloaded methods or same-named classes in one file, combine the name with contextSnippet/lineBefore/lineAfter. Returns changeId.")]
-    public Task<SentinelCallToolResult<object>> ParameterEdit(
+    public Task<SentinelCallToolResult<object>> ParameterEditTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Required params per operation. " +
             "method: filePath+methodName+action; remove " + ToolParams.RemoveLastParameter + " it refuse. " +
@@ -64,48 +64,48 @@ public class ParameterEditTools
         switch (operation)
         {
             case ParameterEditOperation.method:
-            {
-                var rejected = RejectForeignParams("method", ("className", className is not null), ("fieldName", fieldName is not null), ("callSiteFixups", callSiteFixups is not null));
-                if (rejected is not null)
                 {
-                    return rejected;
-                }
+                    var rejected = RejectForeignParams("method", ("className", className is not null), ("fieldName", fieldName is not null), ("callSiteFixups", callSiteFixups is not null));
+                    if (rejected is not null)
+                    {
+                        return rejected;
+                    }
 
-                if (string.IsNullOrEmpty(methodName))
-                {
-                    return InvalidArgument("operation 'method' requires 'methodName'.");
-                }
+                    if (string.IsNullOrEmpty(methodName))
+                    {
+                        return InvalidArgument("operation 'method' requires 'methodName'.");
+                    }
 
-                var missing = MissingForAction(action, paramName, paramType);
-                if (missing is not null)
-                {
-                    return InvalidArgument($"operation 'method', action '{action}' requires {missing}.");
-                }
+                    var missing = MissingForAction(action, paramName, paramType);
+                    if (missing is not null)
+                    {
+                        return InvalidArgument($"operation 'method', action '{action}' requires {missing}.");
+                    }
 
-                return _signature.MethodSignature(reason, filePath, action, methodName, paramName, paramType, defaultValue, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, nullDefault);
-            }
+                    return _signature.MethodSignature(reason, filePath, action, methodName, paramName, paramType, defaultValue, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, nullDefault);
+                }
 
             case ParameterEditOperation.constructor:
-            {
-                var rejected = RejectForeignParams("constructor", ("methodName", methodName is not null));
-                if (rejected is not null)
                 {
-                    return rejected;
-                }
+                    var rejected = RejectForeignParams("constructor", ("methodName", methodName is not null));
+                    if (rejected is not null)
+                    {
+                        return rejected;
+                    }
 
-                if (string.IsNullOrEmpty(className))
-                {
-                    return InvalidArgument("operation 'constructor' requires 'className'.");
-                }
+                    if (string.IsNullOrEmpty(className))
+                    {
+                        return InvalidArgument("operation 'constructor' requires 'className'.");
+                    }
 
-                var missing = MissingForAction(action, paramName, paramType);
-                if (missing is not null)
-                {
-                    return InvalidArgument($"operation 'constructor', action '{action}' requires {missing}.");
-                }
+                    var missing = MissingForAction(action, paramName, paramType);
+                    if (missing is not null)
+                    {
+                        return InvalidArgument($"operation 'constructor', action '{action}' requires {missing}.");
+                    }
 
-                return _signature.ConstructorParameter(reason, filePath, action, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, defaultValue, nullDefault, callSiteFixups);
-            }
+                    return _signature.ConstructorParameter(reason, filePath, action, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken, defaultValue, nullDefault, callSiteFixups);
+                }
 
             default:
                 return InvalidArgument($"Unhandled operation '{operation}'. Valid values: {string.Join(", ", Enum.GetNames<ParameterEditOperation>())}.");

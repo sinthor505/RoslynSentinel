@@ -1168,7 +1168,7 @@ public class C {
         Assert.That(issues.Any(i => i.IssueType == "PotentialDoubleEnumeration"), Is.False, "List<T> is already materialized - using it twice is fine");
     }
 
-    // ── Inline Regex instantiation ────────────────────────────────────────
+    // ── InlineSymbolTool Regex instantiation ────────────────────────────────────────
     [Test]
     public async Task Flags_NewRegexInsideMethod()
     {

@@ -117,7 +117,7 @@ public class ContextHelperTests
     }
 
     // ── Regression: multi-line contextSnippet with mismatched indentation ────
-    // Reproduces a live ContosoOrders agent run (ExtractMethodSafe, Step 6): the agent had
+    // Reproduces a live ContosoOrders agent run (ExtractMethod, Step 6): the agent had
     // just read the exact 8/12-space-indented source via ReadFile, then retyped the snippet
     // from memory with flattened indentation (0 spaces on the outer lines, 4 in the loop body)
     // instead of copying it verbatim. An LLM reliably reproduces tokens but not incidental
@@ -489,7 +489,7 @@ public class ContextHelperTests
         "\r\n" +
         "public class Order\r\n" +
         "{\r\n" +
-        "    // Unused private method: nothing in the solution calls this. Target for SafeDeleteUnusedSymbol.\r\n" +
+        "    // Unused private method: nothing in the solution calls this. Target for DeleteUnusedSymbol.\r\n" +
         "    private string BuildInternalDebugLabel()\r\n" +
         "    {\r\n" +
         "        return $\"[{_customerId}] {_lines.Count} line(s)\";\r\n" +
@@ -521,7 +521,7 @@ public class ContextHelperTests
 
     private static readonly (string Label, string Source, string ContextSnippet)[] RealAgentContextSnippets =
     [
-        // ── ExtractMethodSafe on BuildOrderSummary's totals block, every shape actually sent ──
+        // ── ExtractMethod on BuildOrderSummary's totals block, every shape actually sent ──
         // The 3 entries below cross the loop's closing brace into the following sb.AppendLine
         // calls, which the transcript's own GetMethodSource result confirms had a blank line
         // between them at the time -> hence OrderProcessorLikeSourceWithBlankLineBeforeFooter,
@@ -555,14 +555,14 @@ public class ContextHelperTests
             ApplyDiscountLikeSource,
             "private decimal ApplyDiscount(decimal percentage)"),
 
-        // ── SafeDeleteUnusedSymbol on BuildInternalDebugLabel, actually sent (attempt 2) ──
+        // ── DeleteUnusedSymbol on BuildInternalDebugLabel, actually sent (attempt 2) ──
         // Note: the agent's own reconstruction subtly differs from the real source (see
         // FindSnippetPosition_SafeDelete_AgentFabricatedInterpolation_StillFailsToMatch below for
         // the case where that difference is real, not just whitespace) -> this entry uses the
         // agent's snippet reproduced verbatim against a source shape it DOES match structurally.
         ("attempt2_safeDelete_commentPlusSignature",
             ApplyDiscountLikeSource,
-            "// Unused private method: nothing in the solution calls this. Target for SafeDeleteUnusedSymbol.\nprivate string BuildInternalDebugLabel()\n{\n    return $\"[{_customerId}] {_lines.Count} line(s)\";\n}"),
+            "// Unused private method: nothing in the solution calls this. Target for DeleteUnusedSymbol.\nprivate string BuildInternalDebugLabel()\n{\n    return $\"[{_customerId}] {_lines.Count} line(s)\";\n}"),
     ];
 
     [Test]
@@ -585,7 +585,7 @@ public class ContextHelperTests
     }
 
     [Test]
-    [Description("Regression (ContosoOrders live agent run, attempt 2): the agent's SafeDeleteUnusedSymbol "
+    [Description("Regression (ContosoOrders live agent run, attempt 2): the agent's DeleteUnusedSymbol "
                  + "contextSnippet reconstructed the method body from memory instead of copying it "
                  + "verbatim, and introduced a genuine CONTENT difference, not just whitespace: it wrote "
                  + "return $\"{_customerId}\" + \" \" + {_lines.Count} + \" line(s)\"; (string concatenation, "
@@ -597,7 +597,7 @@ public class ContextHelperTests
     public void FindSnippetPosition_SafeDelete_AgentFabricatedInterpolation_StillFailsToMatch()
     {
         var fabricatedSnippet =
-            "// Unused private method: nothing in the solution calls this. Target for SafeDeleteUnusedSymbol.\n" +
+            "// Unused private method: nothing in the solution calls this. Target for DeleteUnusedSymbol.\n" +
             "private string BuildInternalDebugLabel()\n" +
             "{\n" +
             "    return $\"{_customerId}\" + \" \" + {_lines.Count} + \" line(s)\";\n" +

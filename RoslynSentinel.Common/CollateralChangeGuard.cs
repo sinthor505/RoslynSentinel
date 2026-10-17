@@ -141,7 +141,7 @@ public static class CollateralChangeGuard
         var suffix = string.Empty;
         if (raw.Length > MaxExcerptChars)
         {
-            var start = Math.Max(0, column - 1 - MaxExcerptChars / 3);
+            var start = Math.Max(0, column - 1 - (MaxExcerptChars / 3));
             var take = Math.Min(MaxExcerptChars, raw.Length - start);
             prefix = start > 0 ? "..." : string.Empty;
             suffix = start + take < raw.Length ? "..." : string.Empty;

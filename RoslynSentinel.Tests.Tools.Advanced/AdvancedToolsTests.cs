@@ -290,7 +290,7 @@ public class Service : IService {
         Assert.That(System.Text.RegularExpressions.Regex.IsMatch(result.UpdatedText!, "(?<!\r)\n"), Is.False, "Every line ending must stay CRLF.");
     }
 
-    // ===== Tool 5: IntroduceParameterObject =====
+    // ===== Tool 5: IntroduceParameterObjectTool =====
     [Test]
     [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task IntroduceParameterObject_CreatesRecord()

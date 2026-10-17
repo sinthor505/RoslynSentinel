@@ -37,7 +37,7 @@ public class ToolCallEchoFilterTests
 
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace" };
 
-    // Enough distinct callers of one target that FindReferences(kind: callers) exceeds the
+    // Enough distinct callers of one target that FindReferencesTool(kind: callers) exceeds the
     // 15 KB generic offload threshold on its own (same recipe as LargeResultOffloadFilterTests).
     private const int OffloadCallerCount = 400;
 

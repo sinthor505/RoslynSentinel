@@ -9,7 +9,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
-/// Regression tests for Bug #11 (GenerateToStringSafe) and Bug #12 (ExtractMethodSafe).
+/// Regression tests for Bug #11 (GenerateToStringSafe) and Bug #12 (ExtractMethodTool).
 ///
 /// Bug #11 -> MS generate_tostring produces unescaped literal braces in the interpolated
 /// string format section, e.g.:
@@ -21,7 +21,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 /// Bug #12 -> MS extract_method generates `private void MethodName(...)` when the
 /// selected block ends with `return <expression>`, producing a compile error because
 /// the extracted method has the wrong (void) return type.
-/// Fix: use SemanticModel.GetTypeInfo() on the return expression.
+/// Fix: use SemanticModel.GetTypeInfoTool() on the return expression.
 /// </summary>
 [TestFixture]
 [Category("MsAugmentResult")] // sentinel:auto-category
@@ -74,7 +74,7 @@ public class AuthUser
             "Must use {{ for the literal opening brace (CS8086 regression)");
         Assert.That(result.UpdatedContent, Does.Contain(" }}"),
             "Must use }} for the literal closing brace (CS8086 regression)");
-        // Member interpolations must still be present (unescaped)
+        // MemberTool interpolations must still be present (unescaped)
         Assert.That(result.UpdatedContent, Does.Contain("{Id}"),
             "Id interpolation must be present");
         Assert.That(result.UpdatedContent, Does.Contain("{Email}"),
@@ -274,12 +274,12 @@ public record OrderItem
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // Bug #12 -> ExtractMethodSafe
+    // Bug #12 -> ExtractMethodTool
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
     [Description("Bug #12 regression: return type must not be void when extracting 'return new T{}'")]
-    public async Task ExtractMethodSafe_ReturnNewObject_HasCorrectReturnType()
+    public async Task ExtractMethod_ReturnNewObject_HasCorrectReturnType()
     {
         const string source = @"
 public class Payload
@@ -314,7 +314,7 @@ public class Builder
 
     [Test]
     [Description("Extracting a void block should correctly produce void return type")]
-    public async Task ExtractMethodSafe_VoidBlock_HasVoidReturnType()
+    public async Task ExtractMethod_VoidBlock_HasVoidReturnType()
     {
         const string source = @"
 public class Logger
@@ -339,7 +339,7 @@ public class Logger
 
     [Test]
     [Description("Extracting 'return value * 2' should produce int return type and include parameter")]
-    public async Task ExtractMethodSafe_ReturnArithmetic_HasCorrectReturnTypeAndParameter()
+    public async Task ExtractMethod_ReturnArithmetic_HasCorrectReturnTypeAndParameter()
     {
         const string source = @"
 public class Calc
@@ -364,7 +364,7 @@ public class Calc
 
     [Test]
     [Description("Extracting a string return must produce string return type")]
-    public async Task ExtractMethodSafe_ReturnString_HasStringReturnType()
+    public async Task ExtractMethod_ReturnString_HasStringReturnType()
     {
         const string source = @"
 public class Formatter
@@ -386,7 +386,7 @@ public class Formatter
 
     [Test]
     [Description("Invalid method name returns Fail with a descriptive error")]
-    public async Task ExtractMethodSafe_InvalidMethodName_ReturnsFail()
+    public async Task ExtractMethod_InvalidMethodName_ReturnsFail()
     {
         const string source = @"
 public class C
@@ -408,7 +408,7 @@ public class C
 
     [Test]
     [Description("contextSnippet that doesn't exist in the file returns Fail")]
-    public async Task ExtractMethodSafe_SnippetNotFound_ReturnsFail()
+    public async Task ExtractMethod_SnippetNotFound_ReturnsFail()
     {
         const string source = @"
 public class C
@@ -429,7 +429,7 @@ public class C
 
     [Test]
     [Description("File not in the loaded solution returns Fail with a descriptive error")]
-    public async Task ExtractMethodSafe_FileNotInSolution_ReturnsFail()
+    public async Task ExtractMethod_FileNotInSolution_ReturnsFail()
     {
         SetSource("public class C { }", "C.cs");
 
@@ -444,7 +444,7 @@ public class C
 
     [Test]
     [Description("Static method extraction preserves static modifier on extracted method")]
-    public async Task ExtractMethodSafe_InStaticMethod_ExtractedMethodIsAlsoStatic()
+    public async Task ExtractMethod_InStaticMethod_ExtractedMethodIsAlsoStatic()
     {
         const string source = @"
 public class MathHelper
@@ -466,7 +466,7 @@ public class MathHelper
 
     [Test]
     [Description("Call site in the original method is replaced with the extracted method call")]
-    public async Task ExtractMethodSafe_ReplacesCallSiteCorrectly()
+    public async Task ExtractMethod_ReplacesCallSiteCorrectly()
     {
         const string source = @"
 public class Counter
@@ -679,13 +679,13 @@ public class BigModel
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // ExtractMethodSafe -> additional regression guards
+    // ExtractMethodTool -> additional regression guards
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
     [Description("Regression guard (Bug #12): generic return types (List<T>, Task<T>) must preserve "
                  + "the full generic signature. void is never acceptable for a value-returning block.")]
-    public async Task ExtractMethodSafe_GenericListReturn_HasCorrectReturnType()
+    public async Task ExtractMethod_GenericListReturn_HasCorrectReturnType()
     {
         const string source = @"
 using System.Collections.Generic;
@@ -711,7 +711,7 @@ public class DataFactory
 
     [Test]
     [Description("bool return type must be preserved correctly (not void).")]
-    public async Task ExtractMethodSafe_BoolReturn_HasCorrectReturnType()
+    public async Task ExtractMethod_BoolReturn_HasCorrectReturnType()
     {
         const string source = @"
 public class Validator
@@ -736,7 +736,7 @@ public class Validator
     [Test]
     [Description("Regression guard: extracting a method in a class with multiple methods must work. "
                  + "The engine must append the new method to the end of the type, not overwrite siblings.")]
-    public async Task ExtractMethodSafe_ClassWithMultipleMethods_PreservesAllMethods()
+    public async Task ExtractMethod_ClassWithMultipleMethods_PreservesAllMethods()
     {
         const string source = @"
 public class Service
@@ -769,7 +769,7 @@ public class Service
     [Test]
     [Description("Extracting from inside an if block (the exact pattern from AuthRepository during "
                  + "the ExpressRecipe live test) must produce the correct return type.")]
-    public async Task ExtractMethodSafe_ReturnInsideIfBlock_HasCorrectReturnType()
+    public async Task ExtractMethod_ReturnInsideIfBlock_HasCorrectReturnType()
     {
         const string source = @"
 public class AuthUserMapper
@@ -835,7 +835,7 @@ public class OrderLine
                  + "multi-statement block (declarations + the foreach that consumes them) must "
                  + "extract that entire block, including the loop itself, as a single call - not "
                  + "a per-iteration call.")]
-    public async Task ExtractMethodSafe_WholeBlockSnippetSpanningForeach_ExtractsEntireBlockAsOneCall()
+    public async Task ExtractMethod_WholeBlockSnippetSpanningForeach_ExtractsEntireBlockAsOneCall()
     {
         SetSource(ContosoOrdersLikeSource, "Order.cs");
 
@@ -861,7 +861,7 @@ public class OrderLine
                  + "behavior extracted just that one statement into a method called once per "
                  + "iteration, silently dropping the sibling statement and the loop from the "
                  + "extraction while still reporting IsSuccess=true.")]
-    public async Task ExtractMethodSafe_SingleStatementSnippetInsideAccumulatorLoop_RefusesAmbiguousExtraction()
+    public async Task ExtractMethod_SingleStatementSnippetInsideAccumulatorLoop_RefusesAmbiguousExtraction()
     {
         SetSource(ContosoOrdersLikeSource, "Order.cs");
 
@@ -886,7 +886,7 @@ public class OrderLine
                  + "the tool extracted just 'decimal runningTotal = 0m;' into a method that always "
                  + "returns 0, silently stranding the foreach and totalUnits in the caller while "
                  + "still reporting IsSuccess=true.")]
-    public async Task ExtractMethodSafe_SingleStatementSnippetImmediatelyBeforeAccumulatorLoop_RefusesAmbiguousExtraction()
+    public async Task ExtractMethod_SingleStatementSnippetImmediatelyBeforeAccumulatorLoop_RefusesAmbiguousExtraction()
     {
         SetSource(ContosoOrdersLikeSource, "Order.cs");
 
@@ -938,7 +938,7 @@ public class OrderLine
                  + "producing 'StringBuilder? sb' for a variable that is unconditionally constructed "
                  + "and never reassigned - and the generated body dereferenced it with no null check, "
                  + "producing a live CS8602 warning that did not exist before extraction.")]
-    public async Task ExtractMethodSafe_SelectionUsesEarlierDeclaredReferenceType_ParameterIsNotNullable()
+    public async Task ExtractMethod_SelectionUsesEarlierDeclaredReferenceType_ParameterIsNotNullable()
     {
         SetSource(StringBuilderFlowsIntoSelectionSource, "Order.cs");
 

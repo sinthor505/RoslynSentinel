@@ -19,7 +19,7 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 /// <summary>
 /// Runs the same whole-file-rewrite fix task as <see cref="WholeFileRewriteAgentTests"/> against
 /// <see cref="SizeGraduatedReproducer"/> variants of increasing padding-method count, to find where a
-/// local model's <c>ApplyDiff</c> success rate drops off as the target file (and thus the diff
+/// local model's <c>ApplyDiffTool</c> success rate drops off as the target file (and thus the diff
 /// payload the model must reproduce correctly) grows. Not run by default -> sizes and per-size repeat
 /// count are read from ROSLYNSENTINEL_MODELEVAL_SIZES / ROSLYNSENTINEL_MODELEVAL_REPEATS so an
 /// overnight/background run can sweep a wide range without recompiling. Every run's transcript and a
@@ -420,7 +420,7 @@ public class SizeThresholdAgentTests
 
         // Deliberately NOT asserting on transcript-level tool errors here: this method measures
         // whether the FINAL file is correct, not whether the model made a mistake en route. A
-        // failed ApplyDiff attempt followed by a successful self-correction (observed repeatedly
+        // failed ApplyDiffTool attempt followed by a successful self-correction (observed repeatedly
         // at larger sizes -> the model tries to call the helper before copying it in, gets a
         // CS0103, rereads, and fixes it) is exactly the size-correlated reliability signal this
         // sweep exists to measure via applyDiffErrorCount in the CSV -> it must not also flip

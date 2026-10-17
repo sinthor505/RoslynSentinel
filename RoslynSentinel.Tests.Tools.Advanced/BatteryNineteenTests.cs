@@ -82,13 +82,13 @@ public interface IOrderRepository
         _workspaceManager.SetTestSolution(solution);
     }
 
-    // --- GenerateClassesFromJson (sync) ---
+    // --- GenerateClassesFromJsonTool (sync) ---
     [Test]
     [Category("GenerationTools")] // sentinel:auto-category
     public void GenerateClassesFromJson_ValidJson_ReturnsResult()
     {
         var json = @"{""id"": 1, ""name"": ""test"", ""active"": true}";
-        var result = _generationTools.GenerateClassesFromJson(reason: "test message", json, "Product", "TestProj");
+        var result = _generationTools.GenerateClassesFromJsonTool(reason: "test message", json, "Product", "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -97,17 +97,17 @@ public interface IOrderRepository
     public void GenerateClassesFromJson_NestedJson_ReturnsResult()
     {
         var json = @"{""order"": {""id"": 1, ""items"": [{""sku"": ""A""}]}}";
-        var result = _generationTools.GenerateClassesFromJson(reason: "test message", json, "Root", "TestProj");
+        var result = _generationTools.GenerateClassesFromJsonTool(reason: "test message", json, "Root", "TestProj");
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- GenerateHttpClient ---
+    // --- GenerateHttpClientTool ---
     [Test]
     [Category("GenerationTools")] // sentinel:auto-category
     public async Task GenerateHttpClient_ValidController_ReturnsCode()
     {
         SetSource(ControllerSource, "Orders.cs");
-        var result = await _generationTools.GenerateHttpClient(reason: "test message", "Orders.cs", "OrdersController");
+        var result = await _generationTools.GenerateHttpClientTool(reason: "test message", "Orders.cs", "OrdersController");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
@@ -116,7 +116,7 @@ public interface IOrderRepository
     public async Task GenerateHttpClient_NonExistentFile_ReturnsMessage()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _generationTools.GenerateHttpClient(reason: "test message", "NonExistent.cs", "OrdersController");
+        var result = await _generationTools.GenerateHttpClientTool(reason: "test message", "NonExistent.cs", "OrdersController");
         Assert.That(result, Is.Not.Null, "Tools return a message rather than throwing for an unknown file.");
     }
 
@@ -188,13 +188,13 @@ public interface IOrderRepository
         Assert.That(result, Is.Null);
     }
 
-    // --- GenerateDefaultConfigJson ---
+    // --- GenerateDefaultConfigJsonTool ---
     [Test]
     [Category("GenerationTools")] // sentinel:auto-category
     public async Task GenerateDefaultConfigJson_ValidProject_ReturnsJson()
     {
         SetSource(PocoSource, "Order.cs");
-        var result = await _generationTools.GenerateDefaultConfigJson(reason: "test message", "TestProj");
+        var result = await _generationTools.GenerateDefaultConfigJsonTool(reason: "test message", "TestProj");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
@@ -203,7 +203,7 @@ public interface IOrderRepository
     public async Task GenerateDefaultConfigJson_UnknownProject_ReturnsMessage()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _generationTools.GenerateDefaultConfigJson(reason: "test message", "NoSuchProject");
+        var result = await _generationTools.GenerateDefaultConfigJsonTool(reason: "test message", "NoSuchProject");
         Assert.That(result, Is.Not.Null, "Tools return a message rather than throwing for an unknown project.");
     }
 
@@ -301,14 +301,14 @@ public interface IOrderRepository
         Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 
-    // --- InterpolateStringSafe ---
+    // --- InterpolateStringSafeTool ---
     [Test]
     [Category("GenerationTools")] // sentinel:auto-category
     public async Task InterpolateStringSafe_WithFormatCall_ReturnsCode()
     {
         const string src = @"namespace TestProj; public class Order { public string GetLabel(int id) { return string.Format(""{0}"", id); } }";
         SetSource(src, "Order.cs");
-        var result = await _generationTools.InterpolateStringSafe(reason: "test message", "Order.cs", @"string.Format(""{0}""");
+        var result = await _generationTools.InterpolateStringSafeTool(reason: "test message", "Order.cs", @"string.Format(""{0}""");
         Assert.That(result, Is.Not.Null.And.Not.Empty);
     }
 
@@ -317,7 +317,7 @@ public interface IOrderRepository
     public async Task InterpolateStringSafe_NonExistentFile_ReturnsMessage()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _generationTools.InterpolateStringSafe(reason: "test message", "NonExistent.cs", "string.Format");
+        var result = await _generationTools.InterpolateStringSafeTool(reason: "test message", "NonExistent.cs", "string.Format");
         Assert.That(result, Is.Not.Null, "Tools return a message rather than throwing for an unknown file.");
     }
 }

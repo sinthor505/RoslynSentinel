@@ -4,7 +4,7 @@ root = true
 # C# files
 [*.cs]
 
-# hide ca1852
+# Hide Diagnostic warnings
 dotnet_diagnostic.CA1852.severity = none
 dotnet_diagnostic.CA1707.severity = none
 dotnet_diagnostic.CA1822.severity = none
@@ -22,7 +22,8 @@ dotnet_diagnostic.CA1801.severity = none
 dotnet_diagnostic.IDE0060.severity = none
 dotnet_diagnostic.IDE0028.severity = none
 dotnet_diagnostic.CA2016.severity = warning
-
+dotnet_diagnostic.IDE0047.severity = none
+dotnet_diagnostic.IDE0061.severity = none
 
 dotnet_diagnostic.AsyncFixer01.severity = none
 

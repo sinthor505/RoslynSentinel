@@ -280,7 +280,6 @@ public class TestRunEngine
         ));
     }
 
-
     /// <summary>Detects a build-output file lock (MSB3021/MSB3026/MSB3027) in `dotnet test` output.
     /// Returns an actionable detail message, or null when no lock error is present.</summary>
     public static string? DetectFileLock(string stdout, string stderr)

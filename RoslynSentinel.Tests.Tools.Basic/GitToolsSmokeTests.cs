@@ -1,8 +1,8 @@
-// Smoke coverage for the Git tool's read-only operations (status/log/diff). Not a repro attempt for
-// the unreproduced one-off "Git(operation: status) hung indefinitely" TODO entry -> the 30s
+// Smoke coverage for the GitTool tool's read-only operations (status/log/diff). Not a repro attempt for
+// the unreproduced one-off "GitTool(operation: status) hung indefinitely" TODO entry -> the 30s
 // GitProcessTimeout added for that entry already gives it a bounded failure mode. The goal here is
 // just confirming each operation responds well within that bound against a real git repo, so a
-// regression that made every Git call slow/hang would fail fast in CI instead of only surfacing
+// regression that made every GitTool call slow/hang would fail fast in CI instead of only surfacing
 // live via a 30s timeout during actual use.
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -207,7 +207,7 @@ public class GitToolsSmokeTests
     public async Task Git_Status_RespondsWithinBoundAsync()
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var result = await _gitTools.Git(reason: "test message", GitOperation.status);
+        var result = await _gitTools.GitTool(reason: "test message", GitOperation.status);
         sw.Stop();
 
         Assert.That(result, Is.Not.Null);
@@ -218,7 +218,7 @@ public class GitToolsSmokeTests
     public async Task Git_Log_RespondsWithinBoundAsync()
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var result = await _gitTools.Git(reason: "test message", GitOperation.log, count: 5);
+        var result = await _gitTools.GitTool(reason: "test message", GitOperation.log, count: 5);
         sw.Stop();
 
         Assert.That(result, Is.Not.Null);
@@ -231,7 +231,7 @@ public class GitToolsSmokeTests
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "hello again");
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var result = await _gitTools.Git(reason: "test message", GitOperation.diff);
+        var result = await _gitTools.GitTool(reason: "test message", GitOperation.diff);
         sw.Stop();
 
         Assert.That(result, Is.Not.Null);
@@ -243,8 +243,8 @@ public class GitToolsSmokeTests
     {
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "hello again");
 
-        var unstagedResult = await _gitTools.Git(reason: "test message", GitOperation.diff, target: "unstaged");
-        var workingResult = await _gitTools.Git(reason: "test message", GitOperation.diff, target: "working");
+        var unstagedResult = await _gitTools.GitTool(reason: "test message", GitOperation.diff, target: "unstaged");
+        var workingResult = await _gitTools.GitTool(reason: "test message", GitOperation.diff, target: "working");
 
         Assert.That(!unstagedResult.IsError, Is.True);
         var unstagedDiff = (GitDiffResult)unstagedResult.SuccessData!;
@@ -261,7 +261,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Diff_UnknownRef_ListsValidTargetsAsync()
     {
-        var result = await _gitTools.Git(reason: "test message", GitOperation.diff, target: "nosuchref");
+        var result = await _gitTools.GitTool(reason: "test message", GitOperation.diff, target: "nosuchref");
 
         Assert.That(result.IsError, Is.True, "diff with unknown ref should be an error");
         Assert.That(result.ErrorData?.Message, Does.Contain("Valid diff targets"), "error message should list valid diff targets");
@@ -279,7 +279,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "add", "-A");
         RunGit(_repoDir, "commit", "-m", "second commit");
 
-        var result = await _gitTools.Git(reason: "test message", GitOperation.reset, mode: GitResetMode.soft, @ref: "HEAD~1");
+        var result = await _gitTools.GitTool(reason: "test message", GitOperation.reset, mode: GitResetMode.soft, @ref: "HEAD~1");
 
         Assert.That(result, Is.Not.Null);
         var status = result.SuccessData as GitStatusResult;
@@ -288,7 +288,7 @@ public class GitToolsSmokeTests
         Assert.That(status.Staged.Select(s => s.Path), Does.Contain("README.md"),
             "git reset --soft should leave the second commit's change staged, not discarded.");
 
-        var log = await _gitTools.Git(reason: "test message", GitOperation.log, count: 5);
+        var log = await _gitTools.GitTool(reason: "test message", GitOperation.log, count: 5);
         var logResult = log.SuccessData as GitLogResult;
         Assert.That(logResult?.Commits.Select(c => c.Message), Does.Not.Contain("second commit"),
             "git reset --soft should move HEAD past the second commit.");
@@ -304,7 +304,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "add", "-A");
         RunGit(_repoDir, "commit", "-m", "second commit");
 
-        var result = await _gitTools.Git(reason: "test message", GitOperation.reset, mode: GitResetMode.mixed, @ref: "HEAD~1");
+        var result = await _gitTools.GitTool(reason: "test message", GitOperation.reset, mode: GitResetMode.mixed, @ref: "HEAD~1");
 
         Assert.That(result, Is.Not.Null);
         var status = result.SuccessData as GitStatusResult;
@@ -337,7 +337,7 @@ public class GitToolsSmokeTests
 
             // _gitTools' own loaded-solution repo (_repoDir) is clean at this point - if repoPath were
             // ignored and the tool fell back to _repoDir, this would incorrectly come back clean too.
-            var result = await _gitTools.Git(reason: "test message", GitOperation.status, repoPath: otherRepoDir);
+            var result = await _gitTools.GitTool(reason: "test message", GitOperation.status, repoPath: otherRepoDir);
 
             Assert.That(result, Is.Not.Null);
             Assert.That(!result.IsError, Is.True);
@@ -363,7 +363,7 @@ public class GitToolsSmokeTests
     public async Task Git_Commit_ReturnsCommitHashLengthMatchingActualHashAsync()
     {
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "commit hash length test");
-        var result = await _gitTools.Git(reason: "test message", GitOperation.commit, message: "test commit", scope: GitStageScope.tracked);
+        var result = await _gitTools.GitTool(reason: "test message", GitOperation.commit, message: "test commit", scope: GitStageScope.tracked);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var commit = result.SuccessData as GitCommitResult;
@@ -383,10 +383,10 @@ public class GitToolsSmokeTests
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "revert hash length test");
         RunGit(_repoDir, "add", "-A");
         RunGit(_repoDir, "commit", "-m", "commit to revert");
-        var log = await _gitTools.Git(reason: "test message", GitOperation.log, count: 1);
+        var log = await _gitTools.GitTool(reason: "test message", GitOperation.log, count: 1);
         var hashToRevert = ((GitLogResult)log.SuccessData!).Commits[0].Hash;
 
-        var result = await _gitTools.Git(reason: "test message", GitOperation.revert, commitHash: hashToRevert);
+        var result = await _gitTools.GitTool(reason: "test message", GitOperation.revert, commitHash: hashToRevert);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var revert = result.SuccessData as GitRevertResult;
@@ -400,7 +400,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Commit_RepoPath_IsRejectedAsync()
     {
-        var result = await _gitTools.Git(reason: "test message", GitOperation.commit, message: "should be rejected", repoPath: _repoDir);
+        var result = await _gitTools.GitTool(reason: "test message", GitOperation.commit, message: "should be rejected", repoPath: _repoDir);
 
         Assert.That(result, Is.Not.Null);
         // The repoPath/mutating-op guard returns an error envelope (IsError = true, InvalidArguments), not a
@@ -424,7 +424,7 @@ public class GitToolsSmokeTests
         const string emDash = "—";
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), $"hello {emDash} again", System.Text.Encoding.UTF8);
 
-        var result = await _gitTools.Git(reason: "test message", GitOperation.diff);
+        var result = await _gitTools.GitTool(reason: "test message", GitOperation.diff);
 
         Assert.That(!result.IsError, Is.True);
         var diff = (GitDiffResult)result.SuccessData!;
@@ -445,7 +445,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "add", "-A");
         RunGit(_repoDir, "commit", "-m", "add non-ascii content");
 
-        var result = await _gitTools.Git(reason: "test message", GitOperation.show, target: "HEAD");
+        var result = await _gitTools.GitTool(reason: "test message", GitOperation.show, target: "HEAD");
 
         Assert.That(!result.IsError, Is.True);
         var show = (GitShowResult)result.SuccessData!;
@@ -467,7 +467,7 @@ public class GitToolsSmokeTests
         // of silently returning corrupted text.
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "hello � again");
 
-        var result = await _gitTools.Git(reason: "test message", GitOperation.diff);
+        var result = await _gitTools.GitTool(reason: "test message", GitOperation.diff);
 
         Assert.That(!result.IsError, Is.True);
         var diff = (GitDiffResult)result.SuccessData!;
@@ -488,10 +488,10 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "commit", "-m", "add original.txt");
 
         File.Move(Path.Combine(_repoDir, "original.txt"), Path.Combine(_repoDir, "renamed.txt"));
-        var stageResult = await _gitTools.Git(reason: "stage rename", GitOperation.stage, scope: GitStageScope.all);
+        var stageResult = await _gitTools.GitTool(reason: "stage rename", GitOperation.stage, scope: GitStageScope.all);
         Assert.That(!stageResult.IsError, Is.True, stageResult.ErrorData?.Message);
 
-        var commitResult = await _gitTools.Git(
+        var commitResult = await _gitTools.GitTool(
             reason: "commit both sides of rename",
             GitOperation.commit,
             message: "rename file",
@@ -520,7 +520,7 @@ public class GitToolsSmokeTests
         // Delete the file on disk to simulate case where it's tracked but gone.
         File.Delete(Path.Combine(_repoDir, "TestResults/test.coverage"));
 
-        var commitResult = await _gitTools.Git(
+        var commitResult = await _gitTools.GitTool(
             reason: "commit deletion under ignored dir",
             GitOperation.commit,
             message: "remove coverage file",
@@ -556,7 +556,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "add", "-A");
 
         // Commit only file1 via the tool (no scope parameter).
-        var commitResult = await _gitTools.Git(
+        var commitResult = await _gitTools.GitTool(
             reason: "commit with files, no scope",
             GitOperation.commit,
             message: "modify file1",
@@ -586,7 +586,7 @@ public class GitToolsSmokeTests
         File.WriteAllText(Path.Combine(_repoDir, "new2.txt"), "new content2");
 
         // Stage only new1.txt.
-        var stageResult = await _gitTools.Git(
+        var stageResult = await _gitTools.GitTool(
             reason: "stage with files, no scope",
             GitOperation.stage,
             files: "new1.txt");
@@ -610,7 +610,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "add", "-A");
         RunGit(_repoDir, "commit", "-m", "add existing");
 
-        var stageResult = await _gitTools.Git(
+        var stageResult = await _gitTools.GitTool(
             reason: "stage missing path",
             GitOperation.stage,
             scope: GitStageScope.listed,
@@ -635,7 +635,7 @@ public class GitToolsSmokeTests
         // Must exist on disk: a path that is neither tracked nor on disk is (correctly) reported Missing.
         WriteFile("ignored/file.txt", "ignored content");
 
-        var stageResult = await _gitTools.Git(
+        var stageResult = await _gitTools.GitTool(
             reason: "stage ignored path",
             GitOperation.stage,
             scope: GitStageScope.listed,
@@ -659,7 +659,7 @@ public class GitToolsSmokeTests
         WriteFile("ignored/file.txt", "ignored content");
         WriteFile("ok.txt", "fine");
 
-        var stageResult = await _gitTools.Git(
+        var stageResult = await _gitTools.GitTool(
             reason: "stage mixed list",
             GitOperation.stage,
             scope: GitStageScope.listed,
@@ -684,7 +684,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "add", "-A");
 
         // Commit only the new side of the rename.
-        var commitResult = await _gitTools.Git(
+        var commitResult = await _gitTools.GitTool(
             reason: "commit only new side",
             GitOperation.commit,
             message: "rename",
@@ -716,7 +716,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "add", "-A");
         Assert.That(StagedPaths(), Is.EquivalentTo(new[] { "a.txt", "b.txt", "c.txt" }));
 
-        var commitResult = await _gitTools.Git(
+        var commitResult = await _gitTools.GitTool(
             reason: "commit staged deletion only",
             GitOperation.commit,
             message: "delete b",
@@ -744,7 +744,7 @@ public class GitToolsSmokeTests
         Directory.Delete(Path.Combine(_repoDir, "subdir"), recursive: true);
         Assert.That(StagedPaths(), Is.Empty, "precondition: nothing staged before the tool call");
 
-        var stageResult = await _gitTools.Git(
+        var stageResult = await _gitTools.GitTool(
             reason: "stage deleted tracked directory",
             GitOperation.stage,
             scope: GitStageScope.listed,
@@ -763,7 +763,7 @@ public class GitToolsSmokeTests
         WriteFile("test[a].txt", "literal special chars");
         WriteFile("testa.txt", "would match glob");
 
-        var stageResult = await _gitTools.Git(
+        var stageResult = await _gitTools.GitTool(
             reason: "stage literal with special chars",
             GitOperation.stage,
             scope: GitStageScope.listed,
@@ -803,7 +803,7 @@ public class GitToolsSmokeTests
             "precondition: git must emit the LF/CRLF warning in this flow, otherwise this test proves nothing");
         Assert.That(raw.Stderr, Does.Contain("hook-rejected"));
 
-        var commitResult = await _gitTools.Git(
+        var commitResult = await _gitTools.GitTool(
             reason: "commit with failing hook under crlf warnings",
             GitOperation.commit,
             message: "should fail",
@@ -825,7 +825,7 @@ public class GitToolsSmokeTests
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "modified");
         RunGit(_repoDir, "add", "-A");
 
-        var result = await _gitTools.Git(
+        var result = await _gitTools.GitTool(
             reason: "attempt files plus all scope",
             GitOperation.commit,
             message: "test",
@@ -845,7 +845,7 @@ public class GitToolsSmokeTests
         // files plus scope: all should return a refusal for stage too.
         File.WriteAllText(Path.Combine(_repoDir, "new.txt"), "new");
 
-        var result = await _gitTools.Git(
+        var result = await _gitTools.GitTool(
             reason: "attempt files plus all scope on stage",
             GitOperation.stage,
             scope: GitStageScope.all,
@@ -865,7 +865,7 @@ public class GitToolsSmokeTests
         WriteFile("subdir/file1.txt", "content1");
         WriteFile("subdir/file2.txt", "content2");
 
-        var result = await _gitTools.Git(
+        var result = await _gitTools.GitTool(
             reason: "stage a directory",
             GitOperation.stage,
             scope: GitStageScope.listed,
@@ -894,7 +894,7 @@ public class GitToolsSmokeTests
         WriteFile(spaced, "a");
         WriteFile(accented, "b");
 
-        var statusResult = await _gitTools.Git(reason: "list untracked paths", GitOperation.status);
+        var statusResult = await _gitTools.GitTool(reason: "list untracked paths", GitOperation.status);
         Assert.That(!statusResult.IsError, Is.True, statusResult.ErrorData?.Message);
         var status = (GitStatusResult)statusResult.SuccessData!;
         Assert.That(status.Untracked, Is.EquivalentTo(new[] { spaced, accented }),
@@ -902,7 +902,7 @@ public class GitToolsSmokeTests
 
         // Stage using exactly the strings status returned.
         var files = System.Text.Json.JsonSerializer.Serialize(status.Untracked.ToArray());
-        var stageResult = await _gitTools.Git(reason: "stage status-returned paths", GitOperation.stage, files: files);
+        var stageResult = await _gitTools.GitTool(reason: "stage status-returned paths", GitOperation.stage, files: files);
         Assert.That(!stageResult.IsError, Is.True, stageResult.ErrorData?.Message);
         Assert.That(StagedPaths(), Is.EquivalentTo(new[] { spaced, accented }));
 
@@ -911,7 +911,7 @@ public class GitToolsSmokeTests
 
         // Commit one of them, again using the returned string; RemainingStaged must report the
         // other one unquoted so it too can be fed back into files.
-        var commitResult = await _gitTools.Git(
+        var commitResult = await _gitTools.GitTool(
             reason: "commit the spaced path", GitOperation.commit, message: "add spaced", files: spaced);
         Assert.That(!commitResult.IsError, Is.True, commitResult.ErrorData?.Message);
         var commit = (GitCommitResult)commitResult.SuccessData!;
@@ -932,7 +932,7 @@ public class GitToolsSmokeTests
         // whitespace handling are both exercised.
         RunGit(_repoDir, "mv", "old name.txt", "new name.txt");
 
-        var result = await _gitTools.Git(reason: "status after rename", GitOperation.status);
+        var result = await _gitTools.GitTool(reason: "status after rename", GitOperation.status);
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var status = (GitStatusResult)result.SuccessData!;
 
@@ -945,7 +945,7 @@ public class GitToolsSmokeTests
         // A non-rename entry has no OriginalPath.
         WriteFile("plain.txt", "x");
         RunGit(_repoDir, "add", "plain.txt");
-        var again = (GitStatusResult)(await _gitTools.Git(reason: "status with plain add", GitOperation.status)).SuccessData!;
+        var again = (GitStatusResult)(await _gitTools.GitTool(reason: "status with plain add", GitOperation.status)).SuccessData!;
         Assert.That(again.Staged.Single(e => e.Path == "plain.txt").OriginalPath, Is.Null);
     }
 
@@ -959,14 +959,14 @@ public class GitToolsSmokeTests
         }
 
         // Default (50): 60 entries is over the threshold, so the result is truncated to a sample.
-        var defaultResult = await _gitTools.Git(reason: "default status", GitOperation.status);
+        var defaultResult = await _gitTools.GitTool(reason: "default status", GitOperation.status);
         var truncated = (GitStatusResult)defaultResult.SuccessData!;
         Assert.That(truncated.IsTruncated, Is.True);
         Assert.That(truncated.TotalUntrackedCount, Is.EqualTo(60), "counts stay complete when truncated");
         Assert.That(truncated.Untracked, Has.Count.EqualTo(10));
 
         // maxEntries above 50 lists every entry, no truncation.
-        var bigResult = await _gitTools.Git(reason: "status with larger cap", GitOperation.status, maxEntries: 100);
+        var bigResult = await _gitTools.GitTool(reason: "status with larger cap", GitOperation.status, maxEntries: 100);
         Assert.That(!bigResult.IsError, Is.True, bigResult.ErrorData?.Message);
         var full = (GitStatusResult)bigResult.SuccessData!;
         Assert.That(full.IsTruncated, Is.False);
@@ -974,9 +974,9 @@ public class GitToolsSmokeTests
         Assert.That(full.Untracked, Does.Contain("bulk00.txt").And.Contain("bulk59.txt"));
 
         // Boundary: total == maxEntries is not truncated; one fewer is.
-        var exact = (GitStatusResult)(await _gitTools.Git(reason: "exact cap", GitOperation.status, maxEntries: 60)).SuccessData!;
+        var exact = (GitStatusResult)(await _gitTools.GitTool(reason: "exact cap", GitOperation.status, maxEntries: 60)).SuccessData!;
         Assert.That(exact.IsTruncated, Is.False);
-        var under = (GitStatusResult)(await _gitTools.Git(reason: "cap below total", GitOperation.status, maxEntries: 59)).SuccessData!;
+        var under = (GitStatusResult)(await _gitTools.GitTool(reason: "cap below total", GitOperation.status, maxEntries: 59)).SuccessData!;
         Assert.That(under.IsTruncated, Is.True);
     }
 
@@ -985,7 +985,7 @@ public class GitToolsSmokeTests
     [TestCase(5001)]
     public async Task Git_Status_MaxEntriesOutOfRange_IsRefusedWithNamedParameterAsync(int maxEntries)
     {
-        var result = await _gitTools.Git(reason: "out of range cap", GitOperation.status, maxEntries: maxEntries);
+        var result = await _gitTools.GitTool(reason: "out of range cap", GitOperation.status, maxEntries: maxEntries);
 
         Assert.That(!result.IsError, Is.False);
         var message = result.ErrorData?.Message;
@@ -1007,7 +1007,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "commit", "-m", "add three files");
 
         // show + nameOnly: --name-status lines, no patch.
-        var nameOnly = await _gitTools.Git(reason: "show name list", GitOperation.show, target: "HEAD", nameOnly: true);
+        var nameOnly = await _gitTools.GitTool(reason: "show name list", GitOperation.show, target: "HEAD", nameOnly: true);
         Assert.That(!nameOnly.IsError, Is.True, nameOnly.ErrorData?.Message);
         var nameShow = (GitShowResult)nameOnly.SuccessData!;
         Assert.That(nameShow.FilesChanged, Is.EqualTo(3));
@@ -1016,7 +1016,7 @@ public class GitToolsSmokeTests
         Assert.That(nameShow.Diff, Does.Not.Contain("diff --git").And.Not.Contain("+alpha"), "no patch text");
 
         // show + stat: --stat text, no patch.
-        var statOnly = await _gitTools.Git(reason: "show stat", GitOperation.show, target: "HEAD", stat: true);
+        var statOnly = await _gitTools.GitTool(reason: "show stat", GitOperation.show, target: "HEAD", stat: true);
         Assert.That(!statOnly.IsError, Is.True, statOnly.ErrorData?.Message);
         var statShow = (GitShowResult)statOnly.SuccessData!;
         Assert.That(statShow.FilesChanged, Is.EqualTo(3));
@@ -1025,15 +1025,15 @@ public class GitToolsSmokeTests
 
         // diff honours the same flags (working-tree change to one file).
         WriteFile("a.txt", "alpha\nalpha2\nalpha3\n");
-        var diffNames = (GitDiffResult)(await _gitTools.Git(reason: "diff name list", GitOperation.diff, nameOnly: true)).SuccessData!;
+        var diffNames = (GitDiffResult)(await _gitTools.GitTool(reason: "diff name list", GitOperation.diff, nameOnly: true)).SuccessData!;
         Assert.That(diffNames.Diff.Trim(), Is.EqualTo("M\ta.txt"));
         Assert.That(diffNames.FilesChanged, Is.EqualTo(1));
-        var diffStat = (GitDiffResult)(await _gitTools.Git(reason: "diff stat", GitOperation.diff, stat: true)).SuccessData!;
+        var diffStat = (GitDiffResult)(await _gitTools.GitTool(reason: "diff stat", GitOperation.diff, stat: true)).SuccessData!;
         Assert.That(diffStat.Diff, Does.Contain("a.txt").And.Contain("1 file changed"));
         Assert.That(diffStat.FilesChanged, Is.EqualTo(1));
 
         // Default is still the full patch.
-        var patch = (GitDiffResult)(await _gitTools.Git(reason: "diff patch", GitOperation.diff)).SuccessData!;
+        var patch = (GitDiffResult)(await _gitTools.GitTool(reason: "diff patch", GitOperation.diff)).SuccessData!;
         Assert.That(patch.Diff, Does.Contain("diff --git").And.Contain("+alpha3"));
     }
 
@@ -1041,7 +1041,7 @@ public class GitToolsSmokeTests
     [TestCase(GitOperation.show)]
     public async Task Git_DiffAndShow_NameOnlyPlusStat_IsRefusedNamingBothParametersAsync(GitOperation operation)
     {
-        var result = await _gitTools.Git(reason: "both format flags", operation, target: operation == GitOperation.show ? "HEAD" : "working", nameOnly: true, stat: true);
+        var result = await _gitTools.GitTool(reason: "both format flags", operation, target: operation == GitOperation.show ? "HEAD" : "working", nameOnly: true, stat: true);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.Message, Does.Contain("nameOnly").And.Contain("stat"),
@@ -1058,7 +1058,7 @@ public class GitToolsSmokeTests
         var emoji = char.ConvertFromUtf32(0x1F600);
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), string.Concat(Enumerable.Repeat(emoji, 2000)), System.Text.Encoding.UTF8);
 
-        var result = await _gitTools.Git(reason: "diff with tiny cap", GitOperation.diff, maxBytes: 1024);
+        var result = await _gitTools.GitTool(reason: "diff with tiny cap", GitOperation.diff, maxBytes: 1024);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var diff = (GitDiffResult)result.SuccessData!;
@@ -1111,7 +1111,7 @@ public class GitToolsSmokeTests
         Assert.That(RunGitCapture("status", "--porcelain=v1"), Does.Contain(expectedPair + " " + relPath),
             "fixture sanity: git itself must report the " + expectedPair + " pair");
 
-        var result = await _gitTools.Git(reason: "status during merge conflict", GitOperation.status);
+        var result = await _gitTools.GitTool(reason: "status during merge conflict", GitOperation.status);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var status = (GitStatusResult)result.SuccessData!;
@@ -1133,7 +1133,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "commit", "-m", "second commit");
         var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
 
-        var result = await _gitTools.Git(reason: "bare reset", GitOperation.reset, mode: mode);
+        var result = await _gitTools.GitTool(reason: "bare reset", GitOperation.reset, mode: mode);
 
         Assert.That(!result.IsError, Is.False, "reset must no longer default to HEAD~1");
         var message = result.ErrorData?.Message;
@@ -1157,22 +1157,22 @@ public class GitToolsSmokeTests
         var firstHash = RunGitCapture("rev-parse", "HEAD~1").Trim();
 
         // log: ref is the start ref, so history begins at the first commit.
-        var log = await _gitTools.Git(reason: "log from ref", GitOperation.log, @ref: "HEAD~1");
+        var log = await _gitTools.GitTool(reason: "log from ref", GitOperation.log, @ref: "HEAD~1");
         Assert.That(!log.IsError, Is.True, log.ErrorData?.Message);
         Assert.That(((GitLogResult)log.SuccessData!).Commits.Select(c => c.Message), Is.EqualTo(new[] { "initial commit" }));
 
         // log: the branchName alias still works and agrees with ref when both carry the same value.
-        var aliasLog = await _gitTools.Git(reason: "log from alias", GitOperation.log, branchName: "HEAD~1");
+        var aliasLog = await _gitTools.GitTool(reason: "log from alias", GitOperation.log, branchName: "HEAD~1");
         Assert.That(((GitLogResult)aliasLog.SuccessData!).Commits, Has.Count.EqualTo(1));
-        var sameLog = await _gitTools.Git(reason: "log with equal ref and alias", GitOperation.log, @ref: "HEAD~1", branchName: "HEAD~1");
+        var sameLog = await _gitTools.GitTool(reason: "log with equal ref and alias", GitOperation.log, @ref: "HEAD~1", branchName: "HEAD~1");
         Assert.That(!sameLog.IsError, Is.True, "identical values are not a conflict");
 
         // show: ref names the commit; commitHash and target aliases resolve to the same commit.
         foreach (var show in new[]
         {
-            await _gitTools.Git(reason: "show by ref", GitOperation.show, @ref: firstHash),
-            await _gitTools.Git(reason: "show by commitHash", GitOperation.show, commitHash: firstHash),
-            await _gitTools.Git(reason: "show by target", GitOperation.show, target: firstHash),
+            await _gitTools.GitTool(reason: "show by ref", GitOperation.show, @ref: firstHash),
+            await _gitTools.GitTool(reason: "show by commitHash", GitOperation.show, commitHash: firstHash),
+            await _gitTools.GitTool(reason: "show by target", GitOperation.show, target: firstHash),
         })
         {
             Assert.That(!show.IsError, Is.True, show.ErrorData?.Message);
@@ -1180,12 +1180,12 @@ public class GitToolsSmokeTests
         }
 
         // diff: ref diffs the working tree against that ref.
-        var diff = await _gitTools.Git(reason: "diff against ref", GitOperation.diff, @ref: "HEAD~1", nameOnly: true);
+        var diff = await _gitTools.GitTool(reason: "diff against ref", GitOperation.diff, @ref: "HEAD~1", nameOnly: true);
         Assert.That(!diff.IsError, Is.True, diff.ErrorData?.Message);
         Assert.That(((GitDiffResult)diff.SuccessData!).Diff.Trim(), Is.EqualTo("M\tREADME.md"));
 
         // reset: the branchName alias is still accepted as the ref.
-        var reset = await _gitTools.Git(reason: "reset via alias", GitOperation.reset, branchName: "HEAD~1", mode: GitResetMode.soft);
+        var reset = await _gitTools.GitTool(reason: "reset via alias", GitOperation.reset, branchName: "HEAD~1", mode: GitResetMode.soft);
         Assert.That(!reset.IsError, Is.True, reset.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(firstHash));
     }
@@ -1201,12 +1201,12 @@ public class GitToolsSmokeTests
 
         var cases = new (string Label, string AliasName, Func<Task<SentinelCallToolResult<object>>> Call)[]
         {
-            ("log/branchName", "branchName", () => _gitTools.Git(reason: "conflict", GitOperation.log, @ref: "HEAD", branchName: "HEAD~1")),
-            ("show/commitHash", "commitHash", () => _gitTools.Git(reason: "conflict", GitOperation.show, @ref: "HEAD", commitHash: firstHash)),
-            ("show/target", "target", () => _gitTools.Git(reason: "conflict", GitOperation.show, @ref: "HEAD", target: firstHash)),
-            ("show/commitHash+target", "commitHash", () => _gitTools.Git(reason: "conflict", GitOperation.show, commitHash: "HEAD", target: firstHash)),
-            ("diff/target", "target", () => _gitTools.Git(reason: "conflict", GitOperation.diff, @ref: "HEAD", target: "staged")),
-            ("reset/branchName", "branchName", () => _gitTools.Git(reason: "conflict", GitOperation.reset, @ref: "HEAD~1", branchName: "HEAD")),
+            ("log/branchName", "branchName", () => _gitTools.GitTool(reason: "conflict", GitOperation.log, @ref: "HEAD", branchName: "HEAD~1")),
+            ("show/commitHash", "commitHash", () => _gitTools.GitTool(reason: "conflict", GitOperation.show, @ref: "HEAD", commitHash: firstHash)),
+            ("show/target", "target", () => _gitTools.GitTool(reason: "conflict", GitOperation.show, @ref: "HEAD", target: firstHash)),
+            ("show/commitHash+target", "commitHash", () => _gitTools.GitTool(reason: "conflict", GitOperation.show, commitHash: "HEAD", target: firstHash)),
+            ("diff/target", "target", () => _gitTools.GitTool(reason: "conflict", GitOperation.diff, @ref: "HEAD", target: "staged")),
+            ("reset/branchName", "branchName", () => _gitTools.GitTool(reason: "conflict", GitOperation.reset, @ref: "HEAD~1", branchName: "HEAD")),
         };
 
         foreach (var (label, aliasName, call) in cases)
@@ -1227,7 +1227,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Ref_OnUnsupportedOperation_IsRefusedAsync()
     {
-        var result = await _gitTools.Git(reason: "ref on branch", GitOperation.branch, @ref: "HEAD");
+        var result = await _gitTools.GitTool(reason: "ref on branch", GitOperation.branch, @ref: "HEAD");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
@@ -1241,7 +1241,7 @@ public class GitToolsSmokeTests
         var baseBranch = RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim();
 
         // Missing branch: created, and reported as created.
-        var created = await _gitTools.Git(reason: "create and switch", GitOperation.checkout, branchName: "topic", createBranch: true);
+        var created = await _gitTools.GitTool(reason: "create and switch", GitOperation.checkout, branchName: "topic", createBranch: true);
         Assert.That(!created.IsError, Is.True, created.ErrorData?.Message);
         var createdResult = (GitCheckoutResult)created.SuccessData!;
         Assert.That(createdResult.CreatedNewBranch, Is.True);
@@ -1256,7 +1256,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "checkout", baseBranch);
 
         // Existing branch: plain checkout, not an error, and CreatedNewBranch is false.
-        var existing = await _gitTools.Git(reason: "create-or-switch existing", GitOperation.checkout, branchName: "topic", createBranch: true);
+        var existing = await _gitTools.GitTool(reason: "create-or-switch existing", GitOperation.checkout, branchName: "topic", createBranch: true);
         Assert.That(!existing.IsError, Is.True, existing.ErrorData?.Message);
         var existingResult = (GitCheckoutResult)existing.SuccessData!;
         Assert.That(existingResult.CreatedNewBranch, Is.False, "the branch already existed, so nothing was created");
@@ -1266,7 +1266,7 @@ public class GitToolsSmokeTests
 
         // A startPoint cannot apply to an existing branch: still a plain checkout, but say so.
         RunGit(_repoDir, "checkout", baseBranch);
-        var withStart = await _gitTools.Git(reason: "existing with startPoint", GitOperation.checkout, branchName: "topic", createBranch: true, startPoint: "HEAD");
+        var withStart = await _gitTools.GitTool(reason: "existing with startPoint", GitOperation.checkout, branchName: "topic", createBranch: true, startPoint: "HEAD");
         Assert.That(!withStart.IsError, Is.True, withStart.ErrorData?.Message);
         var withStartResult = (GitCheckoutResult)withStart.SuccessData!;
         Assert.That(withStartResult.CreatedNewBranch, Is.False);
@@ -1280,7 +1280,7 @@ public class GitToolsSmokeTests
         var baseBranch = RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim();
         RunGit(_repoDir, "branch", "other");
 
-        var result = await _gitTools.Git(reason: "startPoint alone", GitOperation.checkout, branchName: "other", startPoint: "HEAD");
+        var result = await _gitTools.GitTool(reason: "startPoint alone", GitOperation.checkout, branchName: "other", startPoint: "HEAD");
 
         Assert.That(!result.IsError, Is.False, "a startPoint that would be silently ignored must be refused");
         Assert.That(result.ErrorData?.Message, Does.Contain("startPoint").And.Contain("createBranch"));
@@ -1314,7 +1314,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "commit", "-m", "add file named feat");
         Assert.That(RunGitRaw("checkout", "feat").ExitCode, Is.Not.EqualTo(0), "fixture sanity: bare checkout of the name is ambiguous");
 
-        var result = await _gitTools.Git(reason: "checkout ambiguous name", GitOperation.checkout, branchName: "feat");
+        var result = await _gitTools.GitTool(reason: "checkout ambiguous name", GitOperation.checkout, branchName: "feat");
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim(), Is.EqualTo("feat"));
@@ -1358,7 +1358,7 @@ public class GitToolsSmokeTests
             var bare = RunGitRaw("pull", "origin");
             Assert.That(bare.ExitCode, Is.Not.EqualTo(0), "fixture sanity: a bare pull must fail here: " + bare.Stderr);
 
-            var result = await _gitTools.Git(reason: "pull divergent", GitOperation.pull);
+            var result = await _gitTools.GitTool(reason: "pull divergent", GitOperation.pull);
 
             Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
             Assert.That(File.Exists(Path.Combine(_repoDir, "remote.txt")), Is.True, "the remote commit must be merged in");
@@ -1377,7 +1377,7 @@ public class GitToolsSmokeTests
         var branch = AddBareRemoteAndPush();
         DivergeFromRemote(branch);
 
-        var result = await _gitTools.Git(reason: "pull with rebase", GitOperation.pull, rebase: true);
+        var result = await _gitTools.GitTool(reason: "pull with rebase", GitOperation.pull, rebase: true);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-list", "--merges", "--count", "HEAD").Trim(), Is.EqualTo("0"), "rebase=true must not create a merge commit");
@@ -1391,7 +1391,7 @@ public class GitToolsSmokeTests
         AddBareRemoteAndPush();
         var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
 
-        var result = await _gitTools.Git(reason: "amend pushed head", GitOperation.commit, amend: true, message: "reworded");
+        var result = await _gitTools.GitTool(reason: "amend pushed head", GitOperation.commit, amend: true, message: "reworded");
 
         Assert.That(!result.IsError, Is.False, "amending a commit already contained in its upstream must be refused");
         Assert.That(result.ErrorData?.Message, Does.Contain("upstream"), "error must explain the upstream reason");
@@ -1404,7 +1404,7 @@ public class GitToolsSmokeTests
     {
         var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
 
-        var result = await _gitTools.Git(reason: "amend local only", GitOperation.commit, amend: true, message: "reworded locally");
+        var result = await _gitTools.GitTool(reason: "amend local only", GitOperation.commit, amend: true, message: "reworded locally");
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.Not.EqualTo(headBefore), "amend must rewrite HEAD");
@@ -1420,7 +1420,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "commit", "-m", "unpushed commit");
         var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
 
-        var result = await _gitTools.Git(reason: "amend unpushed head", GitOperation.commit, amend: true, message: "reworded unpushed");
+        var result = await _gitTools.GitTool(reason: "amend unpushed head", GitOperation.commit, amend: true, message: "reworded unpushed");
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.Not.EqualTo(headBefore), "amend must rewrite the unpushed HEAD");
@@ -1436,7 +1436,7 @@ public class GitToolsSmokeTests
         CreateMergeConflict("shared.txt", existsInBase: true);
         var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
 
-        var result = await _gitTools.Git(reason: "abort conflicted merge", GitOperation.abort);
+        var result = await _gitTools.GitTool(reason: "abort conflicted merge", GitOperation.abort);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var status = (GitStatusResult)result.SuccessData!;
@@ -1452,7 +1452,7 @@ public class GitToolsSmokeTests
     {
         var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
 
-        var result = await _gitTools.Git(reason: "abort with nothing to abort", GitOperation.abort);
+        var result = await _gitTools.GitTool(reason: "abort with nothing to abort", GitOperation.abort);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.Message, Does.Contain("Nothing to abort"));
@@ -1463,11 +1463,11 @@ public class GitToolsSmokeTests
     [Category("GitStatusResult")] // sentinel:auto-category
     public async Task Git_Status_InProgress_IsNullWhenIdleAndMergeDuringConflictedMergeAsync()
     {
-        var idle = await _gitTools.Git(reason: "status when idle", GitOperation.status);
+        var idle = await _gitTools.GitTool(reason: "status when idle", GitOperation.status);
         Assert.That(((GitStatusResult)idle.SuccessData!).InProgress, Is.Null);
 
         CreateMergeConflict("shared.txt", existsInBase: true);
-        var merging = await _gitTools.Git(reason: "status during merge", GitOperation.status);
+        var merging = await _gitTools.GitTool(reason: "status during merge", GitOperation.status);
 
         Assert.That(!merging.IsError, Is.True, merging.ErrorData?.Message);
         Assert.That(((GitStatusResult)merging.SuccessData!).InProgress, Is.EqualTo("merge"));
@@ -1497,14 +1497,14 @@ public class GitToolsSmokeTests
         var branch = AddBareRemoteAndPush();
         var localHead = DivergeConflictingFromRemote(branch);
 
-        var pull = await _gitTools.Git(reason: "conflicting pull", GitOperation.pull, rebase: rebase);
+        var pull = await _gitTools.GitTool(reason: "conflicting pull", GitOperation.pull, rebase: rebase);
 
         Assert.That(!pull.IsError, Is.False, "fixture must produce a conflict");
         Assert.That(pull.ErrorData?.Message, Does.Contain("mid-" + expectedState).And.Contain("operation: abort"));
-        var during = (GitStatusResult)(await _gitTools.Git(reason: "status mid-pull", GitOperation.status)).SuccessData!;
+        var during = (GitStatusResult)(await _gitTools.GitTool(reason: "status mid-pull", GitOperation.status)).SuccessData!;
         Assert.That(during.InProgress, Is.EqualTo(expectedState));
 
-        var abort = await _gitTools.Git(reason: "abort conflicting pull", GitOperation.abort);
+        var abort = await _gitTools.GitTool(reason: "abort conflicting pull", GitOperation.abort);
 
         Assert.That(!abort.IsError, Is.True, abort.ErrorData?.Message);
         Assert.That(((GitStatusResult)abort.SuccessData!).IsClean, Is.True);
@@ -1524,11 +1524,11 @@ public class GitToolsSmokeTests
         var v2 = RunGitCapture("rev-parse", "HEAD~1").Trim();
         var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
 
-        var revert = await _gitTools.Git(reason: "conflicting revert", GitOperation.revert, commitHash: v2);
+        var revert = await _gitTools.GitTool(reason: "conflicting revert", GitOperation.revert, commitHash: v2);
 
         Assert.That(!revert.IsError, Is.False, "reverting v2 under v3 must conflict");
         Assert.That(revert.ErrorData?.Message, Does.Contain("mid-revert").And.Contain("operation: abort"));
-        var abort = await _gitTools.Git(reason: "abort conflicting revert", GitOperation.abort);
+        var abort = await _gitTools.GitTool(reason: "abort conflicting revert", GitOperation.abort);
 
         Assert.That(!abort.IsError, Is.True, abort.ErrorData?.Message);
         var status = (GitStatusResult)abort.SuccessData!;
@@ -1560,7 +1560,7 @@ public class GitToolsSmokeTests
     {
         var mergeHash = CreateMergeCommit();
 
-        var result = await _gitTools.Git(reason: "revert merge without mainline", GitOperation.revert, commitHash: mergeHash);
+        var result = await _gitTools.GitTool(reason: "revert merge without mainline", GitOperation.revert, commitHash: mergeHash);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.Message, Does.Contain("mainline").And.Contain("merge commit"));
@@ -1573,7 +1573,7 @@ public class GitToolsSmokeTests
     {
         var mergeHash = CreateMergeCommit();
 
-        var result = await _gitTools.Git(reason: "revert merge with mainline", GitOperation.revert, commitHash: mergeHash, mainline: 1);
+        var result = await _gitTools.GitTool(reason: "revert merge with mainline", GitOperation.revert, commitHash: mergeHash, mainline: 1);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.Not.EqualTo(mergeHash), "a revert commit must be created");
@@ -1587,9 +1587,9 @@ public class GitToolsSmokeTests
         var mergeHash = CreateMergeCommit();
         var plain = RunGitCapture("rev-parse", "HEAD^2").Trim();
 
-        var onPlainCommit = await _gitTools.Git(reason: "mainline on plain commit", GitOperation.revert, commitHash: plain, mainline: 1);
-        var outOfRange = await _gitTools.Git(reason: "mainline out of range", GitOperation.revert, commitHash: mergeHash, mainline: 3);
-        var onOtherOperation = await _gitTools.Git(reason: "mainline on status", GitOperation.status, mainline: 1);
+        var onPlainCommit = await _gitTools.GitTool(reason: "mainline on plain commit", GitOperation.revert, commitHash: plain, mainline: 1);
+        var outOfRange = await _gitTools.GitTool(reason: "mainline out of range", GitOperation.revert, commitHash: mergeHash, mainline: 3);
+        var onOtherOperation = await _gitTools.GitTool(reason: "mainline on status", GitOperation.status, mainline: 1);
 
         Assert.That(onPlainCommit.ErrorData?.Message, Does.Contain("not a merge commit"));
         Assert.That(outOfRange.ErrorData?.Message, Does.Contain("out of range"));
@@ -1638,7 +1638,7 @@ public class GitToolsSmokeTests
             RunGit(_repoDir, "config", "credential.helper", "");
             RunGit(_repoDir, "remote", "add", "origin", $"http://127.0.0.1:{port}/repo.git");
 
-            var task = _gitTools.Git(reason: "fetch with auth challenge", GitOperation.fetch);
+            var task = _gitTools.GitTool(reason: "fetch with auth challenge", GitOperation.fetch);
             var finished = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(60)));
 
             Assert.That(finished, Is.SameAs(task), "git fetch blocked instead of failing fast - credential prompting is not disabled");
@@ -1666,7 +1666,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Stage_MissingPath_ReportsGitPathNotFoundWithDetailAsync()
     {
-        var result = await _gitTools.Git(reason: "stage missing path", GitOperation.stage, scope: GitStageScope.listed, files: "missing.txt");
+        var result = await _gitTools.GitTool(reason: "stage missing path", GitOperation.stage, scope: GitStageScope.listed, files: "missing.txt");
 
         AssertCoded(result, "GitPathNotFound");
         Assert.That(result.ErrorData?.Message, Does.Contain("missing.txt"));
@@ -1676,7 +1676,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Stage_PathOutsideRepo_ReportsGitPathNotFoundAsync()
     {
-        var result = await _gitTools.Git(reason: "stage outside path", GitOperation.stage, scope: GitStageScope.listed, files: "../outside.txt");
+        var result = await _gitTools.GitTool(reason: "stage outside path", GitOperation.stage, scope: GitStageScope.listed, files: "../outside.txt");
 
         AssertCoded(result, "GitPathNotFound");
         Assert.That(result.ErrorData?.Message, Does.Contain("outside the repository"));
@@ -1685,7 +1685,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Commit_MissingPath_ReportsGitPathNotFoundAsync()
     {
-        var result = await _gitTools.Git(reason: "commit missing path", GitOperation.commit, message: "x", files: "missing.txt");
+        var result = await _gitTools.GitTool(reason: "commit missing path", GitOperation.commit, message: "x", files: "missing.txt");
 
         AssertCoded(result, "GitPathNotFound");
     }
@@ -1696,8 +1696,8 @@ public class GitToolsSmokeTests
         CreateGitignore("ignored/\n");
         WriteFile("ignored/file.txt", "ignored content");
 
-        var stage = await _gitTools.Git(reason: "stage ignored", GitOperation.stage, scope: GitStageScope.listed, files: "ignored/file.txt");
-        var commit = await _gitTools.Git(reason: "commit ignored", GitOperation.commit, message: "x", files: "ignored/file.txt");
+        var stage = await _gitTools.GitTool(reason: "stage ignored", GitOperation.stage, scope: GitStageScope.listed, files: "ignored/file.txt");
+        var commit = await _gitTools.GitTool(reason: "commit ignored", GitOperation.commit, message: "x", files: "ignored/file.txt");
 
         AssertCoded(stage, "GitIgnoredPath");
         AssertCoded(commit, "GitIgnoredPath");
@@ -1710,7 +1710,7 @@ public class GitToolsSmokeTests
     {
         var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
 
-        var result = await _gitTools.Git(reason: "commit with empty index", GitOperation.commit, message: "empty");
+        var result = await _gitTools.GitTool(reason: "commit with empty index", GitOperation.commit, message: "empty");
 
         AssertCoded(result, "GitNothingToCommit");
         Assert.That(result.ErrorData?.Detail, Does.Contain("Git(operation: stage"));
@@ -1720,7 +1720,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Commit_ListedUnchangedTrackedFile_ReportsGitNothingToCommitAsync()
     {
-        var result = await _gitTools.Git(reason: "commit unchanged listed file", GitOperation.commit, message: "no-op", files: "README.md");
+        var result = await _gitTools.GitTool(reason: "commit unchanged listed file", GitOperation.commit, message: "no-op", files: "README.md");
 
         AssertCoded(result, "GitNothingToCommit");
     }
@@ -1736,7 +1736,7 @@ public class GitToolsSmokeTests
 
         var v2 = RunGitCapture("rev-parse", "HEAD~1").Trim();
 
-        var result = await _gitTools.Git(reason: "conflicting revert", GitOperation.revert, commitHash: v2);
+        var result = await _gitTools.GitTool(reason: "conflicting revert", GitOperation.revert, commitHash: v2);
 
         AssertCoded(result, "GitOperationInProgress");
         Assert.That(result.ErrorData?.Message, Does.Contain("mid-revert"));
@@ -1748,7 +1748,7 @@ public class GitToolsSmokeTests
     {
         CreateMergeConflict("shared.txt", existsInBase: true);
 
-        var result = await _gitTools.Git(reason: "commit while conflicted", GitOperation.commit, message: "premature");
+        var result = await _gitTools.GitTool(reason: "commit while conflicted", GitOperation.commit, message: "premature");
 
         AssertCoded(result, "GitOperationInProgress");
         Assert.That(result.ErrorData?.Message, Does.Contain("mid-merge"));
@@ -1760,7 +1760,7 @@ public class GitToolsSmokeTests
         var branch = AddBareRemoteAndPush();
         DivergeConflictingFromRemote(branch);
 
-        var result = await _gitTools.Git(reason: "conflicting pull", GitOperation.pull);
+        var result = await _gitTools.GitTool(reason: "conflicting pull", GitOperation.pull);
 
         AssertCoded(result, "GitOperationInProgress");
     }
@@ -1768,9 +1768,9 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_RefRequiredRefusals_ReportGitRefRequiredAsync()
     {
-        var reset = await _gitTools.Git(reason: "reset without ref", GitOperation.reset);
-        var revert = await _gitTools.Git(reason: "revert without commitHash", GitOperation.revert);
-        var checkout = await _gitTools.Git(reason: "checkout without branchName", GitOperation.checkout);
+        var reset = await _gitTools.GitTool(reason: "reset without ref", GitOperation.reset);
+        var revert = await _gitTools.GitTool(reason: "revert without commitHash", GitOperation.revert);
+        var checkout = await _gitTools.GitTool(reason: "checkout without branchName", GitOperation.checkout);
 
         AssertCoded(reset, "GitRefRequired");
         AssertCoded(revert, "GitRefRequired");
@@ -1781,7 +1781,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_UnclassifiedFailure_StillReportsFallbackGitErrorWithoutDetailAsync()
     {
-        var result = await _gitTools.Git(reason: "reset to unknown ref", GitOperation.reset, @ref: "no-such-ref-anywhere");
+        var result = await _gitTools.GitTool(reason: "reset to unknown ref", GitOperation.reset, @ref: "no-such-ref-anywhere");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("GitError"));
@@ -1792,7 +1792,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_AbortWithNothingInProgress_StillReportsFallbackGitErrorAsync()
     {
-        var result = await _gitTools.Git(reason: "abort nothing", GitOperation.abort);
+        var result = await _gitTools.GitTool(reason: "abort nothing", GitOperation.abort);
 
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("GitError"));
     }
@@ -1806,7 +1806,7 @@ public class GitToolsSmokeTests
         WriteFile("NewDir/sub/b.txt", "content b");
         WriteFile("NewDir/sub/c.txt", "content c");
 
-        var result = await _gitTools.Git(reason: "status with nested untracked files", GitOperation.status, maxEntries: 50);
+        var result = await _gitTools.GitTool(reason: "status with nested untracked files", GitOperation.status, maxEntries: 50);
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var status = (GitStatusResult)result.SuccessData!;
@@ -1824,7 +1824,7 @@ public class GitToolsSmokeTests
         Assert.That(status.Untracked, Has.Count.EqualTo(3), "exactly 3 individual files, no collapsed directories");
     }
 
-    // Step 3 of plan_git_tool_tag_stash_worktree_hunks.md: Git(operation: tag, action: list|create|delete).
+    // Step 3 of plan_git_tool_tag_stash_worktree_hunks.md: GitTool(operation: tag, action: list|create|delete).
 
     private string ShortHead(string rev = "HEAD") => RunGitCapture("rev-parse", "--short", rev).Trim();
 
@@ -1862,7 +1862,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_List_OnRepoWithoutTags_ReturnsEmptyListAsync()
     {
-        var result = await _gitTools.Git(reason: "list tags in empty repo", GitOperation.tag, action: GitAction.list);
+        var result = await _gitTools.GitTool(reason: "list tags in empty repo", GitOperation.tag, action: GitAction.list);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var tags = (GitTagResult)result.SuccessData!;
@@ -1874,7 +1874,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_Create_Lightweight_ThenListShowsItAsync()
     {
-        var create = await _gitTools.Git(reason: "create lightweight tag", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0");
+        var create = await _gitTools.GitTool(reason: "create lightweight tag", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0");
 
         Assert.That(create.IsError, Is.False, create.ErrorData?.Message);
         var created = (GitTagResult)create.SuccessData!;
@@ -1883,7 +1883,7 @@ public class GitToolsSmokeTests
         Assert.That(created.TargetHash, Is.EqualTo(ShortHead()));
         Assert.That(TagNames(), Is.EqualTo("v1.0.0"));
 
-        var list = await _gitTools.Git(reason: "list tags", GitOperation.tag, action: GitAction.list);
+        var list = await _gitTools.GitTool(reason: "list tags", GitOperation.tag, action: GitAction.list);
 
         Assert.That(list.IsError, Is.False, list.ErrorData?.Message);
         var tags = (GitTagResult)list.SuccessData!;
@@ -1897,13 +1897,13 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_Create_WithMessage_IsAnnotatedAsync()
     {
-        var create = await _gitTools.Git(reason: "create annotated tag", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0", message: "release one");
+        var create = await _gitTools.GitTool(reason: "create annotated tag", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0", message: "release one");
 
         Assert.That(create.IsError, Is.False, create.ErrorData?.Message);
         Assert.That(((GitTagResult)create.SuccessData!).Annotated, Is.True);
         Assert.That(RunGitCapture("cat-file", "-t", "refs/tags/v1.0.0").Trim(), Is.EqualTo("tag"));
 
-        var list = await _gitTools.Git(reason: "list tags", GitOperation.tag, action: GitAction.list);
+        var list = await _gitTools.GitTool(reason: "list tags", GitOperation.tag, action: GitAction.list);
 
         var entry = ((GitTagResult)list.SuccessData!).Tags.Single();
         Assert.That(entry.Kind, Is.EqualTo("annotated"));
@@ -1917,7 +1917,7 @@ public class GitToolsSmokeTests
         var firstHash = ShortHead();
         CommitSecondChange();
 
-        var create = await _gitTools.Git(reason: "tag the previous commit", GitOperation.tag, action: GitAction.create, tagName: "old", @ref: "HEAD~1");
+        var create = await _gitTools.GitTool(reason: "tag the previous commit", GitOperation.tag, action: GitAction.create, tagName: "old", @ref: "HEAD~1");
 
         Assert.That(create.IsError, Is.False, create.ErrorData?.Message);
         var created = (GitTagResult)create.SuccessData!;
@@ -1930,11 +1930,11 @@ public class GitToolsSmokeTests
     public async Task Git_Tag_Create_ExistingName_ReportsGitAlreadyExistsAndDoesNotMoveTagAsync()
     {
         var firstHash = ShortHead();
-        var first = await _gitTools.Git(reason: "create tag", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0");
+        var first = await _gitTools.GitTool(reason: "create tag", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0");
         Assert.That(first.IsError, Is.False, first.ErrorData?.Message);
         CommitSecondChange();
 
-        var again = await _gitTools.Git(reason: "create same tag again", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0");
+        var again = await _gitTools.GitTool(reason: "create same tag again", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0");
 
         AssertCoded(again, "GitAlreadyExists");
         Assert.That(again.ErrorData?.Message, Does.Contain("never overwrites"));
@@ -1944,7 +1944,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_Create_InvalidName_ReportsGitInvalidNameAsync()
     {
-        var result = await _gitTools.Git(reason: "create tag with invalid name", GitOperation.tag, action: GitAction.create, tagName: "bad name");
+        var result = await _gitTools.GitTool(reason: "create tag with invalid name", GitOperation.tag, action: GitAction.create, tagName: "bad name");
 
         AssertCoded(result, "GitInvalidName");
         Assert.That(result.ErrorData?.Message, Does.Contain("bad name"));
@@ -1954,7 +1954,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_Create_WithoutTagName_ReportsGitRefRequiredAsync()
     {
-        var result = await _gitTools.Git(reason: "create tag without a name", GitOperation.tag, action: GitAction.create);
+        var result = await _gitTools.GitTool(reason: "create tag without a name", GitOperation.tag, action: GitAction.create);
 
         AssertCoded(result, "GitRefRequired");
         Assert.That(result.ErrorData?.Message, Does.Contain("tagName"));
@@ -1964,7 +1964,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_Create_UnknownRef_ReportsGitTargetNotFoundAsync()
     {
-        var result = await _gitTools.Git(reason: "create tag at unknown ref", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0", @ref: "no-such-ref-anywhere");
+        var result = await _gitTools.GitTool(reason: "create tag at unknown ref", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0", @ref: "no-such-ref-anywhere");
 
         AssertCoded(result, "GitTargetNotFound");
         Assert.That(result.ErrorData?.Message, Does.Contain("no-such-ref-anywhere"));
@@ -1977,7 +1977,7 @@ public class GitToolsSmokeTests
         var headHash = ShortHead();
         RunGit(_repoDir, "tag", "v1.0.0");
 
-        var result = await _gitTools.Git(reason: "delete tag", GitOperation.tag, action: GitAction.delete, tagName: "v1.0.0");
+        var result = await _gitTools.GitTool(reason: "delete tag", GitOperation.tag, action: GitAction.delete, tagName: "v1.0.0");
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var deleted = (GitTagResult)result.SuccessData!;
@@ -1992,7 +1992,7 @@ public class GitToolsSmokeTests
     {
         RunGit(_repoDir, "tag", "keep-me");
 
-        var result = await _gitTools.Git(reason: "delete missing tag", GitOperation.tag, action: GitAction.delete, tagName: "nope");
+        var result = await _gitTools.GitTool(reason: "delete missing tag", GitOperation.tag, action: GitAction.delete, tagName: "nope");
 
         AssertCoded(result, "GitTargetNotFound");
         Assert.That(result.ErrorData?.Message, Does.Contain("keep-me"));
@@ -2002,7 +2002,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_WithoutAction_ReportsGitActionRequiredNamingValidValuesAsync()
     {
-        var result = await _gitTools.Git(reason: "tag without action", GitOperation.tag);
+        var result = await _gitTools.GitTool(reason: "tag without action", GitOperation.tag);
 
         AssertCoded(result, "GitActionRequired");
         Assert.That(result.ErrorData?.Message, Does.Contain("list, create, delete"));
@@ -2024,7 +2024,7 @@ public class GitToolsSmokeTests
             RunGit(otherRepoDir, "tag", "other-tag");
 
             // The loaded solution's repo (_repoDir) has no tags; if repoPath were ignored this would be empty.
-            var result = await _gitTools.Git(reason: "list tags in other repo", GitOperation.tag, action: GitAction.list, repoPath: otherRepoDir);
+            var result = await _gitTools.GitTool(reason: "list tags in other repo", GitOperation.tag, action: GitAction.list, repoPath: otherRepoDir);
 
             Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
             var tags = (GitTagResult)result.SuccessData!;
@@ -2039,7 +2039,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_Create_WithRepoPath_IsRefusedAsync()
     {
-        var result = await _gitTools.Git(reason: "create tag with repoPath", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0", repoPath: _repoDir);
+        var result = await _gitTools.GitTool(reason: "create tag with repoPath", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0", repoPath: _repoDir);
 
         Assert.That(result.IsError, Is.True, "repoPath is only accepted for read-only operations and list actions.");
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
@@ -2050,7 +2050,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Stash_List_Empty_ReturnsEmptyListAsync()
     {
-        var result = await _gitTools.Git(reason: "list stash without entries", GitOperation.stash, action: GitAction.list);
+        var result = await _gitTools.GitTool(reason: "list stash without entries", GitOperation.stash, action: GitAction.list);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var stash = (GitStashResult)result.SuccessData!;
@@ -2062,7 +2062,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Stash_Push_NoChanges_ReportsGitNoChangesAndCreatesNoEntryAsync()
     {
-        var result = await _gitTools.Git(reason: "stash a clean tree", GitOperation.stash, action: GitAction.push);
+        var result = await _gitTools.GitTool(reason: "stash a clean tree", GitOperation.stash, action: GitAction.push);
 
         AssertCoded(result, "GitNoChanges");
         Assert.That(result.ErrorData?.Message, Does.Contain("Nothing to stash"));
@@ -2075,7 +2075,7 @@ public class GitToolsSmokeTests
         WriteFile("README.md", "changed");
         WriteFile("untracked.txt", "keep me");
 
-        var result = await _gitTools.Git(reason: "stash tracked change", GitOperation.stash, action: GitAction.push);
+        var result = await _gitTools.GitTool(reason: "stash tracked change", GitOperation.stash, action: GitAction.push);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var stash = (GitStashResult)result.SuccessData!;
@@ -2090,11 +2090,11 @@ public class GitToolsSmokeTests
     {
         WriteFile("untracked.txt", "stash me");
 
-        var withoutFlag = await _gitTools.Git(reason: "stash only an untracked file without the flag", GitOperation.stash, action: GitAction.push);
+        var withoutFlag = await _gitTools.GitTool(reason: "stash only an untracked file without the flag", GitOperation.stash, action: GitAction.push);
         AssertCoded(withoutFlag, "GitNoChanges");
         Assert.That(RepoFileExists("untracked.txt"), Is.True);
 
-        var result = await _gitTools.Git(reason: "stash untracked file", GitOperation.stash, action: GitAction.push, includeUntracked: true);
+        var result = await _gitTools.GitTool(reason: "stash untracked file", GitOperation.stash, action: GitAction.push, includeUntracked: true);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(((GitStashResult)result.SuccessData!).Created, Is.True);
@@ -2111,7 +2111,7 @@ public class GitToolsSmokeTests
         WriteFile("README.md", "readme changed");
         WriteFile("other.txt", "other changed");
 
-        var result = await _gitTools.Git(reason: "stash one path with a label", GitOperation.stash, action: GitAction.push, message: "only readme", paths: "README.md");
+        var result = await _gitTools.GitTool(reason: "stash one path with a label", GitOperation.stash, action: GitAction.push, message: "only readme", paths: "README.md");
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var stash = (GitStashResult)result.SuccessData!;
@@ -2126,13 +2126,13 @@ public class GitToolsSmokeTests
     public async Task Git_Stash_List_ReportsIndexMessageAndHashAsync()
     {
         WriteFile("README.md", "first change");
-        var first = await _gitTools.Git(reason: "stash first", GitOperation.stash, action: GitAction.push, message: "label one");
+        var first = await _gitTools.GitTool(reason: "stash first", GitOperation.stash, action: GitAction.push, message: "label one");
         Assert.That(first.IsError, Is.False, first.ErrorData?.Message);
         WriteFile("README.md", "second change");
-        var second = await _gitTools.Git(reason: "stash second", GitOperation.stash, action: GitAction.push, message: "label two");
+        var second = await _gitTools.GitTool(reason: "stash second", GitOperation.stash, action: GitAction.push, message: "label two");
         Assert.That(second.IsError, Is.False, second.ErrorData?.Message);
 
-        var list = await _gitTools.Git(reason: "list stash", GitOperation.stash, action: GitAction.list);
+        var list = await _gitTools.GitTool(reason: "list stash", GitOperation.stash, action: GitAction.list);
 
         Assert.That(list.IsError, Is.False, list.ErrorData?.Message);
         var stash = (GitStashResult)list.SuccessData!;
@@ -2150,7 +2150,7 @@ public class GitToolsSmokeTests
     {
         MakeOneStashEntry();
 
-        var result = await _gitTools.Git(reason: "pop without an index", GitOperation.stash, action: GitAction.pop);
+        var result = await _gitTools.GitTool(reason: "pop without an index", GitOperation.stash, action: GitAction.pop);
 
         AssertCoded(result, "GitRefRequired");
         Assert.That(result.ErrorData?.Message, Does.Contain("stashIndex"));
@@ -2163,7 +2163,7 @@ public class GitToolsSmokeTests
     {
         MakeOneStashEntry();
 
-        var result = await _gitTools.Git(reason: "pop an index that does not exist", GitOperation.stash, action: GitAction.pop, stashIndex: 5);
+        var result = await _gitTools.GitTool(reason: "pop an index that does not exist", GitOperation.stash, action: GitAction.pop, stashIndex: 5);
 
         AssertCoded(result, "GitTargetNotFound");
         Assert.That(result.ErrorData?.Message, Does.Contain("stash@{5}"));
@@ -2176,7 +2176,7 @@ public class GitToolsSmokeTests
         MakeOneStashEntry();
         WriteFile("README.md", "dirty again");
 
-        var result = await _gitTools.Git(reason: "pop onto a dirty tree", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
+        var result = await _gitTools.GitTool(reason: "pop onto a dirty tree", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
 
         AssertCoded(result, "GitWorkingTreeDirty");
         Assert.That(result.ErrorData?.Message, Does.Contain("README.md"));
@@ -2189,7 +2189,7 @@ public class GitToolsSmokeTests
     {
         MakeOneStashEntry();
 
-        var result = await _gitTools.Git(reason: "pop the newest entry", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
+        var result = await _gitTools.GitTool(reason: "pop the newest entry", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(((GitStashResult)result.SuccessData!).AppliedIndex, Is.EqualTo(0));
@@ -2202,7 +2202,7 @@ public class GitToolsSmokeTests
     {
         MakeOneStashEntry();
 
-        var result = await _gitTools.Git(reason: "apply the newest entry", GitOperation.stash, action: GitAction.apply, stashIndex: 0);
+        var result = await _gitTools.GitTool(reason: "apply the newest entry", GitOperation.stash, action: GitAction.apply, stashIndex: 0);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(((GitStashResult)result.SuccessData!).AppliedIndex, Is.EqualTo(0));
@@ -2215,7 +2215,7 @@ public class GitToolsSmokeTests
     {
         WriteFile("README.md", "changed");
 
-        var result = await _gitTools.Git(reason: "stash and read the note", GitOperation.stash, action: GitAction.push);
+        var result = await _gitTools.GitTool(reason: "stash and read the note", GitOperation.stash, action: GitAction.push);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(((GitStashResult)result.SuccessData!).Note, Does.Contain("LoadSolution(forceReload: true)"));
@@ -2226,7 +2226,7 @@ public class GitToolsSmokeTests
     {
         WriteFile("README.md", "changed");
 
-        var result = await _gitTools.Git(reason: "stash with repoPath", GitOperation.stash, action: GitAction.push, repoPath: _repoDir);
+        var result = await _gitTools.GitTool(reason: "stash with repoPath", GitOperation.stash, action: GitAction.push, repoPath: _repoDir);
 
         Assert.That(result.IsError, Is.True, "repoPath is only accepted for read-only operations and list actions.");
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
@@ -2238,8 +2238,8 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_StashIndexAndIncludeUntracked_OnOtherOperation_AreRefusedAsync()
     {
-        var withIndex = await _gitTools.Git(reason: "stashIndex on status", GitOperation.status, stashIndex: 0);
-        var withUntracked = await _gitTools.Git(reason: "includeUntracked on status", GitOperation.status, includeUntracked: true);
+        var withIndex = await _gitTools.GitTool(reason: "stashIndex on status", GitOperation.status, stashIndex: 0);
+        var withUntracked = await _gitTools.GitTool(reason: "includeUntracked on status", GitOperation.status, includeUntracked: true);
 
         Assert.That(withIndex.IsError, Is.True);
         Assert.That(withIndex.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
@@ -2256,7 +2256,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "stash", "push", "--include-untracked");
         WriteFile("untracked.txt", "new file in the way");
 
-        var result = await _gitTools.Git(reason: "pop over a colliding untracked file", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
+        var result = await _gitTools.GitTool(reason: "pop over a colliding untracked file", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
 
         Assert.That(result.IsError, Is.True);
         Assert.That(StashEntryCount(), Is.EqualTo(1), "a failed pop must keep the entry.");
@@ -2269,7 +2269,7 @@ public class GitToolsSmokeTests
     {
         await MakeStashConflictAsync();
 
-        var result = await _gitTools.Git(reason: "pop a stash that conflicts", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
+        var result = await _gitTools.GitTool(reason: "pop a stash that conflicts", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
 
         AssertStashConflictRolledBack(result);
     }
@@ -2279,7 +2279,7 @@ public class GitToolsSmokeTests
     {
         await MakeStashConflictAsync();
 
-        var result = await _gitTools.Git(reason: "apply a stash that conflicts", GitOperation.stash, action: GitAction.apply, stashIndex: 0);
+        var result = await _gitTools.GitTool(reason: "apply a stash that conflicts", GitOperation.stash, action: GitAction.apply, stashIndex: 0);
 
         AssertStashConflictRolledBack(result);
     }
@@ -2289,7 +2289,7 @@ public class GitToolsSmokeTests
     private async Task MakeStashConflictAsync()
     {
         WriteFile("README.md", "from stash");
-        var push = await _gitTools.Git(reason: "stash the first edit", GitOperation.stash, action: GitAction.push);
+        var push = await _gitTools.GitTool(reason: "stash the first edit", GitOperation.stash, action: GitAction.push);
         Assert.That(push.IsError, Is.False, push.ErrorData?.Message);
         WriteFile("README.md", "from commit");
         RunGit(_repoDir, "commit", "-am", "conflicting change to the same line");
@@ -2312,7 +2312,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Worktree_List_ReportsMainAndCurrentAsync()
     {
-        var result = await _gitTools.Git(reason: "list worktrees", GitOperation.worktree, action: GitAction.list);
+        var result = await _gitTools.GitTool(reason: "list worktrees", GitOperation.worktree, action: GitAction.list);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var worktrees = (GitWorktreeResult)result.SuccessData!;
@@ -2327,10 +2327,10 @@ public class GitToolsSmokeTests
     private string CurrentBranch() => GitOutStrict("branch", "--show-current");
 
     private Task<SentinelCallToolResult<object>> AddWorktreeAsync(string branch, bool createBranch = true, string? path = null)
-        => _gitTools.Git(reason: "add a worktree", GitOperation.worktree, action: GitAction.add, worktreePath: path ?? WorktreeDir, branchName: branch, createBranch: createBranch);
+        => _gitTools.GitTool(reason: "add a worktree", GitOperation.worktree, action: GitAction.add, worktreePath: path ?? WorktreeDir, branchName: branch, createBranch: createBranch);
 
     private Task<SentinelCallToolResult<object>> RemoveWorktreeAsync(bool discard = false, string? path = null)
-        => _gitTools.Git(reason: "remove a worktree", GitOperation.worktree, action: GitAction.remove, worktreePath: path ?? WorktreeDir, discardUncommittedChanges: discard);
+        => _gitTools.GitTool(reason: "remove a worktree", GitOperation.worktree, action: GitAction.remove, worktreePath: path ?? WorktreeDir, discardUncommittedChanges: discard);
 
     // Adds WorktreeDir on a new branch, then leaves one modified tracked file and one untracked file inside it.
     private async Task MakeDirtyWorktreeAsync()
@@ -2354,7 +2354,7 @@ public class GitToolsSmokeTests
         Assert.That(File.Exists(Path.Combine(WorktreeDir, "README.md")), Is.True, "the worktree must be checked out on disk.");
         Assert.That(GitOutStrict("branch", "--list", "wt-feature"), Does.Contain("wt-feature"));
 
-        var list = await _gitTools.Git(reason: "list worktrees", GitOperation.worktree, action: GitAction.list);
+        var list = await _gitTools.GitTool(reason: "list worktrees", GitOperation.worktree, action: GitAction.list);
         var worktrees = ((GitWorktreeResult)list.SuccessData!).Worktrees;
         Assert.That(worktrees, Has.Count.EqualTo(2));
         Assert.That(worktrees.Count(w => w.IsMain), Is.EqualTo(1));
@@ -2466,7 +2466,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Worktree_WithoutAction_ReportsGitActionRequiredAsync()
     {
-        var result = await _gitTools.Git(reason: "worktree without action", GitOperation.worktree);
+        var result = await _gitTools.GitTool(reason: "worktree without action", GitOperation.worktree);
 
         AssertCoded(result, "GitActionRequired");
         Assert.That(result.ErrorData?.Message, Does.Contain("list, add, remove"));
@@ -2535,8 +2535,8 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_DiscardUncommittedChanges_OnOtherOperationOrAction_IsRefusedAsync()
     {
-        var onStatus = await _gitTools.Git(reason: "discard flag on status", GitOperation.status, discardUncommittedChanges: true);
-        var onWorktreeList = await _gitTools.Git(reason: "discard flag on worktree list", GitOperation.worktree, action: GitAction.list, discardUncommittedChanges: true);
+        var onStatus = await _gitTools.GitTool(reason: "discard flag on status", GitOperation.status, discardUncommittedChanges: true);
+        var onWorktreeList = await _gitTools.GitTool(reason: "discard flag on worktree list", GitOperation.worktree, action: GitAction.list, discardUncommittedChanges: true);
 
         foreach (var result in new[] { onStatus, onWorktreeList })
         {
@@ -2549,7 +2549,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_WorktreePath_OnOtherOperation_IsRefusedAsync()
     {
-        var result = await _gitTools.Git(reason: "worktreePath on status", GitOperation.status, worktreePath: WorktreeDir);
+        var result = await _gitTools.GitTool(reason: "worktreePath on status", GitOperation.status, worktreePath: WorktreeDir);
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
@@ -2559,7 +2559,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_ActionOnOtherOperation_IsRefusedAsync()
     {
-        var result = await _gitTools.Git(reason: "action on status", GitOperation.status, action: GitAction.list);
+        var result = await _gitTools.GitTool(reason: "action on status", GitOperation.status, action: GitAction.list);
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
@@ -2603,7 +2603,7 @@ public class GitToolsSmokeTests
         var lines = CommitNumberedFile("a.txt", 30);
         WriteLines("a.txt", ApplyThreeDistantEdits(lines));
 
-        var result = await _gitTools.Git(reason: "list hunks", GitOperation.hunks, files: "a.txt");
+        var result = await _gitTools.GitTool(reason: "list hunks", GitOperation.hunks, files: "a.txt");
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var hunks = (GitHunksResult)result.SuccessData!;
@@ -2626,11 +2626,11 @@ public class GitToolsSmokeTests
         var edited = ApplyThreeDistantEdits(lines);
         WriteLines("a.txt", edited);
 
-        var first = (GitHunksResult)(await _gitTools.Git(reason: "list hunks", GitOperation.hunks, files: "a.txt")).SuccessData!;
-        var again = (GitHunksResult)(await _gitTools.Git(reason: "list hunks again", GitOperation.hunks, files: "a.txt")).SuccessData!;
+        var first = (GitHunksResult)(await _gitTools.GitTool(reason: "list hunks", GitOperation.hunks, files: "a.txt")).SuccessData!;
+        var again = (GitHunksResult)(await _gitTools.GitTool(reason: "list hunks again", GitOperation.hunks, files: "a.txt")).SuccessData!;
         edited[29] = "line 30 also changed";
         WriteLines("a.txt", edited);
-        var changed = (GitHunksResult)(await _gitTools.Git(reason: "list hunks after another edit", GitOperation.hunks, files: "a.txt")).SuccessData!;
+        var changed = (GitHunksResult)(await _gitTools.GitTool(reason: "list hunks after another edit", GitOperation.hunks, files: "a.txt")).SuccessData!;
 
         Assert.That(again.Fingerprint, Is.EqualTo(first.Fingerprint), "an unchanged file must keep its fingerprint.");
         Assert.That(changed.Fingerprint, Is.Not.EqualTo(first.Fingerprint));
@@ -2643,8 +2643,8 @@ public class GitToolsSmokeTests
         var lines = CommitNumberedFile("a.txt", 30);
         WriteLines("a.txt", ApplyThreeDistantEdits(lines));
 
-        var all = (GitHunksResult)(await _gitTools.Git(reason: "list all hunks", GitOperation.hunks, files: "a.txt")).SuccessData!;
-        var capped = await _gitTools.Git(reason: "list one hunk", GitOperation.hunks, files: "a.txt", count: 1);
+        var all = (GitHunksResult)(await _gitTools.GitTool(reason: "list all hunks", GitOperation.hunks, files: "a.txt")).SuccessData!;
+        var capped = await _gitTools.GitTool(reason: "list one hunk", GitOperation.hunks, files: "a.txt", count: 1);
 
         Assert.That(capped.IsError, Is.False, capped.ErrorData?.Message);
         var cappedHunks = (GitHunksResult)capped.SuccessData!;
@@ -2659,7 +2659,7 @@ public class GitToolsSmokeTests
     {
         WriteFile("brand-new.txt", "one\ntwo\n");
 
-        var result = await _gitTools.Git(reason: "hunks of untracked file", GitOperation.hunks, files: "brand-new.txt");
+        var result = await _gitTools.GitTool(reason: "hunks of untracked file", GitOperation.hunks, files: "brand-new.txt");
 
         AssertCoded(result, "GitHunkUnsupported");
         Assert.That(result.ErrorData?.Message, Does.Contain("untracked"));
@@ -2668,7 +2668,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Hunks_UnchangedFile_ReportsGitNoChangesAsync()
     {
-        var result = await _gitTools.Git(reason: "hunks of unchanged file", GitOperation.hunks, files: "README.md");
+        var result = await _gitTools.GitTool(reason: "hunks of unchanged file", GitOperation.hunks, files: "README.md");
 
         AssertCoded(result, "GitNoChanges");
         Assert.That(result.ErrorData?.Message, Does.Contain("README.md"));
@@ -2679,7 +2679,7 @@ public class GitToolsSmokeTests
     {
         CommitNumberedFile("a.txt", 5);
 
-        var result = await _gitTools.Git(reason: "hunks of two files", GitOperation.hunks, files: "README.md,a.txt");
+        var result = await _gitTools.GitTool(reason: "hunks of two files", GitOperation.hunks, files: "README.md,a.txt");
 
         AssertCoded(result, "GitHunkSelection");
         Assert.That(result.ErrorData?.Message, Does.Contain("one file at a time"));
@@ -2688,7 +2688,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Hunks_WithoutFiles_ReportsGitRefRequiredAsync()
     {
-        var result = await _gitTools.Git(reason: "hunks without files", GitOperation.hunks);
+        var result = await _gitTools.GitTool(reason: "hunks without files", GitOperation.hunks);
 
         AssertCoded(result, "GitRefRequired");
         Assert.That(result.ErrorData?.Detail, Does.Contain("files"));
@@ -2703,7 +2703,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "commit", "-m", "add binary");
         File.WriteAllBytes(Path.Combine(_repoDir, "blob.bin"), [0x00, 0x01, 0x09, 0x03, 0x00]);
 
-        var result = await _gitTools.Git(reason: "hunks of binary file", GitOperation.hunks, files: "blob.bin");
+        var result = await _gitTools.GitTool(reason: "hunks of binary file", GitOperation.hunks, files: "blob.bin");
 
         AssertCoded(result, "GitHunkUnsupported");
         Assert.That(result.ErrorData?.Message, Does.Contain("binary").IgnoreCase);
@@ -2722,7 +2722,7 @@ public class GitToolsSmokeTests
         lines[24] = "crlf line 25 changed";
         WriteLines("crlf.txt", lines, "\r\n");
 
-        var result = await _gitTools.Git(reason: "hunks of CRLF file", GitOperation.hunks, files: "crlf.txt");
+        var result = await _gitTools.GitTool(reason: "hunks of CRLF file", GitOperation.hunks, files: "crlf.txt");
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var hunks = (GitHunksResult)result.SuccessData!;
@@ -2750,7 +2750,7 @@ public class GitToolsSmokeTests
             File.WriteAllBytes(Path.Combine(otherRepoDir, "OTHER.md"), System.Text.Encoding.UTF8.GetBytes("other repo changed\n"));
 
             // OTHER.md does not exist in the loaded solution's repo (_repoDir); if repoPath were ignored this would fail.
-            var result = await _gitTools.Git(reason: "hunks in other repo", GitOperation.hunks, files: "OTHER.md", repoPath: otherRepoDir);
+            var result = await _gitTools.GitTool(reason: "hunks in other repo", GitOperation.hunks, files: "OTHER.md", repoPath: otherRepoDir);
 
             Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
             var hunks = (GitHunksResult)result.SuccessData!;
@@ -2767,14 +2767,14 @@ public class GitToolsSmokeTests
 
     private async Task<GitHunksResult> ListHunksAsync(string relPath)
     {
-        var result = await _gitTools.Git(reason: "list hunks", GitOperation.hunks, files: relPath);
+        var result = await _gitTools.GitTool(reason: "list hunks", GitOperation.hunks, files: relPath);
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         return (GitHunksResult)result.SuccessData!;
     }
 
     private async Task<SentinelCallToolResult<object>> StageHunksAsync(string relPath, string? hunkIds = null, string? hunkFingerprint = null, string? lineRange = null)
     {
-        return await _gitTools.Git(reason: "stage hunks", GitOperation.stage, files: relPath, hunkIds: hunkIds, hunkFingerprint: hunkFingerprint, lineRange: lineRange);
+        return await _gitTools.GitTool(reason: "stage hunks", GitOperation.stage, files: relPath, hunkIds: hunkIds, hunkFingerprint: hunkFingerprint, lineRange: lineRange);
     }
 
     private string StagedDiff() => RunGitCapture("diff", "--cached", "--no-color");
@@ -2813,7 +2813,7 @@ public class GitToolsSmokeTests
         var staged = await StageHunksAsync("a.txt", hunkIds: "1,3", hunkFingerprint: listing.Fingerprint);
         Assert.That(staged.IsError, Is.False, staged.ErrorData?.Message);
 
-        var commit = await _gitTools.Git(reason: "commit staged hunks", GitOperation.commit, message: "partial commit");
+        var commit = await _gitTools.GitTool(reason: "commit staged hunks", GitOperation.commit, message: "partial commit");
 
         Assert.That(commit.IsError, Is.False, commit.ErrorData?.Message);
         var committed = RunGitCapture("show", "HEAD:a.txt").Split('\n', StringSplitOptions.RemoveEmptyEntries);
@@ -2932,7 +2932,7 @@ public class GitToolsSmokeTests
         var lines = CommitNumberedFile("a.txt", 30);
         WriteLines("a.txt", ApplyThreeDistantEdits(lines));
 
-        var result = await _gitTools.Git(reason: "hunks with scope all", GitOperation.stage, scope: GitStageScope.all, files: "a.txt", lineRange: "1-5");
+        var result = await _gitTools.GitTool(reason: "hunks with scope all", GitOperation.stage, scope: GitStageScope.all, files: "a.txt", lineRange: "1-5");
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
@@ -2953,7 +2953,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_HunkParameters_OnOtherOperation_AreRefusedAsync()
     {
-        var result = await _gitTools.Git(reason: "lineRange on status", GitOperation.status, lineRange: "1-5");
+        var result = await _gitTools.GitTool(reason: "lineRange on status", GitOperation.status, lineRange: "1-5");
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));

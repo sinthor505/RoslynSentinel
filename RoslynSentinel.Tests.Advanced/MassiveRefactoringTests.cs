@@ -60,7 +60,7 @@ public class MassiveRefactoringTests
             new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
             NullLogger<RefactoringSignatureImpl>.Instance));
 
-        // ExtractMembers / MoveType moved to AdvancedRefactoringTools in the server split.
+        // ExtractMembersTool / MoveTypeTool moved to AdvancedRefactoringTools in the server split.
         _advancedRefactoringTools = new AdvancedRefactoringTools(_workspaceManager);
     }
 
@@ -118,12 +118,12 @@ namespace MyApp.Services
         var source = $"public class C{id} {{ public void OldM{id}() {{}} public void U() {{ OldM{id}(); }} }}";
         SetSource(source, $"C{id}.cs");
 
-        // RenameSymbol takes a SymbolHandle (projectName, docCommentId) -> resolve it
-        // via SymbolNavigationEngine first, as an agent would via LocateSymbol.
+        // RenameSymbolTool takes a SymbolHandle (projectName, docCommentId) -> resolve it
+        // via SymbolNavigationEngine first, as an agent would via LocateSymbolTool.
         var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         var handle = (await symbolNavEngine.LocateSymbolAsync($"OldM{id}")).Single();
 
-        var result = await _refactoringSignatureTools.RenameSymbol(
+        var result = await _refactoringSignatureTools.RenameSymbolTool(
             reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!,
             newName: $"NewM{id}");
         Assert.That(!result.IsError, Is.True);

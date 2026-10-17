@@ -1,4 +1,4 @@
-// ReadFile -> WorkspaceTools. Zero coverage before this file (GetTestCoverageMap flagged
+// ReadFileTool -> WorkspaceTools. Zero coverage before this file (GetTestCoverageMap flagged
 // branches: document == null, startLine/endLine slicing, out-of-range slice, offload threshold).
 // Data is returned as an anonymous object (not a named record) for the non-offload paths. Anonymous
 // type properties are internal to the declaring assembly, so `dynamic` binding fails cross-assembly
@@ -66,7 +66,7 @@ public class ReadFileTests
     [Test]
     public async Task ReadFile_WholeFile_ReturnsFullSourceAsync()
     {
-        var result = await _tools.ReadFile(reason: "test message", _documentPath);
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath);
 
         Assert.That(!result.IsError, Is.True);
         var data = result.SuccessData!;
@@ -80,7 +80,7 @@ public class ReadFileTests
     {
         var missingPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "DoesNotExist.cs");
 
-        var result = await _tools.ReadFile(reason: "test message", missingPath);
+        var result = await _tools.ReadFileTool(reason: "test message", missingPath);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("FileNotFound"));
@@ -89,9 +89,9 @@ public class ReadFileTests
     [Test]
     public async Task ReadFile_FileOnDiskButNotTrackedAsDocument_FallsBackToDiskReadAsync()
     {
-        // Mirrors CreateFile writing a file that PersistentWorkspaceManager's in-memory sync
+        // Mirrors CreateFileTool writing a file that PersistentWorkspaceManager's in-memory sync
         // never turns into a Roslyn Document (any non-.cs file, or a .cs file outside every
-        // project's globs) -> ReadFile must still be able to see it, matching what CreateFile wrote.
+        // project's globs) -> ReadFileTool must still be able to see it, matching what CreateFileTool wrote.
         var onDiskOnlyPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "OnDiskOnly.txt");
         Directory.CreateDirectory(Path.GetDirectoryName(onDiskOnlyPath)!);
         var content = "not part of the solution, but present on disk";
@@ -99,7 +99,7 @@ public class ReadFileTests
 
         try
         {
-            var result = await _tools.ReadFile(reason: "test message", onDiskOnlyPath);
+            var result = await _tools.ReadFileTool(reason: "test message", onDiskOnlyPath);
 
             Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
             Assert.That((string)GetProp(result.SuccessData!, "source")!, Is.EqualTo(content));
@@ -113,7 +113,7 @@ public class ReadFileTests
     [Test]
     public async Task ReadFile_WithLineRange_ReturnsRequestedSliceAsync()
     {
-        var result = await _tools.ReadFile(reason: "test message", _documentPath, startLine: 2, endLine: 3);
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, startLine: 2, endLine: 3);
 
         Assert.That(!result.IsError, Is.True);
         var data = result.SuccessData!;
@@ -127,7 +127,7 @@ public class ReadFileTests
     [Test]
     public async Task ReadFile_StartLineBeyondEndOfFile_ReturnsInvalidArgumentAsync()
     {
-        var result = await _tools.ReadFile(reason: "test message", _documentPath, startLine: 100, endLine: 200);
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, startLine: 100, endLine: 200);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -143,11 +143,11 @@ public class ReadFileTests
             Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
             new[] { ("Big.cs", bigSource, bigDocPath) });
         _workspaceManager.SetTestSolution(solution);
-        // ReadFile only offloads when GetSolutionRoot() is non-empty; the fake derives that from
+        // ReadFileTool only offloads when GetSolutionRoot() is non-empty; the fake derives that from
         // SolutionPath since the AdhocWorkspace solution here has no FilePathWrapper of its own.
         _workspaceManager.SolutionPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Test.sln");
 
-        var result = await _tools.ReadFile(reason: "test message", bigDocPath);
+        var result = await _tools.ReadFileTool(reason: "test message", bigDocPath);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.LargeResult, Is.Not.Null);
@@ -174,7 +174,7 @@ public class ReadFileTests
         _workspaceManager.SetTestSolution(solution);
         _workspaceManager.SolutionPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Test.sln");
 
-        var result = await _tools.ReadFile(reason: "test message", bigDocPath, startLine: 1, endLine: 800);
+        var result = await _tools.ReadFileTool(reason: "test message", bigDocPath, startLine: 1, endLine: 800);
 
         Assert.That(!result.IsError, Is.True);
         var data = result.SuccessData!;
@@ -212,7 +212,7 @@ public class ReadFileTests
             new[] { ("BigSmallRange.cs", bigSource, bigDocPath) });
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _tools.ReadFile(reason: "test message", bigDocPath, startLine: 1, endLine: 20);
+        var result = await _tools.ReadFileTool(reason: "test message", bigDocPath, startLine: 1, endLine: 20);
 
         Assert.That(!result.IsError, Is.True);
         var data = result.SuccessData!;
@@ -244,7 +244,7 @@ public class ReadFileTests
         _workspaceManager.SolutionPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Test.sln");
 
         // First call: request 1-800, should be shortened.
-        var result1 = await _tools.ReadFile(reason: "test message", bigDocPath, startLine: 1, endLine: 800);
+        var result1 = await _tools.ReadFileTool(reason: "test message", bigDocPath, startLine: 1, endLine: 800);
         Assert.That(!result1.IsError, Is.True);
         var data1 = result1.SuccessData!;
         var firstEndLine = (int)GetProp(data1, "endLine")!;
@@ -258,7 +258,7 @@ public class ReadFileTests
         int lastLineNumber = int.Parse(lastLineMatch.Groups[1].Value);
 
         // Second call: request from firstEndLine + 1 onwards.
-        var result2 = await _tools.ReadFile(reason: "test message", bigDocPath, startLine: firstEndLine + 1, endLine: 820);
+        var result2 = await _tools.ReadFileTool(reason: "test message", bigDocPath, startLine: firstEndLine + 1, endLine: 820);
         Assert.That(!result2.IsError, Is.True);
         var data2 = result2.SuccessData!;
         var source2 = (string)GetProp(data2, "source")!;
@@ -313,7 +313,7 @@ public class ReadFileTests
             await File.WriteAllTextAsync(filePath, content);
 
             var toolsWithoutSolution = BuildToolsWithoutSolution();
-            var result = await toolsWithoutSolution.ReadFile(reason: "test message", filePath);
+            var result = await toolsWithoutSolution.ReadFileTool(reason: "test message", filePath);
 
             Assert.That(!result.IsError, Is.True);
             var data = result.SuccessData!;
@@ -338,7 +338,7 @@ public class ReadFileTests
     public async Task ReadFile_NoSolutionLoadedAndRelativePath_StillReportsSolutionNotLoadedAsync()
     {
         var toolsWithoutSolution = BuildToolsWithoutSolution();
-        var result = await toolsWithoutSolution.ReadFile(reason: "test message", "Foo.cs");
+        var result = await toolsWithoutSolution.ReadFileTool(reason: "test message", "Foo.cs");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
@@ -361,7 +361,7 @@ public class ReadFileTests
     {
         UseDocumentSource("public class Alpha\n{\n    public int Keep() => 1;\n    public int Other() => 2;\n}\n");
 
-        var result = await _tools.ReadFile(reason: "test message", _documentPath, memberName: "Keep");
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Keep");
 
         Assert.That(result.IsError, Is.False);
         var view = (MemberSourceViewResult)result.SuccessData!;
@@ -377,7 +377,7 @@ public class ReadFileTests
             "public class First\n{\n    public int Value() => 1;\n}\n\n" +
             "public class Second\n{\n    public int Value() => 2;\n}\n");
 
-        var result = await _tools.ReadFile(reason: "test message", _documentPath, memberName: "Value", containerName: "Second");
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Value", containerName: "Second");
 
         Assert.That(result.IsError, Is.False);
         var view = (MemberSourceViewResult)result.SuccessData!;
@@ -388,7 +388,7 @@ public class ReadFileTests
     [Test]
     public async Task ReadFile_MemberNameCombinedWithStartLine_ReturnsInvalidArgumentAsync()
     {
-        var result = await _tools.ReadFile(reason: "test message", _documentPath, startLine: 1, memberName: "Keep");
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, startLine: 1, memberName: "Keep");
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -399,7 +399,7 @@ public class ReadFileTests
     {
         UseDocumentSource("public class Alpha\n{\n    public int Keep() => 1;\n}\n");
 
-        var result = await _tools.ReadFile(reason: "test message", _documentPath, memberName: "DoesNotExist");
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "DoesNotExist");
 
         Assert.That(result.IsError, Is.True);
         var message = result.ErrorData!.Message;

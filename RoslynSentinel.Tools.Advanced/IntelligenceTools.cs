@@ -45,7 +45,7 @@ public class IntelligenceTools
     [McpServerTool(Name = "GetComprehensiveHealthReport")]
     [Produces(DataTag.Report)]
     [Description("Generates a paged health report across one or more engines (Structure, Modernization, Performance, Safety, Architecture).")]
-    public async Task<SentinelCallToolResult<object>> GetComprehensiveHealthReport([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Engines to include. Omit for all.")] List<HealthEngineType>? engines = null, [Description("Restricts to one project. Omit for the whole solution.")][Consumes(DataTag.ProjectName)] string? projectName = null, [Description("Restricts to one file. Omit for the whole solution.")][Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null, [Description("Number of project results to skip before taking limit.")][ToolOption(ToolOptionTag.Offset)] int offset = 0, [Description("Maximum number of project results to return.")][ToolOption(ToolOptionTag.ResultLimit)] int limit = 10, [Description("Maximum seconds to spend before returning partial results.")][ToolOption(ToolOptionTag.Timeout)] int timeoutSeconds = 25, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> GetComprehensiveHealthReportTool([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Engines to include. Omit for all.")] List<HealthEngineType>? engines = null, [Description("Restricts to one project. Omit for the whole solution.")][Consumes(DataTag.ProjectName)] string? projectName = null, [Description("Restricts to one file. Omit for the whole solution.")][Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null, [Description("Number of project results to skip before taking limit.")][ToolOption(ToolOptionTag.Offset)] int offset = 0, [Description("Maximum number of project results to return.")][ToolOption(ToolOptionTag.ResultLimit)] int limit = 10, [Description("Maximum seconds to spend before returning partial results.")][ToolOption(ToolOptionTag.Timeout)] int timeoutSeconds = 25, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
@@ -72,7 +72,7 @@ public class IntelligenceTools
     [McpServerTool(Name = "GetSolutionMetrics")]
     [Produces(DataTag.Report)]
     [Description("Returns deep metrics for the solution or a single project.")]
-    public async Task<SentinelCallToolResult<object>> GetSolutionMetrics([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Restricts to one project. Omit for the whole solution.")][ExternalInputRequired(DataTag.ProjectName)] string? projectName = null, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> GetSolutionMetricsTool([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Restricts to one project. Omit for the whole solution.")][ExternalInputRequired(DataTag.ProjectName)] string? projectName = null, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         try
@@ -98,7 +98,7 @@ public class IntelligenceTools
     [McpServerTool(Name = "GetCodeInventory")]
     [Produces(DataTag.Report)]
     [Description("Returns a structured inventory of namespaces, classes, methods, and properties in a file.")]
-    public async Task<SentinelCallToolResult<object>> GetCodeInventory([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> GetCodeInventoryTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
@@ -121,7 +121,7 @@ public class IntelligenceTools
     [McpServerTool(Name = "GetDiRegistrations")]
     [Produces(DataTag.Report)]
     [Description("Scans for DI registrations (AddSingleton/AddScoped/AddTransient) across the solution or a scoped project/file.")]
-    public async Task<SentinelCallToolResult<object>> GetDiRegistrations([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Restricts to one project. Omit for the whole solution.")][Consumes(DataTag.ProjectName)] string? projectName = null, [Description("Restricts to one file. Omit for the whole solution.")][Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null, [Description("Filters by lifetime (Singleton/Scoped/Transient). Omit for all.")][ToolOption(ToolOptionTag.Filter)] string? lifetimeFilter = null, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> GetDiRegistrationsTool([Description(ToolParams.Reason)] ToolCallReason reason, [Description("Restricts to one project. Omit for the whole solution.")][Consumes(DataTag.ProjectName)] string? projectName = null, [Description("Restricts to one file. Omit for the whole solution.")][Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null, [Description("Filters by lifetime (Singleton/Scoped/Transient). Omit for all.")][ToolOption(ToolOptionTag.Filter)] string? lifetimeFilter = null, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
@@ -148,7 +148,7 @@ public class IntelligenceTools
     [McpServerTool(Name = "GetCallGraph")]
     [Produces(DataTag.ResultOnly)]
     [Description("Builds a multi-level call graph for a method.")]
-    public async Task<SentinelCallToolResult<object>> GetCallGraph([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("forward: what it calls. reverse: who calls it. tree: markdown call-tree string.")][ToolOption(ToolOptionTag.Direction)] string direction = "forward", [Description("Maximum levels of depth to traverse.")][ToolOption(ToolOptionTag.MaxDepth)] int maxDepth = 3, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> GetCallGraphTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string methodName, [Description("forward: what it calls. reverse: who calls it. tree: markdown call-tree string.")][ToolOption(ToolOptionTag.Direction)] string direction = "forward", [Description("Maximum levels of depth to traverse.")][ToolOption(ToolOptionTag.MaxDepth)] int maxDepth = 3, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
@@ -222,7 +222,7 @@ public class IntelligenceTools
     [McpServerTool(Name = "PreviewMoveFileToNamespaceFolder")]
     [Produces(DataTag.Report)]
     [Description("Returns the folder path a file should reside in based on its declared namespace.")]
-    public async Task<SentinelCallToolResult<string>> PreviewMoveFileToNamespaceFolder([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<string>> PreviewMoveFileToNamespaceFolderTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
@@ -249,7 +249,7 @@ public class IntelligenceTools
     [McpServerTool(Name = "TraceVariableLifetime")]
     [Produces(DataTag.Report)]
     [Description("Traces a local variable/parameter's full lifetime: every read, write, ref/out pass, return, and capture across all code paths. Use Search(mode: references) for methods/properties/fields instead.")]
-    public async Task<SentinelCallToolResult<object>> TraceVariableLifetime([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Description("Name of the local variable or parameter to trace.")][Consumes(DataTag.SymbolName)] string variableName, [Description("1-based declaration line; disambiguates duplicate names in the file.")][Consumes(DataTag.StartLine)] int lineNumber, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> TraceVariableLifetimeTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Description("Name of the local variable or parameter to trace.")][Consumes(DataTag.SymbolName)] string variableName, [Description("1-based declaration line; disambiguates duplicate names in the file.")][Consumes(DataTag.StartLine)] int lineNumber, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);

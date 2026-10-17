@@ -78,7 +78,7 @@ public class MemberOutcomeFollowsCauseTests
         var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
         var before = workspace.ReadText(FixtureRelativePath);
 
-        var result = await tools.Member(
+        var result = await tools.MemberTool(
             reason: "test enum replace identical source outcome",
             operation: MemberAction.replace,
             filePath: workspace.PathOf(FixtureRelativePath),
@@ -96,7 +96,7 @@ public class MemberOutcomeFollowsCauseTests
         var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
         var before = workspace.ReadText(FixtureRelativePath);
 
-        var result = await tools.Member(
+        var result = await tools.MemberTool(
             reason: "test enum replace invalid value outcome",
             operation: MemberAction.replace,
             filePath: workspace.PathOf(FixtureRelativePath),
@@ -139,7 +139,7 @@ public class MemberOutcomeFollowsCauseTests
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
 
-        var result = await tools.Member(
+        var result = await tools.MemberTool(
             reason: "test enum replace invalid value recovery hint",
             operation: MemberAction.replace,
             filePath: workspace.PathOf(FixtureRelativePath),
@@ -162,7 +162,7 @@ public class MemberOutcomeFollowsCauseTests
         var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
         var before = workspace.ReadText(FixtureRelativePath);
 
-        var result = await tools.Member(
+        var result = await tools.MemberTool(
             reason: "test method replace identical source outcome",
             operation: MemberAction.replace,
             filePath: workspace.PathOf(FixtureRelativePath),
@@ -180,7 +180,7 @@ public class MemberOutcomeFollowsCauseTests
         var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
         var before = workspace.ReadText(FixtureRelativePath);
 
-        var result = await tools.Member(
+        var result = await tools.MemberTool(
             reason: "test addMember unparsable source outcome",
             operation: MemberAction.addMember,
             filePath: workspace.PathOf(FixtureRelativePath),

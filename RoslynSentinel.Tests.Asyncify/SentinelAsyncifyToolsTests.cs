@@ -10,24 +10,24 @@ namespace RoslynSentinel.Tests.Asyncify;
 
 /// <summary>
 /// Tests for AsyncifyTools public MCP methods:
-///   T1  – ScanAsyncMigrationCandidates, no solution -> SolutionNotLoaded
-///   T2  – ScanAsyncMigrationCandidates, loadList with [MigrationCandidate] -> finding returned
-///   T3  – ScanAsyncMigrationCandidates, summarize=true -> MigrationScanSummary with 5 bucket keys
-///   T4  – ScanAsyncMigrationCandidates, minScore above all scores -> empty list
-///   T5  – GetAsyncMigrationProgress, no solution -> SolutionNotLoaded
-///   T6  – GetAsyncMigrationProgress, solution with async methods -> report populated
+///   T1  – ScanAsyncMigrationCandidatesTool, no solution -> SolutionNotLoaded
+///   T2  – ScanAsyncMigrationCandidatesTool, loadList with [MigrationCandidate] -> finding returned
+///   T3  – ScanAsyncMigrationCandidatesTool, summarize=true -> MigrationScanSummary with 5 bucket keys
+///   T4  – ScanAsyncMigrationCandidatesTool, minScore above all scores -> empty list
+///   T5  – GetAsyncMigrationProgressTool, no solution -> SolutionNotLoaded
+///   T6  – GetAsyncMigrationProgressTool, solution with async methods -> report populated
 ///   T7  – FlagAsyncMigrationCandidates, no solution -> SolutionNotLoaded
-///   T8  – BridgeAsyncMethods, empty targets -> 0 attempted, success
+///   T8  – BridgeAsyncMethodsTool, empty targets -> 0 attempted, success
 ///   T9  – FlagAsyncMigrationCandidates, scope=targets, DryRun=true -> succeeded
-///   T10 – BridgeAsyncMethods, DryRun=true -> all items attempted, none failed
-///   T11 – AddCancellationToken, DryRun=true -> returns without error
-///   T12 – PropagateCancellationToken, empty targets -> 0 attempted, success
-///   T13 – ExtractEventHandlers, DryRun=true, missing ContextSnippet -> failed items
-///   T14 – UpliftCallers, empty targets -> 0 attempted, SuggestedPropagateTargets empty
-///   T15 – EventHandlersToAsync, no solution -> SolutionNotLoaded
-///   T17 – UpliftCallers, qualified static call -> qualifier preserved (Service.SyncMethodAsync not SyncMethodAsync)
-///   T19 – Asyncify macro, default params, Score=49 candidate -> Phase 2 skips it (below aligned threshold of 50)
-///   T20 – Asyncify macro, default params, Score=70 candidate with caller -> bridges AND uplifts (Phase 2 + 3)
+///   T10 – BridgeAsyncMethodsTool, DryRun=true -> all items attempted, none failed
+///   T11 – AddCancellationTokenTool, DryRun=true -> returns without error
+///   T12 – PropagateCancellationTokenTool, empty targets -> 0 attempted, success
+///   T13 – ExtractEventHandlersTool, DryRun=true, missing ContextSnippet -> failed items
+///   T14 – UpliftCallersTool, empty targets -> 0 attempted, SuggestedPropagateTargets empty
+///   T15 – EventHandlersToAsyncTool, no solution -> SolutionNotLoaded
+///   T17 – UpliftCallersTool, qualified static call -> qualifier preserved (Service.SyncMethodAsync not SyncMethodAsync)
+///   T19 – AsyncifyTool macro, default params, Score=49 candidate -> Phase 2 skips it (below aligned threshold of 50)
+///   T20 – AsyncifyTool macro, default params, Score=70 candidate with caller -> bridges AND uplifts (Phase 2 + 3)
 /// </summary>
 [TestFixture]
 [Category("AsyncifyTools")] // sentinel:auto-category
@@ -133,13 +133,13 @@ public class AsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T1 – ScanAsyncMigrationCandidates, no solution -> SolutionNotLoaded
+    // T1 – ScanAsyncMigrationCandidatesTool, no solution -> SolutionNotLoaded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
     public async Task T1_ScanAsyncMigrationCandidates_NoSolution_ReturnsSolutionNotLoaded()
     {
-        var result = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message");
+        var result = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -147,7 +147,7 @@ public class AsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T2 – ScanAsyncMigrationCandidates, loadList with [MigrationCandidate] -> finding returned
+    // T2 – ScanAsyncMigrationCandidatesTool, loadList with [MigrationCandidate] -> finding returned
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -155,7 +155,7 @@ public class AsyncifyToolsTests
     {
         SetSource(LoadListFlaggedSource);
 
-        var result = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message");
+        var result = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.True);
         var findings = result.SuccessData as List<MigrationCandidateFinding>;
@@ -169,7 +169,7 @@ public class AsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T3 – ScanAsyncMigrationCandidates, summarize=true -> MigrationScanSummary, 5 bucket keys
+    // T3 – ScanAsyncMigrationCandidatesTool, summarize=true -> MigrationScanSummary, 5 bucket keys
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -177,7 +177,7 @@ public class AsyncifyToolsTests
     {
         SetSource(LoadListFlaggedSource);
 
-        var result = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", summarize: true);
+        var result = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", summarize: true);
 
         Assert.That(!result.IsError, Is.True);
         var summary = result.SuccessData as MigrationScanSummary;
@@ -195,7 +195,7 @@ public class AsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T4 – ScanAsyncMigrationCandidates, minScore above all -> empty list
+    // T4 – ScanAsyncMigrationCandidatesTool, minScore above all -> empty list
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -203,7 +203,7 @@ public class AsyncifyToolsTests
     {
         SetSource(LoadListFlaggedSource);
 
-        var result = await _asyncifyTools.ScanAsyncMigrationCandidates(reason: "test message", minScore: 100);
+        var result = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message", minScore: 100);
 
         Assert.That(!result.IsError, Is.True);
         var findings = result.SuccessData as List<MigrationCandidateFinding>;
@@ -214,13 +214,13 @@ public class AsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T5 – GetAsyncMigrationProgress, no solution -> SolutionNotLoaded
+    // T5 – GetAsyncMigrationProgressTool, no solution -> SolutionNotLoaded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
     public async Task T5_GetAsyncMigrationProgress_NoSolution_ReturnsSolutionNotLoaded()
     {
-        var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test message");
+        var result = await _asyncifyTools.GetAsyncMigrationProgressTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -228,7 +228,7 @@ public class AsyncifyToolsTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T6 – GetAsyncMigrationProgress, solution with async methods -> report populated
+    // T6 – GetAsyncMigrationProgressTool, solution with async methods -> report populated
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(15000)]
@@ -242,7 +242,7 @@ public class Svc
     public async Task<int> GetValueAsync(System.Threading.CancellationToken ct) { return await Task.FromResult(1); }
 }", "Svc.cs");
 
-        var result = await _asyncifyTools.GetAsyncMigrationProgress(reason: "test message");
+        var result = await _asyncifyTools.GetAsyncMigrationProgressTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Null);
@@ -267,7 +267,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T8 – BridgeAsyncMethods, empty targets -> 0 attempted, success
+    // T8 – BridgeAsyncMethodsTool, empty targets -> 0 attempted, success
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -275,7 +275,7 @@ public class Svc
     {
         SetSource("public class C { public void M() {} }", "C.cs");
 
-        var result = await _asyncifyTools.BridgeAsyncMethods(reason: "test message", targets: []);
+        var result = await _asyncifyTools.BridgeAsyncMethodsTool(reason: "test message", targets: []);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
@@ -316,7 +316,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T10 – BridgeAsyncMethods, DryRun=true -> all items attempted, none failed
+    // T10 – BridgeAsyncMethodsTool, DryRun=true -> all items attempted, none failed
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -324,7 +324,7 @@ public class Svc
     {
         SetSource(LoadListUnflaggedSource);
 
-        var result = await _asyncifyTools.BridgeAsyncMethods(
+        var result = await _asyncifyTools.BridgeAsyncMethodsTool(
             reason: "test message",
             targets: [new BatchTarget { FilePath = "RegionForm.cs", MethodNames = ["loadList"] }],
             dryRun: true);
@@ -336,7 +336,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T11 – AddCancellationToken, DryRun=true -> returns without error
+    // T11 – AddCancellationTokenTool, DryRun=true -> returns without error
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -349,7 +349,7 @@ public class Svc
     public async Task DoWorkAsync() { await Task.Delay(1); }
 }", "Svc.cs");
 
-        var result = await _asyncifyTools.AddCancellationToken(
+        var result = await _asyncifyTools.AddCancellationTokenTool(
             reason: "test message",
             targets: [new BatchTarget { FilePath = "Svc.cs" }],
             dryRun: true);
@@ -361,7 +361,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T12 – PropagateCancellationToken, empty targets -> 0 attempted, success
+    // T12 – PropagateCancellationTokenTool, empty targets -> 0 attempted, success
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -369,7 +369,7 @@ public class Svc
     {
         SetSource("public class C { public void M() {} }", "C.cs");
 
-        var result = await _asyncifyTools.PropagateCancellationToken(
+        var result = await _asyncifyTools.PropagateCancellationTokenTool(
             reason: "test message",
             targets: [],
             dryRun: true);
@@ -381,7 +381,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T13 – ExtractEventHandlers, DryRun=true, missing ContextSnippet -> failed items
+    // T13 – ExtractEventHandlersTool, DryRun=true, missing ContextSnippet -> failed items
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(10000)]
@@ -389,7 +389,7 @@ public class Svc
     {
         SetSource(LoadListUnflaggedSource);
 
-        var result = await _asyncifyTools.ExtractEventHandlers(
+        var result = await _asyncifyTools.ExtractEventHandlersTool(
             reason: "test message",
             targets:
             [
@@ -411,7 +411,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T14 – UpliftCallers, empty targets -> 0 attempted, SuggestedPropagateTargets empty
+    // T14 – UpliftCallersTool, empty targets -> 0 attempted, SuggestedPropagateTargets empty
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
@@ -419,7 +419,7 @@ public class Svc
     {
         SetSource("public class C { public void M() {} }", "C.cs");
 
-        var result = await _asyncifyTools.UpliftCallers(reason: "test message", targets: []);
+        var result = await _asyncifyTools.UpliftCallersTool(reason: "test message", targets: []);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
@@ -428,13 +428,13 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T15 – EventHandlersToAsync, no solution -> SolutionNotLoaded
+    // T15 – EventHandlersToAsyncTool, no solution -> SolutionNotLoaded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
     public async Task T15_EventHandlersToAsync_NoSolution_ReturnsSolutionNotLoaded()
     {
-        var result = await _asyncifyTools.EventHandlersToAsync(reason: "test message");
+        var result = await _asyncifyTools.EventHandlersToAsyncTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -442,13 +442,13 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T16 – Asyncify with maxIterations/maxRuntimeSeconds params, no solution -> SolutionNotLoaded
+    // T16 – AsyncifyTool with maxIterations/maxRuntimeSeconds params, no solution -> SolutionNotLoaded
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test, CancelAfter(5000)]
     public async Task T16_Asyncify_WithLimitParams_NoSolution_ReturnsSolutionNotLoaded()
     {
-        var result = await _asyncifyTools.Asyncify(reason: "test message", maxRuntimeSeconds: 30, maxIterations: 10);
+        var result = await _asyncifyTools.AsyncifyTool(reason: "test message", maxRuntimeSeconds: 30, maxIterations: 10);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -456,7 +456,7 @@ public class Svc
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T17 – UpliftCallers, qualified static call -> type qualifier preserved
+    // T17 – UpliftCallersTool, qualified static call -> type qualifier preserved
     // Regression: callers using FooType.BridgedMethod(args) were incorrectly
     // rewritten to BridgedMethodAsync(args) (qualifier stripped).
     // ══════════════════════════════════════════════════════════════════════════
@@ -511,7 +511,7 @@ public static class DataHelper
     {
         SetSource(ChainedCallSource, "Chained.cs");
 
-        var result = await _asyncifyTools.UpliftCallers(
+        var result = await _asyncifyTools.UpliftCallersTool(
             reason: "test message",
             targets: [new UpliftTarget { BridgedMethodName = "GetData" }],
             maxCallersPerMethod: 5,
@@ -539,7 +539,7 @@ public static class DataHelper
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T19 – Asyncify macro, default params, Score=49 candidate -> Phase 2 skips it
+    // T19 – AsyncifyTool macro, default params, Score=49 candidate -> Phase 2 skips it
     // Verifies the lower boundary: a candidate one point below DefaultScoreThreshold=50
     // is found by Phase 2 but excluded, so Phase 3 (uplift) is never entered.
     // ══════════════════════════════════════════════════════════════════════════
@@ -567,7 +567,7 @@ public static class DataHelper
         // loadList has Score=49, one below DefaultScoreThreshold=50 -> must not be bridged.
         SetSource(LoadListLowScoreSource);
 
-        var result = await _asyncifyTools.Asyncify(reason: "test message");
+        var result = await _asyncifyTools.AsyncifyTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
         Assert.That(result.SuccessData, Is.Not.Null);
@@ -583,7 +583,7 @@ public static class DataHelper
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T20 – Asyncify macro, default params, Score=70 candidate with a caller ->
+    // T20 – AsyncifyTool macro, default params, Score=70 candidate with a caller ->
     //        Phase 2 bridges, Phase 3 uplifts the caller
     // Confirms the full pipeline runs when the candidate score meets the threshold.
     // ══════════════════════════════════════════════════════════════════════════
@@ -619,7 +619,7 @@ public static class DataHelper
     {
         SetSource(LoadListHighScoreWithCallerSource);
 
-        var result = await _asyncifyTools.Asyncify(reason: "test message");
+        var result = await _asyncifyTools.AsyncifyTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
         Assert.That(result.SuccessData, Is.Not.Null);
@@ -650,7 +650,7 @@ public static class DataHelper
     {
         SetSource(QualifiedStaticCallSource, "QualifiedCall.cs");
 
-        var result = await _asyncifyTools.UpliftCallers(
+        var result = await _asyncifyTools.UpliftCallersTool(
             reason: "test message",
             targets: [new UpliftTarget { BridgedMethodName = "SyncMethod" }],
             maxCallersPerMethod: 5,

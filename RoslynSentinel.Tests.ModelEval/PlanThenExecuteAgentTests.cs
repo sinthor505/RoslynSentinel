@@ -246,11 +246,11 @@ public class PlanThenExecuteAgentTests
             "public string UnrelatedMethodAfter(  string   s  )\n{\n        return s?.Trim() ?? \"\";\n}");
 
         // Threshold is 2, not 1: CompilerErrorLookupHelper's guidance (see RoslynSentinel.Engines.Basic
-        // CompilerErrorLookupHelper.cs) is designed to be *read after* a failed ApplyDiff, so a
+        // CompilerErrorLookupHelper.cs) is designed to be *read after* a failed ApplyDiffTool, so a
         // model that mis-qualifies a call (e.g. CS0103 on a static member of another class) and
         // then correctly follows the guidance on retry legitimately costs 2 error tool calls, not
         // 1 - observed directly in a 2026-08-31 PlanThenExecute run that fully fixed the bug in 2
-        // ApplyDiff attempts but tripped a <=1 gate. 3+ on the same tool is real thrashing, not a
+        // ApplyDiffTool attempts but tripped a <=1 gate. 3+ on the same tool is real thrashing, not a
         // single guided recovery -> see AgentToolErrorAssertions for why the cap is per-tool, not
         // just total.
         //

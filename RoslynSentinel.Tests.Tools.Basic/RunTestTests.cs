@@ -1,6 +1,6 @@
-// Coverage for the RunTest MCP tool (docs/current/plan-runtest-tool-v1.md). Uses TestSolutionFixture
+// Coverage for the RunTestTool MCP tool (docs/current/plan-runtest-tool-v1.md). Uses TestSolutionFixture
 // (the ContosoOrders sample, which ships a real xUnit test project) rather than the in-memory
-// TestSolutionBuilder path, since RunTest shells out to a real `dotnet test` subprocess against
+// TestSolutionBuilder path, since RunTestTool shells out to a real `dotnet test` subprocess against
 // files on disk -> same real-process rationale as BuildEngine's fullBuild path.
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -95,7 +95,7 @@ public class RunTestTests
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingOutputTests.cs"), FailingTestWithOutputSource);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.all, timeoutSeconds: 120);
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.all, timeoutSeconds: 120);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
@@ -123,7 +123,7 @@ public class RunTestTests
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
@@ -147,7 +147,7 @@ public class RunTestTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
@@ -165,7 +165,7 @@ public class RunTestTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.project, scopeName: "DoesNotExist");
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.project, scopeName: "DoesNotExist");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("TestRunFailed"));
@@ -180,7 +180,7 @@ public class RunTestTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.file);
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.file);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("TestRunFailed"));
@@ -188,7 +188,7 @@ public class RunTestTests
     }
 
     // Known intermittent failure under a full/parallel Battery run (passes isolated and on rerun) ->
-    // same TestSolutionFixture.Dispose()/RunTest-subprocess file-handle race as the comment on
+    // same TestSolutionFixture.Dispose()/RunTestTool-subprocess file-handle race as the comment on
     // RunTest_FilterMatchesZeroTests_DetailReportsZeroMatchAsync below; not specific to this test.
     [Test]
     public async Task RunTest_FilterNarrowsToOneTest_TotalCountOneAsync()
@@ -199,7 +199,7 @@ public class RunTestTests
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, filter: "FullyQualifiedName~AlwaysFails", timeoutSeconds: 120);
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, filter: "FullyQualifiedName~AlwaysFails", timeoutSeconds: 120);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
@@ -208,7 +208,7 @@ public class RunTestTests
     }
 
     // Known intermittent failure under a full/parallel Battery run (passes isolated and on rerun):
-    // TestSolutionFixture.Dispose()'s Directory.Delete can race this test's own RunTest subprocess
+    // TestSolutionFixture.Dispose()'s Directory.Delete can race this test's own RunTestTool subprocess
     // not having fully released its file handles yet, throwing IOException on a .csproj file still
     // "in use by another process." Documented as a known, pre-existing, distinct issue in
     // docs/obsolete/blockers/blocking_error_persistentworkspacemanager_dispose_race_crashes_process.md's
@@ -222,7 +222,7 @@ public class RunTestTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, filter: "FullyQualifiedName~NoSuchTestNameAnywhere", timeoutSeconds: 120);
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, filter: "FullyQualifiedName~NoSuchTestNameAnywhere", timeoutSeconds: 120);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
@@ -231,7 +231,7 @@ public class RunTestTests
     }
 
     // Known intermittent failure under a full/parallel Battery run (passes isolated and on rerun) ->
-    // same TestSolutionFixture.Dispose()/RunTest-subprocess file-handle race as the comment on
+    // same TestSolutionFixture.Dispose()/RunTestTool-subprocess file-handle race as the comment on
     // RunTest_FilterMatchesZeroTests_DetailReportsZeroMatchAsync below; not specific to this test.
     [Test]
     public async Task RunTest_FailureSummary_GroupsBySignatureDescendingByCountAsync()
@@ -267,7 +267,7 @@ public class RunTestTests
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "SharedFailureTests.cs"), sharedFailureSource);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.skipped, timeoutSeconds: 120);
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.skipped, timeoutSeconds: 120);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
@@ -287,7 +287,7 @@ public class RunTestTests
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.failed, timeoutSeconds: 120);
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.failed, timeoutSeconds: 120);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
@@ -304,7 +304,7 @@ public class RunTestTests
         await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "FailingTests.cs"), FailingTestSource);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.all, summary: true, timeoutSeconds: 120);
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, resultsType: TestResultsFilter.all, summary: true, timeoutSeconds: 120);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var data = (TestRunResult)result.SuccessData!;
@@ -319,7 +319,7 @@ public class RunTestTests
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution);
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.Not.EqualTo("Exception"));
@@ -341,14 +341,14 @@ public class RunTestTests
 
         Assert.That(rateLimitError, Is.Not.Null, "expected CheckRateLimit to start rejecting within 15 calls at a limit of 10.");
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution);
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("TestRunFailed"));
     }
 
     // Diffs the shared temp dir before/after, so a sibling test's in-flight .trx would read as a
-    // leftover: must not overlap the other (parallel) RunTest tests in this fixture.
+    // leftover: must not overlap the other (parallel) RunTestTool tests in this fixture.
     [Test]
     [NonParallelizable]
     public async Task RunTest_TrxTempFile_DeletedAfterCallAsync()
@@ -359,11 +359,11 @@ public class RunTestTests
         var workspaceTools = BuildTools(workspaceManager);
 
         // Diffs against a "before" snapshot (rather than asserting the directory is empty) so this
-        // test tolerates other RunTest calls racing concurrently elsewhere in the suite -> each uses
+        // test tolerates other RunTestTool calls racing concurrently elsewhere in the suite -> each uses
         // its own GUID-suffixed filename, so only a leftover from *this* call would show up as new.
         var before = new HashSet<string>(Directory.EnumerateFiles(Path.GetTempPath(), "roslynsentinel_runtest_*.trx"));
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, timeoutSeconds: 120);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var after = Directory.EnumerateFiles(Path.GetTempPath(), "roslynsentinel_runtest_*.trx");
@@ -373,7 +373,7 @@ public class RunTestTests
 
     // When a test project does not compile, `dotnet test` produces no TRX. The failing project and the
     // cause must be in StatusMessage (which the large-result offload envelope relays), not only in the
-    // payload's Detail, so a caller can see what broke without a GetLargeResult round trip.
+    // payload's Detail, so a caller can see what broke without a GetLargeResultTool round trip.
     [Test]
     public async Task RunTest_ProjectFailsToBuild_StatusMessageNamesProjectAndCauseAsync()
     {
@@ -384,7 +384,7 @@ public class RunTestTests
             "namespace ContosoOrders.Tests; public class BrokenTests { this does not compile }");
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.RunTest(reason: "test message", ToolScope.project, scopeName: "ContosoOrders.Tests", timeoutSeconds: 120);
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.project, scopeName: "ContosoOrders.Tests", timeoutSeconds: 120);
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.StatusMessage, Does.Contain("ContosoOrders.Tests").And.Contain("TRX"));

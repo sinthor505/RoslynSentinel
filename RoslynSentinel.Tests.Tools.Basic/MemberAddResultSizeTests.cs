@@ -10,7 +10,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 /// <summary>
-/// An applied Member add must return line changes, not the whole file back as changedContent
+/// An applied MemberTool add must return line changes, not the whole file back as changedContent
 /// (docs/current/plans/plan_mutating_and_test_tool_result_noise.md, Step 2). Dry runs and autoStage=false results
 /// still carry the content: nothing was written, so the content is the result.
 /// Runs on an InMemoryWorkspace, which has no solution root: the offloaded content file cannot be written there, so
@@ -57,7 +57,7 @@ public class MemberAddResultSizeTests
 
     private static Task<SentinelCallToolResult<object>> AddMemberAsync(
         RefactoringStructuralTools tools, InMemoryWorkspace workspace, bool dryRun = false) =>
-        tools.Member(
+        tools.MemberTool(
             reason: "test add member result size",
             operation: MemberAction.addMember,
             filePath: workspace.PathOf(FixtureRelativePath),
@@ -68,7 +68,7 @@ public class MemberAddResultSizeTests
 
     private static Task<SentinelCallToolResult<object>> AddTopLevelTypeAsync(
         RefactoringStructuralTools tools, InMemoryWorkspace workspace, bool dryRun = false) =>
-        tools.Member(
+        tools.MemberTool(
             reason: "test add top level type result size",
             operation: MemberAction.addTopLevelType,
             filePath: workspace.PathOf(FixtureRelativePath),

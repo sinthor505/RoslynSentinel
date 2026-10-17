@@ -143,7 +143,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton(new WriteToolAdviceHelper(activeToolClasses, toolAllowList?.ToolNames));
 
         // Captured once here (the same values ResolveActiveToolClasses/DescribeNoActiveToolsFailure
-        // use to build the startup guidance message) so McpServerStatus can report today's actual
+        // use to build the startup guidance message) so McpServerStatusTool can report today's actual
         // mode/include-tools/exclude-tools resolution instead of a caller having to guess or
         // restart the server to find out.
         var activeToolSurface = new ActiveToolSurface(
@@ -175,12 +175,12 @@ public static class RoslynSentinelServiceExtensionsBasic
         // same category name pattern the rest of the server already uses implicitly.
         services.TryAddSingleton(sp => sp.GetRequiredService<ILoggerFactory>().CreateLogger("RoslynSentinel"));
 
-        // claude-lean only: McpToolsetControl can add any on-demand tool at runtime, and a tool's class is
+        // claude-lean only: McpToolsetControlTool can add any on-demand tool at runtime, and a tool's class is
         // constructed by ActivatorUtilities from the container - so the DEPENDENCIES of those classes (the Impl
         // singletons registered in the blocks below) must exist even though their tools are not exposed at
         // startup. The per-tool allow-list already makes WithSentinelTools register none of the non-Core
         // tools, so widening the set here registers dependencies only. Rebinding (not mutating) keeps the
-        // ActiveToolSurface/WriteToolAdviceHelper sets above - what McpServerStatus and advice report - exact.
+        // ActiveToolSurface/WriteToolAdviceHelper sets above - what McpServerStatusTool and advice report - exact.
         if (toolAllowList is not null)
         {
             bool toolsetControlActive = activeToolClasses.Contains("ToolsetControlTools");
@@ -203,7 +203,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                 mcpBuilder.WithSentinelTools<ToolsetControlTools>();
             }
 
-            // The merged Declaration tool: on-demand only (the allow-list keeps it out of the startup surface; the
+            // The merged DeclarationTool tool: on-demand only (the allow-list keeps it out of the startup surface; the
             // `declarations` toolset adds it). Its Impl dependencies are registered by the Structural/Signature blocks below.
             if (declarationActive)
             {
@@ -211,7 +211,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                 mcpBuilder.WithSentinelTools<DeclarationTools>();
             }
 
-            // The merged ParameterEdit tool: same on-demand arrangement as Declaration; its Impl dependency
+            // The merged ParameterEditTool tool: same on-demand arrangement as DeclarationTool; its Impl dependency
             // (RefactoringSignatureImpl) is registered by the Signature block below.
             if (parameterEditActive)
             {
@@ -219,7 +219,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                 mcpBuilder.WithSentinelTools<ParameterEditTools>();
             }
 
-            // The SemanticFindReplace tool: on-demand only, added by the `moveExtract` toolset. Its dependencies
+            // The SemanticFindReplaceTool tool: on-demand only, added by the `moveExtract` toolset. Its dependencies
             // (SemanticReplaceEngine, ValidationEngine, IWorkspaceManager) are registered by AddRoslynSentinelEnginesBasic.
             if (semanticFindReplaceActive)
             {
@@ -228,7 +228,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             }
         }
 
-        // NamedArguments: opt-in via --mode=NamedArguments, or on demand in claude-lean (the `moveExtract` toolset;
+        // NamedArgumentsTool: opt-in via --mode=NamedArgumentsTool, or on demand in claude-lean (the `moveExtract` toolset;
         // the lean on-demand class set above puts the class in activeToolClasses, the allow-list hides the tool).
         // Dependencies (NamedArgumentsEngine, ValidationEngine, IWorkspaceManager) come from AddRoslynSentinelEnginesBasic.
         if (activeToolClasses.Contains("NamedArgumentsTools"))
@@ -237,7 +237,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             mcpBuilder.WithSentinelTools<NamedArgumentsTools>();
         }
 
-        // TagTestCategories: opt-in via --mode=TestCategories, or on demand in claude-lean (the `testCategories` toolset;
+        // TagTestCategoriesTool: opt-in via --mode=TestCategories, or on demand in claude-lean (the `testCategories` toolset;
         // the lean on-demand class set above puts the class in activeToolClasses, the allow-list hides the tool).
         // TestCategoryTaggingEngine, TestCategoryApplyEngine and ValidationEngine come from AddRoslynSentinelEnginesBasic; the Impl takes the plain ILogger registered above.
         if (activeToolClasses.Contains("TestCategoryTaggingTools"))
@@ -247,7 +247,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             mcpBuilder.WithSentinelTools<TestCategoryTaggingTools>();
         }
 
-        // QualifyCrefs: opt-in via --mode=QualifyCrefs, or on demand in claude-lean (the QualifyCrefsTools class is in the lean lists in ToolClassRegistry).
+        // QualifyCrefsTool: opt-in via --mode=QualifyCrefsTool, or on demand in claude-lean (the QualifyCrefsTools class is in the lean lists in ToolClassRegistry).
         if (activeToolClasses.Contains("QualifyCrefsTools"))
         {
             services.AddSingleton<QualifyCrefsImpl>();
@@ -559,7 +559,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             {
                 var result = await next(context, cancellationToken);
 
-                // GetLargeResult's own switch branches (WorkspaceReadNavigationImpl.cs) already
+                // GetLargeResultTool's own switch branches (WorkspaceReadNavigationImpl.cs) already
                 // shrink-and-verify every list-shaped page against this exact threshold before
                 // returning, specifically so this filter could never re-catch that response. If
                 // one still slips past that (e.g. a single oversized record a page of 1 can't
@@ -606,16 +606,16 @@ public static class RoslynSentinelServiceExtensionsBasic
                         }
 
                         // Best-effort size hint so the pointer alone tells the model whether this
-                        // is 1 big hit or 300 small ones, instead of forcing a GetLargeResult round
+                        // is 1 big hit or 300 small ones, instead of forcing a GetLargeResultTool round
                         // trip just to find out. Shape-agnostic by design (this filter runs for
                         // every tool, typed and untyped alike) -> parsed straight from the raw JSON
                         // rather than any tool-specific DTO. itemCount looks for the envelope's own
                         // totalRecords first (set by ForPossiblyLargeDataAsync callers), then falls
                         // back to LargeResultHelper.CountResultItems, which sums every array found
                         // under successData (recursing through nested objects) - covers untyped
-                        // tools like FindReferences that set SuccessData directly.
+                        // tools like FindReferencesTool that set SuccessData directly.
                         // statusMessage is relayed whenever the tool already populated one (e.g.
-                        // FindReferences/SearchSolutionText's SummarizeListResult-based summary) so
+                        // FindReferencesTool/SearchSolutionTextTool's SummarizeListResult-based summary) so
                         // that hint survives the offload instead of being silently dropped.
                         int? itemCount = null;
                         string? statusMessage = null;
@@ -801,7 +801,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         // Search(mode: text) calls (see PersistentWorkspaceManager.RecordSearchOutcome), restrict
         // tool calls to a small orienting allowlist until one of them succeeds. Exists because
         // agents repeatedly retry text search with reworded guesses instead of switching to
-        // ListAll/GetFileOutline, even though both the system prompt and Search(mode: text)'s own
+        // ListAllTool/GetFileOutlineTool, even though both the system prompt and Search(mode: text)'s own
         // zero-match response already say to do so -> see docs/current/plan-orientation-breaker.md.
         filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
             ModelContextProtocol.Protocol.CallToolRequestParams,
@@ -837,7 +837,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     if (automaticBreaker is not null)
                     {
                         // Search(mode: text)'s own outcome is now recorded inline, from inside
-                        // WorkspaceReadNavigationImpl.SearchSolutionText itself, immediately after
+                        // WorkspaceReadNavigationImpl.SearchSolutionTextTool itself, immediately after
                         // the match count is known -> not here. Recording it a second time here
                         // would double-count every call against the trip threshold. Every other
                         // Search mode (symbol/references/declaration-kind listings) never reaches
@@ -850,7 +850,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                             modeArg.ValueKind == System.Text.Json.JsonValueKind.String &&
                             modeArg.GetString() == "text";
 
-                        // An empty ListAll (nothing listed) is not orientation: it must not lift the breaker.
+                        // An empty ListAllTool (nothing listed) is not orientation: it must not lift the breaker.
                         if (!isTextSearch && automaticBreaker.IsTripped() && result.IsError != true && !IsEmptyListAllResult(toolName, result))
                         {
                             automaticBreaker.Reset();
@@ -892,7 +892,7 @@ public static class RoslynSentinelServiceExtensionsBasic
                     }
 
                     // The live tool collection is the authoritative answer to "is ResetMutationBreaker
-                    // exposed right now" (static modes, allow-lists and McpToolsetControl all land in it).
+                    // exposed right now" (static modes, allow-lists and McpToolsetControlTool all land in it).
                     // Any failure to resolve it counts as "not active": the safe recovery text is "stop and report".
                     var resetActive = false;
                     try

@@ -1,5 +1,5 @@
 // Absolute size budget for the claude-lean core tool surface (the tools/list payload an agent pays for every session).
-// Existing relative checks (ParameterEdit_EmittedSchema_IsSmallerThanTheTwoToolsItMerges and its Declaration twin) only
+// Existing relative checks (ParameterEdit_EmittedSchema_IsSmallerThanTheTwoToolsItMerges and its DeclarationTool twin) only
 // guard one merged tool against its sources; nothing else stopped the whole surface growing. Sizes here are the
 // serialized JSON character count of each emitted ProtocolTool, from a real claude-lean host (core tools only, no
 // on-demand toolsets). Each budget is the measured value rounded UP to the next 500 characters, so a small description
@@ -23,7 +23,7 @@ namespace RoslynSentinel.Tests.Server;
 public class ClaudeLeanSchemaBudgetTests
 {
     // Measured on 2026-10-14 (core claude-lean surface): Advanced 24 tools, 42186 chars total; Basic 23 tools, 40216 chars
-    // total; largest tool Git at 7415 chars in both. Each constant is the measurement rounded up to the next 500.
+    // total; largest tool GitTool at 7415 chars in both. Each constant is the measurement rounded up to the next 500.
     // Raise a constant only when the growth is intended.
     private const int AdvancedTotalBudget = 42500;
     private const int BasicTotalBudget = 40500;

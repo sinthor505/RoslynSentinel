@@ -5,7 +5,7 @@ using RoslynSentinel.Common.AgentLoop;
 namespace RoslynSentinel.Tools.Advanced;
 
 /// <summary>
-/// The agent-loop half of a SubAgent/SubAgentEval call, shared by both: argument validation, and
+/// The agent-loop half of a SubAgentTool/SubAgentEvalTool call, shared by both: argument validation, and
 /// running the dispatched model against a launched <see cref="SubAgentChildServer"/>.
 /// </summary>
 public static class SubAgentModelRun

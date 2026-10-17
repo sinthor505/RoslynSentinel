@@ -1,4 +1,4 @@
-// ReplaceSnippet's batch path (the 'batchEdits' parameter). Per the design doc
+// ReplaceSnippetTool's batch path (the 'batchEdits' parameter). Per the design doc
 // (docs/current/proposal_batch_replacesnippet.md) every edit in a batch is anchored against its
 // file's ORIGINAL content, never a prior edit's output, so these tests specifically cover: multiple
 // batchEdits to one file, batchEdits spanning multiple files, overlap rejection, and the either/or validation
@@ -81,7 +81,7 @@ public class ReplaceSnippetBatchTests
         var firstAnchor = FirstLine(originalContent);
         var lastNonEmptyLine = LastNonEmptyLine(originalContent);
 
-        var result = await tools.ReplaceSnippet(
+        var result = await tools.ReplaceSnippetTool(
             reason: "test batch same file",
             ProposedChangeAction.validate,
             batchEdits:
@@ -104,7 +104,7 @@ public class ReplaceSnippetBatchTests
         var anchorA = FirstLine(workspace.ReadText(LineRelativePath));
         var anchorB = FirstLine(workspace.ReadText(StatusRelativePath));
 
-        var result = await tools.ReplaceSnippet(
+        var result = await tools.ReplaceSnippetTool(
             reason: "test batch across files",
             ProposedChangeAction.apply,
             batchEdits:
@@ -137,7 +137,7 @@ public class ReplaceSnippetBatchTests
         // -> the two matched spans necessarily overlap.
         var overlappingFragment = firstLine.Length > 4 ? firstLine[..^2] : firstLine;
 
-        var result = await tools.ReplaceSnippet(
+        var result = await tools.ReplaceSnippetTool(
             reason: "test batch overlap rejection",
             ProposedChangeAction.apply,
             batchEdits:
@@ -163,7 +163,7 @@ public class ReplaceSnippetBatchTests
         var originalContentA = workspace.ReadText(LineRelativePath);
         var anchorA = FirstLine(originalContentA);
 
-        var result = await tools.ReplaceSnippet(
+        var result = await tools.ReplaceSnippetTool(
             reason: "test batch partial failure",
             ProposedChangeAction.apply,
             batchEdits:
@@ -188,7 +188,7 @@ public class ReplaceSnippetBatchTests
         var targetFile = workspace.PathOf(StatusRelativePath);
         var anchor = FirstLine(workspace.ReadText(StatusRelativePath));
 
-        var result = await tools.ReplaceSnippet(
+        var result = await tools.ReplaceSnippetTool(
             reason: "test both supplied",
             ProposedChangeAction.validate,
             filePath: targetFile,
@@ -206,7 +206,7 @@ public class ReplaceSnippetBatchTests
         using var workspace = CreateWorkspace();
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.ReplaceSnippet(
+        var result = await tools.ReplaceSnippetTool(
             reason: "test empty batchEdits",
             ProposedChangeAction.validate,
             batchEdits: []);
@@ -226,7 +226,7 @@ public class ReplaceSnippetBatchTests
             .Select(i => new SnippetEdit { FilePath = targetFile, OldContent = $"nonexistent-{i}", NewContent = "x" })
             .ToList();
 
-        var result = await tools.ReplaceSnippet(
+        var result = await tools.ReplaceSnippetTool(
             reason: "test over cap",
             ProposedChangeAction.validate,
             batchEdits: edits);
@@ -240,14 +240,14 @@ public class ReplaceSnippetBatchTests
     {
         // The single-edit path always carried escape-hatch advice on a size rejection; the batch
         // path used to list the per-edit bounds with no way forward. Two oversized edits must still
-        // yield exactly one advice sentence, led by Member(replace).
+        // yield exactly one advice sentence, led by MemberTool(replace).
         using var workspace = CreateWorkspace();
         var tools = BuildTools(workspace.Manager);
 
         var targetFile = workspace.PathOf(StatusRelativePath);
         var anchor = FirstLine(workspace.ReadText(StatusRelativePath));
 
-        var result = await tools.ReplaceSnippet(
+        var result = await tools.ReplaceSnippetTool(
             reason: "test batch oversize advice",
             ProposedChangeAction.validate,
             batchEdits:
@@ -276,7 +276,7 @@ public class ReplaceSnippetBatchTests
         var targetFile = workspace.PathOf(StatusRelativePath);
         var anchor = FirstLine(workspace.ReadText(StatusRelativePath));
 
-        var result = await tools.ReplaceSnippet(
+        var result = await tools.ReplaceSnippetTool(
             reason: "test batch missing newContent",
             ProposedChangeAction.validate,
             batchEdits: [new SnippetEdit { FilePath = targetFile, OldContent = anchor, NewContent = null! }]);

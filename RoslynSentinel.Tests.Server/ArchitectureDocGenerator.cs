@@ -19,7 +19,7 @@ public static class ArchitectureDocGenerator
     /// <summary>Modes-cell label for a tool on the claude-lean core allow-list.</summary>
     public const string ClaudeLeanCoreLabel = "claude-lean";
 
-    /// <summary>Modes-cell label for a tool in a ToolsetCatalog toolset (hidden until McpToolsetControl enables it).</summary>
+    /// <summary>Modes-cell label for a tool in a ToolsetCatalog toolset (hidden until McpToolsetControlTool enables it).</summary>
     public const string ClaudeLeanOnDemandLabel = "claude-lean (on demand)";
 
     /// <summary>
@@ -212,7 +212,7 @@ public static class ArchitectureDocGenerator
     /// Turns a class's mode list into the per-tool Modes cell. Every mode except claude-lean applies to the
     /// whole class. claude-lean is per tool: "claude-lean" when the tool is on
     /// <see cref="ToolClassRegistry.ClaudeLeanToolNames"/> (core, always exposed), "claude-lean (on demand)"
-    /// when it belongs to a <see cref="ToolsetCatalog"/> toolset (exposed after McpToolsetControl), and no
+    /// when it belongs to a <see cref="ToolsetCatalog"/> toolset (exposed after McpToolsetControlTool), and no
     /// claude-lean entry otherwise, because the allow-list hides it even though its class is loaded.
     /// </summary>
     private static List<string> ResolvePerToolModes(string className, string toolName, IEnumerable<string> classModes)

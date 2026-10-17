@@ -1,11 +1,9 @@
 using System.ComponentModel;
 
-using RoslynSentinel;
-
 namespace RoslynSentinel.Tools.Basic;
 
-// Operator-adjacent tools: ExternalFileDrift (status/list/acknowledge external-change state and
-// the session-halt latch) and McpServerControl (process lifecycle). Always visible in claude-lean
+// Operator-adjacent tools: ExternalFileDriftTool (status/list/acknowledge external-change state and
+// the session-halt latch) and McpServerControlTool (process lifecycle). Always visible in claude-lean
 // (ToolClassRegistry.ClaudeLeanToolNames).
 [McpServerToolType]
 public class AdminTools
@@ -21,7 +19,7 @@ public class AdminTools
     [McpServerTool(Name = "ExternalFileDrift")]
     [Produces(DataTag.ResultOnly)]
     [Description("Inspect and resolve external file drift: a tracked file that changed on disk outside this server (an editor, git, a build step). A write that touches such a file is refused and halts the session until the drift is acknowledged; read-only tools keep working meanwhile. operation Status = is the session halted and how many external changes are tracked. operation List = full paths of the tracked changes; review these first. operation Acknowledge = declare changes reviewed and clear the session halt; it needs either files (names or relative paths from List) with acknowledgeScope ConfirmWithListedFiles (the default), or acknowledgeScope ConfirmAll with no files to clear every tracked change. Files you did not name stay flagged and halt the session again if a later write touches them.")]
-    public string ExternalFileDrift(
+    public string ExternalFileDriftTool(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     [Description("Status, List or Acknowledge. After a write was refused with 'Session halted', call List first.")] ExternalFileDriftOperation operation,
     [Description("Only for operation Acknowledge with acknowledgeScope ConfirmWithListedFiles. File names or relative paths (CSV or JSON array) taken from operation List. Leave empty when acknowledgeScope is ConfirmAll.")] string? files = null,
@@ -59,7 +57,7 @@ public class AdminTools
     }
 
     /// <summary>
-    /// Core of <c>ExternalFileDrift(operation: Acknowledge)</c>, taking the health reporter as a
+    /// Core of <c>ExternalFileDriftTool(operation: Acknowledge)</c>, taking the health reporter as a
     /// parameter so tests can seed drift with a stub instead of a real file-watcher round trip.
     /// </summary>
     public static string AcknowledgeDrift(IWorkspaceHealthReporter health, string? files, ExternalFileDriftAcknowledgeScope scope)
@@ -162,7 +160,7 @@ public class AdminTools
     [McpServerTool(Name = "McpServerControl")]
     [Produces(DataTag.ResultOnly)]
     [Description("Operator-only control of this server process. operation=GetServerStatus reports the running process. operation=StopServer exits the process and is refused unless confirmServerStop=ConfirmServerStop is also passed.")]
-    public string McpServerControl(
+    public string McpServerControlTool(
      [Description(ToolParams.Reason)] ToolCallReason reason,
      McpServerControlOperation operation,
      [Description("Required with operation=StopServer; only value: ConfirmServerStop.")]
@@ -173,7 +171,7 @@ public class AdminTools
     }
 
     /// <summary>
-    /// Core of <see cref="McpServerControl"/>, with the process-exit side effect injected so tests can
+    /// Core of <see cref="McpServerControlTool"/>, with the process-exit side effect injected so tests can
     /// verify the confirmation guard without terminating the test host.
     /// </summary>
     public static string ControlServer(

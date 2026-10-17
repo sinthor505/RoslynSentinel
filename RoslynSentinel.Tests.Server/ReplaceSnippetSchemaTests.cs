@@ -1,4 +1,4 @@
-// Guards the emitted ReplaceSnippet schema (blocker: replacesnippet_schema_invites_anchor_only_edits, slice 2):
+// Guards the emitted ReplaceSnippetTool schema (blocker: replacesnippet_schema_invites_anchor_only_edits, slice 2):
 // each batchEdits item lists oldContent as required, and lineBefore/lineAfter describe oldContent anchors
 // rather than the nonexistent contextSnippet.
 using System.Text.Json.Nodes;
@@ -19,7 +19,7 @@ public class ReplaceSnippetSchemaTests
     private static JsonObject BuildSchema()
     {
         var services = new ServiceCollection().BuildServiceProvider();
-        var method = typeof(WorkspaceTools).GetMethod(nameof(WorkspaceTools.ReplaceSnippet))!;
+        var method = typeof(WorkspaceTools).GetMethod(nameof(WorkspaceTools.ReplaceSnippetTool))!;
         var tool = McpToolSchemaPatcher.CreateSentinelTool(method, typeof(WorkspaceTools), services);
         return (JsonObject)JsonNode.Parse(tool.ProtocolTool.InputSchema.GetRawText())!;
     }

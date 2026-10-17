@@ -1,4 +1,4 @@
-// GetOperationDetail -> WorkspaceTools. Zero coverage before this file (GetTestCoverageMap
+// GetOperationDetailTool -> WorkspaceTools. Zero coverage before this file (GetTestCoverageMap
 // flagged branches: blobPath == null, filter present, file: filter true/false, unknown filter).
 // Blob schema follows OperationBlobWriter.WriteAsync's on-disk layout, same as UndoLastApplyTests.cs.
 // ItemRecordOutcome now serializes as its string name (JsonStringEnumConverter), matching its
@@ -83,7 +83,7 @@ public class GetOperationDetailTests
     [Test]
     public async Task GetOperationDetail_NoBlobForChangeId_ReturnsInvalidArgumentAsync()
     {
-        var result = await _tools.GetOperationDetail(reason: "test message", changeId: "nonexistent-change-id");
+        var result = await _tools.GetOperationDetailTool(reason: "test message", changeId: "nonexistent-change-id");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -99,7 +99,7 @@ public class GetOperationDetailTests
             new { FilePath = Path.Combine(_tempDir, "Bar.cs"), Outcome = ItemRecordOutcome.Failed, BeforeSource = (string?)null },
         });
 
-        var result = await _tools.GetOperationDetail(reason: "test message", changeId: changeId);
+        var result = await _tools.GetOperationDetailTool(reason: "test message", changeId: changeId);
 
         Assert.That(!result.IsError, Is.True);
         var data = (OperationDetailResult)result.SuccessData!;
@@ -117,7 +117,7 @@ public class GetOperationDetailTests
             new { FilePath = Path.Combine(_tempDir, "Bar.cs"), Outcome = ItemRecordOutcome.Failed, BeforeSource = (string?)null },
         });
 
-        var result = await _tools.GetOperationDetail(reason: "test message", changeId, filter: "fail");
+        var result = await _tools.GetOperationDetailTool(reason: "test message", changeId, filter: "fail");
 
         Assert.That(!result.IsError, Is.True);
         var data = (OperationDetailResult)result.SuccessData!;
@@ -135,7 +135,7 @@ public class GetOperationDetailTests
             new { FilePath = Path.Combine(_tempDir, "Bar.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
         });
 
-        var result = await _tools.GetOperationDetail(reason: "test message", changeId, filter: "file:Foo.cs");
+        var result = await _tools.GetOperationDetailTool(reason: "test message", changeId, filter: "file:Foo.cs");
 
         Assert.That(!result.IsError, Is.True);
         var data = (OperationDetailResult)result.SuccessData!;
@@ -154,13 +154,13 @@ public class GetOperationDetailTests
             new { FilePath = Path.Combine(_tempDir, "C.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
         });
 
-        var firstPage = await _tools.GetOperationDetail(reason: "test message", changeId, maxItems: 2);
+        var firstPage = await _tools.GetOperationDetailTool(reason: "test message", changeId, maxItems: 2);
         var firstData = (OperationDetailResult)firstPage.SuccessData!;
         Assert.That(firstData.Items, Has.Count.EqualTo(2));
         Assert.That(firstPage.HasMoreData, Is.True);
         Assert.That(firstData.NextOffset, Is.EqualTo(2));
 
-        var secondPage = await _tools.GetOperationDetail(reason: "test message", changeId, maxItems: 2, offset: firstData.NextOffset!.Value);
+        var secondPage = await _tools.GetOperationDetailTool(reason: "test message", changeId, maxItems: 2, offset: firstData.NextOffset!.Value);
         var secondData = (OperationDetailResult)secondPage.SuccessData!;
 
         Assert.That(!secondPage.IsError, Is.True);
@@ -179,7 +179,7 @@ public class GetOperationDetailTests
             new { FilePath = Path.Combine(_tempDir, "A.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
         });
 
-        var result = await _tools.GetOperationDetail(reason: "test message", changeId, offset: 10);
+        var result = await _tools.GetOperationDetailTool(reason: "test message", changeId, offset: 10);
 
         Assert.That(!result.IsError, Is.True);
         var data = (OperationDetailResult)result.SuccessData!;
@@ -196,7 +196,7 @@ public class GetOperationDetailTests
             new { FilePath = Path.Combine(_tempDir, "Foo.cs"), Outcome = ItemRecordOutcome.Succeeded, BeforeSource = (string?)null },
         });
 
-        var result = await _tools.GetOperationDetail(reason: "test message", changeId, filter: "bogus");
+        var result = await _tools.GetOperationDetailTool(reason: "test message", changeId, filter: "bogus");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));

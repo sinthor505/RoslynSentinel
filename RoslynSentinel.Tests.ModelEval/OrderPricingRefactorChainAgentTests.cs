@@ -65,21 +65,21 @@ namespace RoslynSentinel.Tests.ModelEval.LiveModel;
 public class OrderPricingRefactorChainAgentTests
 {
     // "Refactor" and "Workspace" are the exact mode strings AddRoslynSentinelToolsBasic checks ->
-    // together they register ApplyDiff/Build/ReadFile/Search/ListSolutionItems plus
-    // SentinelRefactoringTools (ExtractMethodSafe, RenameSymbol, ChangeAccessibility,
-    // ModifyModifier, SyncInterface), without pulling in Advanced's larger tool catalog.
+    // together they register ApplyDiffTool/BuildTool/ReadFileTool/Search/ListSolutionItemsTool plus
+    // SentinelRefactoringTools (ExtractMethodTool, RenameSymbolTool, ChangeAccessibilityTool,
+    // ModifyModifierTool, SyncInterfaceTool), without pulling in Advanced's larger tool catalog.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
     {
         "Refactor", "Workspace", "WorkspaceFileContent"
     };
 
-    // Toggle for an isolation experiment: with WriteFile blocked, the model must use ApplyDiff/
-    // ApplyUnifiedDiff/RenameSymbol/ChangeSignature for every edit, so the rename-desync failure
+    // Toggle for an isolation experiment: with WriteFileTool blocked, the model must use ApplyDiffTool/
+    // ApplyUnifiedDiffTool/RenameSymbolTool/ChangeSignatureTool for every edit, so the rename-desync failure
     // mode found in the 2026-09-05 ladder batch (see
     // project_sequential_edit_habit_vs_compiler_checks_theory memory) can be compared with and
-    // without the whole-file-rewrite escape hatch available, isolating whether it's WriteFile
+    // without the whole-file-rewrite escape hatch available, isolating whether it's WriteFileTool
     // specifically that invites the failure or whether the same pattern just resurfaces via
-    // ApplyDiff regardless. Flip to true, rebuild, and rerun the same rungs for the comparison
+    // ApplyDiffTool regardless. Flip to true, rebuild, and rerun the same rungs for the comparison
     // batch; leave false for normal runs.
     private static readonly bool BlockWriteFile = false;
 
@@ -120,9 +120,9 @@ public class OrderPricingRefactorChainAgentTests
 
         if (BlockWriteFile)
         {
-            // Mirrors PlanOnlyAgentTests' filter shape, blocking just WriteFile instead of every
-            // mutating tool -> the model still has ApplyDiff/ApplyUnifiedDiff/RenameSymbol/
-            // ChangeSignature/etc., so this isolates the one specific tool rather than reverting to
+            // Mirrors PlanOnlyAgentTests' filter shape, blocking just WriteFileTool instead of every
+            // mutating tool -> the model still has ApplyDiffTool/ApplyUnifiedDiffTool/RenameSymbolTool/
+            // ChangeSignatureTool/etc., so this isolates the one specific tool rather than reverting to
             // a read-only exercise.
             mcpBuilder.WithRequestFilters(filters =>
             {

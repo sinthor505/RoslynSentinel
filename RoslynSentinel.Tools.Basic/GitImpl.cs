@@ -22,7 +22,7 @@ public record GitResult : IResultStatus
     [JsonIgnore]
     public ResultStatus Status => IsError ? GitErrorCodes.ToResultStatus(Code) : ResultStatus.Success;
 
-    /// <summary>The code the Git tool reports on failure: <see cref="ErrorKind"/>, or the fallback GitError. Null on success.</summary>
+    /// <summary>The code the GitTool tool reports on failure: <see cref="ErrorKind"/>, or the fallback GitError. Null on success.</summary>
     [JsonIgnore]
     public string? Code => IsError ? ErrorKind ?? GitErrorCodes.Fallback : null;
 
@@ -30,7 +30,7 @@ public record GitResult : IResultStatus
     public string? Message => Error;
 
     /// <summary>Machine-readable cause of a failure, one of <see cref="GitErrorCodes"/>, when the cause is
-    /// known. Null means unclassified: the Git tool then reports the fallback code GitError. Never
+    /// known. Null means unclassified: the GitTool tool then reports the fallback code GitError. Never
     /// serialized with a success payload.</summary>
     [JsonIgnore]
     public string? ErrorKind
@@ -47,7 +47,7 @@ public record GitResult : IResultStatus
     }
 }
 
-/// <summary>Specific ResultError.ErrorCode values for failed Git results. GitError stays the fallback.</summary>
+/// <summary>Specific ResultError.ErrorCode values for failed GitTool results. GitError stays the fallback.</summary>
 public static class GitErrorCodes
 {
     /// <summary>Fallback when a failure has no more specific known cause.</summary>
@@ -85,7 +85,7 @@ public static class GitErrorCodes
     /// <summary>The hunkFingerprint no longer matches the file's current diff.</summary>
     public const string HunkStale = "GitHunkStale";
 
-    /// <summary>Maps a Git failure code to the canonical status. Every Git code is a refusal or failure, so none maps to a non-error status; an unknown or fallback code is Failed.</summary>
+    /// <summary>Maps a GitTool failure code to the canonical status. Every GitTool code is a refusal or failure, so none maps to a non-error status; an unknown or fallback code is Failed.</summary>
     public static ResultStatus ToResultStatus(string? code) => code switch
     {
         PathNotFound or TargetNotFound => ResultStatus.NotFound,
@@ -184,7 +184,7 @@ public record GitStatusResult : GitResult
 
     /// <summary>Which multi-step operation the repository is in the middle of: "merge", "rebase",
     /// "revert", "cherry-pick" or "am". Null when none is in progress. Set by status; when set,
-    /// Git(operation: abort) backs out of it.</summary>
+    /// GitTool(operation: abort) backs out of it.</summary>
     public string? InProgress
     {
         get; set;
@@ -461,7 +461,7 @@ public record GitWorktreeEntry
         get; set;
     }
 
-    /// <summary>True when this is the worktree the Git tool is operating in (the loaded solution's repository).</summary>
+    /// <summary>True when this is the worktree the GitTool tool is operating in (the loaded solution's repository).</summary>
     public bool IsCurrent
     {
         get; set;
@@ -570,7 +570,7 @@ public class GitImpl : IGitOperations
     /// Bound on how long a single git subprocess invocation may run. Applied whenever no caller-
     /// supplied CancellationToken already carries a shorter deadline -> MCP tool calls that omit
     /// cancellationToken get CancellationToken.None here, which would otherwise let a hung git
-    /// process (see docs/TODO.md's "Git(operation: status) hung indefinitely" entry) block forever.
+    /// process (see docs/TODO.md's "GitTool(operation: status) hung indefinitely" entry) block forever.
     /// </summary>
     private static readonly TimeSpan GitProcessTimeout = TimeSpan.FromSeconds(30);
 
@@ -610,7 +610,7 @@ public class GitImpl : IGitOperations
     }
 
     /// <summary>
-    /// Catch-all for an unexpected exception in a new Git operation. Logs the full exception and
+    /// Catch-all for an unexpected exception in a new GitTool operation. Logs the full exception and
     /// returns a fixed message, so no exception text or internal path reaches the caller.
     /// </summary>
     internal T UnexpectedFailure<T>(Exception ex, string what) where T : GitResult, new()
@@ -1538,13 +1538,13 @@ public class GitImpl : IGitOperations
     }
 
     /// <summary>
-    /// Finds the git repository root. Git operations read the working tree, not the Roslyn
+    /// Finds the git repository root. GitTool operations read the working tree, not the Roslyn
     /// compilation, so this deliberately does NOT require a loaded solution: it falls back to
     /// walking up from the server's own base/working directory when nothing is loaded. When a
     /// solution IS loaded, its directory is tried FIRST -> a loaded solution reflects the
-    /// worktree/repo the caller most recently pointed the server at via LoadSolution, whereas the
+    /// worktree/repo the caller most recently pointed the server at via LoadSolutionTool, whereas the
     /// server's base directory and process working directory are fixed at process launch and
-    /// never change afterward. Trying those first meant that once LoadSolution pointed the
+    /// never change afterward. Trying those first meant that once LoadSolutionTool pointed the
     /// workspace at a git worktree, status/diff/commit still silently resolved against whatever
     /// repo the server binary happened to be launched from/inside (almost always the primary
     /// checkout) instead of the worktree -> a plausible, well-formed, wrong answer with no error.
@@ -1552,7 +1552,7 @@ public class GitImpl : IGitOperations
     /// </summary>
     public string? TryGetGitRoot(out string error, string? repoPath = null)
     {
-        // 0. An explicit repoPath override (status/log/diff/show only - see Git's own parameter
+        // 0. An explicit repoPath override (status/log/diff/show only - see GitTool's own parameter
         //    description). Takes priority over everything else: a caller who names a specific
         //    worktree meant that one, not whatever the loaded solution happens to point at.
         if (!string.IsNullOrWhiteSpace(repoPath))
@@ -1569,7 +1569,7 @@ public class GitImpl : IGitOperations
         }
 
         // 1. The loaded solution's directory, if there is one. This is the caller's most recent
-        //    explicit signal of which repo/worktree they mean, via LoadSolution.
+        //    explicit signal of which repo/worktree they mean, via LoadSolutionTool.
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         if (solutionRoot is not null)
         {
@@ -1660,7 +1660,7 @@ public class GitImpl : IGitOperations
             UseShellExecute = false,
             CreateNoWindow = true,
             // Without these, Process decodes the redirected pipes using Console.OutputEncoding,
-            // which on Windows defaults to the legacy OS codepage, not UTF-8. Git writes UTF-8 to
+            // which on Windows defaults to the legacy OS codepage, not UTF-8. GitTool writes UTF-8 to
             // stdout/stderr regardless of that codepage, so every non-ASCII multi-byte character
             // (e.g. an em dash in a diffed file) gets decoded one byte at a time as separate
             // legacy-codepage characters and re-encoded into mojibake like "ΓÇö" - see
@@ -1672,7 +1672,7 @@ public class GitImpl : IGitOperations
         // Non-interactive by construction: stdin is closed and there is no console, so a credential
         // prompt can never be answered and would otherwise hang until GitProcessTimeout kills it.
         // GIT_TERMINAL_PROMPT=0 makes git itself fail fast ("terminal prompts disabled");
-        // GCM_INTERACTIVE=never does the same for Git Credential Manager, which can otherwise pop
+        // GCM_INTERACTIVE=never does the same for GitTool Credential Manager, which can otherwise pop
         // a GUI prompt that nobody is there to answer.
         process.StartInfo.Environment["GIT_TERMINAL_PROMPT"] = "0";
         process.StartInfo.Environment["GCM_INTERACTIVE"] = "never";
@@ -1738,7 +1738,7 @@ public class GitImpl : IGitOperations
     // reads stdout through OutputDataReceived, which splits on line breaks, drops each CR/LF and re-adds
     // Environment.NewLine via AppendLine, so every line ending in a diff would be rewritten (CRLF on Windows).
     // Here stdout is copied raw from the pipe's BaseStream and no StandardOutputEncoding is set; callers decode
-    // with Encoding.Latin1 so one char is one byte. Duplicated rather than refactored because every Git test
+    // with Encoding.Latin1 so one char is one byte. Duplicated rather than refactored because every GitTool test
     // depends on RunGitAsync. Follow-up: extract the shared process setup into one helper used by both.
     private async Task<(int ExitCode, byte[] Stdout, string Stderr)> RunGitBytesAsync(
         string gitRoot, string[] args, CancellationToken cancellationToken)
@@ -2793,7 +2793,7 @@ public class GitImpl : IGitOperations
 
             if (inIgnoredBlock)
             {
-                // The block ends at the first blank or hint line. Git prints each ignored path
+                // The block ends at the first blank or hint line. GitTool prints each ignored path
                 // unindented (verified on git 2.55), so any other line here is a path.
                 if (string.IsNullOrWhiteSpace(line) || line.StartsWith("hint:"))
                     break;
@@ -3321,7 +3321,7 @@ public class GitImpl : IGitOperations
                     return new GitCommitResult { IsError = true, Error = stageResult.Error };
             }
 
-            // Build commit arguments
+            // BuildTool commit arguments
             var messageArgs = (amend, HasMessage: !string.IsNullOrWhiteSpace(message)) switch
             {
                 (amend: true, HasMessage: true) => new[] { "--amend", "-m", message! },

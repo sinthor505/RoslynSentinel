@@ -95,7 +95,7 @@ public class RegressionTests
         var result = changeResult.Changes;
         Assert.That(changeResult.SkippedCallSites, Is.Empty, "This call site has matching arity and should not be skipped");
 
-        // Declaration must reflect new order: c, a, b
+        // DeclarationTool must reflect new order: c, a, b
         var decl = result["Math.cs"];
         var cIdx = decl.IndexOf("int c", StringComparison.Ordinal);
         var aIdx = decl.IndexOf("int a", StringComparison.Ordinal);

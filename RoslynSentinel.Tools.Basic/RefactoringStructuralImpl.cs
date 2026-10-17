@@ -8,8 +8,8 @@ namespace RoslynSentinel.Tools.Basic;
 
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): implementation half of the
 // RefactoringStructuralTools/Impl pair. Method bodies below are moved verbatim from
-// RefactoringStructuralTools.cs (Member, ModifyEnum, ModifyAttribute, ModifyModifier, ModifyBaseType,
-// SyncTypeAndFilename) plus their 3 private batch helpers (ModifyModifierBatch, ModifyAttributeBatch,
+// RefactoringStructuralTools.cs (MemberTool, ModifyEnumTool, ModifyAttributeTool, ModifyModifierTool, ModifyBaseTypeTool,
+// SyncTypeAndFilenameTool) plus their 3 private batch helpers (ModifyModifierBatch, ModifyAttributeBatch,
 // ModifyBaseTypeBatch), each called from exactly one of the public methods above. ValidateAndApplyAsync
 // is duplicated per-Impl-class per Decision 1-Amendment.
 public class RefactoringStructuralImpl
@@ -22,7 +22,7 @@ public class RefactoringStructuralImpl
     private readonly ValidationEngine _validationEngine;
     private readonly ILogger _logger;
 
-    // Reuses ReplaceSnippet's batch cap (WorkspaceTools.MaxSnippetEditsPerBatch) as a starting
+    // Reuses ReplaceSnippetTool's batch cap (WorkspaceTools.MaxSnippetEditsPerBatch) as a starting
     // value -> these are keyword/name batchEdits rather than text blocks, so the limit is purely count-based,
     // not size-derived.
     private const int MaxModifierFamilyEditsPerBatch = 20;
@@ -81,7 +81,7 @@ public class RefactoringStructuralImpl
     }
 
     /// <summary>
-    /// ModifyModifier add static on methods/properties: makes them static AND rewrites their instance-qualified callers as one
+    /// ModifyModifierTool add static on methods/properties: makes them static AND rewrites their instance-qualified callers as one
     /// change set (see MemberRefactoringEngine.ConvertMembersToStaticAsync). Returns null when the conversion took over none of the
     /// requests (a field, an already-static member, an unresolved target), so the caller falls back to the plain modifier path,
     /// which reports those cases. A refusal (instance state still used, unsupported member, unrewritable call site) is a
@@ -981,7 +981,7 @@ public class RefactoringStructuralImpl
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
             // ChangedContent is dropped centrally by AppliedChangeSummary for a real apply: the new member list is just the caller-supplied `values` string
-            // already passed in verbatim -> same reasoning as ChangeAccessibility/ModifyModifier.
+            // already passed in verbatim -> same reasoning as ChangeAccessibilityTool/ModifyModifierTool.
             return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId) };
         }
         catch (Exception ex)
@@ -1112,7 +1112,7 @@ public class RefactoringStructuralImpl
 
             // add/replace: existingAttribute (add) or newAttribute (replace) already holds the
             // exact attribute source the caller composed -> echoed back verbatim, same reasoning
-            // as Member(add)'s raw-source path. remove has no new content to show.
+            // as MemberTool(add)'s raw-source path. remove has no new content to show.
             if (action == AttributeModifyAction.remove)
             {
                 return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, StatusMessage = description, SuccessData = summary };
@@ -1236,7 +1236,7 @@ public class RefactoringStructuralImpl
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
             // ChangedContent is dropped centrally by AppliedChangeSummary for a real apply: the only "new" text is the single modifier keyword the caller
-            // already passed in -> same reasoning as ChangeAccessibility.
+            // already passed in -> same reasoning as ChangeAccessibilityTool.
             var description = $"{(action == AddRemoveAction.add ? "Added" : "Removed")} '{modifierText}' modifier on '{targetName}' in {Path.GetFileName(filePathResolved)}.";
             var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId);
             return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, StatusMessage = description, SuccessData = summary };
@@ -1342,7 +1342,7 @@ public class RefactoringStructuralImpl
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
             // ChangedContent is dropped centrally by AppliedChangeSummary for a real apply: the only "new" text is the base type name the caller already
-            // passed in -> same reasoning as ChangeAccessibility/ModifyModifier.
+            // passed in -> same reasoning as ChangeAccessibilityTool/ModifyModifierTool.
             var description = $"{(action == AddRemoveAction.add ? "Added" : "Removed")} '{baseTypeName}' on '{typeName}' in {Path.GetFileName(filePathResolved)}.";
             var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId);
             return new SentinelCallToolResult<AppliedChangeSummary>() { IsError = false, StatusMessage = description, SuccessData = summary };
@@ -1380,7 +1380,7 @@ public class RefactoringStructuralImpl
 
             // deletePaths (not removePaths) so the old file's delete goes through
             // ApplyProposedChangesAsync's tracked delete path: that's what captures its pre-image
-            // content into the operation blob, which is what makes UndoLastApply able to actually
+            // content into the operation blob, which is what makes UndoLastApplyTool able to actually
             // restore a rename instead of reporting NoReversibleItems for it. It also removes the
             // old Document from the workspace itself, so a separate RemoveDocumentByPathAsync call
             // is no longer needed afterward. Passing filePathResolved in BOTH removePaths and

@@ -1,4 +1,4 @@
-// Coverage for the includeTests parameter of SymbolRelationshipImpl.FindReferences. With includeTests:
+// Coverage for the includeTests parameter of SymbolRelationshipImpl.FindReferencesTool. With includeTests:
 // false, callers whose file lies in a test project (TestProjectDetector.IsTestProject) are dropped before
 // the summary is built and the StatusMessage ends with a dropped-hits note. A filePath that itself lies
 // in a test project disables the filter. The test project references AppProj so its caller binds to Svc.

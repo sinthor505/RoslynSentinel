@@ -24,7 +24,7 @@ public class SubAgentEvalTools
         "the model, then builds and runs the tests. Use for an ad-hoc micro-eval question (\"can this model do " +
         "X\"), not for a scoped multi-step plan (use PlanStepRunner for that). Only usable when the loaded " +
         "solution is the RoslynSentinel repo.")]
-    public Task<SentinelCallToolResult<SubAgentEvalResult>> SubAgentEval(
+    public Task<SentinelCallToolResult<SubAgentEvalResult>> SubAgentEvalTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Full task text for the dispatched model, inlined by value - never a file path.")]
         string prompt,

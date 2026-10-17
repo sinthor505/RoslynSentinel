@@ -103,7 +103,7 @@ public class ToolParameterAliasTests
     [Test]
     public async Task Alias_IsRenamed_ToolRunsOnTheRealValue_AndNoteNamesTheDeclaredParameter()
     {
-        // "symbol" is not a FindReferences parameter; "symbolName" is. Without the alias this is the
+        // "symbol" is not a FindReferencesTool parameter; "symbolName" is. Without the alias this is the
         // unknown-parameter rejection the transcripts show.
         var result = await _client.CallToolAsync(
             "FindReferences",

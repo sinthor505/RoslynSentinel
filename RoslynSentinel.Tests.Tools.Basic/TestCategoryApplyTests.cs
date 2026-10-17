@@ -12,7 +12,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
-/// Tests for applying a category plan (TestCategoryApplyEngine and TagTestCategories dryRun: false) over an in-memory
+/// Tests for applying a category plan (TestCategoryApplyEngine and TagTestCategoriesTool dryRun: false) over an in-memory
 /// workspace: attributes land with correct placement, stale marked attributes go while hand-written ones stay, a second
 /// run is a no-op, and one test project's rejected batch does not block the others.
 /// </summary>
@@ -215,7 +215,7 @@ namespace FixturesBad
         _workspaceManager.SetTestSolution(BuildSolution(includeBad: true));
         var tool = new TestCategoryTaggingTools(new TestCategoryTaggingImpl(_planner, _applier, _workspaceManager, NullLogger.Instance));
 
-        var result = await tool.TagTestCategories(
+        var result = await tool.TagTestCategoriesTool(
             new ToolCallReason("testing the TagTestCategories tool"), "Targets", null, null, null, 1.0, 0.5,
             TestCategoryFramework.Auto, dryRun: false);
 
@@ -247,7 +247,7 @@ namespace FixturesBad
         _workspaceManager.SetTestSolution(AddTestProject(targets.Solution, targets.Id, "FixturesBad", "Tests.cs", BadSource, BadPath));
         var tool = new TestCategoryTaggingTools(new TestCategoryTaggingImpl(_planner, _applier, _workspaceManager, NullLogger.Instance));
 
-        var result = await tool.TagTestCategories(
+        var result = await tool.TagTestCategoriesTool(
             new ToolCallReason("testing the TagTestCategories tool"), "Targets", null, null, null, 1.0, 0.5,
             TestCategoryFramework.Auto, dryRun: false);
 
@@ -265,7 +265,7 @@ namespace FixturesBad
         _workspaceManager.ApplyException = new SessionHaltedException("Session halted: external file drift was detected on a tracked file.");
         var tool = new TestCategoryTaggingTools(new TestCategoryTaggingImpl(_planner, _applier, _workspaceManager, NullLogger.Instance));
 
-        var result = await tool.TagTestCategories(
+        var result = await tool.TagTestCategoriesTool(
             new ToolCallReason("testing the TagTestCategories tool"), "Targets", null, null, null, 1.0, 0.5,
             TestCategoryFramework.Auto, dryRun: false);
 

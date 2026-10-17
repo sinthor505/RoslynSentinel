@@ -41,7 +41,7 @@ public static class ServerStartupHelpers
     /// <param name="solutionPath">Value of --solution=, or null. May be absolute or relative;
     /// relative paths are resolved via <see cref="PersistentWorkspaceManager"/>
     /// against the current directory, --base-repo-dir (if set), or the server's install directory.</param>
-    /// <param name="baseRepoDirectory">Value of --base-repo-dir=, or null. Used to resolve relative --solution/LoadSolution paths.</param>
+    /// <param name="baseRepoDirectory">Value of --base-repo-dir=, or null. Used to resolve relative --solution/LoadSolutionTool paths.</param>
     /// <param name="includeTools">Parsed --include-tools value: individual tool-class names to
     /// activate in addition to whatever --mode resolves, e.g. "GitTools,ScanTools".</param>
     /// <param name="excludeTools">Parsed --exclude-tools value: individual tool-class names to
@@ -543,7 +543,7 @@ public static class ServerStartupHelpers
     // ── ValidateOnBuild ───────────────────────────────────────────────────────
 
     /// <summary>
-    /// Enables eager DI graph validation at Build() time so missing or
+    /// Enables eager DI graph validation at BuildTool() time so missing or
     /// mis-registered services surface as a hard startup failure instead of
     /// a runtime exception on first tool invocation.
     /// </summary>
@@ -622,7 +622,7 @@ public static class ServerStartupHelpers
         {
             // OperatingMode is logged explicitly (and names the doc root it selects) because a
             // testing-mode server reading production docs -> or the reverse -> is otherwise only
-            // detectable by noticing that ProjectDoc returned the wrong file.
+            // detectable by noticing that ProjectDocTool returned the wrong file.
             logger.LogInformation(
                 "Roslyn Sentinel MCP Server starting. Modes: {Modes} (from --mode={ModeArg}) | IncludeTools: {IncludeTools} | ExcludeTools: {ExcludeTools} | OperatingMode: {OperatingMode} (ProjectDoc root: {DocRoot}) | Binary: {BinaryPath} (PID {Pid})",
                 string.Join(", ", activeModes), modeArg,

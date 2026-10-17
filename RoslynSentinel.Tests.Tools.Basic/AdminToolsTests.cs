@@ -29,7 +29,7 @@ public class AdminToolsTests
     [Test]
     public void ExternalFileDrift_Status_ReportsNotHaltedOnFreshManager()
     {
-        var result = _tools.ExternalFileDrift(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Status);
+        var result = _tools.ExternalFileDriftTool(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Status);
         Assert.That(result, Does.StartWith("SessionHalted=False"));
         Assert.That(result, Does.Contain("tracked external changes: 0"));
     }
@@ -37,14 +37,14 @@ public class AdminToolsTests
     [Test]
     public void ExternalFileDrift_List_OnFreshManager_SaysNoChanges()
     {
-        var result = _tools.ExternalFileDrift(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.List);
+        var result = _tools.ExternalFileDriftTool(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.List);
         Assert.That(result, Is.EqualTo("No tracked external file changes."));
     }
 
     [Test]
     public void ExternalFileDrift_FilesWithStatus_IsRefused()
     {
-        var result = _tools.ExternalFileDrift(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Status, files: "a.cs");
+        var result = _tools.ExternalFileDriftTool(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Status, files: "a.cs");
         Assert.That(result, Does.Contain("only used with operation: Acknowledge"));
         Assert.That(result, Does.Contain("nothing changed"));
     }
@@ -52,7 +52,7 @@ public class AdminToolsTests
     [Test]
     public void Acknowledge_UnknownFile_ReturnsNothingClearedNamingFile()
     {
-        var result = _tools.ExternalFileDrift(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Acknowledge, files: "nope.cs");
+        var result = _tools.ExternalFileDriftTool(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Acknowledge, files: "nope.cs");
         Assert.That(result, Does.Contain("Nothing cleared"));
         Assert.That(result, Does.Contain("nope.cs"));
     }
@@ -60,7 +60,7 @@ public class AdminToolsTests
     [Test]
     public void Acknowledge_MalformedJsonArray_ReturnsParserError()
     {
-        var result = _tools.ExternalFileDrift(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Acknowledge, files: "[\"a.cs\"");
+        var result = _tools.ExternalFileDriftTool(reason: "test message", operation: AdminTools.ExternalFileDriftOperation.Acknowledge, files: "[\"a.cs\"");
         Assert.That(result, Is.Not.Null);
         Assert.That(result, Is.Not.Empty);
         Assert.That(result, Does.Not.StartWith("Cleared"));
@@ -154,13 +154,13 @@ public class AdminToolsTests
         public WorkspaceStatus GetWorkspaceStatus() => throw new NotImplementedException();
     }
 
-    // McpServerControl: the stop path is exercised through AdminTools.ControlServer with an injected
+    // McpServerControlTool: the stop path is exercised through AdminTools.ControlServer with an injected
     // exit action, so these tests never call Environment.Exit on the test host.
 
     [Test]
     public void McpServerControl_GetServerStatus_ReportsRunning()
     {
-        var result = _tools.McpServerControl(reason: "test message", operation: AdminTools.McpServerControlOperation.GetServerStatus);
+        var result = _tools.McpServerControlTool(reason: "test message", operation: AdminTools.McpServerControlOperation.GetServerStatus);
         Assert.That(result, Does.StartWith("Running."));
     }
 
@@ -233,7 +233,7 @@ public class AdminToolsTests
     public void McpServerControl_ConfirmParameter_IsOptionalSingleValueEnum()
     {
         // The guard must be visible in the emitted schema as a one-value enum, not a magic string.
-        var parameter = typeof(AdminTools).GetMethod(nameof(AdminTools.McpServerControl))!
+        var parameter = typeof(AdminTools).GetMethod(nameof(AdminTools.McpServerControlTool))!
             .GetParameters()
             .Single(p => p.Name == "confirmServerStop");
 

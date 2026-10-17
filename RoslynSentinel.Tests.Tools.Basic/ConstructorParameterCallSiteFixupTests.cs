@@ -8,7 +8,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// ConstructorParameter(add, callSiteFixups): the new argument is added at every call site of the
+/// ConstructorParameterTool(add, callSiteFixups): the new argument is added at every call site of the
 /// constructor in one atomic change set. Engine-level tests exercise
 /// MemberRefactoringEngine.AddConstructorParameterWithCallSitesAsync; the ConstructorParameterTool_*
 /// tests go through the tool surface (error codes, dryRun, compile gate).
@@ -345,7 +345,7 @@ public class Caller
         SetFiles(("Svc.cs", SvcSource));
         var tools = CreateSignatureTools();
 
-        var result = await tools.ConstructorParameter(reason: "test", "Svc.cs", AddRemoveViewAction.remove, "Svc", "config", callSiteFixups: new() { ["*"] = "cfg" });
+        var result = await tools.ConstructorParameterTool(reason: "test", "Svc.cs", AddRemoveViewAction.remove, "Svc", "config", callSiteFixups: new() { ["*"] = "cfg" });
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
@@ -358,7 +358,7 @@ public class Caller
         SetFiles(("Svc.cs", SvcSource), ("Caller.cs", SimpleCaller), ("Other.cs", OtherCaller));
         var tools = CreateSignatureTools();
 
-        var result = await tools.ConstructorParameter(reason: "test", "Svc.cs", AddRemoveViewAction.add, "Svc", "config", "Config", dryRun: true, callSiteFixups: new() { ["Other.cs:*"] = "cfg" });
+        var result = await tools.ConstructorParameterTool(reason: "test", "Svc.cs", AddRemoveViewAction.add, "Svc", "config", "Config", dryRun: true, callSiteFixups: new() { ["Other.cs:*"] = "cfg" });
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.UnresolvedCallSites));
@@ -372,7 +372,7 @@ public class Caller
         SetFiles(("Svc.cs", SvcSource), ("Caller.cs", SimpleCaller));
         var tools = CreateSignatureTools();
 
-        var result = await tools.ConstructorParameter(reason: "test", "Svc.cs", AddRemoveViewAction.add, "Svc", "config", "Config", dryRun: true, callSiteFixups: new() { ["*"] = "new Config()" });
+        var result = await tools.ConstructorParameterTool(reason: "test", "Svc.cs", AddRemoveViewAction.add, "Svc", "config", "Config", dryRun: true, callSiteFixups: new() { ["*"] = "new Config()" });
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message + " " + result.ErrorData?.Detail);
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, CancellationToken.None);

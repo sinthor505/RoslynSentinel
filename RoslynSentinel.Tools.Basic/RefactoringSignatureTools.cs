@@ -15,7 +15,7 @@ public class RefactoringSignatureTools
     [McpServerTool(Name = "RenameSymbol", UseStructuredContent = false, OutputSchemaType = typeof(RenameSymbolResultEnvelope))]
     [Produces(DataTag.ChangeId)]
     [Description("Renames a symbol and all its references across the solution, including XML doc comments, inline comments and string literals. Returns changeId, updatedHandle and residualMentions (old-name occurrences it couldn't reach). Does not touch using directives (use UsingDirective).")]
-    public Task<SentinelCallToolResult<object>> RenameSymbol(
+    public Task<SentinelCallToolResult<object>> RenameSymbolTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description(ToolParams.ProjectName)] string projectName,
         [Description(ToolParams.DocCommentId)][Consumes(DataTag.DocCommentId, required: true)] string docCommentId,
@@ -32,7 +32,7 @@ public class RefactoringSignatureTools
     [McpServerTool(Name = "MethodSignature", UseStructuredContent = false, OutputSchemaType = typeof(MethodSignatureViewResultEnvelope))]
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view a method's parameters (any method; ConstructorParameter handles DI constructor parameters with a backing field). For overloaded methods, combine methodName with contextSnippet/lineBefore/lineAfter.")]
-    public Task<SentinelCallToolResult<object>> MethodSignature(
+    public Task<SentinelCallToolResult<object>> MethodSignatureTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("add (needs paramName+paramType): appends a parameter to the end of the list. remove (needs paramName): " + ToolParams.RemoveLastParameter + " the operation refuse. view: lists parameters (name, type, default).")]
@@ -62,7 +62,7 @@ public class RefactoringSignatureTools
     [McpServerTool(Name = "ChangeAccessibility")]
     [Produces(DataTag.ChangeId)]
     [Description("Sets the accessibility of a type or member to the given level, replacing whatever is present. For overloaded members, provide contextSnippet and optionally lineBefore/lineAfter. Accessibility only (others: ModifyModifier, ModifyAttribute). Returns changeId.")]
-    public Task<SentinelCallToolResult<AppliedChangeSummary>> ChangeAccessibility(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ChangeAccessibilityTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Consumes(DataTag.SymbolName, required: true)] string targetName,
@@ -84,7 +84,7 @@ public class RefactoringSignatureTools
     [McpServerTool(Name = "ConstructorParameter")]
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view DI constructor parameters on a class. For same-named classes in one file, combine className with contextSnippet/lineBefore/lineAfter. add accepts defaultValue/nullDefault so existing call sites that omit the argument keep compiling.")]
-    public Task<SentinelCallToolResult<object>> ConstructorParameter(
+    public Task<SentinelCallToolResult<object>> ConstructorParameterTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("add (needs paramName+paramType): creates a private readonly field, parameter and body assignment; creates a constructor if none exists. remove (needs paramName): deletes the parameter and its assignment; the backing field is deleted only if nothing else in the class uses it. view: lists constructor parameters and their backing fields.")]

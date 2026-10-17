@@ -170,7 +170,7 @@ public class PlanImplementVerifyAgentTests
     // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
     // AddRoslynSentinelToolsBasic checks -> see WholeFileRewriteAgentTests.ActiveModes for why both
     // modes are needed for every phase here, including the read-only ones: the tools this fixture's
-    // prompts need (ReadFile/ListAll/Search/Build) live in SentinelWorkspaceTools, gated
+    // prompts need (ReadFileTool/ListAllTool/Search/BuildTool) live in SentinelWorkspaceTools, gated
     // by "Workspace", alongside the mutating tools gated by "Refactor" -> the per-phase BlockedToolNames
     // filter below is what actually enforces read-only, not the mode selection.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase)
@@ -187,15 +187,15 @@ public class PlanImplementVerifyAgentTests
     };
 
     // The exact set of tools actually called across 20 real PlanImplementVerify transcripts
-    // against this fixture (58 ReadFile, 21 ApplyDiff, 18 Search, 15 Build, 4
-    // LoadSolution, 4 ListWorkspaceSolutions, 3 ListAll, 3 ChangeAccessibility, 1 UsingDirective,
-    // 1 ModifyModifier, 1 ListSolutionItems -> 2026-09-05 analysis). Used only when
+    // against this fixture (58 ReadFileTool, 21 ApplyDiffTool, 18 Search, 15 BuildTool, 4
+    // LoadSolutionTool, 4 ListWorkspaceSolutionsTool, 3 ListAllTool, 3 ChangeAccessibilityTool, 1 UsingDirectiveTool,
+    // 1 ModifyModifierTool, 1 ListSolutionItemsTool -> 2026-09-05 analysis). Used only when
     // LlmOptions.MinimalToolSchema is set, to narrow the advertised tools/list schema down from
     // ActiveModes' full 48 tools to just these 11 -> see project_granite42_8b_tool_schema_size_isolated
     // for why schema size itself (not context growth or task difficulty) is the latency driver
     // this is meant to test. Not a permanent restriction: this list reflects what qwen3.5-9b-coder
     // happened to use on this one fixture, not a general-purpose minimal toolset.
-    // "Search" was "SearchSolutionText" until commit d99fc78a (2026-09-27, unified Search
+    // "Search" was "SearchSolutionTextTool" until commit d99fc78a (2026-09-27, unified Search
     // tool migration). If this set stops matching the live tool list, check for a similar
     // tool rename before assuming the fixture itself is stale.
     private static readonly HashSet<string> MinimalToolNames = new(StringComparer.Ordinal)
@@ -385,7 +385,7 @@ public class PlanImplementVerifyAgentTests
         McpClient? mcpClient = null;
         try
         {
-            _ = host.RunAsync();
+            _ = host.RunAsync(cancellationToken);
 
             var workspaceManager = host.Services.GetRequiredService<IWorkspaceManager>();
             await workspaceManager.LoadSolutionAsync(_fixture.SolutionPath, cancellationToken);
@@ -417,7 +417,7 @@ public class PlanImplementVerifyAgentTests
                 await mcpClient.DisposeAsync();
             }
 
-            await host.StopAsync();
+            await host.StopAsync(cancellationToken);
             host.Dispose();
         }
     }

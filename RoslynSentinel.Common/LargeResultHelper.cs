@@ -102,7 +102,6 @@ public static class LargeResultHelper
 
     public const int RetentionDays = 7;
 
-
     /// <summary>
     /// Deletes largeresult_*.json files directly inside &lt;solutionRoot&gt;/.roslynsentinel/largeresults whose
     /// LastWriteTimeUtc is older than maxAge. Non-recursive. Never throws; a file held by another session is skipped.

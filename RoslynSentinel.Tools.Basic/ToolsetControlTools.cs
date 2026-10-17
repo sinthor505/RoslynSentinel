@@ -3,7 +3,7 @@ using System.ComponentModel;
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
-/// <c>McpToolsetControl</c>: switches on-demand toolsets on and off at runtime so a lean session
+/// <c>McpToolsetControlTool</c>: switches on-demand toolsets on and off at runtime so a lean session
 /// (<c>--mode claude-lean</c>, ~26 tools) can pull in the rest only when needed. Registered only in claude-lean
 /// (see ServiceRegistrationExtensionsBasic); the state and the tool-collection mutation live in
 /// <see cref="ToolsetService"/>, and the SDK turns the collection change into <c>tools/list_changed</c>.
@@ -23,10 +23,10 @@ public class ToolsetControlTools
     [Produces(DataTag.ResultOnly)]
     [Description("Turns an on-demand toolset on or off; the server then sends tools/list_changed so your tool list updates. Idempotent. " +
         "declarations = Declaration (modifier, accessibility, attribute, baseType), ParameterEdit (method, constructor), ModifyEnum, ChangeSignature, SyncTypeAndFilename. " +
-        "moveExtract = MoveMember, MoveType, MoveAllTypesToFiles, Extract*, Inline*, Introduce*, WrapRange, InvertAssignments, ConvertAnonymousToNamed, SyncInterface, SummaryComment, SafeDeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments, QualifyCrefs. " +
+        "moveExtract = MoveMember, MoveType, MoveAllTypesToFiles, Extract*, Inline*, Introduce*, WrapRange, InvertAssignments, ConvertAnonymousToNamed, SyncInterface, SummaryComment, DeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments, QualifyCrefs. " +
         "projectAdmin = CreateProject, SplitProjectByFolder, ListSolutionItems, ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth, GetOperationDetail, RetryFailedChanges, GetTypeInfo, QuerySymbolRelationships, GetBestInsertionPoint. " +
         "testCategories = TagTestCategories (plan test-category attributes from the production types each test references; dry run by default, dryRun: false applies).")]
-    public SentinelCallToolResult<object> McpToolsetControl(
+    public SentinelCallToolResult<object> McpToolsetControlTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("The toolset to switch.")] ToolSetName toolSet,
         [Description("true = add the set's tools; false = remove them.")] bool enabled,

@@ -36,7 +36,7 @@
 | GenerationTools | GenerateClassesFromJson | Generation | - | Generates C# class declarations from a JSON string using rootClassName as the top-level type name under the specified... |
 | GenerationTools | GenerateDefaultConfigJson | Generation | - | Scans a project for all config["Key"] and IConfiguration.GetValue<T>("Key") usages and returns a JSON skeleton with... |
 | GenerationTools | GenerateHttpClient | Generation | - | Generates a typed HttpClient wrapper for a Web API controller. |
-| GenerationTools | InterpolateStringSafe | Generation | - | Converts a string.Format(...) call to an interpolated string. |
+| GenerationTools | InterpolateString | Generation | - | Converts a string.Format(...) call to an interpolated string. |
 | IntelligenceTools | GetCallGraph | Intelligence | - | Builds a multi-level call graph for a method. |
 | IntelligenceTools | GetCodeInventory | Intelligence | - | Returns a structured inventory of namespaces, classes, methods, and properties in a file. |
 | IntelligenceTools | GetComprehensiveHealthReport | Intelligence | - | Generates a paged health report across one or more engines (Structure, Modernization, Performance, Safety,... |
@@ -72,7 +72,7 @@
 | ParameterEditTools | ParameterEdit | claude-lean (on demand) | - | Add, remove, or view parameters of a method (operation method, any method) or of a class's DI constructor (operation... |
 | QualifyCrefsTools | QualifyCrefs | claude-lean (on demand), QualifyCrefs | - | Qualify bare member crefs in XML doc comments: rewrites a bare member cref such as <see cref="Foo"/> to its qualified... |
 | RefactoringExtractionDocsTools | ExtractLocalVariable | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Extracts an inline expression into a named local variable declaration. exactExpressionText must be the WHOLE... |
-| RefactoringExtractionDocsTools | ExtractMethodSafe | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Extracts selected statements into a new method with the return type inferred from the selection. |
+| RefactoringExtractionDocsTools | ExtractMethod | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Extracts selected statements into a new method with the return type inferred from the selection. |
 | RefactoringExtractionDocsTools | SummaryComment | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Add, remove, or view a /// <summary> XML doc comment on a type or member. |
 | RefactoringExtractionDocsTools | UsingDirective | Claude, claude-lean, Refactor, RefactorExtractionDocs | - | Add, remove, or view using directives in a file. |
 | RefactoringSignatureTools | ChangeAccessibility | Claude, Refactor, RefactorSignature | - | Sets the accessibility of a type or member to the given level, replacing whatever is present. |
@@ -110,11 +110,11 @@
 | WorkspaceHealthMiscTools | Features | WorkspaceHealthMisc | - | Queries or updates feature flags. |
 | WorkspaceHealthMiscTools | GetWorkspaceHealth | WorkspaceHealthMisc | Allowed | Targeted workspace health check - reads actual workspace/solution state directly rather than environment probes. |
 | WorkspaceProjectManagementTools | CreateProject | WorkspaceProjectManagement | - | Creates a new project and adds it to the current solution. projectType defaults to console. |
+| WorkspaceProjectManagementTools | DeleteUnusedSymbol | WorkspaceProjectManagement | - | Deletes a symbol only if it has zero usages in the entire codebase. |
 | WorkspaceProjectManagementTools | ListProjectFrameworkTargets | WorkspaceProjectManagement | - | Returns each project's TargetFramework value. |
 | WorkspaceProjectManagementTools | ListSolutionItems | WorkspaceProjectManagement | Allowed | Lists projects, files, dependencies, or solution-folder items in the loaded solution. |
 | WorkspaceProjectManagementTools | ListWorkspaceSolutions | WorkspaceProjectManagement | - | Lists all *.sln and *.slnx files under a directory. |
 | WorkspaceProjectManagementTools | LoadSolution | WorkspaceProjectManagement | - | Loads a .NET solution file into memory for persistent analysis. |
-| WorkspaceProjectManagementTools | SafeDeleteUnusedSymbol | WorkspaceProjectManagement | - | Deletes a symbol only if it has zero usages in the entire codebase. |
 | WorkspaceProjectManagementTools | SplitProjectByFolder | WorkspaceProjectManagement | - | Moves all files under a specific folder from a source project to a new target project, preserving folder structure. |
 | WorkspaceReadNavigationTools | GetFileOutline | WorkspaceFileContent, WorkspaceReadNav | Allowed | Returns a structural outline of a file - namespaces, classes, structs, records, interfaces, enums (and their... |
 | WorkspaceReadNavigationTools | GetLargeResult | WorkspaceFileContent, WorkspaceReadNav | - | Pages through a large result that was written to disk because it exceeded the inline size threshold. |
@@ -125,6 +125,7 @@
 | WorkspaceTools | Build | Claude, claude-lean, Workspace | - | Compiles the loaded solution and reports the result. level=quickBuild uses in-memory Roslyn diagnostics (fast, same... |
 | WorkspaceTools | CreateFile | Claude, claude-lean, Workspace | - | Creates a new file; fails if it already exists. |
 | WorkspaceTools | CreateProject | Claude, claude-lean (on demand), Workspace | - | Creates a new project and adds it to the loaded solution. |
+| WorkspaceTools | DeleteUnusedSymbol | Claude, claude-lean (on demand), Workspace | - | Deletes a symbol only if it has zero usages anywhere in the codebase. |
 | WorkspaceTools | Features | Claude, claude-lean (on demand), Workspace | - | Queries or updates feature flags. |
 | WorkspaceTools | GetDiagnostics | Claude, claude-lean, Workspace | - | Gets compiler diagnostics for a file, project, or the whole solution. |
 | WorkspaceTools | GetFileOutline | Claude, claude-lean, Workspace | Allowed | Returns a structural outline of a file's types and members with 1-based line ranges (no bodies). |
@@ -141,7 +142,6 @@
 | WorkspaceTools | ReplaceSnippet | Claude, claude-lean, Workspace | - | Replaces one exact text block with another in a file, for small localized edits. |
 | WorkspaceTools | RetryFailedChanges | Claude, claude-lean (on demand), Workspace | - | Retries failed file writes using server-cached content. |
 | WorkspaceTools | RunTest | Claude, claude-lean, Workspace | - | Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. |
-| WorkspaceTools | SafeDeleteUnusedSymbol | Claude, claude-lean (on demand), Workspace | - | Deletes a symbol only if it has zero usages anywhere in the codebase. |
 | WorkspaceTools | Search | Claude, claude-lean, Workspace | - | Unified search. mode selects what's searched: text (free-text/regex scan), symbol (declaration lookup by name),... |
 | WorkspaceTools | SplitProjectByFolder | Claude, claude-lean (on demand), Workspace | - | Moves all files under a folder from one project to a new target project, preserving structure. |
 | WorkspaceTools | UndoLastApply | Claude, claude-lean, Workspace | - | Reverts files from a previous apply back to their pre-apply state. |

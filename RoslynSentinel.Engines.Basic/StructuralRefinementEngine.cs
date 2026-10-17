@@ -121,7 +121,7 @@ public class StructuralRefinementEngine
     /// </summary>
     public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePathWrapper filePath, int line, int column, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("SafeDeleteUnusedSymbol"))
+        if (!_config.IsFeatureEnabled("DeleteUnusedSymbol"))
         {
             return DocumentEditResult.FeatureDisabled(filePath);
         }
@@ -312,7 +312,7 @@ public class StructuralRefinementEngine
     /// </summary>
     public async Task<DocumentEditResult> SafeDeleteSymbolAsync(FilePathWrapper filePath, ISymbol symbol, CancellationToken cancellationToken = default)
     {
-        if (!_config.IsFeatureEnabled("SafeDeleteUnusedSymbol"))
+        if (!_config.IsFeatureEnabled("DeleteUnusedSymbol"))
         {
             return DocumentEditResult.FeatureDisabled(filePath);
         }

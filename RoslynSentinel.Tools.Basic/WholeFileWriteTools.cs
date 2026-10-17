@@ -30,7 +30,7 @@ public class WholeFileWriteTools
     [McpServerTool(Name = "WriteFile")]
     [Produces(DataTag.ChangeId)]
     [Description("Writes a whole file to disk, creating or overwriting it. Use ApplyUnifiedDiff for partial edits.")]
-    public async Task<SentinelCallToolResult<object>> WriteFile(
+    public async Task<SentinelCallToolResult<object>> WriteFileTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("CreateFile: file must not already exist. ReplaceFile: overwrites, creating if missing.")]
         [ExternalInputRequired(DataTag.Action)] WriteFileOperation operation,
@@ -59,7 +59,7 @@ public class WholeFileWriteTools
             }
 
             // For ReplaceFile, normalize the new content to the existing file's dominant EOL.
-            // For CreateFile, leave the content as-is (new files use their provided EOL).
+            // For CreateFileTool, leave the content as-is (new files use their provided EOL).
             var normalizedContent = content;
             if (exists)
             {
@@ -116,7 +116,7 @@ public class WholeFileWriteTools
     [McpServerTool(Name = "DeleteFile")]
     [Produces(DataTag.ChangeId)]
     [Description("Deletes a file from disk; fails if it doesn't exist. Undoable via UndoLastApply.")]
-    public async Task<SentinelCallToolResult<object>> DeleteFile(
+    public async Task<SentinelCallToolResult<object>> DeleteFileTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath, CancellationToken cancellationToken = default)
     {
@@ -252,8 +252,8 @@ public class WholeFileWriteTools
     }
 
     /// <summary>
-    /// Builds the success-response payload for a diff-hunk apply (ApplyDiff's changesetFormat=diff
-    /// branch, and ApplyUnifiedDiff), including <paramref name="diffReport"/>'s findings when it has
+    /// Builds the success-response payload for a diff-hunk apply (ApplyDiffTool's changesetFormat=diff
+    /// branch, and ApplyUnifiedDiffTool), including <paramref name="diffReport"/>'s findings when it has
     /// any. Previously a hunk whose header line counts didn't match its own body (e.g. declaring 2
     /// removed/10 added lines when the body actually had 2 removed/159 added) was only logged
     /// server-side on success -> the caller had no way to learn its hunk was malformed until the file
@@ -297,7 +297,7 @@ public class WholeFileWriteTools
     [McpServerTool(Name = "ApplyDiff")]
     [Produces(DataTag.ChangeId)]
     [Description("Applies or validates a change set as either full file contents (changesetFormat=files) or a unified diff (changesetFormat=diff), validating by delta-compile before writing.")]
-    public async Task<SentinelCallToolResult<object>> ApplyDiff(
+    public async Task<SentinelCallToolResult<object>> ApplyDiffTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("files: use changes (filePath->content map). diff: use filePath+unifiedDiff.")]
         [ExternalInputRequired(DataTag.ChangeseFormat)] ChangesetFormat changesetFormat,
@@ -399,9 +399,9 @@ public class WholeFileWriteTools
                         };
                     await OperationBlobHelper.WriteBlobForApplyAsync(_logger, _workspaceManager, "apply_diff", result, cancellationToken: cancellationToken);
                     // PreImages (full pre-edit file content) is dropped from the default response -
-                    // it's already captured in the undo blob written above (GetOperationDetail/
-                    // UndoLastApply can retrieve it) and was the single largest contributor to
-                    // ApplyDiff responses exceeding the calling harness's token limit on large files.
+                    // it's already captured in the undo blob written above (GetOperationDetailTool/
+                    // UndoLastApplyTool can retrieve it) and was the single largest contributor to
+                    // ApplyDiffTool responses exceeding the calling harness's token limit on large files.
                     var strippedResult = result with { PreImages = null };
                     object responseData = returnDiff
                         ? new
@@ -583,21 +583,21 @@ public class WholeFileWriteTools
             };
         }
     }
-    // Simplified, diff-only sibling of ApplyDiff -> collapses ApplyDiff's two required-param-sets
+    // Simplified, diff-only sibling of ApplyDiffTool -> collapses ApplyDiffTool's two required-param-sets
     // (files: 'changes' dict / diff: 'filePath'+'unifiedDiff', with 'filePath' silently ignored in
     // files mode) into a single always-required (filePath, unifiedDiff) pair, closing the common
     // agent footgun of supplying unifiedDiff without filePath. Whole-file rewrites now go through
-    // WriteFile(operation=ReplaceFile) instead of a 'files' mode here. ApplyDiff itself is kept
+    // WriteFileTool(operation=ReplaceFile) instead of a 'files' mode here. ApplyDiffTool itself is kept
     // unchanged (not deleted) so its multi-file 'files' mode can be reactivated later if needed.
     // Moved here (off the default MCP surface, this class carries no [McpServerToolType]) from
-    // WorkspaceTools.cs -> ReplaceSnippet there now covers small exact-text edits on the
+    // WorkspaceTools.cs -> ReplaceSnippetTool there now covers small exact-text edits on the
     // default surface without diff-hunk syntax; this tool is kept for reactivation if a genuine
     // need for multi-line diff-hunk edits resurfaces. See
     // docs/current/design_applyunifieddiff_replace_snippet_v1.md.
     [McpServerTool(Name = "ApplyUnifiedDiff")]
     [Produces(DataTag.ChangeId)]
     [Description("Applies or validates a unified diff against a single file; mismatched hunk lines are re-anchored nearby.")]
-    public async Task<SentinelCallToolResult<object>> ApplyUnifiedDiff(
+    public async Task<SentinelCallToolResult<object>> ApplyUnifiedDiffTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("apply: writes the change. validate: checks without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,

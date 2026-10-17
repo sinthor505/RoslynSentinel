@@ -18,7 +18,7 @@ public class RefactoringExtractionDocsTools
     [McpServerTool(Name = "UsingDirective")]
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view using directives in a file.")]
-    public Task<SentinelCallToolResult<object>> UsingDirective(
+    public Task<SentinelCallToolResult<object>> UsingDirectiveTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("add: inserts a using (no-op if present). remove: deletes it. view: lists usings (name, isStatic, alias).")]
@@ -41,7 +41,7 @@ public class RefactoringExtractionDocsTools
     [McpServerTool(Name = "SummaryComment")]
     [Produces(DataTag.ChangeId)]
     [Description("Add, remove, or view a /// <summary> XML doc comment on a type or member. For overloaded targets, combine targetName with contextSnippet/lineBefore/lineAfter.")]
-    public Task<SentinelCallToolResult<object>> SummaryComment(
+    public Task<SentinelCallToolResult<object>> SummaryCommentTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("add: adds or replaces the summary. remove: deletes it (no-op if none). view: returns the current summary text (or null).")]
@@ -67,7 +67,7 @@ public class RefactoringExtractionDocsTools
     [McpServerTool(Name = "ExtractLocalVariable")]
     [Produces(DataTag.ChangeId)]
     [Description("Extracts an inline expression into a named local variable declaration. exactExpressionText must be the WHOLE expression, copied verbatim.")]
-    public Task<SentinelCallToolResult<object>> ExtractLocalVariable(
+    public Task<SentinelCallToolResult<object>> ExtractLocalVariableTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("The whole expression to extract, copied verbatim from a prior ReadFile/GetMethodSource result (whitespace differences are tolerated). Not a search anchor like contextSnippet: a partial expression may silently extract the wrong span.")]
@@ -80,11 +80,11 @@ public class RefactoringExtractionDocsTools
         CancellationToken cancellationToken = default) =>
         _impl.ExtractLocalVariable(reason, filePath, exactExpressionText, variableName, lineBefore, lineAfter, dryRun, returnDiff, cancellationToken);
 
-    [McpServerTool(Name = "ExtractMethodSafe")]
+    [McpServerTool(Name = "ExtractMethod")]
     [Produces(DataTag.ChangeId)]
     [Description("Extracts selected statements into a new method with the return type inferred from the selection. Returns changeId.")]
     // Fixes MS BUG: where selections ending with "return <expression>" are extracted into a method declared "private void MethodName(...)", causing a compile error. This tool uses Roslyn's SemanticModel to determine the actual type of the returned expression, and DataFlowAnalysis to find the correct parameter list. Requires a loaded solution (via set_solution_path or equivalent).
-    public Task<SentinelCallToolResult<AppliedChangeSummary>> ExtractMethodSafe(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ExtractMethodTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [ExternalInputRequired(DataTag.MethodName, required: true)] string newMethodName,
@@ -100,6 +100,6 @@ public class RefactoringExtractionDocsTools
     {
         // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
         bool autoStage = true;
-        return _impl.ExtractMethodSafe(reason, filePath, newMethodName, exactSourceBlock, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
+        return _impl.ExtractMethod(reason, filePath, newMethodName, exactSourceBlock, lineBefore, lineAfter, autoStage, dryRun, returnDiff, cancellationToken);
     }
 }

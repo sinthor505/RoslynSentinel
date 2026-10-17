@@ -13,11 +13,11 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 /// <summary>
 /// Full-pipeline regression tests for the mutating-tool compact-result default
 /// (docs/current/plans/plan_mutating_tools_compact_result_default.md, Step 7): a real apply through a real tool
-/// (ModifyModifier -> ValidateAndApplyHelper -> AppliedChangeSummary) must not echo the whole file in
+/// (ModifyModifierTool -> ValidateAndApplyHelper -> AppliedChangeSummary) must not echo the whole file in
 /// changedContent, while dry runs and autoStage=false results still do.
 /// Runs on an InMemoryWorkspace (no MSBuild load). That workspace has no solution root by default, so the offload to a
 /// large-result file cannot happen there (fail-closed: ChangedContentResultId is null and the Note falls back to
-/// ReadFile). The offload end-to-end test sets FakeWorkspaceManager.SolutionPath to a temp directory, which is the
+/// ReadFileTool). The offload end-to-end test sets FakeWorkspaceManager.SolutionPath to a temp directory, which is the
 /// fake's documented way to supply a root.
 /// NonParallelizable: ChangedContentOptions.InlineOnApply is process-wide static state that one test flips.
 /// </summary>
@@ -60,7 +60,7 @@ public class CompactResultDefaultTests
 
     private static Task<SentinelCallToolResult<AppliedChangeSummary>> AddVirtualAsync(
         RefactoringStructuralTools tools, InMemoryWorkspace workspace, bool dryRun = false) =>
-        tools.ModifyModifier(
+        tools.ModifyModifierTool(
             reason: "test compact result default",
             filePath: workspace.PathOf(FixtureRelativePath),
             targetName: "Target",
@@ -94,7 +94,7 @@ public class CompactResultDefaultTests
     public async Task ModifyModifier_Applied_WithoutSolutionRoot_ResultIdIsNullAndNoteFallsBackToReadFileAsync()
     {
         // The in-memory workspace has no solution root, so there is nowhere to write the offloaded content file:
-        // the offload fails closed (null id) and the Note must not advertise GetLargeResult.
+        // the offload fails closed (null id) and the Note must not advertise GetLargeResultTool.
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
         Assert.That(workspace.Manager.GetSolutionRoot(), Is.Null, "precondition: no solution root");

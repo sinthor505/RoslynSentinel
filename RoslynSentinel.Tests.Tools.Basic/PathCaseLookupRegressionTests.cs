@@ -122,7 +122,7 @@ public class PathCaseLookupRegressionTests
         var real = RealPath(h, "ContosoOrders.Core", "OrderStatus.cs");
         var anchor = await FirstLineAsync(real);
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "path case regression single",
             ProposedChangeAction.apply,
             filePath: Spell(spelling, real),
@@ -143,7 +143,7 @@ public class PathCaseLookupRegressionTests
         var anchorA = await FirstLineAsync(realA);
         var anchorB = await FirstLineAsync(realB);
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "path case regression batch",
             ProposedChangeAction.apply,
             batchEdits:
@@ -168,7 +168,7 @@ public class PathCaseLookupRegressionTests
         var original = await File.ReadAllTextAsync(real);
         var anchor = await FirstLineAsync(real);
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "path case regression same file two spellings",
             ProposedChangeAction.apply,
             batchEdits:
@@ -189,7 +189,7 @@ public class PathCaseLookupRegressionTests
         var real = RealPath(h, "ContosoOrders.Core", "OrderStatus.cs");
         var original = await File.ReadAllTextAsync(real);
 
-        var result = await h.Tools.ReplaceSnippet(
+        var result = await h.Tools.ReplaceSnippetTool(
             reason: "path case regression bare duplicate name",
             ProposedChangeAction.apply,
             filePath: "OrderStatus.cs",
@@ -211,7 +211,7 @@ public class PathCaseLookupRegressionTests
         using var h = await CreateHarnessAsync();
         var real = RealPath(h, "ContosoOrders.Core", "OrderStatus.cs");
 
-        var result = await h.WriteTools.ApplyDiff(
+        var result = await h.WriteTools.ApplyDiffTool(
             reason: "path case regression ApplyDiff",
             ChangesetFormat.diff,
             ProposedChangeAction.apply,
@@ -230,7 +230,7 @@ public class PathCaseLookupRegressionTests
         using var h = await CreateHarnessAsync();
         var real = RealPath(h, "ContosoOrders.Core", "OrderStatus.cs");
 
-        var result = await h.WriteTools.ApplyUnifiedDiff(
+        var result = await h.WriteTools.ApplyUnifiedDiffTool(
             reason: "path case regression ApplyUnifiedDiff",
             ProposedChangeAction.apply,
             filePath: Spell(spelling, real),
@@ -251,7 +251,7 @@ public class PathCaseLookupRegressionTests
         using var h = await CreateHarnessAsync();
         var real = RealPath(h, "ContosoOrders.Core", "OrderStatus.cs");
 
-        var result = await h.Tools.SearchSolution(
+        var result = await h.Tools.SearchSolutionTool(
             reason: "path case regression Search symbol",
             SearchMode.symbol,
             query: "OrderStatus",
@@ -267,7 +267,7 @@ public class PathCaseLookupRegressionTests
         using var h = await CreateHarnessAsync();
         var real = RealPath(h, "ContosoOrders.Core", "OrderStatus.cs");
 
-        var result = await h.Tools.SearchSolution(
+        var result = await h.Tools.SearchSolutionTool(
             reason: "path case regression Search references",
             SearchMode.references,
             query: "OrderStatus",
@@ -325,7 +325,7 @@ public class PathCaseLookupRegressionTests
             "a file missing from the solution is a NotFound, not a raw 'Exception'");
     }
 
-    // GetDiagnostics(scope: file) + a solution-relative path: the implicit string -> FilePathWrapper
+    // GetDiagnosticsTool(scope: file) + a solution-relative path: the implicit string -> FilePathWrapper
     // conversion is root-less, so a tool must resolve the wire path with ResolveFromWire first.
     [Test]
     [Category("DiagnosticEngine")] // sentinel:auto-category

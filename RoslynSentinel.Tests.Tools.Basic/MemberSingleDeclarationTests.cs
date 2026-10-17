@@ -7,7 +7,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 /// <summary>
-/// Member(replace/addMember) take exactly one member declaration in newMemberSource. A source with
+/// MemberTool(replace/addMember) take exactly one member declaration in newMemberSource. A source with
 /// several members used to be rejected by replace as "not a valid member declaration" (the engine's
 /// ContainsDiagnostics check fired before its multi-declaration check, and the tool layer then
 /// overwrote the engine message with a hardcoded generic string) - which sent agents off rewriting a
@@ -55,7 +55,7 @@ public class MemberSingleDeclarationTests
         var tools = BuildTools(workspace.Manager);
         var before = workspace.ReadText(FixtureRelativePath);
 
-        var result = await tools.Member(
+        var result = await tools.MemberTool(
             reason: "test multi member replace",
             operation: MemberAction.replace,
             filePath: workspace.PathOf(FixtureRelativePath),
@@ -86,7 +86,7 @@ public class MemberSingleDeclarationTests
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.Member(
+        var result = await tools.MemberTool(
             reason: "test malformed single replace",
             operation: MemberAction.replace,
             filePath: workspace.PathOf(FixtureRelativePath),
@@ -110,7 +110,7 @@ public class MemberSingleDeclarationTests
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.Member(
+        var result = await tools.MemberTool(
             reason: "test multi member add",
             operation: MemberAction.addMember,
             filePath: workspace.PathOf(FixtureRelativePath),

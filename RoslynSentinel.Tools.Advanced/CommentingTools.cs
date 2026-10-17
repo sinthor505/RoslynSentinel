@@ -30,7 +30,7 @@ public class CommentingTools
     [Description("Adds or refreshes /// summary doc comments across a solution, project, or file; re-invoke with the same scope while RemainingStale > 0 to continue.")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: projectName required for scope=project, filePath required
     // for scope=file; neither is individually required by the schema (enforced at runtime instead).
-    public async Task<SentinelCallToolResult<CommentingResult>> BulkComment(
+    public async Task<SentinelCallToolResult<CommentingResult>> BulkCommentTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("solution (default), project (needs projectName), or file (needs filePath).")]
         ToolScope scope = ToolScope.solution,
@@ -154,7 +154,7 @@ public class CommentingTools
                 // so FindStaleMembersAsync would see the pre-seed workspace and every stale member's
                 // eventual per-file apply would hit the same validation failure again -> previously
                 // this ran unabated until the circuit breaker tripped, having burned thousands of
-                // attempts to produce zero net comments (see docs history: "BulkComment fails to
+                // attempts to produce zero net comments (see docs history: "BulkCommentTool fails to
                 // apply any comments").
                 var abortResult = new CommentingResult
                 {
@@ -241,7 +241,7 @@ public class CommentingTools
         }
 
         // ── Phase 2: comment stale members, up to maxMembers / maxRuntimeSeconds ──
-        // Applied per-file, not per-member: BulkComment operates at file granularity (one disk
+        // Applied per-file, not per-member: BulkCommentTool operates at file granularity (one disk
         // write per file, covering every stale member that file had), unlike the *Async* migration
         // tools which apply per-member because a single member's edit there can touch multiple
         // files. Grouping preserves each file's original stale-member order.

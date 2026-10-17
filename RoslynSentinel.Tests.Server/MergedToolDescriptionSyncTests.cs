@@ -1,5 +1,5 @@
-// In claude-lean, ParameterEdit replaces MethodSignature + ConstructorParameter and Declaration replaces
-// ModifyModifier + ChangeAccessibility + ModifyAttribute + ModifyBaseType. Their description text is single-sourced in
+// In claude-lean, ParameterEditTool replaces MethodSignatureTool + ConstructorParameterTool and DeclarationTool replaces
+// ModifyModifierTool + ChangeAccessibilityTool + ModifyAttributeTool + ModifyBaseTypeTool. Their description text is single-sourced in
 // ToolParams (see the "Merged-tool shared text" block there); these tests fail if a merged tool and a source tool stop
 // emitting the same shared text, which is what a hand-edit of one side only would cause.
 //   1. Params whose whole description is shared must be byte-identical in both emitted schemas.
@@ -8,9 +8,6 @@ using System.Text.Json;
 
 using Microsoft.Extensions.DependencyInjection;
 
-using ModelContextProtocol.Server;
-
-using RoslynSentinel.Server.Basic;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Server;
@@ -69,15 +66,15 @@ public class MergedToolDescriptionSyncTests
                 _ => nameof(ToolParams.ReturnDiff),
             };
 
-            yield return Identical(Param(Pe, "ParameterEdit", name), Param(Sig, "MethodSignature", name), constant);
-            yield return Identical(Param(Pe, "ParameterEdit", name), Param(Sig, "ConstructorParameter", name), constant);
-            yield return Identical(Param(Decl, "Declaration", name), Param(Struct, "ModifyModifier", name), constant);
-            yield return Identical(Param(Decl, "Declaration", name), Param(Sig, "ChangeAccessibility", name), constant);
-            yield return Identical(Param(Decl, "Declaration", name), Param(Struct, "ModifyAttribute", name), constant);
-            yield return Identical(Param(Decl, "Declaration", name), Param(Struct, "ModifyBaseType", name), constant);
+            yield return Identical(Param(Pe, "ParameterEditTool", name), Param(Sig, "MethodSignatureTool", name), constant);
+            yield return Identical(Param(Pe, "ParameterEditTool", name), Param(Sig, "ConstructorParameterTool", name), constant);
+            yield return Identical(Param(Decl, "DeclarationTool", name), Param(Struct, "ModifyModifierTool", name), constant);
+            yield return Identical(Param(Decl, "DeclarationTool", name), Param(Sig, "ChangeAccessibilityTool", name), constant);
+            yield return Identical(Param(Decl, "DeclarationTool", name), Param(Struct, "ModifyAttributeTool", name), constant);
+            yield return Identical(Param(Decl, "DeclarationTool", name), Param(Struct, "ModifyBaseTypeTool", name), constant);
         }
 
-        yield return Identical(Param(Decl, "Declaration", "accessibility"), Param(Sig, "ChangeAccessibility", "accessibility"), nameof(ToolParams.AccessibilityValues));
+        yield return Identical(Param(Decl, "DeclarationTool", "accessibility"), Param(Sig, "ChangeAccessibilityTool", "accessibility"), nameof(ToolParams.AccessibilityValues));
     }
 
     private static TestCaseData Identical(Slot merged, Slot source, string constant) =>
@@ -103,31 +100,31 @@ public class MergedToolDescriptionSyncTests
     {
         var clauses = new (Slot Merged, Slot Source, string Name, string Value)[]
         {
-            // ParameterEdit <-> MethodSignature
-            (Param(Pe, "ParameterEdit", "operation"), Param(Sig, "MethodSignature", "operation"), nameof(ToolParams.RemoveLastParameter), ToolParams.RemoveLastParameter),
-            (Param(Pe, "ParameterEdit", "defaultValue"), Param(Sig, "MethodSignature", "defaultValue"), nameof(ToolParams.DefaultValueLead), ToolParams.DefaultValueLead),
-            (Param(Pe, "ParameterEdit", "defaultValue"), Param(Sig, "MethodSignature", "defaultValue"), nameof(ToolParams.DefaultValueTail), ToolParams.DefaultValueTail),
-            (Param(Pe, "ParameterEdit", "nullDefault"), Param(Sig, "MethodSignature", "nullDefault"), nameof(ToolParams.NullDefaultLead), ToolParams.NullDefaultLead),
-            (Param(Pe, "ParameterEdit", "nullDefault"), Param(Sig, "MethodSignature", "nullDefault"), nameof(ToolParams.NullDefaultTail), ToolParams.NullDefaultTail),
+            // ParameterEditTool <-> MethodSignatureTool
+            (Param(Pe, "ParameterEditTool", "operation"), Param(Sig, "MethodSignatureTool", "operation"), nameof(ToolParams.RemoveLastParameter), ToolParams.RemoveLastParameter),
+            (Param(Pe, "ParameterEditTool", "defaultValue"), Param(Sig, "MethodSignatureTool", "defaultValue"), nameof(ToolParams.DefaultValueLead), ToolParams.DefaultValueLead),
+            (Param(Pe, "ParameterEditTool", "defaultValue"), Param(Sig, "MethodSignatureTool", "defaultValue"), nameof(ToolParams.DefaultValueTail), ToolParams.DefaultValueTail),
+            (Param(Pe, "ParameterEditTool", "nullDefault"), Param(Sig, "MethodSignatureTool", "nullDefault"), nameof(ToolParams.NullDefaultLead), ToolParams.NullDefaultLead),
+            (Param(Pe, "ParameterEditTool", "nullDefault"), Param(Sig, "MethodSignatureTool", "nullDefault"), nameof(ToolParams.NullDefaultTail), ToolParams.NullDefaultTail),
 
-            // ParameterEdit <-> ConstructorParameter
-            (Param(Pe, "ParameterEdit", "defaultValue"), Param(Sig, "ConstructorParameter", "defaultValue"), nameof(ToolParams.DefaultValueLead), ToolParams.DefaultValueLead),
-            (Param(Pe, "ParameterEdit", "defaultValue"), Param(Sig, "ConstructorParameter", "defaultValue"), nameof(ToolParams.DefaultValueTail), ToolParams.DefaultValueTail),
-            (Param(Pe, "ParameterEdit", "nullDefault"), Param(Sig, "ConstructorParameter", "nullDefault"), nameof(ToolParams.NullDefaultLead), ToolParams.NullDefaultLead),
-            (Param(Pe, "ParameterEdit", "nullDefault"), Param(Sig, "ConstructorParameter", "nullDefault"), nameof(ToolParams.NullDefaultTail), ToolParams.NullDefaultTail),
-            (Param(Pe, "ParameterEdit", "fieldName"), Param(Sig, "ConstructorParameter", "fieldName"), nameof(ToolParams.FieldNameOverride), ToolParams.FieldNameOverride),
-            (Param(Pe, "ParameterEdit", "callSiteFixups"), Param(Sig, "ConstructorParameter", "callSiteFixups"), nameof(ToolParams.CallSiteTargets), ToolParams.CallSiteTargets),
-            (Param(Pe, "ParameterEdit", "callSiteFixups"), Param(Sig, "ConstructorParameter", "callSiteFixups"), nameof(ToolParams.CallSiteKeys), ToolParams.CallSiteKeys),
-            (Param(Pe, "ParameterEdit", "callSiteFixups"), Param(Sig, "ConstructorParameter", "callSiteFixups"), nameof(ToolParams.CallSiteFallback), ToolParams.CallSiteFallback),
+            // ParameterEditTool <-> ConstructorParameterTool
+            (Param(Pe, "ParameterEditTool", "defaultValue"), Param(Sig, "ConstructorParameterTool", "defaultValue"), nameof(ToolParams.DefaultValueLead), ToolParams.DefaultValueLead),
+            (Param(Pe, "ParameterEditTool", "defaultValue"), Param(Sig, "ConstructorParameterTool", "defaultValue"), nameof(ToolParams.DefaultValueTail), ToolParams.DefaultValueTail),
+            (Param(Pe, "ParameterEditTool", "nullDefault"), Param(Sig, "ConstructorParameterTool", "nullDefault"), nameof(ToolParams.NullDefaultLead), ToolParams.NullDefaultLead),
+            (Param(Pe, "ParameterEditTool", "nullDefault"), Param(Sig, "ConstructorParameterTool", "nullDefault"), nameof(ToolParams.NullDefaultTail), ToolParams.NullDefaultTail),
+            (Param(Pe, "ParameterEditTool", "fieldName"), Param(Sig, "ConstructorParameterTool", "fieldName"), nameof(ToolParams.FieldNameOverride), ToolParams.FieldNameOverride),
+            (Param(Pe, "ParameterEditTool", "callSiteFixups"), Param(Sig, "ConstructorParameterTool", "callSiteFixups"), nameof(ToolParams.CallSiteTargets), ToolParams.CallSiteTargets),
+            (Param(Pe, "ParameterEditTool", "callSiteFixups"), Param(Sig, "ConstructorParameterTool", "callSiteFixups"), nameof(ToolParams.CallSiteKeys), ToolParams.CallSiteKeys),
+            (Param(Pe, "ParameterEditTool", "callSiteFixups"), Param(Sig, "ConstructorParameterTool", "callSiteFixups"), nameof(ToolParams.CallSiteFallback), ToolParams.CallSiteFallback),
 
-            // Declaration <-> ModifyModifier / ModifyAttribute / ModifyBaseType
-            (Tool(Decl, "Declaration"), Tool(Struct, "ModifyModifier"), nameof(ToolParams.AddStaticUnsupported), ToolParams.AddStaticUnsupported),
-            (Param(Decl, "Declaration", "modifierBatchEdits"), Param(Struct, "ModifyModifier", "batchEdits"), nameof(ToolParams.ModifierEdits), ToolParams.ModifierEdits),
-            (Param(Decl, "Declaration", "existingAttribute"), Param(Struct, "ModifyAttribute", "existingAttribute"), nameof(ToolParams.AttributeNameClause), ToolParams.AttributeNameClause),
-            (Param(Decl, "Declaration", "newAttribute"), Param(Struct, "ModifyAttribute", "newAttribute"), nameof(ToolParams.NewAttributeClause), ToolParams.NewAttributeClause),
-            (Param(Decl, "Declaration", "attributeBatchEdits"), Param(Struct, "ModifyAttribute", "batchEdits"), nameof(ToolParams.AttributeEdits), ToolParams.AttributeEdits),
-            (Param(Decl, "Declaration", "baseTypeName"), Param(Struct, "ModifyBaseType", "baseTypeName"), nameof(ToolParams.BaseTypeNameClause), ToolParams.BaseTypeNameClause),
-            (Param(Decl, "Declaration", "baseTypeBatchEdits"), Param(Struct, "ModifyBaseType", "batchEdits"), nameof(ToolParams.BaseTypeEdits), ToolParams.BaseTypeEdits),
+            // DeclarationTool <-> ModifyModifierTool / ModifyAttributeTool / ModifyBaseTypeTool
+            (Tool(Decl, "DeclarationTool"), Tool(Struct, "ModifyModifierTool"), nameof(ToolParams.AddStaticUnsupported), ToolParams.AddStaticUnsupported),
+            (Param(Decl, "DeclarationTool", "modifierBatchEdits"), Param(Struct, "ModifyModifierTool", "batchEdits"), nameof(ToolParams.ModifierEdits), ToolParams.ModifierEdits),
+            (Param(Decl, "DeclarationTool", "existingAttribute"), Param(Struct, "ModifyAttributeTool", "existingAttribute"), nameof(ToolParams.AttributeNameClause), ToolParams.AttributeNameClause),
+            (Param(Decl, "DeclarationTool", "newAttribute"), Param(Struct, "ModifyAttributeTool", "newAttribute"), nameof(ToolParams.NewAttributeClause), ToolParams.NewAttributeClause),
+            (Param(Decl, "DeclarationTool", "attributeBatchEdits"), Param(Struct, "ModifyAttributeTool", "batchEdits"), nameof(ToolParams.AttributeEdits), ToolParams.AttributeEdits),
+            (Param(Decl, "DeclarationTool", "baseTypeName"), Param(Struct, "ModifyBaseTypeTool", "baseTypeName"), nameof(ToolParams.BaseTypeNameClause), ToolParams.BaseTypeNameClause),
+            (Param(Decl, "DeclarationTool", "baseTypeBatchEdits"), Param(Struct, "ModifyBaseTypeTool", "batchEdits"), nameof(ToolParams.BaseTypeEdits), ToolParams.BaseTypeEdits),
         };
 
         foreach (var (merged, source, name, value) in clauses)

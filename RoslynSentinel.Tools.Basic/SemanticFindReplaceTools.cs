@@ -1,6 +1,7 @@
 using System.ComponentModel;
+
 using Microsoft.Extensions.Logging;
-using RoslynSentinel.Common;
+
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
@@ -46,7 +47,7 @@ public class SemanticFindReplaceTools
         "If any reference is unsupported (e.g. compound assignment |=, ++, ref argument, property pattern, == true), " +
         "the entire operation is refused and the message lists each file:line so you can fix those by hand. " +
         "Returns sites and changeId on success, or a structured error naming the parameter and a correct value.")]
-    public async Task<SentinelCallToolResult<object>> SemanticFindReplace(
+    public async Task<SentinelCallToolResult<object>> SemanticFindReplaceTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("The operation to perform.")] SemanticReplaceOperation operation,
         [Description("A docCommentId identifying the bool property or field to rename and invert.")] string symbol,

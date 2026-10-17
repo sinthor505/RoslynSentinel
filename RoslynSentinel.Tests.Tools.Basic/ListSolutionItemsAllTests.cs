@@ -1,6 +1,6 @@
-// Coverage for ListSolutionItems(kind: all) -> see docs/current/plan-orientation-breaker.md
+// Coverage for ListSolutionItemsTool(kind: all) -> see docs/current/plan-orientation-breaker.md
 // section 3. This is the aggregation option the orientation breaker's tripped-state message
-// points agents at as a "browse everything" alternative to guessing SearchSolutionText
+// points agents at as a "browse everything" alternative to guessing SearchSolutionTextTool
 // patterns: it returns projects + solutionItems + every project's files and dependencies in
 // one call, without requiring projectName (unlike kind=files/dependencies, which need it).
 
@@ -44,7 +44,7 @@ public class ListSolutionItemsAllTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
+        var result = await workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.all);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
     }
@@ -57,7 +57,7 @@ public class ListSolutionItemsAllTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
+        var result = await workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.all);
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
 
         var combined = (SolutionItemsAllResult)result.SuccessData!;
@@ -83,16 +83,16 @@ public class ListSolutionItemsAllTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var allResult = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.all);
+        var allResult = await workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.all);
         var combined = (SolutionItemsAllResult)allResult.SuccessData!;
 
-        var projectsResult = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.projects);
+        var projectsResult = await workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.projects);
         var projectsOnly = (List<ProjectInfoEntry>)projectsResult.SuccessData!;
         Assert.That(combined.Projects.Select(p => p.Name), Is.EquivalentTo(projectsOnly.Select(p => p.Name)));
 
         foreach (var project in projectsOnly)
         {
-            var filesResult = await workspaceTools.ListSolutionItems(reason: "test message", SolutionItemsKind.files, projectName: project.Name);
+            var filesResult = await workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.files, projectName: project.Name);
             var filesOnly = (List<string>)filesResult.SuccessData!;
             var detail = combined.ProjectDetails.Single(d => d.ProjectName == project.Name);
             Assert.That(detail.Files, Is.EquivalentTo(filesOnly));

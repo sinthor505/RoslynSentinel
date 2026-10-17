@@ -11,7 +11,7 @@ using RoslynSentinel.Common.GitWorktree;
 namespace RoslynSentinel.Tools.Advanced;
 
 /// <summary>
-/// Launches the child RoslynSentinel server that a SubAgent/SubAgentEval call's model drives: a fresh
+/// Launches the child RoslynSentinel server that a SubAgentTool/SubAgentEvalTool call's model drives: a fresh
 /// git worktree of the repo, a private build of that worktree's <c>Server.Advanced</c>, a stdio
 /// <see cref="McpClient"/> connected to it, and an explicit <c>LoadSolution</c>. Shared by both tools,
 /// which need the identical sequence. Modelled on PlanStepRunner's <c>RunStepAsync</c>.

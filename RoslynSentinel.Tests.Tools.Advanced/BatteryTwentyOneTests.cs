@@ -484,14 +484,14 @@ public class Worker
         await Assert.DoesNotThrowAsync(async () => await _logicOptimizationEngine.ConvertStaticToExtensionAsync("NonExistent.cs", "Format"));
     }
 
-    // --- InvertBooleanLogic ---
+    // --- InvertBooleanLogicTool ---
     [Test]
     [Category("ModernizationTools")] // sentinel:auto-category
     public async Task InvertBooleanLogic_BoolField_ReturnsDictionary()
     {
         const string src = "namespace TestProj; public class Flags { public bool IsActive; public void Toggle() { IsActive = !IsActive; } }";
         SetSource(src, "Flags.cs");
-        var result = await _tools.InvertBooleanLogic(reason: "test message", "Flags.cs", "IsActive");
+        var result = await _tools.InvertBooleanLogicTool(reason: "test message", "Flags.cs", "IsActive");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -501,7 +501,7 @@ public class Worker
     {
         const string src = "namespace TestProj; public class Flags { public bool IsActive; }";
         SetSource(src, "Flags.cs");
-        var result = await _tools.InvertBooleanLogic(reason: "test message", "Missing.cs", "IsActive");
+        var result = await _tools.InvertBooleanLogicTool(reason: "test message", "Missing.cs", "IsActive");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
@@ -513,7 +513,7 @@ public class Worker
     {
         const string src = "namespace TestProj; public class Flags { public bool IsActive; }";
         SetSource(src, "Flags.cs");
-        var result = await _tools.InvertBooleanLogic(reason: "test message", "Flags.cs", "NoSuchBool");
+        var result = await _tools.InvertBooleanLogicTool(reason: "test message", "Flags.cs", "NoSuchBool");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
@@ -525,7 +525,7 @@ public class Worker
     {
         const string src = "namespace TestProj; public class Flags { public bool IsActive; public void Toggle() { IsActive = !IsActive; } }";
         SetSource(src, "Flags.cs");
-        var result = await _tools.InvertBooleanLogic(reason: "test message", "Flags.cs", "IsActive");
+        var result = await _tools.InvertBooleanLogicTool(reason: "test message", "Flags.cs", "IsActive");
         Assert.That(result.IsError, Is.False);
         Assert.That(result.SuccessData, Is.Not.Null);
         Assert.That(result.SuccessData!.GetType().Name, Does.Not.Contain("EngineResultWrapper"));

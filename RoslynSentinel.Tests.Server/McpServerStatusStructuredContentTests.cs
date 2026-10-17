@@ -107,7 +107,7 @@ public class McpServerStatusStructuredContentTests
 
         // Cross-check structured content against the legacy TextContentBlock so the spike proves both
         // channels describe the same underlying call, not just that StructuredContent exists.
-        // McpServerStatus is tagged [Produces(DataTag.ResultOnly)], so its text payload is the bare
+        // McpServerStatusTool is tagged [Produces(DataTag.ResultOnly)], so its text payload is the bare
         // result object at the root -- unlike the "data"-wrapped envelope this same tool call's own
         // MCP response uses at the harness/dispatch layer -- so read sessionHalted directly.
         var textBlock = result.Content.OfType<TextContentBlock>().Single();

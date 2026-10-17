@@ -1,10 +1,9 @@
 using System.ComponentModel;
-using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
-/// <c>QualifyCrefs</c>: rewrites bare member crefs in XML doc comments to qualified ones (<c>Foo</c> to <c>A.Foo</c>).
+/// <c>QualifyCrefsTool</c>: rewrites bare member crefs in XML doc comments to qualified ones (<c>Foo</c> to <c>A.Foo</c>).
 /// Dry run by default (read-only plan); <c>dryRun: false</c> applies it through the validated write path, one compile-gated
 /// batch per project. Never commits.
 /// </summary>
@@ -30,7 +29,7 @@ public class QualifyCrefsTools
         "skippedAlreadyQualified, skippedTypeOrPredefined, skippedUnresolved, droppedByRebind). " +
         "Idempotent: re-running after an apply produces no further edits. " +
         "Returns one changeId per project batch (revertible with UndoLastApply) and a status of dry_run_ok, applied, partially_applied or no_changes.")]
-    public async Task<SentinelCallToolResult<object>> QualifyCrefs(
+    public async Task<SentinelCallToolResult<object>> QualifyCrefsTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ExternalInputRequired(DataTag.Scope)] ToolScope scope,
         [Description("Required for scope=file (a file path) and scope=project (a project name). Omit for scope=solution.")][ExternalInputRequired(DataTag.SourceFilepath), ExternalInputRequired(DataTag.ProjectName)] string? scopeName = null,

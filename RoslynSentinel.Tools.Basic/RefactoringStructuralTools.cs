@@ -16,7 +16,7 @@ public sealed record RenameSymbolUpdatedHandle(
     [property: Produces(DataTag.DocCommentId)] string DocCommentId);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
-/// Named shape mirroring the anonymous object <see cref="RefactoringSignatureTools.RenameSymbol"/>
+/// Named shape mirroring the anonymous object <see cref="RefactoringSignatureTools.RenameSymbolTool"/>
 /// assigns to <c>SentinelCallToolResult<object>.Data</c> on its applied success path. Primary path only
 /// (the resolution-failed / no-pending-changes / apply-failed error paths return a different,
 /// error-shaped envelope with no Data) - see proposal_structuredcontent_rollout.md.
@@ -34,7 +34,7 @@ public sealed record RenameSymbolData(
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
-/// <see cref="RefactoringSignatureTools.RenameSymbol"/>'s primary success path, which sets only
+/// <see cref="RefactoringSignatureTools.RenameSymbolTool"/>'s primary success path, which sets only
 /// <c>IsError</c> and <c>Data</c> (not TotalRecords/WorkspaceVersion/etc). Primary path only -
 /// see proposal_structuredcontent_rollout.md.
 /// </summary>
@@ -44,13 +44,13 @@ public sealed record RenameSymbolResultEnvelope(
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
-/// <see cref="RefactoringStructuralTools.ModifyModifier"/>'s primary (autoStage=true, singular-edit,
+/// <see cref="RefactoringStructuralTools.ModifyModifierTool"/>'s primary (autoStage=true, singular-edit,
 /// non-batch) success path, which sets only <c>IsError</c> and <c>Data</c>. Deliberately does not
 /// cover the batch (batchEdits != null), autoStage=false, or error branches - see
 /// proposal_structuredcontent_rollout.md. AppliedChangeSummary lives in RoslynSentinel.Common and
-/// is reused by several other tools (e.g. ChangeAccessibility); it is intentionally left
+/// is reused by several other tools (e.g. ChangeAccessibilityTool); it is intentionally left
 /// undecorated here rather than adding DataTag attributes to a shared type outside this POC's
-/// file scope - ChangeId tagging on ModifyModifier's own output is expressed at the method level
+/// file scope - ChangeId tagging on ModifyModifierTool's own output is expressed at the method level
 /// via the existing [Produces(DataTag.ChangeId)] instead.
 /// </summary>
 public sealed record ModifyModifierResultEnvelope(
@@ -59,7 +59,7 @@ public sealed record ModifyModifierResultEnvelope(
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Named shape mirroring the engine-layer <c>MethodParameterInfo</c> (RoslynSentinel.Engines.Basic,
-/// BasicRefactoringEngine.cs) as surfaced by MethodSignature's view branch. Declared here (rather than
+/// BasicRefactoringEngine.cs) as surfaced by MethodSignatureTool's view branch. Declared here (rather than
 /// tagging MethodParameterInfo itself) because that engine type lives outside this POC's file
 /// scope - see proposal_structuredcontent_rollout.md.
 /// </summary>
@@ -70,14 +70,14 @@ public sealed record MethodSignatureParameterInfo(
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Mirrors the anonymous <c>new { Parameters = parameters }</c> object assigned to Data on
-/// MethodSignature's view branch.
+/// MethodSignatureTool's view branch.
 /// </summary>
 public sealed record MethodSignatureViewData(
     IReadOnlyList<MethodSignatureParameterInfo> Parameters);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
 /// Envelope shape mirroring <c>SentinelCallToolResult<object></c> as actually populated on
-/// <see cref="RefactoringSignatureTools.MethodSignature"/>'s "view" branch only (operation=view),
+/// <see cref="RefactoringSignatureTools.MethodSignatureTool"/>'s "view" branch only (operation=view),
 /// which sets only <c>IsError</c> and <c>Data = new { Parameters }</c>. The add/remove branches
 /// (both the non-autoStage ToJsonSummary shape and the autoStage applied-with-offload
 /// MemberChangedContentResult/AppliedChangeSummary shape) are intentionally NOT covered by this
@@ -108,12 +108,12 @@ public class RefactoringStructuralTools
     // supply the wrong subset for its chosen operation and only find out at runtime.
     [McpServerTool(Name = "Member")]
     [Produces(DataTag.ChangeId)]
-    //[Description("Add (as a raw source member, a generated typed property/field, or a brand-new top-level type), remove, replace, or view a type member (method, property, field, constructor). This is the right choice even for a one-line change inside a member - read the member's current source first (e.g. via GetMethodSource/ReadFile), copy it verbatim, make your edit, and pass the whole resulting member as newMemberSource, not a fragment. Prefer this over a unified diff to edit part of a member: a whole-member replacement can't drift out of sync the way a hand-built diff hunk can.")]
+    //[Description("Add (as a raw source member, a generated typed property/field, or a brand-new top-level type), remove, replace, or view a type member (method, property, field, constructor). This is the right choice even for a one-line change inside a member - read the member's current source first (e.g. via GetMethodSourceTool/ReadFileTool), copy it verbatim, make your edit, and pass the whole resulting member as newMemberSource, not a fragment. Prefer this over a unified diff to edit part of a member: a whole-member replacement can't drift out of sync the way a hand-built diff hunk can.")]
     [Description("Add, remove, replace, or view a raw source member, a typed property/field, or a brand-new top-level type. Also views constructors.")]
-    public Task<SentinelCallToolResult<object>> Member(
+    public Task<SentinelCallToolResult<object>> MemberTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
-        //[Description("addMember: adds raw member source into an existing container (requires containerName + newMemberSource). addTopLevelType: adds a brand-new top-level type declaration - no container (requires newMemberSource as the full type source; optional namespaceName). addTypedMember: generates a property/field via typedKind/typedName/typedType into an existing container (requires containerName + typedKind + typedName + typedType). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use SafeDeleteUnusedSymbol instead. replace: replaces a member's full source, including for small in-member batchEdits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
+        //[Description("addMember: adds raw member source into an existing container (requires containerName + newMemberSource). addTopLevelType: adds a brand-new top-level type declaration - no container (requires newMemberSource as the full type source; optional namespaceName). addTypedMember: generates a property/field via typedKind/typedName/typedType into an existing container (requires containerName + typedKind + typedName + typedType). remove: deletes a member - by default checks for callers/implementations first (see skipPrecheck); for a zero-usages-only contract use DeleteUnusedSymbolTool instead. replace: replaces a member's full source, including for small in-member batchEdits. view: lists a container's direct members (name, kind, signature, line range) to find the exact memberName/contextSnippet to pass to remove or replace.")]
         //[Description("Add, remove, replace, or view a raw source member, a typed property/field, or a brand-new top-level type. Also views constructors.")]
         [Description("Required params per operation. addMember: containerName+newMemberSource (optional position). addTypedMember: containerName+typedKind+typedName+typedType. addTopLevelType: newMemberSource (optional namespaceName). remove: memberName. replace: memberName+newMemberSource. view: containerName (lists its members) or memberName (returns that member's full source).")]
         [Consumes(DataTag.Action, required: true)] MemberAction operation,
@@ -160,7 +160,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "ModifyEnum")]
     [Produces(DataTag.ChangeId)]
     [Description("Replaces an enum's complete member list in one operation. Use GetTypeInfo(typeName, include:\"members\") to see current values first.")]
-    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyEnum(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyEnumTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Consumes(DataTag.SymbolName, required: true)] string enumName,
@@ -184,7 +184,7 @@ public class RefactoringStructuralTools
     [SupportsBatching]
     [Produces(DataTag.ChangeId)]
     [Description("Adds, replaces, or removes an [Attribute] on a type or member. Use ChangeAccessibility for accessibility keywords and ModifyModifier for other modifier keywords.")]
-    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyAttribute(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyAttributeTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
@@ -217,7 +217,7 @@ public class RefactoringStructuralTools
     [SupportsBatching]
     [Produces(DataTag.ChangeId)]
     [Description("Adds or removes a non-accessibility modifier keyword (use ChangeAccessibility for private/public/etc., ModifyAttribute for [Attribute]). For overloaded targets, provide contextSnippet and optionally lineBefore/lineAfter. ADD STATIC on a method or property is a conversion: the member must use no instance state (no this/base or instance members of its type), and instance-qualified callers (receiver.M(...), receiver.P) are rewritten to Type.M(...) in the same atomic change; members that only use each other may be converted together in one 'batchEdits' batch. Not supported for add static: " + ToolParams.AddStaticUnsupported + ". Returns changeId.")]
-    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyModifier(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyModifierTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
@@ -243,7 +243,7 @@ public class RefactoringStructuralTools
     [SupportsBatching]
     [Produces(DataTag.ChangeId)]
     [Description("Adds or removes a base type or interface from a type declaration.")]
-    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyBaseType(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> ModifyBaseTypeTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
@@ -269,7 +269,7 @@ public class RefactoringStructuralTools
     [McpServerTool(Name = "SyncTypeAndFilename")]
     [Produces(DataTag.ResultOnly)]
     [Description("Synchronizes the filename to match a type declared in the file.")]
-    public Task<SentinelCallToolResult<object>> SyncTypeAndFilename(
+    public Task<SentinelCallToolResult<object>> SyncTypeAndFilenameTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("The top-level type to sync the filename to. Omit to use the first non-nested type in the file; name it explicitly when the file declares more than one top-level type.")]

@@ -112,7 +112,7 @@ public class OrientationBreakerFilterTests
             Assert.That(result.IsError, Is.Not.True, "a zero-match search is a valid empty answer; only the breaker's refusal is an error");
         }
 
-        // ListWorkspaceSolutions is not on the allowlist (ListAll, ListSolutionItems, GetFileOutline, ReadFile).
+        // ListWorkspaceSolutionsTool is not on the allowlist (ListAllTool, ListSolutionItemsTool, GetFileOutlineTool, ReadFileTool).
         var blocked = await _client.CallToolAsync(
             "ListWorkspaceSolutions",
             new Dictionary<string, object?> { ["reason"] = "test message", ["workspacePath"] = _fixture.SolutionDirectory }!,
@@ -193,7 +193,7 @@ public class OrientationBreakerFilterTests
             await SearchForGuaranteedNoMatchAsync($"ZzzNoSuchTokenAnywhereInTheSolution{i}Zzz");
         }
 
-        // Call ListAll with a non-existent project name so it returns totalRecords: 0
+        // Call ListAllTool with a non-existent project name so it returns totalRecords: 0
         var emptyListAllResult = await _client.CallToolAsync(
             "ListAll",
             new Dictionary<string, object?> { ["reason"] = "test message", ["projectName"] = "NoSuchProjectZzz" }!,
@@ -210,7 +210,7 @@ public class OrientationBreakerFilterTests
         }
 
         // Now try a previously-blocked non-allowlisted tool. It should still be blocked
-        // because ListAll with empty result should NOT reset the breaker.
+        // because ListAllTool with empty result should NOT reset the breaker.
         var blocked = await _client.CallToolAsync(
             "ListWorkspaceSolutions",
             new Dictionary<string, object?> { ["reason"] = "test message", ["workspacePath"] = _fixture.SolutionDirectory }!,

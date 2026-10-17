@@ -1,6 +1,6 @@
-// ReplaceSnippet's per-parameter size guard. Run 20260910-013550-398 died here: the old shared
+// ReplaceSnippetTool's per-parameter size guard. Run 20260910-013550-398 died here: the old shared
 // 200-char cap rejected an ordinary 6-line insertion, the message named all four bounds at once so
-// the model kept guessing which it had hit, and the one escape hatch it named (WriteFile) was gated
+// the model kept guessing which it had hit, and the one escape hatch it named (WriteFileTool) was gated
 // off for that run. These tests pin all three fixes -> the raised caps, the per-bound message naming
 // the actual value, and advice sourced from WriteToolAdviceHelper rather than a hardcoded name.
 //
@@ -78,7 +78,7 @@ public class ReplaceSnippetSizeGuardTests
         Assert.That(newContent.Length, Is.GreaterThan(200), "must exceed the old char cap to be a regression test");
         Assert.That(newContent.Length, Is.LessThan(2000), "must stay under the new char cap");
 
-        var result = await tools.ReplaceSnippet(
+        var result = await tools.ReplaceSnippetTool(
             reason: "test message", ProposedChangeAction.validate, targetFile,
             oldContent: anchor, newContent: newContent);
 
@@ -96,7 +96,7 @@ public class ReplaceSnippetSizeGuardTests
         var anchor = FirstLine(workspace.ReadText(TargetRelativePath));
         var oversized = new string('x', 2500);
 
-        var result = await tools.ReplaceSnippet(
+        var result = await tools.ReplaceSnippetTool(
             reason: "test message", ProposedChangeAction.validate, targetFile,
             oldContent: anchor, newContent: oversized);
 
@@ -117,7 +117,7 @@ public class ReplaceSnippetSizeGuardTests
         var targetFile = workspace.PathOf(TargetRelativePath);
         var tooManyLines = string.Join('\n', Enumerable.Range(0, 120).Select(i => $"line {i}"));
 
-        var result = await tools.ReplaceSnippet(
+        var result = await tools.ReplaceSnippetTool(
             reason: "test message", ProposedChangeAction.validate, targetFile,
             oldContent: tooManyLines, newContent: new string('y', 2500));
 
@@ -141,7 +141,7 @@ public class ReplaceSnippetSizeGuardTests
         var targetFile = workspace.PathOf(TargetRelativePath);
         var anchor = FirstLine(workspace.ReadText(TargetRelativePath));
 
-        var result = await tools.ReplaceSnippet(
+        var result = await tools.ReplaceSnippetTool(
             reason: "test message", ProposedChangeAction.validate, targetFile,
             oldContent: anchor, newContent: new string('z', 2500));
 

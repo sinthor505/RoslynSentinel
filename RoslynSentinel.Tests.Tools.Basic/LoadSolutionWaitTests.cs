@@ -1,4 +1,4 @@
-// Regression tests for LoadSolution while a solution load is already running (plan Step A5, after A4).
+// Regression tests for LoadSolutionTool while a solution load is already running (plan Step A5, after A4).
 //
 // Timing assumption: a real solution load takes seconds (MSBuild opens the fixture solution). The
 // mid-load tests start LoadSolutionAsync unawaited and then call the tool while that load is still

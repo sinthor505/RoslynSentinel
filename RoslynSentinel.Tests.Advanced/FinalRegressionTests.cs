@@ -7,9 +7,9 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tests.Advanced;
 /// <summary>
 /// Final regression tests for RoslynSentinel:
-/// - BUG-61: SyncTypeAndFilename uses staging mechanism
+/// - BUG-61: SyncTypeAndFilenameTool uses staging mechanism
 /// - BUG-60: RemoveMember checks for usages
-/// - BUG-57: IntroduceParameterObject handles interfaces
+/// - BUG-57: IntroduceParameterObjectTool handles interfaces
 /// - BUG-55: OptimizeToValueTask updates interface signatures
 /// - 4 additional regression tests for final coverage
 /// </summary>
@@ -40,7 +40,7 @@ public class FinalRegressionTests
     }
 
     // ────────────────────────────────────────────────────────────────────────────
-    // BUG-61: SyncTypeAndFilename -> Uses Staging Instead of Direct Write
+    // BUG-61: SyncTypeAndFilenameTool -> Uses Staging Instead of Direct Write
     // ────────────────────────────────────────────────────────────────────────────
     [Test]
     [Category("StructuralRefinementEngine")] // sentinel:auto-category
@@ -62,7 +62,7 @@ public class FinalRegressionTests
     }
 
     // ────────────────────────────────────────────────────────────────────────────
-    // BUG-57: IntroduceParameterObject -> Warns About Interface Methods
+    // BUG-57: IntroduceParameterObjectTool -> Warns About Interface Methods
     // ────────────────────────────────────────────────────────────────────────────
     [Test]
     [Category("StructuralRefactoringEngine")] // sentinel:auto-category

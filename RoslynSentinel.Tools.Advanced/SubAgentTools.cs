@@ -22,7 +22,7 @@ public class SubAgentTools
         "its final message and a transcript path come back. The dispatched model is given the Claude tool " +
         "surface minus SubAgent and SubAgentEval, so it cannot dispatch further. Slow: builds a private server " +
         "before the model runs. Only usable when the loaded solution is the RoslynSentinel repo.")]
-    public Task<SentinelCallToolResult<SubAgentResult>> SubAgent(
+    public Task<SentinelCallToolResult<SubAgentResult>> SubAgentTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Full task text for the dispatched model, inlined by value - never a file path.")]
         string prompt,

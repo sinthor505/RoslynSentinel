@@ -4,7 +4,7 @@
 // are now registered unprefixed (WorkspaceTools, GitTools; only SymbolNavigationTools keeps the
 // prefix). So "--exclude-tools=GitTools" became "SentinelGitTools" and silently removed nothing,
 // and "--include-tools=WorkspaceTools" silently added nothing. Found while implementing the
-// SubAgent recursion guard, which depends on --exclude-tools actually excluding.
+// SubAgentTool recursion guard, which depends on --exclude-tools actually excluding.
 //
 // Plain unit tests: ParseArgs and ResolveActiveToolClasses are static and take raw args, so no host
 // or server process is needed.

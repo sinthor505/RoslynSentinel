@@ -12,7 +12,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
-/// Tests for WorkspaceTools.GetLargeResult:
+/// Tests for WorkspaceTools.GetLargeResultTool:
 ///   T1  – No resultId and no filePath -> error "Result file not found"
 ///   T2  – Unknown resultId (file doesn't exist) -> error
 ///   T3  – Valid resultId, MigrationCandidateFindingList file -> findings returned, TotalRecords set
@@ -122,7 +122,7 @@ public class GetLargeResultTests
     [Test, CancelAfter(5000)]
     public async Task T1_GetLargeResult_NoResultIdNoFilePath_ReturnsError()
     {
-        var result = await _workspaceTools.GetLargeResult(reason: "test message");
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -137,7 +137,7 @@ public class GetLargeResultTests
     [Test, CancelAfter(5000)]
     public async Task T2_GetLargeResult_UnknownResultId_ReturnsError()
     {
-        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: "00000000000000000000000000000000");
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: "00000000000000000000000000000000");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -182,7 +182,7 @@ public class GetLargeResultTests
         var workspaceTools = CreateWorkspaceToolsWithoutSolution();
         try
         {
-            var result = await workspaceTools.GetLargeResult(reason: "test message", resultId: "00000000000000000000000000000000");
+            var result = await workspaceTools.GetLargeResultTool(reason: "test message", resultId: "00000000000000000000000000000000");
 
             Assert.That(result.IsError, Is.True);
             Assert.That(result.ErrorData, Is.Not.Null);
@@ -212,13 +212,13 @@ public class GetLargeResultTests
         var findings = MakeMigrationFindings(5);
         WriteLargeResultFile(findings, ResultWrapperType.MigrationCandidateFindingList, resultId);
 
-        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 3, offset: 0);
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId, limit: 3, offset: 0);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(5), "TotalRecords must match the item count in the file.");
         Assert.That(result.HasMoreData, Is.True, "limit=3 of 5 total -> HasMoreData should be true.");
 
-        // GetLargeResult's Data is the flat, paged List<MigrationCandidateFinding> -> the same
+        // GetLargeResultTool's Data is the flat, paged List<MigrationCandidateFinding> -> the same
         // shape every other SentinelCallToolResult<object>-returning tool uses; it used to be double-wrapped
         // in an inner SentinelCallToolResult<object>, which was a bug (fixed alongside these assertions).
         var returnedFindings = result.SuccessData as List<MigrationCandidateFinding>;
@@ -239,7 +239,7 @@ public class GetLargeResultTests
         var entries = MakeApiSurfaceEntries(4);
         WriteLargeResultFile(entries, ResultWrapperType.ApiSurfaceEntryList, resultId);
 
-        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 10, offset: 0);
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId, limit: 10, offset: 0);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(4));
@@ -251,7 +251,7 @@ public class GetLargeResultTests
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // T7 – Valid resultId, SolutionSymbolEntryList (ListAll's offload type) -> entries returned,
+    // T7 – Valid resultId, SolutionSymbolEntryList (ListAllTool's offload type) -> entries returned,
     //      and a non-zero offset actually skips records rather than always returning page 1.
     // ══════════════════════════════════════════════════════════════════════════
 
@@ -262,7 +262,7 @@ public class GetLargeResultTests
         var entries = MakeSolutionSymbolEntries(5);
         WriteLargeResultFile(entries, ResultWrapperType.SolutionSymbolEntryList, resultId);
 
-        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 3, offset: 0);
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId, limit: 3, offset: 0);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(5));
@@ -280,8 +280,8 @@ public class GetLargeResultTests
         var entries = MakeSolutionSymbolEntries(5);
         WriteLargeResultFile(entries, ResultWrapperType.SolutionSymbolEntryList, resultId);
 
-        var page1 = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 2, offset: 0);
-        var page2 = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 2, offset: 2);
+        var page1 = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId, limit: 2, offset: 0);
+        var page2 = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId, limit: 2, offset: 2);
 
         var names1 = ((List<SolutionSymbolEntry>)page1.SuccessData!).Select(e => e.Name).ToList();
         var names2 = ((List<SolutionSymbolEntry>)page2.SuccessData!).Select(e => e.Name).ToList();
@@ -297,7 +297,7 @@ public class GetLargeResultTests
         var findings = MakeMigrationFindings(2);
         var filePath = WriteLargeResultFile(findings, ResultWrapperType.MigrationCandidateFindingList, resultId);
 
-        var result = await _workspaceTools.GetLargeResult(reason: "test message", filePath: filePath);
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", filePath: filePath);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(2));
@@ -315,7 +315,7 @@ public class GetLargeResultTests
         var outsidePath = Path.Combine(_tempDir, "result_20260101T000000Z_fakeid.json");
         await File.WriteAllTextAsync(outsidePath, "{}");
 
-        var result = await _workspaceTools.GetLargeResult(reason: "test message", filePath: outsidePath);
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", filePath: outsidePath);
 
         Assert.That(!result.IsError, Is.False,
             "A result file outside .roslynsentinel/largeresults/ must be rejected.");
@@ -325,7 +325,7 @@ public class GetLargeResultTests
     // ═══════════════════════════════════════════════════════════════════════════
     // T9-T12 – ResultWrapperType.Raw (the generic MCP request-filter offload backstop,
     //          see docs/current/proposal_centralized_large_result_filter.md). Unlike every
-    //          other case above, Raw has no known element shape, so GetLargeResult pages over
+    //          other case above, Raw has no known element shape, so GetLargeResultTool pages over
     //          the stored raw text itself as a byte/char window rather than a list.
     // ═══════════════════════════════════════════════════════════════════════════
 
@@ -341,7 +341,7 @@ public class GetLargeResultTests
         // charLimit controls the raw-text window size (limit means "N records" and is ignored for
         // Raw results) - pass the full threshold explicitly to read the whole short payload back in
         // one window.
-        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, charLimit: LargeResultHelper.OffloadThresholdBytes);
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: stored.resultId, charLimit: LargeResultHelper.OffloadThresholdBytes);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.HasMoreData, Is.False, "The whole stored text fits in one window, so there should be no more pages.");
@@ -371,7 +371,7 @@ public class GetLargeResultTests
         {
             // charLimit controls the raw-text window size (limit means "N records" and is ignored
             // for Raw results) - pass the full threshold explicitly on every page.
-            var page = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, offset: offset.Value, charLimit: LargeResultHelper.OffloadThresholdBytes);
+            var page = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: stored.resultId, offset: offset.Value, charLimit: LargeResultHelper.OffloadThresholdBytes);
             Assert.That(!page.IsError, Is.True);
 
             var pageDataType = page.SuccessData!.GetType();
@@ -379,7 +379,7 @@ public class GetLargeResultTests
             reassembled.Append(text);
 
             // A single page must never itself be big enough to re-trigger the offload filter on
-            // its way back out -> otherwise GetLargeResult(Raw) could re-offload under a new
+            // its way back out -> otherwise GetLargeResultTool(Raw) could re-offload under a new
             // resultId in an unbounded fetch/still-too-big/re-offload loop.
             Assert.That(text.Length, Is.LessThanOrEqualTo(LargeResultHelper.OffloadThresholdBytes));
 
@@ -405,7 +405,7 @@ public class GetLargeResultTests
         var stored = await LargeResultHelper.StoreRawJsonAsync(
             JsonSerializer.Serialize(original), _tempDir, CancellationToken.None);
 
-        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, offset: 100_000);
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: stored.resultId, offset: 100_000);
 
         Assert.That(!result.IsError, Is.True, "An offset far past the end of the stored text must clamp, not throw a Substring range exception.");
         var text = (string)result.SuccessData!.GetType().GetProperty("text")!.GetValue(result.SuccessData)!;
@@ -420,7 +420,7 @@ public class GetLargeResultTests
         var stored = await LargeResultHelper.StoreRawJsonAsync(
             JsonSerializer.Serialize(original), _tempDir, CancellationToken.None);
 
-        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: stored.resultId, offset: 0, charLimit: 50);
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: stored.resultId, offset: 0, charLimit: 50);
 
         Assert.That(!result.IsError, Is.True);
         var text = (string)result.SuccessData!.GetType().GetProperty("text")!.GetValue(result.SuccessData)!;
@@ -456,7 +456,7 @@ public class GetLargeResultTests
         var pages = 0;
         while (true)
         {
-            var page = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: limit, offset: offset);
+            var page = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId, limit: limit, offset: offset);
             Assert.That(!page.IsError, Is.True);
             first ??= page;
 
@@ -527,7 +527,7 @@ public class GetLargeResultTests
         var stored = new TextSearchResult(MakeTextMatches(3, 0, MatchKind.Literal), MakeTextMatches(5, 3, MatchKind.Regex), 0, true);
         WriteLargeResultFile(stored, ResultWrapperType.TextSearchMatchList, resultId);
 
-        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 50, offset: 0);
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId, limit: 50, offset: 0);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.TotalRecords, Is.EqualTo(8));
@@ -545,7 +545,7 @@ public class GetLargeResultTests
         var stored = new TextSearchResult([], MakeTextMatches(135, 0, MatchKind.Regex), 0, true);
         WriteLargeResultFile(stored, ResultWrapperType.TextSearchMatchList, resultId);
 
-        var first = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 50, offset: 0);
+        var first = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId, limit: 50, offset: 0);
         var firstData = (TextSearchResult)first.SuccessData!;
         var firstReturned = firstData.LiteralResults.Count + firstData.RegexResults.Count;
         Assert.That(first.NextOffset, Is.EqualTo(firstReturned), "NextOffset must equal the rows returned on the first page.");
@@ -556,7 +556,7 @@ public class GetLargeResultTests
         var pages = 1;
         while (next is int offset && pages < 20)
         {
-            var page = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 50, offset: offset);
+            var page = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId, limit: 50, offset: offset);
             var data = (TextSearchResult)page.SuccessData!;
             lines.AddRange(data.LiteralResults.Select(r => r.Line));
             lines.AddRange(data.RegexResults.Select(r => r.Line));
@@ -579,7 +579,7 @@ public class GetLargeResultTests
         var stored = new TextSearchResult(MakeTextMatches(3, 0, MatchKind.Literal), MakeTextMatches(5, 3, MatchKind.Regex), 0, true);
         WriteLargeResultFile(stored, ResultWrapperType.TextSearchMatchList, resultId);
 
-        var result = await _workspaceTools.GetLargeResult(reason: "test message", resultId: resultId, limit: 50, offset: 0);
+        var result = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: resultId, limit: 50, offset: 0);
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.HasMoreData, Is.False);

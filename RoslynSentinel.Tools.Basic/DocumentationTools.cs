@@ -150,7 +150,7 @@ public class DocumentationTools
     /// Resolves the root that per-docType subdirectories (plans/handoffs/completed/documentation)
     /// live under. Some repos archive active docs under docs/current/ (with a matching docs/obsolete/
     /// for retired ones) instead of directly under docs/ -> if docs/current/ exists, root subdirs
-    /// there so ProjectDoc(read/write) can reach what ProjectDoc(list) already reports.
+    /// there so ProjectDocTool(read/write) can reach what ProjectDocTool(list) already reports.
     /// </summary>
     private static string GetDocTypeSubdirRoot(string docsRoot)
     {
@@ -374,7 +374,7 @@ public class DocumentationTools
     [McpServerTool(Name = "ProjectDoc")]
     [Produces(DataTag.Documentation)]
     [Description("Reads, writes, appends, or lists project doc files under docs/.")]
-    public object ProjectDoc(
+    public object ProjectDocTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("read, write, append (completed_work only), or list.")]
         DocAction action,
@@ -398,7 +398,7 @@ public class DocumentationTools
             if (rateLimitError is not null)
             {
                 return action == DocAction.read || action == DocAction.list
-                    ? (object)new DocReadResult { Found = false, Filename = name ?? "", Error = rateLimitError }
+                    ? new DocReadResult { Found = false, Filename = name ?? "", Error = rateLimitError }
                     : new DocWriteResult { IsError = true, Filename = name ?? "", Error = rateLimitError };
             }
 
@@ -406,7 +406,7 @@ public class DocumentationTools
             if (docsRoot is null)
             {
                 return action == DocAction.read || action == DocAction.list
-                    ? (object)new DocReadResult { Found = false, Filename = name ?? "", Error = error }
+                    ? new DocReadResult { Found = false, Filename = name ?? "", Error = error }
                     : new DocWriteResult { IsError = true, Filename = name ?? "", Error = error };
             }
 

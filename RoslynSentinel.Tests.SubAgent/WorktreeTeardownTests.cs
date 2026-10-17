@@ -6,7 +6,7 @@ using RoslynSentinel.Tools.Advanced;
 namespace RoslynSentinel.Tests.SubAgent;
 
 /// <summary>
-/// The worktree lifecycle a SubAgent call relies on, against a real throwaway git repo: create a
+/// The worktree lifecycle a SubAgentTool call relies on, against a real throwaway git repo: create a
 /// worktree, let a "model" dirty it, then force-remove it and delete its branch. The non-forced
 /// removal PlanStepRunner uses refuses a dirty tree, which is exactly why the force option exists.
 /// </summary>

@@ -13,13 +13,13 @@ namespace RoslynSentinel.Tools.Basic;
 /// verbatim from WorkspaceTools (Decision 7 step 2).
 ///
 /// CORRECTION vs. the plan doc's Decision 1 (flagged per Decision 7 step 1.5's audit mandate):
-/// Decision 1 listed this class as 7 tools (ApplyDiff, ApplyUnifiedDiff, WriteFile, DeleteFile,
-/// RetryFailedChanges, UndoLastApply, ReadFile) with DiffEngine as a dependency. As of 2026-09-17,
+/// Decision 1 listed this class as 7 tools (ApplyDiffTool, ApplyUnifiedDiffTool, WriteFileTool, DeleteFileTool,
+/// RetryFailedChangesTool, UndoLastApplyTool, ReadFileTool) with DiffEngine as a dependency. As of 2026-09-17,
 /// WorkspaceTools.cs only actually still has 3 of those 7 live as [McpServerTool] methods
-/// (RetryFailedChanges, UndoLastApply, ReadFile) - the other 4 (ApplyDiff/ApplyUnifiedDiff/
-/// WriteFile/DeleteFile) are live, separately-registered [McpServerTool] methods on a wholly
+/// (RetryFailedChangesTool, UndoLastApplyTool, ReadFileTool) - the other 4 (ApplyDiffTool/ApplyUnifiedDiffTool/
+/// WriteFileTool/DeleteFileTool) are live, separately-registered [McpServerTool] methods on a wholly
 /// different, pre-existing class (WholeFileWriteTools.cs) that this plan does not name and
-/// is out of scope to touch. DiffEngine is confirmed dead on WorkspaceTools (FindReferences:
+/// is out of scope to touch. DiffEngine is confirmed dead on WorkspaceTools (FindReferencesTool:
 /// only the constructor assignment, zero live-method uses - its only "use" is inside a large
 /// block-commented dead ApplyDiffWithConfirmationCode method) so it is dropped from this class
 /// entirely rather than carried forward unused.
@@ -420,7 +420,7 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
-                    // Paging here goes through LargeResult/GetLargeResult, not HasMoreData -> leaving it
+                    // Paging here goes through LargeResult/GetLargeResultTool, not HasMoreData -> leaving it
                     // false avoids signalling a second, redundant continuation mechanism.
                     HasMoreData = false,
                     LargeResult = new LargeResultInfo(resultType: "FileSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: textBytes, totalRecords: 1, message: $"Result is {totalLines} lines, {textBytes} bytes (threshold: {thresholdBytes}). " + $"Use GetLargeResult(resultId: \"{stored.resultId}\") to page through results, or retry ReadFile with startLine/endLine for just the slice you need, or use GetFileOutline to get the constructors, methods, helpers, members, enums, fields, properties, etc of a file without reading the entire file."),
@@ -514,9 +514,9 @@ public class WorkspaceFileEditImpl
         => root is null ? null : position => EnclosingMemberResolver.GetEnclosingMemberName(root, position);
 
     /// <summary>
-    /// Resolves oldContent to the single span a ReplaceSnippet edit may splice, shared by the single and batch
+    /// Resolves oldContent to the single span a ReplaceSnippetTool edit may splice, shared by the single and batch
     /// paths. The request tier is IgnoreLineEndings with case-sensitive comparison: the ordinal stage, then the
-    /// CR/LF/CRLF-interchangeable stage, exactly what the removed legacy ReplaceSnippet matcher did, so the returned
+    /// CR/LF/CRLF-interchangeable stage, exactly what the removed legacy ReplaceSnippetTool matcher did, so the returned
     /// span is always the real removable span (see project_replacesnippet_silent_splice_corruption_adjacent_lines).
     /// Only <see cref="SnippetMatchOutcome.Matched"/> yields a match. Every other outcome, including a snippet that
     /// matches only at a looser tier (its near-matches are never edit candidates), is thrown through
@@ -629,7 +629,7 @@ public class WorkspaceFileEditImpl
             if (exceeded.Count > 0)
             {
                 // Escape-hatch advice comes from WriteToolAdviceHelper, never a hardcoded tool name:
-                // the old text here named WriteFile unconditionally, and in run 398 WriteFile was
+                // the old text here named WriteFileTool unconditionally, and in run 398 WriteFileTool was
                 // gated off, so the one instruction the model was given was unfollowable.
                 var advice = _writeAdvice.AdviseForOversizedEdit("ReplaceSnippet");
                 return new SentinelCallToolResult<ReplaceSnippetResult>()
@@ -840,7 +840,7 @@ public class WorkspaceFileEditImpl
 
             // Resolve every edit's match against the file's ORIGINAL text -> never against a prior
             // edit's output within this same batch. This is what removes the sequencing hazard a
-            // series of single ReplaceSnippet calls has: every edit here is anchored against one
+            // series of single ReplaceSnippetTool calls has: every edit here is anchored against one
             // fixed snapshot, not a chain of intermediate results the model never sees.
             var resolved = new List<(int index, SnippetMatch match, string newContent)>();
             foreach (var (edit, index) in fileGroup)
@@ -864,7 +864,7 @@ public class WorkspaceFileEditImpl
             }
 
             // Reject overlapping matches before splicing anything -> silent last-writer-wins here is
-            // the same corruption class as the closed ReplaceSnippet silent-splice-corruption finding
+            // the same corruption class as the closed ReplaceSnippetTool silent-splice-corruption finding
             // on adjacent lines (wrong match length previously corrupted a neighboring line with no
             // error at all).
             var byStart = resolved.OrderBy(r => r.match.Start).ToList();

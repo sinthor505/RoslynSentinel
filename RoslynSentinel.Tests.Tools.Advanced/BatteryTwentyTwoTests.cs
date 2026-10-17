@@ -146,7 +146,7 @@ public class OrderService : IOrderService
         // Symbol-level tools moved to SymbolNavigationTools (Basic) in the server split.
         _symbolRelationshipTools = new SymbolRelationshipTools(new SymbolRelationshipImpl(_discoveryEngine, _symbolNavigationEngine, _workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance));
         _symbolNavigationTools = new SymbolNavigationTools(new SymbolNavigationImpl(_symbolNavigationEngine, _impactAnalyzer, _workspaceManager, NullLogger<SymbolNavigationImpl>.Instance));
-        // GetPublicApiSurface moved to ScanTools (Advanced).
+        // GetPublicApiSurfaceTool moved to ScanTools (Advanced).
         _scanTools = new ScanTools(new SecurityEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), _asyncSafetyEngine, new ThreadSafetyEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new PerformanceEngine(_workspaceManager), _deadCodeEngine, _dependencyEngine, _solutionStructureEngine, _dependencyInjectionEngine, new ProjectConsistencyEngine(_workspaceManager), _metricsEngine, new CloneDetectionEngine(_workspaceManager), _discoveryEngine, new StackOverflowEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeStyleAnalysisEngine(_workspaceManager), new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config), _symbolNavigationEngine, new BreakingChangeEngine(_workspaceManager), _workspaceManager, new ResourceSafetyEngine(_workspaceManager), NullLogger<ScanTools>.Instance);
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Wrappers.cs", RichSource)]);
@@ -161,38 +161,38 @@ public class OrderService : IOrderService
         _workspaceManager.SetTestSolution(solution);
     }
 
-    // --- RunScanDetector ---
+    // --- RunScanDetectorTool ---
     [Test]
     [Category("DetectorId")] // sentinel:auto-category
     [Category("ScanTools")] // sentinel:auto-category
     public async Task RunScanDetector_UnusedReferencesWithoutProjectScope_ReturnsInvalidArgument()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _scanTools.RunScanDetector(reason: "test message", detector: ScanTools.DetectorId.unused_references, scope: ToolScope.file, filePath: "Test.cs");
+        var result = await _scanTools.RunScanDetectorTool(reason: "test message", detector: ScanTools.DetectorId.unused_references, scope: ToolScope.file, filePath: "Test.cs");
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
-    // --- GetComprehensiveHealthReport ---
+    // --- GetComprehensiveHealthReportTool ---
     [Test]
     [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetComprehensiveHealthReport_ValidSolution_ReturnsReport()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetComprehensiveHealthReport(reason: "test message", timeoutSeconds: 5);
+        var result = await _tools.GetComprehensiveHealthReportTool(reason: "test message", timeoutSeconds: 5);
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
     }
 
-    // --- GetBlastRadius (via InspectSymbol) ---
+    // --- GetBlastRadius (via InspectSymbolTool) ---
     [Test]
     [Category("SymbolNavigationTools")] // sentinel:auto-category
     public async Task GetBlastRadius_FieldWithObjectCreationInitializer_ResolvesFieldNotConstructor()
     {
         const string fieldSource = "using System.Collections.Generic;\nclass C { public static readonly IReadOnlySet<string> Names = new HashSet<string>(new[] { \"a\" }); void M() { var n = Names; } }";
         SetSource(fieldSource, "Test.cs");
-        var result = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "public static readonly IReadOnlySet<string> Names = new HashSet<string>(", InspectSymbolAspect.blastRadius);
+        var result = await _symbolNavigationTools.InspectSymbolTool(reason: "test message", "Test.cs", "public static readonly IReadOnlySet<string> Names = new HashSet<string>(", InspectSymbolAspect.blastRadius);
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
         var report = (ImpactReport)result.SuccessData!;
@@ -207,7 +207,7 @@ public class OrderService : IOrderService
     public async Task GetBlastRadius_ValidMethod_ReturnsReport()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ProcessAsync", InspectSymbolAspect.blastRadius);
+        var result = await _symbolNavigationTools.InspectSymbolTool(reason: "test message", "Test.cs", "ProcessAsync", InspectSymbolAspect.blastRadius);
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
     }
@@ -217,7 +217,7 @@ public class OrderService : IOrderService
     public async Task GetBlastRadius_ValidMethod_ReportHasNoErrorAndNamesSymbol()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ProcessAsync", InspectSymbolAspect.blastRadius);
+        var result = await _symbolNavigationTools.InspectSymbolTool(reason: "test message", "Test.cs", "ProcessAsync", InspectSymbolAspect.blastRadius);
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
         var report = (ImpactReport)result.SuccessData!;
@@ -230,7 +230,7 @@ public class OrderService : IOrderService
     public async Task GetBlastRadius_UnresolvableSnippet_ReturnsNotFoundError()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.blastRadius);
+        var result = await _symbolNavigationTools.InspectSymbolTool(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.blastRadius);
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -243,8 +243,8 @@ public class OrderService : IOrderService
     public async Task InspectSymbol_UnresolvableSnippet_InfoAndBlastRadiusAgree()
     {
         SetSource(RichSource, "Test.cs");
-        var resultInfo = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.info);
-        var resultBlastRadius = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.blastRadius);
+        var resultInfo = await _symbolNavigationTools.InspectSymbolTool(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.info);
+        var resultBlastRadius = await _symbolNavigationTools.InspectSymbolTool(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.blastRadius);
         Assert.That(!resultInfo.IsError, Is.False);
         Assert.That(!resultBlastRadius.IsError, Is.False);
         Assert.That(resultInfo.ErrorData, Is.Not.Null);
@@ -255,23 +255,23 @@ public class OrderService : IOrderService
         Assert.That(resultBlastRadius.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound.ToString()));
     }
 
-    // --- FindMethodsByReturnType (via QuerySymbolRelationships) ---
+    // --- FindMethodsByReturnType (via QuerySymbolRelationshipsTool) ---
     [Test]
     [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindMethodsByReturnType_ValidType_ReturnsList()
     {
-        var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "List<string>", FindUsagesSearchKind.methodsByReturnType);
+        var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "List<string>", FindUsagesSearchKind.methodsByReturnType);
         Assert.That(result, Is.Not.Null);
         Assert.That(result.TotalRecords > 0);
     }
 
-    // --- GetSolutionMetrics ---
+    // --- GetSolutionMetricsTool ---
     [Test]
     [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetSolutionMetrics_LoadedSolution_ReturnsMetrics()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetSolutionMetrics(reason: "test message");
+        var result = await _tools.GetSolutionMetricsTool(reason: "test message");
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
     }
@@ -281,18 +281,18 @@ public class OrderService : IOrderService
     public async Task GetSolutionMetrics_WithProjectName_ReturnsMetrics()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetSolutionMetrics(reason: "test message", "TestProj");
+        var result = await _tools.GetSolutionMetricsTool(reason: "test message", "TestProj");
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
     }
 
-    // --- GetCodeInventory ---
+    // --- GetCodeInventoryTool ---
     [Test]
     [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetCodeInventory_ValidFile_ReturnsInventory()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetCodeInventory(reason: "test message", "Test.cs");
+        var result = await _tools.GetCodeInventoryTool(reason: "test message", "Test.cs");
         Assert.That(result, Is.Not.Null);
         //Assert.That(result.TotalRecords > 0);
     }
@@ -363,13 +363,13 @@ public class OrderService : IOrderService
         //Assert.That(result.Count > 0);
     }
 
-    // --- GenerateCallTree (via GetCallGraph "tree") ---
+    // --- GenerateCallTree (via GetCallGraphTool "tree") ---
     [Test]
     [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GenerateCallTree_ValidMethod_ReturnsString()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetCallGraph(reason: "test message", "Test.cs", "ProcessAsync", "tree");
+        var result = await _tools.GetCallGraphTool(reason: "test message", "Test.cs", "ProcessAsync", "tree");
         Assert.That(result.SuccessData, Is.Not.Null);
         //Assert.That(result.TotalRecords > 0);
     }
@@ -491,23 +491,23 @@ public class OrderService : IOrderService
         //Assert.That(result, Is.Not.Null);
     }
 
-    // --- GetSymbolInfo (via InspectSymbol) ---
+    // --- GetSymbolInfo (via InspectSymbolTool) ---
     [Test]
     [Category("SymbolNavigationTools")] // sentinel:auto-category
     public async Task GetSymbolInfo_ValidSymbolSnippet_ReturnsInfo()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolNavigationTools.InspectSymbol(reason: "test message", "Test.cs", "ProcessAsync", InspectSymbolAspect.info);
+        var result = await _symbolNavigationTools.InspectSymbolTool(reason: "test message", "Test.cs", "ProcessAsync", InspectSymbolAspect.info);
         Assert.That(result, Is.Not.Null);
         //Assert.That(result.TotalRecords > 0);
     }
 
-    // --- FindAllImplementations (via QuerySymbolRelationships) ---
+    // --- FindAllImplementations (via QuerySymbolRelationshipsTool) ---
     [Test]
     [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindAllImplementations_ValidInterface_ReturnsList()
     {
-        var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "IOrderService", FindUsagesSearchKind.implementorsOf);
+        var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "IOrderService", FindUsagesSearchKind.implementorsOf);
         Assert.That(result, Is.Not.Null);
         Assert.That(result.TotalRecords > 0);
     }
@@ -523,34 +523,34 @@ public class OrderService : IOrderService
         //Assert.That(result.Count > 0);
     }
 
-    // --- FindDiRegistrations (now GetDiRegistrations) ---
+    // --- FindDiRegistrations (now GetDiRegistrationsTool) ---
     [Test]
     [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task FindDiRegistrations_ValidSolution_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetDiRegistrations(reason: "test message");
+        var result = await _tools.GetDiRegistrationsTool(reason: "test message");
         Assert.That(result, Is.Not.Null);
         //Assert.That(result.TotalRecords > 0);
     }
 
-    // --- GetTypeMembersDetail (via GetTypeInfo) ---
+    // --- GetTypeMembersDetail (via GetTypeInfoTool) ---
     [Test]
     [Category("SymbolNavigationTools")] // sentinel:auto-category
     public async Task GetTypeMembersDetail_ValidType_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolNavigationTools.GetTypeInfo(reason: "test message", "Order", include: TypeInfoInclude.members);
+        var result = await _symbolNavigationTools.GetTypeInfoTool(reason: "test message", "Order", include: TypeInfoInclude.members);
         Assert.That(result, Is.Not.Null);
         //Assert.That(result.TotalRecords > 0);
     }
 
-    // --- FindExtensionMethods (via QuerySymbolRelationships) ---
+    // --- FindExtensionMethods (via QuerySymbolRelationshipsTool) ---
     [Test]
     [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindExtensionMethods_ValidType_ReturnsList()
     {
-        var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "Order", FindUsagesSearchKind.extensionsFor);
+        var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "Order", FindUsagesSearchKind.extensionsFor);
         Assert.That(result, Is.Not.Null);
         Assert.That(result.TotalRecords > 0);
     }
@@ -577,13 +577,13 @@ public class OrderService : IOrderService
         //Assert.That(result.Count > 0);
     }
 
-    // --- GetCallGraph ---
+    // --- GetCallGraphTool ---
     [Test]
     [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetCallGraph_ValidMethod_ReturnsCallGraph()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetCallGraph(reason: "test message", "Test.cs", "ProcessAsync");
+        var result = await _tools.GetCallGraphTool(reason: "test message", "Test.cs", "ProcessAsync");
         Assert.That(result, Is.Not.Null);
         //Assert.That(result.TotalRecords > 0);
     }
@@ -593,18 +593,18 @@ public class OrderService : IOrderService
     public async Task GetCallGraph_NonExistentMethod_ReturnsStructuredError()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetCallGraph(reason: "test message", "Test.cs", "NoSuchMethod99");
+        var result = await _tools.GetCallGraphTool(reason: "test message", "Test.cs", "NoSuchMethod99");
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
-    // --- GetReverseCallGraph (via GetCallGraph "reverse") ---
+    // --- GetReverseCallGraph (via GetCallGraphTool "reverse") ---
     [Test]
     [Category("IntelligenceTools")] // sentinel:auto-category
     public async Task GetReverseCallGraph_ValidMethod_ReturnsCallGraph()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetCallGraph(reason: "test message", "Test.cs", "GetStatus", "reverse");
+        var result = await _tools.GetCallGraphTool(reason: "test message", "Test.cs", "GetStatus", "reverse");
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
     }
@@ -614,7 +614,7 @@ public class OrderService : IOrderService
     public async Task GetReverseCallGraph_NonExistentMethod_ReturnsStructuredError()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.GetCallGraph(reason: "test message", "Test.cs", "NoSuchMethod99", "reverse");
+        var result = await _tools.GetCallGraphTool(reason: "test message", "Test.cs", "NoSuchMethod99", "reverse");
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
     }
@@ -625,7 +625,7 @@ public class OrderService : IOrderService
     public async Task MoveFileToNamespaceFolder_ValidFile_ReturnsString()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _tools.PreviewMoveFileToNamespaceFolder(reason: "test message", "Test.cs");
+        var result = await _tools.PreviewMoveFileToNamespaceFolderTool(reason: "test message", "Test.cs");
         Assert.That(result, Is.Not.Null);
         Assert.That(result.SuccessData, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
@@ -647,18 +647,18 @@ public class OrderService : IOrderService
     [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindObjectCreationSites_ValidType_ReturnsList()
     {
-        var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "", FindUsagesSearchKind.objectCreations);
+        var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "", FindUsagesSearchKind.objectCreations);
         Assert.That(result, Is.Not.Null);
         Assert.That(result.TotalRecords > 0);
     }
 
-    // --- GetPublicApiSurface ---
+    // --- GetPublicApiSurfaceTool ---
     [Test]
     [Category("ScanTools")] // sentinel:auto-category
     public async Task GetPublicApiSurface_ValidProject_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _scanTools.GetPublicApiSurface("TestProj");
+        var result = await _scanTools.GetPublicApiSurfaceTool("TestProj");
         Assert.That(result, Is.Not.Null);
         //Assert.That(result.TotalRecords > 0);
     }
@@ -674,13 +674,13 @@ public class OrderService : IOrderService
         //Assert.That(result.Count > 0);
     }
 
-    // --- FindBestInsertionPoint (now GetBestInsertionPoint) ---
+    // --- FindBestInsertionPoint (now GetBestInsertionPointTool) ---
     [Test]
     [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindBestInsertionPoint_ValidClass_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolRelationshipTools.GetBestInsertionPoint(reason: "test message", "Test.cs", "Order", InsertionMemberKind.method);
+        var result = await _symbolRelationshipTools.GetBestInsertionPointTool(reason: "test message", "Test.cs", "Order", InsertionMemberKind.method);
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
     }
@@ -696,46 +696,46 @@ public class OrderService : IOrderService
         //Assert.That(result.Count > 0);
     }
 
-    // --- PreviewRenameImpact ---
+    // --- PreviewRenameImpactTool ---
     [Test]
     [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task PreviewRenameImpact_ValidSymbol_ReturnsPreview()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolRelationshipTools.PreviewRenameImpact(reason: "test message", filePath: "Test.cs", symbolName: "ProcessAsync");
+        var result = await _symbolRelationshipTools.PreviewRenameImpactTool(reason: "test message", filePath: "Test.cs", symbolName: "ProcessAsync");
         Assert.That(result, Is.Not.Null);
         //Assert.That(result.TotalRecords > 0);
     }
 
-    // --- FindCallersSafe (via FindReferences) ---
+    // --- FindCallersSafe (via FindReferencesTool) ---
     [Test]
     [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindCallersSafe_ValidSymbol_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolRelationshipTools.FindReferences(reason: "test message", "ProcessAsync", FindReferencesKind.callers, filePath: "Test.cs");
+        var result = await _symbolRelationshipTools.FindReferencesTool(reason: "test message", "ProcessAsync", FindReferencesKind.callers, filePath: "Test.cs");
         Assert.That(result, Is.Not.Null);
         //Assert.That(result.TotalRecords > 0);
     }
 
-    // --- FindImplementationsSafe (via FindReferences) ---
+    // --- FindImplementationsSafe (via FindReferencesTool) ---
     [Test]
     [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindImplementationsSafe_ValidInterface_ReturnsList()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolRelationshipTools.FindReferences(reason: "test message", "IOrderService", FindReferencesKind.implementations, filePath: "Test.cs");
+        var result = await _symbolRelationshipTools.FindReferencesTool(reason: "test message", "IOrderService", FindReferencesKind.implementations, filePath: "Test.cs");
         Assert.That(result, Is.Not.Null);
         //Assert.That(result.TotalRecords > 0);
     }
 
-    // --- FindReferences(kind: all) ---
+    // --- FindReferencesTool(kind: all) ---
     [Test]
     [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindReferences_KindAll_ReturnsBothCallersAndImplementations()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolRelationshipTools.FindReferences(reason: "test message", "ProcessAsync", FindReferencesKind.all, filePath: "Test.cs");
+        var result = await _symbolRelationshipTools.FindReferencesTool(reason: "test message", "ProcessAsync", FindReferencesKind.all, filePath: "Test.cs");
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
         var json = System.Text.Json.JsonSerializer.Serialize(result.SuccessData);
@@ -743,13 +743,13 @@ public class OrderService : IOrderService
         Assert.That(json, Does.Contain("implementations"));
     }
 
-    // --- QuerySymbolRelationships (renamed from FindUsages) ---
+    // --- QuerySymbolRelationshipsTool (renamed from FindUsages) ---
     [Test]
     [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task QuerySymbolRelationships_ObjectCreationsForRealType_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "Order", FindUsagesSearchKind.objectCreations);
+        var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "Order", FindUsagesSearchKind.objectCreations);
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
     }
@@ -759,7 +759,7 @@ public class OrderService : IOrderService
     public async Task QuerySymbolRelationships_ObjectCreationsForMethodName_ReturnsSemanticGuardError()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "ProcessAsync", FindUsagesSearchKind.objectCreations);
+        var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "ProcessAsync", FindUsagesSearchKind.objectCreations);
         Assert.That(!result.IsError, Is.False, "objectCreations against a method name must be rejected, not silently return [].");
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.Message, Does.Contain("Search(mode: references"), "The guard should point the caller at FindReferences instead of objectCreations for a member name.");
@@ -772,7 +772,7 @@ public class OrderService : IOrderService
         SetSource(RichSource, "Test.cs");
         // "IOrderService" has zero attribute usages, but a real implementor exists (OrderService) ->
         // broaden-on-empty should surface that under 'implementorsOf' instead of just returning [].
-        var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "IOrderService", FindUsagesSearchKind.attributeUsages);
+        var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "IOrderService", FindUsagesSearchKind.attributeUsages);
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.WarningDetails, Is.Not.Null.And.Contains("Broadened"));
         Assert.That(result.WarningDetails, Does.Contain("implementorsOf"));
@@ -783,7 +783,7 @@ public class OrderService : IOrderService
     public async Task QuerySymbolRelationships_EmptyUnderAllKinds_ReturnsPlainNotFoundSignal()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "ThisNameAppearsNowhereInTheSolution", FindUsagesSearchKind.attributeUsages);
+        var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "ThisNameAppearsNowhereInTheSolution", FindUsagesSearchKind.attributeUsages);
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.WarningDetails, Does.Contain("nothing found under any kind"));
     }
@@ -809,7 +809,7 @@ public class ProbeAttribute : Attribute { }
 public class AttributedTarget { }
 ";
         SetSource(source, "AttributeProbe.cs");
-        var result = await _symbolRelationshipTools.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages);
+        var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages);
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         var sites = (result.SuccessData as System.Collections.IEnumerable)?.Cast<object>().ToList();
         Assert.That(sites, Is.Not.Null.And.Count.EqualTo(1));

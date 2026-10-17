@@ -3,9 +3,9 @@ using RoslynSentinel.Common.AgentLoop;
 namespace RoslynSentinel.Tests.SubAgent;
 
 /// <summary>
-/// <see cref="SubAgentEvalResult.ResolveOffloadedResult"/>: a child Build/RunTest result that was too
+/// <see cref="SubAgentEvalResult.ResolveOffloadedResult"/>: a child BuildTool/RunTestTool result that was too
 /// large to return inline is a pointer to a file in the child's worktree. Found by the live smoke
-/// run, where a full-solution Build came back as a pointer and BuildSucceeded was reported false.
+/// run, where a full-solution BuildTool came back as a pointer and BuildSucceeded was reported false.
 /// </summary>
 [TestFixture]
 public class SubAgentOffloadedResultTests

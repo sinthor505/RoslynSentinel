@@ -180,7 +180,7 @@ public class WirePathRelativizeFilterTests
 
         Assert.That(filePath, Is.Not.Empty, "Search response must contain at least one filePath.");
 
-        // Now call ReadFile with that relative path.
+        // Now call ReadFileTool with that relative path.
         var (readResult, readText) = await CallAsync("ReadFile", new Dictionary<string, object?>
         {
             ["reason"] = "test read relative path",
@@ -284,7 +284,7 @@ public class WirePathRelativizeFilterTests
     [Test]
     public async Task OffloadedLargeResult_RawFile_ContainsRelativePathsAndSolutionRoot()
     {
-        // Call FindReferences with enough callers to trigger offload.
+        // Call FindReferencesTool with enough callers to trigger offload.
         var (result, text) = await CallAsync("FindReferences", new Dictionary<string, object?>
         {
             ["reason"] = "test offload large result",

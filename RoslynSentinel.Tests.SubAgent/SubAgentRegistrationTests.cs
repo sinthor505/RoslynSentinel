@@ -13,7 +13,7 @@ using RoslynSentinel.Tools.Advanced;
 namespace RoslynSentinel.Tests.SubAgent;
 
 /// <summary>
-/// The two SubAgent tool classes against the real production registration path. Adding a tool needs a
+/// The two SubAgentTool tool classes against the real production registration path. Adding a tool needs a
 /// class, a ToolClassRegistry entry and an explicit DI block; none alone makes it callable, and a
 /// missing one fails silently, so each is checked here.
 /// </summary>

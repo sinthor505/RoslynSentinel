@@ -95,7 +95,7 @@ public static class AsyncMigrationDiagnostic
             .Where(i => i.Reason!.Contains("already has CancellationToken", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
-        // Methods flagged NeedsManualReview by a prior Asyncify run.
+        // Methods flagged NeedsManualReview by a prior AsyncifyTool run.
         var priorManualReview = bridgeItems
             .Where(i => i.Outcome == ItemRecordOutcome.Skipped
                      && i.Reason!.Contains("NeedsManualReview", StringComparison.OrdinalIgnoreCase)

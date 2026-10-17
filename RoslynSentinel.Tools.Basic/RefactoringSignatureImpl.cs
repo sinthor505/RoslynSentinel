@@ -8,8 +8,8 @@ namespace RoslynSentinel.Tools.Basic;
 
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): implementation half of the
 // RefactoringSignatureTools/Impl pair. Method bodies below are moved verbatim from
-// RefactoringStructuralTools.cs (RenameSymbol, MethodSignature, ChangeAccessibility,
-// ConstructorParameter) except for the ValidateAndApplyAsync private helper, which is duplicated
+// RefactoringStructuralTools.cs (RenameSymbolTool, MethodSignatureTool, ChangeAccessibilityTool,
+// ConstructorParameterTool) except for the ValidateAndApplyAsync private helper, which is duplicated
 // per-Impl-class (each new class owns its own thin instance wrapper around the shared static
 // ValidateAndApplyHelper, per Decision 1-Amendment).
 public class RefactoringSignatureImpl
@@ -107,7 +107,7 @@ public class RefactoringSignatureImpl
         // KNOWN, INTENTIONALLY CORRECT REFUSAL: renaming a member to a name the type already has with the same signature
         // makes the compile gate below reject the change with CS0111 (duplicate member) or CS0121 (ambiguous call). There
         // is no explicit collision check here or in BasicRefactoringEngine.RenameSymbolAsync; the gate produces the
-        // refusal and CompilerErrorLookupHelper adds the CS0101/CS0111 hint. RenameSymbol is a rename, not a merge, so no
+        // refusal and CompilerErrorLookupHelper adds the CS0101/CS0111 hint. RenameSymbolTool is a rename, not a merge, so no
         // body-reconciliation policy exists to apply. Decision 13 in
         // docs/current/proposals/proposal_journal_digest_followup_decisions.md: do not re-investigate or "fix" this.
         var apply = await ValidateAndApplyAsync(

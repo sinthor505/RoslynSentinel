@@ -72,7 +72,7 @@ public static class OrderPricingRefactorReproducer
     /// unrelated-looking file with one real call site into <c>CalcDisc</c>, standing in for the
     /// "rename missed a call site in another file" failure mode a same-file-only rename could hide.
     /// A correct rename must update this call along with any others; a rename tool used correctly
-    /// (e.g. RenameSymbol) updates this automatically, while a model that hand-edits only
+    /// (e.g. RenameSymbolTool) updates this automatically, while a model that hand-edits only
     /// OrderPricingCalculator.cs will leave this call referencing the old, now-missing name.
     /// </summary>
     public const string CheckoutCallerFileContent = """

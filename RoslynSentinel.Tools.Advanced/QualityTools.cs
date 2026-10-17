@@ -52,7 +52,7 @@ public class QualityTools
     [Description("""
         Returns reference documentation for a named tool's valid input values - transform/kind/detector catalogues and parameter defaults. Only covers tools whose valid values cannot be inferred from the schema alone. Covered tools: scan, apply_file_codetransform, apply_method_codetransform, apply_class_codetransform, generate, convert_switch_to_pattern_safe, analyze_switch_for_pattern_conversion, analyze_foreach_for_linq_conversion. Returns ErrorCode="NoFurtherDocumentation" if the tool is not in the covered set - this does not mean the tool is invalid, only that its schema is self-describing.
         """)]
-    public ToolOptionsResult DescribeAdvancedToolOptions(
+    public ToolOptionsResult DescribeAdvancedToolOptionsTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [ToolOption(ToolOptionTag.ToolName, required: true)] string toolName,
         // RequestContext<CallToolRequestParams> requestParams = null,
@@ -87,7 +87,7 @@ public class QualityTools
     [McpServerTool(Name = "GetTestCoverageMap")]
     [Produces(DataTag.Report)]
     [Description("Returns execution paths to cover and test methods that exercise a production method. Finds covering tests by name convention (test method name contains production method name) and by direct call-site presence. Returns BranchesToTest, CoveringTests (test file, method, line), and HasAnyCoverage flag.")]
-    public async Task<SentinelCallToolResult<object>> GetTestCoverageMap(
+    public async Task<SentinelCallToolResult<object>> GetTestCoverageMapTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
@@ -118,7 +118,7 @@ public class QualityTools
     [McpServerTool(Name = "GetMethodComplexity")]
     [Produces(DataTag.Report)]
     [Description("Calculates cyclomatic complexity of a method: 1 + one per if/else/case/while/for/foreach/catch/&&/||/?? branch. Returns complexity score and contributing conditionals. Guide: 1–4 = Low, 5–7 = Medium, 8–10 = High (refactoring candidate), >10 = Very High.")]
-    public async Task<SentinelCallToolResult<object>> GetMethodComplexity(
+    public async Task<SentinelCallToolResult<object>> GetMethodComplexityTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Consumes(DataTag.SymbolName, required: true)] string methodName,
@@ -147,12 +147,12 @@ public class QualityTools
         }
     }
 
-    // ── 7. AnalyzeForeachForLinqConversion ────────────────────────────────────
+    // ── 7. AnalyzeForeachForLinqConversionTool ────────────────────────────────────
 
     [McpServerTool(Name = "AnalyzeForeachForLinqConversion")]
     [Produces(DataTag.ResultOnly)]
     [Description("Pre-flight safety check before converting a foreach loop to LINQ: detects mutation of the collection being iterated within the loop body (a common pattern the standard conversion tool produces incorrect code for) using Roslyn's ControlFlowAnalysis and DataFlowAnalysis. Returns IsSafeToConvert and rejection reasons.")]
-    public async Task<SentinelCallToolResult<object>> AnalyzeForeachForLinqConversion(
+    public async Task<SentinelCallToolResult<object>> AnalyzeForeachForLinqConversionTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Short snippet identifying the foreach statement, e.g. \"foreach (var item in\".")]
@@ -189,12 +189,12 @@ public class QualityTools
         }
     }
 
-    // ── 2. AnalyzeSwitchForPatternConversion ─────────────────────────────────
+    // ── 2. AnalyzeSwitchForPatternConversionTool ─────────────────────────────────
 
     [McpServerTool(Name = "AnalyzeSwitchForPatternConversion")]
     [Produces(DataTag.Analysis)]
     [Description("Pre-flight safety check before converting a switch statement to a switch expression: detects variables assigned in more than one case arm, or read later in the method (indicating a dependency on the variable retaining its value across cases) - a pattern the standard conversion tool silently drops, using Roslyn's ControlFlowAnalysis and DataFlowAnalysis. Returns IsSafeToConvert and rejection reasons.")]
-    public async Task<SentinelCallToolResult<object>> AnalyzeSwitchForPatternConversion(
+    public async Task<SentinelCallToolResult<object>> AnalyzeSwitchForPatternConversionTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Verbatim substring from the switch keyword line, e.g. \"switch (unit)\".")]

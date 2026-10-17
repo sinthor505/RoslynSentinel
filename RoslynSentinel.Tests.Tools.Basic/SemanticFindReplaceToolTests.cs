@@ -69,7 +69,7 @@ public class Usage
         var docCommentId = $"P:C.IsSuccess";
 
         // Call the tool in preview mode
-        var result = await _tool.SemanticFindReplace(
+        var result = await _tool.SemanticFindReplaceTool(
             new ToolCallReason("testing preview mode"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
@@ -116,7 +116,7 @@ public class Usage
         var docCommentId = $"P:C.IsSuccess";
 
         // Call the tool in apply mode
-        var result = await _tool.SemanticFindReplace(
+        var result = await _tool.SemanticFindReplaceTool(
             new ToolCallReason("testing apply mode"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
@@ -159,7 +159,7 @@ public class Usage
         var docCommentId = "P:C.UnknownMember";
 
         // Call with unknown symbol
-        var result = await _tool.SemanticFindReplace(
+        var result = await _tool.SemanticFindReplaceTool(
             new ToolCallReason("testing unknown symbol"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
@@ -199,7 +199,7 @@ public class Usage
         var docCommentId = $"P:C.IsSuccess";
 
         // Call with unsupported site in preview mode
-        var result = await _tool.SemanticFindReplace(
+        var result = await _tool.SemanticFindReplaceTool(
             new ToolCallReason("testing unsupported site"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
@@ -255,7 +255,7 @@ public class Usage
         var docCommentId = "P:C.IsSuccess";
 
         // Renaming in place stays refused, and the message teaches the alias-retarget form.
-        var refused = await _tool.SemanticFindReplace(
+        var refused = await _tool.SemanticFindReplaceTool(
             new ToolCallReason("testing alias in-place refusal"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
@@ -266,7 +266,7 @@ public class Usage
         Assert.That(refused.ErrorData.Message, Does.Contain("alias retarget"));
         Assert.That(refused.ErrorData.Message, Does.Contain("'IsError'"));
 
-        var preview = await _tool.SemanticFindReplace(
+        var preview = await _tool.SemanticFindReplaceTool(
             new ToolCallReason("testing alias retarget preview"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
@@ -275,7 +275,7 @@ public class Usage
         Assert.That(!preview.IsError, Is.True, preview.ErrorData?.Message);
         Assert.That(File.ReadAllText(targetFile), Is.EqualTo(originalContent), "File should be unchanged after preview");
 
-        var apply = await _tool.SemanticFindReplace(
+        var apply = await _tool.SemanticFindReplaceTool(
             new ToolCallReason("testing alias retarget apply"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,

@@ -1,5 +1,4 @@
 using Microsoft.CodeAnalysis.Text;
-using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Basic;
 
@@ -495,7 +494,7 @@ public sealed class MovePositionMap
         string raw;
         try
         {
-            raw = CollateralChangeGuard.ApplyEdits(fullText, inMember.Select(e => new TextChange(new TextSpan(e.Span.Start - full.Start, e.Span.Length), e.NewText)).ToList());
+            raw = CollateralChangeGuard.ApplyEdits(fullText, inMember.Select(e => new TextChange(new TextSpan(e.Span.Start - full.Start, e.Span.Length), e.NewText ?? string.Empty)).ToList());
         }
         catch (ArgumentException)
         {
@@ -631,9 +630,15 @@ public sealed class MovePositionMap
             }
         }
 
-        public SourceText Original { get; }
+        public SourceText Original
+        {
+            get;
+        }
 
-        public TextChange[] Edits { get; }
+        public TextChange[] Edits
+        {
+            get;
+        }
 
         /// <summary>Start of edit <paramref name="index"/>'s text in the trial text.</summary>
         public int NewStartOf(int index) => Edits[index].Span.Start + _cumulativeBefore[index];
@@ -683,28 +688,55 @@ public sealed class MovePositionMap
             InMemberEdits = inMemberEdits;
         }
 
-        public MovedMemberRegion Region { get; }
+        public MovedMemberRegion Region
+        {
+            get;
+        }
 
         /// <summary>The member's text with the in-member edits applied (what BuildMovedMemberText starts from).</summary>
-        public string Raw { get; }
+        public string Raw
+        {
+            get;
+        }
 
-        public List<TextSpan> RawLines { get; }
+        public List<TextSpan> RawLines
+        {
+            get;
+        }
 
         /// <summary>Count of leading blank raw lines the engine trims.</summary>
-        public int Lead { get; }
+        public int Lead
+        {
+            get;
+        }
 
         /// <summary>Index of the last non-blank raw line (later lines are trimmed).</summary>
-        public int LastKept { get; }
+        public int LastKept
+        {
+            get;
+        }
 
-        public List<TextSpan> BlockLines { get; }
+        public List<TextSpan> BlockLines
+        {
+            get;
+        }
 
         /// <summary>0-based line index in the source original text of the member's first line.</summary>
-        public int StartLineIndex { get; }
+        public int StartLineIndex
+        {
+            get;
+        }
 
         /// <summary>Offset of the block's first character in the target document's trial text.</summary>
-        public int DestinationBlockStart { get; }
+        public int DestinationBlockStart
+        {
+            get;
+        }
 
         /// <summary>In-member edits, sorted, in the source document's original coordinates.</summary>
-        public List<TextChange> InMemberEdits { get; }
+        public List<TextChange> InMemberEdits
+        {
+            get;
+        }
     }
 }

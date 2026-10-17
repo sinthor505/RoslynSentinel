@@ -8,7 +8,7 @@ using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
 
-// The batch parameter of ModifyModifier, ModifyAttribute and ModifyBaseType is named 'batchEdits'. These tests pin that
+// The batch parameter of ModifyModifierTool, ModifyAttributeTool and ModifyBaseTypeTool is named 'batchEdits'. These tests pin that
 // the user-visible error text names it correctly ('batchEdits[n]'), not a stale 'edits[n]', and carries no stray
 // internal identifier (an earlier find/replace accident injected '_symbolNavigationEngine.' into the collision message).
 [TestFixture]
@@ -70,7 +70,7 @@ public class MemberBatchErrorWordingTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyModifier(
+        var result = await tools.ModifyModifierTool(
             reason: "wording test same target collision",
             batchEdits:
             [
@@ -90,7 +90,7 @@ public class MemberBatchErrorWordingTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "wording test same target collision",
             batchEdits:
             [
@@ -110,7 +110,7 @@ public class MemberBatchErrorWordingTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyBaseType(
+        var result = await tools.ModifyBaseTypeTool(
             reason: "wording test same target collision",
             batchEdits:
             [
@@ -130,7 +130,7 @@ public class MemberBatchErrorWordingTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyModifier(
+        var result = await tools.ModifyModifierTool(
             reason: "wording test target not found",
             batchEdits:
             [
@@ -150,7 +150,7 @@ public class MemberBatchErrorWordingTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "wording test target not found",
             batchEdits:
             [
@@ -180,7 +180,7 @@ public class MemberBatchErrorWordingTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyModifier(
+        var result = await tools.ModifyModifierTool(
             reason: "error code test target not found",
             batchEdits:
             [
@@ -199,7 +199,7 @@ public class MemberBatchErrorWordingTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyModifier(
+        var result = await tools.ModifyModifierTool(
             reason: "error code test ambiguous snippet",
             batchEdits:
             [
@@ -218,7 +218,7 @@ public class MemberBatchErrorWordingTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyModifier(
+        var result = await tools.ModifyModifierTool(
             reason: "error code test mixed failures",
             batchEdits:
             [
@@ -238,7 +238,7 @@ public class MemberBatchErrorWordingTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "error code test target not found",
             batchEdits:
             [
@@ -257,7 +257,7 @@ public class MemberBatchErrorWordingTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyBaseType(
+        var result = await tools.ModifyBaseTypeTool(
             reason: "error code test type not found",
             batchEdits:
             [
@@ -276,7 +276,7 @@ public class MemberBatchErrorWordingTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyBaseType(
+        var result = await tools.ModifyBaseTypeTool(
             reason: "wording test target not found",
             batchEdits:
             [

@@ -356,7 +356,7 @@ public static class McpToolSchemaPatcher
     /// </remarks>
     private static void ApplyReplaceSnippetLimits(McpServerTool tool, MethodInfo toolMethod)
     {
-        if (toolMethod.Name != "ReplaceSnippet")
+        if (toolMethod.Name != "ReplaceSnippetTool")
         {
             return;
         }

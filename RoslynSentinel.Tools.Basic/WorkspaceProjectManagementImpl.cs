@@ -465,7 +465,7 @@ public class WorkspaceProjectManagementImpl
         }
     }
 
-    public async Task<SentinelCallToolResult<object>> SafeDeleteUnusedSymbol(ToolCallReason reason, string filePath,
+    public async Task<SentinelCallToolResult<object>> DeleteUnusedSymbol(ToolCallReason reason, string filePath,
         string projectName = "", string docCommentId = "", string? symbolName = null,
         string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null,
         int line = 0, int column = 0, CancellationToken cancellationToken = default)
@@ -478,7 +478,7 @@ public class WorkspaceProjectManagementImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol: no change produced for '{filePathResolved}' ({result.Outcome}). {result.Message}")
+                    ErrorData = new ResultError(ToolErrorCode.Exception, $"DeleteUnusedSymbol: no change produced for '{filePathResolved}' ({result.Outcome}). {result.Message}")
                 };
             }
 
@@ -493,7 +493,7 @@ public class WorkspaceProjectManagementImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"SafeDeleteUnusedSymbol {reason}")
+                    ErrorData = new ResultError(ToolErrorCode.Exception, $"DeleteUnusedSymbol {reason}")
                 };
             }
 
@@ -539,16 +539,16 @@ public class WorkspaceProjectManagementImpl
             return new SentinelCallToolResult<object>()
             {
                 IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "SafeDeleteUnusedSymbol requires one of: (projectName, docCommentId) for handle-based resolution, (symbolName, optionally with contextSnippet/lineBefore/lineAfter) for name-based resolution, or (line, column) for legacy line/column-based resolution.")
+                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "DeleteUnusedSymbol requires one of: (projectName, docCommentId) for handle-based resolution, (symbolName, optionally with contextSnippet/lineBefore/lineAfter) for name-based resolution, or (line, column) for legacy line/column-based resolution.")
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "SafeDeleteUnusedSymbol failed for '{FilePathWrapper}' at {Line}:{Column} or handle {ProjectName}/{DocCommentId}", filePathResolved, line, column, projectName, docCommentId);
+            _logger.LogError(ex, "DeleteUnusedSymbol failed for '{FilePathWrapper}' at {Line}:{Column} or handle {ProjectName}/{DocCommentId}", filePathResolved, line, column, projectName, docCommentId);
             return new SentinelCallToolResult<object>()
             {
                 IsError = true,
-                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "SafeDeleteUnusedSymbol")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "DeleteUnusedSymbol")
             };
         }
     }

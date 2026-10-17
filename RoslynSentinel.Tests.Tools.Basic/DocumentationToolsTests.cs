@@ -60,7 +60,7 @@ public class DocumentationToolsTests
     {
         WriteDoc(Path.Combine("current", "plans", "plan-x-steps", "01-baseline.md"), "baseline content");
 
-        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)_tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "plan-x-steps/01-baseline.md");
 
         Assert.That(result.Found, Is.True, result.Error);
@@ -73,7 +73,7 @@ public class DocumentationToolsTests
         // No docs/current/ at all -> only docs/plans/ directly, matching the original assumed layout.
         WriteDoc(Path.Combine("plans", "01-baseline.md"), "flat layout content");
 
-        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)_tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "01-baseline.md");
 
         Assert.That(result.Found, Is.True, result.Error);
@@ -87,7 +87,7 @@ public class DocumentationToolsTests
     {
         WriteDoc(Path.Combine("current", "plans", "plan-x-steps", "01-baseline.md"), "baseline content");
 
-        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)_tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "01-baseline");
 
         Assert.That(result.Found, Is.True, result.Error);
@@ -100,7 +100,7 @@ public class DocumentationToolsTests
     {
         WriteDoc(Path.Combine("current", "plans", "01-baseline.md"), "baseline content");
 
-        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)_tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "01-baseline.txt");
 
         Assert.That(result.Found, Is.True, result.Error);
@@ -113,7 +113,7 @@ public class DocumentationToolsTests
         WriteDoc(Path.Combine("current", "plans", "a", "01-baseline.md"), "content A");
         WriteDoc(Path.Combine("current", "plans", "b", "01-baseline.md"), "content B");
 
-        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)_tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "01-baseline");
 
         Assert.That(result.Found, Is.False);
@@ -127,7 +127,7 @@ public class DocumentationToolsTests
     {
         Directory.CreateDirectory(Path.Combine(_solutionRoot, "docs", "current", "plans"));
 
-        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)_tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "does-not-exist.md");
 
         Assert.That(result.Found, Is.False);
@@ -144,7 +144,7 @@ public class DocumentationToolsTests
         // of docs/current/plans/... -> action:list would still surface it, so read must reach it.
         WriteDoc(Path.Combine("current", "tests", "plan-x-steps-runner", "02-step.md"), "runner step content");
 
-        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)_tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "tests/plan-x-steps-runner/02-step.md");
 
         Assert.That(result.Found, Is.True, result.Error);
@@ -156,7 +156,7 @@ public class DocumentationToolsTests
     {
         WriteDoc(Path.Combine("current", "tests", "plan-x-steps-runner", "02-step.md"), "runner step content");
 
-        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)_tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "02-step");
 
         Assert.That(result.Found, Is.True, result.Error);
@@ -173,7 +173,7 @@ public class DocumentationToolsTests
         // sharing a basename. The request names the tests/ path; the plans/ copy must not answer it.
         WriteDoc(Path.Combine("current", "plans", "01-baseline.md"), "PRODUCTION plan");
 
-        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)_tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "tests/plan-x-steps-runner/01-baseline.md");
 
         Assert.That(result.Found, Is.False, "a path-qualified miss must not fall back to a basename search");
@@ -188,7 +188,7 @@ public class DocumentationToolsTests
         // still read, both inside the docType subdir and elsewhere under docs/.
         WriteDoc(Path.Combine("current", "plans", "plan-x-steps", "01-baseline.md"), "in-docType content");
 
-        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)_tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "plan-x-steps/01-baseline.md");
 
         Assert.That(result.Found, Is.True, result.Error);
@@ -201,7 +201,7 @@ public class DocumentationToolsTests
     {
         WriteDoc(Path.Combine("current", "plans", "plan-x-steps", "01-baseline.md"), "baseline content");
 
-        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)_tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "01-baseline");
 
         Assert.That(result.Found, Is.True, result.Error);
@@ -222,7 +222,7 @@ public class DocumentationToolsTests
         WriteDoc(Path.Combine("testing", "plan-x-steps-runner", "01-baseline.md"), "runner baseline");
         var tools = BuildTools(OperatingMode.Testing);
 
-        var result = (DocReadResult)tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "plan-x-steps-runner/01-baseline.md");
 
         Assert.That(result.Found, Is.True, result.Error);
@@ -236,7 +236,7 @@ public class DocumentationToolsTests
         WriteDoc(Path.Combine("current", "plans", "01-baseline.md"), "PRODUCTION plan");
         var tools = BuildTools(OperatingMode.Testing);
 
-        var result = (DocReadResult)tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "01-baseline.md");
 
         Assert.That(result.Found, Is.False);
@@ -250,7 +250,7 @@ public class DocumentationToolsTests
         WriteDoc(Path.Combine("testing", "run-b", "01-baseline.md"), "content B");
         var tools = BuildTools(OperatingMode.Testing);
 
-        var result = (DocReadResult)tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "01-baseline");
 
         Assert.That(result.Found, Is.False);
@@ -268,7 +268,7 @@ public class DocumentationToolsTests
         WriteDoc(Path.Combine("current", "plans", "01-baseline.md"), "PRODUCTION plan");
         WriteDoc(Path.Combine("testing", "01-baseline.md"), "TESTING fixture");
 
-        var result = (DocReadResult)_tools.ProjectDoc("test", DocAction.read, DocType.plan,
+        var result = (DocReadResult)_tools.ProjectDocTool("test", DocAction.read, DocType.plan,
             name: "01-baseline.md");
 
         Assert.That(result.Found, Is.True, result.Error);

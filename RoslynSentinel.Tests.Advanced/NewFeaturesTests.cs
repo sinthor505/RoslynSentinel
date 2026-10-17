@@ -711,7 +711,7 @@ public class MyService
 
         var findings = await _antiPatternEngine.FindValueTypeMutationIntentAsync("MyService.cs");
 
-        // Member access assignment is NOT a reassignment of the parameter reference itself
+        // MemberTool access assignment is NOT a reassignment of the parameter reference itself
         Assert.That(findings.Any(f => f.Pattern == "ReferenceTypeParameterReplaced"), Is.False,
             "dto.Name = ... is a member mutation, not a reference replacement");
     }

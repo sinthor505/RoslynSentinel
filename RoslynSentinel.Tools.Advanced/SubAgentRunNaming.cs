@@ -3,7 +3,7 @@ using RoslynSentinel.Common.GitWorktree;
 namespace RoslynSentinel.Tools.Advanced;
 
 /// <summary>
-/// Mints the run id, run directory and branch name for one SubAgent/SubAgentEval call.
+/// Mints the run id, run directory and branch name for one SubAgentTool/SubAgentEvalTool call.
 /// </summary>
 /// <remarks>
 /// Every call must get a name that cannot collide with another call's, whether that is a concurrent
@@ -13,14 +13,14 @@ namespace RoslynSentinel.Tools.Advanced;
 /// PlanStepRunner needs no suffix because each run is a distinct human-launched process; a live
 /// server can start several calls in the same millisecond.
 /// <para>
-/// The run directory is a sibling of the source repo (<c>../RoslynSentinel-TestRuns/SubAgent/&lt;runId&gt;</c>),
+/// The run directory is a sibling of the source repo (<c>../RoslynSentinel-TestRuns/SubAgentTool/&lt;runId&gt;</c>),
 /// the same place PlanStepRunner defaults to, never inside the repo: a run folder inside the repo would
 /// show up as untracked content in the live session's own <c>git status</c>.
 /// </para>
 /// </remarks>
 public static class SubAgentRunNaming
 {
-    /// <summary>Folder name, under the test-runs root, that owns every SubAgent run.</summary>
+    /// <summary>Folder name, under the test-runs root, that owns every SubAgentTool run.</summary>
     public const string RunsFolderName = "SubAgent";
 
     private const string TestRunsRootFolderName = "RoslynSentinel-TestRuns";
@@ -46,7 +46,7 @@ public static class SubAgentRunNaming
 }
 
 /// <summary>
-/// The single pseudo-step a SubAgent run hands to <see cref="GitWorktreeManager"/>, which is keyed by
+/// The single pseudo-step a SubAgentTool run hands to <see cref="GitWorktreeManager"/>, which is keyed by
 /// a step file name. Its only job is to fix the worktree's folder name (<c>&lt;runDir&gt;/subagent/Worktree</c>).
 /// </summary>
 public sealed class SubAgentWorktreeStep : IWorktreeStep

@@ -40,9 +40,9 @@ public static class ToolsetCatalog
             [ToolSetName.moveExtract] =
             [
                 "MoveMember", "MoveType", "MoveAllTypesToFiles", "ExtractLocalVariable", "ExtractMembers",
-                "ExtractMethodSafe", "Inline", "InlineClass", "Introduce", "IntroduceParameterObject", "WrapRange",
+                "ExtractMethod", "Inline", "InlineClass", "Introduce", "IntroduceParameterObject", "WrapRange",
                 "InvertAssignments", "ConvertAnonymousToNamed", "SyncInterface", "SummaryComment",
-                "SafeDeleteUnusedSymbol", "PreviewRenameImpact", "ApplyDiff", "ApplyUnifiedDiff", "SemanticFindReplace",
+                "DeleteUnusedSymbol", "PreviewRenameImpact", "ApplyDiff", "ApplyUnifiedDiff", "SemanticFindReplace",
                 "NamedArguments", "QualifyCrefs",
             ],
             [ToolSetName.projectAdmin] =

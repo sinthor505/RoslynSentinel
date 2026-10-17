@@ -11,8 +11,8 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 /// <summary>
-/// Shape of the projected BuildResult returned by the Build tool (quickBuild): green builds carry counts only,
-/// failed builds carry a breakdown and a capped detail list, and the full list is readable through GetLargeResult.
+/// Shape of the projected BuildResult returned by the BuildTool tool (quickBuild): green builds carry counts only,
+/// failed builds carry a breakdown and a capped detail list, and the full list is readable through GetLargeResultTool.
 /// </summary>
 [TestFixture]
 [Category("WorkspaceTools")] // sentinel:auto-category
@@ -77,7 +77,7 @@ public class BuildToolResultShapeTests
     {
         SetSource(ManyErrorsSource(21), "Many.cs");
 
-        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild, maxDetails: 5);
+        var result = await _workspaceTools.BuildTool(reason: "test message", BuildVerifyLevel.quickBuild, maxDetails: 5);
 
         Assert.That(result.IsError, Is.True);
         var data = (BuildResult)result.SuccessData!;
@@ -102,7 +102,7 @@ public class BuildToolResultShapeTests
     {
         SetSource(SimpleSource, "Test.cs");
 
-        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
+        var result = await _workspaceTools.BuildTool(reason: "test message", BuildVerifyLevel.quickBuild);
 
         Assert.That(result.IsError, Is.False);
         var data = (BuildResult)result.SuccessData!;
@@ -124,7 +124,7 @@ public class BuildToolResultShapeTests
     {
         SetSource(ManyErrorsSource(25), "Many.cs");
 
-        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
+        var result = await _workspaceTools.BuildTool(reason: "test message", BuildVerifyLevel.quickBuild);
 
         Assert.That(result.IsError, Is.True);
         var data = (BuildResult)result.SuccessData!;
@@ -138,7 +138,7 @@ public class BuildToolResultShapeTests
         var pageCount = 0;
         while (offset is not null)
         {
-            var page = await _workspaceTools.GetLargeResult(reason: "test message", resultId: data.FullDiagnosticsResultId, offset: offset.Value, charLimit: LargeResultHelper.OffloadThresholdBytes);
+            var page = await _workspaceTools.GetLargeResultTool(reason: "test message", resultId: data.FullDiagnosticsResultId, offset: offset.Value, charLimit: LargeResultHelper.OffloadThresholdBytes);
 
             Assert.That(page.IsError, Is.False, "the stored full-diagnostics payload must be readable by its resultId.");
             var pageDataType = page.SuccessData!.GetType();
@@ -159,7 +159,7 @@ public class BuildToolResultShapeTests
     {
         SetSource(WarningOnlySource, "Warn.cs");
 
-        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild, includeWarnings: true);
+        var result = await _workspaceTools.BuildTool(reason: "test message", BuildVerifyLevel.quickBuild, includeWarnings: true);
 
         Assert.That(result.IsError, Is.False, "a warning does not fail the build.");
         var data = (BuildResult)result.SuccessData!;
@@ -173,7 +173,7 @@ public class BuildToolResultShapeTests
     {
         SetSource(ManyErrorsSource(21), "Many.cs");
 
-        var result = await _workspaceTools.Build(reason: "test message", BuildVerifyLevel.quickBuild);
+        var result = await _workspaceTools.BuildTool(reason: "test message", BuildVerifyLevel.quickBuild);
 
         Assert.That(result.IsError, Is.True);
         var data = (BuildResult)result.SuccessData!;

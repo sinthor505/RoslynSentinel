@@ -29,7 +29,7 @@ public class SolutionWideFunctionalTests
             new PerformanceEngine(_workspaceManager),
             new AntiPatternEngine(_workspaceManager, config));
 
-        // Build a mock solution with 3 projects to test paging
+        // BuildTool a mock solution with 3 projects to test paging
         var solution = TestSolutionBuilder.CreateSolutionWithProject("ProjA", new[] { ("F1.cs", "class A {}") });
 
         var idB = ProjectId.CreateNewId();

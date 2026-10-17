@@ -6,7 +6,7 @@ using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
 
-// These tests are about ModifyAttribute's code-correctness (which batchEdits apply, what text results, how the batch is
+// These tests are about ModifyAttributeTool's code-correctness (which batchEdits apply, what text results, how the batch is
 // validated and reported), so they run on an InMemoryWorkspace: no temp directory, MSBuild load or disk write. Disk
 // fidelity (BOM, line endings, write-through) is covered by the dedicated disk tests, not here.
 [TestFixture]
@@ -61,7 +61,7 @@ public class ModifyAttributeBatchTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "batch test same file two batchEdits",
             batchEdits:
             [
@@ -86,7 +86,7 @@ public class ModifyAttributeBatchTests
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource), (SecondFixtureRelativePath, SecondFixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "batch test across two files",
             batchEdits:
             [
@@ -113,7 +113,7 @@ public class ModifyAttributeBatchTests
 
         var beforeContent = workspace.ReadText(FixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "batch test same node collision",
             batchEdits:
             [
@@ -135,7 +135,7 @@ public class ModifyAttributeBatchTests
 
         var beforeContent = workspace.ReadText(FixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "batch test target not found",
             batchEdits:
             [
@@ -157,7 +157,7 @@ public class ModifyAttributeBatchTests
         var beforeContent = workspace.ReadText(FixtureRelativePath);
 
         // The first edit is valid; the whole batch must still be rejected before any write.
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "batch test comment in added attribute",
             batchEdits:
             [
@@ -185,7 +185,7 @@ public class ModifyAttributeBatchTests
         var path = workspace.PathOf(FixtureRelativePath);
         var beforeContent = workspace.ReadText(FixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "batch test comment in replacement attribute",
             batchEdits:
             [
@@ -210,7 +210,7 @@ public class ModifyAttributeBatchTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "batch test both supplied",
             filePath: path,
             targetName: "AttributeBatchTargetA",
@@ -229,7 +229,7 @@ public class ModifyAttributeBatchTests
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "batch test neither supplied",
             dryRun: false, returnDiff: false, cancellationToken: default);
 
@@ -243,7 +243,7 @@ public class ModifyAttributeBatchTests
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "batch test empty batchEdits array",
             batchEdits: [],
             dryRun: false, returnDiff: false, cancellationToken: default);
@@ -263,7 +263,7 @@ public class ModifyAttributeBatchTests
             .Select(i => new AttributeEdit { FilePath = path, TargetName = $"NonexistentType{i}", Action = AttributeModifyAction.add, NewAttribute = "Serializable" })
             .ToList();
 
-        var result = await tools.ModifyAttribute(reason: "batch test over cap", batchEdits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
+        var result = await tools.ModifyAttributeTool(reason: "batch test over cap", batchEdits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));
@@ -330,7 +330,7 @@ public class ModifyAttributeBatchTests
         var typeEdit = new AttributeEdit { FilePath = path, TargetName = "AttributeNestedTarget", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" };
         var methodEdit = new AttributeEdit { FilePath = path, TargetName = "First", Action = AttributeModifyAction.add, ExistingAttribute = "Obsolete(\"first\")" };
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "regression: ancestor/descendant targets in one batch",
             batchEdits: typeEditFirst ? [typeEdit, methodEdit] : [methodEdit, typeEdit],
             dryRun: false, returnDiff: false, cancellationToken: default);
@@ -355,7 +355,7 @@ public class ModifyAttributeBatchTests
         var before = workspace.ReadText(NestedFixtureRelativePath);
         var eol = EolOf(before);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "regression: remove on member plus add on its type",
             batchEdits:
             [
@@ -380,7 +380,7 @@ public class ModifyAttributeBatchTests
         var before = workspace.ReadText(WeirdFormattingRelativePath);
         var eol = EolOf(before);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "regression: type-level add must not reformat members",
             batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(WeirdFormattingRelativePath), TargetName = "AttributeFormattingTarget", Action = AttributeModifyAction.add, ExistingAttribute = "Serializable" }],
             dryRun: false, returnDiff: false, cancellationToken: default);
@@ -399,7 +399,7 @@ public class ModifyAttributeBatchTests
         var before = workspace.ReadText(WeirdFormattingRelativePath);
         var eol = EolOf(before);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "regression: single-edit type-level add must not reformat members",
             filePath: workspace.PathOf(WeirdFormattingRelativePath),
             targetName: "AttributeFormattingTarget",
@@ -421,7 +421,7 @@ public class ModifyAttributeBatchTests
         var before = workspace.ReadText(WeirdFormattingRelativePath);
         var eol = EolOf(before);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "regression: method-level add keeps indentation and leaves siblings alone",
             batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(WeirdFormattingRelativePath), TargetName = "Other", Action = AttributeModifyAction.add, ExistingAttribute = "Obsolete" }],
             dryRun: false, returnDiff: false, cancellationToken: default);
@@ -439,7 +439,7 @@ public class ModifyAttributeBatchTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(NestedFixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "regression: reported applied count matches written batchEdits",
             batchEdits:
             [
@@ -462,7 +462,7 @@ public class ModifyAttributeBatchTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(NestedFixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "regression: a no-effect edit must not be reported as applied",
             batchEdits:
             [
@@ -488,7 +488,7 @@ public class ModifyAttributeBatchTests
         var tools = BuildTools(workspace.Manager);
         var before = workspace.ReadText(NestedFixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "regression: zero effective batchEdits is not a success",
             batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(NestedFixtureRelativePath), TargetName = "First", Action = AttributeModifyAction.remove, ExistingAttribute = "Conditional" }],
             dryRun: false, returnDiff: false, cancellationToken: default);
@@ -506,7 +506,7 @@ public class ModifyAttributeBatchTests
         using var workspace = InMemoryWorkspace.Create((SecondFixtureRelativePath, SecondFixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "alias: singular add using 'attribute' instead of 'existingAttribute'",
             filePath: workspace.PathOf(SecondFixtureRelativePath),
             targetName: "AttributeBatchTargetC",
@@ -524,7 +524,7 @@ public class ModifyAttributeBatchTests
         using var workspace = InMemoryWorkspace.Create((NestedFixtureRelativePath, NestedFixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "alias: singular remove using 'attribute'",
             filePath: workspace.PathOf(NestedFixtureRelativePath),
             targetName: "Second",
@@ -542,7 +542,7 @@ public class ModifyAttributeBatchTests
         using var workspace = InMemoryWorkspace.Create((SecondFixtureRelativePath, SecondFixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "alias: both params with the same value are not a conflict",
             filePath: workspace.PathOf(SecondFixtureRelativePath),
             targetName: "AttributeBatchTargetC",
@@ -561,7 +561,7 @@ public class ModifyAttributeBatchTests
         var tools = BuildTools(workspace.Manager);
         var before = workspace.ReadText(SecondFixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "alias: conflicting values must be rejected, not silently resolved",
             filePath: workspace.PathOf(SecondFixtureRelativePath),
             targetName: "AttributeBatchTargetC",
@@ -586,7 +586,7 @@ public class ModifyAttributeBatchTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(SecondFixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "alias: a singular 'attribute' alongside batchEdits is still the mixed form",
             attribute: "Serializable",
             batchEdits: [new AttributeEdit { FilePath = path, TargetName = "AttributeBatchTargetC", Action = AttributeModifyAction.add, Attribute = "Obsolete" }],
@@ -603,7 +603,7 @@ public class ModifyAttributeBatchTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(NestedFixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "alias: batch items using 'attribute' (add and remove) alongside an existingAttribute item",
             batchEdits:
             [
@@ -632,7 +632,7 @@ public class ModifyAttributeBatchTests
         var path = workspace.PathOf(NestedFixtureRelativePath);
         var before = workspace.ReadText(NestedFixtureRelativePath);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "alias: conflicting values in a batch item must be rejected before anything is written",
             batchEdits:
             [
@@ -657,7 +657,7 @@ public class ModifyAttributeBatchTests
         using var workspace = InMemoryWorkspace.Create((NestedFixtureRelativePath, NestedFixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.ModifyAttribute(
+        var result = await tools.ModifyAttributeTool(
             reason: "alias: a batch item that supplies neither name gets an error that names both",
             batchEdits: [new AttributeEdit { FilePath = workspace.PathOf(NestedFixtureRelativePath), TargetName = "First", Action = AttributeModifyAction.add }],
             dryRun: false, returnDiff: false, cancellationToken: default);

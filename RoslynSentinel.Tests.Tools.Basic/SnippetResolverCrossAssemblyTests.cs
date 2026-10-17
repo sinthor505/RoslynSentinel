@@ -38,7 +38,7 @@ public class SnippetResolverCrossAssemblyTests
     public void Resolve_IndentationDroppedSnippetAtExact_ReportsLooserTierNearMatch()
     {
         // The braces and the statement are at column 0 in the snippet but indented in the file, the shape
-        // that made ReplaceSnippet fail with a bare NotFound in the Qwen run.
+        // that made ReplaceSnippetTool fail with a bare NotFound in the Qwen run.
         const string snippet = "{\nvar x = 1;\n}";
         var sourceText = SourceText.From(Source);
 

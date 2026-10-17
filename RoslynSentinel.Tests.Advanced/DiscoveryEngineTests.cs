@@ -502,7 +502,7 @@ public class MyService
     public async Task PreviewRenameImpact_DocCommentIdAndProjectName_ResolvesWithoutFileOrSnippet()
     {
         // The preferred resolution path: a caller that already has a docCommentId + projectName
-        // from LocateSymbol shouldn't need a filepath or a disambiguating text snippet at all.
+        // from LocateSymbolTool shouldn't need a filepath or a disambiguating text snippet at all.
         SetMultipleFiles(
             ("Helper.cs", "public class MyHelper\n{\n    public void Execute() { }\n}"),
             ("Consumer.cs", @"public class Consumer

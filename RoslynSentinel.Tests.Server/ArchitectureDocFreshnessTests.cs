@@ -194,7 +194,7 @@ public class ArchitectureDocFreshnessTests
         Assert.That(build, Does.Not.Contain(ArchitectureDocGenerator.ClaudeLeanOnDemandLabel));
         Assert.That(build, Does.Contain("Workspace"));
 
-        // Same class as Build, but not on the allow-list and in no toolset: the class is loaded, the tool is hidden.
+        // Same class as BuildTool, but not on the allow-list and in no toolset: the class is loaded, the tool is hidden.
         Assert.That(listAll!.Any(mode => mode.StartsWith("claude-lean", StringComparison.Ordinal)), Is.False);
         Assert.That(listAll, Does.Contain("Workspace"));
 

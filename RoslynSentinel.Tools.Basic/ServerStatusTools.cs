@@ -9,7 +9,7 @@ public class ServerStatusTools
     private readonly StoppedByScriptMarker _stoppedByScriptMarker;
     private readonly ToolsetService? _toolsets;
 
-    /// <param name="toolsets">Present only in claude-lean, where McpToolsetControl can switch tools on at runtime.</param>
+    /// <param name="toolsets">Present only in claude-lean, where McpToolsetControlTool can switch tools on at runtime.</param>
     public ServerStatusTools(
         IWorkspaceManager workspaceManager,
         ActiveToolSurface activeToolSurface,
@@ -27,7 +27,7 @@ public class ServerStatusTools
     [Description("Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, serverBinaryPath, serverPid, binaryStaleness = loaded assemblies with a newer build on disk), session-halt state, circuit breaker, loaded workspace (isFreshStartup = this server process has not loaded a solution yet, e.g. just restarted), active tool-mode resolution. " +
         "Tools are gated per mode: before concluding a tool does not exist, call with toolListing=inactive." +
         " solutionLoadStatus = NotLoaded | Loading | Loaded | Failed; tool calls wait up to 30 s for a Loading solution.")]
-    public object McpServerStatus(
+    public object McpServerStatusTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("inactive: declared tools not active in this mode, with an enabledBy hint. all: every declared tool.")]
         McpServerStatusToolListing toolListing = McpServerStatusToolListing.none,
@@ -45,10 +45,10 @@ public class ServerStatusTools
             .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel", StringComparison.Ordinal) == true)
             .ToArray();
         // ServerStatusTools is registered outside ActiveToolClasses (always on), so it must be
-        // special-cased or McpServerStatus would report itself as inactive.
+        // special-cased or McpServerStatusTool would report itself as inactive.
         // A tool is active when its class is active and, under a per-tool allow-list (claude-lean),
         // its name is on it too.
-        // A tool McpToolsetControl switched on is active too, whatever its class or the allow-list say.
+        // A tool McpToolsetControlTool switched on is active too, whatever its class or the allow-list say.
         var dynamicToolNames = _toolsets?.DynamicToolNames.ToHashSet(StringComparer.Ordinal) ?? [];
         bool IsActive(string className, string toolName) =>
             dynamicToolNames.Contains(toolName)
@@ -134,7 +134,7 @@ public class ServerStatusTools
             return $"excluded by --exclude-tools {className}; remove it from --exclude-tools";
         }
 
-        // claude-lean with McpToolsetControl: a tool in an on-demand set is enabled at runtime, not by a restart.
+        // claude-lean with McpToolsetControlTool: a tool in an on-demand set is enabled at runtime, not by a restart.
         if (_toolsets is not null && ToolsetCatalog.FindSet(toolName) is { } toolSet)
         {
             return $"McpToolsetControl(toolSet: {toolSet}, enabled: true)";
@@ -158,7 +158,7 @@ public class ServerStatusTools
             : $"--include-tools {className}";
     }
 }
-/// <summary>Which declared tools McpServerStatus lists in <c>AllDeclaredTools</c>.</summary>
+/// <summary>Which declared tools McpServerStatusTool lists in <c>AllDeclaredTools</c>.</summary>
 public enum McpServerStatusToolListing
 {
     none,
@@ -166,7 +166,7 @@ public enum McpServerStatusToolListing
     all
 }
 // Added by AddTopLevelType (expected - used for diagnostics)
-/// <summary>A single circuit breaker's tripped state and message, as reported by McpServerStatus.</summary>
+/// <summary>A single circuit breaker's tripped state and message, as reported by McpServerStatusTool.</summary>
 public sealed record McpServerStatusBreakerState(bool Tripped, string? Message);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>Circuit breaker states reported by <see cref="McpServerStatusResult"/>.</summary>
@@ -175,7 +175,7 @@ public sealed record McpServerStatusBreakers(
     McpServerStatusBreakerState Automatic,
     McpServerStatusBreakerState Unrecoverable);
 // Added by AddTopLevelType (expected - used for diagnostics)
-/// <summary>Active --mode/--include-tools/--exclude-tools resolution, as reported by McpServerStatus.</summary>
+/// <summary>Active --mode/--include-tools/--exclude-tools resolution, as reported by McpServerStatusTool.</summary>
 public sealed record McpServerStatusToolSurface(
     string ModeArg,
     IReadOnlyCollection<string> ActiveModes,
@@ -186,11 +186,11 @@ public sealed record McpServerStatusToolSurface(
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>Whether this instance's predecessor was deliberately stopped by
 /// roslynsentinel-vscode-control.ps1's stopallstdio/stopallhttp/stopalltypes actions, as reported by
-/// McpServerStatus.</summary>
+/// McpServerStatusTool.</summary>
 public sealed record McpServerStatusStoppedByScript(bool WasFound, string? Details);
 // Added by AddTopLevelType (expected - used for diagnostics)
 /// <summary>
-/// Named shape mirroring <see cref="ServerStatusTools.McpServerStatus"/>'s anonymous return
+/// Named shape mirroring <see cref="ServerStatusTools.McpServerStatusTool"/>'s anonymous return
 /// object, used only as <c>OutputSchemaType</c> so the tool can advertise a real MCP
 /// <c>outputSchema</c>/<c>StructuredContent</c> shape (2026-07-28 protocol) without changing the
 /// method's actual return type.
@@ -216,7 +216,7 @@ public sealed record McpServerStatusResult(
     IReadOnlyCollection<McpServerStatusDeclaredTool> AllDeclaredTools);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
-/// by McpServerStatus's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this
+/// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this
 /// process" independent of whether its class is currently active for this session's mode.
 /// </summary>
 public sealed record McpServerStatusDeclaredTool(string Name, string ClassName, bool ActiveForThisMode, string? EnabledBy = null);

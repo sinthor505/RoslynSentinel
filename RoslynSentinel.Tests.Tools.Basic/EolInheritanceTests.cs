@@ -1,6 +1,6 @@
 // Tests that EOL normalization preserves the file's dominant line ending.
 // DISK tier - asserts on real file bytes, not text content.
-// Comprehensive coverage: ReplaceSnippet (single and batch), WriteFile, ApplyDiff,
+// Comprehensive coverage: ReplaceSnippetTool (single and batch), WriteFileTool, ApplyDiffTool,
 // LF preservation, and edge cases (single-line files).
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -86,7 +86,7 @@ public class EolInheritanceTests
 
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.ReplaceSnippet(
+        var result = await workspaceTools.ReplaceSnippetTool(
             reason: "test",
             action: ProposedChangeAction.apply,
             filePath: targetFile,
@@ -116,7 +116,7 @@ public class EolInheritanceTests
 
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.ReplaceSnippet(
+        var result = await workspaceTools.ReplaceSnippetTool(
             reason: "test batch",
             action: ProposedChangeAction.apply,
             batchEdits:
@@ -165,7 +165,7 @@ public class EolInheritanceTests
 
         // Replace with mixed content
         var mixedContent = "// Mixed\nclass Test\r\n{\n}\n";
-        var result = await wholeFileTools.WriteFile(
+        var result = await wholeFileTools.WriteFileTool(
             reason: "test LF preservation",
             operation: WriteFileOperation.ReplaceFile,
             filePath: targetFile,
@@ -195,7 +195,7 @@ public class EolInheritanceTests
 
         var workspaceTools = BuildTools(workspaceManager);
 
-        var result = await workspaceTools.ReplaceSnippet(
+        var result = await workspaceTools.ReplaceSnippetTool(
             reason: "test single line",
             action: ProposedChangeAction.apply,
             filePath: targetFile,
@@ -238,7 +238,7 @@ public class EolInheritanceTests
 
         // Replace with LF content
         var lfContent = "// Replaced with LF line endings\nclass Test\n{\n}\n";
-        var result = await wholeFileTools.WriteFile(
+        var result = await wholeFileTools.WriteFileTool(
             reason: "test EOL preservation",
             operation: WriteFileOperation.ReplaceFile,
             filePath: targetFile,
@@ -282,7 +282,7 @@ public class EolInheritanceTests
 
         // Apply with LF content via files-format
         var lfContent = "// ApplyDiff replacement with LF\nclass Replaced\n{\n}\n";
-        var result = await wholeFileTools.ApplyDiff(
+        var result = await wholeFileTools.ApplyDiffTool(
             reason: "test EOL preservation",
             changesetFormat: ChangesetFormat.files,
             action: ProposedChangeAction.apply,

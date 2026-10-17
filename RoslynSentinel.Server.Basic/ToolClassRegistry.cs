@@ -34,9 +34,9 @@ public static class ToolClassRegistry
 
     /// <summary>
     /// The MCP tool names the <see cref="ClaudeLeanMode"/> mode exposes: the proposal's Core set minus
-    /// FindReferences and LocateSymbol (reachable via Search mode: references and mode: symbol, which saves
-    /// their schema tokens) plus McpToolsetControl, which switches the on-demand toolsets (<see cref="ToolsetCatalog"/>) at runtime.
-    /// McpServerStatus is declared by ServerStatusTools, which is registered outside the class
+    /// FindReferencesTool and LocateSymbolTool (reachable via Search mode: references and mode: symbol, which saves
+    /// their schema tokens) plus McpToolsetControlTool, which switches the on-demand toolsets (<see cref="ToolsetCatalog"/>) at runtime.
+    /// McpServerStatusTool is declared by ServerStatusTools, which is registered outside the class
     /// registry, and passes through the same allow-list.
     /// </summary>
     public static readonly IReadOnlySet<string> ClaudeLeanToolNames = new HashSet<string>(
@@ -52,8 +52,8 @@ public static class ToolClassRegistry
 
     /// <summary>
     /// Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool (the same in Basic and Advanced, except SubAgentTools, which is Advanced-only and is not registered by Basic), plus
-    /// DeclarationTools, ParameterEditTools and SemanticFindReplaceTools, whose single tools (Declaration, ParameterEdit, SemanticFindReplace) are on-demand only: the allow-list keeps
-    /// them out of the startup surface and the <c>declarations</c> toolset adds them. Listed here so the class exists in claude-lean and McpServerStatus can name its mode.
+    /// DeclarationTools, ParameterEditTools and SemanticFindReplaceTools, whose single tools (DeclarationTool, ParameterEditTool, SemanticFindReplaceTool) are on-demand only: the allow-list keeps
+    /// them out of the startup surface and the <c>declarations</c> toolset adds them. Listed here so the class exists in claude-lean and McpServerStatusTool can name its mode.
     /// </summary>
     private static readonly string[] ClaudeLeanToolClasses =
     [
@@ -65,10 +65,10 @@ public static class ToolClassRegistry
 
     /// <summary>
     /// Tool classes whose dependencies claude-lean registers WITHOUT registering their tools (the per-tool
-    /// allow-list filters every non-Core tool out at startup), so <c>McpToolsetControl</c> can build any on-demand
+    /// allow-list filters every non-Core tool out at startup), so <c>McpToolsetControlTool</c> can build any on-demand
     /// tool later and have its class constructed. These are the facade classes of the "Claude" mode; a tool name
     /// also declared by a split class behind a facade resolves to the facade. Only claude-lean uses this.
-    /// DeclarationTools and ParameterEditTools (the merged Declaration and ParameterEdit tools) are the entries that are not facades
+    /// DeclarationTools and ParameterEditTools (the merged DeclarationTool and ParameterEditTool tools) are the entries that are not facades
     /// of the "Claude" mode: they exist only in claude-lean, so their Impl dependencies are covered by the Structural/Signature entries above.
     /// </summary>
     public static readonly IReadOnlySet<string> ClaudeLeanOnDemandToolClasses = new HashSet<string>(
@@ -153,7 +153,7 @@ public static class ToolClassRegistry
 
     /// <summary>
     /// Inverts both mode maps into tool class name -> the mode names that enable it (Basic modes
-    /// first, then Advanced-only ones, no duplicates). Feeds McpServerStatus's per-tool
+    /// first, then Advanced-only ones, no duplicates). Feeds McpServerStatusTool's per-tool
     /// <c>enabledBy</c> hint; "Claude"/"all"-style umbrella modes are listed like any other.
     /// </summary>
     public static IReadOnlyDictionary<string, IReadOnlyList<string>> BuildClassToModes()

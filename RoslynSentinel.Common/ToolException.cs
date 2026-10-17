@@ -126,7 +126,6 @@ public sealed class DiffApplyException : ToolException
     }
 }
 
-
 /// <summary>
 /// The requested operation has no real implementation behind it -> the engine method is a
 /// deliberate stub (e.g. always returns an empty change set) rather than something that ran and

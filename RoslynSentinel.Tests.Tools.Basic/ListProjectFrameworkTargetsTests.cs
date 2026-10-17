@@ -1,4 +1,4 @@
-// ListProjectFrameworkTargets -> WorkspaceTools. Zero coverage before this file. The tool itself
+// ListProjectFrameworkTargetsTool -> WorkspaceTools. Zero coverage before this file. The tool itself
 // is a thin try/catch wrapper with no branches of its own; the real branching lives in
 // ProjectConsistencyEngine.GetProjectFrameworkSummaryAsync, which reads each project's .csproj file
 // directly off disk (not from the in-memory Roslyn solution) looking for TargetFramework/TargetFrameworks
@@ -72,7 +72,7 @@ public class ListProjectFrameworkTargetsTests
             new[] { ("Foo.cs", "public class Foo { }\n", docPath) });
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _tools.ListProjectFrameworkTargets(reason: "test message");
+        var result = await _tools.ListProjectFrameworkTargetsTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.True);
         var data = (List<ProjectFrameworkSummary>)result.SuccessData!;
@@ -93,7 +93,7 @@ public class ListProjectFrameworkTargetsTests
             new[] { ("Foo.cs", "public class Foo { }\n", docPath) });
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _tools.ListProjectFrameworkTargets(reason: "test message");
+        var result = await _tools.ListProjectFrameworkTargetsTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.True);
         var data = (List<ProjectFrameworkSummary>)result.SuccessData!;
@@ -114,7 +114,7 @@ public class ListProjectFrameworkTargetsTests
             new[] { ("Foo.cs", "public class Foo { }\n", docPath) });
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _tools.ListProjectFrameworkTargets(reason: "test message");
+        var result = await _tools.ListProjectFrameworkTargetsTool(reason: "test message");
 
         Assert.That(!result.IsError, Is.True);
         var data = (List<ProjectFrameworkSummary>)result.SuccessData!;

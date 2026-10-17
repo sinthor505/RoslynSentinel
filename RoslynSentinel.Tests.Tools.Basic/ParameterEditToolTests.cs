@@ -8,9 +8,9 @@ using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
 
-// ParameterEdit (slice 4a-2) merges MethodSignature and ConstructorParameter behind an 'operation' enum and delegates to
+// ParameterEditTool (slice 4a-2) merges MethodSignatureTool and ConstructorParameterTool behind an 'operation' enum and delegates to
 // the same Impl methods, so each operation/action must behave exactly like its original tool on the same input. Every case
-// runs the original on one InMemoryWorkspace and ParameterEdit on a second, identical one, then compares outcome and file text.
+// runs the original on one InMemoryWorkspace and ParameterEditTool on a second, identical one, then compares outcome and file text.
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
 [Category("ParameterEditTools")] // sentinel:auto-category
@@ -57,15 +57,15 @@ public class ParameterEditToolTests
         return new Tools(new RefactoringSignatureTools(signatureImpl), new ParameterEditTools(signatureImpl));
     }
 
-    // ---- operation 'method' (MethodSignature) ----
+    // ---- operation 'method' (MethodSignatureTool) ----
 
     [Test]
     public async Task ParameterEdit_MethodAdd_WithDefault_MatchesMethodSignatureAsync()
     {
         var text = await AssertParityAsync(
-            (t, ws) => t.Signature.MethodSignature(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.add, methodName: "Compute",
+            (t, ws) => t.Signature.MethodSignatureTool(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.add, methodName: "Compute",
                 paramName: "third", paramType: "int", defaultValue: "3", cancellationToken: default),
-            (t, ws) => t.ParameterEdit.ParameterEdit(reason: "parity merged", operation: ParameterEditOperation.method, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add,
+            (t, ws) => t.ParameterEdit.ParameterEditTool(reason: "parity merged", operation: ParameterEditOperation.method, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add,
                 methodName: "Compute", paramName: "third", paramType: "int", defaultValue: "3", cancellationToken: default));
 
         Assert.That(text, Does.Contain("int third = 3"));
@@ -75,9 +75,9 @@ public class ParameterEditToolTests
     public async Task ParameterEdit_MethodAdd_WithNullDefault_MatchesMethodSignatureAsync()
     {
         var text = await AssertParityAsync(
-            (t, ws) => t.Signature.MethodSignature(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.add, methodName: "Compute",
+            (t, ws) => t.Signature.MethodSignatureTool(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.add, methodName: "Compute",
                 paramName: "third", paramType: "string", nullDefault: true, cancellationToken: default),
-            (t, ws) => t.ParameterEdit.ParameterEdit(reason: "parity merged", operation: ParameterEditOperation.method, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add,
+            (t, ws) => t.ParameterEdit.ParameterEditTool(reason: "parity merged", operation: ParameterEditOperation.method, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add,
                 methodName: "Compute", paramName: "third", paramType: "string", nullDefault: true, cancellationToken: default));
 
         Assert.That(text, Does.Contain("string third = null"));
@@ -88,9 +88,9 @@ public class ParameterEditToolTests
     {
         // The call site lives in a second file so this parity case does not depend on same-file handling; same-file and multi-site call sites are covered by RemoveMethodParameterSinglePassTests.
         var text = await AssertParityAsync(
-            (t, ws) => t.Signature.MethodSignature(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.remove, methodName: "Compute",
+            (t, ws) => t.Signature.MethodSignatureTool(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.remove, methodName: "Compute",
                 paramName: "second", cancellationToken: default),
-            (t, ws) => t.ParameterEdit.ParameterEdit(reason: "parity merged", operation: ParameterEditOperation.method, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.remove,
+            (t, ws) => t.ParameterEdit.ParameterEditTool(reason: "parity merged", operation: ParameterEditOperation.method, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.remove,
                 methodName: "Compute", paramName: "second", cancellationToken: default),
             (CallerRelativePath, MethodCallerSource));
 
@@ -101,8 +101,8 @@ public class ParameterEditToolTests
     public async Task ParameterEdit_MethodView_MatchesMethodSignatureAsync()
     {
         await AssertParityAsync(
-            (t, ws) => t.Signature.MethodSignature(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.view, methodName: "Compute", cancellationToken: default),
-            (t, ws) => t.ParameterEdit.ParameterEdit(reason: "parity merged", operation: ParameterEditOperation.method, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.view,
+            (t, ws) => t.Signature.MethodSignatureTool(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.view, methodName: "Compute", cancellationToken: default),
+            (t, ws) => t.ParameterEdit.ParameterEditTool(reason: "parity merged", operation: ParameterEditOperation.method, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.view,
                 methodName: "Compute", cancellationToken: default));
     }
 
@@ -110,23 +110,23 @@ public class ParameterEditToolTests
     public async Task ParameterEdit_MethodAdd_DryRun_MatchesAndDoesNotWriteAsync()
     {
         var text = await AssertParityAsync(
-            (t, ws) => t.Signature.MethodSignature(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.add, methodName: "Compute",
+            (t, ws) => t.Signature.MethodSignatureTool(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.add, methodName: "Compute",
                 paramName: "third", paramType: "int", defaultValue: "3", dryRun: true, cancellationToken: default),
-            (t, ws) => t.ParameterEdit.ParameterEdit(reason: "parity merged", operation: ParameterEditOperation.method, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add,
+            (t, ws) => t.ParameterEdit.ParameterEditTool(reason: "parity merged", operation: ParameterEditOperation.method, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add,
                 methodName: "Compute", paramName: "third", paramType: "int", defaultValue: "3", dryRun: true, cancellationToken: default));
 
         Assert.That(text, Does.Not.Contain("third"));
     }
 
-    // ---- operation 'constructor' (ConstructorParameter) ----
+    // ---- operation 'constructor' (ConstructorParameterTool) ----
 
     [Test]
     public async Task ParameterEdit_ConstructorAdd_MatchesConstructorParameterAsync()
     {
         var text = await AssertParityAsync(
-            (t, ws) => t.Signature.ConstructorParameter(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.add, className: "ParameterTarget",
+            (t, ws) => t.Signature.ConstructorParameterTool(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.add, className: "ParameterTarget",
                 paramName: "name", paramType: "string", fieldName: "_label", cancellationToken: default),
-            (t, ws) => t.ParameterEdit.ParameterEdit(reason: "parity merged", operation: ParameterEditOperation.constructor, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add,
+            (t, ws) => t.ParameterEdit.ParameterEditTool(reason: "parity merged", operation: ParameterEditOperation.constructor, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add,
                 className: "ParameterTarget", paramName: "name", paramType: "string", fieldName: "_label", cancellationToken: default));
 
         Assert.That(text, Does.Contain("string name").And.Contain("_label"));
@@ -148,10 +148,10 @@ public class ParameterEditToolTests
         using var original = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource), (callerRelativePath, callerSource));
         using var merged = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource), (callerRelativePath, callerSource));
 
-        var expected = await BuildTools(original.Manager).Signature.ConstructorParameter(
+        var expected = await BuildTools(original.Manager).Signature.ConstructorParameterTool(
             reason: "parity original", filePath: original.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.add, className: "ParameterTarget",
             paramName: "name", paramType: "string", callSiteFixups: new Dictionary<string, string> { ["*"] = "\"n\"" }, cancellationToken: default);
-        var actual = await BuildTools(merged.Manager).ParameterEdit.ParameterEdit(
+        var actual = await BuildTools(merged.Manager).ParameterEdit.ParameterEditTool(
             reason: "parity merged", operation: ParameterEditOperation.constructor, filePath: merged.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add, className: "ParameterTarget",
             paramName: "name", paramType: "string", callSiteFixups: new Dictionary<string, string> { ["*"] = "\"n\"" }, cancellationToken: default);
 
@@ -164,9 +164,9 @@ public class ParameterEditToolTests
     public async Task ParameterEdit_ConstructorRemove_MatchesConstructorParameterAsync()
     {
         var text = await AssertParityAsync(
-            (t, ws) => t.Signature.ConstructorParameter(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.remove, className: "ParameterTarget",
+            (t, ws) => t.Signature.ConstructorParameterTool(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.remove, className: "ParameterTarget",
                 paramName: "a", cancellationToken: default),
-            (t, ws) => t.ParameterEdit.ParameterEdit(reason: "parity merged", operation: ParameterEditOperation.constructor, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.remove,
+            (t, ws) => t.ParameterEdit.ParameterEditTool(reason: "parity merged", operation: ParameterEditOperation.constructor, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.remove,
                 className: "ParameterTarget", paramName: "a", cancellationToken: default));
 
         Assert.That(text, Does.Not.Contain("int a)"));
@@ -176,8 +176,8 @@ public class ParameterEditToolTests
     public async Task ParameterEdit_ConstructorView_MatchesConstructorParameterAsync()
     {
         await AssertParityAsync(
-            (t, ws) => t.Signature.ConstructorParameter(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.view, className: "ParameterTarget", cancellationToken: default),
-            (t, ws) => t.ParameterEdit.ParameterEdit(reason: "parity merged", operation: ParameterEditOperation.constructor, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.view,
+            (t, ws) => t.Signature.ConstructorParameterTool(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.view, className: "ParameterTarget", cancellationToken: default),
+            (t, ws) => t.ParameterEdit.ParameterEditTool(reason: "parity merged", operation: ParameterEditOperation.constructor, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.view,
                 className: "ParameterTarget", cancellationToken: default));
     }
 
@@ -185,9 +185,9 @@ public class ParameterEditToolTests
     public async Task ParameterEdit_ConstructorAdd_DryRun_MatchesAndDoesNotWriteAsync()
     {
         var text = await AssertParityAsync(
-            (t, ws) => t.Signature.ConstructorParameter(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.add, className: "ParameterTarget",
+            (t, ws) => t.Signature.ConstructorParameterTool(reason: "parity original", filePath: ws.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.add, className: "ParameterTarget",
                 paramName: "name", paramType: "string", dryRun: true, cancellationToken: default),
-            (t, ws) => t.ParameterEdit.ParameterEdit(reason: "parity merged", operation: ParameterEditOperation.constructor, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add,
+            (t, ws) => t.ParameterEdit.ParameterEditTool(reason: "parity merged", operation: ParameterEditOperation.constructor, filePath: ws.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add,
                 className: "ParameterTarget", paramName: "name", paramType: "string", dryRun: true, cancellationToken: default));
 
         Assert.That(text, Does.Not.Contain("string name"));
@@ -200,7 +200,7 @@ public class ParameterEditToolTests
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
 
-        var result = await BuildTools(workspace.Manager).ParameterEdit.ParameterEdit(
+        var result = await BuildTools(workspace.Manager).ParameterEdit.ParameterEditTool(
             reason: "mixed params", operation: ParameterEditOperation.method, filePath: workspace.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add, methodName: "Compute",
             className: "ParameterTarget", fieldName: "_x", paramName: "third", paramType: "int", cancellationToken: default);
 
@@ -213,7 +213,7 @@ public class ParameterEditToolTests
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
 
-        var result = await BuildTools(workspace.Manager).ParameterEdit.ParameterEdit(
+        var result = await BuildTools(workspace.Manager).ParameterEdit.ParameterEditTool(
             reason: "mixed params", operation: ParameterEditOperation.constructor, filePath: workspace.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add, className: "ParameterTarget",
             methodName: "Compute", paramName: "name", paramType: "string", cancellationToken: default);
 
@@ -226,7 +226,7 @@ public class ParameterEditToolTests
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
 
-        var result = await BuildTools(workspace.Manager).ParameterEdit.ParameterEdit(
+        var result = await BuildTools(workspace.Manager).ParameterEdit.ParameterEditTool(
             reason: "missing name", operation: ParameterEditOperation.method, filePath: workspace.PathOf(FixtureRelativePath), action: AddRemoveViewAction.view, cancellationToken: default);
 
         AssertInvalidArgument(result, "operation 'method' requires 'methodName'");
@@ -237,7 +237,7 @@ public class ParameterEditToolTests
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
 
-        var result = await BuildTools(workspace.Manager).ParameterEdit.ParameterEdit(
+        var result = await BuildTools(workspace.Manager).ParameterEdit.ParameterEditTool(
             reason: "missing name", operation: ParameterEditOperation.constructor, filePath: workspace.PathOf(FixtureRelativePath), action: AddRemoveViewAction.view, cancellationToken: default);
 
         AssertInvalidArgument(result, "operation 'constructor' requires 'className'");
@@ -249,7 +249,7 @@ public class ParameterEditToolTests
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
 
-        var result = await BuildTools(workspace.Manager).ParameterEdit.ParameterEdit(
+        var result = await BuildTools(workspace.Manager).ParameterEdit.ParameterEditTool(
             reason: "missing params", operation: ParameterEditOperation.method, filePath: workspace.PathOf(FixtureRelativePath), action: action, methodName: "Compute", cancellationToken: default);
 
         AssertInvalidArgument(result, $"action '{action}' requires {expected}");
@@ -261,9 +261,9 @@ public class ParameterEditToolTests
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var expected = await tools.Signature.MethodSignature(reason: "exclusive defaults", filePath: workspace.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.add, methodName: "Compute",
+        var expected = await tools.Signature.MethodSignatureTool(reason: "exclusive defaults", filePath: workspace.PathOf(FixtureRelativePath), operation: AddRemoveViewAction.add, methodName: "Compute",
             paramName: "third", paramType: "string", defaultValue: "\"x\"", nullDefault: true, cancellationToken: default);
-        var actual = await tools.ParameterEdit.ParameterEdit(reason: "exclusive defaults", operation: ParameterEditOperation.method, filePath: workspace.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add,
+        var actual = await tools.ParameterEdit.ParameterEditTool(reason: "exclusive defaults", operation: ParameterEditOperation.method, filePath: workspace.PathOf(FixtureRelativePath), action: AddRemoveViewAction.add,
             methodName: "Compute", paramName: "third", paramType: "string", defaultValue: "\"x\"", nullDefault: true, cancellationToken: default);
 
         Assert.That(!expected.IsError, Is.False);
@@ -279,7 +279,7 @@ public class ParameterEditToolTests
         Assert.That(result.ErrorData.Message, Does.Contain(expectedMessagePart));
     }
 
-    // Runs the original tool on one InMemoryWorkspace and ParameterEdit on a second identical one, asserts the same outcome
+    // Runs the original tool on one InMemoryWorkspace and ParameterEditTool on a second identical one, asserts the same outcome
     // and file text, and returns the merged workspace's file text for operation-specific assertions.
     private static async Task<string> AssertParityAsync(
         Func<Tools, InMemoryWorkspace, Task<SentinelCallToolResult<object>>> runOriginal,
@@ -319,7 +319,7 @@ public class ParameterEditToolTests
     {
         string json = data is null ? "null" : JsonSerializer.Serialize(data, data.GetType());
         string root = Path.GetDirectoryName(Path.GetDirectoryName(workspace.PathOf(FixtureRelativePath)))!;
-        // The id also appears inside the human-readable message (e.g. "UndoLastApply(changeId: ...)"), so mask every occurrence.
+        // The id also appears inside the human-readable message (e.g. "UndoLastApplyTool(changeId: ...)"), so mask every occurrence.
         var changeId = System.Text.RegularExpressions.Regex.Match(json, "\"ChangeId\":\"([^\"]+)\"");
         if (changeId.Success)
         {

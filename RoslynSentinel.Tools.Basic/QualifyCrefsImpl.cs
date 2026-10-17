@@ -6,7 +6,7 @@ using RoslynSentinel.Engines.Basic;
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
-/// Backs the QualifyCrefs tool: resolves the scope to documents, qualifies bare member crefs per document through
+/// Backs the QualifyCrefsTool tool: resolves the scope to documents, qualifies bare member crefs per document through
 /// <see cref="CrefQualifier"/>, and writes each project's edits as one validated batch through
 /// <see cref="ValidateAndApplyHelper"/>. dryRun runs the same compile gate and returns the same batch without writing.
 /// Projects run one after another. Never throws; every failure is a structured <see cref="SentinelCallToolResult{T}"/> error.

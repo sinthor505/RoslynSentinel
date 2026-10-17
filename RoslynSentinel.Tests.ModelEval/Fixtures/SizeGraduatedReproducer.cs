@@ -4,7 +4,7 @@ namespace RoslynSentinel.Tests.ModelEval.Fixtures;
 
 /// <summary>
 /// Size-parameterized variant of <see cref="WholeFileRewriteReproducer"/>, built to bisect the file
-/// size / diff payload size at which a local model's <c>ApplyDiff</c> success rate drops off. Same
+/// size / diff payload size at which a local model's <c>ApplyDiffTool</c> success rate drops off. Same
 /// bug shape and same required fix (copy a private helper into the buggy file, rewire one method
 /// call, leave everything else byte-for-byte alone) at every size -> the only thing that changes is
 /// <paramref name="unrelatedMethodCount"/> padding methods before the buggy method, each numbered

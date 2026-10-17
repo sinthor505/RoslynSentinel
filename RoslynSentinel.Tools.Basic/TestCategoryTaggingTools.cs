@@ -1,11 +1,11 @@
 using System.ComponentModel;
-using RoslynSentinel.Common;
+
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
-/// <c>TagTestCategories</c>: plans category attributes for test methods and fixtures (<c>[Category("X")]</c> /
+/// <c>TagTestCategoriesTool</c>: plans category attributes for test methods and fixtures (<c>[Category("X")]</c> /
 /// <c>[Trait("Category", "X")]</c> / <c>[TestCategory("X")]</c>) from the production types each test references.
 /// Dry run by default (read-only plan); <c>dryRun: false</c> applies it through the validated write path. On-demand only in claude-lean
 /// (the <c>testCategories</c> toolset), opt-in elsewhere via <c>--mode=TestCategories</c>.
@@ -46,7 +46,7 @@ public class TestCategoryTaggingTools
         "uncategorized tests, stale attributes); pass a test project name from that table for its fixtures, uncategorized test names, stale " +
         "attributes and planned edits. An unknown name returns an error listing the valid project names. " +
         "Attributes this tool writes carry a // sentinel:auto-category marker; only marked attributes are ever reported stale.")]
-    public async Task<SentinelCallToolResult<object>> TagTestCategories(
+    public async Task<SentinelCallToolResult<object>> TagTestCategoriesTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Required. Comma-separated project names or namespace prefixes whose types become categories, e.g. \"RoslynSentinel.Engines.Basic,RoslynSentinel.Common\".")] string targets,
         [Description("Comma-separated test project names to scan. Omit to scan every project that references a known test framework. Changes the statistics: ubiquity shares (maxTestShare) are computed over the scanned tests only. To edit a subset of projects use applyProjects instead.")] string? testScope = null,

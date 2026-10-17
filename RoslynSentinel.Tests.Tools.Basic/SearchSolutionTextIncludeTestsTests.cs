@@ -1,4 +1,4 @@
-// Coverage for the includeTests parameter of WorkspaceReadNavigationImpl.SearchSolutionText.
+// Coverage for the includeTests parameter of WorkspaceReadNavigationImpl.SearchSolutionTextTool.
 // With includeTests: false, documents of projects whose .csproj references Microsoft.NET.Test.Sdk
 // (TestProjectDetector.IsTestProject) are not scanned; the result says how many were excluded.
 

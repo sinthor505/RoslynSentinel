@@ -1,14 +1,14 @@
 // The blob-integrity invariant: an apply that writes files and returns a changeId must have a
-// blob that UndoLastApply can resolve.
+// blob that UndoLastApplyTool can resolve.
 //
-// Run 20260910-013550-398 (A3) violated it across five tools at once -> WrapRange, ExtractMembers,
-// SyncInterface, Inline and MoveType all passed slashed operation names ("WrapRange/region"),
+// Run 20260910-013550-398 (A3) violated it across five tools at once -> WrapRangeTool, ExtractMembersTool,
+// SyncInterfaceTool, InlineSymbolTool and MoveTypeTool all passed slashed operation names ("WrapRangeTool/region"),
 // Path.Combine resolved the blob into a non-existent subdirectory, the write threw, and
 // ValidateAndApplyHelper discarded the result. Each tool reported status:"applied" with a
 // confident undo instruction and no blob on disk.
 //
 // Driven across all five tools rather than the one the original report named, because this is the
-// third recorded UndoLastApply gap (cf. project_synctypeandfilename_undolastapply_blocker) and the
+// third recorded UndoLastApplyTool gap (cf. project_synctypeandfilename_undolastapply_blocker) and the
 // class of bug is what needs covering. Tools that decline a change (target not found, etc.) return
 // no changeId and are simply not exercised by that case -> the assertion is conditional on a
 // changeId being issued, which is exactly the invariant's own precondition.
@@ -88,7 +88,7 @@ public class BlobIntegrityInvariantTests
         var lines = source.Split('\n');
         var bodyLine = Array.FindIndex(lines, l => l.TrimStart().StartsWith("public ")) + 2;
 
-        var result = await _advancedRefactoringTools.WrapRange(
+        var result = await _advancedRefactoringTools.WrapRangeTool(
             reason: "test message", _targetFile, startLine: bodyLine, endLine: bodyLine,
             wrapper: "region", name: "TestRegion", dryRun: false);
 
@@ -100,7 +100,7 @@ public class BlobIntegrityInvariantTests
     {
         var typeName = await FindATypeNameAsync();
 
-        var result = await _advancedRefactoringTools.MoveType(
+        var result = await _advancedRefactoringTools.MoveTypeTool(
             reason: "test message", _targetFile, typeName, destination: "ownFile", dryRun: false);
 
         AssertChangeIdIsRedeemable(result, "MoveType");
@@ -111,7 +111,7 @@ public class BlobIntegrityInvariantTests
     {
         var typeName = await FindATypeNameAsync();
 
-        var result = await _advancedRefactoringTools.ExtractMembers(
+        var result = await _advancedRefactoringTools.ExtractMembersTool(
             reason: "test message", _targetFile, typeName, ExtractAsType.@interface,
             newTypeName: "IExtractedForTest", dryRun: false);
 
@@ -123,7 +123,7 @@ public class BlobIntegrityInvariantTests
     {
         var typeName = await FindATypeNameAsync();
 
-        var result = await _advancedRefactoringTools.SyncInterface(
+        var result = await _advancedRefactoringTools.SyncInterfaceTool(
             reason: "test message", _targetFile, interfaceName: "IDisposable", action: SyncInterfaceAction.sync,
             className: typeName, dryRun: false);
 
@@ -133,7 +133,7 @@ public class BlobIntegrityInvariantTests
     [Test]
     public async Task Inline_IssuedChangeIdResolvesToABlobAsync()
     {
-        var result = await _advancedRefactoringTools.Inline(
+        var result = await _advancedRefactoringTools.InlineSymbolTool(
             reason: "test message", _targetFile, targetName: "value", kind: InlineKind.variable, dryRun: false);
 
         AssertChangeIdIsRedeemable(result, "Inline");

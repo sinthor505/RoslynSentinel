@@ -123,7 +123,7 @@ public class RelativePathInputAuditTests
             || errorMsg.Contains("not found", StringComparison.OrdinalIgnoreCase);
     }
 
-    // Row 1: GetFileOutline with relative path
+    // Row 1: GetFileOutlineTool with relative path
     [Test]
     [Category("RelativePathInputAudit")]
     public async Task GetFileOutline_AcceptsRelativePath()
@@ -138,7 +138,7 @@ public class RelativePathInputAuditTests
             $"GetFileOutline failed with a path resolution error: {text}");
     }
 
-    // Row 2: GetMethodSource with relative path
+    // Row 2: GetMethodSourceTool with relative path
     [Test]
     [Category("RelativePathInputAudit")]
     public async Task GetMethodSource_AcceptsRelativePath()
@@ -154,7 +154,7 @@ public class RelativePathInputAuditTests
             $"GetMethodSource failed with a path resolution error: {text}");
     }
 
-    // Row 3: ReadFile with relative path
+    // Row 3: ReadFileTool with relative path
     [Test]
     [Category("RelativePathInputAudit")]
     public async Task ReadFile_AcceptsRelativePath()
@@ -169,7 +169,7 @@ public class RelativePathInputAuditTests
             $"ReadFile failed with a path resolution error: {text}");
     }
 
-    // Row 4: Declaration (read-only) with relative path
+    // Row 4: DeclarationTool (read-only) with relative path
     [Test]
     [Category("RelativePathInputAudit")]
     public async Task Declaration_View_AcceptsRelativePath()
@@ -186,7 +186,7 @@ public class RelativePathInputAuditTests
             $"Declaration (view) failed with a path resolution error: {text}");
     }
 
-    // Row 5: ParameterEdit (view action) with relative path
+    // Row 5: ParameterEditTool (view action) with relative path
     [Test]
     [Category("RelativePathInputAudit")]
     public async Task ParameterEdit_View_AcceptsRelativePath()
@@ -204,12 +204,12 @@ public class RelativePathInputAuditTests
             $"ParameterEdit (view) failed with a path resolution error: {text}");
     }
 
-    // Row 6: SafeDeleteUnusedSymbol with relative path
+    // Row 6: DeleteUnusedSymbolTool with relative path
     [Test]
     [Category("RelativePathInputAudit")]
-    public async Task SafeDeleteUnusedSymbol_AcceptsRelativePath()
+    public async Task DeleteUnusedSymbol_AcceptsRelativePath()
     {
-        var (result, text) = await CallAsync("SafeDeleteUnusedSymbol", new Dictionary<string, object?>
+        var (result, text) = await CallAsync("DeleteUnusedSymbol", new Dictionary<string, object?>
         {
             ["reason"] = "audit test",
             ["filePath"] = _relativeProbeFilePath,
@@ -217,10 +217,10 @@ public class RelativePathInputAuditTests
         });
 
         Assert.That(!IsPathResolutionError(text), Is.True,
-            $"SafeDeleteUnusedSymbol failed with a path resolution error: {text}");
+            $"DeleteUnusedSymbol failed with a path resolution error: {text}");
     }
 
-    // Row 7: GetDiagnostics with relative file path (scope=file)
+    // Row 7: GetDiagnosticsTool with relative file path (scope=file)
     [Test]
     [Category("RelativePathInputAudit")]
     public async Task GetDiagnostics_FileScope_AcceptsRelativePath()
@@ -236,7 +236,7 @@ public class RelativePathInputAuditTests
             $"GetDiagnostics (file scope) failed with a path resolution error: {text}");
     }
 
-    // Row 8: Member (operation view) with relative path
+    // Row 8: MemberTool (operation view) with relative path
     [Test]
     [Category("RelativePathInputAudit")]
     public async Task Member_View_AcceptsRelativePath()
@@ -253,7 +253,7 @@ public class RelativePathInputAuditTests
             $"Member (view) failed with a path resolution error: {text}");
     }
 
-    // Row 9: ReplaceSnippet (validate action, single edit) with relative path
+    // Row 9: ReplaceSnippetTool (validate action, single edit) with relative path
     [Test]
     [Category("RelativePathInputAudit")]
     public async Task ReplaceSnippet_Validate_SingleEdit_AcceptsRelativePath()
@@ -271,7 +271,7 @@ public class RelativePathInputAuditTests
             $"ReplaceSnippet (validate, single) failed with a path resolution error: {text}");
     }
 
-    // Row 10: ReplaceSnippet (validate action, batchEdits) with relative path in batchEdits[].filePath
+    // Row 10: ReplaceSnippetTool (validate action, batchEdits) with relative path in batchEdits[].filePath
     [Test]
     [Category("RelativePathInputAudit")]
     public async Task ReplaceSnippet_Validate_BatchEdits_AcceptsRelativePath()
@@ -294,7 +294,7 @@ public class RelativePathInputAuditTests
             $"ReplaceSnippet (validate, batch) failed with a path resolution error: {text}");
     }
 
-    // Row 11: Build (file scope) with relative path
+    // Row 11: BuildTool (file scope) with relative path
     [Test]
     [Category("RelativePathInputAudit")]
     public async Task Build_FileScope_AcceptsRelativePath()

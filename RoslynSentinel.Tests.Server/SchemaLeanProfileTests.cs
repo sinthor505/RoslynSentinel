@@ -208,7 +208,7 @@ public class SchemaLeanProfileTests
 
         Assert.That(HiddenSchemaParams.IsHidden("ReplaceSnippet", "returnDiff"), Is.True);
         Assert.That(HiddenSchemaParams.IsHidden("replacesnippet", "validateOnApply"), Is.True, "Tool names match case-insensitively.");
-        // ReplaceSnippet has no autoStage parameter, so it must not be registered for it.
+        // ReplaceSnippetTool has no autoStage parameter, so it must not be registered for it.
         Assert.That(HiddenSchemaParams.IsHidden("ReplaceSnippet", "autoStage"), Is.False);
         Assert.That(HiddenSchemaParams.IsHidden("Member", "returnDiff"), Is.True);
         // Never registers names that stay in the schema.

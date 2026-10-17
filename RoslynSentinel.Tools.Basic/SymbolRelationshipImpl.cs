@@ -179,7 +179,7 @@ public class SymbolRelationshipImpl
     private async Task<Dictionary<string, string>> BuildTestDocumentMapAsync(string resolvedAbsolutePath, CancellationToken cancellationToken)
     {
         var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        // READCHOKEPOINT-CAST: same cast as SymbolNavigationImpl.LocateSymbol; ISolutionProvider has no GetSolutionAsync.
+        // READCHOKEPOINT-CAST: same cast as SymbolNavigationImpl.LocateSymbolTool; ISolutionProvider has no GetSolutionAsync.
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         foreach (var project in solution.Projects)
         {

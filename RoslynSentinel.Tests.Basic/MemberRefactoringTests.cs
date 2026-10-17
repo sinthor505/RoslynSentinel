@@ -536,7 +536,7 @@ public enum ToolScope
     }
 
     [Test]
-    public async Task ExtractMethodSafe_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    public async Task ExtractMethod_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
     {
         SetSource(SnippetMissSource, "ExtractMethodMiss.cs");
         var augmentEngine = new MsToolAugmentEngine(_workspaceManager);
@@ -712,7 +712,7 @@ public enum ToolScope
         Assert.That(plainField.Signature, Does.Not.StartWith("["));
 
         // Verify no member has attribute in signature
-        Assert.That(members, Has.All.Matches<SymbolNavigationEngine.ContainerMemberInfo>(m => !m.Signature.StartsWith("[")));
+        Assert.That(members, Has.All.Matches<SymbolNavigationEngine.ContainerMemberInfo>(m => !(m?.Signature?.StartsWith("[") ?? false)));
     }
 
     [Test]
@@ -2176,7 +2176,7 @@ public class OrderService
         "\r\n" +
         "public class Order\r\n" +
         "{\r\n" +
-        "    // Unused private method: nothing in the solution calls this. Target for SafeDeleteUnusedSymbol.\r\n" +
+        "    // Unused private method: nothing in the solution calls this. Target for DeleteUnusedSymbol.\r\n" +
         "    private string BuildInternalDebugLabel()\r\n" +
         "    {\r\n" +
         "        return $\"[{_customerId}] {_lines.Count} line(s)\";\r\n" +

@@ -458,7 +458,7 @@ public class SomeClass { }", "SomeClass.cs");
     }
 
     // ──────────────────────────────────────────────────────────────────────────
-    // InterpolateStringSafe
+    // InterpolateStringSafeTool
     // ──────────────────────────────────────────────────────────────────────────
 
     [Test]
@@ -565,7 +565,7 @@ public class SomeClass { }", "SomeClass.cs");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
-    // 4. InterpolateStringSafe -> const format string (the exact MS built-in bug)
+    // 4. InterpolateStringSafeTool -> const format string (the exact MS built-in bug)
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]

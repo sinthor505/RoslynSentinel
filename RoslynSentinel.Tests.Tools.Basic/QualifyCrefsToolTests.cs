@@ -10,7 +10,7 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Tools.Basic;
 
 /// <summary>
-/// Tests for the QualifyCrefs tool (QualifyCrefsTools over QualifyCrefsImpl) over an in-memory workspace: a dry run plans
+/// Tests for the QualifyCrefsTool tool (QualifyCrefsTools over QualifyCrefsImpl) over an in-memory workspace: a dry run plans
 /// and diffs without writing, apply rewrites only the files with bare member crefs, a second apply is a no-op, scope
 /// validation rejects a missing scopeName and an unknown project or file, project and file scope touch only their target,
 /// and containingType limits the rewrite to one type.
@@ -133,7 +133,7 @@ public class QualifyCrefsToolTests
         string? containingType = null,
         bool dryRun = true,
         bool returnDiff = false) =>
-        _tool.QualifyCrefs(
+        _tool.QualifyCrefsTool(
             reason: new ToolCallReason("testing qualify crefs"),
             scope: scope,
             scopeName: scopeName,

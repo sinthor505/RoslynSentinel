@@ -31,10 +31,10 @@ namespace RoslynSentinel.Tests.ModelEval;
 [TestFixture]
 public class RepeatedToolFailureBreakerTests
 {
-    // "Workspace" is where LocateSymbol/GetFileOutline live (SentinelWorkspaceTools /
+    // "Workspace" is where LocateSymbolTool/GetFileOutlineTool live (SentinelWorkspaceTools /
     // SymbolNavigationTools) -> see ToolClassRegistry.AdvancedModeToToolClasses. Not the project
     // names "Basic"/"Advanced", which aren't mode names at all and silently resolve to nothing.
-    // "Workspace" alone no longer covers LocateSymbol: the DI split moved it onto
+    // "Workspace" alone no longer covers LocateSymbolTool: the DI split moved it onto
     // SymbolNavigationTools, gated by the fine-grained "SymbolNavigation" sub-mode (see
     // ToolClassRegistry.BasicModeToToolClasses), not "Workspace" itself.
     private static readonly HashSet<string> ActiveModes =
@@ -106,7 +106,7 @@ public class RepeatedToolFailureBreakerTests
     [Test]
     public async Task Breaker_TripsAndStopsTheLoop_WhenTheSameCallKeepsFailing()
     {
-        // No solution is loaded, so every LocateSymbol call fails identically -> the same shape as
+        // No solution is loaded, so every LocateSymbolTool call fails identically -> the same shape as
         // the real livelock, where each retry differed only in content the signature ignores.
         var runner = NewRunner(repeatedFailureLimit: 3, turnCap: 30, alwaysCall: LocateSymbolCall);
 

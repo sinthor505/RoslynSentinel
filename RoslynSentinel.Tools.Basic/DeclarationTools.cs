@@ -3,8 +3,8 @@ using System.ComponentModel;
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
-/// <c>Declaration</c>: one tool for changing a declaration, merging ModifyModifier, ChangeAccessibility,
-/// ModifyAttribute and ModifyBaseType behind a closed <see cref="DeclarationOperation"/> enum.
+/// <c>DeclarationTool</c>: one tool for changing a declaration, merging ModifyModifierTool, ChangeAccessibilityTool,
+/// ModifyAttributeTool and ModifyBaseTypeTool behind a closed <see cref="DeclarationOperation"/> enum.
 /// Opt-in and additive: exposed only in claude-lean, through the <c>declarations</c> toolset
 /// (see ToolsetCatalog and ServiceRegistrationExtensionsBasic); the four original tools are untouched and stay
 /// available in the other modes. Each operation delegates to the same Impl method its original tool calls, so
@@ -30,7 +30,7 @@ public class DeclarationTools
     [Description("Changes a declaration's modifier, accessibility, attribute or base type. For overloaded targets provide contextSnippet. " +
         "modifier: ADD STATIC on a method or property is a conversion - the member must use no instance state, and instance-qualified callers are rewritten to Type.M(...) in the same atomic change; " +
         "not supported for " + ToolParams.AddStaticUnsupported + ". Returns changeId.")]
-    public Task<SentinelCallToolResult<AppliedChangeSummary>> Declaration(
+    public Task<SentinelCallToolResult<AppliedChangeSummary>> DeclarationTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("Required params per operation. " +
             "modifier: add or remove a non-accessibility modifier keyword; filePath+targetName+modifier+action (add|remove), or modifierBatchEdits instead of those four. " +

@@ -5,8 +5,8 @@ namespace RoslynSentinel.Tools.Basic;
 /// <summary>
 /// CORRECTION vs. plan doc Decision 1 (see WorkspaceFileEditImpl.cs doc comment for full detail):
 /// scoped down to the tools actually still live on WorkspaceTools today
-/// (RetryFailedChanges, UndoLastApply, ReadFile, ReplaceSnippet, CreateFile). ApplyDiff/
-/// ApplyUnifiedDiff/WriteFile/DeleteFile live on the separate, plan-unnamed
+/// (RetryFailedChangesTool, UndoLastApplyTool, ReadFileTool, ReplaceSnippetTool, CreateFileTool). ApplyDiffTool/
+/// ApplyUnifiedDiffTool/WriteFileTool/DeleteFileTool live on the separate, plan-unnamed
 /// WholeFileWriteTools.cs and are out of scope here.
 /// </summary>
 [McpServerToolType]
@@ -22,7 +22,7 @@ public class WorkspaceFileEditTools
     [McpServerTool(Name = "RetryFailedChanges")]
     [Produces(DataTag.ResultOnly)]
     [Description("Retries failed file writes using server-cached content - no need to re-send file contents. specificFiles limits to a subset. retryCount defaults to 3.")]
-    public Task<SentinelCallToolResult<object>> RetryFailedChanges(
+    public Task<SentinelCallToolResult<object>> RetryFailedChangesTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: false)] List<string>? specificFiles = null,
         [ToolOption(ToolOptionTag.RetryCount)] int retryCount = 3,
@@ -32,7 +32,7 @@ public class WorkspaceFileEditTools
     [McpServerTool(Name = "UndoLastApply")]
     [Produces(DataTag.ResultOnly)]
     [Description("Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. Covers all apply operations: ApplyDiff, refactoring-tool writes, and batch-first tools.")]
-    public Task<SentinelCallToolResult<object>> UndoLastApply(
+    public Task<SentinelCallToolResult<object>> UndoLastApplyTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.OperationId, required: true)] string changeId,
         CancellationToken cancellationToken = default)
@@ -42,13 +42,13 @@ public class WorkspaceFileEditTools
     [McpServerTool(Name = "ReadFile")]
     [Produces(DataTag.SourceCode)]
     [Description("Returns the raw text of a file in the loaded solution, verbatim (no reformatting). Pass startLine/endLine (1-based, inclusive) to read a slice instead of the whole file - useful once GetFileOutline or a search result gives you a line range. Whole-file reads past the size threshold are written to .roslynsentinel/largeresults and returned as a resultId (see GetMethodSource) instead of inline text. To read a single member, pass memberName (optionally containerName).")]
-    public Task<SentinelCallToolResult<object>> ReadFile(
+    public Task<SentinelCallToolResult<object>> ReadFileTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("1-based, inclusive. Omit to start from the first line.")] int? startLine = null,
         [Description("1-based, inclusive. Omit to read through the last line.")] int? endLine = null,
-        [Consumes(DataTag.SymbolName, required: false)] [Description("Read just this member's source (method, property, field, constructor) instead of the whole file. Cannot be combined with startLine/endLine.")] string? memberName = null,
-        [Consumes(DataTag.SymbolName, required: false)] [Description("Only with memberName: the type that holds the member, to disambiguate same-named members.")] string? containerName = null,
+        [Consumes(DataTag.SymbolName, required: false)][Description("Read just this member's source (method, property, field, constructor) instead of the whole file. Cannot be combined with startLine/endLine.")] string? memberName = null,
+        [Consumes(DataTag.SymbolName, required: false)][Description("Only with memberName: the type that holds the member, to disambiguate same-named members.")] string? containerName = null,
         CancellationToken cancellationToken = default)
         => _impl.ReadFile(reason, filePath, startLine, endLine, memberName, containerName, cancellationToken);
 
@@ -60,8 +60,8 @@ public class WorkspaceFileEditTools
     // over-cap error can (see WriteToolAdviceHelper) -> and a hardcoded name here would be shown to
     // the model on every single call even when that tool is gated off, which is the run-398 failure
     // in its most persistent form. The error path is where the redirect is actually needed.
-    [Description("Replaces one exact block of text with another in a single file, for localized batchEdits. For a structural change, prefer the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethodSafe, Member, etc.) instead. For multiple small batchEdits - in the same file or across files - pass 'batchEdits' instead of the singular filePath/oldContent/newContent params. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
-    public Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippet(
+    [Description("Replaces one exact block of text with another in a single file, for localized batchEdits. For a structural change, prefer the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethod, Member, etc.) instead. For multiple small batchEdits - in the same file or across files - pass 'batchEdits' instead of the singular filePath/oldContent/newContent params. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
+    public Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippetTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
@@ -81,8 +81,8 @@ public class WorkspaceFileEditTools
 
     [McpServerTool(Name = "CreateFile")]
     [Produces(DataTag.ChangeId)]
-    [Description("Creates a new file. Fails if the file already exists - this tool never overwrites or writes free-form whole-file content. Parent directories are created automatically if missing. For a new file with its full content in one call, use WriteFile(operation: CreateFile, content: ...).")] 
-    public Task<SentinelCallToolResult<object>> CreateFile(
+    [Description("Creates a new file. Fails if the file already exists - this tool never overwrites or writes free-form whole-file content. Parent directories are created automatically if missing. For a new file with its full content in one call, use WriteFile(operation: CreateFile, content: ...).")]
+    public Task<SentinelCallToolResult<object>> CreateFileTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
         [Description("Required for .cs files, ignored otherwise. Namespace to seed the file with (e.g. 'RoslynSentinel.Tests.Battery.Basic').")] string? namespaceName = null,

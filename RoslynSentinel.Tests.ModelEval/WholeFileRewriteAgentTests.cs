@@ -92,7 +92,7 @@ public class WholeFileRewriteAgentTests
 
     // Level 3: no method/file names, no fix mechanism, no step list -> just the observable symptom.
     // The model has to locate the bug by reading BlockConverter.cs, discover BlockEditHelpers.cs's
-    // existing fix pattern itself (e.g. via Search/ListSolutionItems), and decide how to
+    // existing fix pattern itself (e.g. via Search/ListSolutionItemsTool), and decide how to
     // reuse it. Reuses the same fixture and AssertFixApplied as the level-2 test above -> only the
     // prompt differs, so a pass/fail delta between the two tests isolates how much the scripted
     // guidance in the level-2 prompt was doing versus the model's own reasoning.
@@ -156,7 +156,7 @@ public class WholeFileRewriteAgentTests
     //
     // Updated 2026-09-05 to match PlanImplementVerifyAgentTests' wording/structure in two ways
     // proven out there: (1) the "solution is already loaded" orientation line -> PIV's own live
-    // transcripts showed the model calling ListWorkspaceSolutions("/")/LoadSolution on turn 1 of
+    // transcripts showed the model calling ListWorkspaceSolutionsTool("/")/LoadSolutionTool on turn 1 of
     // EVERY phase despite the harness's [SetUp]/RunPhaseAsync having already called
     // LoadSolutionAsync before the model's first turn in each case; the pre-load was never visible
     // to the model without being told, so the fix is about informing the model of harness state,
@@ -272,7 +272,7 @@ public class WholeFileRewriteAgentTests
 
     // "Refactor" (not "Refactoring") and "Workspace" are the exact mode strings
     // AddRoslynSentinelToolsBasic checks -> these two together register everything the prompts in
-    // this file need (ApplyDiff, Build, ReadFile, Search, ListSolutionItems via
+    // this file need (ApplyDiffTool, BuildTool, ReadFileTool, Search, ListSolutionItemsTool via
     // SentinelWorkspaceTools; SentinelRefactoringTools for edits) without
     // pulling in Advanced's much larger scanner/analyzer/asyncify tool catalog, which only adds
     // context bloat and slows the model down for tasks that never call those tools.
@@ -607,12 +607,12 @@ public class WholeFileRewriteAgentTests
         // the 2026-09-02 165-run excavation found ~27 runs (mostly MinimalGuidance) produced a
         // byte-perfect, functionally correct fix and still failed here, because a legitimate
         // self-correction sequence spanning two DIFFERENT tools (e.g. a real compiler error on
-        // ApplyDiff, then a ModifyModifier/ChangeAccessibility retry) never trips the per-tool cap
+        // ApplyDiffTool, then a ModifyModifierTool/ChangeAccessibilityTool retry) never trips the per-tool cap
         // but does trip a tight total cap the moment any third, unrelated benign hiccup occurs
         // (almost always a zero-match Search). The total cap needs to be loose enough
         // to tolerate several independent single-retry corrections across a longer agentic run.
         // maxPerTool was raised from 2 to 4 on 2026-09-04: a PlanImplementVerify base-qwen3.5-9b
-        // run made a wrong-then-right accessibility call on ONE tool (ApplyDiff: unqualified call
+        // run made a wrong-then-right accessibility call on ONE tool (ApplyDiffTool: unqualified call
         // -> CS0103 -> added a using directive, still wrong -> fully-qualified call, correct),
         // 3 failed calls on the single tool for a legitimate multi-step diagnosis, not thrashing.
         // 4 still catches true thrashing (5+ retries on one unresolved root cause).

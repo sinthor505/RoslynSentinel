@@ -9,7 +9,7 @@ using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Battery.Basic;
 
-// About ModifyBaseType's code-correctness, so it runs on an InMemoryWorkspace (no temp directory, MSBuild load or disk
+// About ModifyBaseTypeTool's code-correctness, so it runs on an InMemoryWorkspace (no temp directory, MSBuild load or disk
 // write). See ModifyAttributeBatchTests for the pattern.
 [TestFixture]
 [Parallelizable(ParallelScope.All)]
@@ -67,7 +67,7 @@ public class ModifyBaseTypeBatchTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyBaseType(
+        var result = await tools.ModifyBaseTypeTool(
             reason: "batch test same file two batchEdits",
             batchEdits:
             [
@@ -92,7 +92,7 @@ public class ModifyBaseTypeBatchTests
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource), (SecondFixtureRelativePath, SecondFixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.ModifyBaseType(
+        var result = await tools.ModifyBaseTypeTool(
             reason: "batch test across two files",
             batchEdits:
             [
@@ -119,7 +119,7 @@ public class ModifyBaseTypeBatchTests
 
         var beforeContent = workspace.ReadText(FixtureRelativePath);
 
-        var result = await tools.ModifyBaseType(
+        var result = await tools.ModifyBaseTypeTool(
             reason: "batch test same node collision",
             batchEdits:
             [
@@ -142,7 +142,7 @@ public class ModifyBaseTypeBatchTests
 
         var beforeContent = workspace.ReadText(FixtureRelativePath);
 
-        var result = await tools.ModifyBaseType(
+        var result = await tools.ModifyBaseTypeTool(
             reason: "batch test target not found",
             batchEdits:
             [
@@ -162,7 +162,7 @@ public class ModifyBaseTypeBatchTests
         var tools = BuildTools(workspace.Manager);
         var path = workspace.PathOf(FixtureRelativePath);
 
-        var result = await tools.ModifyBaseType(
+        var result = await tools.ModifyBaseTypeTool(
             reason: "batch test both supplied",
             filePath: path,
             typeName: "BaseTypeBatchTargetA",
@@ -181,7 +181,7 @@ public class ModifyBaseTypeBatchTests
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.ModifyBaseType(
+        var result = await tools.ModifyBaseTypeTool(
             reason: "batch test neither supplied",
             dryRun: false, returnDiff: false, cancellationToken: default);
 
@@ -195,7 +195,7 @@ public class ModifyBaseTypeBatchTests
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = BuildTools(workspace.Manager);
 
-        var result = await tools.ModifyBaseType(
+        var result = await tools.ModifyBaseTypeTool(
             reason: "batch test empty batchEdits array",
             batchEdits: [],
             dryRun: false, returnDiff: false, cancellationToken: default);
@@ -215,7 +215,7 @@ public class ModifyBaseTypeBatchTests
             .Select(i => new BaseTypeEdit { FilePath = path, TypeName = $"NonexistentType{i}", BaseTypeName = "IBaseTypeBatchMarker", Action = AddRemoveAction.add })
             .ToList();
 
-        var result = await tools.ModifyBaseType(reason: "batch test over cap", batchEdits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
+        var result = await tools.ModifyBaseTypeTool(reason: "batch test over cap", batchEdits: edits, dryRun: false, returnDiff: false, cancellationToken: default);
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("20"));
@@ -256,7 +256,7 @@ public class ModifyBaseTypeBatchTests
         var outerEdit = new BaseTypeEdit { FilePath = path, TypeName = "OuterHost", BaseTypeName = "IOuterMarker", Action = AddRemoveAction.add };
         var innerEdit = new BaseTypeEdit { FilePath = path, TypeName = "InnerNested", BaseTypeName = "IInnerMarker", Action = AddRemoveAction.add };
 
-        var result = await tools.ModifyBaseType(
+        var result = await tools.ModifyBaseTypeTool(
             reason: "regression: ancestor/descendant type targets in one batch",
             batchEdits: outerFirst ? [outerEdit, innerEdit] : [innerEdit, outerEdit],
             dryRun: false, returnDiff: false, cancellationToken: default);
@@ -307,7 +307,7 @@ public class ModifyBaseTypeBatchTests
         var path = workspace.PathOf(FormattingFixtureRelativePath);
         var before = workspace.ReadText(FormattingFixtureRelativePath);
 
-        var result = await tools.ModifyBaseType(
+        var result = await tools.ModifyBaseTypeTool(
             reason: "regression: base-list batchEdits must not reformat the rest of the type",
             batchEdits:
             [
@@ -334,7 +334,7 @@ public class ModifyBaseTypeBatchTests
         var path = workspace.PathOf(FixtureRelativePath);
         var before = workspace.ReadText(FixtureRelativePath);
 
-        var result = await tools.ModifyBaseType(
+        var result = await tools.ModifyBaseTypeTool(
             reason: "regression: a remove that matches nothing must not be reported as applied",
             batchEdits:
             [

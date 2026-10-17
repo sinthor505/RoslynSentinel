@@ -306,10 +306,10 @@ public class OrderService : IOrderService
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- ExtractMethodSafe ---
+    // --- ExtractMethodTool ---
 
     [Test]
-    public async Task ExtractMethodSafe_WithMethodBody_ReturnsResult()
+    public async Task ExtractMethod_WithMethodBody_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
         var result = await _msEngine.ExtractMethodSafeAsync("Test.cs", "DoProcess", @"var result = string.Format");
@@ -317,7 +317,7 @@ public class OrderService : IOrderService
     }
 
     [Test]
-    public async Task ExtractMethodSafe_NonExistentFile_ReturnsNotNull()
+    public async Task ExtractMethod_NonExistentFile_ReturnsNotNull()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _msEngine.ExtractMethodSafeAsync("NonExistent.cs", "NewMethod", "some code");

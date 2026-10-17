@@ -39,7 +39,7 @@ public class ModernizationTools
     [McpServerTool(Name = "InvertBooleanLogic")]
     [Produces(DataTag.ResultOnly)]
     [Description("Inverts all usages of a boolean identifier solution-wide (wraps with !, collapses double negations).")]
-    public async Task<SentinelCallToolResult<object>> InvertBooleanLogic([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string boolName, // RequestContext<CallToolRequestParams> requestParams = null,
+    public async Task<SentinelCallToolResult<object>> InvertBooleanLogicTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string boolName, // RequestContext<CallToolRequestParams> requestParams = null,
     CancellationToken cancellationToken = default)
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);

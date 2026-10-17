@@ -12,7 +12,7 @@ using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
 
-/// <summary>Return payload for <c>GetMethodSource</c>.</summary>
+/// <summary>Return payload for <c>GetMethodSourceTool</c>.</summary>
 public record MethodSourceResult
 {
     /// <summary>Scope/truncation metadata for the containing file. See <see cref="ReadEnvelope"/>.</summary>
@@ -35,8 +35,8 @@ public record MethodAttributeInfo
 }
 
 /// <summary>
-/// Plain implementation class for the read/navigation slice of workspace tools: GetMethodSource,
-/// GetFileOutline, ListAll, SearchSolutionText, GetOperationDetail, GetLargeResult. Method bodies
+/// Plain implementation class for the read/navigation slice of workspace tools: GetMethodSourceTool,
+/// GetFileOutlineTool, ListAllTool, SearchSolutionTextTool, GetOperationDetailTool, GetLargeResultTool. Method bodies
 /// are verbatim moves from WorkspaceTools -> see docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md
 /// (Decision 1-Amendment). Not an [McpServerToolType]; the MCP surface lives in WorkspaceReadNavigationTools.
 ///
@@ -61,7 +61,7 @@ public class WorkspaceReadNavigationImpl
 
     // Candidate-suggestion behavior confirmed live: an agent asked to read a file at a slightly
     // wrong path (e.g. missing a subfolder) retried the identical wrong path 2-3 times before
-    // giving up, even when ListSolutionItems's own earlier output already showed the real path ->
+    // giving up, even when ListSolutionItemsTool's own earlier output already showed the real path ->
     // the plain "file not found" message gave them nothing to act on. Searching the solution for
     // files sharing the requested filename turns most of these into a one-shot redirect; when
     // nothing matches by filename either, the message issues an explicit, unhedged directive
@@ -243,7 +243,7 @@ public class WorkspaceReadNavigationImpl
         }
     }
 
-    /// <summary>Walks a document's syntax tree and extracts the same outline entries GetFileOutline returns for one file -> shared with ListAll, which runs this across every document in the solution.</summary>
+    /// <summary>Walks a document's syntax tree and extracts the same outline entries GetFileOutlineTool returns for one file -> shared with ListAllTool, which runs this across every document in the solution.</summary>
     internal static List<OutlineItem> ExtractOutlineItems(SyntaxNode root)
     {
         var items = new List<OutlineItem>();
@@ -283,7 +283,7 @@ public class WorkspaceReadNavigationImpl
                 // an outline with nothing but a "namespace" entry, silently implying the file had
                 // no commentable/editable members at all. Confirmed live: an agent asked to add
                 // summary comments to every member skipped OrderStatus.cs's enum entirely because
-                // GetFileOutline gave no indication OrderStatus existed, then SummaryComment also
+                // GetFileOutlineTool gave no indication OrderStatus existed, then SummaryCommentTool also
                 // failed once the agent tried it anyway (separate gap, see GetMemberName).
                 case StructDeclarationSyntax @struct:
                     kind = "struct";
@@ -1186,7 +1186,7 @@ public class WorkspaceReadNavigationImpl
                 case ResultWrapperType.MethodSource:
                     {
                         // Single object, not a list - limit/offset don't apply, matching the shape
-                        // GetMethodSource returns inline when the result is small enough not to offload.
+                        // GetMethodSourceTool returns inline when the result is small enough not to offload.
                         var methodSource = JsonSerializer.Deserialize<MethodSourceResult>(all.Data.ToString(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
@@ -1210,7 +1210,7 @@ public class WorkspaceReadNavigationImpl
                 case ResultWrapperType.FileSource:
                     {
                         // Single object, not a list - limit/offset don't apply, matching the shape
-                        // ReadFile returns inline when the result is small enough not to offload.
+                        // ReadFileTool returns inline when the result is small enough not to offload.
                         var fileSource = JsonSerializer.Deserialize<FileSourceResult>(all.Data.ToString(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
@@ -1362,7 +1362,7 @@ public class WorkspaceReadNavigationImpl
                 case ResultWrapperType.SolutionItemsAllResult:
                     {
                         // Single object, not a list - limit/offset don't apply, matching the shape
-                        // ListSolutionItems(kind: all) returns inline when small enough not to offload.
+                        // ListSolutionItemsTool(kind: all) returns inline when small enough not to offload.
                         var solutionItemsAll = JsonSerializer.Deserialize<SolutionItemsAllResult>(all.Data.ToString(), _jsonOptions);
                         result = new SentinelCallToolResult<object>
                         {
@@ -1500,7 +1500,7 @@ public class WorkspaceReadNavigationImpl
     }
 
     // Mirrors the Raw branch's worst-case-then-shrink loop (see the ResultWrapperType.Raw case in
-    // GetLargeResult) so every list-shaped switch branch there gets the same guarantee: the page
+    // GetLargeResultTool) so every list-shaped switch branch there gets the same guarantee: the page
     // this method hands back can never itself be large enough for the generic offload filter
     // (ServiceRegistrationExtensionsBasic.cs's "Generic large-result offload backstop") to re-catch
     // it and wrap it under a brand-new resultId, which would otherwise hand the caller an

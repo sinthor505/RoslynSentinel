@@ -21,7 +21,7 @@ namespace RoslynSentinel.Tests.Server;
 [NonParallelizable] // mutates the process-wide SchemaOptions
 public class SchemaDataTagOptionTests
 {
-    // ReplaceSnippet/ModifyModifier live in Refactor mode, ReadFile/LocateSymbol in Workspace mode.
+    // ReplaceSnippetTool/ModifyModifierTool live in Refactor mode, ReadFileTool/LocateSymbolTool in Workspace mode.
     private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace", "Refactor" };
 
     [TearDown]

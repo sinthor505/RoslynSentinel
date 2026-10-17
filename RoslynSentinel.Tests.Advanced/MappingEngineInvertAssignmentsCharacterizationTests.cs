@@ -47,7 +47,7 @@ public class MappingEngineInvertAssignmentsCharacterizationTests
     // Lines 15-16 hold the assignments the tests invert; everything else is untouched. The comment and the blank
     // lines sit before a non-assignment statement on purpose: the engine swaps whole operands including their
     // leading trivia, so a comment or blank line directly in front of an inverted assignment travels to its right-hand
-    // side (a defect of the swap, not of the format step; see the docs/current/TODO.md entry on InvertAssignments
+    // side (a defect of the swap, not of the format step; see the docs/current/TODO.md entry on InvertAssignmentsTool
     // leading trivia).
     private static string[] Input() =>
     [

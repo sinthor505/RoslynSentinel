@@ -1,4 +1,4 @@
-// Coverage for the includeTests parameter of WorkspaceReadNavigationImpl.ListAll.
+// Coverage for the includeTests parameter of WorkspaceReadNavigationImpl.ListAllTool.
 // With includeTests: false and no projectName, declarations of projects whose .csproj references
 // Microsoft.NET.Test.Sdk (TestProjectDetector.IsTestProject) are skipped and the StatusMessage says how
 // many were excluded. An explicit projectName naming a test project always lists it.

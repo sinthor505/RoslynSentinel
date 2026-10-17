@@ -6,8 +6,8 @@ namespace RoslynSentinel.Tools.Basic;
 
 // Decision 7 step 3 (plan_split_workspace_refactoring_tools_for_di.md): implementation half of the
 // RefactoringExtractionDocsTools/Impl pair. Method bodies below are moved verbatim from
-// RefactoringStructuralTools.cs (GenerateMapping, UsingDirective, SummaryComment, ExtractLocalVariable,
-// ExtractMethodSafe). ValidateAndApplyAsync is duplicated per-Impl-class per Decision 1-Amendment.
+// RefactoringStructuralTools.cs (GenerateMapping, UsingDirectiveTool, SummaryCommentTool, ExtractLocalVariableTool,
+// ExtractMethodTool). ValidateAndApplyAsync is duplicated per-Impl-class per Decision 1-Amendment.
 public class RefactoringExtractionDocsImpl
 {
     private readonly BasicRefactoringEngine _refactoringEngine;
@@ -225,7 +225,7 @@ public class RefactoringExtractionDocsImpl
             var summary = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], description, apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId);
 
             // add: summaryText is caller-supplied verbatim, echoed back as the added content
-            // (same reasoning as Member(add)'s raw-source path). remove has no new content to show.
+            // (same reasoning as MemberTool(add)'s raw-source path). remove has no new content to show.
             if (operation != AddRemoveViewAction.add)
             {
                 return new SentinelCallToolResult<object>() { IsError = false, StatusMessage = description, SuccessData = summary };
@@ -274,7 +274,7 @@ public class RefactoringExtractionDocsImpl
             var apply = await ValidateAndApplyAsync(changes, $"Extract local variable '{variableName}'.", "ExtractLocalVariable", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
-            // Not wired into MemberChangedContentResult: unlike Member/ConstructorParameter, the new
+            // Not wired into MemberChangedContentResult: unlike MemberTool/ConstructorParameterTool, the new
             // declaration text isn't caller-supplied or separately exposed -> DocumentEditResult only
             // returns the whole-file UpdatedText, so reconstructing just the new "var x = ..." line
             // here would mean duplicating ExtractLocalVariableAsync's formatting logic. Revisit only
@@ -288,7 +288,7 @@ public class RefactoringExtractionDocsImpl
         }
     }
 
-    public async Task<SentinelCallToolResult<AppliedChangeSummary>> ExtractMethodSafe(
+    public async Task<SentinelCallToolResult<AppliedChangeSummary>> ExtractMethod(
         ToolCallReason reason,
         string filePath,
         string newMethodName,
@@ -303,7 +303,7 @@ public class RefactoringExtractionDocsImpl
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         if (_logger.IsEnabled(LogLevel.Information))
         {
-            _logger.LogInformation("ExtractMethodSafe: {File} method={Name}", filePathResolved, newMethodName);
+            _logger.LogInformation("ExtractMethod: {File} method={Name}", filePathResolved, newMethodName);
         }
         try
         {
@@ -315,7 +315,7 @@ public class RefactoringExtractionDocsImpl
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
                     IsError = true,
-                    ErrorData = new ResultError(result.ErrorCode ?? ToolErrorCode.Exception, $"ExtractMethodSafe: {result.Error}")
+                    ErrorData = new ResultError(result.ErrorCode ?? ToolErrorCode.Exception, $"ExtractMethod: {result.Error}")
                 };
             }
 
@@ -343,7 +343,7 @@ public class RefactoringExtractionDocsImpl
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"ExtractMethodSafe: no change produced for '{filePathResolved}'.")
+                    ErrorData = new ResultError(ToolErrorCode.Exception, $"ExtractMethod: no change produced for '{filePathResolved}'.")
                 };
             }
 
@@ -353,7 +353,7 @@ public class RefactoringExtractionDocsImpl
             // its formatting/signature-inference logic. Revisit only if that engine method starts
             // returning the extracted method's text alongside UpdatedContent.
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedContent };
-            var apply = await ValidateAndApplyAsync(changes, $"Extract '{newMethodName}' from '{filePathResolved}'.", "ExtractMethodSafe", dryRun, returnDiff, cancellationToken: cancellationToken);
+            var apply = await ValidateAndApplyAsync(changes, $"Extract '{newMethodName}' from '{filePathResolved}'.", "ExtractMethod", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<AppliedChangeSummary> { IsError = true, ErrorData = apply.Error };
             return new SentinelCallToolResult<AppliedChangeSummary>
@@ -364,11 +364,11 @@ public class RefactoringExtractionDocsImpl
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "ExtractMethodSafe failed for '{NewMethodName}' in '{FilePathWrapper}'", newMethodName, filePathResolved);
+            _logger.LogError(ex, "ExtractMethod failed for '{NewMethodName}' in '{FilePathWrapper}'", newMethodName, filePathResolved);
             return new SentinelCallToolResult<AppliedChangeSummary>
             {
                 IsError = true,
-                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractMethodSafe")
+                ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "ExtractMethod")
             };
         }
     }
