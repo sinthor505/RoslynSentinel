@@ -16,9 +16,9 @@ Tracked as a blocker: `blockers/blocking_error_search_references_by_name_exclude
 
 Found while characterizing C5b-2a (read-only probe, LF and CRLF alike): the nested type is removed but never re-added at the outer scope. In the namespace branch the new namespace node is built from the old `ns` and applied with `newRoot.ReplaceNode(ns, newNs)`, which is probably a silent no-op because `ns` is not in `newRoot`; the compilation-unit fallback adds to the old `root` and discards the removal. Existing MoveTypeToOuterScope tests assert only non-null. Data-loss bug: fix and add byte-exact tests before routing the `Formatter.FormatAsync` at ~:1058 (it is irrelevant until the type survives).
 
-## C5b-2a state (2026-10-16) - paused at the weekly usage limit
+## `IntroduceParameterObjectAsync` drops its TODO comment, hides the class path, wrong success message (2026-10-17) - not started
 
-Read-only findings, nothing edited. `IntroduceParameterObjectAsync` main path (~:1302) and interface-warning branch (~:1258, it returns `UpdatedText`, so it affects output) both leak the formatter's CRLF into LF input (after the method `{` and around the added record). Plan: swap the existing annotation for `Formatter.Annotation`, call `FormatAnnotatedSpansAsync`, characterization tests first (LF, CRLF, mixed with stray CRLF on the method `{` line). Leave :126, :1108, :1462 and the parked private remove (:293).
+Found in the C5b-2a review (all pre-existing; the formatter routing itself is done in 1069b161). (1) The "TODO: Update call sites" comment is attached to an `EmptyStatement` built with `WithSemicolonToken(MissingToken)`, which drops the leading trivia, so it never reaches the output (`todoComment` is dead code); `IntroduceParameterObject_IncludesTodoComment` never asserts the comment. (2) The method is found by name with `FirstOrDefault`, so an interface declared before its implementing class is picked and the class implementation is left untouched; the warning branch is then unreachable. (3) The main-path success message reads "// Local variable introduced." Fix all three with byte-exact tests.
 
 ## `MappingEngine.InvertAssignments` leaks leading trivia onto the right-hand side (2026-10-16) - not started
 
