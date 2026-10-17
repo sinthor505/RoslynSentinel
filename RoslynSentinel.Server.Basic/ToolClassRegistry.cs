@@ -51,7 +51,7 @@ public static class ToolClassRegistry
         StringComparer.Ordinal);
 
     /// <summary>
-    /// Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool (the same in Basic and Advanced, except SubAgentTools, which is Advanced-only and is not registered by Basic), plus
+    /// Tool classes that declare at least one <see cref="ClaudeLeanToolNames"/> tool. This is the Basic claude-lean set; Advanced adds the Advanced-only SubAgentTools (see AdvancedClaudeLeanToolClasses), plus
     /// DeclarationTools, ParameterEditTools and SemanticFindReplaceTools, whose single tools (DeclarationTool, ParameterEditTool, SemanticFindReplaceTool) are on-demand only: the allow-list keeps
     /// them out of the startup surface and the <c>declarations</c> toolset adds them. Listed here so the class exists in claude-lean and McpServerStatusTool can name its mode.
     /// </summary>
@@ -60,8 +60,14 @@ public static class ToolClassRegistry
         "WorkspaceTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
         "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
         "AdminTools", "WholeFileWriteTools", "ToolsetControlTools", "DeclarationTools", "ParameterEditTools",
-        "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools", "QualifyCrefsTools", "SubAgentTools",
+        "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools", "QualifyCrefsTools",
     ];
+
+    /// <summary>
+    /// The Advanced claude-lean set: <see cref="ClaudeLeanToolClasses"/> plus the Advanced-only SubAgentTools (Basic never registers SubAgentTools).
+    /// Must textually follow ClaudeLeanToolClasses, since static initializers run in textual order.
+    /// </summary>
+    private static readonly string[] AdvancedClaudeLeanToolClasses = [.. ClaudeLeanToolClasses, "SubAgentTools"];
 
     /// <summary>
     /// Tool classes whose dependencies claude-lean registers WITHOUT registering their tools (the per-tool
@@ -147,7 +153,7 @@ public static class ToolClassRegistry
             ["TestCategories"] = ["TestCategoryTaggingTools"],
             ["QualifyCrefs"] = ["QualifyCrefsTools"],
             ["Claude"] = ["WorkspaceTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
-            [ClaudeLeanMode] = ClaudeLeanToolClasses,
+            [ClaudeLeanMode] = AdvancedClaudeLeanToolClasses,
             [ExperimentalMode] = ["CodeTransformTools"],
         };
 

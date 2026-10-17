@@ -222,9 +222,34 @@ public class ClaudeLeanModeTests
         Assert.That(classes, Does.Contain("SemanticFindReplaceTools"));
         Assert.That(classes, Does.Contain("NamedArgumentsTools"));
         Assert.That(classes, Does.Contain("TestCategoryTaggingTools"));
-        Assert.That(classes, Does.Contain("SubAgentTools"));
+        Assert.That(classes, Does.Not.Contain("SubAgentTools")); // Basic does not register it; Advanced adds it via AdvancedClaudeLeanToolClasses
         Assert.That(classes, Does.Not.Contain("AdvancedRefactoringTools"));
         Assert.That(classes, Does.Not.Contain("DocumentationTools"));
+    }
+
+    [Test]
+    [Category("ServerStartupHelpers")] // sentinel:auto-category
+    public void ResolveActiveToolClasses_ClaudeLeanAdvanced_IsSupersetOfBasicClaudeLeanAndAddsSubAgentToolsOnce()
+    {
+        var classes = ServerStartupHelpers.ResolveActiveToolClasses(
+            new HashSet<string>(["claude-lean"], StringComparer.OrdinalIgnoreCase),
+            ToolClassRegistry.AdvancedModeToToolClasses,
+            new HashSet<string>(),
+            new HashSet<string>());
+
+        var basicClaudeLean = ToolClassRegistry.BasicModeToToolClasses["claude-lean"];
+        Assert.That(classes, Is.SupersetOf(basicClaudeLean), "Advanced claude-lean must include every Basic claude-lean class");
+        Assert.That(classes, Does.Contain("SubAgentTools"));
+
+        int subAgentCount = 0;
+        foreach (var name in classes)
+        {
+            if (name == "SubAgentTools")
+            {
+                subAgentCount++;
+            }
+        }
+        Assert.That(subAgentCount, Is.EqualTo(1), "SubAgentTools must appear exactly once in the Advanced claude-lean resolution");
     }
 
     [Test]
