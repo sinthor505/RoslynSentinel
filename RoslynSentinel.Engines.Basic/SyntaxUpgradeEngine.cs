@@ -528,7 +528,8 @@ public class SyntaxUpgradeEngine
             // Rebuild the class without the removed backing fields, with updated auto-properties
             var newMembers = classNode.Members
                 .Where(m => !(m is FieldDeclarationSyntax f && fieldsToRemove.Contains(f)))
-                .Select(m => m is PropertyDeclarationSyntax p && propReplacements.TryGetValue(p, out var r) ? r : m)
+                // Only the rewritten property is annotated, so the format pass leaves the rest of the class alone.
+                .Select(m => m is PropertyDeclarationSyntax p && propReplacements.TryGetValue(p, out var r) ? r.WithAdditionalAnnotations(Formatter.Annotation) : m)
                 .ToList();
 
             replaceMap[classNode] = classNode.WithMembers(SyntaxFactory.List(newMembers));
@@ -544,9 +545,8 @@ public class SyntaxUpgradeEngine
             };
         }
 
-        var fieldBackedPropsAnnotation = new SyntaxAnnotation();
-        var newRoot = root.ReplaceNodes(replaceMap.Keys, (orig, _) => replaceMap[orig].WithAdditionalAnnotations(fieldBackedPropsAnnotation));
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), fieldBackedPropsAnnotation, cancellationToken: cancellationToken);
+        var newRoot = root.ReplaceNodes(replaceMap.Keys, (orig, _) => replaceMap[orig]);
+        var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,

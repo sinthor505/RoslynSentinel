@@ -700,3 +700,7 @@ Found fixing BatteryTwentyFourTests.MethodSignature_Remove_LastParameter_Updates
 ## ExtractInterfaceAsync base-list layout defect and moved-type files lack trailing newline (2026-10-17) - not started
 
 Found in C5c-3. ExtractInterfaceAsync (BasicRefactoringEngine) AddBaseListTypes leaves the colon on its own line at column 0 (class Svc / : ISvc / {); fix by moving the class-identifier trailing trivia, then the site can use an annotated route instead of FormatWholeDocumentAsync. Files scaffolded by MoveTypeToFileAsync end at the closing brace with no trailing newline. Both are pinned as-is in BasicRefactoringEngineFormatCharacterizationTests.
+
+## C5c leftovers: AdvancedStructuralEngine ConvertExpressionBody and SemanticRefactoringEngine InlineVariable fallback (2026-10-17) - not started
+
+AdvancedStructuralEngine ~:1457 (ConvertExpressionBodyAsync): whole-document Formatter.FormatAsync after ReplaceNode(target, NormalizeWholeSubtreeWhitespace(newTarget)); annotate the new target and route via FormatAnnotatedSpansAsync, and decide the NormalizeWholeSubtreeWhitespace call under C6. SemanticRefactoringEngine ~:168 is the near-dead InlineVariableAsync all-replacements-failed fallback; mechanical swap is FormatWholeDocumentAsync(document.WithSyntaxRoot(modifiedRoot), originalText) but no characterization test is possible. UseFieldBackedProperties keeps a blank line after the opening brace when the backing field is removed (pinned as-is).
