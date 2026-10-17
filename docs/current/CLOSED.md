@@ -5,6 +5,10 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## MoveTypeToOuterScopeAsync dropped the nested type - resolved 2026-10-17
+
+Root cause: the namespace was looked up in the pre-removal root, so ReplaceNode silently no-op'd (no-namespace case duplicated the type). Fix: track the type and target container in the original root, re-find after removal, annotate only the re-added type and format via FormatAnnotatedSpansAsync. 25 byte-exact tests in MoveTypeToOuterScopeFormatCharacterizationTests.
+
 ## Type-by-name follow-ups: implementations+filePath, near-miss types, namespaced attributes, Git pickaxe/follow - resolved 2026-10-17
 
 - `FindImplementationsForMemberAsync` with `filePath` + a type name now resolves the type declared in that file (type preferred over same-named ctor); a filePath miss reports the scoped failure instead of answering for another same-named type; type eligibility (sealed/static/struct/enum/delegate throw) now applies on the filePath path too. Non-sealed class targets now return transitive derived classes (`FindDerivedClassesAsync`); previously an empty list that read as "zero implementations".

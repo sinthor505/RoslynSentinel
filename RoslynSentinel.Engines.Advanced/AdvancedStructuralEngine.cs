@@ -1007,9 +1007,18 @@ public class StructuralRefactoringEngine
             };
         }
 
-        // Type is nested, move it out
-        var newRoot = root.RemoveNode(nestedType, SyntaxRemoveOptions.KeepUnbalancedDirectives);
-        if (newRoot == null)
+        // Type is nested, move it out: to the nearest enclosing namespace, or the compilation unit when there is none.
+        // The removal and the re-add must act on the same tree. The container and the type are tracked in the ORIGINAL
+        // root so the container can be found again after the removal (a node taken from the original root is not in the
+        // trimmed tree, so replacing it there would silently do nothing and the type would be lost).
+        SyntaxNode container = nestedType.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault() ?? (SyntaxNode)root;
+        var trackedRoot = root.TrackNodes(nestedType, container);
+        var trackedNestedType = trackedRoot.GetCurrentNode(nestedType);
+        var newRoot = trackedNestedType == null
+            ? null
+            : trackedRoot.RemoveNode(trackedNestedType, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+        var currentContainer = newRoot?.GetCurrentNode(container);
+        if (newRoot == null || currentContainer == null)
         {
             return new DocumentEditResult
             {
@@ -1019,43 +1028,27 @@ public class StructuralRefactoringEngine
             };
         }
 
-        // Find the namespace or file scope and add the type there
-        var ns = root.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();
-        var fileScopedNs = root.DescendantNodes().OfType<FileScopedNamespaceDeclarationSyntax>().FirstOrDefault();
-        var annotation = new SyntaxAnnotation();
-        var annotatedNestedType = nestedType.WithAdditionalAnnotations(annotation);
-        if (ns != null)
+        // Only the re-added type is annotated for formatting.
+        var annotatedNestedType = nestedType.WithAdditionalAnnotations(Formatter.Annotation);
+        SyntaxNode newContainer = currentContainer switch
         {
-            var newNs = ns.AddMembers(annotatedNestedType);
-            newRoot = newRoot!.ReplaceNode(ns, newNs);
-        }
-        else if (fileScopedNs != null)
-        {
-            var newFileScopedNs = fileScopedNs.AddMembers(annotatedNestedType);
-            newRoot = newRoot!.ReplaceNode(fileScopedNs, newFileScopedNs);
-        }
-        else
-        {
-            // Add at compilation unit level
-            var compilationUnit = root as CompilationUnitSyntax;
-            if (compilationUnit != null)
-            {
-                newRoot = compilationUnit.AddMembers(annotatedNestedType);
-            }
-        }
-
-        if (newRoot == null)
+            BaseNamespaceDeclarationSyntax baseNs => baseNs.AddMembers(annotatedNestedType),
+            CompilationUnitSyntax unit => unit.AddMembers(annotatedNestedType),
+            _ => currentContainer,
+        };
+        if (ReferenceEquals(newContainer, currentContainer))
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.Modified,
+                Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = "// Nested type moved to outer scope.",
-                UpdatedText = root.ToFullString()
+                Message = $"// ErrorDetails: Cannot move '{nestedTypeName}': unsupported outer scope."
             };
         }
 
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
+        newRoot = newRoot.ReplaceNode(currentContainer, newContainer);
+
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,

@@ -12,9 +12,9 @@ actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outr
 
 Tracked as a blocker: `blockers/blocking_error_search_references_by_name_excludes_types.md` (root cause traced to `SymbolNavigationEngine.cs:1581-1583`; workaround: pass `filePath`). Prerequisite for the DTO proposal phases.
 
-## `StructuralRefactoringEngine.MoveTypeToOuterScopeAsync` drops the nested type instead of moving it (2026-10-16) - not started
+## `MoveTypeToOuterScopeAsync` does not adjust accessibility (2026-10-17) - not started
 
-Found while characterizing C5b-2a (read-only probe, LF and CRLF alike): the nested type is removed but never re-added at the outer scope. In the namespace branch the new namespace node is built from the old `ns` and applied with `newRoot.ReplaceNode(ns, newNs)`, which is probably a silent no-op because `ns` is not in `newRoot`; the compilation-unit fallback adds to the old `root` and discards the removal. Existing MoveTypeToOuterScope tests assert only non-null. Data-loss bug: fix and add byte-exact tests before routing the `Formatter.FormatAsync` at ~:1058 (it is irrelevant until the type survives).
+A `private`/`protected` nested type moved to namespace scope becomes invalid C# (CS1527); the engine does not widen accessibility (tests use `public`). Decide: widen to `internal`, or reject with an actionable message. Also unreachable `_ => currentContainer` / `TargetNotFound` arm (~:1034-1048) and test gaps (nested-in-nested, attributes/docs/#region, duplicate names).
 
 ## Unrouted EOL flatteners in the constructor-parameter cascade (2026-10-17) - not started
 
