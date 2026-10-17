@@ -276,11 +276,12 @@ public class CodeGenerationEngine
         var ctor = SyntaxFactory.ConstructorDeclaration(className)
             .AddModifiers(SyntaxFactory.Token(accessibility))
             .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters)))
-            .WithBody(SyntaxFactory.Block(assignments));
+            .WithBody(SyntaxFactory.Block(assignments))
+            .WithAdditionalAnnotations(Formatter.Annotation);
 
         var updatedClass = classNode.AddMembers(ctor);
         var updatedRoot = root!.ReplaceNode(classNode, updatedClass);
-        var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot), cancellationToken: cancellationToken);
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, updatedRoot, cancellationToken);
         var updatedText = (await formatted.GetTextAsync(cancellationToken)).ToString();
         return new DocumentEditResult
         {
@@ -366,11 +367,12 @@ public class CodeGenerationEngine
             .AddModifiers(
                 SyntaxFactory.Token(SyntaxKind.PublicKeyword),
                 SyntaxFactory.Token(SyntaxKind.OverrideKeyword))
-            .WithBody(SyntaxFactory.Block(SyntaxFactory.ParseStatement(returnStatement)));
+            .WithBody(SyntaxFactory.Block(SyntaxFactory.ParseStatement(returnStatement)))
+            .WithAdditionalAnnotations(Formatter.Annotation);
 
         var updatedClass = classNode.AddMembers(method);
         var updatedRoot = root!.ReplaceNode(classNode, updatedClass);
-        var formatted = await Formatter.FormatAsync(document.WithSyntaxRoot(updatedRoot), cancellationToken: cancellationToken);
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, updatedRoot, cancellationToken);
         var updatedContent = (await formatted.GetTextAsync(cancellationToken)).ToString();
 
         string? warning = allExcluded.Count > 0
@@ -974,7 +976,7 @@ public class CodeGenerationEngine
                     .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
                     .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(methodParams)))
                     .WithBody(body), eol);
-                newMembers.Add(methodDecl);
+                newMembers.Add(methodDecl.WithAdditionalAnnotations(Formatter.Annotation));
             }
             else if (member is IPropertySymbol prop)
             {
@@ -998,14 +1000,13 @@ public class CodeGenerationEngine
                 MemberDeclarationSyntax propDecl = RoslynFormattingHelper.NormalizeNewChildWhitespace(SyntaxFactory.PropertyDeclaration(propType, prop.Name)
                     .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
                     .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))), eol);
-                newMembers.Add(propDecl);
+                newMembers.Add(propDecl.WithAdditionalAnnotations(Formatter.Annotation));
             }
         }
 
         var newClass = classDecl.AddMembers(newMembers.ToArray());
         var newRoot = root.ReplaceNode(classDecl, newClass);
-        var updatedDoc = document.WithSyntaxRoot(newRoot);
-        var formatted = await Formatter.FormatAsync(updatedDoc, null, cancellationToken);
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -1099,8 +1100,7 @@ public class CodeGenerationEngine
             _ => throw new ToolInvalidArgumentException($"Unknown direction '{direction}'. Use 'ToFullProperty' or 'ToAutoProperty'.")
         };
 
-        var updatedDoc = document.WithSyntaxRoot(newRoot);
-        var formatted = await Formatter.FormatAsync(updatedDoc, null, cancellationToken);
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -1122,7 +1122,8 @@ public class CodeGenerationEngine
 
         var fieldDecl = SyntaxFactory.FieldDeclaration(
                 SyntaxFactory.VariableDeclaration(propType).AddVariables(varDeclarator))
-            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword));
+            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword))
+            .WithAdditionalAnnotations(Formatter.Annotation);
 
         bool hasGetter = propNode.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration)) ?? true;
         bool hasSetter = propNode.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.SetAccessorDeclaration)) ?? true;
@@ -1148,7 +1149,8 @@ public class CodeGenerationEngine
 
         var newPropNode = SyntaxFactory.PropertyDeclaration(propType, propNode.Identifier)
             .WithModifiers(propNode.Modifiers)
-            .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)));
+            .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)))
+            .WithAdditionalAnnotations(Formatter.Annotation);
 
         return ReplacePropertyInType(root, propNode, newPropNode, fieldDecl);
     }
@@ -1200,7 +1202,7 @@ public class CodeGenerationEngine
             return root;
         }
 
-        members[propIdx] = newProp;
+        members[propIdx] = newProp.WithAdditionalAnnotations(Formatter.Annotation);
         if (backingField != null)
         {
             var fieldIdx = members.FindIndex(m => ReferenceEquals(m, backingField));
@@ -1363,11 +1365,11 @@ public class CodeGenerationEngine
         var fmtArgs = args.Skip(1).Select(a => a.Expression.ToString()).ToList();
         var interpolated = BuildInterpolatedString(formatString, fmtArgs);
 
-        var replacement = SyntaxFactory.ParseExpression(interpolated).WithTriviaFrom(invocation);
+        var replacement = SyntaxFactory.ParseExpression(interpolated).WithTriviaFrom(invocation)
+            .WithAdditionalAnnotations(Formatter.Annotation);
         var newRoot = root.ReplaceNode(invocation, replacement);
 
-        var updatedDoc = document.WithSyntaxRoot(newRoot);
-        var formatted = await Formatter.FormatAsync(updatedDoc, null, cancellationToken);
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,

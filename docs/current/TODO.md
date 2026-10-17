@@ -690,3 +690,7 @@ ChangeSignature, RenameSymbol conflicts) do not use it.
 ## Schema budget headroom is ~2 chars (2026-10-17)
 
 The claude-lean Search/Git schemas sit at the `CoreSurface` budget limits (Basic total ~40498/40500). The next added parameter or description must trim existing wording first; consider reviewing whether the budgets or the longest descriptions (Git `operation`, Search tool-level text) should be restructured.
+
+## BatteryTwentyFourTests.MethodSignature_Remove_LastParameter_UpdatesCallSite fails with EolChangeRefused (2026-10-17) - not started
+
+Fails at HEAD a0803c79 (verified by stashing C5c-1): removing the last parameter in a CRLF Order.cs leaves one bare LF (CRLF x 34, LF x 1). Suspect the remove-parameter path routed in C5b-2b (bdd2e799) or the call-site rewrite; Tests.Tools.Advanced was probably not run then. Find the unrouted/mis-routed newline source and add a byte-exact guard.
