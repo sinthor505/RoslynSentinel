@@ -313,8 +313,7 @@ internal static class ConstructorCallSiteFinder
 
             var byNode = group.ToDictionary(e => e.Site.Node, e => e);
             var newRoot = root.ReplaceNodes(byNode.Keys, (originalNode, rewritten) => Rewrite(rewritten, byNode[originalNode].Site, byNode[originalNode].Expression, paramName));
-            var edited = document.WithSyntaxRoot(newRoot);
-            result[document.Id] = await Formatter.FormatAsync(edited, Formatter.Annotation, cancellationToken: cancellationToken);
+            result[document.Id] = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         }
 
         return result;

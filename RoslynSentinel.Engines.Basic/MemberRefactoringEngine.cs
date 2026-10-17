@@ -1641,17 +1641,15 @@ public class MemberRefactoringEngine
         foreach (var (path, nodes) in editNodesByPath)
         {
             var fileDocument = documentByPath[path];
-            var annotation = new SyntaxAnnotation();
             var newRoot = rootByPath[path].ReplaceNodes(nodes, (original, rewritten) => (rewritten switch
             {
                 MethodDeclarationSyntax m => (SyntaxNode)m.WithParameterList(m.ParameterList.WithParameters(SyntaxFactory.SeparatedList(m.ParameterList.Parameters.Take(targetParamCount - 1)))),
                 InvocationExpressionSyntax i => i.WithArgumentList(i.ArgumentList.WithArguments(SyntaxFactory.SeparatedList(i.ArgumentList.Arguments.Take(targetParamCount - 1)))),
                 _ => rewritten
-            }).WithAdditionalAnnotations(annotation));
-            var formatted = await Formatter.FormatAsync(fileDocument.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
-            var originalText = await fileDocument.GetTextAsync(cancellationToken);
-            // Formatter output uses the platform EOL; restore the file's own dominant EOL so an LF file stays LF.
-            var updatedText = RoslynSentinel.Common.EolUtilities.NormalizeEol((await formatted.GetTextAsync(cancellationToken)).ToString(), RoslynSentinel.Common.EolUtilities.DetectDominantEol(originalText));
+            }).WithAdditionalAnnotations(Formatter.Annotation));
+            // Span-scoped format + line-level EOL restore: untouched lines keep their own terminator, changed lines take the dominant EOL.
+            var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(fileDocument, newRoot, cancellationToken);
+            var updatedText = (await formatted.GetTextAsync(cancellationToken)).ToString();
             result[path.Equals(declPath) ? filePath : path] = updatedText;
         }
 

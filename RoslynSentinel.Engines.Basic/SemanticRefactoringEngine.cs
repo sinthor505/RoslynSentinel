@@ -119,7 +119,7 @@ public class SemanticRefactoringEngine
         // Replace each usage (process backwards to avoid position invalidation). All replacement
         // nodes share one annotation so the final formatting pass can reformat just the affected
         // spans instead of reflowing the whole file.
-        var editAnnotation = new SyntaxAnnotation();
+        var editAnnotation = Formatter.Annotation;
         var modifiedRoot = root;
         foreach (var usage in usages)
         {
@@ -161,7 +161,7 @@ public class SemanticRefactoringEngine
         // is annotated and Formatter.FormatAsync(document, annotation) would find no matching spans.
         if (modifiedRoot.GetAnnotatedNodes(editAnnotation).Any())
         {
-            var scopedFormattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(modifiedRoot), editAnnotation, cancellationToken: cancellationToken);
+            var scopedFormattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, modifiedRoot, cancellationToken);
             return (await scopedFormattedDoc.GetTextAsync(cancellationToken)).ToString();
         }
 
