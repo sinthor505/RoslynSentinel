@@ -17,11 +17,10 @@ namespace RoslynSentinel.Tests.Advanced;
 /// byte-identical to the pre-routing behaviour; the LF and mixed-EOL tests encode the corrected output (the old
 /// code leaked formatter-inserted CRLF into LF documents, or flattened a stray CRLF line to LF).
 /// <para>
-/// The constructor cascade is not pinned for mixed EOL, only for single-EOL files. Both of its output paths still
-/// flatten a stray CRLF line and neither is a span-scoped <c>Formatter.FormatAsync</c> site: caller files go through
-/// a whole-file <c>EolUtilities.NormalizeEol</c> in <c>AddConstructorParameterWithCallSitesAsync</c>, and the class's
-/// own file goes through <c>RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync</c> (also whole-file
-/// <c>NormalizeEol</c>). The cascade tests are therefore guards for the finder's routing, not red-to-green pins.
+/// C5c-2 routed the two remaining constructor-cascade output paths (the caller-file whole-file <c>NormalizeEol</c> in
+/// <c>AddConstructorParameterWithCallSitesAsync</c> and <c>RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync</c>)
+/// onto the changed-lines EOL rule, and added the mixed-EOL cascade tests plus byte-level tests for
+/// <c>AddTopLevelTypeAsync</c> (no-namespace path) and <c>MemberRefactoringEngine.ExtractMethodAsync</c>.
 /// </para>
 /// </summary>
 [TestFixture]
@@ -195,8 +194,7 @@ public class RefactoringEngineFormatCharacterizationTests
         Assert.That(ChangeFor(result, "Svc.cs").Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
-    // No mixed-EOL test for the constructor cascade: neither output path can keep a stray CRLF line yet (see the class
-    // summary), so a mixed-EOL pin here would only be reachable after those two follow-up sites are routed.
+    // Mixed-EOL cascade tests live at the end of the file (C5c-2).
 
     // ================================================================ MemberRefactoringEngine.RemoveMethodParameterAsync
 
@@ -404,5 +402,163 @@ public class RefactoringEngineFormatCharacterizationTests
         var result = await _semanticEngine.InlineVariableAsync("Test.cs", "total");
 
         Assert.That(result, Is.EqualTo(WithStrayCrlf(Src(false, InlineExpected()), anchor)));
+    }
+
+    // ================================================================ C5c-2: constructor cascade mixed EOL
+
+    // Stray CRLF on an unchanged line of the caller file (the cascade used to flatten it with a whole-file NormalizeEol).
+    [TestCase("    // keep   this   comment\n")]
+    [TestCase("    private int   Helper( ) { return  1; }\n")]
+    public async Task ConstructorCascade_CallerInOtherFile_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
+    {
+        SetFiles(("Svc.cs", Src(false, SvcSource.Split('\n'))), ("Caller.cs", WithStrayCrlf(Src(false, CallerInput()), anchor)));
+
+        var result = await CascadeAsync("Caller.cs:*");
+
+        Assert.That(ChangeFor(result, "Caller.cs"), Is.EqualTo(WithStrayCrlf(Src(false, CallerExpected()), anchor)));
+    }
+
+    // Same, for the class's own file (the class edit goes through ReplaceNodeAndFormatReplacementAsync). The anchors sit
+    // outside the edited class (Config) and in the call-site type (Maker).
+    [TestCase("public class Config { }\n")]
+    [TestCase("    // keep   this   comment\n")]
+    [TestCase("    private int   Helper( ) { return  1; }\n")]
+    public async Task ConstructorCascade_CallerInClassFile_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
+    {
+        SetFiles(("Svc.cs", WithStrayCrlf(Src(false, SameFileInput()), anchor)));
+
+        var result = await CascadeAsync("Svc.cs:*");
+
+        Assert.That(ChangeFor(result, "Svc.cs"), Is.EqualTo(WithStrayCrlf(Src(false, SameFileExpected()), anchor)));
+    }
+
+    // The class edit alone (no call sites): a stray CRLF outside the edited class must survive.
+    [TestCase("public class Config { }\n")]
+    [TestCase("public class Other   { int   z; }\n")]
+    public async Task AddConstructorParameter_MixedEol_StrayCrlfOutsideEditedClassKeepsItsTerminator(string anchor)
+    {
+        const string source = "namespace TestProj;\npublic class Config { }\npublic class Other   { int   z; }\npublic class Svc\n{\n    public Svc(int a) { }\n}\n";
+        SetFiles(("Svc.cs", WithStrayCrlf(source, anchor)));
+
+        var result = await _memberEngine.AddConstructorParameterAsync("Svc.cs", "Svc", "config", "Config");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
+        Assert.That(result.UpdatedText, Does.Contain(anchor.Substring(0, anchor.Length - 1) + "\r\n"));
+        Assert.That(result.UpdatedText!.Count(c => c == '\r'), Is.EqualTo(1), "Only the stray CRLF may carry a carriage return.");
+    }
+
+    // ================================================================ AddTopLevelTypeAsync (no-namespace path)
+
+    private static string[] TopLevelInput() =>
+    [
+        "using System;",
+        "",
+        "public class A",
+        "{",
+        "    public   int  X;",
+        "}",
+        "",
+    ];
+
+    private async Task<string> AddTopLevelAsync(string text)
+    {
+        SetFiles(("Test.cs", text));
+        var result = await _memberEngine.AddTopLevelTypeAsync("Test.cs", "public class B\n{\n    public int Y;\n}");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
+        return result.UpdatedText!;
+    }
+
+    [Test]
+    public async Task AddTopLevelType_NoNamespace_LfDocument_KeepsUntouchedSpacingAndHasNoCarriageReturn()
+    {
+        var text = await AddTopLevelAsync(Src(false, TopLevelInput()));
+
+        Assert.That(text, Does.Not.Contain("\r"));
+        Assert.That(text, Does.StartWith(Src(false, TopLevelInput()).TrimEnd('\n')));
+        Assert.That(text, Does.Contain("public class B\n{\n    public int Y;\n}"));
+    }
+
+    [Test]
+    public async Task AddTopLevelType_NoNamespace_CrlfDocument_IsLfResultInCrlf_ByteExact()
+    {
+        var lf = await AddTopLevelAsync(Src(false, TopLevelInput()));
+
+        var crlf = await AddTopLevelAsync(Src(true, TopLevelInput()));
+
+        Assert.That(crlf, Is.EqualTo(lf.Replace("\n", "\r\n")));
+    }
+
+    [TestCase("using System;\n")]
+    [TestCase("    public   int  X;\n")]
+    public async Task AddTopLevelType_NoNamespace_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
+    {
+        var lf = await AddTopLevelAsync(Src(false, TopLevelInput()));
+
+        var mixed = await AddTopLevelAsync(WithStrayCrlf(Src(false, TopLevelInput()), anchor));
+
+        Assert.That(mixed, Is.EqualTo(WithStrayCrlf(lf, anchor)));
+    }
+
+    // ================================================================ MemberRefactoringEngine.ExtractMethodAsync
+
+    private static string[] ExtractInput() =>
+    [
+        "namespace TestProj;",
+        "public class Calc",
+        "{",
+        "    private   int _n;",
+        "",
+        "    public int Run(int a)",
+        "    {",
+        "        var x = a + 1;",
+        "        var y = x * 2;",
+        "        return y;",
+        "    }",
+        "",
+        "    private int   Helper( ) { return  1; }",
+        "}",
+        "",
+    ];
+
+    private async Task<string> ExtractAsync(string text)
+    {
+        SetFiles(("Test.cs", text));
+        var result = await _memberEngine.ExtractMethodAsync("Test.cs", 9, "var y = x * 2;", 9, "var y = x * 2;", "Doubled");
+        Assert.That(result.IsError, Is.False, result.ErrorMessage);
+        return result.UpdatedSourceContent!;
+    }
+
+    [Test]
+    public async Task ExtractMethod_LfDocument_UntouchedCodeKeepsIrregularSpacing_NoCarriageReturn()
+    {
+        var text = await ExtractAsync(Src(false, ExtractInput()));
+
+        Assert.That(text, Does.Not.Contain("\r"));
+        Assert.That(text, Does.Contain("    private   int _n;\n"));
+        Assert.That(text, Does.Contain("    private int   Helper( ) { return  1; }\n"));
+        Assert.That(text, Does.Contain("var y = Doubled(x);"));
+        Assert.That(text, Does.Contain("private int Doubled(int x)\n    {\n        var y = x * 2;\n        return y;\n    }"));
+    }
+
+    [Test]
+    public async Task ExtractMethod_CrlfDocument_IsLfResultInCrlf_ByteExact()
+    {
+        var lf = await ExtractAsync(Src(false, ExtractInput()));
+
+        var crlf = await ExtractAsync(Src(true, ExtractInput()));
+
+        Assert.That(crlf, Is.EqualTo(lf.Replace("\n", "\r\n")));
+    }
+
+    [TestCase("    private   int _n;\n")]
+    [TestCase("        var x = a + 1;\n")]
+    [TestCase("    private int   Helper( ) { return  1; }\n")]
+    public async Task ExtractMethod_MixedEol_StrayCrlfLineKeepsItsTerminator(string anchor)
+    {
+        var lf = await ExtractAsync(Src(false, ExtractInput()));
+
+        var mixed = await ExtractAsync(WithStrayCrlf(Src(false, ExtractInput()), anchor));
+
+        Assert.That(mixed, Is.EqualTo(WithStrayCrlf(lf, anchor)));
     }
 }

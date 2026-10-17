@@ -51,19 +51,15 @@ public static class RoslynFormattingHelper
     /// </summary>
     public static async Task<string> ReplaceNodeAndFormatReplacementAsync(Document document, SyntaxNode root, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld, ILogger? logger = null)
     {
-        var originalSourceText = await document.GetTextAsync(cancellationToken);
-        var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
-
-        var annotation = new SyntaxAnnotation();
-
         var leadingTrivia = triviaIntent == TriviaEditIntent.ReplaceLeading ? newNode.GetLeadingTrivia() : oldNode.GetLeadingTrivia();
         var trailingTrivia = oldNode.GetTrailingTrivia();
 
-        var annotatedNewNode = newNode.WithLeadingTrivia(leadingTrivia).WithTrailingTrivia(trailingTrivia).WithAdditionalAnnotations(annotation);
+        // Only the replacement is annotated, so FormatAnnotatedSpansAsync formats just it and keeps the terminator of
+        // every line the edit did not change (a stray CRLF in an LF file survives).
+        var annotatedNewNode = newNode.WithLeadingTrivia(leadingTrivia).WithTrailingTrivia(trailingTrivia).WithAdditionalAnnotations(Formatter.Annotation);
         var newRoot = root.ReplaceNode(oldNode, annotatedNewNode);
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
-        var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
-        var normalizedText = EolUtilities.NormalizeEol(formattedText, dominantEol);
+        var formattedDoc = await FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        var normalizedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
 
         // TODO(Phase 3): wire these into the real Finding channel once it exists instead of ILogger.
         if (logger != null)

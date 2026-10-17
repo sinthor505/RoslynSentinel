@@ -466,9 +466,9 @@ public class MemberRefactoringEngine
                 continue;
             }
 
-            var originalText = await solution.GetDocument(documentId)!.GetTextAsync(cancellationToken);
-            var editedText = (await editedDocument.GetTextAsync(cancellationToken)).ToString();
-            changes[(FilePathWrapper)editedDocument.FilePath] = EolUtilities.NormalizeEol(editedText, EolUtilities.DetectDominantEol(originalText));
+            // ConstructorCallSiteFinder.ApplyAsync already put the changed lines in the document's line ending and left the
+            // terminators of unchanged lines alone, so the text is used as it is (no whole-file NormalizeEol).
+            changes[(FilePathWrapper)editedDocument.FilePath] = (await editedDocument.GetTextAsync(cancellationToken)).ToString();
         }
 
         return new AddConstructorParameterCascadeResult(classEdit, changes, [], null, edits.Count, leftToDefault);
@@ -3169,8 +3169,8 @@ public class MemberRefactoringEngine
         // No namespace in the file at all -> append directly to the compilation unit.
         // ReplaceNodeAndFormatReplacementAsync needs oldNode to be a strict descendant of the tracked root,
         // which the root itself never is, so format the freshly-built root directly instead.
-        var newRoot = root.AddMembers(newType);
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), cancellationToken: cancellationToken);
+        var newRoot = root.AddMembers(newType.WithAdditionalAnnotations(Formatter.Annotation));
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
@@ -4655,9 +4655,10 @@ public class MemberRefactoringEngine
         }
 
         // Append extracted method after the type's existing members
-        var newParent = parentType.ReplaceNode(containingMethod, updatedMethod).AddMembers(extractedMethod);
+        // Annotate only the two nodes this edit created or rewrote; the rest of the type keeps its spacing and line endings.
+        var newParent = parentType.ReplaceNode(containingMethod, updatedMethod.WithAdditionalAnnotations(Formatter.Annotation)).AddMembers(extractedMethod.WithAdditionalAnnotations(Formatter.Annotation));
         var newRoot = root.ReplaceNode(parentType, newParent);
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), null, cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         var updatedContent = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
         var beforeSnippet = string.Concat(selectedStatements.Select(s => s.ToFullString())).Trim();
         // callStatement carries the original statement's leading trivia (the user's indentation, and any comment

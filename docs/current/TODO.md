@@ -16,7 +16,9 @@ Tracked as a blocker: `blockers/blocking_error_search_references_by_name_exclude
 
 A `private`/`protected` nested type moved to namespace scope becomes invalid C# (CS1527); the engine does not widen accessibility (tests use `public`). Decide: widen to `internal`, or reject with an actionable message. Also unreachable `_ => currentContainer` / `TargetNotFound` arm (~:1034-1048) and test gaps (nested-in-nested, attributes/docs/#region, duplicate names).
 
-## Unrouted EOL flatteners in the constructor-parameter cascade (2026-10-17) - not started
+## Unrouted EOL flatteners: plural `ReplaceNodesAndFormatReplacementsAsync` and `RemoveMethodParameterAsync` scope (2026-10-17) - partly done
+
+C5c-2 routed `ReplaceNodeAndFormatReplacementAsync`, the cascade caller-file `NormalizeEol`, `AddTopLevelTypeAsync` (no-namespace path) and `MemberRefactoringEngine.ExtractMethodAsync` onto the changed-lines EOL rule (constructor mixed-EOL tests added). Still open: the plural `ReplaceNodesAndFormatReplacementsAsync` (same raw `Formatter.FormatAsync` + whole-file `NormalizeEol`; route the same way and cover its callers). The original entry text follows.
 
 Found in the C5b-2b review. `RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync` (~:63-67) is a raw span-scoped `Formatter.FormatAsync` followed by a whole-file `NormalizeEol`, and `MemberRefactoringEngine.AddConstructorParameterWithCallSitesAsync` (~:471) does the same `NormalizeEol` on caller files, so `AddConstructorParameter*` flattens a stray CRLF line in LF files. Route both via `FormatAnnotatedSpansAsync` (C5c), then add constructor mixed-EOL tests (the six cascade tests in `RefactoringEngineFormatCharacterizationTests.cs` are guards that would pass on the old finder; fix the header wording "is not a span-scoped Formatter.FormatAsync site" to "not yet routed"). Also: `RemoveMethodParameterAsync` annotates the whole method declaration, so unrelated body whitespace is reformatted (pre-existing); annotating only the `ParameterList`/`ArgumentList` would narrow it.
 
