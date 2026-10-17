@@ -91,7 +91,7 @@ public static class ToolParams
         "\"all\"|\"namespace\"|\"class\"|\"interface\"|\"method\"|\"property\"|\"struct\"|\"record\"|\"enum\"|\"enum member\"|\"constructor\"|\"field\"";
 
     public const string SearchModeValues =
-    "\"text\"|\"symbol\"|\"references\"|\"all\"|\"namespace\"|\"class\"|\"interface\"|\"method\"|\"property\"|\"struct\"|\"record\"|\"enum\"|\"enum member\"|\"constructor\"|\"field\"";
+    "\"text\"|\"symbol\"|\"references\"|\"callers\"|\"implementations\"|\"attribute\"|\"all\"|\"namespace\"|\"class\"|\"interface\"|\"method\"|\"property\"|\"struct\"|\"record\"|\"enum\"|\"enum member\"|\"constructor\"|\"field\"";
 
     public const string SymbolKindFilter =
         "\"type\"|\"method\"|\"property\"|\"field\"|\"event\"|\"any\" (default)";

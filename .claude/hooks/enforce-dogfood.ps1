@@ -295,7 +295,7 @@ was being asked to approximate:
 
   Search(mode: "text",             query: "$pattern")   # literal text, same as this Grep call
   Search(mode: "symbol",           query: "$pattern")   # find a type/method/field by name
-  Search(mode: "references",       query: "$pattern", referencesKind: "callers")   # callers/implementations of a symbol
+  Search(mode: "callers",          query: "$pattern")   # callers of a symbol (also: implementations, attribute)
   Search(mode: "declaration-kind", query: "$pattern")   # find declarations of a given kind
 
 If the pattern above names a specific method or type, GetMethodSource or

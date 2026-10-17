@@ -1105,6 +1105,11 @@ public static class RoslynSentinelServiceExtensionsBasic
                     if (aliasRenameNotes is not null)
                         aliasNotes = enumNotes is null ? aliasRenameNotes : [.. (enumNotes ?? System.Array.Empty<string>()), .. aliasRenameNotes];
 
+                    var legacySearchNotes = ToolArgumentValidator.ApplyLegacySearchReferencesKind(
+                        context.Server, context.Params?.Name, context.Params?.Arguments);
+                    if (legacySearchNotes is not null)
+                        aliasNotes = aliasNotes is null ? legacySearchNotes : [.. aliasNotes, .. legacySearchNotes];
+
                     var wrapNotes = ToolArgumentValidator.WrapFlatBatchParameters(
                         context.Server, context.Params?.Name, context.Params?.Arguments);
                     if (wrapNotes is not null)

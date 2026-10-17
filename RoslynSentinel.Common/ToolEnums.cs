@@ -371,7 +371,7 @@ public enum GitAction
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum SearchMode
 {
-    text, symbol, references, all, @namespace, @class, @interface, method, property, @struct, record, @enum,
+    text, symbol, references, callers, implementations, attribute, all, @namespace, @class, @interface, method, property, @struct, record, @enum,
     [JsonStringEnumMemberName("enum member")] enumMember,
     constructor, field,
 }

@@ -122,7 +122,7 @@ All C# reads and writes, and all git operations, go through the RoslynSentinel M
 to work on RoslynSentinel's own source, which is nearly every task here - "I'm editing the server
 itself" is not an exemption.
 
-- NEVER use plain Grep on C# code. Use `Search` (`mode: symbol` for declarations; `mode: references` with `referencesKind: callers` for callers).
+- NEVER use plain Grep on C# code. Use `Search` (`mode: symbol` for declarations; `mode: callers` for callers, `mode: implementations` for implementers, `mode: attribute` for attribute usages).
 - NEVER use the built-in Edit/Write tools on `.cs` files. Use `ReplaceSnippet`, `Member`, `MoveMember`
   and the other MCP tools below.
 - NEVER use shell `git add` or `git commit`. Use the `Git` tool.

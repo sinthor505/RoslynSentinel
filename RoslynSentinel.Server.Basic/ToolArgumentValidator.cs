@@ -541,6 +541,68 @@ public static class ToolArgumentValidator
     }
 
     /// <summary>
+    /// Rewrites a call that still passes the retired <c>referencesKind</c> parameter of <c>Search</c>.
+    /// That parameter was folded into the mode: <c>mode: "references"</c> with <c>referencesKind</c>
+    /// <c>callers</c>, <c>implementations</c> or <c>all</c> now means <c>mode: "callers"</c>,
+    /// <c>mode: "implementations"</c> or <c>mode: "references"</c>. The mode is rewritten, the
+    /// <c>referencesKind</c> key is removed, and one note tells the model the new form.
+    /// <para>
+    /// Any other combination (another mode, or an unknown kind value) is left untouched so
+    /// <see cref="Validate"/> rejects the unknown parameter like it does for any other call.
+    /// </para>
+    /// </summary>
+    public static System.Collections.Generic.IReadOnlyList<string>? ApplyLegacySearchReferencesKind(
+        ModelContextProtocol.Server.McpServer? server,
+        string? toolName,
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments)
+    {
+        if (!string.Equals(toolName, "Search", System.StringComparison.Ordinal) || arguments is null)
+            return null;
+
+        string? kindKey = null;
+        string? modeKey = null;
+        foreach (var key in arguments.Keys)
+        {
+            if (kindKey is null && string.Equals(key, "referencesKind", System.StringComparison.OrdinalIgnoreCase))
+                kindKey = key;
+            else if (modeKey is null && string.Equals(key, "mode", System.StringComparison.OrdinalIgnoreCase))
+                modeKey = key;
+        }
+
+        if (kindKey is null || modeKey is null)
+            return null;
+
+        var kindElement = arguments[kindKey];
+        var modeElement = arguments[modeKey];
+        if (kindElement.ValueKind != System.Text.Json.JsonValueKind.String
+            || modeElement.ValueKind != System.Text.Json.JsonValueKind.String)
+            return null;
+
+        var mode = modeElement.GetString();
+        var kindValue = kindElement.GetString();
+        if (kindValue is null || !string.Equals(mode, "references", System.StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        string mapped;
+        if (string.Equals(kindValue, "callers", System.StringComparison.OrdinalIgnoreCase))
+            mapped = "callers";
+        else if (string.Equals(kindValue, "implementations", System.StringComparison.OrdinalIgnoreCase))
+            mapped = "implementations";
+        else if (string.Equals(kindValue, "all", System.StringComparison.OrdinalIgnoreCase))
+            mapped = "references";
+        else
+            return null;
+
+        arguments.Remove(kindKey);
+        arguments[modeKey] = System.Text.Json.JsonSerializer.SerializeToElement(mapped);
+
+        return new[]
+        {
+            $"Note: 'referencesKind' is no longer a parameter of Search; mode 'references' with referencesKind '{kindValue}' was treated as mode '{mapped}'. Use mode '{mapped}' in future calls.",
+        };
+    }
+
+    /// <summary>
     /// Suffix that marks a tool parameter as a batch-edit array (<c>batchEdits</c>,
     /// <c>modifierBatchEdits</c>, ...). The repair in <see cref="WrapFlatBatchParameters"/> only
     /// considers parameters with this suffix.

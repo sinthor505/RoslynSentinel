@@ -1676,7 +1676,7 @@ public class SymbolNavigationEngine
                 $"FindCallers: symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                 (contextSnippet != null ? " with the supplied contextSnippet" : "") + ". " +
                 "This is NOT a confirmed zero-references result - the lookup never ran. " + nearMissHint +
-                "Verify the name via Search(failureMode: symbol)/GetFileOutline before treating this as evidence the symbol is unused.");
+                "Verify the name via Search(mode: symbol)/GetFileOutline before treating this as evidence the symbol is unused.");
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -1975,7 +1975,7 @@ public class SymbolNavigationEngine
                     ($"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                     (contextSnippet != null ? " with the supplied contextSnippet" : "") + ".")) +
                 " This is NOT a confirmed zero-implementations result - the lookup never ran. " + nearMissHint +
-                "Verify the name via Search(failureMode: symbol)/GetFileOutline before treating this as evidence of no implementations.");
+                "Verify the name via Search(mode: symbol)/GetFileOutline before treating this as evidence of no implementations.");
         }
 
         // The resolved symbol may still be structurally incapable of having implementations - e.g.
@@ -2000,7 +2000,7 @@ public class SymbolNavigationEngine
                 "member - it is structurally incapable of having implementations, so this is NOT a confirmed " +
                 "zero-implementations result. If you meant the interface/virtual declaration this member " +
                 "implements or overrides, disambiguate with contextSnippet or filepath pointing at that " +
-                "declaration specifically, or call Search(failureMode: symbol, exactMatch: true) first to see every " +
+                "declaration specifically, or call Search(mode: symbol, exactMatch: true) first to see every " +
                 $"same-named candidate ('{symbolName}') with its containing type and kind.");
         }
 

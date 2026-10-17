@@ -25,7 +25,7 @@ public class SymbolRelationshipTools
         [Description("Ranks results by frequency. Only affects objectCreations.")]
         [ToolOption(ToolOptionTag.Sort)] bool sortByFrequency = false,
         CancellationToken cancellationToken = default) =>
-        _impl.QuerySymbolRelationships(reason, name, searchKind, projectName, filePath, sortByFrequency, cancellationToken);
+        _impl.QuerySymbolRelationships(reason, name, searchKind, projectName, filePath, sortByFrequency, cancellationToken: cancellationToken);
 
     [McpServerTool(Name = "GetBestInsertionPoint")]
     [Produces(DataTag.StartLine)]

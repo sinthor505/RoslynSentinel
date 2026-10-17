@@ -579,7 +579,7 @@ public class DiscoveryEngine
     /// Finds all usages of a named attribute across the solution, optionally scoped to a
     /// project or file. Matches both "Foo" and "FooAttribute" spelling variants.
     /// </summary>
-    public async Task<List<AttributeUsageSite>> FindAttributeUsagesAsync(string attributeName, string? projectName = null, string? filePath = null, CancellationToken cancellationToken = default)
+    public async Task<List<AttributeUsageSite>> FindAttributeUsagesAsync(string attributeName, string? projectName = null, string? filePath = null, bool includeTests = true, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         // Normalise: strip leading [ / trailing ] if user typed e.g. "[Authorize]"
@@ -599,7 +599,7 @@ public class DiscoveryEngine
         }
         else
         {
-            documents = solution.Projects.SelectMany(p => p.Documents).Cast<Document?>();
+            documents = solution.Projects.Where(p => includeTests || !TestProjectDetector.IsTestProject(p)).SelectMany(p => p.Documents).Cast<Document?>();
         }
 
         var results = new List<AttributeUsageSite>();

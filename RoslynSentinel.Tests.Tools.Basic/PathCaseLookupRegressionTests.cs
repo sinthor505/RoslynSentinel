@@ -269,9 +269,8 @@ public class PathCaseLookupRegressionTests
 
         var result = await h.Tools.SearchSolutionTool(
             reason: "path case regression Search references",
-            SearchMode.references,
+            SearchMode.callers,
             query: "OrderStatus",
-            referencesKind: FindReferencesKind.callers,
             filePath: Spell(spelling, real),
             contextSnippet: "public enum OrderStatus");
 
