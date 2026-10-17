@@ -2434,7 +2434,7 @@ public class GitImpl : IGitOperations
     }
 
     public async Task<GitLogResult> LogAsync(
-        string gitRoot, int count, string? refName, string? paths, CancellationToken cancellationToken)
+        string gitRoot, int count, string? refName, string? paths, string? pickaxe, bool pickaxeRegex, bool follow, CancellationToken cancellationToken)
     {
         count = Math.Clamp(count, 1, 100);
         try
@@ -2447,6 +2447,11 @@ public class GitImpl : IGitOperations
             var format = $"%H{fieldSep}%h{fieldSep}%an{fieldSep}%aI{fieldSep}%B{recordSep}";
 
             var args = new List<string> { "log", $"--max-count={count}", $"--format={format}" };
+            // Attached form (-S<text> / -G<regex>) so a value beginning with '-' is never read as an option.
+            if (!string.IsNullOrWhiteSpace(pickaxe))
+                args.Add((pickaxeRegex ? "-G" : "-S") + pickaxe);
+            if (follow)
+                args.Add("--follow");
             if (!string.IsNullOrWhiteSpace(refName))
                 args.Add(refName);
             if (!string.IsNullOrWhiteSpace(paths))
@@ -2455,8 +2460,16 @@ public class GitImpl : IGitOperations
                 if (pathsError != null)
                     return new GitLogResult { IsError = true, Error = pathsError };
 
+                var pathCount = parsedPaths!.Count();
+                if (follow && pathCount != 1)
+                    return new GitLogResult { IsError = true, Error = $"follow needs exactly one path in paths, but {pathCount} were supplied. Pass a single file path, or omit follow." };
+
                 args.Add("--");
                 args.AddRange(parsedPaths!);
+            }
+            else if (follow)
+            {
+                return new GitLogResult { IsError = true, Error = "follow needs exactly one path in paths, but none was supplied. Pass a single file path, or omit follow." };
             }
 
             var logRaw = await RunGitAsync(gitRoot, [.. args], cancellationToken);

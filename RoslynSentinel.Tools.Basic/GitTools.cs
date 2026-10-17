@@ -22,10 +22,10 @@ public class GitTools
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "Git")]
     [Produces(DataTag.Report)]
-    [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-merge/rebase/revert (status reports it as inProgress); operation=abort backs out of whichever is in progress and restores the pre-operation state. tag/stash/worktree take an action. stage accepts hunkIds+hunkFingerprint or lineRange to stage part of one file.")]
+    [Description("Unified git tool. A conflicting pull/revert leaves the repo mid-operation (status shows inProgress); operation=abort backs out and restores the prior state. tag/stash/worktree take an action. stage accepts hunkIds+hunkFingerprint or lineRange to stage part of one file.")]
     public async Task<SentinelCallToolResult<object>> GitTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description("abort: cancels the merge, rebase, cherry-pick, revert or am that a conflict left in progress (no other parameters). tag: needs action (list|create|delete); create needs tagName. stash: needs action (list|push|apply|pop); apply/pop need stashIndex. worktree: needs action (list|add|remove); add needs worktreePath and branchName; remove needs worktreePath. hunks: list the unstaged hunks of one file (files: one path) with ids and a fingerprint, to feed stage's hunkIds.")]
+        [Description("abort: cancels the merge/rebase/cherry-pick/revert/am a conflict left in progress (no other params). tag: action list|create|delete; create needs tagName. stash: action list|push|apply|pop; apply/pop need stashIndex. worktree: action list|add|remove; add needs worktreePath+branchName; remove needs worktreePath. hunks: lists one file's unstaged hunks (files: one path) with ids and a fingerprint for stage's hunkIds.")]
         GitOperation operation,
         [Description("log / tag list: number of entries (max 100). hunks: max hunks listed.")]
         int count = 20,
@@ -38,7 +38,7 @@ public class GitTools
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: message is required when operation=commit and amend=false; optional when amend=true (omit to keep HEAD's message); unused otherwise.
         [Description("Required for operation=commit unless amend=true (then omitting keeps HEAD's message). tag create: when set makes an annotated tag. stash push: label for the entry.")]
         string? message = null,
-        [Description("stage: \"tracked\" (default) stages modified/deleted tracked files only; \"all\" also stages untracked files; \"listed\" stages exactly files/paths. commit: omit to commit exactly what's staged; pass scope only to also stage first. files implies scope=listed.")]
+        [Description("stage: \"tracked\" (default) = modified/deleted tracked files; \"all\" adds untracked; \"listed\" = exactly files/paths. commit: omit to commit what's staged; scope also stages first. files implies listed.")]
         GitStageScope? scope = null,
         [Description("stage/commit: paths to stage (CSV string or JSON array); implies scope=listed.")]
         string? files = null,
@@ -49,13 +49,13 @@ public class GitTools
         [Description("revert: true stages without committing; commit separately to finalize.")]
         bool noCommit = false,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: branchName is required for operation=checkout; optional for operation=branch (omit to list).
-        [Description("branch/checkout/worktree add: branch to create/delete/switch to/check out in the new worktree (branch: omit to list all; checkout and worktree add: required).")]
+        [Description("branch/checkout/worktree add: branch to create/delete/switch to/use in the new worktree (branch: omit to list; checkout, worktree add: required).")]
         string? branchName = null,
         [Description("Base ref for a new branch (default HEAD). checkout and worktree add: only with createBranch=true.")]
         string? startPoint = null,
         [Description("branch: true deletes branchName instead of creating it.")]
         bool deleteBranch = false,
-        [Description("checkout: true creates branchName from startPoint if it does not exist (otherwise a plain checkout). worktree add: true creates branchName (it must not exist yet); false checks out an existing branchName.")]
+        [Description("checkout: true creates branchName from startPoint if missing (else plain checkout). worktree add: true creates branchName (must not exist); false checks out an existing one.")]
         bool createBranch = false,
         [Description("push/fetch/pull: the remote to operate on.")]
         string remoteName = "origin",
@@ -65,11 +65,11 @@ public class GitTools
         bool rebase = false,
         [Description("commit: true amends HEAD instead of a new commit; message becomes optional (omit to keep HEAD's message).")]
         bool amend = false,
-        [Description("reset: \"soft\" moves HEAD only (changes stay staged); \"mixed\" (default) also resets the index (changes become unstaged). No \"hard\" mode.")]
+        [Description("reset: \"soft\" moves HEAD only (changes stay staged); \"mixed\" (default) also resets the index (unstaged). No \"hard\".")]
         GitResetMode? mode = null,
         [Description("status/log/diff/show/hunks (and list actions) only: absolute path to a different repo/worktree.")]
         string? repoPath = null,
-        [Description("status: most entries to list before truncating to a 10-per-list sample plus full counts (valid 1-5000). Untracked files are listed individually, so any listed path can be passed as-is to stage/commit files.")]
+        [Description("status: max entries listed before truncating to a 10-per-list sample plus full counts (1-5000). Untracked files are listed individually; pass any listed path as-is to stage/commit files.")]
         int maxEntries = 50,
         [Description("diff/show: true returns a name-status file list instead of the patch. Mutually exclusive with stat.")]
         bool nameOnly = false,
@@ -77,7 +77,7 @@ public class GitTools
         bool stat = false,
         [Description("revert: parent to keep when reverting a MERGE commit (git revert -m N): 1 = the branch merged into (almost always right), 2 = the branch merged in. Required for a merge commit.")]
         int? mainline = null,
-        [Description("log/show/diff/reset/tag: the git ref (a branch, tag, commit hash, HEAD~1, ...). log: start ref. show: the commit to show. diff: what to diff the working tree against (or a range). reset: REQUIRED, the ref to move HEAD to (e.g. \"HEAD~1\" to undo the last commit). tag create: the commit to tag (default HEAD).")]
+        [Description("log/show/diff/reset/tag: a git ref (branch, tag, hash, HEAD~1). log: start ref. show: commit to show. diff: what to diff the working tree against (or a range). reset: REQUIRED, the ref to move HEAD to. tag create: commit to tag (default HEAD).")]
         string? @ref = null,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: action is required when operation=tag, stash or worktree; refused for every other operation.
         [Description("tag/stash/worktree: REQUIRED. tag: list | create | delete. stash: list | push | apply | pop. worktree: list | add | remove. Refused for every other operation.")]
@@ -93,7 +93,7 @@ public class GitTools
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: worktreePath is required for worktree add/remove; unused otherwise.
         [Description("worktree add/remove: absolute path of the worktree. For add it must be OUTSIDE the repository root.")]
         string? worktreePath = null,
-        [Description("worktree remove only: true allows removing a worktree that has uncommitted or untracked files, permanently discarding them (git worktree remove --force). Default false: a dirty worktree is refused with the list of changed paths. The main, current and locked worktrees are refused regardless.")]
+        [Description("worktree remove only: true removes a worktree with uncommitted or untracked files, permanently discarding them (--force). Default false: a dirty worktree is refused, listing changed paths. Main, current and locked worktrees are always refused.")]
         bool discardUncommittedChanges = false,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: hunkIds needs hunkFingerprint and exactly one path in files; alternative to lineRange; refused for every operation except stage/add.
         [Description("stage: hunk ids from Git(operation: hunks), e.g. \"1,3\". Needs files (exactly one path) and hunkFingerprint.")]
@@ -102,6 +102,15 @@ public class GitTools
         string? hunkFingerprint = null,
         [Description("stage: stage the hunks wholly inside these new-file lines, e.g. \"40-80\" or \"52\". Alternative to hunkIds.")]
         string? lineRange = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: pickaxe is optional for operation=log; refused for every other operation.
+        [Description("log: commits adding/removing this text (-S)")]
+        string? pickaxe = null,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: pickaxeRegex requires pickaxe and operation=log; refused otherwise.
+        [Description("log: treat pickaxe as regex (-G)")]
+        bool pickaxeRegex = false,
+        // CONDITIONAL-PARAM-REVIEW-REQUIRED: follow needs operation=log and exactly one path in paths; refused for every other operation.
+        [Description("log: follow renames; needs one path")]
+        bool follow = false,
         // RequestContext<CallToolRequestParams> requestParams = null,
         CancellationToken cancellationToken = default)
     {
@@ -152,6 +161,16 @@ public class GitTools
         if (mainline is not null && operation != GitOperation.revert)
         {
             return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"mainline is only supported for revert - operation '{operation}' does not use it. Omit mainline.", Detail: null) };
+        }
+
+        if ((!string.IsNullOrWhiteSpace(pickaxe) || pickaxeRegex || follow) && operation != GitOperation.log)
+        {
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: $"pickaxe, pickaxeRegex and follow are only supported for log - operation '{operation}' does not use them. Omit them.", Detail: null) };
+        }
+
+        if (pickaxeRegex && string.IsNullOrWhiteSpace(pickaxe))
+        {
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ErrorCode: "InvalidArguments", Message: "pickaxeRegex only goes with pickaxe. Pass the regular expression in pickaxe, or omit pickaxeRegex.", Detail: null) };
         }
 
         if (action is not null && operation is not (GitOperation.tag or GitOperation.stash or GitOperation.worktree))
@@ -214,7 +233,7 @@ public class GitTools
         GitResult result = operation switch
         {
             GitOperation.status => await _gitImpl.StatusAsync(gitRoot, maxEntries, cancellationToken),
-            GitOperation.log => await _gitImpl.LogAsync(gitRoot, count, resolvedRef, resolvedPaths, cancellationToken),
+            GitOperation.log => await _gitImpl.LogAsync(gitRoot, count, resolvedRef, resolvedPaths, pickaxe, pickaxeRegex, follow, cancellationToken),
             GitOperation.diff => await _gitImpl.DiffAsync(gitRoot, resolvedRef ?? target, resolvedPaths, maxBytes, nameOnly, stat, cancellationToken),
             GitOperation.show => await _gitImpl.ShowAsync(gitRoot, resolvedRef ?? target, resolvedPaths, maxBytes, nameOnly, stat, cancellationToken),
             GitOperation.stage or GitOperation.add when hasHunkParams => await _gitImpl.StageHunksAsync(gitRoot, resolvedPaths, hunkIds, hunkFingerprint, lineRange, cancellationToken),

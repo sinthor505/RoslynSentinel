@@ -683,6 +683,6 @@ ChangeSignature, RenameSymbol conflicts) do not use it.
 
 
 
-## Open follow-ups from the type-by-name fix (2026-10-17) - not started
+## Open follow-ups from the type-by-name fix (2026-10-17) - mostly closed
 
-`FindImplementationsForMemberAsync` with `filePath` + a type name ignores `filePath` (its filePath branch matches only method/property/field declarations; falls back to the first same-named type in the solution). `DescribeNearMissCandidatesAsync` scans `SymbolFilter.Member` only (one-token change to `TypeAndMember`). `Git(operation: log)` lacks pickaxe (`-S`/`-G`) and `--follow` (TOOL-GAP found while tracing why the type filter existed). Also: `attribute` mode could gain a `hasAttribute` filter; `typesWithAttribute` is suspected to fail for namespaced attributes (hypothesis).
+The other items moved to CLOSED.md. Remaining: `Search(mode: attribute)` could gain a `hasAttribute` filter (semantics undefined: sibling attribute on the same declaration?); add an `includeTests=false` attribute-search test once a test fixture can mark a project as a test project (`TestProjectDetector` needs a csproj referencing Microsoft.NET.Test.Sdk).

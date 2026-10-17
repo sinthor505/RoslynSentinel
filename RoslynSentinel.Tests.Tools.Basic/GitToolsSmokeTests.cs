@@ -226,6 +226,110 @@ public class GitToolsSmokeTests
     }
 
     [Test]
+    public async Task Git_Log_Pickaxe_ReturnsOnlyCommitThatAddsTheStringAsync()
+    {
+        WriteFile("notes.txt", "alpha\nunique_marker_string_123\n");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add marker");
+        WriteFile("other.txt", "unrelated");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "unrelated change");
+
+        var result = await _gitTools.GitTool(reason: "pickaxe literal search", GitOperation.log, pickaxe: "unique_marker_string_123");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(((GitLogResult)result.SuccessData!).Commits.Select(c => c.Message), Is.EqualTo(new[] { "add marker" }));
+    }
+
+    [Test]
+    public async Task Git_Log_PickaxeRegex_MatchesRegularExpressionAndLiteralDoesNotAsync()
+    {
+        WriteFile("tokens.txt", "const string Token = \"uniqueAlpha42\";");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add token");
+        WriteFile("plain.txt", "nothing here");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "unrelated change");
+
+        var regex = await _gitTools.GitTool(reason: "pickaxe regex search", GitOperation.log, pickaxe: "uniqueAlpha[0-9]+", pickaxeRegex: true);
+        Assert.That(!regex.IsError, Is.True, regex.ErrorData?.Message);
+        Assert.That(((GitLogResult)regex.SuccessData!).Commits.Select(c => c.Message), Is.EqualTo(new[] { "add token" }));
+
+        // The same text as a plain string is not a pattern, so nothing matches.
+        var literal = await _gitTools.GitTool(reason: "pickaxe literal control", GitOperation.log, pickaxe: "uniqueAlpha[0-9]+");
+        Assert.That(!literal.IsError, Is.True, literal.ErrorData?.Message);
+        Assert.That(((GitLogResult)literal.SuccessData!).Commits, Is.Empty);
+    }
+
+    [Test]
+    public async Task Git_Log_Pickaxe_LeadingDash_IsTreatedAsTextNotGitOptionAsync()
+    {
+        WriteFile("flags.txt", "value -foo here");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add dash flag");
+        WriteFile("plain.txt", "nothing here");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "unrelated change");
+
+        var result = await _gitTools.GitTool(reason: "pickaxe leading dash", GitOperation.log, pickaxe: "-foo");
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(((GitLogResult)result.SuccessData!).Commits.Select(c => c.Message), Is.EqualTo(new[] { "add dash flag" }));
+    }
+
+    [Test]
+    public async Task Git_Log_Follow_AcrossRename_ReturnsHistoryBeforeTheRenameAsync()
+    {
+        WriteFile("old.txt", "history line");
+        RunGit(_repoDir, "add", "-A");
+        RunGit(_repoDir, "commit", "-m", "add old file");
+        RunGit(_repoDir, "mv", "old.txt", "new.txt");
+        RunGit(_repoDir, "commit", "-m", "rename file");
+
+        var result = await _gitTools.GitTool(reason: "follow across rename", GitOperation.log, paths: "new.txt", follow: true);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        Assert.That(((GitLogResult)result.SuccessData!).Commits.Select(c => c.Message), Is.EqualTo(new[] { "rename file", "add old file" }));
+    }
+
+    [Test]
+    public async Task Git_Log_Follow_WithZeroOrTwoPaths_ReturnsGitErrorWithoutRawStderrAsync()
+    {
+        var noPaths = await _gitTools.GitTool(reason: "follow without paths", GitOperation.log, follow: true);
+        var twoPaths = await _gitTools.GitTool(reason: "follow with two paths", GitOperation.log, paths: "README.md,other.txt", follow: true);
+
+        foreach (var result in new[] { noPaths, twoPaths })
+        {
+            Assert.That(result.IsError, Is.True);
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("GitError"));
+            Assert.That(result.ErrorData?.Message, Is.Not.Null.And.Not.Empty);
+            Assert.That(result.ErrorData?.Message, Does.Not.Contain("fatal:"));
+        }
+    }
+
+    [Test]
+    public async Task Git_PickaxeAndFollow_OnNonLogOperation_ReturnsInvalidArgumentsAsync()
+    {
+        var pickaxeOnShow = await _gitTools.GitTool(reason: "pickaxe on show", GitOperation.show, pickaxe: "x");
+        var followOnDiff = await _gitTools.GitTool(reason: "follow on diff", GitOperation.diff, paths: "README.md", follow: true);
+
+        foreach (var result in new[] { pickaxeOnShow, followOnDiff })
+        {
+            Assert.That(result.IsError, Is.True);
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
+        }
+    }
+
+    [Test]
+    public async Task Git_Log_PickaxeRegexWithoutPickaxe_ReturnsInvalidArgumentsAsync()
+    {
+        var result = await _gitTools.GitTool(reason: "pickaxeRegex without pickaxe", GitOperation.log, pickaxeRegex: true);
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
+    }
+
+    [Test]
     public async Task Git_Diff_RespondsWithinBoundAsync()
     {
         File.WriteAllText(Path.Combine(_repoDir, "README.md"), "hello again");

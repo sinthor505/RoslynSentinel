@@ -40,7 +40,7 @@ public class SymbolRelationshipImpl
             FindUsagesSearchKind.attributeUsages => await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePathResolved, includeTests: includeTests, cancellationToken: cancellationToken),
             FindUsagesSearchKind.objectCreations => await _discoveryEngine.FindObjectCreationSitesAsync(name, filePathResolved, projectName, sortByFrequency, cancellationToken),
             FindUsagesSearchKind.extensionsFor => await _symbolNavigationEngine.FindExtensionMethodsAsync(name, projectName, cancellationToken),
-            FindUsagesSearchKind.typesWithAttribute => await _discoveryEngine.FindTypesByAttributeAsync(name, cancellationToken),
+            FindUsagesSearchKind.typesWithAttribute => await _discoveryEngine.FindTypesByAttributeAsync(name, includeTests, projectName, cancellationToken),
             FindUsagesSearchKind.methodsByReturnType => await _discoveryEngine.FindMethodsByReturnTypeAsync(name, cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(searchKind), searchKind, "Unhandled searchKind.")
         };
@@ -100,11 +100,14 @@ public class SymbolRelationshipImpl
 
             if (broadened.Count == 0)
             {
+                // Only claim a global miss when the whole solution was searched; a narrowed scope
+                // (test projects excluded, or a single project) must say what was actually covered.
+                var scopeNote = includeTests && string.IsNullOrEmpty(projectName) ? "This is a trustworthy 'not found anywhere' signal, not an error." : "Searched scope: " + (string.IsNullOrEmpty(projectName) ? "non-test projects only" : $"project '{projectName}'" + (includeTests ? string.Empty : " (non-test)")) + (includeTests ? string.Empty : "; pass includeTests: true to include test projects") + ". This is NOT a 'not found anywhere' signal.";
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
                     SuccessData = results,
-                    WarningDetails = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " + "nothing found under any kind. This is a trustworthy 'not found anywhere' signal, not an error."
+                    WarningDetails = $"0 results for '{searchKind}'. Broadened search across all relationship kinds - " + "nothing found under any kind. " + scopeNote
                 };
             }
 

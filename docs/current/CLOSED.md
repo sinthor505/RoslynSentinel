@@ -5,6 +5,14 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## Type-by-name follow-ups: implementations+filePath, near-miss types, namespaced attributes, Git pickaxe/follow - resolved 2026-10-17
+
+- `FindImplementationsForMemberAsync` with `filePath` + a type name now resolves the type declared in that file (type preferred over same-named ctor); a filePath miss reports the scoped failure instead of answering for another same-named type; type eligibility (sealed/static/struct/enum/delegate throw) now applies on the filePath path too. Non-sealed class targets now return transitive derived classes (`FindDerivedClassesAsync`); previously an empty list that read as "zero implementations".
+- `DescribeNearMissCandidatesAsync` scans `TypeAndMember`; global-namespace types render without `()`.
+- `typesWithAttribute` (`FindTypesByAttributeAsync`) resolves bare names across namespaces and referenced assemblies (hypothesis confirmed: `Search(attribute, "TestFixture")` found nothing while the qualified name found 397); `attributeUsages` matches qualified queries on the last segment; `includeTests`/`projectName` honored; XML-doc cref hits skipped; the broaden-on-empty message no longer claims "not found anywhere" when only non-test projects were searched.
+- `Git(operation: log)` gained `pickaxe` (-S), `pickaxeRegex` (-G) and `follow` (--follow, one path). To fit the claude-lean schema budget, wording of other Git parameter descriptions was tightened.
+- Still open: `Search(mode: attribute)` `hasAttribute` filter (semantics undefined); `includeTests=false` attribute test needs a fixture that can mark a project as a test project.
+
 ## DTO-justification PreToolUse hook - resolved 2026-10-16
 
 **Resolved 2026-10-16.** Entry was: build the hook that makes a new DTO carry a `NEW-DTO:`/`DTO-EXEMPT:` justification in the call's `reason`. Built `.claude/hooks/enforce-dto-justification.ps1` (fail-open; `Member` addTopLevelType/addMember, `CreateFile` class/record/struct, `WriteFile` content minus on-disk types; production `.cs` only), a separate `settings.json` PreToolUse entry (matcher `.*__Member|.*__CreateFile|.*__WriteFile`) and `enforce-dto-justification.Tests.ps1` (plain script like `enforce-dogfood.Tests.ps1`, not Pester; 45 cases, all pass). Decisions: `*Options` types trigger, `Wire impact:` is not enforced, dry runs are not skipped, `DTO-EXEMPT` is the only bypass; service suffixes also include Builder, Visitor, Rewriter, Walker, Provider, Handler, Converter, Comparer. Remaining gap is in TODO.md.

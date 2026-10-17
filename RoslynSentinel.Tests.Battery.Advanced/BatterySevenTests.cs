@@ -130,6 +130,77 @@ public class PlainDto { public int Id { get; set; } }
         var results = await new DiscoveryEngine(_workspaceManager).FindTypesByAttributeAsync("Obsolete");
         Assert.That(results, Is.Empty, "No types have Obsolete attribute");
     }
+
+    [Test]
+    public async Task FindTypesByAttribute_NamespacedAttribute_BareNameQuery_FindsDecoratedType()
+    {
+        SetSource(@"
+using System;
+namespace Ns
+{
+    public class MyAttrAttribute : Attribute { }
+}
+namespace App
+{
+    using Ns;
+    [MyAttr]
+    public class Widget { }
+    public class Plain { }
+}
+");
+        var results = await new DiscoveryEngine(_workspaceManager).FindTypesByAttributeAsync("MyAttr");
+        Assert.That(results.Count, Is.EqualTo(1), "Bare-name query must resolve the namespaced attribute and find exactly one decorated type");
+        Assert.That(results[0].MemberName, Is.EqualTo("Widget"));
+    }
+
+    [Test]
+    public async Task FindTypesByAttribute_NamespacedAttribute_QualifiedQuery_FindsTypeAndUsage()
+    {
+        SetSource(@"
+using System;
+namespace Ns
+{
+    public class MyAttrAttribute : Attribute { }
+}
+namespace App
+{
+    using Ns;
+    [MyAttr]
+    public class Widget { }
+}
+");
+        var engine = new DiscoveryEngine(_workspaceManager);
+        var types = await engine.FindTypesByAttributeAsync("Ns.MyAttrAttribute");
+        Assert.That(types.Count, Is.EqualTo(1), "Qualified query must find the type decorated with [MyAttr] written through the using directive");
+        Assert.That(types[0].MemberName, Is.EqualTo("Widget"));
+
+        var usages = await engine.FindAttributeUsagesAsync("Ns.MyAttrAttribute");
+        Assert.That(usages.Count, Is.EqualTo(1), "Qualified query must match the [MyAttr] source usage by its last segment");
+        Assert.That(usages[0].TargetName, Is.EqualTo("Widget"));
+    }
+
+    [Test]
+    public async Task FindTypesByAttribute_NamespacedAttribute_CrefOnlyMention_IsNotCounted()
+    {
+        SetSource(@"
+using System;
+namespace Ns
+{
+    public class MyAttrAttribute : Attribute { }
+}
+namespace App
+{
+    /// <summary>See <see cref=""Ns.MyAttrAttribute""/> for details.</summary>
+    public class DocOnly { }
+}
+");
+        var engine = new DiscoveryEngine(_workspaceManager);
+        var types = await engine.FindTypesByAttributeAsync("Ns.MyAttrAttribute");
+        Assert.That(types, Is.Empty, "A cref in an XML doc comment is not an attribute application and must not be reported as a typesWithAttribute hit");
+
+        var usages = await engine.FindAttributeUsagesAsync("Ns.MyAttrAttribute");
+        Assert.That(usages, Is.Empty, "A cref in an XML doc comment is not an AttributeSyntax and must not be reported as an attributeUsages hit");
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════════════════

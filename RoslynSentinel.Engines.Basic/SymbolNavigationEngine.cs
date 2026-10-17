@@ -1812,27 +1812,31 @@ public class SymbolNavigationEngine
                         // Same name-only lookup as the no-snippet branch below, used purely to
                         // enrich this message with "symbolName WAS found at line N" when possible ->
                         // does not change resolution/matching behavior, only what the error reports.
-                        var nameOnlyCandidates = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-                            .Where(m => m switch
-                            {
-                                MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
-                                PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
-                                _ => false
-                            }).ToList();
+                        // Kind-complete (ResolveCandidates), so a type name declared in this file is
+                        // reported too, matching FindCallersAsync's precheck.
+                        var nameOnlyText = await document.GetTextAsync(cancellationToken);
+                        var nameOnlyCandidates = SyntaxTargetResolver.ResolveCandidates(root, nameOnlyText, symbolName, cancellationToken)
+                            .Select(c => c.Node)
+                            .OfType<MemberDeclarationSyntax>()
+                            .ToList();
                         scopedResolutionFailure = $"contextSnippet did not resolve to a symbol in '{filePath}'. " +
                             DescribeNameOnlyCandidates(nameOnlyCandidates, symbolName);
                     }
                 }
                 else
                 {
-                    var decl = root.DescendantNodes().OfType<MemberDeclarationSyntax>()
-                        .FirstOrDefault(m => m switch
-                        {
-                            MethodDeclarationSyntax md => md.Identifier.Text == symbolName,
-                            PropertyDeclarationSyntax pd => pd.Identifier.Text == symbolName,
-                            FieldDeclarationSyntax fd => fd.Declaration.Variables.Any(v => v.Identifier.Text == symbolName),
-                            _ => false
-                        });
+                    // Kind-complete lookup (methods, properties, fields, constructors and every type
+                    // kind) instead of a Method/Property/Field-only switch, which silently dropped a
+                    // class/interface/record/struct/enum declared in this file. A constructor is
+                    // demoted behind any other match: for `class Foo` the name matches both the type
+                    // and its constructor, and the type is the intended target.
+                    var declsText = await document.GetTextAsync(cancellationToken);
+                    var decls = SyntaxTargetResolver.ResolveCandidates(root, declsText, symbolName, cancellationToken)
+                        .Select(c => c.Node)
+                        .OfType<MemberDeclarationSyntax>()
+                        .ToList();
+                    var decl = decls.FirstOrDefault(m => m is not ConstructorDeclarationSyntax)
+                        ?? decls.FirstOrDefault();
                     if (decl != null)
                     {
                         // GetDeclaredSymbol returns null directly on a FieldDeclarationSyntax (it can
@@ -1964,7 +1968,10 @@ public class SymbolNavigationEngine
             }
         }
 
-        if (symbol == null)
+        // Gated on scopedResolutionFailure == null: when a filePath/contextSnippet-scoped lookup ran and
+        // failed, falling back to a solution-wide type lookup would silently answer for a different
+        // same-named type than the file named. Report the scoped failure below instead.
+        if (symbol == null && scopedResolutionFailure == null)
         {
             // Fallback: try to find as a named type (e.g., user passed an interface name, not a member name).
             foreach (var project in solution.Projects)
@@ -2015,7 +2022,11 @@ public class SymbolNavigationEngine
             ? namedTarget.TypeKind is TypeKind.Class or TypeKind.Interface && !namedTarget.IsSealed && !namedTarget.IsStatic
             : symbol.IsAbstract || symbol.IsVirtual || symbol.IsOverride
                 || symbol.ContainingType?.TypeKind == TypeKind.Interface;
-        if (!skipStructuralCheck && !isImplementable && symbol is INamedTypeSymbol ineligibleType)
+        // Type eligibility applies on every path, including filePath: a type resolved from the named
+        // file is just as unable to have implementations when sealed/static/struct/enum/delegate.
+        // skipStructuralCheck only relaxes the member check below (a pinned concrete member is a
+        // trustworthy "confirmed zero" answer), not the type check.
+        if (!isImplementable && symbol is INamedTypeSymbol ineligibleType)
         {
             throw new ToolTargetIneligibleException(
                 $"FindImplementations: symbolName '{symbolName}' resolved to {DescribeKind(ineligibleType)} " +
@@ -2037,7 +2048,17 @@ public class SymbolNavigationEngine
                 $"same-named candidate ('{symbolName}') with its containing type and kind.");
         }
 
-        var implementations = await SymbolFinder.FindImplementationsAsync(symbol, solution, null, cancellationToken);
+        IEnumerable<ISymbol> implementations = await SymbolFinder.FindImplementationsAsync(symbol, solution, null, cancellationToken);
+
+        // SymbolFinder.FindImplementationsAsync only finds interface implementers and returns nothing for a
+        // class symbol, so an abstract/non-sealed class would read as "confirmed zero implementations" even
+        // with derived classes present. Union in the transitive derived classes for a class target.
+        if (symbol is INamedTypeSymbol { TypeKind: TypeKind.Class } classTarget)
+        {
+            var derived = await SymbolFinder.FindDerivedClassesAsync(classTarget, solution, true, null, cancellationToken);
+            implementations = implementations.Concat(derived).Distinct(SymbolEqualityComparer.Default).ToList();
+        }
+
         var results = new List<ImplementationInfo>();
 
         foreach (var impl in implementations)
@@ -2428,7 +2449,7 @@ public class SymbolNavigationEngine
 
             var matches = compilation.GetSymbolsWithName(
                 name => name.Contains(symbolName, StringComparison.OrdinalIgnoreCase),
-                SymbolFilter.Member,
+                SymbolFilter.TypeAndMember,
                 cancellationToken);
 
             foreach (var match in matches)
@@ -2439,7 +2460,9 @@ public class SymbolNavigationEngine
                 }
 
                 var containingType = match.ContainingType?.Name ?? match.ContainingNamespace?.Name ?? "?";
-                var label = $"{match.Name} ({containingType})";
+                // A type in the global namespace has an empty containing-namespace name -> render just
+                // the name instead of a dangling "Foo ()".
+                var label = containingType.Length == 0 ? match.Name : $"{match.Name} ({containingType})";
                 if (!suggestions.Contains(label))
                 {
                     suggestions.Add(label);

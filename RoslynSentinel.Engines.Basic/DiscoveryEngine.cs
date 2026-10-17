@@ -585,7 +585,10 @@ public class DiscoveryEngine
         // Normalise: strip leading [ / trailing ] if user typed e.g. "[Authorize]"
         var name = attributeName.Trim('[', ']');
         // Build both canonical forms: "Authorize" and "AuthorizeAttribute"
-        var bare = name.EndsWith("Attribute", StringComparison.Ordinal) ? name[..^9] : name;
+        // A qualified query ("System.ObsoleteAttribute", "NUnit.Framework.TestFixture") is compared on
+        // its last dotted segment, because the source side below compares attr.Name's last segment too.
+        var lastSegment = name.Contains('.') ? name[(name.LastIndexOf('.') + 1)..] : name;
+        var bare = lastSegment.EndsWith("Attribute", StringComparison.Ordinal) ? lastSegment[..^9] : lastSegment;
         var full = bare + "Attribute";
         IEnumerable<Document?> documents;
         if (!string.IsNullOrEmpty(filePath))
@@ -725,20 +728,31 @@ public class DiscoveryEngine
     /// Resolves both "Foo" and "FooAttribute" spelling variants. Each result includes
     /// FilePathWrapper, Line, and ContextSnippet for direct use with filePath-gated tools.
     /// </summary>
-    public async Task<List<SearchResult>> FindTypesByAttributeAsync(string attributeName, CancellationToken cancellationToken = default)
+    public async Task<List<SearchResult>> FindTypesByAttributeAsync(string attributeName, bool includeTests = true, string? projectName = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var results = new List<SearchResult>();
         var seen = new HashSet<string>();
-        // Normalise: strip brackets if the caller passed "[Authorize]".
-        var bare = attributeName.Trim('[', ']');
+        // Normalise: strip brackets if the caller passed "[Authorize]". A qualified query
+        // ("NUnit.Framework.TestFixture") keeps its namespace as a resolution filter.
+        var name = attributeName.Trim('[', ']');
+        var lastDot = name.LastIndexOf('.');
+        var namespacePrefix = lastDot > 0 ? name[..lastDot] : null;
+        var bare = lastDot >= 0 ? name[(lastDot + 1)..] : name;
         if (bare.EndsWith("Attribute", StringComparison.OrdinalIgnoreCase))
         {
             bare = bare[..^9];
         }
 
         var full = bare + "Attribute";
-        foreach (var project in solution.Projects)
+        // Scope: projects whose compilations are used to resolve the attribute AND whose documents
+        // may contribute reference locations (the attribute may live in a referenced assembly).
+        var scopeProjects = solution.Projects.Where(p => (includeTests || !TestProjectDetector.IsTestProject(p)) && (string.IsNullOrEmpty(projectName) || string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase))).ToList();
+        var scopeIds = scopeProjects.Select(p => p.Id).ToHashSet();
+        // Resolve every matching attribute type (source or metadata, any namespace unless the query was
+        // qualified). The same attribute resolves again from every project that sees it -> keep one.
+        var attributeSymbols = new Dictionary<string, INamedTypeSymbol>();
+        foreach (var project in scopeProjects)
         {
             var compilation = await project.GetCompilationAsync(cancellationToken);
             if (compilation == null)
@@ -746,14 +760,14 @@ public class DiscoveryEngine
                 continue;
             }
 
-            // Resolve the attribute type symbol so we can use SymbolFinder for semantic accuracy.
-            INamedTypeSymbol? attrSymbol = compilation.GetTypeByMetadataName(full) ?? compilation.GetTypeByMetadataName(bare);
-            if (attrSymbol == null)
+            foreach (var candidate in ResolveAttributeTypes(compilation, namespacePrefix, bare, full, cancellationToken))
             {
-                // Attribute not found in this project's compilation -> skip.
-                continue;
+                attributeSymbols.TryAdd((candidate.ContainingAssembly?.Name ?? string.Empty) + "|" + candidate.ToDisplayString(), candidate);
             }
+        }
 
+        foreach (var attrSymbol in attributeSymbols.Values)
+        {
             // SymbolFinder.FindReferencesAsync finds all uses of the attribute type,
             // including on classes, methods, properties, etc.
             var references = await SymbolFinder.FindReferencesAsync(attrSymbol, solution, cancellationToken);
@@ -761,13 +775,23 @@ public class DiscoveryEngine
             {
                 foreach (var location in refGroup.Locations)
                 {
-                    if (!location.Location.IsInSource)
+                    if (!location.Location.IsInSource || !scopeIds.Contains(location.Document.Project.Id))
                     {
                         continue;
                     }
 
                     var refTree = location.Location.SourceTree;
                     if (refTree == null)
+                    {
+                        continue;
+                    }
+
+                    // Only count real attribute applications: XML-doc crefs and typeof/nameof uses
+                    // are references too, but their syntax is not inside an AttributeSyntax name.
+                    var root = await refTree.GetRootAsync(cancellationToken);
+                    var node = root.FindNode(location.Location.SourceSpan);
+                    var attributeNode = node.AncestorsAndSelf().OfType<AttributeSyntax>().FirstOrDefault();
+                    if (attributeNode == null || !attributeNode.Name.Span.Contains(location.Location.SourceSpan))
                     {
                         continue;
                     }
@@ -782,8 +806,6 @@ public class DiscoveryEngine
                     }
 
                     // Walk up from the attribute usage to find the attributed member name.
-                    var root = await refTree.GetRootAsync(cancellationToken);
-                    var node = root.FindNode(location.Location.SourceSpan);
                     var memberName = FindAttributedMemberName(node);
                     string? contextSnippet = null;
                     try
@@ -796,7 +818,7 @@ public class DiscoveryEngine
                     }
                     catch (Exception)
                     {
-                    // non-fatal
+                        // non-fatal
                     }
 
                     results.Add(new SearchResult(FilePath: filePath, MemberName: memberName, Detail: $"Has [{bare}] attribute", Line: line, ContextSnippet: contextSnippet));
@@ -805,6 +827,76 @@ public class DiscoveryEngine
         }
 
         return results.OrderBy(r => r.FilePath).ThenBy(r => r.Line).ToList();
+    }
+
+    /// <summary>
+    /// Resolves every attribute type matching the query in one compilation (source and referenced
+    /// assemblies). A qualified query tries the exact metadata name first; otherwise (or when that
+    /// misses) the namespace tree is walked and types named <paramref name="full"/> or
+    /// <paramref name="bare"/> are collected, optionally restricted to a namespace suffix match.
+    /// Only types deriving from System.Attribute are returned.
+    /// </summary>
+    private static List<INamedTypeSymbol> ResolveAttributeTypes(Compilation compilation, string? namespacePrefix, string bare, string full, CancellationToken cancellationToken)
+    {
+        var found = new List<INamedTypeSymbol>();
+        void Add(INamedTypeSymbol? candidate)
+        {
+            if (candidate != null && IsAttributeType(candidate) && !found.Contains(candidate, SymbolEqualityComparer.Default))
+            {
+                found.Add(candidate);
+            }
+        }
+
+        if (namespacePrefix != null)
+        {
+            Add(compilation.GetTypeByMetadataName(namespacePrefix + "." + full));
+            Add(compilation.GetTypeByMetadataName(namespacePrefix + "." + bare));
+            if (found.Count > 0)
+            {
+                return found;
+            }
+        }
+
+        var namespaces = new Stack<INamespaceSymbol>();
+        namespaces.Push(compilation.GlobalNamespace);
+        while (namespaces.Count > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var ns = namespaces.Pop();
+            var display = namespacePrefix == null ? string.Empty : ns.ToDisplayString();
+            if (namespacePrefix == null || display == namespacePrefix || display.EndsWith("." + namespacePrefix, StringComparison.Ordinal))
+            {
+                foreach (var type in ns.GetTypeMembers(full))
+                {
+                    Add(type);
+                }
+
+                foreach (var type in ns.GetTypeMembers(bare))
+                {
+                    Add(type);
+                }
+            }
+
+            foreach (var child in ns.GetNamespaceMembers())
+            {
+                namespaces.Push(child);
+            }
+        }
+
+        return found;
+    }
+
+    private static bool IsAttributeType(INamedTypeSymbol type)
+    {
+        for (var baseType = type.BaseType; baseType != null; baseType = baseType.BaseType)
+        {
+            if (baseType.Name == "Attribute" && baseType.ContainingNamespace?.ToDisplayString() == "System")
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

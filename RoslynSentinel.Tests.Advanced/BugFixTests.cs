@@ -1794,6 +1794,109 @@ public class Foo : IFoo
             var results = await _navigationEngine.FindImplementationsForMemberAsync(null, "IFoo", contextSnippet: null);
             Assert.That(results, Is.Not.Empty, "A by-name FindImplementations on an interface type must resolve to the interface and return its implementers");
         }
+
+        // -- Fix B2: FindImplementations filePath + type name resolves the type declared in that file, not a same-named decoy elsewhere --
+        [Test]
+        public async Task FindImplementations_FilePathAndTypeName_ResolvesDeclaredInterfaceNotDecoy()
+        {
+            SetMultipleFiles(
+                ("A.cs", @"public interface IFoo
+{
+    void Run();
+}"),
+                ("B.cs", @"public class Foo : IFoo
+{
+    public void Run() { }
+}"),
+                ("C.cs", @"namespace Other
+{
+    public interface IFoo
+    {
+        void Stop();
+    }
+    public class Bar : IFoo
+    {
+        public void Stop() { }
+    }
+}"));
+            var results = await _navigationEngine.FindImplementationsForMemberAsync("A.cs", "IFoo", contextSnippet: null);
+            var names = results.Select(r => r.TypeName).ToList();
+            Assert.That(names.Any(n => n.EndsWith("Foo", StringComparison.Ordinal)), Is.True, "The implementer of the interface declared in A.cs (Foo in B.cs) must be returned");
+            Assert.That(names.Any(n => n.EndsWith("Bar", StringComparison.Ordinal)), Is.False, "The same-named decoy interface in C.cs must not be resolved when filePath pins A.cs");
+        }
+
+        // -- Fix B3: FindImplementations filePath + type name not declared in that file -> scoped not-found, never a same-named type elsewhere --
+        [Test]
+        public async Task FindImplementations_FilePathAndTypeNameNotInFile_ThrowsScopedNotFound()
+        {
+            SetMultipleFiles(
+                ("A.cs", @"public class Unrelated
+{
+    public void Run() { }
+}"),
+                ("B.cs", @"public interface Missing
+{
+    void Go();
+}"));
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindImplementationsForMemberAsync("A.cs", "Missing", contextSnippet: null));
+            Assert.That(ex!.Message, Does.Contain("not found declared in 'A.cs'"), "The failure must be scoped to the file the caller named");
+        }
+
+        // -- Fix B4: FindImplementations filePath + sealed class name -> ineligible target, the type check applies on the filePath path too --
+        [Test]
+        public async Task FindImplementations_FilePathAndSealedClassName_ThrowsTargetIneligible()
+        {
+            SetSource(@"public sealed class Locked
+{
+    public void Run() { }
+}", "Locked.cs");
+            await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _navigationEngine.FindImplementationsForMemberAsync("Locked.cs", "Locked", contextSnippet: null));
+        }
+
+        // -- Fix B5: FindImplementations filePath + type name whose constructor shares the name -> the type wins over the ctor --
+        [Test]
+        public async Task FindImplementations_FilePathAndAbstractClassWithSameNamedCtor_ResolvesTypeNotCtor()
+        {
+            SetMultipleFiles(
+                ("A.cs", @"public abstract class Foo
+{
+    public Foo() { }
+    public abstract void Run();
+}"),
+                ("B.cs", @"public class Bar : Foo
+{
+    public override void Run() { }
+}"));
+            var results = await _navigationEngine.FindImplementationsForMemberAsync("A.cs", "Foo", contextSnippet: null);
+            var names = results.Select(r => r.TypeName).ToList();
+            Assert.That(names.Any(n => n.EndsWith("Bar", StringComparison.Ordinal)), Is.True, "Filepath + class name must resolve to the type Foo, so its derived class Bar is returned (not an empty constructor lookup)");
+        }
+
+        // -- Fix B6a: near-miss hint now includes types -> a misspelled type name on FindCallers suggests the type --
+        [Test]
+        public async Task FindCallersAsync_MisspelledTypeName_SuggestsTypeInDidYouMean()
+        {
+            SetSource(@"public class Calculator
+{
+    public void Add() { }
+}", "Calculator.cs");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindCallersAsync(null, "Calculato", contextSnippet: null));
+            Assert.That(ex!.Message, Does.Contain("Did you mean"));
+            Assert.That(ex.Message, Does.Contain("Calculator"));
+        }
+
+        // -- Fix B6b: same near-miss hint for FindImplementations -> a misspelled type name suggests the type --
+        [Test]
+        public async Task FindImplementationsForMemberAsync_MisspelledTypeName_SuggestsTypeInDidYouMean()
+        {
+            SetSource(@"public class Calculator
+{
+    public void Add() { }
+}", "Calculator.cs");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _navigationEngine.FindImplementationsForMemberAsync(null, "Calculato", contextSnippet: null));
+            Assert.That(ex!.Message, Does.Contain("Did you mean"));
+            Assert.That(ex.Message, Does.Contain("Calculator"));
+        }
     }
 
     [TestFixture]
