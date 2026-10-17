@@ -1361,7 +1361,7 @@ public class StructuralRefactoringEngine
         string? snippetWarning;
         try
         {
-            var resolved = SyntaxTargetResolver.ResolveBySnippetWithWarning(candidates, text, contextSnippet, lineBefore, lineAfter, (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode), trustSingleCandidate: true);
+            var resolved = SyntaxTargetResolver.ResolveBySnippetWithWarning(candidates, text, contextSnippet, lineBefore, lineAfter, (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode), trustSingleCandidate: true, filePath: document.FilePath ?? string.Empty);
             target = resolved.Candidate?.Node as MemberDeclarationSyntax;
             snippetWarning = resolved.Warning;
         }
@@ -1372,7 +1372,8 @@ public class StructuralRefactoringEngine
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
                 Message = ex.Message,
-                ErrorCode = ex.ErrorCode
+                ErrorCode = ex.ErrorCode,
+                Candidates = (ex as ToolAmbiguousMatchException)?.Candidates
             };
         }
 

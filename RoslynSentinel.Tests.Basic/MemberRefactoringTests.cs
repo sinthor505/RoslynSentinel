@@ -316,6 +316,51 @@ public enum ToolScope
     }
 
     [Test]
+    [Category("SymbolNavigationEngine")] // sentinel:auto-category
+    public async Task GetMemberSource_OverloadsWithSink_FillsOneStructuredCandidatePerOverload()
+    {
+        var source = """
+            public class Holder
+            {
+                public void Run(int x) { }
+                public void Run(string s) { }
+            }
+            """;
+        SetSource(source, "MemberSourceSink.cs");
+
+        var candidates = new List<AmbiguousCandidate>();
+        var (outcome, message, errorCode, info) = await _symbolNavigationEngine.GetMemberSourceAsync(
+            "MemberSourceSink.cs", "Run", containerName: null, contextSnippet: null, lineBefore: null, lineAfter: null,
+            ambiguousCandidates: candidates);
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(errorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(info, Is.Null);
+        Assert.That(candidates, Has.Count.EqualTo(2), message);
+        Assert.That(candidates.All(c => c.Counted), Is.True);
+        Assert.That(candidates.All(c => !string.IsNullOrEmpty(c.ContextSnippet)), Is.True);
+        Assert.That(candidates.All(c => c.Line > 0), Is.True);
+    }
+
+    [Test]
+    [Category("MemberRefactoringEngine")] // sentinel:auto-category
+    public async Task ReplaceMember_SnippetMatchesBothOverloads_SetsStructuredCandidates()
+    {
+        SetSource(@"
+public class C
+{
+    public void Foo(int x) { }
+    public void Foo(string x) { }
+}", "C.cs");
+
+        var result = await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(double x) { }",
+            contextSnippet: "public void Foo(");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        Assert.That(result.Candidates, Is.Not.Null.And.Not.Empty);
+    }
+
+    [Test]
     [Category("MemberSourceInfo")] // sentinel:auto-category
     [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task GetMemberSource_OverloadsWithSnippet_ReturnsMatchingOverload()

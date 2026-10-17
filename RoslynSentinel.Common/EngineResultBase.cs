@@ -29,6 +29,13 @@ public record EngineResultBase : IResultStatus
         get; init;
     } = string.Empty;
 
+    /// <summary>Structured candidates when the failure was an ambiguous match (see <see cref="ToolAmbiguousMatchException"/>); null otherwise. Not serialized, so <see cref="ToJsonSummary"/> output is unchanged.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<AmbiguousCandidate>? Candidates
+    {
+        get; init;
+    }
+
     /// <summary><see cref="IResultStatus.Status"/>: the canonical status of <see cref="Outcome"/>. Not serialized.</summary>
     [JsonIgnore]
     public ResultStatus Status => Outcome.ToResultStatus();

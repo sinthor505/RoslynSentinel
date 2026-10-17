@@ -84,7 +84,7 @@ public static class RefactoringToolHelpers
         {
             IsError = true,
             ErrorData = new ResultError(ErrorCodeFor(updated),
-                $"{operationName}: no change produced for '{filePath}' ({updated.Outcome}). {SummarizeEngineMessage(updated.Message, MaxEngineGuidanceLength)}{(string.IsNullOrEmpty(recoveryHint) ? string.Empty : " " + recoveryHint)}")
+                $"{operationName}: no change produced for '{filePath}' ({updated.Outcome}). {SummarizeEngineMessage(updated.Message, MaxEngineGuidanceLength)}{(string.IsNullOrEmpty(recoveryHint) ? string.Empty : " " + recoveryHint)}", StructuredDetail: ToolErrorMapper.ToStructuredDetail(updated.Candidates))
         };
     }
 
@@ -168,7 +168,7 @@ public static class RefactoringToolHelpers
         return new SentinelCallToolResult<object>
         {
             IsError = true,
-            ErrorData = new ResultError(result.Code ?? ToolErrorCode.Exception, message.TrimEnd())
+            ErrorData = new ResultError(result.Code ?? ToolErrorCode.Exception, message.TrimEnd(), StructuredDetail: ToolErrorMapper.ToStructuredDetail(result.Candidates))
         };
     }
 
@@ -180,7 +180,7 @@ public static class RefactoringToolHelpers
         return new SentinelCallToolResult<object>
         {
             IsError = true,
-            ErrorData = new ResultError(result.Code ?? ToolErrorCode.Exception, $"{detail} {hint}".TrimEnd())
+            ErrorData = new ResultError(result.Code ?? ToolErrorCode.Exception, $"{detail} {hint}".TrimEnd(), StructuredDetail: ToolErrorMapper.ToStructuredDetail(result.Candidates))
         };
     }
 

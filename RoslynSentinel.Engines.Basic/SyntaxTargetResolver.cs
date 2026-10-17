@@ -300,10 +300,10 @@ public static class SyntaxTargetResolver
         string? contextSnippet,
         string? lineBefore,
         string? lineAfter,
-        Func<List<SyntaxNodeCandidate>, List<int>, string, string> hintBuilder, bool trustSingleCandidate = false)
+        Func<List<SyntaxNodeCandidate>, List<int>, string, string> hintBuilder, bool trustSingleCandidate = false, string? filePath = null)
     {
         return ResolveBySnippetWithWarning(
-            candidates, sourceText, contextSnippet, lineBefore, lineAfter, hintBuilder, trustSingleCandidate).Candidate;
+            candidates, sourceText, contextSnippet, lineBefore, lineAfter, hintBuilder, trustSingleCandidate, filePath).Candidate;
     }
 
     /// <summary>
@@ -318,7 +318,7 @@ public static class SyntaxTargetResolver
         string? contextSnippet,
         string? lineBefore,
         string? lineAfter,
-        Func<List<SyntaxNodeCandidate>, List<int>, string, string> hintBuilder, bool trustSingleCandidate = false)
+        Func<List<SyntaxNodeCandidate>, List<int>, string, string> hintBuilder, bool trustSingleCandidate = false, string? filePath = null)
     {
         if (contextSnippet == null || candidates.Count == 0)
         {
@@ -386,6 +386,8 @@ public static class SyntaxTargetResolver
             : SnippetMatchOutcome.Ambiguous;
         SnippetMatchResult Ambiguity(IReadOnlyList<SnippetMatch> matches) => SnippetMatchResult.WithAmbiguity(result, outcome, matches);
 
+        var described = filePath == null ? null : BuildDeclarationCandidates(candidates, sourceText, filePath);
+        var survivorCandidates = filePath == null ? null : BuildDeclarationCandidates(survivors.Select(s => s.Candidate).ToList(), sourceText, filePath);
         if (survivors.Count == 0)
         {
             // The snippet is in the file but not in any candidate, so it selects none of them. List where it is.
@@ -394,7 +396,7 @@ public static class SyntaxTargetResolver
                        "The place(s) it does match:";
             throw ComposeFailure(
                 SnippetErrorFormatter.Build(Ambiguity(result.Matches), sourceText, contextSnippet, SnippetLookup.DefaultSnippetLabel),
-                lead, scope: null, hintBuilder(candidates, matchStarts, "ambiguous"));
+                lead, scope: null, hintBuilder(candidates, matchStarts, "ambiguous"), described);
         }
 
         string? MemberNameAt(int position) =>
@@ -407,7 +409,32 @@ public static class SyntaxTargetResolver
                 SnippetLookup.DefaultSnippetLabel, MemberNameAt),
             lead: null,
             scope: outside > 0 ? $"{outside} further match(es) of contextSnippet lie outside the candidate declarations and are not listed." : null,
-            hintBuilder(candidates, matchStarts, "ambiguous"));
+            hintBuilder(candidates, matchStarts, "ambiguous"), survivorCandidates);
+    }
+
+    /// <summary>
+    /// Structured candidates for an ambiguous member snippet: up to 10 declarations (Counted=true). Each carries its
+    /// 1-based start line, kind, preview as the signature, and the trimmed first-line text; LineBefore is set only when
+    /// that first-line text is not unique in the file. Mirrors SymbolNavigationEngine.BuildAmbiguousCandidates.
+    /// </summary>
+    internal static IReadOnlyList<AmbiguousCandidate> BuildDeclarationCandidates(
+        IReadOnlyList<SyntaxNodeCandidate> declarations, SourceText sourceText, string filePath)
+    {
+        var lines = sourceText.Lines;
+        var result = new List<AmbiguousCandidate>();
+        foreach (var c in declarations.Take(10))
+        {
+            var index = c.StartLine - 1;
+            var inRange = index >= 0 && index < lines.Count;
+            var snippet = inRange ? lines[index].ToString().Trim() : string.Empty;
+            var lineBefore = inRange && index > 0 ? lines[index - 1].ToString().Trim() : string.Empty;
+            var isUnique = lines.Where(l => l.ToString().Trim() == snippet).Count() == 1;
+            result.Add(new AmbiguousCandidate(
+                filePath, c.StartLine, c.Kind.ToString().ToLowerInvariant(), c.Preview,
+                c.ContainingTypeName ?? string.Empty, snippet, isUnique ? null : lineBefore, true));
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -424,7 +451,7 @@ public static class SyntaxTargetResolver
     /// Wraps the formatter's exception with an optional lead sentence (before) and the scope sentence and the caller's
     /// hint (after), keeping the exception type, and so the ErrorCode callers copy, unchanged.
     /// </summary>
-    private static ToolException ComposeFailure(ToolException formatted, string? lead, string? scope, string hint)
+    private static ToolException ComposeFailure(ToolException formatted, string? lead, string? scope, string hint, IReadOnlyList<AmbiguousCandidate>? candidates = null)
     {
         var parts = new List<string>();
         if (!string.IsNullOrEmpty(lead))
@@ -442,7 +469,7 @@ public static class SyntaxTargetResolver
         var message = string.Join("\n", parts);
         return formatted switch
         {
-            ToolAmbiguousMatchException => new ToolAmbiguousMatchException(message),
+            ToolAmbiguousMatchException => new ToolAmbiguousMatchException(message, candidates),
             ToolNotFoundException => new ToolNotFoundException(message),
             _ => formatted,
         };

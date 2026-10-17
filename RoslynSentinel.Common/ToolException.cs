@@ -183,9 +183,20 @@ public static class ToolErrorMapper
         var (code, message) = ToCodeAndMessage(ex, workspaceManager, context);
         // The candidate list is capped by the engine (<=10 plus a dropped count), far under the offload
         // threshold, and ToResultError is synchronous, so it is inlined rather than offloaded.
-        if (ex is ToolAmbiguousMatchException { Candidates: { Count: > 0 } c })
-            return new ResultError(code, message, ex.Message, StructuredDetail: c.Cast<object>().ToList());
+        if (ex is ToolAmbiguousMatchException ambiguous && ToStructuredDetail(ambiguous.Candidates) is { } detail)
+            return new ResultError(code, message, ex.Message, StructuredDetail: detail);
         return new ResultError(code, message, ex.Message);
+    }
+
+    /// <summary>
+    /// Structured detail for an ambiguous-match failure: the candidates as objects, or null when there are none.
+    /// Shared by every ambiguity mapping so the wire shape is defined in one place.
+    /// </summary>
+    public static IReadOnlyList<object>? ToStructuredDetail(IReadOnlyList<AmbiguousCandidate>? candidates)
+    {
+        if (candidates is not { Count: > 0 })
+            return null;
+        return candidates.Cast<object>().ToList();
     }
 
     /// <summary>

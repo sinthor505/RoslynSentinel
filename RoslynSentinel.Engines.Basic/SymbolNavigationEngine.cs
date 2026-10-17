@@ -2606,7 +2606,14 @@ public class SymbolNavigationEngine
     /// 200 lines; past the cap Source is the first 200 lines, IsComplete is false, and EndLine is
     /// still the member's real last line so a follow-up ReadFile is one precise call.
     /// </summary>
-    public async Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+        => GetMemberSourceAsync(filePath, memberName, containerName, contextSnippet, lineBefore, lineAfter, null, cancellationToken);
+
+    /// <summary>
+    /// Same result as GetMemberSourceAsync without a sink. When the result is an Ambiguous error, the sink
+    /// (if not null) receives the structured candidates (AmbiguousCandidate) that the error message describes.
+    /// </summary>
+    public async Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName, string? contextSnippet, string? lineBefore, string? lineAfter, List<AmbiguousCandidate>? ambiguousCandidates, CancellationToken cancellationToken = default)
     {
         const int MaxSourceLines = 200;
 
@@ -2653,17 +2660,22 @@ public class SymbolNavigationEngine
         {
             if (contextSnippet == null && memberCandidates.Count > 1)
             {
-                throw new ToolAmbiguousMatchException(SyntaxTargetResolver.BuildHintForCandidates(memberCandidates, [], "ambiguous"));
+                throw new ToolAmbiguousMatchException(SyntaxTargetResolver.BuildHintForCandidates(memberCandidates, [], "ambiguous"), SyntaxTargetResolver.BuildDeclarationCandidates(memberCandidates, sourceText, document.FilePath ?? string.Empty));
             }
 
             resolved = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode));
+                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode), filePath: document.FilePath ?? string.Empty);
         }
         catch (ToolException ex)
         {
             // ResolveBySnippetOrThrow throws ToolNotFoundException (snippet matched nothing) or
             // ToolAmbiguousMatchException (2+ snippet matches, or the match fell outside every candidate);
             // the exception carries its own error code.
+            if (ex is ToolAmbiguousMatchException { Candidates.Count: > 0 } amb && ambiguousCandidates != null)
+            {
+                ambiguousCandidates.AddRange(amb.Candidates);
+            }
+
             return (EditOutcome.CannotEdit, ex.Message, ex.ErrorCode, null);
         }
 

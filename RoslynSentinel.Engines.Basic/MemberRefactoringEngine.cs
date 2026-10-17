@@ -2873,7 +2873,7 @@ public class MemberRefactoringEngine
                 .ToList());
             memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
             var resolved = SyntaxTargetResolver.ResolveBySnippetWithWarning(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode), trustSingleCandidate: true);
+                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode), trustSingleCandidate: true, filePath: document.FilePath ?? string.Empty);
             member = resolved.Candidate?.Node;
             snippetWarning = resolved.Warning;
         }
@@ -2884,7 +2884,8 @@ public class MemberRefactoringEngine
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
                 Message = ex.Message,
-                ErrorCode = ex.ErrorCode
+                ErrorCode = ex.ErrorCode,
+                Candidates = (ex as ToolAmbiguousMatchException)?.Candidates
             };
         }
 

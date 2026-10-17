@@ -364,4 +364,34 @@ public class SyntaxTargetResolverTests
             + "Provide a more specific contextSnippet or use lineBefore/lineAfter.";
         Assert.That(message, Is.EqualTo(expected));
     }
+
+    [Test]
+    [Category("SyntaxNodeCandidate")] // sentinel:auto-category
+    public void ResolveBySnippetWithWarning_AmbiguousSnippet_CarriesCandidatesOnlyWhenFilePathGiven()
+    {
+        var source = """
+            public class Holder
+            {
+                public void Run(int x) { }
+                public void Run(string s) { }
+            }
+            """;
+        var compilation = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", source)]);
+        var document = compilation.Projects.First().Documents.First();
+        var root = document.GetSyntaxRootAsync().Result!;
+        var sourceText = document.GetTextAsync().Result!;
+        var candidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, "Run");
+
+        var withPath = Assert.Throws<ToolAmbiguousMatchException>(() =>
+            SyntaxTargetResolver.ResolveBySnippetWithWarning(candidates, sourceText, "public void Run(", null, null,
+                (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode), filePath: "Source.cs"));
+        Assert.That(withPath!.Candidates, Has.Count.EqualTo(2));
+        Assert.That(withPath.Candidates!.All(c => c.Counted && c.FilePath == "Source.cs" && c.Line > 0
+            && !string.IsNullOrEmpty(c.ContextSnippet)), Is.True);
+
+        var withoutPath = Assert.Throws<ToolAmbiguousMatchException>(() =>
+            SyntaxTargetResolver.ResolveBySnippetWithWarning(candidates, sourceText, "public void Run(", null, null,
+                (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode)));
+        Assert.That(withoutPath!.Candidates, Is.Null.Or.Empty);
+    }
 }

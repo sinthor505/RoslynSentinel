@@ -559,9 +559,10 @@ public class RefactoringStructuralImpl
             {
                 if (!string.IsNullOrEmpty(memberName))
                 {
-                    var (sourceOutcome, sourceMessage, sourceErrorCode, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    var ambiguousCandidates = new List<AmbiguousCandidate>();
+                    var (sourceOutcome, sourceMessage, sourceErrorCode, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, ambiguousCandidates, cancellationToken);
                     if (sourceOutcome != EditOutcome.Modified || source is null)
-                        return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(sourceErrorCode ?? RefactoringToolHelpers.ErrorCodeFor(sourceOutcome), $"Member: {sourceMessage}") };
+                        return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(sourceErrorCode ?? RefactoringToolHelpers.ErrorCodeFor(sourceOutcome), $"Member: {sourceMessage}", StructuredDetail: ToolErrorMapper.ToStructuredDetail(ambiguousCandidates)) };
                     return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source) };
                 }
 
@@ -614,7 +615,7 @@ public class RefactoringStructuralImpl
                         EditOutcome.TargetNotFound => $"Member: member '{memberName}' not found in '{filePathResolved}'.",
                         _ => $"Member: no changes produced for '{memberName}' in '{filePathResolved}' ({result.Outcome}). {result.Message}"
                     };
-                    return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(RefactoringToolHelpers.ErrorCodeFor(result), errorReason) };
+                    return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(RefactoringToolHelpers.ErrorCodeFor(result), errorReason, StructuredDetail: ToolErrorMapper.ToStructuredDetail(result.Candidates)) };
                 }
 
                 var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };

@@ -314,9 +314,10 @@ public class WorkspaceFileEditImpl
             }
             try
             {
-                var (sourceOutcome, sourceMessage, sourceErrorCode, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, null, null, null, cancellationToken);
+                var ambiguousCandidates = new List<AmbiguousCandidate>();
+                var (sourceOutcome, sourceMessage, sourceErrorCode, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, null, null, null, ambiguousCandidates, cancellationToken);
                 if (sourceOutcome != EditOutcome.Modified || source is null)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(sourceErrorCode ?? RefactoringToolHelpers.ErrorCodeFor(sourceOutcome), $"ReadFile: {sourceMessage}") };
+                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(sourceErrorCode ?? RefactoringToolHelpers.ErrorCodeFor(sourceOutcome), $"ReadFile: {sourceMessage}", StructuredDetail: ToolErrorMapper.ToStructuredDetail(ambiguousCandidates)) };
                 return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source) };
             }
             catch (Exception ex)
