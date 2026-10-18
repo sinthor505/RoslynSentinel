@@ -494,6 +494,123 @@ public enum Status { Active = 1, Pending = 2 }
 
     [Test]
     [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_DefaultOldMember_Unchanged()
+    {
+        SetMultiFile(("Refactor.cs", "public class Source\n{\n    public int Get() => 1;\n}\n\npublic class Target\n{\n}\n"));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target");
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var text = await ReadCommittedRefactorText();
+        var sourcePart = text.Substring(0, text.IndexOf("class Target", StringComparison.Ordinal));
+        var targetPart = text.Substring(text.IndexOf("class Target", StringComparison.Ordinal));
+        Assert.That(sourcePart, Does.Not.Contain("Get()"), "Default remove mode deletes the source member.");
+        Assert.That(targetPart, Does.Contain("public int Get() => 1;"), "Default remove mode moves the body to the target.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepAsDeprecatedWrapper_ToBaseClass_ReturnsTargetIneligible()
+    {
+        const string original = "public class Base\n{\n}\n\npublic class Source : Base\n{\n    public int Get() => 1;\n}\n";
+        SetMultiFile(("Refactor.cs", original));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Base", oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_ForwarderReceiver_WithRemove_ReturnsInvalidArgument()
+    {
+        const string original = "public class Source\n{\n    private Target _impl = new Target();\n    public int Get() => 1;\n}\n\npublic class Target\n{\n}\n";
+        SetMultiFile(("Refactor.cs", original));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", forwarderReceiver: "_impl");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused call must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_PartialSourceClass_ReturnsTargetIneligible()
+    {
+        const string original = "public partial class Source\n{\n    public int Get() => 1;\n}\n\npublic partial class Source\n{\n    public int Other() => 2;\n}\n\npublic class Target\n{\n}\n";
+        SetMultiFile(("Refactor.cs", original));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_GenericMethod_ReturnsNotImplemented()
+    {
+        const string original = "public class Source\n{\n    public int Get<T>(T x) => 1;\n}\n\npublic class Target\n{\n}\n";
+        SetMultiFile(("Refactor.cs", original));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented));
+        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_Property_ReturnsTargetIneligible()
+    {
+        const string original = "public class Source\n{\n    public int Value => 1;\n}\n\npublic class Target\n{\n}\n";
+        SetMultiFile(("Refactor.cs", original));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Value"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_OverrideMethod_ReturnsTargetIneligible()
+    {
+        const string original = "public class Base\n{\n    public virtual int Get() => 1;\n}\n\npublic class Source : Base\n{\n    public override int Get() => 2;\n}\n\npublic class Target\n{\n}\n";
+        SetMultiFile(("Refactor.cs", original));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_AbstractMethod_ReturnsTargetIneligible()
+    {
+        const string original = "public abstract class Source\n{\n    public abstract int Get();\n}\n\npublic class Target\n{\n}\n";
+        SetMultiFile(("Refactor.cs", original));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_VirtualMethod_ReturnsTargetIneligible()
+    {
+        const string original = "public class Source\n{\n    public virtual int Get() => 1;\n}\n\npublic class Target\n{\n}\n";
+        SetMultiFile(("Refactor.cs", original));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
+    }
+
+    private async Task<string> ReadCommittedRefactorText()
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var doc = solution.Projects.SelectMany(p => p.Documents).Single(d => d.Name == "Refactor.cs");
+        return (await doc.GetTextAsync()).ToString();
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
     public async Task MoveMember_SomeRequestedNamesMissing_ReturnsNotFoundAndWritesNothing()
     {
         SetMultiFile(("Refactor.cs", "public class Source\n{\n    public int Foo() => 1;\n    public int Bar() => 2;\n}\n\npublic class Target\n{\n}\n"));
