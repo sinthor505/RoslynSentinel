@@ -3,25 +3,11 @@ using System.ComponentModel;
 namespace RoslynSentinel.Tools.Basic;
 
 /// <summary>
-/// Thin MCP surface for the read/navigation slice of workspace tools. Holds all [McpServerTool]
-/// attributes and delegates every call to <see cref="WorkspaceReadNavigationImpl"/>, which carries
-/// the actual implementation. See docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md
-/// (Decision 1-Amendment).
-///
-/// This class is a trial slice of that plan's DI split, landed ahead of the rest: today it is
-/// registered in DI only as a plain singleton consumed internally by <c>WorkspaceTools</c>
-/// (field <c>_readNav</c>) -> the plan's Decision 4 mode strings ("WorkspaceReadNav"/"WorkspaceFileIO")
-/// that would call <c>mcpBuilder.WithTools<WorkspaceReadNavigationTools>()</c> and make the
-/// [McpServerTool] attributes below live have not been added to
-/// ServiceRegistrationExtensionsBasic.cs yet. So GetMethodSourceTool/GetFileOutlineTool/GetLargeResultTool here
-/// are currently NOT reachable over MCP -> the real, registered versions of those three tool names
-/// are the ones in WorkspaceTools.cs, which is what MCP clients actually call. This is not
-/// dead code or an accidental duplicate; it is the intended shape once Decision 4/Decision 7 step 4
-/// finish wiring the fine-grained mode strings.
-///
-/// The six methods this pairs with in WorkspaceTools.cs (the ones actually reachable over
-/// MCP today) are: GetMethodSourceTool, GetFileOutlineTool, ListAllTool, SearchSolutionTextTool,
-/// GetOperationDetailTool, GetLargeResultTool - each carries its own short comment there pointing back here.
+/// MCP surface for the read/navigation slice of workspace tools (GetMethodSource, GetFileOutline, ListAll, Search,
+/// GetOperationDetail, GetLargeResult). Holds the [McpServerTool] attributes and delegates to
+/// <see cref="WorkspaceReadNavigationImpl"/> (Search to the symbol engines). Registered in ToolClassRegistry and DI;
+/// WorkspaceTools keeps attribute-less delegators for source compatibility. See
+/// docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md (Decision 1-Amendment).
 /// </summary>
 [McpServerToolType]
 public class WorkspaceReadNavigationTools

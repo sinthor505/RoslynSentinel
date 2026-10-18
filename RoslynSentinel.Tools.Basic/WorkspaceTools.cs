@@ -6,14 +6,11 @@ using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
 /// <summary>
-/// God-class MCP surface for workspace tools. Six of its tool methods -> GetMethodSourceTool,
-/// GetFileOutlineTool, ListAllTool, SearchSolutionTextTool, GetOperationDetailTool, GetLargeResultTool -> are thin
-/// delegates to <see cref="WorkspaceReadNavigationTools"/> (field <c>_readNav</c>), which itself
-/// delegates to <see cref="WorkspaceReadNavigationImpl"/> for the actual logic. That pair is a
-/// trial slice of a larger planned split of this class -> see
-/// docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md. This class remains the one
-/// actually registered/reachable over MCP for those six tool names until that plan's Decision 4/
-/// Decision 7 step 4 (fine-grained mode-string wiring) lands.
+/// MCP surface for workspace tools. GetMethodSourceTool, GetFileOutlineTool, ListAllTool, SearchSolutionTool,
+/// GetOperationDetailTool and GetLargeResultTool here are attribute-less delegators to <see cref="WorkspaceReadNavigationTools"/>
+/// (field <c>_readNavTools</c>), which carries their [McpServerTool] attributes and delegates to
+/// <see cref="WorkspaceReadNavigationImpl"/>. They exist so existing callers keep compiling and no tool name is
+/// registered twice. See docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md.
 /// </summary>
 [McpServerToolType]
 public class WorkspaceTools
