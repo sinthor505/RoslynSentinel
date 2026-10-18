@@ -87,7 +87,7 @@ warning-reporting history in `blockers/resolved/blocking_error_build_tool_suppre
 | --- | --- | --- |
 | `InlineDeprecatedCalls` (new) | Inline any source-defined deprecated forwarding wrapper at its call sites. Inputs: wrapper symbol (`docCommentId` or locator), scope (files/project), `maxSites`, `dryRun`. Output: per-site Succeeded/Skipped/Failed with reasons, using the `OperationItemRecord`/operation blob/`FailureRouter` scaffolding from `AsyncifyTools.UpliftCallersCore` | Proposed as the first slice |
 | `ChangeSignature(oldMember: keepAsDeprecatedWrapper)` | New enum parameter, values `keepAsDeprecatedWrapper` / `remove`. With `keepAsDeprecatedWrapper`, emit the new signature beside the old and reduce the old one to a forwarding wrapper. Never touches call sites | Proposed |
-| `MoveMember(oldMember: keepAsDeprecatedWrapper)` | Same parameter. Move the body and leave `[Obsolete] Foo(...) => _target.Foo(...)` at the source. This is the delegating-stub strategy the ledger proposal already prefers, made the default | Proposed |
+| `MoveMember(oldMember: keepAsDeprecatedWrapper)` | Same parameter. Move the body and leave `[Obsolete] Foo(...) => _target.Foo(...)` at the source. This is the delegating-stub strategy the ledger proposal already prefers, made the default | Built 2026-10-18 (see `proposal_movemember_keep_delegator_and_same_class_calls.md`; the attribute is emitted as `[global::System.Obsolete(...)]`) |
 | `Member(remove)` on a deprecated wrapper | Refuse while references remain, and name the count and `InlineDeprecatedCalls` | Proposed |
 | `UpliftCallers` | Unchanged. It stays the async-specific variant (it also creates `callerAsync` overloads and threads `CancellationToken`, which is more than inlining) | Decided: leave as is |
 
