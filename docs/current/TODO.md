@@ -56,6 +56,7 @@ Ideas and low priority.
 - [OPEN] Tool terminology/naming backlog (2026-08-24) - weak or ambiguous tool and parameter names, unactioned - [doc](tool-terminology-refinement-reference-v1.md)
 - [OPEN] Model tool-choice gap: `ApplyDiff` used instead of `ChangeAccessibility` for `ReplaceBlockFormatted`, 67.5% of all ApplyDiff failures (2026-09-05) - unactioned - [doc](model_eval_replaceblockformatted_accessibility_cost_2026_09_05.md)
 - [OPEN] Server-side telemetry/metrics for tool call counts and error rates (2026-09-05) - idea, not implemented - [doc](ideas/server_telemetry_idea.md)
+- [OPEN] `Plan:`/`Closes:` commit trailers plus a reconciliation script for plan/proposal/finding docs (2026-10-18) - convention first, `ProjectDoc` extension later - [doc](ideas/idea_doc_id_commit_trailers_and_reconciliation.md)
 
 ### Needs owner review (audit verdict UNSURE)
 
