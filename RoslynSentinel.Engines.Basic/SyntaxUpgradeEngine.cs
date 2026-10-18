@@ -71,7 +71,7 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken)).GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -116,7 +116,7 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken)).GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -161,7 +161,7 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken)).GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -364,7 +364,7 @@ public class SyntaxUpgradeEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken)).GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -1012,12 +1012,12 @@ public class SyntaxUpgradeEngine
 
             if (newNode.Statement is not BlockSyntax)
             {
-                newNode = newNode.WithStatement(SyntaxFactory.Block(newNode.Statement));
+                newNode = newNode.WithStatement(SyntaxFactory.Block(newNode.Statement).WithAdditionalAnnotations(Formatter.Annotation));
             }
 
             if (newNode.Else != null && newNode.Else.Statement is not BlockSyntax && newNode.Else.Statement is not IfStatementSyntax)
             {
-                newNode = newNode.WithElse(newNode.Else.WithStatement(SyntaxFactory.Block(newNode.Else.Statement)));
+                newNode = newNode.WithElse(newNode.Else.WithStatement(SyntaxFactory.Block(newNode.Else.Statement).WithAdditionalAnnotations(Formatter.Annotation)));
             }
 
             return newNode;
@@ -1047,7 +1047,7 @@ public class SyntaxUpgradeEngine
                     ChangesMade = true;
                     return SyntaxFactory.ExpressionStatement(SyntaxFactory.InvocationExpression(
                         SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("ArgumentNullException"), SyntaxFactory.IdentifierName("ThrowIfNull")),
-                        SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(SyntaxFactory.IdentifierName(varName)))))).WithTriviaFrom(node);
+                        SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(SyntaxFactory.IdentifierName(varName)))))).WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
                 }
 
                 if (type == "ArgumentOutOfRangeException" && node.Condition is BinaryExpressionSyntax be2)
@@ -1076,7 +1076,7 @@ public class SyntaxUpgradeEngine
 
                         return SyntaxFactory.ExpressionStatement(SyntaxFactory.InvocationExpression(
                             SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("ArgumentOutOfRangeException"), SyntaxFactory.IdentifierName(helper)),
-                            SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(argsList)))).WithTriviaFrom(node);
+                            SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(argsList)))).WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
                     }
                 }
 
@@ -1086,7 +1086,7 @@ public class SyntaxUpgradeEngine
                     var argName = ies.ArgumentList.Arguments.FirstOrDefault()?.Expression.ToString() ?? varName;
                     return SyntaxFactory.ExpressionStatement(SyntaxFactory.InvocationExpression(
                         SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("ArgumentException"), SyntaxFactory.IdentifierName("ThrowIfNullOrEmpty")),
-                        SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(SyntaxFactory.IdentifierName(argName)))))).WithTriviaFrom(node);
+                        SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(SyntaxFactory.IdentifierName(argName)))))).WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
                 }
             }
             return base.VisitIfStatement(node);
@@ -1110,7 +1110,7 @@ public class SyntaxUpgradeEngine
                         {
                             var newCondition = SyntaxFactory.IsPatternExpression(be.Left, SyntaxFactory.DeclarationPattern((TypeSyntax)be.Right, SyntaxFactory.SingleVariableDesignation(variable.Identifier)));
                             var newBlock = block.WithStatements(block.Statements.RemoveAt(0));
-                            return node.WithCondition(newCondition).WithStatement(newBlock);
+                            return node.WithCondition(newCondition).WithStatement(newBlock).WithAdditionalAnnotations(Formatter.Annotation);
                         }
                     }
                 }
@@ -1125,7 +1125,7 @@ public class SyntaxUpgradeEngine
         {
             if (node.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text == "AsSpan")
             {
-                return ma.Expression.WithTriviaFrom(node);
+                return ma.Expression.WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
             }
             return base.VisitInvocationExpression(node);
         }

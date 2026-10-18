@@ -73,7 +73,6 @@ public class WhitespaceRatchetTests
         ["RoslynSentinel.Engines.Basic/MemberRefactoringEngine.cs"] = 2,
         ["RoslynSentinel.Engines.Basic/MsToolAugmentEngine.cs"] = 2,
         ["RoslynSentinel.Engines.Basic/ProjectStructureEngine.cs"] = 1,
-        ["RoslynSentinel.Engines.Basic/SyntaxUpgradeEngine.cs"] = 4,
     };
 
     [Test]
