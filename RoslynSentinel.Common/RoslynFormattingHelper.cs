@@ -233,9 +233,6 @@ public static class RoslynFormattingHelper
     /// </summary>
     public static async Task<string> InsertMemberDeclarationAndFormatInsertionAsync(Document document, SyntaxNode root, TypeDeclarationSyntax container, int insertIndex, MemberDeclarationSyntax newMember, CancellationToken cancellationToken = default)
     {
-        var originalSourceText = await document.GetTextAsync(cancellationToken);
-        var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
-
         var members = container.Members;
         var precedingMember = insertIndex > 0 ? members[insertIndex - 1] : null;
         var followingMember = insertIndex < members.Count ? members[insertIndex] : null;
@@ -255,8 +252,7 @@ public static class RoslynFormattingHelper
             .WithLeadingTrivia(blankLineBefore.Concat(newMember.GetLeadingTrivia()))
             .WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed);
 
-        var annotation = new SyntaxAnnotation();
-        var annotatedNewMember = newMemberWithTrivia.WithAdditionalAnnotations(annotation);
+        var annotatedNewMember = newMemberWithTrivia.WithAdditionalAnnotations(Formatter.Annotation);
 
         var newMembersList = members.Insert(insertIndex, annotatedNewMember);
 
@@ -288,9 +284,8 @@ public static class RoslynFormattingHelper
         var newContainer = container.WithMembers(newMembersList);
         var newRoot = root.ReplaceNode(container, newContainer);
 
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
-        var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
-        return EolUtilities.NormalizeEol(formattedText, dominantEol);
+        var formattedDoc = await FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
     /// <summary>
