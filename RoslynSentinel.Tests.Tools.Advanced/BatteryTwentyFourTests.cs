@@ -492,6 +492,24 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(text, Does.Not.Contain("var first = _b"), "A dry run must not write the moved body to the target.");
     }
 
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_SomeRequestedNamesMissing_ReturnsNotFoundAndWritesNothing()
+    {
+        SetMultiFile(("Refactor.cs", "public class Source\n{\n    public int Foo() => 1;\n    public int Bar() => 2;\n}\n\npublic class Target\n{\n}\n"));
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var before = (await solution.Projects.SelectMany(p => p.Documents).Single(d => d.Name == "Refactor.cs").GetTextAsync()).ToString();
+
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Foo", "Missing"], "Target");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData?.Message, Does.Contain("Missing"));
+        var afterSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var after = (await afterSolution.Projects.SelectMany(p => p.Documents).Single(d => d.Name == "Refactor.cs").GetTextAsync()).ToString();
+        Assert.That(after, Is.EqualTo(before), "A refused move must not write anything.");
+    }
+
     // --- MoveMemberTool (pull-up to existing base class) ---
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category

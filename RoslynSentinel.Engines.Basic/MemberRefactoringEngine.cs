@@ -3450,6 +3450,26 @@ public class MemberRefactoringEngine
             throw new ToolNotFoundException($"None of the requested member(s) [{string.Join(", ", memberNames)}] were found in class '{className}'.");
         }
 
+        // Names declared by one class member, using the same identifier rules as the membersToMove predicate above.
+        static IEnumerable<string> MemberDeclaredNames(MemberDeclarationSyntax m) => m switch
+        {
+            MethodDeclarationSyntax meth => new[] { meth.Identifier.Text },
+            PropertyDeclarationSyntax prop => new[] { prop.Identifier.Text },
+            FieldDeclarationSyntax field => field.Declaration.Variables.Select(v => v.Identifier.Text),
+            BaseTypeDeclarationSyntax nestedType => new[] { nestedType.Identifier.Text },
+            _ => Array.Empty<string>()
+        };
+
+        // A requested name that matches no member in this file is otherwise dropped silently while the
+        // rest moves (e.g. the member lives in another part of a partial class). Refuse before any write.
+        var matchedMemberNames = membersToMove.SelectMany(MemberDeclaredNames).ToHashSet(StringComparer.Ordinal);
+        var missingMemberNames = memberNames.Where(n => !matchedMemberNames.Contains(n)).Distinct(StringComparer.Ordinal).ToList();
+        if (missingMemberNames.Count > 0)
+        {
+            var foundNames = classNode.Members.SelectMany(MemberDeclaredNames).Distinct(StringComparer.Ordinal);
+            throw new ToolNotFoundException($"Requested member(s) [{string.Join(", ", missingMemberNames)}] were not found in class '{className}' in this file (found: [{string.Join(", ", foundNames)}]). Nothing was moved. If the class is partial, the member may be declared in another part; pass that file's path.");
+        }
+
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var classSymbol = semanticModel?.GetDeclaredSymbol(classNode, cancellationToken) as INamedTypeSymbol;
         var baseType = classSymbol?.BaseType;
