@@ -206,15 +206,82 @@ public static class MoveMemberTextEdits
     /// </summary>
     public static List<TextChange> BuildSourceEdits(SourceText sourceText, IReadOnlyList<MemberDeclarationSyntax> membersToMove, IEnumerable<TextChange> sourceReferenceEdits, out List<TextChange> insideMovedMemberEdits)
     {
+        return BuildSourceEdits(sourceText, membersToMove, sourceReferenceEdits, new HashSet<MemberDeclarationSyntax>(), _ => string.Empty, out insideMovedMemberEdits);
+    }
+
+    /// <summary>
+    /// As the four-argument overload, but a member in <paramref name = "keptMembers"/> is replaced over its <c>Span</c>
+    /// by <c>forwarderText(member)</c> instead of being deleted, so its leading doc comment stays in place.
+    /// </summary>
+    public static List<TextChange> BuildSourceEdits(SourceText sourceText, IReadOnlyList<MemberDeclarationSyntax> membersToMove, IEnumerable<TextChange> sourceReferenceEdits, ISet<MemberDeclarationSyntax> keptMembers, Func<MemberDeclarationSyntax, string> forwarderText, out List<TextChange> insideMovedMemberEdits)
+    {
         var all = sourceReferenceEdits.ToList();
         insideMovedMemberEdits = all.Where(e => membersToMove.Any(m => m.FullSpan.Contains(e.Span))).ToList();
         var edits = all.Except(insideMovedMemberEdits).ToList();
-        foreach (var removal in MergeSpans(membersToMove.Select(m => GetRemovalSpan(sourceText, m))))
+        foreach (var removal in MergeSpans(membersToMove.Where(m => !keptMembers.Contains(m)).Select(m => GetRemovalSpan(sourceText, m))))
         {
             edits.Add(new TextChange(removal, string.Empty));
         }
 
+        foreach (var kept in membersToMove.Where(m => keptMembers.Contains(m)))
+        {
+            edits.Add(new TextChange(kept.Span, forwarderText(kept)));
+        }
+
         return edits;
+    }
+
+    /// <summary>
+    /// The replacement text for a source method that stays behind as a forwarder: an expression-bodied
+    /// <c>M(params) =&gt; receiver.M(args);</c>. Only accessibility, static, unsafe and new modifiers are kept; member and
+    /// parameter attributes are not copied; ref/out/in are mirrored at the call. Starts at the member's Span start
+    /// (no leading trivia); line breaks use <paramref name = "eol"/>.
+    /// </summary>
+    public static string BuildForwarder(MethodDeclarationSyntax method, string qualifiedReceiver, bool deprecated, string targetDisplayName, string eol)
+    {
+        var name = method.Identifier.ValueText;
+        var parameters = method.ParameterList.Parameters;
+        var signature = new StringBuilder();
+        foreach (var modifier in method.Modifiers.Where(m => m.IsKind(SyntaxKind.PublicKeyword) || m.IsKind(SyntaxKind.PrivateKeyword) || m.IsKind(SyntaxKind.ProtectedKeyword) || m.IsKind(SyntaxKind.InternalKeyword) || m.IsKind(SyntaxKind.StaticKeyword) || m.IsKind(SyntaxKind.UnsafeKeyword) || m.IsKind(SyntaxKind.NewKeyword)))
+        {
+            signature.Append(modifier.ValueText).Append(' ');
+        }
+
+        signature.Append((method.ReturnType.ToString()).Trim()).Append(' ').Append(name).Append('(')
+            .Append(string.Join(", ", parameters.Select(p => FormatForwarderParameter(p)))).Append(") => ")
+            .Append(qualifiedReceiver).Append('.').Append(name).Append('(')
+            .Append(string.Join(", ", parameters.Select(p => FormatForwarderArgument(p)))).Append(");");
+        if (!deprecated)
+        {
+            return signature.ToString();
+        }
+
+        var indent = LeadingWhitespaceOfLine(method.SyntaxTree.GetText(), method.SpanStart);
+        return "[Obsolete(\"Deprecated wrapper: call " + targetDisplayName + "." + name + " instead.\", DiagnosticId = \"RSDEPRECATED\")]" + eol + indent + signature.ToString();
+    }
+
+    private static string FormatForwarderParameter(ParameterSyntax parameter)
+    {
+        var text = new StringBuilder();
+        foreach (var modifier in parameter.Modifiers)
+        {
+            text.Append(modifier.ValueText).Append(' ');
+        }
+
+        text.Append((parameter.Type?.ToString() ?? string.Empty).Trim()).Append(' ').Append(parameter.Identifier.ValueText);
+        if (parameter.Default != null)
+        {
+            text.Append(" = ").Append(parameter.Default.Value.ToString().Trim());
+        }
+
+        return text.ToString();
+    }
+
+    private static string FormatForwarderArgument(ParameterSyntax parameter)
+    {
+        var name = parameter.Identifier.ValueText;
+        var passMode = parameter.Modifiers.FirstOrDefault(m => m.IsKind(SyntaxKind.RefKeyword) || m.IsKind(SyntaxKind.OutKeyword) || m.IsKind(SyntaxKind.InKeyword));
+        return passMode.IsKind(SyntaxKind.None) ? name : passMode.ValueText + " " + name;
     }
 
     /// <summary>
