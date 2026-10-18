@@ -100,7 +100,7 @@ public static class RoslynFormattingHelper
     /// <summary>
     /// Batch form of <see cref="ReplaceNodeAndFormatReplacementAsync"/>: replaces every old->new pair in
     /// <paramref name="replacements"/> against one evolving root and formats the whole set in a
-    /// single <see cref="Formatter.FormatAsync"/> pass, instead of one call per pair. Needed because
+    /// single annotated-span pass (<see cref="FormatAnnotatedSpansAsync"/>), instead of one call per pair. Needed because
     /// after the first <c>ReplaceNode</c> call, every other pending old node reference is stale -> the
     /// original node objects are no longer part of the tree being edited. <see cref="SyntaxNode.TrackNodes"/>/
     /// <see cref="SyntaxNode.GetCurrentNode{TNode}"/> re-locates each tracked old node against the
@@ -117,11 +117,7 @@ public static class RoslynFormattingHelper
     /// </summary>
     public static async Task<ReplaceNodesResult> ReplaceNodesAndFormatReplacementsAsync(Document document, SyntaxNode root, Dictionary<SyntaxNode, SyntaxNode> replacements, CancellationToken cancellationToken = default, TriviaEditIntent triviaIntent = TriviaEditIntent.PreserveOld)
     {
-        var originalSourceText = await document.GetTextAsync(cancellationToken);
-        var dominantEol = EolUtilities.DetectDominantEol(originalSourceText);
-
         var trackedRoot = root.TrackNodes(replacements.Keys);
-        var annotation = new SyntaxAnnotation();
 
         var currentRoot = trackedRoot;
         var unlocatedNodes = new List<SyntaxNode>();
@@ -138,13 +134,13 @@ public static class RoslynFormattingHelper
 
             var leadingTrivia = triviaIntent == TriviaEditIntent.ReplaceLeading ? newNode.GetLeadingTrivia() : currentOldNode.GetLeadingTrivia();
             var trailingTrivia = currentOldNode.GetTrailingTrivia();
-            var annotatedNewNode = newNode.WithLeadingTrivia(leadingTrivia).WithTrailingTrivia(trailingTrivia).WithAdditionalAnnotations(annotation);
+            var annotatedNewNode = newNode.WithLeadingTrivia(leadingTrivia).WithTrailingTrivia(trailingTrivia).WithAdditionalAnnotations(Formatter.Annotation);
             currentRoot = currentRoot.ReplaceNode(currentOldNode, annotatedNewNode);
         }
 
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(currentRoot), annotation, cancellationToken: cancellationToken);
+        var formattedDoc = await FormatAnnotatedSpansAsync(document, currentRoot, cancellationToken);
         var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
-        return new ReplaceNodesResult(EolUtilities.NormalizeEol(formattedText, dominantEol), unlocatedNodes);
+        return new ReplaceNodesResult(formattedText, unlocatedNodes);
     }
 
     /// <summary>

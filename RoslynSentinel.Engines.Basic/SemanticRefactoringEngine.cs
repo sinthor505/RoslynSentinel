@@ -165,7 +165,8 @@ public class SemanticRefactoringEngine
             return (await scopedFormattedDoc.GetTextAsync(cancellationToken)).ToString();
         }
 
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(modifiedRoot), cancellationToken: cancellationToken);
+        var originalText = await document.GetTextAsync(cancellationToken);
+        var formattedDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(document.WithSyntaxRoot(modifiedRoot), originalText, cancellationToken);
         return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
