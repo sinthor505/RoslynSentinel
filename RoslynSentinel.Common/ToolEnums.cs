@@ -382,7 +382,10 @@ public enum SearchMode
 public enum SemanticReplaceOperation
 {
     /// <summary>Rename a bool property or field and invert its polarity at every site.</summary>
-    invertBoolean
+    invertBoolean,
+
+    /// <summary>Rewrite object-creation expressions of a type (or constructor) into calls to a static factory method.</summary>
+    replaceConstruction
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

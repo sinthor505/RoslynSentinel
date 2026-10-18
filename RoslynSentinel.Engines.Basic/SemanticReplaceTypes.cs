@@ -22,7 +22,10 @@ public enum SemanticReplaceRole
     DeclarationInitializer,
 
     /// <summary>Reference in an unsupported syntactic context.</summary>
-    Unsupported
+    Unsupported,
+
+    /// <summary>Object-creation expression rewritten into a factory call (replaceConstruction). Skipped creation sites use Unsupported with an UnsupportedReason.</summary>
+    Construction
 }
 
 /// <summary>Describes one reference site that will be or was rewritten by a semantic find-replace operation.</summary>

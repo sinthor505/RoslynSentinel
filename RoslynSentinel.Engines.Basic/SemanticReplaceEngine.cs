@@ -1308,4 +1308,22 @@ public class SemanticReplaceEngine
         var (sites, changes, planError) = await PlanInvertBooleanAsync(symbol!, newName, cancellationToken);
         return new SemanticReplaceOutcome(sites, changes, planError);
     }
+
+    /// <summary>
+    /// Plans the <c>replaceConstruction</c> operation: rewrites object-creation expressions of the type (or constructor) named by
+    /// <paramref name="symbolId"/> into calls to the static factory method named by <paramref name="factoryId"/>.
+    /// </summary>
+    /// <remarks>
+    /// Rewritten sites have Role Construction; sites that cannot be rewritten safely are returned as Unsupported with a reason and
+    /// never block the others. A refused operation (bad ids, factory return type not assignable, unknown project) returns Error.
+    /// </remarks>
+    /// <param name="symbolId">docCommentId of the constructed type, or of one constructor to restrict matching to that overload.</param>
+    /// <param name="factoryId">docCommentId of the static, non-generic factory method.</param>
+    /// <param name="projectFilter">Optional project names (comma or semicolon separated) to restrict the rewrite; null or empty means all projects.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    public async Task<SemanticReplaceOutcome> ReplaceConstructionAsync(string symbolId, string factoryId, string? projectFilter, CancellationToken cancellationToken = default)
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        return await ConstructionReplacer.PlanAsync(solution, symbolId, factoryId, projectFilter, cancellationToken);
+    }
 }

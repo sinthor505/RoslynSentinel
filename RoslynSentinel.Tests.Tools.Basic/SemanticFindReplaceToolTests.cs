@@ -73,8 +73,8 @@ public class Usage
             new ToolCallReason("testing preview mode"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
-            "HasError",
-            SemanticReplaceMode.preview);
+            newName: "HasError",
+            mode: SemanticReplaceMode.preview);
 
         // Assert preview mode returns success with data
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
@@ -120,8 +120,8 @@ public class Usage
             new ToolCallReason("testing apply mode"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
-            "HasError",
-            SemanticReplaceMode.apply);
+            newName: "HasError",
+            mode: SemanticReplaceMode.apply);
 
         // Assert apply mode succeeds
         if (result.IsError)
@@ -163,8 +163,8 @@ public class Usage
             new ToolCallReason("testing unknown symbol"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
-            "HasError",
-            SemanticReplaceMode.preview);
+            newName: "HasError",
+            mode: SemanticReplaceMode.preview);
 
         // Assert NotFound error
         Assert.That(!result.IsError, Is.False);
@@ -203,8 +203,8 @@ public class Usage
             new ToolCallReason("testing unsupported site"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
-            "HasError",
-            SemanticReplaceMode.preview);
+            newName: "HasError",
+            mode: SemanticReplaceMode.preview);
 
         // Assert failure with proper error code
         Assert.That(!result.IsError, Is.False);
@@ -259,8 +259,8 @@ public class Usage
             new ToolCallReason("testing alias in-place refusal"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
-            "HasSucceeded",
-            SemanticReplaceMode.preview);
+            newName: "HasSucceeded",
+            mode: SemanticReplaceMode.preview);
         Assert.That(!refused.IsError, Is.False);
         Assert.That(refused.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
         Assert.That(refused.ErrorData.Message, Does.Contain("alias retarget"));
@@ -270,8 +270,8 @@ public class Usage
             new ToolCallReason("testing alias retarget preview"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
-            "IsError",
-            SemanticReplaceMode.preview);
+            newName: "IsError",
+            mode: SemanticReplaceMode.preview);
         Assert.That(!preview.IsError, Is.True, preview.ErrorData?.Message);
         Assert.That(File.ReadAllText(targetFile), Is.EqualTo(originalContent), "File should be unchanged after preview");
 
@@ -279,8 +279,8 @@ public class Usage
             new ToolCallReason("testing alias retarget apply"),
             SemanticReplaceOperation.invertBoolean,
             docCommentId,
-            "IsError",
-            SemanticReplaceMode.apply);
+            newName: "IsError",
+            mode: SemanticReplaceMode.apply);
         Assert.That(!apply.IsError, Is.True, apply.ErrorData?.Message);
 
         var expected = originalContent
