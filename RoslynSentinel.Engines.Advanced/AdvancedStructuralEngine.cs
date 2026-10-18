@@ -1452,9 +1452,8 @@ public class StructuralRefactoringEngine
             }
         }
 
-        var newRoot = root.ReplaceNode(target, RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newTarget));
-        var doc = document.WithSyntaxRoot(newRoot);
-        var formatted = await Formatter.FormatAsync(doc, null, cancellationToken);
+        var newRoot = root.ReplaceNode(target, newTarget.WithAdditionalAnnotations(Formatter.Annotation));
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
