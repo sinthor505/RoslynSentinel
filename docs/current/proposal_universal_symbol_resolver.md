@@ -377,3 +377,38 @@ still-open bug.
 - [[project_member_remove_dispatch_table_drift_pattern]]'s 2026-09-27 update -- fifth same-symptom
   incident (top-level class removal), root-caused to `FindCallersAsync`'s `decls` filter, the sixth
   drifted lookup path folded into this proposal's Motivation and migration scope.
+
+## Moved from TODO.md (2026-10-17)
+
+### Symbol/member lookup fragmentation across five resolvers plus three dispatch tables — proposal only, not implemented
+
+**Found:** 2026-09-20, surfaced while root-causing the third `Member(remove)` "false not found"
+incident (`blockers/resolved/blocking_error_member_remove_false_not_found.md`). Broadened
+2026-09-24 after a fourth same-symptom incident
+(`blockers/resolved/blocking_error_member_replace_interface_notfound.md`, fixed 2026-09-25) traced to
+the same fragmentation
+disease one level down, in `SymbolNavigationEngine.cs`'s five symbol-lookup resolvers rather than
+just the three declaration-kind dispatch tables originally found here. Full, current proposal:
+[proposal_universal_symbol_resolver.md](proposal_universal_symbol_resolver.md) — supersedes
+[proposal_unify_member_lookup_paths.md](proposal_unify_member_lookup_paths.md), which is kept in
+place with a superseded notice since two resolved blockers cite it by filename.
+
+**What:** `GetMemberName` (`SymbolNavigationEngine.cs`), `GetContainerMembersAsync`'s inline
+switch (`SymbolNavigationEngine.cs`), and `FindImplementationsForMemberAsync`'s dispatch
+(`SymbolNavigationEngine.cs:1634-1641`) each independently enumerate which
+`MemberDeclarationSyntax` kinds they recognize, and all three currently disagree with each other
+(different kind sets, different fallback behavior for an unrecognized kind). `e120b68` fixed one
+gap in one of the three (fields, in the third table); nothing stops the same shape of bug
+recurring in a kind/table combination not yet hit by a live repro. Separately,
+`SymbolNavigationEngine.cs`'s five symbol-lookup resolvers (`LocateSymbolAsync`,
+`ResolveSymbolByNameAsync`, `ResolveMemberByNameOrSnippet`, `ResolveMemberOrEnumMemberByNameOrSnippet`,
+`ResolveTypeByNameOrSnippet`) each maintain their own candidate-collection and disambiguation logic;
+the interface-member incident above traced directly to two of these five disagreeing about whether
+interface-body members belong in the candidate set at all.
+
+**Suggested approach:** see `proposal_universal_symbol_resolver.md` for the full design — a single
+`ResolveCandidates` query replacing the three syntax-only resolvers, a `CandidateKind` enum, a
+separate opt-in semantic layer, and a staged obsolete-then-sweep migration folding in the
+dispatch-table unification (this section's original scope) as part of the same pass. Not started; a
+multi-session refactor, not a quick patch.
+

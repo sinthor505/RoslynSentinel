@@ -1,6 +1,6 @@
 # Plan: SemanticFindReplace - a symbol-anchored replace tool (v1: rename + invert a bool property or field)
 
-**Status:** APPROVED 2026-10-04. Not started; slices are sized for the Haiku-tier implementer, one slice per dispatch.
+**Status:** IMPLEMENTED 2026-10-04 (status corrected 2026-10-17). Plan and steps 1-2b 22c5d70e, tool class step 9 999aab94, registration step 10 f795a816, inverse-alias retarget 65d9ebb4, replaceConstruction operation f9be549a (2026-10-17). Slices were sized for the Haiku-tier implementer, one slice per dispatch.
 
 ## Problem
 Retiring `SentinelCallToolResult.IsSuccess` in favour of `IsError` (see

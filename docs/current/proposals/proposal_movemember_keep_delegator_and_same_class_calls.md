@@ -404,3 +404,24 @@ Slice 8 (validator) is independent of 1-7 and may run at any point. Slices 1-7 a
 **After slice 8 / 7 (dispatcher, not an implementer slice):** update `docs/current/TODO.md` lines 66-68 (move the closed
 entries to `CLOSED.md`), flip this doc's status to PARTLY BUILT or IMPLEMENTED with the commit hashes, and record the
 parallel-change proposal's `MoveMember(oldMember: keepAsDeprecatedWrapper)` item as built.
+
+## Moved from TODO.md (2026-10-17)
+
+### TOOL-GAP: `MoveMember` cannot move members that use private state or constructor-initialised fields (2026-10-17) - mostly done 2026-10-17
+
+**Done:** `fieldMap` (source private field -> target field, instance moves into an existing class) with validation, body rewrite, collision guard for a moved local named like the target field, tool parameter and tool-level tests (valid move, dry run, invalid value); a guard refusing to move a field that a source constructor assigns; the `Search` move itself (`WorkspaceReadNavigationTools` now takes `SymbolNavigationImpl`/`SymbolRelationshipImpl` by DI; `WorkspaceTools.SearchSolutionTool` stays as an attribute-less delegator; five duplicate WorkspaceTools tool methods became delegators). Option (a) (moving a ctor assignment with its field) is dropped: `ConstructorParameter` plus `fieldMap` covers it. A static-only move with `fieldMap` is refused on purpose (a static member cannot use an instance field).
+
+**Still open (TOOL-GAPs from the Search move).** The first three are designed in `proposals/proposal_movemember_keep_delegator_and_same_class_calls.md` (PROPOSED 2026-10-17; slices 1-8, not built):
+- The MoveMember client schema cached by a running client can lack `fieldMap` (the value was sent as a string and the server threw a `JsonException`); refresh schemas on server restart, or answer a string-for-object with a hint.
+- MoveMember neither rewrites nor reports unqualified same-class calls to moved members (a delegator's own call became CS0103 until qualified with `this.`).
+- MoveMember has no "leave a delegator behind" option (`keepDelegator`); see `proposals/proposal_parallel_change_deprecated_wrappers.md`. The Search move needed a temporary-name staging trick to keep a delegator.
+- A toolset enabled by a subagent through `McpToolsetControl` is not visible to that subagent's client; enable it in the main session before spawning.
+- Class-level XML docs on `WorkspaceTools` and `WorkspaceReadNavigationTools` are stale (still say the read-navigation tools are unreachable, mention `_readNav`).
+- `SearchSolutionText` lost its `[McpServerTool]` attribute, so it is gone from the `WorkspaceReadNav` and `WorkspaceFileContent` sub-modes; `Search(mode: text)` covers it. Restore if wanted.
+
+Original report follows.
+
+Task: move `Search` (`SearchSolutionTool` plus `KindListingMaxItems`, `SearchModeToListAllKind`, `DispatchSearchCore`, `DispatchSearch`, `FindIgnoredSearchParameters`, `WorkspaceTools.cs:617-771`) from the `WorkspaceTools` facade into `WorkspaceReadNavigationTools`, the first step of removing the facade (`plans/plan_split_workspace_refactoring_tools_for_di.md`). Tool tried: `MoveMember` (`dryRun: true`, two attempts). Both were refused with `InvalidArgument`: the bodies reference private members `_readNav`, `_symbolNavigation`, `_symbolRelationship` of `WorkspaceTools` (`:33`, `:841`, `:843`) that are not in the move. Adding the two symbol fields to `memberNames` narrowed the refusal to `_readNav` only. Limits: (1) `_readNav` is also used by other facade methods, so it cannot move, and the target's equivalent is `_impl`, so the bodies would need rewriting; (2) the fields are assigned in the `WorkspaceTools` constructor (`:64-73`) and moving the declarations does not move the initialisation; (3) the target has no constructor parameters for the two symbol engines. Measured: 6 members (about 155 lines), 1 file, 1 project (`Tools.Basic`), 2 private fields, 1 shared field.
+
+Suggested change: extend `MoveMember` so that when the moved bodies use private fields it can (a) move a field together with its constructor initialisation, or (b) add the needed dependencies to the target's constructor as new parameters and rewrite the target's construction sites, optionally mapping a source field to a target field (`_readNav` -> `_impl`). Until then, the migration-first route is to add the two engine dependencies to the target (and its `Impl`) first, then `MoveMember` the six members. Dry-run refusal text was clear and actionable but offered no way to resolve a shared field.
+

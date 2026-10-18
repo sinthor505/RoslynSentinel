@@ -293,3 +293,15 @@ vantage point and says nothing about uncovered paths. Proposed minimum, none of 
   [[project_engine_reorg_group6_solution_structure_partial]] -- the reorg (commit `72a327e` and
   neighbours) that produced the 91-call coupling and the DI-chain constructor-parameter gap.
 - [[project_concurrent_sessions]] -- scheduling caution for hot files.
+
+## Moved from TODO.md (2026-10-17)
+
+### `SyntaxTargetResolver` extraction follow-ups (2026-10-03) - not started
+
+These were left open by the extraction in 50378ea and b95e857. See [proposals/proposal_syntax_target_resolver_extraction.md](./proposal_syntax_target_resolver_extraction.md).
+
+- **The `Describe*` formatters were not unified.** `DescribeNameOnlyCandidates`, `DescribeCandidateLocations` and `DescribeNearMissCandidatesAsync` still format candidate lists separately from `SyntaxTargetResolver.BuildHintForCandidates`. Where they belong is an open question in the proposal. Decide it before folding them in.
+- **`BasicRefactoringEngine._symbolNavigationEngine` is write-only.** The field is now never read. Removing the constructor parameter would collide with the existing 3-arg constructor and change which constructor DI selects. This needs a decision on the constructor and DI shape, not a mechanical delete. (`AdvancedStructuralEngine`'s equivalent field was removed in b95e857.)
+- **`RenameSymbol` cannot merge into an existing signature.** Renaming a method onto a name and signature that already exists fails with CS0111/CS0121. Step 2 had to work around it with a temporary disambiguating overload. A merge mode that retargets callers to the existing member would remove the workaround.
+- **`Member(remove)` resolved a context snippet to a keyword.** With `contextSnippet: "bool tempOverloadDisambiguator = false"`, it resolved the `bool` keyword's type symbol rather than the parameter's method. It then returned a 425 KB error listing "1006 caller(s)". Two fixes are needed: resolve to the enclosing declaration, and cap or offload the caller list in the error.
+

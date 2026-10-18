@@ -1,142 +1,67 @@
-# TODO — known gaps not yet fixed
+# TODO - open items only
 
-Running list of confirmed-but-deferred issues found during tool development/grading. Each entry
-should have enough detail to pick back up without re-discovering the root cause. Once an entry is
-actually fixed, move it to [CLOSED.md](./CLOSED.md) rather than deleting it outright.
+Rules: (1) one entry = one line (`- [OPEN|IN-PROGRESS|BLOCKED] Title (YYYY-MM-DD if known) - one sentence - [doc]` followed by a relative link); (2) when an item is done, move it to [CLOSED.md](./CLOSED.md) with evidence (older months: [archive/](./archive/)); (3) design prose belongs in proposals/, ideas/, issues/ or design/ (see [templates/README.md](./templates/README.md)), never here. Full text of every shrunk entry lives in the linked doc under "Moved from TODO.md (2026-10-17)".
 
-## DTO hook gap: `Member replace`, `ReplaceSnippet` and `ApplyDiff` are not inspected (2026-10-16) - not started
+## P1 Now
 
-`enforce-dto-justification.ps1` only inspects `Member` addTopLevelType/addMember, `CreateFile` and `WriteFile`. A new DTO added through `Member replace`, `ReplaceSnippet` or `ApplyDiff` is covered by the skill's wording only. Unverified: whether `tool_input.reason` reaches PreToolUse as a plain string for MCP calls (inferred from `ToolCallReason.cs:23-41`; check `.claude/journal/dto-hook.jsonl` after the first live trigger).
+Blocking or in-flight slices.
 
-## `Search(mode: references)` cannot resolve a type by name unless `filePath` is pinned (2026-10-16) - not started
+- [BLOCKED] MoveMember fold: no tool retypes an existing constructor parameter, so DI-chain call sites cannot be resolved (2026-09-29) - blocks the MoveMember fold of engine-reorg group 6 - [doc](blockers/blocking_error_movemember_no_retype_tool_for_di_chain_call_sites.md)
+- [OPEN] ReplaceSnippet schema invites anchor-only edits (2026-10-12) - NotFound buries the culprit snippet and the description never points to Member - [doc](blockers/blocking_error_replacesnippet_schema_invites_anchor_only_edits.md)
+- [OPEN] SubAgent fails with a bare InvalidOperationException and no findable run log (2026-10-12) - cause undiagnosed - [doc](blockers/blocking_error_subagent_invalidoperationexception_no_detail.md)
+- [IN-PROGRESS] C5c-2 leftovers: unrouted EOL flatteners (2026-10-17) - plural `ReplaceNodesAndFormatReplacementsAsync` still raw `Formatter.FormatAsync` + whole-file `NormalizeEol`; `RemoveMethodParameterAsync` annotates the whole method - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- [IN-PROGRESS] C5c-3: ExtractInterfaceAsync base-list layout leaves the colon at column 0, and files scaffolded by MoveTypeToFileAsync lack a trailing newline (2026-10-17) - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- [IN-PROGRESS] C5c leftovers: ConvertExpressionBodyAsync whole-document format and the near-dead InlineVariableAsync fallback (2026-10-17) - route via `FormatAnnotatedSpansAsync`, decide the `NormalizeWholeSubtreeWhitespace` call under C6 - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- [IN-PROGRESS] MoveMember private-state TOOL-GAP, mostly done (2026-10-17) - `fieldMap` and the ctor-assigned-field guard shipped; stale client schema, same-class calls, `keepDelegator`, subagent toolset visibility, stale class docs on WorkspaceTools/WorkspaceReadNavigationTools remain - [doc](proposals/proposal_movemember_keep_delegator_and_same_class_calls.md)
 
-Tracked as a blocker: `blockers/blocking_error_search_references_by_name_excludes_types.md` (root cause traced to `SymbolNavigationEngine.cs:1581-1583`; workaround: pass `filePath`). Prerequisite for the DTO proposal phases.
+## P2 Next
 
-## `MoveTypeToOuterScopeAsync` does not adjust accessibility (2026-10-17) - not started
+Committed, not started.
 
-A `private`/`protected` nested type moved to namespace scope becomes invalid C# (CS1527); the engine does not widen accessibility (tests use `public`). Decide: widen to `internal`, or reject with an actionable message. Also unreachable `_ => currentContainer` / `TargetNotFound` arm (~:1034-1048) and test gaps (nested-in-nested, attributes/docs/#region, duplicate names).
+- [OPEN] Wrap the 9 unwrapped `[McpServerTool]` returns in `SentinelCallToolResult` (2026-10-17) - plan is DRAFT and another session is implementing; do not begin until the user says so - [doc](plans/plan_wrap_unwrapped_tool_returns_in_sentinel_call_tool_result.md)
+- [OPEN] C6 whole-subtree whitespace enforcement: reachability check of ~65 legacy root sites, migrate engine by engine (2026-10-15) - 73 call sites in 16 files; 3 sites deliberately left unfixed on 2026-08-27 (`RunMicroRefactoringAsync`, `ExtractConstantSafeAsync`, `GenerateToStringSafeAsync`) - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- [OPEN] TOOL-GAP `NormalizeNewRootWhitespaceKeepingComments` (2026-10-16) - no helper formats a newly built root that embeds existing code with comments kept (PinnedC6_* sites, ExtractInterface comment loss) - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- [OPEN] `NormalizeNewRootWhitespaceKeepingUsingHeaders` limitations (2026-10-16) - directive spanning usings gives CS1027 and a header on a usings-less file is not carried; fix only if the C6 variant does not subsume it - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- [OPEN] MoveMember keep-delegator, same-class calls and string-for-object coercion (2026-10-17) - proposal PROPOSED, slices 1-8 not built; also see the parallel-change wrappers proposal - [doc](proposals/proposal_movemember_keep_delegator_and_same_class_calls.md)
+- [OPEN] `MoveTypeToOuterScopeAsync` does not adjust accessibility (2026-10-17) - private/protected nested type becomes CS1527; widen to internal or refuse; also an unreachable `_ => currentContainer` arm - [doc](issues/issue_structural_refactoring_open_defects.md)
+- [OPEN] `IntroduceParameterObjectAsync` drops its TODO comment, hides the class path and reports a wrong success message (2026-10-17) - [doc](issues/issue_structural_refactoring_open_defects.md)
+- [OPEN] `MoveType` cannot lift a nested type to top level (2026-10-14) - qualified `Outer.Nested` references are left behind (13 CS0426) - [doc](issues/issue_structural_refactoring_open_defects.md)
+- [OPEN] `MoveType(destination: ownFile)` has no target-folder parameter (2026-10-14) - also adds an unused using and drops the type-level doc summary - [doc](issues/issue_structural_refactoring_open_defects.md)
+- [OPEN] `MappingEngine.InvertAssignments` leaks leading trivia onto the right-hand side (2026-10-16) - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- [OPEN] `IDEStyleEngine.SimplifyMemberAccess` drops the leading trivia of the `this` token (2026-10-16) - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- [OPEN] `AddUsingDirective` simplifyExisting: `Simplifier.ReduceAsync` simplifies nothing because no node carries `Simplifier.Annotation` (2026-10-16) - re-verified 2026-10-17 at `BasicRefactoringEngine.cs:1553` - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- [OPEN] ExtractInterface drops comments and cannot warn (2026-10-16) - engine returns only a file dictionary; add a warnings field or a comment-keeping variant - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- [OPEN] DTO hook gap: `Member replace`, `ReplaceSnippet` and `ApplyDiff` are not inspected by `enforce-dto-justification.ps1` (2026-10-16) - [doc](issues/issue_tool_hygiene_open_items.md)
+- [OPEN] `GitImpl` generic catch blocks put `ex.Message` into `Error` (2026-09-30) - about 16 sites; violates the no-raw-exception rule - [doc](issues/issue_tool_hygiene_open_items.md)
+- [OPEN] `SessionHalted` external-drift latch: false positive from a timestamp-only touch, message does not self-report scope (2026-09-15) - [doc](plans/plan_session_halt_recovery_and_git_gaps.md)
+- [OPEN] Path comparison: analyzer/source-scan guardrail for `FilePathWrapper` vs `PathComparison.Comparer` case traps, and `FilePathLock` platform-conditional comparer (2026-10-02) - [doc](issues/issue_path_comparison_case_sensitivity.md)
+- [OPEN] `contextSnippet` "not found" wording, Step 5 (wrong-node-kind family, about 7 files) (2026-09-16) - categories A/B fixed; see the plan for steps 1-4 - [doc](finding_snippet_notfound_wording_confusion_audit.md)
+- [OPEN] Scoped operation ledger: review and extend to more tools than MoveMember (2026-10-09) - [doc](proposals/proposal_journal_digest_followup_decisions.md)
+- [OPEN] Follow-ups of the blocking-load and Build-result-shape plan (2026-10-09) - SubAgent tools do not wait for `SolutionLoadStatus`, embedded `BuildVerification` details not projected - [doc](plans/plan_blocking_solution_load_and_build_result_shape.md)
+- [OPEN] `SyntaxTargetResolver` extraction follow-ups (2026-10-03) - `Describe*` formatters not unified, write-only `_symbolNavigationEngine`, RenameSymbol cannot merge into an existing signature, `Member(remove)` keyword resolution - [doc](proposals/proposal_syntax_target_resolver_extraction.md)
+- [OPEN] `MoveMember` follow-ups left by the whole-file reformat fix (2026-10-03) - instance-move cref limitations and others - [doc](issues/issue_movemember_open_followups.md)
+- [OPEN] Schema budget headroom is about 2 chars (2026-10-17) - claude-lean Search/Git schemas sit at the `CoreSurface` limits (~40498/40500); the next parameter must trim wording first - [doc](proposals/proposal_reduce_tool_schema_token_cost.md)
+- [OPEN] Battery tests with bare relative file names leak files into the working directory (2026-10-17) - only BatteryTwentyFourTests got a cleanup; consider a shared test-base cleanup - [doc](issues/issue_tool_hygiene_open_items.md)
 
-## Unrouted EOL flatteners: plural `ReplaceNodesAndFormatReplacementsAsync` and `RemoveMethodParameterAsync` scope (2026-10-17) - partly done
+## P3 Later
 
-C5c-2 routed `ReplaceNodeAndFormatReplacementAsync`, the cascade caller-file `NormalizeEol`, `AddTopLevelTypeAsync` (no-namespace path) and `MemberRefactoringEngine.ExtractMethodAsync` onto the changed-lines EOL rule (constructor mixed-EOL tests added). Still open: the plural `ReplaceNodesAndFormatReplacementsAsync` (same raw `Formatter.FormatAsync` + whole-file `NormalizeEol`; route the same way and cover its callers). The original entry text follows.
+Ideas and low priority.
 
-Found in the C5b-2b review. `RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync` (~:63-67) is a raw span-scoped `Formatter.FormatAsync` followed by a whole-file `NormalizeEol`, and `MemberRefactoringEngine.AddConstructorParameterWithCallSitesAsync` (~:471) does the same `NormalizeEol` on caller files, so `AddConstructorParameter*` flattens a stray CRLF line in LF files. Route both via `FormatAnnotatedSpansAsync` (C5c), then add constructor mixed-EOL tests (the six cascade tests in `RefactoringEngineFormatCharacterizationTests.cs` are guards that would pass on the old finder; fix the header wording "is not a span-scoped Formatter.FormatAsync site" to "not yet routed"). Also: `RemoveMethodParameterAsync` annotates the whole method declaration, so unrelated body whitespace is reformatted (pre-existing); annotating only the `ParameterList`/`ArgumentList` would narrow it.
+- [OPEN] `NormalizeEolOfChangedLines` matches by line text, so repeated identical lines can take the wrong terminator (2026-10-16) - low risk, mixed-EOL files only - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- [OPEN] Old Advanced-side NormalizeWhitespace sweep list (2026-08-24) - SUPERSEDED by the C0-C6 enforcement proposal; full history kept there - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- [OPEN] Symbol/member lookup fragmentation across five resolvers plus three dispatch tables (2026-09-20) - proposal only, not implemented (see also the unify-member-lookup proposal) - [doc](proposal_universal_symbol_resolver.md)
+- [OPEN] Future feature: `UsingDirective(operation: add, simplifyAllCallers: true)` solution-wide simplification (2026-10-17) - NOT DESIGNED - [doc](ideas/idea_using_directive_simplify_all_callers.md)
+- [OPEN] `contextSnippet` deprecation tracking and `NearMissList`'s 3-candidate cap (2026-09-16) - deferred - [doc](finding_snippet_notfound_wording_confusion_audit.md)
+- [OPEN] Read-tool metadata envelope (`isComplete`/truncation flag) for the read tools other than `GetMethodSource`/`GetFileOutline` (2026-08-24) - [doc](ideas/idea_read_tool_metadata_envelope_followups.md)
+- [OPEN] Tool terminology/naming backlog (2026-08-24) - weak or ambiguous tool and parameter names, unactioned - [doc](tool-terminology-refinement-reference-v1.md)
+- [OPEN] Model tool-choice gap: `ApplyDiff` used instead of `ChangeAccessibility` for `ReplaceBlockFormatted`, 67.5% of all ApplyDiff failures (2026-09-05) - unactioned - [doc](model_eval_replaceblockformatted_accessibility_cost_2026_09_05.md)
+- [OPEN] Server-side telemetry/metrics for tool call counts and error rates (2026-09-05) - idea, not implemented - [doc](ideas/server_telemetry_idea.md)
 
-## `IntroduceParameterObjectAsync` drops its TODO comment, hides the class path, wrong success message (2026-10-17) - not started
+### Needs owner review (audit verdict UNSURE, original text left intact)
 
-Found in the C5b-2a review (all pre-existing; the formatter routing itself is done in 1069b161). (1) The "TODO: Update call sites" comment is attached to an `EmptyStatement` built with `WithSemicolonToken(MissingToken)`, which drops the leading trivia, so it never reaches the output (`todoComment` is dead code); `IntroduceParameterObject_IncludesTodoComment` never asserts the comment. (2) The method is found by name with `FirstOrDefault`, so an interface declared before its implementing class is picked and the class implementation is left untouched; the warning branch is then unreachable. (3) The main-path success message reads "// Local variable introduced." Fix all three with byte-exact tests.
+These four entries could not be verified or refuted from source on 2026-10-17. They stay verbatim until an owner decides to close, shrink or re-scope them.
 
-## `MappingEngine.InvertAssignments` leaks leading trivia onto the right-hand side (2026-10-16) - not started
-
-`InvertAssignments` swaps the operands together with their leading trivia, so a comment or blank lines directly before an inverted assignment end up on the right-hand side of the result. Found in the C5b-1 review; swap the operands but keep each side's own leading trivia in place.
-
-## `AddUsingDirective` simplifyExisting: `Simplifier.ReduceAsync` simplifies nothing (2026-10-16) - not started
-
-With `simplifyExisting: true`, `BasicRefactoringEngine.AddUsingDirectiveAsync` calls `Simplifier.ReduceAsync(doc, Simplifier.Annotation)`, but no node in the document carries `Simplifier.Annotation` at that point (only the new using has `Formatter.Annotation`), so the reduce step is a no-op and the option shortens no names. Found in the C5b-1 review; annotate the qualified names to reduce (or reduce the whole root) before the call.
-
-## `AddUsingDirective` simplifyExisting whole-document format can leak the formatter NewLine into mixed-EOL files (2026-10-16) - not started
-
-The `simplifyExisting` path (`BasicRefactoringEngine` ~:1555) runs a whole-document `Formatter.FormatAsync`, and its end-of-line guard (~:1571) only normalizes single-style documents, so in a mixed-EOL document the formatter's own NewLine option can leak in. Found in the C5b-1 review; route it via `RoslynFormattingHelper.FormatWholeDocumentAsync` with the pre-edit text as `eolReference` in C5c.
-
-## `IDEStyleEngine.SimplifyMemberAccess` drops the leading trivia of the `this` token (2026-10-16) - not started
-
-Replacing `this.x` with `x` drops the leading trivia of the `this` token, so a comment, `#region` or blank line directly before a statement that starts with `this.` is lost. Found in the C5a review; carry the `this` token's leading trivia onto the replacement name.
-
-## `NormalizeEolOfChangedLines` matches by line text, so repeated identical lines can take the wrong terminator (2026-10-16) - low risk, not started
-
-`EolUtilities.NormalizeEolOfChangedLines` matches lines by text with an LCS, so repeated identical lines (for example `}` or a blank line) inside a changed region of a mixed-EOL file can be matched to the wrong pre-image line and take its terminator. Only affects files that already mix endings; fix with position-aware matching if it ever shows up.
-
-## ExtractInterface drops comments and cannot warn (2026-10-16) - not started
-
-ExtractInterface now silently drops comments inside copied signatures and trailing comments after the parameter list (the old `NormalizeWhitespace` output kept them). The engine returns only a file dictionary, so it cannot warn. Consider a warnings field on the engine result or a comment-keeping variant. See `proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md` (C3-G3a).
-
-## TOOL-GAP: `NormalizeNewRootWhitespaceKeepingComments` (2026-10-16) - not started
-
-No helper formats a newly built root that embeds existing code with its comments kept (needed by the `PinnedC6_*` sites: ExtractSuperclass :126, ExtractMembersToPartial :1108, ConvertTupleToClass :1625, ExtractMethod :4600/:4569; also the ExtractInterface comment loss above). Suggested change: a new `RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingComments` that exempts comments from the guard but still rejects non-elastic whitespace, or move those sites to annotate-and-format in C6. See `proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md` (C3 status, C6).
-
-## `NormalizeNewRootWhitespaceKeepingUsingHeaders` limitations (2026-10-16) - not started
-
-A directive opened in a using's leading trivia and closed after the last using (the `#endif` on the namespace token) gives CS1027 in the output, and a header on a file with no usings is not carried. Both are documented on the method and pinned by `KnownLimitation_*` tests in `RoslynFormattingHelperNormalizeNewTests`. Fix only if the C6 comment-keeping variant does not subsume it.
-
-## TOOL-GAP: `MoveMember` cannot move members that use private state or constructor-initialised fields (2026-10-17) - mostly done 2026-10-17
-
-**Done:** `fieldMap` (source private field -> target field, instance moves into an existing class) with validation, body rewrite, collision guard for a moved local named like the target field, tool parameter and tool-level tests (valid move, dry run, invalid value); a guard refusing to move a field that a source constructor assigns; the `Search` move itself (`WorkspaceReadNavigationTools` now takes `SymbolNavigationImpl`/`SymbolRelationshipImpl` by DI; `WorkspaceTools.SearchSolutionTool` stays as an attribute-less delegator; five duplicate WorkspaceTools tool methods became delegators). Option (a) (moving a ctor assignment with its field) is dropped: `ConstructorParameter` plus `fieldMap` covers it. A static-only move with `fieldMap` is refused on purpose (a static member cannot use an instance field).
-
-**Still open (TOOL-GAPs from the Search move).** The first three are designed in `proposals/proposal_movemember_keep_delegator_and_same_class_calls.md` (PROPOSED 2026-10-17; slices 1-8, not built):
-- The MoveMember client schema cached by a running client can lack `fieldMap` (the value was sent as a string and the server threw a `JsonException`); refresh schemas on server restart, or answer a string-for-object with a hint.
-- MoveMember neither rewrites nor reports unqualified same-class calls to moved members (a delegator's own call became CS0103 until qualified with `this.`).
-- MoveMember has no "leave a delegator behind" option (`keepDelegator`); see `proposals/proposal_parallel_change_deprecated_wrappers.md`. The Search move needed a temporary-name staging trick to keep a delegator.
-- A toolset enabled by a subagent through `McpToolsetControl` is not visible to that subagent's client; enable it in the main session before spawning.
-- Class-level XML docs on `WorkspaceTools` and `WorkspaceReadNavigationTools` are stale (still say the read-navigation tools are unreachable, mention `_readNav`).
-- `SearchSolutionText` lost its `[McpServerTool]` attribute, so it is gone from the `WorkspaceReadNav` and `WorkspaceFileContent` sub-modes; `Search(mode: text)` covers it. Restore if wanted.
-
-Original report follows.
-
-Task: move `Search` (`SearchSolutionTool` plus `KindListingMaxItems`, `SearchModeToListAllKind`, `DispatchSearchCore`, `DispatchSearch`, `FindIgnoredSearchParameters`, `WorkspaceTools.cs:617-771`) from the `WorkspaceTools` facade into `WorkspaceReadNavigationTools`, the first step of removing the facade (`plans/plan_split_workspace_refactoring_tools_for_di.md`). Tool tried: `MoveMember` (`dryRun: true`, two attempts). Both were refused with `InvalidArgument`: the bodies reference private members `_readNav`, `_symbolNavigation`, `_symbolRelationship` of `WorkspaceTools` (`:33`, `:841`, `:843`) that are not in the move. Adding the two symbol fields to `memberNames` narrowed the refusal to `_readNav` only. Limits: (1) `_readNav` is also used by other facade methods, so it cannot move, and the target's equivalent is `_impl`, so the bodies would need rewriting; (2) the fields are assigned in the `WorkspaceTools` constructor (`:64-73`) and moving the declarations does not move the initialisation; (3) the target has no constructor parameters for the two symbol engines. Measured: 6 members (about 155 lines), 1 file, 1 project (`Tools.Basic`), 2 private fields, 1 shared field.
-
-Suggested change: extend `MoveMember` so that when the moved bodies use private fields it can (a) move a field together with its constructor initialisation, or (b) add the needed dependencies to the target's constructor as new parameters and rewrite the target's construction sites, optionally mapping a source field to a target field (`_readNav` -> `_impl`). Until then, the migration-first route is to add the two engine dependencies to the target (and its `Impl`) first, then `MoveMember` the six members. Dry-run refusal text was clear and actionable but offered no way to resolve a shared field.
-
-## `MoveType` cannot lift a nested type to top level (2026-10-14) - not started
-
-`MoveType(typeName: SnippetSpan, destination: ownFile)` on a nested type (`ContextHelper.SnippetSpan`) moves the declaration but leaves the qualified `ContextHelper.SnippetSpan` references, so the compile gate rejects it with 13 `CS0426`. Suggested change: when the moved type was nested, rewrite `Outer.Nested` references solution-wide to the new top-level name in the same atomic change. Worked around in slice 5f-D4 with migration-first: add the top-level type beside the nested one, retarget references, then remove the nested one.
-
-## `MoveType(destination: ownFile)` has no target-folder parameter (2026-10-14) - not started
-
-Found moving `SnippetMatchOutcome` out of `ContextErrorBuilder.cs` (commit d9a2ff90). `MoveType` can only create the new file beside the source file, so a type cannot be moved into a subfolder such as `SnippetMatching/`. It also adds an unused `using Microsoft.CodeAnalysis.Text;` to the new file and drops the type-level doc summary. Suggested change: add an optional `targetFolder` (or `targetPath`) parameter, copy the source file's usings only where the moved type needs them, and carry the type's doc comment across. Workaround used: accept the source folder and fix the using and summary with one `ReplaceSnippet`.
-
-## `MoveMember` follow-ups left open by the whole-file reformat fix (2026-10-03) - not started
-
-These came out of the fix in 4dedc78, a23c581, 4aa2dc2 and 389ae1b. The details are in the "Resolution" section of `blockers/resolved/blocking_error_movemember_reformats_entire_source_and_caller_files.md`.
-
-- **Instance-move cref limitations (2026-10-15; the main item is closed, see CLOSED.md).** Known and intended for now: (1) bare crefs to inherited members do not bind in the fixture, so a bare cref in a derived class is never found or retargeted, and the move adds a standing "could not be verified" note; (2) qualification is verified in the source-document context only, so a target in another file or namespace can give CS1574 (a note says so); (3) `PreviewInstanceMoveCallSitesAsync` omits cref edits and its cref row still says "not a call site, not rewritten by this move" (optional reword, Q3-7); (4) two adjacent moved members leave a blank line after `{` (cosmetic); (5) review nits: a shared declared-symbol helper, notes use Caution severity, the collector may cascade to base or interface members, and a zero-length cref insertion strictly inside a receiver replacement is not dropped by the `==`/`OverlapsWith` merge guard (contrived).
-- **Wrapped call sites can be misclassified.** `PreviewInstanceMoveCallSitesAsync` matches a diagnostic to a reference by start line. On a wrapped call whose error lands on a later line, such as a named argument, the site is classified `Valid` and left unrewritten, and only the compile gate stops the result. It also compares original reference lines against post-edit diagnostic lines in the source and target, which shift after the removal. Match by span overlap against the edited text instead. **Proposal 2026-10-15:** `proposals/proposal_instance_move_preview_position_map_classification.md` (position map from the engine's own edits, line-text validation, bind-based classification; leaning option c, after B3).
-- **Instance moves do not qualify the moved body's bare calls ("qualify receivers" pass).** A moved member's body that calls A's other members bare (`Other()`, `_count`, `this.x`) no longer resolves once it sits in B; today only the compile gate catches it, as an error with no repair. The fix is a pre-move pass that rewrites those bare references to go through an A receiver (`a.Other()`), the same shape as the cref qualifier. Unchecked: whether `MoveInstanceMembersAsync` already handles any of this, and where the receiver comes from (parameter, field). Needs a design pass; planned alongside the cref work in `plans/plan_cref_qualifier_helper_and_tool.md` (listed there as out of scope).
-- **Line counts partly wired up.** `AppliedChangeSummary.LineChanges` was extended in 8c987c97: 30 of the 83 `new AppliedChangeSummary(` sites now pass it (14 of 41 in `AdvancedRefactoringTools`, 9 of 25 in `RefactoringStructuralImpl`, 4 of 8 in `RefactoringExtractionDocsImpl`, 3 of 6 in `RefactoringSignatureImpl`). `GenerationTools`, `RefactoringToolHelpers` and `WorkspaceProjectManagementImpl` pass none. Adopt it at the remaining 53 sites.
-- **Collateral-change check: B1-B3 landed 2026-10-15 (c27896cc, 74895c51, 7e2d04fd); B1t landed 83df2fdf.** Not covered: the new-class route's new file (no pre-image, unchecked), a tool-level test that a refusal surfaces through the MoveMember tool, dry runs returning the edits. Original design note: consider one beyond the EOL refusal: flag a file whose changed lines far exceed the lines the edit declared. **Design decided 2026-10-15 (tripwire, MoveMember only):** `MoveMemberResult` gains the `TextChange`s each route applied (captured where `ApplyChanges` is called: base-type, existing-class, new-class, instance via `MaterializeDocumentEditsAsync`); `ValidateAndApplyAsync` gets an optional edits parameter (before `CancellationToken`) and, right after the pre-image read, refuses with a new `ToolErrorCode.CollateralChangeRefused` when the returned text differs from pre-image plus edits (names the file and first differing line). No allowance formula. It only catches post-processing after `ApplyChanges` (a re-added normalizer), not a wrong edit set, because the text is built from the same edits. Dry runs may return the edits instead of full text; real applies already drop `ChangedContent`. Slices: B1 `CollateralChangeGuard` + error code (Common, senior), B2 helper wiring, B3 `MoveMemberResult`/route capture + tool forwarding (senior), B1t tests. **Plan 2026-10-15:** `plans/plan_movemember_collateral_change_tripwire.md`.
-- **Review nits from the D2 and Q1 slices (2026-10-15), all minor, not started.**
-  - D2: the unmappable/untrusted-map fallback in `PreviewInstanceMoveCallSitesAsync` has no test (needs a seam or a `MovePositionMap`-level test).
-  - D2: the preview still computes full diagnostics through `ValidateChangesWithCandidateAsync` and ignores them; a candidate-only entry point would save the cost.
-  - D2: CS8604 at `MovePositionMap.cs:498`; the wrapped-call D2.4 test does not pin `row.Line`.
-  - Q1: `CrefQualifier`'s re-bind DROP path (`DroppedByRebind`) has no test. Q1f tried a natural fixture (a property named like the containing type); cref container lookup ignores it, so no mismatch is reachable from plain source. Needs a test seam (injectable re-bind resolver) or removal of the branch.
-  - Q1: bare crefs to inherited members do not bind in the in-memory fixture (observed twice); not re-checked under `MSBuildWorkspace`. `CrefQualifier` counts them as unresolved. Q3 and the tool should say "not checked" for them.
-  - Q1: `CrefQualifier` verifies per document only; cross-document edits applied together are not re-bound together.
-  - Q2a: `QualifyCrefsImpl` returns `InvalidArgument` ("matched no documents") for an existing project or solution with zero documents (or null-path documents dropped by the dedupe); the argument is valid, so return a `no_changes` summary instead and add a test. Unknown project/file already return `NotFound` from `DocumentLookup`, which is fine.
-  - Q2a: if `ValidateAndApplyAsync` itself writes then throws, that project's ChangeId is lost (per-project try/catch only keeps earlier projects').
-  - Q2a: no multi-project solution-scope apply test and no `partially_applied`/all-rejected test (no natural trigger found for a rejected project).
-  - Q2a: `QualifyCrefs` tool description does not mention `changeId`s (one per project, revertible with `UndoLastApply`) or the statuses `dry_run_ok`, `applied`, `partially_applied`, `no_changes`; add one sentence (fold into Q2b).
-
-## `SyntaxTargetResolver` extraction follow-ups (2026-10-03) - not started
-
-These were left open by the extraction in 50378ea and b95e857. See [proposals/proposal_syntax_target_resolver_extraction.md](./proposals/proposal_syntax_target_resolver_extraction.md).
-
-- **The `Describe*` formatters were not unified.** `DescribeNameOnlyCandidates`, `DescribeCandidateLocations` and `DescribeNearMissCandidatesAsync` still format candidate lists separately from `SyntaxTargetResolver.BuildHintForCandidates`. Where they belong is an open question in the proposal. Decide it before folding them in.
-- **`BasicRefactoringEngine._symbolNavigationEngine` is write-only.** The field is now never read. Removing the constructor parameter would collide with the existing 3-arg constructor and change which constructor DI selects. This needs a decision on the constructor and DI shape, not a mechanical delete. (`AdvancedStructuralEngine`'s equivalent field was removed in b95e857.)
-- **`RenameSymbol` cannot merge into an existing signature.** Renaming a method onto a name and signature that already exists fails with CS0111/CS0121. Step 2 had to work around it with a temporary disambiguating overload. A merge mode that retargets callers to the existing member would remove the workaround.
-- **`Member(remove)` resolved a context snippet to a keyword.** With `contextSnippet: "bool tempOverloadDisambiguator = false"`, it resolved the `bool` keyword's type symbol rather than the parameter's method. It then returned a 425 KB error listing "1006 caller(s)". Two fixes are needed: resolve to the enclosing declaration, and cap or offload the caller list in the error.
-
-## Analyzer / source-scan guardrail for case-sensitive path comparison - not started
-
-**Found:** 2026-10-02, while fixing `blockers/blocking_error_path_lookup_case_sensitive_drive_letter_replacesnippet_file_not_found.md`
-(phase 5a of `design_read_chokepoint.md` step 5). The root cause was a static-type trap:
-`FilePathWrapper` has OrdinalIgnoreCase `Equals`/`==`, but its `implicit operator string` (->
-`.Absolute`) and any `.Absolute ==` / `string.Equals(a, b)` silently become case-sensitive, so every
-hand-rolled `Documents.FirstOrDefault(d => d.FilePath == path)` is a latent copy of the bug. Phase 5b
-(the ~110 LINQ lookups plus ~310 `GetSolutionAsync` sites) removes the existing instances; nothing
-stops a new one. Proposed: a Roslyn analyzer (or a test that scans production source) flagging
-(a) `==`/`Equals` between `Document.FilePath`/`FilePathWrapper.Absolute`/`string`-converted wrappers
-without `PathComparison.Comparer`, and (b) `Solution.Projects...Documents` scans for a path outside
-`DocumentLookup`. Not built: the fix plan said to record it here instead.
-
-## `FilePathLock` uses a platform-conditional comparer - left case-sensitive on Linux
-
-**Found:** 2026-10-02, same fix. Phase 5a added `PathComparison.Comparer` (OrdinalIgnoreCase, the
-same comparer Roslyn's `GetDocumentIdsWithFilePath` uses on every OS) and applied it to
-`PersistentWorkspaceManager`'s `_internalChanges`, `_pendingChanges` and the `_externalChanges`
-`Distinct()`. `FilePathLock` was deliberately left alone: its platform-conditional comparer is a
-separate locking-semantics decision (two spellings of one file can take two different locks on a
-case-sensitive OS). Revisit whether it should use `PathComparison.Comparer` too.
-
-## `SubAgentEval` child's full `RunTest` reported 1 failed test (2657 passed) in the live smoke run - unexplained
+### `SubAgentEval` child's full `RunTest` reported 1 failed test (2657 passed) in the live smoke run - unexplained
 
 **Found:** 2026-10-01, live `SubAgentEval` smoke run (run `20261001-222319-107-295d110c`). The same
 suite in the main checkout has 0 failures. `SubAgentEvalResult` carries counts only, so the failing
@@ -146,29 +71,9 @@ or a flake from running alongside other sessions. Next step: re-run `SubAgentEva
 manual worktree at that path) and capture which test fails; consider adding the first failing test
 name to `SubAgentEvalResult` so this is visible without digging.
 
-## `MoveMember`'s `callSiteFixups` `"new"` sentinel only supports a parameterless constructor
+### `MoveMember`'s ledger `TryOpen` path still unexercised with entries actually present at apply time
 
-**Found:** 2026-09-27, during real end-to-end `MoveMember` testing
-(`ApiIntegrationEngine.AddValidationToPocoAsync` -> `ApiAutomationEngine`).
-
-**What:** `AdvancedStructuralEngine.cs`'s `MoveInstanceMembersAsync` rewrite handles the `"new"`
-sentinel value in `callSiteFixups` by emitting
-`SyntaxFactory.ObjectCreationExpression(SyntaxFactory.IdentifierName(targetClassName)).WithArgumentList(SyntaxFactory.ArgumentList())`
-— always a parameterless constructor call, regardless of what the target type's actual constructor
-requires. Against `ApiAutomationEngine(IWorkspaceManager workspaceManager)` (a required-parameter
-constructor), every call site fixed up with `"new"` failed with `CS7036`
-("no argument given that corresponds to the required parameter 'workspaceManager'"). Worked around
-in that session by passing the full expression (`"new ApiAutomationEngine(_workspaceManager)"`) as
-the fixup value instead of the bare `"new"` sentinel — this already works, since non-`"new"` values
-are parsed via `SyntaxFactory.ParseExpression` verbatim.
-
-**Not fixed:** the `"new"` sentinel could inspect the target type's constructor(s) and either (a)
-only offer itself as valid when a parameterless constructor exists, or (b) attempt to match
-in-scope fields/parameters to the constructor's parameter types the same way call-site candidate
-resolution already does. Low priority — the raw-expression fixup already covers this case, so it's
-a convenience gap, not a blocker.
-
-## `MoveMember`'s ledger `TryOpen` path still unexercised with entries actually present at apply time
+_Note 2026-10-17: "same session as above" referred to the `"new"` sentinel entry, now closed (see CLOSED.md, found during end-to-end MoveMember testing)._
 
 **Found:** 2026-09-27, same session as above. See
 `docs/current/blockers/resolved/blocking_error_movemember_ledger_discarded_on_apply.md` (now FIXED —
@@ -184,78 +89,7 @@ overall (i.e. the *resolved* sites compile, leaving only the *deliberately-unfix
 `PendingLedgerEntries`) — confirm the ledger actually opens, blocks an unrelated write, and can be
 resolved by a follow-up `callSiteFixups`-carrying retry.
 
-## `SentinelRefactoringTools` / `RefactoringStructuralTools` split left half-finished — duplicate `SyncTypeAndFilename` MCP tool registration
-
-**Found:** 2026-09-20, while investigating whether `SyncTypeAndFilename` is duplicated.
-
-**What:** `RoslynSentinel.Server.Basic/RefactoringStructuralTools.cs` was created as step 1 of
-`docs/current/plans/plan_split_workspace_refactoring_tools_for_di.md` (Decision 1: split
-`SentinelRefactoringTools` into `RefactoringSignatureTools`, `RefactoringStructuralTools`,
-`RefactoringExtractionDocsTools`). It duplicates 6 methods verbatim from
-`SentinelRefactoringTools.cs` — `Member`, `ModifyEnum`, `ModifyAttribute`, `ModifyModifier`,
-`ModifyBaseType`, `SyncTypeAndFilename` — all still `[McpServerTool]`-attributed with identical
-names/signatures in both classes. `RefactoringStructuralTools` is registered in DI
-(`ServiceRegistrationExtensionsBasic.cs:279-282`, `AddSingleton` + `WithSentinelTools<>()`) under a
-`"RefactorStructural"` mode key (`ToolClassRegistry.cs:38`) that is never enabled by any active
-mode (`ServerStdio.cs`'s `ActiveToolTypes`, `AdvancedModeToToolClasses`, and every mode string
-built anywhere in the repo were grepped — none reference `"RefactorStructural"` or
-`RefactoringStructuralTools`). So today there is no live duplicate registration, but the two
-classes are one config change away from colliding on 6 tool names simultaneously, and the class
-sits as dead-in-production code with real duplicated logic behind it (bugs fixed in one copy, e.g.
-`SyncTypeAndFilename`'s first-declared-type bug, silently do not apply to the other).
-
-The plan's designed end-state (Decision 3) is NOT deleting `RefactoringStructuralTools` — it's
-turning `SentinelRefactoringTools` into a thin legacy facade that internally constructs and
-delegates to `RefactoringStructuralTools` + the other 2 split classes, preserving
-`SentinelRefactoringTools`'s public constructor/method signatures so all 18 existing
-direct-construction test call sites and the 4 `typeof(SentinelRefactoringTools)` reflection sites
-keep compiling untouched. That cutover (and the matching `SentinelWorkspaceTools` -> 5-class split
-in the same plan) was never carried out.
-
-**Suggested approach:** treat as its own implementation pass, not a quick patch — follow
-`plan_split_workspace_refactoring_tools_for_di.md` Decision 3's facade pattern and Decision 7's
-stepwise/incremental-build-checkpoint sequencing. Minimum slice to close the actual duplication
-risk: make `SentinelRefactoringTools`'s `Member`/`ModifyEnum`/`ModifyAttribute`/`ModifyModifier`/
-`ModifyBaseType`/`SyncTypeAndFilename` methods delegate to an internally-held
-`RefactoringStructuralTools` instance instead of containing their own copies, matching the facade
-shape already spec'd in the plan doc. Full plan also covers `RefactoringSignatureTools` and
-`RefactoringExtractionDocsTools`, which have not been independently verified as duplicated or not
-during this pass — check those too before assuming this TODO's scope is limited to
-`SyncTypeAndFilename`'s cluster.
-
-## Symbol/member lookup fragmentation across five resolvers plus three dispatch tables — proposal only, not implemented
-
-**Found:** 2026-09-20, surfaced while root-causing the third `Member(remove)` "false not found"
-incident (`blockers/resolved/blocking_error_member_remove_false_not_found.md`). Broadened
-2026-09-24 after a fourth same-symptom incident
-(`blockers/resolved/blocking_error_member_replace_interface_notfound.md`, fixed 2026-09-25) traced to
-the same fragmentation
-disease one level down, in `SymbolNavigationEngine.cs`'s five symbol-lookup resolvers rather than
-just the three declaration-kind dispatch tables originally found here. Full, current proposal:
-[proposal_universal_symbol_resolver.md](proposal_universal_symbol_resolver.md) — supersedes
-[proposal_unify_member_lookup_paths.md](proposal_unify_member_lookup_paths.md), which is kept in
-place with a superseded notice since two resolved blockers cite it by filename.
-
-**What:** `GetMemberName` (`SymbolNavigationEngine.cs`), `GetContainerMembersAsync`'s inline
-switch (`SymbolNavigationEngine.cs`), and `FindImplementationsForMemberAsync`'s dispatch
-(`SymbolNavigationEngine.cs:1634-1641`) each independently enumerate which
-`MemberDeclarationSyntax` kinds they recognize, and all three currently disagree with each other
-(different kind sets, different fallback behavior for an unrecognized kind). `e120b68` fixed one
-gap in one of the three (fields, in the third table); nothing stops the same shape of bug
-recurring in a kind/table combination not yet hit by a live repro. Separately,
-`SymbolNavigationEngine.cs`'s five symbol-lookup resolvers (`LocateSymbolAsync`,
-`ResolveSymbolByNameAsync`, `ResolveMemberByNameOrSnippet`, `ResolveMemberOrEnumMemberByNameOrSnippet`,
-`ResolveTypeByNameOrSnippet`) each maintain their own candidate-collection and disambiguation logic;
-the interface-member incident above traced directly to two of these five disagreeing about whether
-interface-body members belong in the candidate set at all.
-
-**Suggested approach:** see `proposal_universal_symbol_resolver.md` for the full design — a single
-`ResolveCandidates` query replacing the three syntax-only resolvers, a `CandidateKind` enum, a
-separate opt-in semantic layer, and a staged obsolete-then-sweep migration folding in the
-dispatch-table unification (this section's original scope) as part of the same pass. Not started; a
-multi-session refactor, not a quick patch.
-
-## `Member(replace)` sub-findings left open by the blank-line/newline fix (2026-09-18)
+### `Member(replace)` sub-findings left open by the blank-line/newline fix (2026-09-18)
 
 Split out of `blocking_error_member_replace_strips_blank_line_between_adjacent_members.md` when that
 doc's primary symptom (inserted members losing separating blank lines/newlines) was archived as
@@ -276,18 +110,7 @@ were explicitly left unresolved and are carried forward here rather than lost wi
    combination is meant to be supported at all, or whether it's a genuine insertion/targeting bug
    that nests new content into the class instead of replacing it wholesale.
 
-## `GitImpl` generic catch blocks put `ex.Message` into `Error`
-
-**Found:** 2026-09-30, during the Git listed-scope/shell-parity plan (Phases 1-6). About 16
-`catch (Exception ex)` blocks in `RoslynSentinel.Tools.Basic/GitImpl.cs` build a failed result from
-`ex.Message`, which can leak raw exception text (and potentially internal paths) into the tool's
-`Error`/`ResultError.Message`, against the CLAUDE.md rule that raw exceptions never reach a tool result.
-
-**Suggested approach:** route these through one helper that logs the exception server-side and returns a
-fixed, actionable message (plus a `GitError` code and `Detail` naming the operation and a next step), and
-add a test that forces an exception path and asserts no exception text is exposed.
-
-## `docCommentId` parameter audit across all tools — not started
+### `docCommentId` parameter audit across all tools — not started
 
 **Found:** 2026-09-06, see [docCommentId_description_gap.md](./docCommentId_description_gap.md). `RenameSymbol`'s description
 doesn't say how to obtain `docCommentId` (via `LocateSymbol`); confirmed as the direct cause of a
@@ -305,419 +128,9 @@ model fabricating a placeholder ID and getting rejected before self-correcting.
 
 **Not started** — deferred to its own session per the original memory's plan.
 
-## Future feature: `UsingDirective(operation: add, simplifyAllCallers: true)` — solution-wide simplification
-
-**Found:** 2026-08-19, while reviewing whether `UsingDirective` needed a `simplifySingleFile`/
-`simplifyAllCallers` split. `simplifySingleFile` already effectively exists as the current
-`simplifyExisting` bool (add-only, runs `Simplifier.ReduceAsync` scoped to just the edited
-document) — no new work needed there. `simplifyAllCallers` does not exist and would be new,
-larger-scope work, not a boolean flag on the existing method.
-
-**Not `FindReferences` + a loop.** The obvious-looking shortcut — call `FindReferences` to get a
-file list, then loop `UsingDirective(simplifySingleFile)` over each — doesn't work: `FindReferences`
-resolves references to one specific *symbol* (a method/type/member via `docCommentId`), but this
-feature is scoped to a *namespace*, which can contain many independent symbols
-(`ContosoOrders.Core.Discounts` might have `DiscountCalculator`, `TaxCalculator`, etc.). There's no
-single symbol representing "the namespace" to feed `FindReferences`, running it once per symbol in
-the namespace would still miss files that don't reference that particular symbol, and a
-`FindReferences` hit doesn't distinguish "referenced via existing using directive" (nothing to
-simplify) from "referenced via a fully-qualified name" (the actual target).
-
-**What it would actually need to do (namespace-scoped solution sweep, not symbol-based):**
-1. Enumerate every document in the solution — not a filtered subset, since there's no cheap way to
-   know in advance which documents contain a fully-qualified reference into the target namespace.
-2. Per document: get the semantic model and look for `QualifiedNameSyntax`/
-   `MemberAccessExpressionSyntax` nodes whose resolved symbol's containing namespace matches the
-   target (a syntax/semantic scan, not a reference lookup) — cheaply skip documents with no such
-   node before doing anything else, since most of the solution won't reference the namespace at all.
-3. For each document that does have matches: ensure the `using` directive is present (add if
-   missing, matching `AddUsingDirectiveAsync`'s existing idempotency check), then run
-   `Simplifier.ReduceAsync` scoped to that document — same mechanism `simplifyExisting` already uses
-   per-file, just applied across every matching document instead of one.
-4. Only report/return documents that actually changed.
-
-**Why not built now:** this changes the tool's blast radius from "one file" to "the whole
-solution" — every document touched needs its own using-directive-presence check (not just the one
-file the caller named), its own simplify pass, and its own change entry in the result. That's a
-meaningfully different feature (a bespoke semantic-model sweep across the whole solution) than the
-current single-document flag, and deserves a deliberate design pass (e.g. should it also report
-which files it touched? cap how many files it'll touch in one call? require a dry-run first?)
-rather than being bolted on as a same-shaped bool.
-
-## Deferred: `contextSnippet` deprecation tracking, and `NearMissList`'s 3-candidate cap
-
-**Found:** 2026-08-19, closing out `docs/plan-tool-disambiguation-remediation-v1.md` Task I/J
-(hint-strategy evaluation + raw-`ContextHelper` error-message enrichment).
-
-**What (two related, deliberately-unresolved questions):**
-1. Every tool touched by that plan keeps `contextSnippet` fully optional, silently first-matching
-   by name when omitted — including when the name is genuinely ambiguous. Whether to eventually
-   require `contextSnippet` (or `symbolName`+`contextSnippet`) once ambiguity is detected, or at
-   least emit a non-fatal warning on a silent first-match against 2+ candidates, was explicitly
-   raised as a Risks-section question in that plan and never decided — it's a product/reliability
-   trade-off (breaking today's default-argument-free call shape vs. catching silent wrong-guesses
-   proactively), not something to decide unilaterally while fixing the hint text.
-2. The `NearMissList` hint strategy (now the sole implementation in `SymbolNavigationEngine.BuildMemberHint`/
-   `BuildTypeHint`) caps its candidate list at 3, with a "+N more" suffix beyond that. No fixture in
-   the current test suite has more than 3 real same-named candidates, so this was left at the plan's
-   originally-specified cap rather than speculatively widened or made configurable.
-
-**Why not resolved now:** both are explicitly flagged in the plan doc's Task J addendum as
-recommendations for the user to decide, not gaps this session's work left broken — the additive,
-non-breaking behavior is working as designed today.
-
-## `contextSnippet` "not found"/"does not exist" wording — Category A/B fixed 2026-09-15/16; Step 5 (wrong-node-kind family, ~7 files) still open
-
-**Found:** 2026-09-15. Full audit: [finding_snippet_notfound_wording_confusion_audit.md](finding_snippet_notfound_wording_confusion_audit.md).
-
-**Fixed 2026-09-15/16** via `docs/current/plans/plan_contexterrorbuilder_orienting_guidance.md` Steps
-1-4: `ContextHelper.cs`'s two throw sites (lines 216, 322) and `ToolException.cs`'s
-`ToolNotFoundException` conflation were replaced with `ContextErrorBuilder`/`SnippetMatchOutcome`/
-`DiagnoseNoMatch`, and `[COMPILER ERROR]` labels were added to all 5
-`CompilerErrorLookupHelper.DescribeAsync` dump sites in `SentinelWorkspaceTools.cs` (the
-`ReplaceSnippet`/`ApplyDiff` compiler-diagnostic-vs-snippet-not-found conflation that originally
-prompted the audit).
-
-**Still open (Step 5, not started):** the "position resolved but wrong node kind there" family
-repeated across `GranularRefactoringEngine.cs`, `MappingEngine.cs`, `SemanticRefactoringLibrary.cs`,
-`MsToolAugmentEngine.cs`, `CodeGenerationEngine.cs`, plus related raw-`ex.Message`-propagation sites
-in `SymbolNavigationEngine.cs`/`ImpactAnalyzer.cs`/`BasicRefactoringEngine.cs`/`MemberRefactoringEngine.cs` (~7 files, a dozen-plus
-distinct sites). Explicitly lower priority per the plan; deferred as its own follow-up sweep — see
-the finding doc's raw audit findings for the full site inventory.
-
-## `RoslynSentinel.Advanced`'s NormalizeWhitespace occurrences never got a follow-up sweep — Basic side now fully closed 2026-08-27; Advanced still open
-
-**Correction 2026-10-03:** the "Basic side fully closed" claim was wrong. `MemberRefactoringEngine.cs` (the former `RefactoringEngine`) still had about 20 whole-root `NormalizeWholeSubtreeWhitespace` sites in every `MoveMember` path. Those were fixed in 4dedc78, a23c581 and 4aa2dc2; see `blockers/resolved/blocking_error_movemember_reformats_entire_source_and_caller_files.md`. **Update 2026-10-13:** the two calls left in `ExtractMethodAsync` (`MemberRefactoringEngine.cs` 4334 and 4398) were classified safe: both normalize newly synthesized nodes (a built `MethodDeclaration` and a built `callStatement`). `MethodSignature`'s caller rewrite is fixed (d89cc95f, see CLOSED.md). `AdvancedStructuralEngine.cs` was wrongly called deleted: it exists under `RoslynSentinel.Engines.Advanced/` with 16 `NormalizeWholeSubtreeWhitespace` hits, and the inventory (`finding_normalizewhitespace_container_reformat_risk_inventory.md`) now carries the current per-file counts (81 non-test hits in 19 files). Re-grep for whole-root calls in both Engines projects before scoping this sweep.
-
-**Found:** 2026-08-24, while auditing `docs/plan-normalize-whitespace-full-sweep-v1.md` (now filed
-`docs/obsolete/`) for the docs reorganization pass. That plan completed a sweep of `RoslynSentinel.Basic`
-but explicitly scoped out `RoslynSentinel.Advanced`'s ~64 occurrences of the same whole-file
-`NormalizeWhitespace()` pattern as deferred/out-of-scope, and no follow-up plan doc for the Advanced
-side exists anywhere in `docs/`.
-
-**Why this matters:** the Basic-side version of this bug caused real line-shift/re-indentation damage
-(see the plan doc's own root-cause writeup) before being fixed. If the same call pattern is still
-present ~64 times in `RoslynSentinel.Advanced` (not re-verified count-wise in this pass — worth a fresh
-grep for `NormalizeWhitespace()` before scoping work), those call sites carry the same latent risk and
-have simply not been hit by a repro yet.
-
-**Suggested approach:** grep `RoslynSentinel.Advanced` for `.NormalizeWhitespace()` calls that
-re-serialize a whole document (vs. a narrowly-scoped single-node call, which is fine), cross-check each
-against the Basic-side fix's shape (targeted formatting vs. whole-tree re-indent), and either confirm
-they're already narrow/safe or port the same fix pattern across.
-
-**Correction 2026-08-27 — the Basic-side sweep this entry assumed was "done" had two live misses of
-its own,** found while fixing the unrelated "`ConstructorParameter` collapses multi-line signatures"
-bug (separate TODO entry). `RoslynSentinel.Basic/RefactoringEngine.cs`'s (now `MemberRefactoringEngine.cs`) `AddConstructorParameterAsync`
-and `RemoveConstructorParameterAsync` both did `root.ReplaceNode(classDecl, newClassNode)
-.NormalizeWhitespace()` — a whole-tree reflow identical to the pattern this entry describes, not a
-narrowly-scoped one. Fixed by switching both to the file's own established
-`ReplaceNodeFormattedAsync` helper (annotates only the new/replaced node and calls
-`Formatter.FormatAsync` scoped to that annotation — already used by `AddMemberAsync`/`AddPropertyAsync`
-/`AddFieldAsync` and others in the same file). `SortMembersAsync` (same file, ~line 3458) has the
-identical unscoped `.ReplaceNode(...).NormalizeWhitespace()` shape and was NOT fixed in this pass — out
-of scope for the `ConstructorParameter` bug, flagged here since it's the same bug class found by the
-same audit. **Implication for this entry:** "the Basic sweep is done, only Advanced is unswept" can no
-longer be assumed — worth a fresh grep of `RoslynSentinel.Basic` too (not just `RoslynSentinel.Advanced`)
-for any other `.ReplaceNode(...).NormalizeWhitespace()`/bare `.NormalizeWhitespace()` call before
-scoping the Advanced-side follow-up work, since the "already fixed" premise just proved incomplete once.
-
-**Basic side fully closed 2026-08-27:** a fresh `SearchSolutionText` sweep of all of
-`RoslynSentinel.Basic` found 89 raw `.NormalizeWhitespace()` hits (not just the 1 `SortMembersAsync`
-miss above), across 17 files. Every hit was individually classified: 55 were the unscoped
-whole-root-reflow bug, 34 were legitimate uses (whole-document `SyntaxRewriter.Visit` passes where
-full-file reformatting is correct-by-design; small standalone nodes normalized before insertion,
-never a reflow of existing content; text built only for display/comparison, never written back; or
-brand-new output with the original root untouched). Of the 55 confirmed bugs, 52 were fixed by
-switching to `ReplaceNodeFormattedAsync`/`RemoveNodeFormattedAsync` (or a shared-`SyntaxAnnotation` +
-`Formatter.FormatAsync` pass for compound/multi-edit methods) — full per-file breakdown in the
-`RoslynSentinel.Basic/*.cs` diffs from this date. 3 were deliberately left unfixed, flagged for a
-human/architecture decision rather than a mechanical swap:
-- `RunMicroRefactoringAsync` (`GranularRefactoringEngine.cs`) — its 5 dispatched helpers return bare
-  `SyntaxNode?` with no way to identify which sub-node changed; scoping the fix requires changing
-  helper return contracts, not just wrapping the call site.
-- `ExtractConstantSafeAsync` and `GenerateToStringSafeAsync` (`MsToolAugmentEngine.cs`) — both
-  Document-less (parse from a raw string via `CSharpSyntaxTree.ParseText`/`File.ReadAllTextAsync`,
-  no `Document` available for `Formatter.FormatAsync`'s annotation-scoped overload). Would need an
-  `AdhocWorkspace`-based formatting variant; `FormatDocumentSafeAsync` in the same file was checked
-  as a possible existing precedent and doesn't cover this case.
-
-Verified via `dotnet build RoslynSentinel.slnx` (0 errors, only pre-existing test-project warnings)
-and the full test suite across all 5 test projects (0 new failures; every name in
-`docs/known-failing-tests.{Basic,Advanced}.txt` still fails/skips the same way, nothing new).
-`git diff --ignore-all-space` confirms each file's actual change is exactly the expected
-targeted-formatting swap — large raw `git diff` line counts in a few files (e.g. `AnalysisEngine.cs`)
-are pure pre-existing LF/CRLF line-ending noise, not scope creep.
-
-**Advanced side (~63-64 occurrences) remains explicitly out of scope** — not started this session
-per direct user instruction to do Basic only. Suggested approach section above still applies when
-that work is picked up; re-run `SearchSolutionText` fresh rather than trusting the old ~64 count,
-since this session's Basic count (89, not the originally-assumed handful) shows raw grep-style
-estimates for this pattern have been unreliable so far.
-
-**Guard still advisory (item C):** enforcement design is in `proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md` (DESIGN AGREED 2026-10-15; slices C0-C6 not started).
-
-## Read-tool metadata envelope (`isComplete`/truncation flag) — `GetMethodSource`/`GetFileOutline` done 2026-08-27
-
-**Found:** 2026-08-24, while auditing `docs/spec-read-tool-metadata-envelope-v1.md` (kept in
-`docs/current/`) for the docs reorganization pass. Zero `isComplete`/`IsTruncated`-style fields exist
-anywhere in the codebase — the spec's proposed metadata envelope for read tools (so a caller can tell
-whether a returned excerpt is the whole thing or was cut short) has not been started.
-
-**Implemented 2026-08-27** (spec's steps 1–3): added `ReadEnvelope`
-(`RoslynSentinel.Common/ReadEnvelope.cs`) — `SchemaVersion`, `LineCount`/`ByteCount` (total file, not
-slice), `IsComplete`, `ReturnedFromLine`/`ReturnedToLine`, `ContinuationOffset`, `OutlineAvailable` —
-plus `ReadEnvelopeBuilder.Build`/`BuildForWholeFile` and configurable `ReadEnvelopeThresholds`
-(`ReadWholeMaxLines`=800, `OutlineAvailableMinLines`=400, `MaxReturnedLines`=1200, matching the spec's
-suggested defaults). Wired into:
-- `GetMethodSource` — `MethodSourceResult` gained an `Envelope` property; the envelope describes the
-  **containing file's** scope while `ReturnedFromLine`/`ReturnedToLine` are the method's own line span
-  (per spec, so a caller gets file-level scope even when it only asked for one method).
-- `GetFileOutline` — return shape changed from a bare `List<OutlineItem>` to a new `FileOutlineResult
-  { Envelope, Symbols }` record (this is a breaking shape change to `Data`; the one existing test
-  asserting the old bare-list shape was updated).
-
-**Steps 4–5 resolved 2026-08-27, no code change:**
-- Step 4 (configurable thresholds) — decided the existing `ReadEnvelopeThresholds` static settable
-  properties (`ReadWholeMaxLines`/`OutlineAvailableMinLines`/`MaxReturnedLines`) already *are* the
-  tuning surface; a `read-limits.json`/env-var loader was judged unnecessary since nothing else in the
-  repo loads per-feature JSON config at startup, and this matches the existing precedent
-  (`ScanResultHelper.ThresholdBytes` is likewise a hardcoded constant, not file/env-configurable).
-- Step 5 (fold the contract into "the tools-review doc") — that doc is `docs/obsolete/tool_review_v1.md`
-  (where `BatchResultSummary` is documented), already retired to `obsolete/`. No live successor exists
-  to fold this into; `tool-terminology-refinement-reference-v1.md` is a different, naming-focused doc,
-  not a shared-contract catalog. Decided this TODO.md entry plus `ReadEnvelope.cs`'s own doc comments
-  are the durable record — no new doc created.
-
-`Read` File was left unwired: it already has its own startLine/endLine slicing and inline
-`filePath/startLine/endLine/totalLines/source` shape; folding it into `ReadEnvelope` would touch three
-response shapes (whole-file, ranged, offloaded) and wasn't part of this pass's scope. `MethodNotFound`
-also still returns a plain error rather than `MethodFound=false` + populated envelope, since
-`GetMethodSource`'s result type has no `MethodFound` field today — a further contract change, not
-attempted here.
-
-Verified via `dotnet build RoslynSentinel.slnx` (0 errors) and the full test suite across all 5 test
-projects (0 new failures): new `ReadEnvelopeBuilderTests` (8 tests, spec's "BuildEnvelope helper" list)
-plus envelope assertions added to `GetMethodSourceTests` and the `GetFileOutline` enum test.
-
-**Remaining work if picked up again:** wire `ReadFile` into the envelope, and decide `MethodNotFound`'s
-contract (`MethodFound` field + populated envelope instead of a plain error). Steps 4–5 are closed, not
-just deferred.
-
-## Tool terminology/naming backlog — open, unactioned
-
-**Found:** 2026-08-24, while auditing `docs/tool-terminology-refinement-reference-v1.md` (kept in
-`docs/current/`) for the docs reorganization pass. That reference catalogs weak/ambiguous tool and
-parameter names (`GetBreakerStatus`, `GetMigrationLedger`, `ClearExternalDrift` vs. its sibling
-list tool's inconsistent metaphor (both since merged into `ExternalFileDrift`), the `Apply*Codemod`/`Generate`/`Introduce`/`Inline`
-untyped-string-discriminator family) and recommends, in order: (1) convert small/stable discriminator
-params to real enums; (2) standardize the "call `DescribeAdvancedToolOptions` first" wording across all
-wide dispatchers; (3) only then revisit the specific rename table. None of the three steps has been
-started as of this pass.
-
-**Suggested approach:** see the reference doc itself for the full weak-term table and confusable-group
-list; this entry exists so the backlog is discoverable from `TODO.md` without having to know the
-reference doc exists.
-
-## Model tool-choice gap: `ApplyDiff` used instead of `ChangeAccessibility` for `ReplaceBlockFormatted`, costing 67.5% of all ApplyDiff failures — open, unactioned
-
-**Found:** 2026-09-05, via a full-dataset aggregation pass over `ModelTestingResults\113` (995
-archived model-eval runs) using the new `Parse-AgentLog.ps1` script (see
-`docs/current/reference_parse_agent_log_script.md`). Full writeup:
-`docs/current/model_eval_replaceblockformatted_accessibility_cost_2026_09_05.md`.
-
-**What:** across every model-eval test variant that asks the model to reuse
-`BlockEditHelpers.ReplaceBlockFormatted` (all of `MinimalGuidance`, `MinimalGuidanceDisambiguated`,
-`PlanThenExecute`, `PlanImplementVerify`), the model overwhelmingly edits accessibility via a raw
-`ApplyDiff` hunk instead of calling the purpose-built `ChangeAccessibility` tool (already present
-in every affected run's tool allowlist — availability isn't the gap). When it sequences the
-accessibility change *after* adding the call site instead of before/atomically-with it, the
-pre-apply Roslyn diagnostic pass or the post-apply compile guard correctly rejects the edit
-(`CS0103`/`CS0122`), forcing a retry. This single sequencing pattern accounts for 382 of 566
-(67.5%) of every `ApplyDiff` failure across the entire 995-run historical dataset — the largest
-single failure/retry driver of anything currently measured, affecting 206/995 runs, worst in
-`PlanImplementVerify` (126/655 of its runs).
-
-**Why this matters:** both compile guards are working as designed (this is not a tool bug) — the
-cost is entirely wasted turns and tool-error-budget consumption
-(`RoslynSentinel.Tests.ModelEval`'s `AssertWithinBudget`), not unrecovered failures. It's also the
-quantified scale-up of an already-recorded qualitative finding
-(a hand-reviewed 13-run sample found `ChangeAccessibility` used 1/13 times vs. `ApplyDiff`'s ~8/13
-for the identical operation) — this is
-the first full-dataset confirmation that the pattern is both real and large, not sample noise.
-
-**Suggested approach (three candidates, none implemented/tested yet, roughly cheapest first):**
-1. Add an explicit sequencing hint to the affected fixture prompts ("check/change
-   `ReplaceBlockFormatted`'s accessibility before wiring the new call site") and re-run a batch to
-   see if it measurably shifts the tool-choice ratio or the CS0103/CS0122 counts down.
-2. Strengthen `ChangeAccessibility`'s `[Description]` to more assertively claim the "make X
-   internal/public" use case away from `ApplyDiff` — opposite direction from the
-   `ModifyModifier`-accessibility-enum fix (that one narrowed a tool's enum to steer *away* from
-   it; this would need to steer *toward* one), so the same mechanism may not transfer directly.
-3. Enrich the `CS0103`/`CS0122` compile-guard error text to name `ChangeAccessibility` explicitly
-   when the underlying cause is fixable by it, rather than leaving the model to infer the fix path
-   from a raw Roslyn diagnostic (matches the spirit of the agent-friendly-error-messages
-   principle already applied elsewhere in the tool layer).
-
-Not yet decided which lever to pull or A/B tested — this entry exists so the (large, confirmed)
-opportunity is discoverable from `TODO.md` rather than only living in the dated doc.
-
-## Feature idea: server-side telemetry/metrics for tool call counts and error rates — open, unactioned
-
-**Found:** 2026-09-05, raised by Andrew while reviewing the `ReplaceBlockFormatted` finding above,
-which required an offline post-hoc `Parse-AgentLog.ps1` aggregation pass over archived transcripts
-to get per-tool call/error-rate numbers.
-
-**What:** the MCP server itself has no live counters for how often each tool is called, or its
-success/error rate — this data currently only exists reconstructible after the fact from
-`agent.log`/`transcript.json` files (model-eval only) or not at all (real interactive/production
-sessions have no equivalent transcript to mine). A lightweight in-process metrics layer (e.g. a
-`ToolCallCount`/`ToolErrorCount` counter per tool name, exposed via a new read-only tool or a
-`/metrics`-style endpoint) would give live visibility into tool usage and failure rates across
-*any* session — model-eval or a real agent — not just ones that happen to have a saved transcript
-to parse afterward.
-
-**Why this matters:** the `ReplaceBlockFormatted` finding above and a separate tool-choice-fidelity
-review both needed a bespoke offline analysis pass (grep/parse a log, or hand-review transcripts)
-to surface tool-choice and error-rate patterns that live counters would expose immediately and
-continuously, for every session, not just archived model-eval batches with saved logs.
-
-**Hook point confirmed 2026-09-05 (not yet implemented):** the MCP call-tool filter chain in
-`RoslynSentinel.Server.Basic/ServiceRegistrationExtensionsBasic.cs`'s
-`AddRoslynSentinelToolsBasic` (`mcpBuilder.WithRequestFilters(...)`, ~line 167-406) is the single
-place every tool call already passes through regardless of server flavor (Advanced reuses Basic's
-registration — see `project_advanced_extends_basic`), and already has 5 filters following the
-exact shape a metrics filter would need: `filters.AddCallToolFilter(next => new
-McpRequestHandler<CallToolRequestParams, CallToolResult>(async (context, ct) => { var result =
-await next(context, ct); try { /* logic */ } catch (Exception ex) { Debug.WriteLine(...); }
-return result; }))`, with `context.Params?.Name` for the tool name and `context.Server.Services?
-.GetService<T>()` already the established way to resolve a shared singleton (used today for
-`PersistentWorkspaceManager`/`ILogger<T>`).
-
-**Placement matters**: a metrics filter should be registered *after* the "domain-failure →
-protocol-error sync" filter (ends ~line 245) — that's the one that sets `result.IsError = true`
-for tools that catch their own exceptions and return `isError: true` instead of throwing (see
-`feedback_agent_friendly_error_messages`), so counting before it would undercount real failures
-the same way raw exception-based `IsError` detection already does. It should also count the
-orientation breaker's own pre-check short-circuit (~line 342-350, which returns before ever
-calling `next()`) as a real failed invocation of whatever tool was blocked, not skip it.
-
-**Suggested approach:** a `ConcurrentDictionary<string, ToolCallStats>` (call count, error count,
-maybe total duration) singleton, registered in DI and updated inside the new filter exactly as
-described above, plus a new read-only tool (or extend `GetWorkspaceHealth`/
-`GetComprehensiveHealthReport`) to surface current counts. Whether counts should persist across
-server restarts, reset per-session, or both is an open design question — not decided here.
-See also `docs/current/reference_parse_agent_log_script.md` and
-`docs/current/model_eval_replaceblockformatted_accessibility_cost_2026_09_05.md` for the concrete
-analysis gap that prompted this idea.
-
-
----
-
-## `SearchSolutionText`: run both modes, use `searchMode` to *rank* rather than to *select*
-
-**Status:** proposal only. Deferred out of the run-398 defect sweep (A4) on 2026-09-10.
-
-Today `searchMode` selects which single search runs. A pattern with regex metacharacters passed
-under `searchMode: literal` is searched literally as requested — correct per the parameter, but
-in practice it returns zero results, and run `20260910-013550-398` burned three turns (17, 18, 25)
-on exactly that: the model rewrote the pattern each time rather than changing the mode.
-
-A4 fixed the immediate footgun by making `searchMode` **required**, so an unstated mode can no
-longer silently produce the wrong search (see
-`feedback_prefer_mandatory_params_to_close_footgun_roundtrips`). That is a strictly smaller change
-than the idea below, and does not preclude it.
-
-**The proposal:** run *both* the literal and the regex search, return the union, and use
-`searchMode` only to order the results — matches from the requested mode first. A caller who names
-the wrong mode then gets the right answer ranked second instead of an empty result set.
-
-**Why this was not bundled into the defect sweep:**
-
-- It changes result *semantics*, not just a parameter's default — every caller's result shape and
-  ordering contract shifts.
-- Auto-promotion of literal→regex was already tried and deliberately reverted. `BatteryTwentyTests`
-  still asserts the no-fallback behaviour explicitly ("explicit literal mode must actually search
-  literally, not silently switch to regex"). This proposal is *not* that reverted design — it adds
-  results rather than substituting a mode — but the history says this tool warrants its own
-  evaluation run rather than a change riding along with unrelated fixes.
-- Cost is unmeasured: two passes over every document instead of one, on a tool that already scans
-  the whole solution in parallel.
-
-**Open questions:** whether a regex that fails to compile should degrade to literal-only or error;
-whether the union should be de-duplicated per (file, line) or per (file, line, column); whether
-`maxResults` applies before or after ranking; and whether the response should label each match with
-the mode that found it.
-
-## `SessionHalted` external-drift latch: false-positive from timestamp-only touch, message doesn't self-report scope — not started
-
-Raised 2026-09-15 resolving `blockers/resolved/blocking_error_sessionhalted_concurrent_session_drift_mid_contexterrorbuilder_plan.md`.
-A `ReplaceSnippet(apply)` call mid-plan hit `SessionHalted`; the list tool (formerly `ListExternalDiskChanges`) reported 34
-drifted files, but `Git(operation: status)` showed only 1 file genuinely modified (plus expected
-untracked new files) — zero overlap with the 34. Most likely trigger: an earlier MCP server restart
-this session updated file mtimes without changing content, and the drift detector treats a
-timestamp-only touch the same as real content drift. Cleared via `ExternalFileDrift(operation: Acknowledge)`
-once confirmed false-positive; not yet fixed at the detector level.
-
-Update 2026-10-09 (`plans/plan_session_halt_recovery_and_git_gaps.md`, then
-`plans/plan_external_file_drift_tool_and_halt_stamping.md`): the three recovery tools were merged into
-`ExternalFileDrift(operation: Status|List|Acknowledge, files, acknowledgeScope)`; the halt message now names the drifted
-files and the recovery, the latch policy was decided and implemented, and a failed `Build` appends a drift note. The
-former first gap (halt message wording) is resolved and recorded in `CLOSED.md`.
-
-Remaining gaps, all still open:
-
-- Follow-up: Revisit partial-acknowledge policy after real use (decision 2, `proposal_journal_digest_followup_decisions.md`).
-- The detector doesn't appear to distinguish "mtime changed, content identical" from "content
-  actually changed on disk" — the former should not be able to trip a fatal, session-wide latch.
-  Needs source-level confirmation (not yet read this session) of where the drift check lives and
-  whether it hashes content or only compares timestamps.
-- Whether per-session (vs. solution-wide) halting is even the right granularity when multiple
-  concurrent sessions against the same solution are a supported pattern (`project_concurrent_sessions`
-  memory) is still unresolved — same open question as the prior occurrence,
-  `blocking_error_session_halt_from_out_of_band_rm_mid_spike.md`.
-
-
-## Review and extend the scoped operation ledger / non-validated edits to more tools (2026-10-09) - not started
-
-**Found:** 2026-10-09, owner question in the journal-digest follow-up. The scoped operation ledger
-(`IScopedOperationLedger`, enforced in `PersistentWorkspaceManager.ApplyProposedChangesAsync`) is active, but
-only `MoveMember` opens an entry (`AdvancedRefactoringTools.cs` `MoveMember`). Other multi-step changes that can
-leave the tree intentionally non-compiling (MethodSignature/ParameterEdit remove with unrelated call sites,
-ChangeSignature, RenameSymbol conflicts) do not use it.
-
-**Not fixed:** review which tools should open ledger entries, how a model resolves one, and how the non-validated
-(compile-gate-skipping) edit path relates. Decision context: `proposals/proposal_journal_digest_followup_decisions.md`.
-
-
-## Follow-ups left open by the blocking-load and Build-result-shape plan (2026-10-09) - not started
-
-**Found:** 2026-10-09, `plans/plan_blocking_solution_load_and_build_result_shape.md` (Out of scope list).
-
-- `SubAgentImpl.cs:55` and `SubAgentEvalImpl.cs:29` read `SolutionPath` only and still say "retry" if called in
-  the first seconds after start-up; they do not wait for `SolutionLoadStatus`.
-- `GetDiagnostics` / `GetWorkspaceHealth` embedded `BuildVerification` still carry up to 50 details and are not
-  projected like `Build`.
-- `IsAlreadyLoadedPath` (`WorkspaceProjectManagementImpl.cs`) returns false for non-rooted paths, so a
-  relative-path `LoadSolution` after an auto-load still reloads.
-- New files made by `CreateFile` are written with LF endings and `WriteFile(ReplaceFile)` treats an EOL-only
-  rewrite as a no-op, so a new test file cannot be given the repo's CRLF endings with the MCP tools (seen with
-  `BuildEngineParseTests.cs` and the B4/B7 test files).
-
-
-
-## Schema budget headroom is ~2 chars (2026-10-17)
-
-The claude-lean Search/Git schemas sit at the `CoreSurface` budget limits (Basic total ~40498/40500). The next added parameter or description must trim existing wording first; consider reviewing whether the budgets or the longest descriptions (Git `operation`, Search tool-level text) should be restructured.
-
-## Battery tests with bare relative file names leak files into the working directory (2026-10-17) - not started
-
-Found fixing BatteryTwentyFourTests.MethodSignature_Remove_LastParameter_UpdatesCallSite: a stale CRLF Order.cs in the test bin dir (left by another test) was read by the chokepoint's disk pre-image check (PersistentWorkspaceManager ~:1582) and tripped EolChangeGuard. Only BatteryTwentyFourTests got a Setup/TearDown cleanup; other battery classes using bare names can leak the same way. Consider a shared test-base cleanup.
-
-## ExtractInterfaceAsync base-list layout defect and moved-type files lack trailing newline (2026-10-17) - not started
-
-Found in C5c-3. ExtractInterfaceAsync (BasicRefactoringEngine) AddBaseListTypes leaves the colon on its own line at column 0 (class Svc / : ISvc / {); fix by moving the class-identifier trailing trivia, then the site can use an annotated route instead of FormatWholeDocumentAsync. Files scaffolded by MoveTypeToFileAsync end at the closing brace with no trailing newline. Both are pinned as-is in BasicRefactoringEngineFormatCharacterizationTests.
-
-## C5c leftovers: AdvancedStructuralEngine ConvertExpressionBody and SemanticRefactoringEngine InlineVariable fallback (2026-10-17) - not started
-
-AdvancedStructuralEngine ~:1457 (ConvertExpressionBodyAsync): whole-document Formatter.FormatAsync after ReplaceNode(target, NormalizeWholeSubtreeWhitespace(newTarget)); annotate the new target and route via FormatAnnotatedSpansAsync, and decide the NormalizeWholeSubtreeWhitespace call under C6. SemanticRefactoringEngine ~:168 is the near-dead InlineVariableAsync all-replacements-failed fallback; mechanical swap is FormatWholeDocumentAsync(document.WithSyntaxRoot(modifiedRoot), originalText) but no characterization test is possible. UseFieldBackedProperties keeps a blank line after the opening brace when the backing field is removed (pinned as-is).
+## By area
+
+- Formatting, EOL and trivia: [proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
+- Structural refactoring (MoveType, MoveMember, IntroduceParameterObject): [issues/issue_structural_refactoring_open_defects.md](issues/issue_structural_refactoring_open_defects.md), [issues/issue_movemember_open_followups.md](issues/issue_movemember_open_followups.md)
+- Tool surface and schema: [proposals/proposal_reduce_tool_schema_token_cost.md](proposals/proposal_reduce_tool_schema_token_cost.md), [tool-terminology-refinement-reference-v1.md](tool-terminology-refinement-reference-v1.md)
+- Session, workspace and Git: [plans/plan_session_halt_recovery_and_git_gaps.md](plans/plan_session_halt_recovery_and_git_gaps.md), [issues/issue_tool_hygiene_open_items.md](issues/issue_tool_hygiene_open_items.md)

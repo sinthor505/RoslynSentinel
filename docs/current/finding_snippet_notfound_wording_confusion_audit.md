@@ -246,3 +246,47 @@ Suggested order, per the agent's leverage ranking:
 4. Align the "position resolved but wrong node kind" family's wording across the ~6 affected files.
 5. Re-run `SearchSolutionText` for "not found"/"does not exist" after the fix to confirm no
    contradictory wording remains, per this repo's established verification pattern.
+
+## Moved from TODO.md (2026-10-17)
+
+### Deferred: `contextSnippet` deprecation tracking, and `NearMissList`'s 3-candidate cap
+
+**Found:** 2026-08-19, closing out `docs/plan-tool-disambiguation-remediation-v1.md` Task I/J
+(hint-strategy evaluation + raw-`ContextHelper` error-message enrichment).
+
+**What (two related, deliberately-unresolved questions):**
+1. Every tool touched by that plan keeps `contextSnippet` fully optional, silently first-matching
+   by name when omitted — including when the name is genuinely ambiguous. Whether to eventually
+   require `contextSnippet` (or `symbolName`+`contextSnippet`) once ambiguity is detected, or at
+   least emit a non-fatal warning on a silent first-match against 2+ candidates, was explicitly
+   raised as a Risks-section question in that plan and never decided — it's a product/reliability
+   trade-off (breaking today's default-argument-free call shape vs. catching silent wrong-guesses
+   proactively), not something to decide unilaterally while fixing the hint text.
+2. The `NearMissList` hint strategy (now the sole implementation in `SymbolNavigationEngine.BuildMemberHint`/
+   `BuildTypeHint`) caps its candidate list at 3, with a "+N more" suffix beyond that. No fixture in
+   the current test suite has more than 3 real same-named candidates, so this was left at the plan's
+   originally-specified cap rather than speculatively widened or made configurable.
+
+**Why not resolved now:** both are explicitly flagged in the plan doc's Task J addendum as
+recommendations for the user to decide, not gaps this session's work left broken — the additive,
+non-breaking behavior is working as designed today.
+
+### `contextSnippet` "not found"/"does not exist" wording — Category A/B fixed 2026-09-15/16; Step 5 (wrong-node-kind family, ~7 files) still open
+
+**Found:** 2026-09-15. Full audit: [finding_snippet_notfound_wording_confusion_audit.md](finding_snippet_notfound_wording_confusion_audit.md).
+
+**Fixed 2026-09-15/16** via `docs/current/plans/plan_contexterrorbuilder_orienting_guidance.md` Steps
+1-4: `ContextHelper.cs`'s two throw sites (lines 216, 322) and `ToolException.cs`'s
+`ToolNotFoundException` conflation were replaced with `ContextErrorBuilder`/`SnippetMatchOutcome`/
+`DiagnoseNoMatch`, and `[COMPILER ERROR]` labels were added to all 5
+`CompilerErrorLookupHelper.DescribeAsync` dump sites in `SentinelWorkspaceTools.cs` (the
+`ReplaceSnippet`/`ApplyDiff` compiler-diagnostic-vs-snippet-not-found conflation that originally
+prompted the audit).
+
+**Still open (Step 5, not started):** the "position resolved but wrong node kind there" family
+repeated across `GranularRefactoringEngine.cs`, `MappingEngine.cs`, `SemanticRefactoringLibrary.cs`,
+`MsToolAugmentEngine.cs`, `CodeGenerationEngine.cs`, plus related raw-`ex.Message`-propagation sites
+in `SymbolNavigationEngine.cs`/`ImpactAnalyzer.cs`/`BasicRefactoringEngine.cs`/`MemberRefactoringEngine.cs` (~7 files, a dozen-plus
+distinct sites). Explicitly lower priority per the plan; deferred as its own follow-up sweep — see
+the finding doc's raw audit findings for the full site inventory.
+

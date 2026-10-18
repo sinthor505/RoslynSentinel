@@ -1,358 +1,207 @@
 # RoslynSentinel
 
-An MCP server exposing Roslyn-backed C# analysis and refactoring to AI agents. It bridges what a
-language model can reason about and what the compiler actually knows.
+An MCP server exposing Roslyn-backed C# analysis and refactoring to AI agents.
 
 ## Mission
 
-Enable agents - **especially weak or self-hosted models** - to safely and efficiently navigate and
-refactor C# codebases. A small local model should drive meaningful, semantically-correct refactoring
-by calling structured tools, never by falling back to grep, regex search-and-replace, file-read
-loops, or manual text edits.
+Let agents - **especially weak or self-hosted models** - navigate and refactor C# semantically by
+calling structured tools, never by grep, regex replace, file-read loops or manual text edits. If an
+agent reaches for a shell command to inspect or modify C# code, that is a gap in the tool surface, not
+a deficiency in the agent.
 
-If an agent reaches for a shell command to inspect or modify C# code, that is a gap in the tool
-surface, not a deficiency in the agent.
+## What belongs in this file
 
-## Where guidance belongs: CLAUDE.md vs. memory
+Loaded every session, so it is the most expensive file. Admit only an imperative a turn-one agent would
+plausibly break, with a costly repeatable consequence; at most one line of "why". No history, incidents,
+dates or commit hashes. Procedure over ~5 lines, reference tables and tool detail go to a skill or
+`docs/current/references/` with a one-line pointer. Budget 15 KB (`scripts/Test-GuidanceHygiene.ps1`
+checks it; the `tidy-guidance` skill cleans up and promotes memory entries).
 
-This file is loaded into every session from turn one. Memory (`MEMORY.md` and linked files) is loaded
-reactively, usually after the mistake it warns about has already been made.
+## Agent conduct
 
-- **Put it here:** standing rules, conventions, and gotchas an agent must know *before* acting - where
-  getting it wrong on turn one would be a costly, repeatable mistake. This includes anything that
-  would otherwise be a `type: feedback` memory, and `type: project` facts describing a still-true
-  limitation or required workaround.
-- **Leave it in memory:** open ideas, resolved one-off incidents, scoped facts about in-progress work,
-  pointers to external systems.
-- **When promoting a memory entry here:** distill it to the current rule plus a one-line "why". Mark
-  the source memory file superseded (banner + pointer to the section here) and move its index line to
-  `MEMORY_CLOSED.md`.
+- **Approval before editing.** Confirm the approach (a short summary) before any edit, even an obvious
+  one; re-confirm if scope shifts. Reading and diagnosis need none; minor incidental finds (typo,
+  off-by-one) need no separate round.
+- Batch small edits onto one subagent and resume it with `SendMessage` rather than one agent per item.
+- Report a finished subagent in a few lines (changed, built/passed, decisions needed); flag high-token
+  work before starting it.
+- A substantial new topic mid-session: sketch it and suggest a fresh chat; do not deep-dive in place.
+- A new `[McpServerToolType]` class needs a fresh chat session as well as a server restart.
+- Comment intentional deviations from a codebase pattern, and a `[Test]` that fails only on full/parallel runs.
+- A tool param added to stop a known model failure is mandatory unless a concrete usage needs the fallback.
+- In agent/plan docs state the allowed workflow positively; never name a tool that is gated off.
 
-## Shell tool choice
+## Shell
 
-This is a **Windows environment: default to the PowerShell tool for every shell command.** Bash is
-fallback-only, for a genuine POSIX/Git-Bash-only need, however simple the command looks - cmdlets,
-`.\`-relative paths and error-to-exit-code translation silently break when run through Bash. If a
-Bash call's result looks even slightly off, re-run it via PowerShell before trusting it.
+Windows: use the PowerShell tool for every shell command. Bash only for a genuine POSIX-only need;
+if a Bash result looks even slightly off, re-run it in PowerShell.
 
-## Diagnosing a "missing" or gated tool
+## Gated tools
 
-The tool surface is intentionally gated: every active tool's schema costs prompt tokens each session,
-so rarely-needed tools are off by mode. A tool you expect but don't see is usually gated, not missing.
+The tool surface is gated to save prompt tokens, so a tool you expect but cannot see is usually gated,
+not missing. Before concluding it is missing or building a duplicate, call
+`McpServerStatus(toolListing: inactive)` (optional `toolNameFilter`): it lists every tool with
+`activeForThisMode` and `enabledBy`. If `enabledBy` names a `McpToolsetControl(toolSet:, enabled: true)`
+call, make it yourself. If it names a mode or flag, stop and report the tool and hint (a configuration
+decision for the user, not a blocker). Only if the listing is empty, try `Search(mode: "text", query: "Name = \"ToolName\"")`.
 
-Before concluding a tool doesn't exist, suspecting a stale binary, or building a duplicate, call
-`McpServerStatus(toolListing: inactive)` (optionally with `toolNameFilter`). It returns every declared
-tool with `className`, `activeForThisMode` and an `enabledBy` hint. Only if that comes back empty, fall
-back to `Search(mode: "text", query: "Name = \"ToolName\"")` (for a tool in an assembly this server
-flavor doesn't load).
+## Subagents (hard rules)
 
-If the tool is gated and would make the task materially easier:
-- `enabledBy` names a `McpToolsetControl(toolSet: ..., enabled: true)` call: make that call yourself.
-- `enabledBy` names a mode or flag: stop and report the tool name and hint instead of working around
-  it with many more steps. This is a configuration decision for the user, not a tool failure - do not
-  write a blocker doc.
+- **Implementation is never done in the main session** - not even small edits, unless the user asks and
+  approves for that task (approval does not carry over). Dispatch `implementer` (several edits, few
+  files), `implementer-sweep` (one mechanical operation, many files), `implementer-senior` (over the
+  limits) or `test-writer`. The main session plans, briefs, dispatches, reviews and commits; reading,
+  searching, building, tests, git and Markdown edits stay. Load the `dispatch-implementer` skill before
+  the first dispatch; limits live in `.claude/implementer-tiers.json`; the `enforce-dogfood.ps1` hook
+  refuses a non-conforming brief. If about to call `ReplaceSnippet`/`Member`/`ApplyDiff`/`RenameSymbol`/
+  `MoveMember` on source, write a brief instead. Why: implementation churn crowds out planning in the main context.
+- **C# edit dispatches are sequential, never parallel**: subagents share one server process, and one
+  plain `Edit`/`Write` on a tracked `.cs` trips `SessionHalted` for all of them and the parent.
+- **Exploration and review are dispatched.** The main session does only small reads (one outline,
+  method, file or `git status`). Anything broader goes to `explore-haiku` (symbol/usage lookups) or
+  `explore-sonnet` (multi-file investigation, reviews). If it needs more than a couple of reads, dispatch.
+- **Verification is never a supervisor job.** `modeleval-runner` and `planstep-runner` are only for runs
+  with a model under test. A post-change `Build`/`RunTest`/baseline comparison is a plain call.
 
-## Subagent choice: verification is never a supervisor job
+## Tool gaps: report, don't brute-force
 
-`modeleval-runner` and `planstep-runner` exist only to supervise a run in which **a model is under
-test** (ModelEval test or PlanStepRunner run against an LLM). Ordinary build/test verification - a
-post-change `Build`, a `RunTest` over a project or the full suite, a baseline comparison - is a plain
-`Build`/`RunTest` call, backgrounded if it must stay off the main context. Never dispatch a runner
-agent for it.
+If no tool can do a task as one semantic operation (a limit blocks it, or no tool exists) and the
+blast radius is large, stop. Do not use many manual edits, a shell loop or text replace. Report
+`TOOL-GAP:` (task, tool tried and its limit or "no tool", measured call sites/files/projects, suggested
+change); the dispatcher records it in `docs/current/TODO.md` or a proposal and continues with any
+staged slice. Prefer migration-first changes: new member beside the old, `[Obsolete("Use X")]`, move
+callers in slices, remove the old one last. Why: brute force hides the gap and burns context.
 
-## Implementation is never done in the main session (hard rule)
+## Dog-fooding (hard rule)
 
-All coding and plan implementation is dispatched to a subagent (`implementer`, or `implementer-senior`
-over the slice limits; `test-writer` for tests). The main session plans, scopes briefs, dispatches,
-reviews reports and commits. It does not make implementation edits itself - not even "small" ones -
-unless the user explicitly asks for it *and* approves it for that task. Approval does not carry over to
-later tasks.
-
-**Why:** the main chat's context is the scarce resource; implementation churn (edits, build output,
-retries) crowds out planning and review.
-
-**How to apply:** if you catch yourself about to call `ReplaceSnippet`, `Member`, `ApplyDiff`,
-`RenameSymbol`, `MoveMember` or similar on source, stop and write a dispatch brief instead. Reading,
-searching, building, running tests, git operations and editing docs/Markdown stay in the main session.
-Dispatch sequentially, never in parallel, for C# edits (see below).
-
-## Exploration and review are dispatched too (hard rule)
-
-The main session only does small reads: confirming or verifying a specific fact (one outline, one
-method, one file, one `git status`). Anything broader - exploring how something works, tracing call
-chains, surveying docs/proposals, reviewing a diff, file or plan - goes to a read-only subagent:
-`explore-haiku` for symbol/usage lookups, `explore-sonnet` for multi-file investigation and large
-reviews. Both already know the reference docs; the brief only needs the question and a breadth.
-
-**Why:** same as implementation - the main chat's context is the scarce resource, and subagents return
-a distilled answer instead of the file contents. **How to apply:** if a question needs more than a
-couple of reads to answer, dispatch instead of starting to read.
-
-## Dispatching `implementer`
-
-Load the `dispatch-implementer` skill before the first dispatch. In short: two Haiku 5.5 lanes,
-`implementer` (several edits, few files) and `implementer-sweep` (one mechanical operation, many files),
-each with an evaluated tier ladder. The limits live in `.claude/implementer-tiers.json`, not in prose;
-the brief carries `Tier:` and `Limits:` copied from it, plus `Symbols:`, `Call sites:` (measured with
-`InspectSymbol(aspect: blastRadius)`), `Acceptance:` and `Out of scope:` (including the `RESCOPE:`
-clause). Tiers rise only on ledger evidence and fall back on failures (thresholds in the skill). Over the
-limits, split or go to `implementer-senior`. The `enforce-dogfood.ps1` hook refuses a non-conforming dispatch.
-
-## Tool gaps and large changes: report, don't brute-force
-
-If a task is blocked, or its blast radius is large, because no tool can do it as one semantic operation
-(a tool's limit blocks it, or no tool exists), stop. Do not perform it with many manual edits, a shell
-loop or text search-and-replace. Report `TOOL-GAP:` (task, tool tried and its limit or "no tool",
-measured call sites/files/projects, suggested change: extend tool X with Y, or new tool Z with inputs and
-outputs). The dispatcher records it as a `docs/current/TODO.md` line or a proposal and continues with
-any staged slice; if no staged route exists, the blocker workflow applies.
-
-Prefer **migration-first** changes: add the new overload, delegate or property beside the old member,
-mark the old one `[Obsolete("Use X")]`, move callers in slices, and remove the old member in a final
-slice once nothing references it. This is an encouraged workflow, not a workaround; it keeps every step
-compile-green and every slice inside a tier. See
-`docs/current/proposals/proposal_parallel_change_deprecated_wrappers.md`.
-
-**Why:** a missing or too-narrow tool is a gap in the tool surface (see Mission); brute force hides it
-and burns the context the agent needs.
-
-## Dog-fooding policy (hard rule)
-
-All C# reads and writes, and all git operations, go through the RoslynSentinel MCP tools. This applies
-to work on RoslynSentinel's own source, which is nearly every task here - "I'm editing the server
-itself" is not an exemption.
-
-- NEVER use plain Grep on C# code. Use `Search` (`mode: symbol` for declarations; `mode: callers` for callers, `mode: implementations` for implementers, `mode: attribute` for attribute usages).
-- NEVER use the built-in Edit/Write tools on `.cs` files. Use `ReplaceSnippet`, `Member`, `MoveMember`
-  and the other MCP tools below.
-- NEVER use shell `git add` or `git commit`. Use the `Git` tool.
-- Edit, Grep and shell are fine for Markdown, JSON, `.ps1`, `.csproj` and other non-C# files, and for
-  any file outside the repo. Git operations the `Git` tool doesn't implement (rebase, merge, cherry-pick,
-  restore, clean, stash drop/clear, tag push, worktree prune/lock/move) legitimately use the shell; tag,
-  stash, worktree and hunk staging (`Git(operation: hunks)`) are covered by the tool.
+All C# reads and writes and all git operations go through the RoslynSentinel MCP tools, including work
+on this repo's own source.
 
 | Instead of | Use |
 | --- | --- |
-| `Read` a `.cs` | `ReadFile`, `GetFileOutline`, `GetMethodSource` (methods only; for one field/property/constant use `Member(operation: view, memberName: ...)` or `ReadFile`) |
-| `Grep` / `Glob` for C# symbols | `Search(mode: text/symbol/references/all/namespace/class/interface/method/property/struct/record/enum/enum member/constructor/field)` |
-| `Edit` / `Write` a `.cs` | `Member`, `MethodSignature`, `ModifyModifier`, `ReplaceSnippet`, `ApplyDiff`, `RenameSymbol`, `MoveMember` (toolset `moveExtract` - enable via `McpToolsetControl`) |
-| `Bash(git status/log/diff/add/commit/revert)` | `Git(operation: ...)` |
-| `Bash(dotnet build/test)` | `Build`, `RunTest` |
+| `Read` a `.cs` | `ReadFile`, `GetFileOutline`, `GetMethodSource` (methods only; one field/property/constant: `Member(operation: view, memberName: ...)`) |
+| `Grep`/`Glob` for C# | `Search` (modes: text, symbol, references, callers, implementations, attribute, all, namespace, class, interface, method, property, struct, record, enum, enum member, constructor, field) |
+| `Edit`/`Write` a `.cs` | `Member`, `MethodSignature`, `ModifyModifier`, `ReplaceSnippet`, `ApplyDiff`, `RenameSymbol`, `MoveMember` (toolset `moveExtract` via `McpToolsetControl`) |
+| shell `git status/log/diff/add/commit/revert` | `Git(operation: ...)` (shell only for rebase, merge, cherry-pick, restore, clean, stash drop/clear, tag push, worktree prune/lock/move) |
+| `dotnet build/test` | `Build`, `RunTest` |
 
-**Why:** chokepointing every operation is the only way to surface in-memory-vs-on-disk drift,
-multi-call sequencing bugs, and edge cases that never appear in an isolated test. Falling back
-whenever a tool is awkward hides exactly those failures - the awkwardness is itself the finding.
+Edit/Grep/shell are fine for Markdown, JSON, `.ps1`, `.csproj`, other non-C# files and files outside
+the repo. Why: chokepointing surfaces drift and sequencing bugs; falling back when a tool is awkward
+hides them - the awkwardness is the finding.
 
-### ReplaceSnippet / Member gotchas
+**ReplaceSnippet / Member gotchas**
+- Never pass `filePath` with `batchEdits`; each batch edit carries its own path.
+- Order batch edits definitions-first (the compile gate rejects non-compiling intermediate states);
+  rename a field and all its usages in one atomic batch.
+- Snippets must match exactly, whitespace and line endings included; copy context from a
+  `ReadFile`/`GetMethodSource` result, never invent it.
+- `Member(addMember)` takes one declaration per call; `addTopLevelType` for a new top-level type;
+  `Member` cannot edit an existing top-level record - use `ReplaceSnippet`.
+- `ModifyEnum`'s `values` is the complete list; omitting a member deletes it.
+- `CancellationToken` is always the last parameter; new parameters go before it.
 
-- Never pass `filePath` together with `batchEdits` on `ReplaceSnippet` - each batch edit carries its
-  own path.
-- Order batch edits so definitions (methods, enum members, fields) come before the call sites that
-  reference them; the compile gate rejects any intermediate state that doesn't compile.
-- Rename a field and all of its usages in the same atomic batch.
-- Every snippet must match the file exactly, including whitespace and line endings. Copy surrounding
-  context lines from a `ReadFile`/`GetMethodSource` result; never invent them.
-- `Member(addMember)` takes exactly one declaration per call. Use `addTopLevelType` for a new
-  top-level type; `Member` cannot edit an existing top-level record - use `ReplaceSnippet`.
-- `ModifyEnum`'s `values` is the complete member list, not add-only - omitting a member deletes it.
-- In new method signatures, `CancellationToken` is always the last parameter; new parameters go before it.
-
-### Tool failures, bypasses and hooks
+## Tool failures and hooks
 
 **A tool failure is a blocking finding.** If a needed MCP tool fails, returns wrong data, is
-unreachable, or has no equivalent operation (and no staged route exists - see "Tool gaps and large
-changes"; a gap with a staged route is a `TOOL-GAP:` report, not a blocker): finish any in-flight edit, stop advancing the task, and
-write `docs/current/blockers/blocking_error_<slug>.md` (slug from the real symptom, never generic).
-Do not retry speculatively and do not route around it with shell tools. Then follow the Blocker
-workflow below.
+unreachable or has no equivalent (and no staged route exists), finish in-flight edits, stop, write
+`docs/current/blockers/blocking_error_<slug>.md` (slug from the real symptom) and follow
+[reference_blocker_workflow.md](docs/current/references/reference_blocker_workflow.md). Do not retry
+speculatively or route around it with shell tools.
 
-A `PreToolUse` hook (`.claude/hooks/enforce-dogfood.ps1`) blocks the common violations mechanically.
-It is a backstop, not the policy: it cannot see intent. It now also blocks the built-in `Read` on an
-in-repo `.cs`, so an agent (for example a custom subagent) whose frontmatter lists `Read` but no MCP
-tools must also list `ReadFile`/`GetMethodSource`/`Search`, or it is stranded; such an agent reports
-the missing tools as a finding (`.claude/hooks/agent-mcp-tools.Tests.ps1` guards this). If the hook blocks something genuinely necessary, say so and
-stop; do not reword the command to slip past it.
+`.claude/hooks/enforce-dogfood.ps1` mechanically blocks common violations (including `Read` on an
+in-repo `.cs`). It is a backstop that matches literal text, so it can block a benign command that merely
+mentions `.cs` or `git log`. If it blocks something genuinely necessary, say so and stop; do not reword
+to slip past it. A custom subagent that lists `Read` must also list `ReadFile`/`GetMethodSource`/`Search`.
 
-**Recovering from an accidental bypass.** If you used `Read`/`Edit`/`Write`/`Bash` on a `.cs` file, or
-a shell git command, when an MCP tool fit: report it in your response and continue. Do not write a
-blocker doc - a blocker is for the environment failing the agent. Exception: if the bypass caused a
-new tool-side symptom you can't explain (a mutating tool now fails, or reports state inconsistent with
-disk), treat that symptom as a tool failure, scoped to the actual anomaly.
+- **Accidental bypass** (used `Read`/`Edit`/`Write`/shell on a `.cs` or shell git when an MCP tool fit):
+  report it and continue; no blocker doc. If it caused an unexplained tool-side symptom, treat that as a tool failure.
+- **Hook bypass** is legitimate only for a `.cs` outside the repo or a manual call you decided is right;
+  never for a failed tool. Routes and logging: `docs/current/references/reference_hook_bypass.md`.
+- **Never delete a tracked file with a shell command** (it trips external-drift detection and halts all
+  mutating tools: `SessionHalted`). Use `DeleteFile`. If halted: `ExternalFileDrift(operation: List)`
+  then `Acknowledge`; report it as a self-inflicted bypass.
 
-**Deliberate hook bypass** (legitimate: a `.cs` file outside this repo, or a manual repo edit/read/git
-call you have decided is right, e.g. raw bytes or a halted `Git` tool you already reported; never a
-failed or missing MCP tool). Routes:
-- **Outside this repo:** Edit/Write/Grep/Read on a `.cs` path outside the repo root is exempt automatically.
-- **Bash/PowerShell:** put `DeliberateHookBypass: <reason>` in the command (as a comment) or the
-  `description`. A bare keyword is still blocked.
-- **Edit/Write/Grep/Read on repo files:** write `.claude/bypass.local.json` (valid 10 minutes):
-  `{"reason": "...", "tools": ["Edit"], "paths": ["Foo.cs"]}` (`tools` may be `["Read"]`) - `reason`
-  required, `tools`/`paths` optional narrowing; use the narrowest `paths`.
+## Tool-experience journal
 
-Accepted bypasses are logged to `.claude/journal/hook-bypass.jsonl` and are journal-worthy. The
-`ReplaceSnippet` parameter check and the commit checks cannot be bypassed.
+A `SessionStart` hook prints the session journal path (`.claude/journal/<date>_<sid8>.md`). Append
+`- HH:mm [+|-|~] ToolName: one sentence` right after anything notable - never save it for the end,
+compaction erases it. Note: one call replacing many, confusing descriptions/parameters, error messages
+that did or did not help, and every shell/built-in fallback on C# with the reason. A `Stop` hook nudges
+after 15 MCP calls, a failed call or a C# fallback; "`~ nothing notable`" is fine. `/journal-review` summarizes.
 
-**Never delete a tracked file with a shell command.** Deleting a file the server has touched via
-`rm`/`Remove-Item` trips the external-drift detector and halts every mutating tool for the session
-(`errorCode: SessionHalted`; read-only tools keep working). Use `DeleteFile`. If already halted: call
-`ExternalFileDrift(operation: List)` then `ExternalFileDrift(operation: Acknowledge, files: ...)`. This is a self-inflicted bypass
-(report and continue), not a tool defect.
+## Failure analysis
 
-**Never dispatch parallel subagents for C# edits.** Subagents share the parent session's single server
-process; one plain `Edit`/`Write` on a tracked `.cs` file trips `SessionHalted` for all of them and the
-parent. Dispatch repo-wide mechanical edits sequentially.
-
-## Tool-experience journal: note it as it happens
-
-A `SessionStart` hook prints this session's journal path (`.claude/journal/<date>_<sid8>.md`,
-local-only; re-printed after compaction). **Append one line right after anything notable** - never save
-notes for the end, because compaction erases them. Format: `- HH:mm [+|-|~] ToolName: one sentence`
-(`+` good, `-` bad, `~` mixed). Examples:
-
-- `- 14:02 + MoveMember: moved 10 members and fixed 80 call sites in one call`
-- `- 14:20 - ReplaceSnippet: "anchor not unique" didn't say which lines matched; took 3 retries`
-- `- 14:31 ~ Read: read a .cs directly because I needed raw bytes; no MCP tool returns those`
-
-Worth noting: one call replacing many; a confusing description or parameter; an error message that did
-or didn't get you unstuck; and **every time you reach for a shell or built-in tool on C# code**, with
-the reason. These are brief impressions, not blocker docs. A `Stop` hook asks for a line after 15 MCP
-calls, any failed call, or any C# fallback; "`~ nothing notable`" is a fine answer. `/journal-review`
-summarizes a session.
-
-## Failure doctrine and root-cause discipline
-
-Governs every model-eval run, PlanStepRunner step and task failure. The model is a novice; the environment
-(tools, schemas, descriptions, error messages, prompts, assertions) is the expert, so ask "what change to the
-environment would have prevented this or made recovery immediate?", never "was the model wrong?". Trace every
-claimed cause to source with a `file:line`, quoted error or turn number; unverified causes are hypotheses.
-Load the `failure-analysis` skill before analysing or writing up a failure.
+For every model-eval, PlanStepRunner or task failure: the model is a novice and the environment (tools,
+schemas, descriptions, errors, prompts, assertions) is the expert, so ask what environment change
+would have prevented it, never "was the model wrong?". Trace every cause to a `file:line`, quoted error
+or turn number; unverified causes are hypotheses. Load the `failure-analysis` skill first.
 
 ## Working conventions
 
-- Build (0 errors) before committing.
-- **Run one `RunTest`, `dotnet test` or `Build` at a time, never several in parallel** (subagents
-  included; a dispatcher must not run its own while a subagent is mid-test). They share the solution's
-  `bin/`/`obj/` folders and build dependencies, so concurrent runs block each other or fail on file
-  locks. Run the next one only after the previous returns; to cover several projects, use one
-  solution-scope `RunTest` or run project-scoped ones sequentially.
-- Tests use **NUnit 5.0, not 4.6**: `Assert.ThrowsAsync`/`CatchAsync`/`DoesNotThrowAsync` must be
-  `await`ed (an un-awaited one silently asserts nothing), and `TestDelegate`/`AsyncTestDelegate` are
-  gone. Details: memory `reference_nunit5_test_conventions.md`.
-- Never leak raw exceptions, stack traces, or internal paths into a tool's `ResultError` - catch at the
+- Build (0 errors) before committing. Run **one** `RunTest`/`dotnet test`/`Build` at a time (subagents
+  included); they share `bin/`/`obj/` and block on file locks. Several projects: one solution-scope run
+  or sequential project runs.
+- NUnit 5.0, not 4.6: `await` `Assert.ThrowsAsync`/`CatchAsync`/`DoesNotThrowAsync` (un-awaited asserts
+  nothing); `TestDelegate`/`AsyncTestDelegate` are gone. See `docs/current/references/reference_nunit5_test_conventions.md`.
+- Never leak raw exceptions, stack traces or internal paths into a tool's `ResultError`; catch at the
   tool boundary and return a structured, actionable error.
-- Any unhandled `CS####` surfacing during automated work gets a writeup in `docs/current/blockers/`
-  immediately, not deferred.
-- `docs/current/TODO.md` is open-items-only; resolved entries move to `docs/current/CLOSED.md`.
-- Writing a blocker, finding, proposal, issue, design, plan, idea or reference doc: read
-  `docs/current/templates/README.md` for the folder and filename rule, then copy the matching
-  template. Never read existing docs to learn the house style.
-- `*/Worktree/` folders under a PlanStepRunner run are harness clones - exclude them from diffs,
-  searches, and reviews, and never treat git output from inside one as authoritative.
-- Use ASCII-only punctuation in any comment, doc, commit message, or prompt text you write: `-`/`--`
-  for dashes, straight quotes, `<=`/`>=` for comparison glyphs. Non-ASCII punctuation turns into
-  mojibake when it crosses an encoding mismatch in the file -> server -> MCP -> harness chain. Does not
-  apply to non-ASCII characters that are the actual subject of a task (e.g. accented test fixtures).
-- Before hand-rolling a shell loop for a repeated task (e.g. N model-eval runs), check the repo root
-  for an existing front-door `.ps1` script - it likely handles failure modes (testhost.exe races, env
-  vars, filter syntax) a naive loop will hit.
-- The top-level solution file is `RoslynSentinel.slnx` (no root `.sln`). Target it directly for
-  solution-wide `dotnet build`/`dotnet test`.
+- An unhandled `CS####` during automated work gets a `docs/current/blockers/` writeup immediately.
+- `docs/current/TODO.md` is open-items-only; resolved entries go to `CLOSED.md`. A finished plan,
+  proposal or finding gets its Status line updated and moves to its folder's `closed/`.
+- Writing a blocker, finding, proposal, issue, design, plan, idea or reference doc: follow
+  `docs/current/templates/README.md` (folder, filename, template); never read existing docs for style.
+  `docs/current/upstream/` and `docs/obsolete/` are not active documentation.
+- Exclude `*/Worktree/` folders (PlanStepRunner harness clones) from diffs, searches and reviews; their git output is not authoritative.
+- ASCII-only punctuation in comments, docs, commit messages and prompts (`-`/`--`, straight quotes,
+  `<=`/`>=`); non-ASCII becomes mojibake across the file -> server -> MCP -> harness chain.
+- Before hand-rolling a shell loop for a repeated task, check `scripts/` for a front-door `.ps1`
+  (`roslynsentinel-modeleval.ps1`, `roslynsentinel-planstep.ps1`, `build.ps1`, ...).
+- The solution is `RoslynSentinel.slnx` (no root `.sln`).
 
 ## Architecture
 
-Tables of every tool and project are generated into `docs/generated/` (read those instead of searching).
-Before changing server source (request pipeline, write chokepoint, tool registration, workspace manager),
-read `docs/current/references/reference_architecture_map.md`. It is deliberately not auto-imported, to
-keep every session's context small. If the map and the source disagree, trust the source and fix the map.
+Tool and project tables are generated into `docs/generated/`. Before changing server source (request
+pipeline, write chokepoint, tool registration, workspace manager) read
+`docs/current/references/reference_architecture_map.md`; if it and the source disagree, trust the source
+and fix the map.
 
-- **Layering is one-way:** `Common` <- `Engines.*` <- `Tools.*` <- `Server.*`.
-  - `Engines.Basic` / `Engines.Advanced` - Roslyn analysis and refactoring logic. No MCP protocol
-    types (`RequestContext<>`, tool attributes).
-  - `Tools.Basic` / `Tools.Advanced` / `Tools.Experimental` - the `[McpServerToolType]` classes. The
-    `*Impl` classes backing the Basic tools live in `Tools.Basic`.
-  - `Server.Basic` / `Server.Advanced` - hosting, transport, mode resolution and DI registration only.
-  - `Utilities.PlanStepRunner` - the plan-step harness exe; references only `Common`. The shared agent
-    loop lives in `Common/AgentLoop`.
-- **Sibling projects cannot see each other.** `Tools.Advanced` does not reference `Tools.Basic`;
-  `Engines.Basic` cannot reference `Engines.Advanced`. A helper needed on both sides goes one layer
-  down: `Engines.Basic` for engine logic, `Common` for result/MCP plumbing. Check the `.csproj`
-  `<ProjectReference>` list if unsure.
-- **Advanced is additive, not a fork.** A fix in a Basic project is sufficient on its own; there is no
-  duplicate in Advanced. Verify with `build.ps1 -Flavor Solution` (or `-Flavor Basic` and
-  `-Flavor Advanced`).
-- **Adding a new MCP tool requires three things:**
-  1. the `[McpServerToolType]`/`[McpServerTool(Name = ...)]` class, in a `Tools.*` project;
-  2. an entry in a mode dictionary in `Server.Basic/ToolClassRegistry.cs` (shared by both servers);
-  3. an explicit `if (activeToolClasses.Contains("..."))` DI block in
-     `Server.Basic/ServiceRegistrationExtensionsBasic.cs` or
-     `Server.Advanced/ServiceRegistrationExtensionsAdvanced.cs`.
-
-  Any one alone silently produces a dead tool with no startup error. A new `Tools.*` project also
-  needs a `<ProjectReference>` from the `Server.*` project that hosts it (`Tools.Experimental` is
-  hosted by `Server.Advanced` only).
-- **The `*Tools` suffix is reserved for classes that declare `[McpServerTool]` methods.** Helpers use a
-  different suffix (e.g. `TaskEnabledToolsHelper`).
+- **Layering is one-way:** `Common` <- `Engines.*` <- `Tools.*` <- `Server.*` (`RoslynSentinel.<Layer>.<Flavor>`).
+  Engines hold Roslyn logic with no MCP types; Tools hold `[McpServerToolType]` classes (Basic's `*Impl`
+  classes live in `Tools.Basic`); Server is hosting/DI only. `Utilities.PlanStepRunner` references only `Common`.
+- **Sibling projects cannot see each other** (`Tools.Advanced` not `Tools.Basic`; `Engines.Basic` not
+  `Engines.Advanced`). Shared helpers go one layer down: `Engines.Basic` for engine logic, `Common` for
+  result/MCP plumbing. Check the `.csproj` `<ProjectReference>` list if unsure.
+- **Advanced is additive, not a fork.** A Basic fix suffices; verify with `scripts/build.ps1 -Flavor Solution`.
+- **A new MCP tool needs three things**, or it is silently dead with no startup error: (1) the
+  `[McpServerToolType]`/`[McpServerTool(Name = ...)]` class in a `Tools.*` project; (2) an entry in a mode
+  dictionary in `Server.Basic/ToolClassRegistry.cs`; (3) an explicit `if (activeToolClasses.Contains("..."))`
+  DI block in `Server.Basic/ServiceRegistrationExtensionsBasic.cs` or `Server.Advanced/ServiceRegistrationExtensionsAdvanced.cs`.
+  A new `Tools.*` project also needs a `<ProjectReference>` from its hosting `Server.*` project
+  (`Tools.Experimental` is hosted by `Server.Advanced` only).
+- The `*Tools` suffix is reserved for classes declaring `[McpServerTool]` methods; helpers use another (e.g. `TaskEnabledToolsHelper`).
 
 ## Commits
 
-- Commit **only** the files changed in this session. Leave pre-existing dirty or untracked files and
-  other sessions' changes unstaged unless told otherwise. If the user edited CLAUDE.md or a doc during
-  the session, that counts as in-scope; ask if unsure. Before committing, check that no session file
-  was missed, so no amend is needed.
-- Use `Git` commit with scope `listed` and an explicit file list, staging before committing. Never use
-  a blanket add or shell `git add`/`git commit`.
-- Every commit message includes the `Co-Authored-By` trailer (see attribution instructions).
-- Report commit hashes exactly as `Git` returns them. Never count characters by hand; read
-  `CommitHashLength` off the result (a full SHA-1 is 40 characters).
-
-## Blocker workflow
-
-- Before investigating or fixing, check `MEMORY.md`, `git log`, `docs/current/CLOSED.md` and
-  `docs/current/proposals/` for prior attempts - the gap may already be fixed, or tried and reverted.
-- Once the blocker doc is written, dispatch an `implementer` to fix it (obeying the slice contract;
-  `implementer-senior` if over the limits), confirm the fix, then restart the server with
-  `McpServerControl` (see Verification) before resuming the original task.
-- When fixed: add a regression test, compare against the pre-existing-failure baseline, then in the
-  same commit add a resolution note (root cause, fix, commit hash, tests) and move the doc from
-  `docs/current/blockers/` to `docs/current/blockers/resolved/`.
-- If the workspace looks stale (a fix appears missing), reload the solution (`LoadSolution`) before
-  concluding anything.
-- If test runs fail on file locks, kill only stray `testhost` processes that belong to your own session
-  (identify by PID/command line); other sessions may share this machine.
+- Commit only files changed in this session; leave pre-existing dirty/untracked files and other
+  sessions' changes unstaged. A doc or CLAUDE.md the user edited this session is in scope; ask if unsure.
+  Check no session file was missed so no amend is needed.
+- `Git` commit with scope `listed`, an explicit file list, staged first; never blanket add or shell commit.
+  Every message carries the `Co-Authored-By` trailer.
+- Report hashes exactly as `Git` returns them; read `CommitHashLength` off the result, never count by hand.
 
 ## Verification
 
-### Live MCP server freshness
+Rebuilding does not change the running server; it is stale until restarted. After changing server
+source, run `Build(fullBuild)` and restart your own instance
+(`McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)`, then `LoadSolution`)
+with no subagent mid-operation. `"isServerBinaryStale": true` in a response means a newer DLL exists.
+`LoadSolution` changes which files are analyzed, not which binary runs. Details:
+`docs/current/references/reference_live_server_freshness.md`.
 
-Rebuilding RoslynSentinel does not change the running server: VS Code builds and spawns a server only
-when a session starts. After changing server source, the running server is **stale** until stopped and
-respawned, so restart it before verifying fixes live.
-
-- Server instances are isolated per session, so you may restart your own at any time:
-  `McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)`. Omitting the confirm
-  param returns a refusal and stops nothing. Allow a few seconds; a clean `Connection closed` is
-  normal. VS Code relaunches it on a fresh build; reconnect and re-run `LoadSolution`.
-- Detection: any response carries `"isServerBinaryStale": true` while a newer build of a loaded
-  `RoslynSentinel.*.dll` exists under a project's `bin/<Config>/` (omitted when current; can lag a few
-  seconds). `Build(level: fullBuild)` writes those DLLs and so sets the flag; `Build(quickBuild)` is
-  in-memory and does not. `McpServerStatus` gives `binaryStaleness.staleAssemblies`, `serverBinaryPath`,
-  `serverBuildTimeUtc` (DLL mtime on disk) and `serverPid`. If you edited server source but have not run
-  a `fullBuild`, assume the live server is old.
-- Before restarting, make sure no subagent is mid-operation against the same server.
-- If `Build` reports a suspicious warning/error count, force a full rebuild; incremental builds can
-  skip recompiles and under-report.
-
-**`LoadSolution` does not rebind which binary executes tool logic - only which files it analyzes.**
-Pointing the server at another worktree's `.slnx` loads that worktree's files, but tool calls still run
-the already-running process's code, with no error. Before trusting a live result as evidence about a
-specific worktree, confirm the server was built from it (`serverBinaryPath` and `serverBuildTimeUtc` vs.
-`git log`). If not, prefer `dotnet test` against that worktree over live MCP calls.
-
-- Compare test results against the known pre-existing-failure baseline (`docs/current` / memory
-  `reference_known_failing_tests`) and report only *new* failures.
+Compare test results with the baselines (`docs/known-failing-tests.{Basic,Advanced,Solution}.txt`,
+`docs/known-build-warnings.*.txt`, written by `scripts/build.ps1`) and report only *new* failures.
 
 ## Compact instructions
 
-When summarizing for compaction, keep this session's journal path (`.claude/journal/...md`) and list any
-notable tool experiences (including shell/built-in fallbacks on C# and why) not yet written to it, so
-they can be appended right after compaction.
+When compacting, keep this session's journal path and list notable tool experiences (including C#
+shell/built-in fallbacks and why) not yet written to it.

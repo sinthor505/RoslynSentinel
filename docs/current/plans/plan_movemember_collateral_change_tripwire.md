@@ -1,6 +1,6 @@
 # Plan: collateral-change tripwire for MoveMember (item B)
 
-**Status:** DRAFT 2026-10-15. Design decided with the user (tripwire, MoveMember only); slices B1-B3 not dispatched. Facts below were traced by exploration agents earlier in this session and not all were re-read when this was written; re-anchor with `Search` before dispatching.
+**Status:** IMPLEMENTED 2026-10-15 (status corrected 2026-10-17). Design decided with the user (tripwire, MoveMember only); B1 c27896cc (CollateralChangeGuard, CollateralChangeRefused), B2 74895c51 (expectedEdits in ValidateAndApplyAsync), B3 7e2d04fd (MoveMemberResult.AppliedEdits forwarded by the tool), B1t 83df2fdf (guard-fires battery test). Facts below were traced by exploration agents earlier in this session and not all were re-read when this was written; re-anchor with `Search` before dispatching.
 
 ## Problem
 

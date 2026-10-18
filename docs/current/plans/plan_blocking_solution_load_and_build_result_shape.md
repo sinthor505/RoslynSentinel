@@ -255,3 +255,20 @@ Risks that are new or still real:
 9. `LoadSolutionAsync` now registers as `Loading` before taking the lock, so `LoadState.LoadInProgress` is true while a load is merely queued behind a writer. The `Build` message text for that case stays valid.
 10. **Part B hypotheses (unchanged):** the green-payload savings are measured (94 files); the projector's runtime cost is negligible but unmeasured; whether quickBuild's `int.MaxValue` request (Step B5) is memory-significant on a 1000-error solution is a hypothesis (the diagnostics already exist in memory in `allDiagnostics`); the NuGet project-level error format in `DiagnosticLineRegex` is pinned by canned lines, not by a real run.
 11. Journal entries are impressions: the two `cc715aa0`/`93fd2d31` Build notes were traced to source (every fullBuild payload exceeds 15 KB; measured), not taken on trust.
+
+## Moved from TODO.md (2026-10-17)
+
+### Follow-ups left open by the blocking-load and Build-result-shape plan (2026-10-09) - not started
+
+**Found:** 2026-10-09, `plans/plan_blocking_solution_load_and_build_result_shape.md` (Out of scope list).
+
+- `SubAgentImpl.cs:55` and `SubAgentEvalImpl.cs:29` read `SolutionPath` only and still say "retry" if called in
+  the first seconds after start-up; they do not wait for `SolutionLoadStatus`.
+- `GetDiagnostics` / `GetWorkspaceHealth` embedded `BuildVerification` still carry up to 50 details and are not
+  projected like `Build`.
+- `IsAlreadyLoadedPath` (`WorkspaceProjectManagementImpl.cs`) returns false for non-rooted paths, so a
+  relative-path `LoadSolution` after an auto-load still reloads.
+- New files made by `CreateFile` are written with LF endings and `WriteFile(ReplaceFile)` treats an EOL-only
+  rewrite as a no-op, so a new test file cannot be given the repo's CRLF endings with the MCP tools (seen with
+  `BuildEngineParseTests.cs` and the B4/B7 test files).
+

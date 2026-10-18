@@ -470,3 +470,122 @@ Whether every engine's tool wrapper already does this is **[unverified]**.
   updated 2026-10-13)
 - `docs/current/TODO.md`, NormalizeWhitespace sweep entry
 - `docs/current/proposals/proposal_parallel_change_deprecated_wrappers.md` (migration-first workflow)
+
+## Moved from TODO.md (2026-10-17)
+
+Open engine-level formatting, EOL and trivia defects and the old Advanced-side NormalizeWhitespace sweep list, moved here verbatim from the restructured TODO.md. Open items are indexed in TODO.md; the old sweep list (C0-C6 supersedes it) is kept for history.
+
+### Unrouted EOL flatteners: plural `ReplaceNodesAndFormatReplacementsAsync` and `RemoveMethodParameterAsync` scope (2026-10-17) - partly done
+
+C5c-2 routed `ReplaceNodeAndFormatReplacementAsync`, the cascade caller-file `NormalizeEol`, `AddTopLevelTypeAsync` (no-namespace path) and `MemberRefactoringEngine.ExtractMethodAsync` onto the changed-lines EOL rule (constructor mixed-EOL tests added). Still open: the plural `ReplaceNodesAndFormatReplacementsAsync` (same raw `Formatter.FormatAsync` + whole-file `NormalizeEol`; route the same way and cover its callers). The original entry text follows.
+
+Found in the C5b-2b review. `RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync` (~:63-67) is a raw span-scoped `Formatter.FormatAsync` followed by a whole-file `NormalizeEol`, and `MemberRefactoringEngine.AddConstructorParameterWithCallSitesAsync` (~:471) does the same `NormalizeEol` on caller files, so `AddConstructorParameter*` flattens a stray CRLF line in LF files. Route both via `FormatAnnotatedSpansAsync` (C5c), then add constructor mixed-EOL tests (the six cascade tests in `RefactoringEngineFormatCharacterizationTests.cs` are guards that would pass on the old finder; fix the header wording "is not a span-scoped Formatter.FormatAsync site" to "not yet routed"). Also: `RemoveMethodParameterAsync` annotates the whole method declaration, so unrelated body whitespace is reformatted (pre-existing); annotating only the `ParameterList`/`ArgumentList` would narrow it.
+
+### `MappingEngine.InvertAssignments` leaks leading trivia onto the right-hand side (2026-10-16) - not started
+
+`InvertAssignments` swaps the operands together with their leading trivia, so a comment or blank lines directly before an inverted assignment end up on the right-hand side of the result. Found in the C5b-1 review; swap the operands but keep each side's own leading trivia in place.
+
+### `AddUsingDirective` simplifyExisting: `Simplifier.ReduceAsync` simplifies nothing (2026-10-16) - not started
+
+With `simplifyExisting: true`, `BasicRefactoringEngine.AddUsingDirectiveAsync` calls `Simplifier.ReduceAsync(doc, Simplifier.Annotation)`, but no node in the document carries `Simplifier.Annotation` at that point (only the new using has `Formatter.Annotation`), so the reduce step is a no-op and the option shortens no names. Found in the C5b-1 review; annotate the qualified names to reduce (or reduce the whole root) before the call.
+
+### `IDEStyleEngine.SimplifyMemberAccess` drops the leading trivia of the `this` token (2026-10-16) - not started
+
+Replacing `this.x` with `x` drops the leading trivia of the `this` token, so a comment, `#region` or blank line directly before a statement that starts with `this.` is lost. Found in the C5a review; carry the `this` token's leading trivia onto the replacement name.
+
+### `NormalizeEolOfChangedLines` matches by line text, so repeated identical lines can take the wrong terminator (2026-10-16) - low risk, not started
+
+`EolUtilities.NormalizeEolOfChangedLines` matches lines by text with an LCS, so repeated identical lines (for example `}` or a blank line) inside a changed region of a mixed-EOL file can be matched to the wrong pre-image line and take its terminator. Only affects files that already mix endings; fix with position-aware matching if it ever shows up.
+
+### ExtractInterface drops comments and cannot warn (2026-10-16) - not started
+
+ExtractInterface now silently drops comments inside copied signatures and trailing comments after the parameter list (the old `NormalizeWhitespace` output kept them). The engine returns only a file dictionary, so it cannot warn. Consider a warnings field on the engine result or a comment-keeping variant. See `proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md` (C3-G3a).
+
+### TOOL-GAP: `NormalizeNewRootWhitespaceKeepingComments` (2026-10-16) - not started
+
+No helper formats a newly built root that embeds existing code with its comments kept (needed by the `PinnedC6_*` sites: ExtractSuperclass :126, ExtractMembersToPartial :1108, ConvertTupleToClass :1625, ExtractMethod :4600/:4569; also the ExtractInterface comment loss above). Suggested change: a new `RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingComments` that exempts comments from the guard but still rejects non-elastic whitespace, or move those sites to annotate-and-format in C6. See `proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md` (C3 status, C6).
+
+### `NormalizeNewRootWhitespaceKeepingUsingHeaders` limitations (2026-10-16) - not started
+
+A directive opened in a using's leading trivia and closed after the last using (the `#endif` on the namespace token) gives CS1027 in the output, and a header on a file with no usings is not carried. Both are documented on the method and pinned by `KnownLimitation_*` tests in `RoslynFormattingHelperNormalizeNewTests`. Fix only if the C6 comment-keeping variant does not subsume it.
+
+### `RoslynSentinel.Advanced`'s NormalizeWhitespace occurrences never got a follow-up sweep — Basic side now fully closed 2026-08-27; Advanced still open
+
+**Correction 2026-10-03:** the "Basic side fully closed" claim was wrong. `MemberRefactoringEngine.cs` (the former `RefactoringEngine`) still had about 20 whole-root `NormalizeWholeSubtreeWhitespace` sites in every `MoveMember` path. Those were fixed in 4dedc78, a23c581 and 4aa2dc2; see `blockers/resolved/blocking_error_movemember_reformats_entire_source_and_caller_files.md`. **Update 2026-10-13:** the two calls left in `ExtractMethodAsync` (`MemberRefactoringEngine.cs` 4334 and 4398) were classified safe: both normalize newly synthesized nodes (a built `MethodDeclaration` and a built `callStatement`). `MethodSignature`'s caller rewrite is fixed (d89cc95f, see CLOSED.md). `AdvancedStructuralEngine.cs` was wrongly called deleted: it exists under `RoslynSentinel.Engines.Advanced/` with 16 `NormalizeWholeSubtreeWhitespace` hits, and the inventory (`finding_normalizewhitespace_container_reformat_risk_inventory.md`) now carries the current per-file counts (81 non-test hits in 19 files). Re-grep for whole-root calls in both Engines projects before scoping this sweep.
+
+**Found:** 2026-08-24, while auditing `docs/plan-normalize-whitespace-full-sweep-v1.md` (now filed
+`docs/obsolete/`) for the docs reorganization pass. That plan completed a sweep of `RoslynSentinel.Basic`
+but explicitly scoped out `RoslynSentinel.Advanced`'s ~64 occurrences of the same whole-file
+`NormalizeWhitespace()` pattern as deferred/out-of-scope, and no follow-up plan doc for the Advanced
+side exists anywhere in `docs/`.
+
+**Why this matters:** the Basic-side version of this bug caused real line-shift/re-indentation damage
+(see the plan doc's own root-cause writeup) before being fixed. If the same call pattern is still
+present ~64 times in `RoslynSentinel.Advanced` (not re-verified count-wise in this pass — worth a fresh
+grep for `NormalizeWhitespace()` before scoping work), those call sites carry the same latent risk and
+have simply not been hit by a repro yet.
+
+**Suggested approach:** grep `RoslynSentinel.Advanced` for `.NormalizeWhitespace()` calls that
+re-serialize a whole document (vs. a narrowly-scoped single-node call, which is fine), cross-check each
+against the Basic-side fix's shape (targeted formatting vs. whole-tree re-indent), and either confirm
+they're already narrow/safe or port the same fix pattern across.
+
+**Correction 2026-08-27 — the Basic-side sweep this entry assumed was "done" had two live misses of
+its own,** found while fixing the unrelated "`ConstructorParameter` collapses multi-line signatures"
+bug (separate TODO entry). `RoslynSentinel.Basic/RefactoringEngine.cs`'s (now `MemberRefactoringEngine.cs`) `AddConstructorParameterAsync`
+and `RemoveConstructorParameterAsync` both did `root.ReplaceNode(classDecl, newClassNode)
+.NormalizeWhitespace()` — a whole-tree reflow identical to the pattern this entry describes, not a
+narrowly-scoped one. Fixed by switching both to the file's own established
+`ReplaceNodeFormattedAsync` helper (annotates only the new/replaced node and calls
+`Formatter.FormatAsync` scoped to that annotation — already used by `AddMemberAsync`/`AddPropertyAsync`
+/`AddFieldAsync` and others in the same file). `SortMembersAsync` (same file, ~line 3458) has the
+identical unscoped `.ReplaceNode(...).NormalizeWhitespace()` shape and was NOT fixed in this pass — out
+of scope for the `ConstructorParameter` bug, flagged here since it's the same bug class found by the
+same audit. **Implication for this entry:** "the Basic sweep is done, only Advanced is unswept" can no
+longer be assumed — worth a fresh grep of `RoslynSentinel.Basic` too (not just `RoslynSentinel.Advanced`)
+for any other `.ReplaceNode(...).NormalizeWhitespace()`/bare `.NormalizeWhitespace()` call before
+scoping the Advanced-side follow-up work, since the "already fixed" premise just proved incomplete once.
+
+**Basic side fully closed 2026-08-27:** a fresh `SearchSolutionText` sweep of all of
+`RoslynSentinel.Basic` found 89 raw `.NormalizeWhitespace()` hits (not just the 1 `SortMembersAsync`
+miss above), across 17 files. Every hit was individually classified: 55 were the unscoped
+whole-root-reflow bug, 34 were legitimate uses (whole-document `SyntaxRewriter.Visit` passes where
+full-file reformatting is correct-by-design; small standalone nodes normalized before insertion,
+never a reflow of existing content; text built only for display/comparison, never written back; or
+brand-new output with the original root untouched). Of the 55 confirmed bugs, 52 were fixed by
+switching to `ReplaceNodeFormattedAsync`/`RemoveNodeFormattedAsync` (or a shared-`SyntaxAnnotation` +
+`Formatter.FormatAsync` pass for compound/multi-edit methods) — full per-file breakdown in the
+`RoslynSentinel.Basic/*.cs` diffs from this date. 3 were deliberately left unfixed, flagged for a
+human/architecture decision rather than a mechanical swap:
+- `RunMicroRefactoringAsync` (`GranularRefactoringEngine.cs`) — its 5 dispatched helpers return bare
+  `SyntaxNode?` with no way to identify which sub-node changed; scoping the fix requires changing
+  helper return contracts, not just wrapping the call site.
+- `ExtractConstantSafeAsync` and `GenerateToStringSafeAsync` (`MsToolAugmentEngine.cs`) — both
+  Document-less (parse from a raw string via `CSharpSyntaxTree.ParseText`/`File.ReadAllTextAsync`,
+  no `Document` available for `Formatter.FormatAsync`'s annotation-scoped overload). Would need an
+  `AdhocWorkspace`-based formatting variant; `FormatDocumentSafeAsync` in the same file was checked
+  as a possible existing precedent and doesn't cover this case.
+
+Verified via `dotnet build RoslynSentinel.slnx` (0 errors, only pre-existing test-project warnings)
+and the full test suite across all 5 test projects (0 new failures; every name in
+`docs/known-failing-tests.{Basic,Advanced}.txt` still fails/skips the same way, nothing new).
+`git diff --ignore-all-space` confirms each file's actual change is exactly the expected
+targeted-formatting swap — large raw `git diff` line counts in a few files (e.g. `AnalysisEngine.cs`)
+are pure pre-existing LF/CRLF line-ending noise, not scope creep.
+
+**Advanced side (~63-64 occurrences) remains explicitly out of scope** — not started this session
+per direct user instruction to do Basic only. Suggested approach section above still applies when
+that work is picked up; re-run `SearchSolutionText` fresh rather than trusting the old ~64 count,
+since this session's Basic count (89, not the originally-assumed handful) shows raw grep-style
+estimates for this pattern have been unreliable so far.
+
+**Guard still advisory (item C):** enforcement design is in `proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md` (DESIGN AGREED 2026-10-15; slices C0-C6 not started).
+
+### ExtractInterfaceAsync base-list layout defect and moved-type files lack trailing newline (2026-10-17) - not started
+
+Found in C5c-3. ExtractInterfaceAsync (BasicRefactoringEngine) AddBaseListTypes leaves the colon on its own line at column 0 (class Svc / : ISvc / {); fix by moving the class-identifier trailing trivia, then the site can use an annotated route instead of FormatWholeDocumentAsync. Files scaffolded by MoveTypeToFileAsync end at the closing brace with no trailing newline. Both are pinned as-is in BasicRefactoringEngineFormatCharacterizationTests.
+
+### C5c leftovers: AdvancedStructuralEngine ConvertExpressionBody and SemanticRefactoringEngine InlineVariable fallback (2026-10-17) - not started
+
+AdvancedStructuralEngine ~:1457 (ConvertExpressionBodyAsync): whole-document Formatter.FormatAsync after ReplaceNode(target, NormalizeWholeSubtreeWhitespace(newTarget)); annotate the new target and route via FormatAnnotatedSpansAsync, and decide the NormalizeWholeSubtreeWhitespace call under C6. SemanticRefactoringEngine ~:168 is the near-dead InlineVariableAsync all-replacements-failed fallback; mechanical swap is FormatWholeDocumentAsync(document.WithSyntaxRoot(modifiedRoot), originalText) but no characterization test is possible. UseFieldBackedProperties keeps a blank line after the opening brace when the backing field is removed (pinned as-is).
+

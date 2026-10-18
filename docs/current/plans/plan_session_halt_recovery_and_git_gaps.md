@@ -235,3 +235,34 @@ Not environment-fixable by a small change (see Risks): hunk-level staging (`6e6b
    SessionHalted in TagTestCategories (commit `44e6032`).
 9. Proposed doc follow-ups (not done here): record in `docs/current/TODO.md` L613-635 that steps 2-5 landed; mark
    `ideas/external-drift-hard-blocker.md` as superseded for the recovery path once decision 2 is made.
+
+## Moved from TODO.md (2026-10-17)
+
+### `SessionHalted` external-drift latch: false-positive from timestamp-only touch, message doesn't self-report scope — not started
+
+Raised 2026-09-15 resolving `blockers/resolved/blocking_error_sessionhalted_concurrent_session_drift_mid_contexterrorbuilder_plan.md`.
+A `ReplaceSnippet(apply)` call mid-plan hit `SessionHalted`; the list tool (formerly `ListExternalDiskChanges`) reported 34
+drifted files, but `Git(operation: status)` showed only 1 file genuinely modified (plus expected
+untracked new files) — zero overlap with the 34. Most likely trigger: an earlier MCP server restart
+this session updated file mtimes without changing content, and the drift detector treats a
+timestamp-only touch the same as real content drift. Cleared via `ExternalFileDrift(operation: Acknowledge)`
+once confirmed false-positive; not yet fixed at the detector level.
+
+Update 2026-10-09 (`plans/plan_session_halt_recovery_and_git_gaps.md`, then
+`plans/plan_external_file_drift_tool_and_halt_stamping.md`): the three recovery tools were merged into
+`ExternalFileDrift(operation: Status|List|Acknowledge, files, acknowledgeScope)`; the halt message now names the drifted
+files and the recovery, the latch policy was decided and implemented, and a failed `Build` appends a drift note. The
+former first gap (halt message wording) is resolved and recorded in `CLOSED.md`.
+
+Remaining gaps, all still open:
+
+- Follow-up: Revisit partial-acknowledge policy after real use (decision 2, `proposal_journal_digest_followup_decisions.md`).
+- The detector doesn't appear to distinguish "mtime changed, content identical" from "content
+  actually changed on disk" — the former should not be able to trip a fatal, session-wide latch.
+  Needs source-level confirmation (not yet read this session) of where the drift check lives and
+  whether it hashes content or only compares timestamps.
+- Whether per-session (vs. solution-wide) halting is even the right granularity when multiple
+  concurrent sessions against the same solution are a supported pattern (`project_concurrent_sessions`
+  memory) is still unresolved — same open question as the prior occurrence,
+  `blocking_error_session_halt_from_out_of_band_rm_mid_spike.md`.
+

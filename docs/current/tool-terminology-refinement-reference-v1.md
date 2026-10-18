@@ -145,3 +145,21 @@ across all dispatcher tools, rather than leaving the agent to discover the patte
   affect mutation correctness).
 - Any code changes. This document is descriptive only — no tool has been renamed or had its
   description changed as part of producing this reference.
+
+## Moved from TODO.md (2026-10-17)
+
+### Tool terminology/naming backlog — open, unactioned
+
+**Found:** 2026-08-24, while auditing `docs/tool-terminology-refinement-reference-v1.md` (kept in
+`docs/current/`) for the docs reorganization pass. That reference catalogs weak/ambiguous tool and
+parameter names (`GetBreakerStatus`, `GetMigrationLedger`, `ClearExternalDrift` vs. its sibling
+list tool's inconsistent metaphor (both since merged into `ExternalFileDrift`), the `Apply*Codemod`/`Generate`/`Introduce`/`Inline`
+untyped-string-discriminator family) and recommends, in order: (1) convert small/stable discriminator
+params to real enums; (2) standardize the "call `DescribeAdvancedToolOptions` first" wording across all
+wide dispatchers; (3) only then revisit the specific rename table. None of the three steps has been
+started as of this pass.
+
+**Suggested approach:** see the reference doc itself for the full weak-term table and confusable-group
+list; this entry exists so the backlog is discoverable from `TODO.md` without having to know the
+reference doc exists.
+

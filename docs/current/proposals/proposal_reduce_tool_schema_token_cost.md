@@ -185,3 +185,10 @@ not measured.
 - `issue_member_containername_conditional_required_gap.md` (the Member requirements gap)
 - Memories: `project_mcpserverstatus_alldeclaredtools_added`, `project_startup_arg_wiring_pattern`,
   `project_server_flavors_and_build_configs`
+
+## Moved from TODO.md (2026-10-17)
+
+### Schema budget headroom is ~2 chars (2026-10-17)
+
+The claude-lean Search/Git schemas sit at the `CoreSurface` budget limits (Basic total ~40498/40500). The next added parameter or description must trim existing wording first; consider reviewing whether the budgets or the longest descriptions (Git `operation`, Search tool-level text) should be restructured.
+
