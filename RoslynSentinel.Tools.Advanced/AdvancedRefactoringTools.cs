@@ -540,7 +540,11 @@ public class AdvancedRefactoringTools
             }
 
             var summaryNote = $"Moved [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.";
-            var conversionFindings = (result.Notes ?? []).Select(n => new Finding("MoveMember", n, FindingSeverity.Caution)).ToList();
+            IReadOnlyList<RewrittenCallSite> rewrittenCallSites = result.RewrittenCallSites ?? [];
+            var conversionFindings = (result.Notes ?? []).Select(n => new Finding("MoveMember", n, FindingSeverity.Caution))
+                .Concat(rewrittenCallSites.Take(25).Select(r => new Finding("MoveMember", $"Rewrote same-class call {r.OldText} -> {r.NewText} ({r.FilePath}:{r.Line})", FindingSeverity.Caution)))
+                .Concat(rewrittenCallSites.Count > 25 ? new[] { new Finding("MoveMember", $"+{rewrittenCallSites.Count - 25} more rewritten call sites", FindingSeverity.Caution) } : Array.Empty<Finding>())
+                .ToList();
             // Ledger opened here, after the atomic apply above has actually landed - not inside
             // MoveInstanceMembersAsync, since IsBlocked would otherwise refuse that same apply's
             // own source/target file write (neither necessarily has an unresolved ledger entry for

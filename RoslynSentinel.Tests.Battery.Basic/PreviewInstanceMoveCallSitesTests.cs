@@ -1593,11 +1593,10 @@ public class PreviewInstanceMoveCallSitesTests
         Assert.That(sourceChange, Does.Contain("KnownLimitTgtS.Foo(2)"));
     }
 
-    // Characterisation (variant c). Same bare call as (a), but the source holds exactly one field of the destination
-    // type, so a receiver is unambiguous. Hypothesis: still not rewritten; a receiver is only chosen for callers.
-    // HELD: the bare call stays Foo(2) with no _tgt. receiver.
+    // Rewrite behaviour (remove mode): the source holds exactly one field of the destination type, so the bare
+    // Foo(2) in Caller becomes this._tgt.Foo(2), is reported in RewrittenCallSites, and leaves no unresolved row.
     [Test]
-    public async Task KnownLimitation_InstanceMove_BareSameClassCall_WithSingleTargetField_IsNotRewrittenAsync()
+    public async Task InstanceMove_BareSameClassCall_WithSingleTargetField_IsRewrittenAndReportedAsync()
     {
         var (workspace, engine) = CreateInMemoryTestFixture(
             ("ContosoOrders.Core/KnownLimitSrcC.cs", """
@@ -1633,8 +1632,65 @@ public class PreviewInstanceMoveCallSitesTests
         var sourceChange = result.Changes.Single(kv => kv.Key.ToString().Contains("KnownLimitSrcC")).Value;
         Assert.Multiple(() =>
         {
+            Assert.That(sourceChange, Does.Contain("return this._tgt.Foo(2);"));
+            Assert.That(sourceChange, Does.Not.Contain("return Foo(2);"));
+            Assert.That(result.RewrittenCallSites, Has.Count.EqualTo(1));
+            var row = result.RewrittenCallSites.Single();
+            Assert.That(row.Line, Is.EqualTo(14));
+            Assert.That(row.OldText, Is.EqualTo("Foo(2)"));
+            Assert.That(row.NewText, Is.EqualTo("this._tgt.Foo(2)"));
+            Assert.That(result.PendingLedgerEntries?.Any(e => e.Status == CallSiteStatus.NoCandidateIntroducible) ?? false, Is.False);
+        });
+    }
+
+    // Two target-typed fields: the receiver is ambiguous, so the bare call is not rewritten. It stays an unresolved row
+    // whose BlockReason names both candidate fields.
+    [Test]
+    public async Task InstanceMove_BareSameClassCall_TwoTargetFields_LeftUnresolvedNamingBothAsync()
+    {
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/MultiFieldSrc.cs", """
+                namespace ContosoOrders.Core;
+
+                public class MultiFieldSrc
+                {
+                    private readonly MultiFieldTgt _first = new MultiFieldTgt();
+                    private readonly MultiFieldTgt _second = new MultiFieldTgt();
+
+                    public int Foo(int x)
+                    {
+                        return x + 1;
+                    }
+
+                    public int Caller()
+                    {
+                        return Foo(2);
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/MultiFieldTgt.cs", """
+                namespace ContosoOrders.Core;
+
+                public class MultiFieldTgt
+                {
+                }
+                """));
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/MultiFieldSrc.cs"),
+            "MultiFieldSrc", ["Foo"], "MultiFieldTgt");
+
+        var sourceChange = result.Changes.Single(kv => kv.Key.ToString().Contains("MultiFieldSrc")).Value;
+        var entry = result.PendingLedgerEntries!.Single();
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.RewrittenCallSites, Is.Empty);
             Assert.That(sourceChange, Does.Contain("return Foo(2);"));
-            Assert.That(sourceChange, Does.Not.Contain("_tgt.Foo"));
+            Assert.That(sourceChange, Does.Not.Contain("this._first"));
+            Assert.That(sourceChange, Does.Not.Contain("this._second"));
+            Assert.That(entry.FilePath, Does.Contain("MultiFieldSrc"));
+            Assert.That(entry.BlockReason, Does.Contain("_first"));
+            Assert.That(entry.BlockReason, Does.Contain("_second"));
         });
     }
 }

@@ -17,7 +17,12 @@ public record SkippedCallSite(FilePathWrapper FilePath, int LineNumber, string R
 /// CollateralChangeGuard). A file with no entry is unchecked; a brand-new file (new-class route) has no original text
 /// and so never has an entry. Null when a producer does not report edits.
 /// </summary>
-public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, List<CallSiteLedgerEntry>? PendingLedgerEntries = null, string? PendingLedgerOperationName = null, List<AppliedCallSiteFixup>? AppliedFixups = null, IReadOnlyList<string>? Notes = null, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? AppliedEdits = null);
+public record MoveMemberResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, List<CallSiteLedgerEntry>? PendingLedgerEntries = null, string? PendingLedgerOperationName = null, List<AppliedCallSiteFixup>? AppliedFixups = null, IReadOnlyList<string>? Notes = null, IReadOnlyDictionary<FilePathWrapper, IReadOnlyList<TextChange>>? AppliedEdits = null, List<RewrittenCallSite>? RewrittenCallSites = null);
+/// <summary>
+/// One bare same-class call (`M(x)` in a remaining member of the source class) that a remove-mode instance move rewrote to
+/// `this.<field>.M(x)`. <paramref name = "Line"/> is the 1-based line in the ORIGINAL source text. The MoveMember tool reports each one as a finding.
+/// </summary>
+public record RewrittenCallSite(string FilePath, int Line, string OldText, string NewText);
 /// <summary>
 /// One call site rewritten from a caller-supplied callSiteFixups entry (not an auto-resolved one).
 /// <paramref name = "Line"/> is the 1-based line in the PROPOSED (post-rewrite, post-normalization)
@@ -4275,7 +4280,9 @@ public class MemberRefactoringEngine
     /// written into an existing target (empty for a brand-new class file): the data MovePositionMap needs to map
     /// source positions into the trial text.
     /// </summary>
-    public static async Task<(Dictionary<DocumentId, SourceText> Texts, Dictionary<FilePathWrapper, string> NewFiles, List<MovedMemberRegion> MovedRegions)> AddInstanceMoveStructuralEditsAsync(Dictionary<DocumentId, List<TextChange>> editsByDocument, Document sourceDocument, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string targetClassName, Document? targetDocument, ClassDeclarationSyntax? targetClassNode, bool createNewClassFile, CancellationToken cancellationToken, ISet<MemberDeclarationSyntax>? keptMembers = null, Func<MemberDeclarationSyntax, string>? forwarderText = null)
+    public static async Task<(Dictionary<DocumentId, SourceText> Texts, Dictionary<FilePathWrapper, string> NewFiles, List<MovedMemberRegion> MovedRegions)> AddInstanceMoveStructuralEditsAsync(Dictionary<DocumentId, List<TextChange>> editsByDocument, Document sourceDocument, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string targetClassName, Document? targetDocument, ClassDeclarationSyntax? targetClassNode, bool createNewClassFile, CancellationToken cancellationToken,
+        // Deliberate deviation from the token-last rule: an existing test caller passes the token positionally, so the keep-mode parameters were appended after it instead of before.
+        ISet<MemberDeclarationSyntax>? keptMembers = null, Func<MemberDeclarationSyntax, string>? forwarderText = null)
     {
         var sourceText = await sourceDocument.GetTextAsync(cancellationToken);
         var texts = new Dictionary<DocumentId, SourceText> { [sourceDocument.Id] = sourceText };
@@ -4442,7 +4449,51 @@ public class MemberRefactoringEngine
         // Refuse BEFORE building or validating any change set - a bad "new" would otherwise surface
         // only as one undifferentiated CS7036 per fixed-up site from the compile gate.
         await EnsureNewFixupsAreConstructibleAsync(callerFixupSources.Values, existingTargetDoc, existingTargetClassNode, cancellationToken);
-        var unresolvedRows = rows.Where(r => r.Status != CallSiteStatus.Valid && !resolvedReceivers.ContainsKey((r.FilePath, r.Line))).ToList();
+        // Remove mode only: a bare same-class call to a moved member (`M(x)` in a remaining member of the source class) cannot
+        // resolve once M leaves. Exactly one non-static instance field/property of the target type in the source class is
+        // rewritten to `this.<field>.M(x)` (reported in RewrittenCallSites); several are refused as unresolved with the candidates
+        // named; none, or a static enclosing member, leaves the row as it was. Rows are selected by call shape (a bare identifier invocation), not by status.
+        var sameClassRewriteRecords = new List<RewrittenCallSite>();
+        var sameClassRewriteEdits = new List<(DocumentId DocumentId, TextChange Change)>();
+        var sameClassRewriteKeys = new HashSet<(FilePathWrapper FilePath, int Line)>();
+        var sameClassAmbiguousReasons = new Dictionary<(FilePathWrapper FilePath, int Line), string>();
+        if (oldMember == MoveMemberOldMember.remove && rows.Count > 0)
+        {
+            var sameClassDocument = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).First()!;
+            var sameClassRoot = (CompilationUnitSyntax)(await sameClassDocument.GetSyntaxRootAsync(cancellationToken))!;
+            var sameClassText = await sameClassDocument.GetTextAsync(cancellationToken);
+            var sameClassModel = await sameClassDocument.GetSemanticModelAsync(cancellationToken);
+            var sameClassNode = sameClassRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().First(c => c.Identifier.Text == className);
+            var receiverCandidates = sameClassModel?.GetDeclaredSymbol(sameClassNode, cancellationToken) is { } sameClassSymbol
+                ? sameClassSymbol.GetMembers().Where(m => !m.IsStatic && !m.IsImplicitlyDeclared && (m is IFieldSymbol || m is IPropertySymbol) && (m is IFieldSymbol f ? f.Type : ((IPropertySymbol)m).Type).Name == targetClassName).Select(m => m.Name).ToList()
+                : new List<string>();
+            foreach (var row in rows.Where(r => (r.Status == CallSiteStatus.NoCandidateIntroducible || r.Status == CallSiteStatus.Valid || r.Status == CallSiteStatus.Ambiguous) && solution.GetDocumentIdsWithFilePath(r.FilePath).Contains(sameClassDocument.Id)))
+            {
+                var invocation = sameClassRoot.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(inv => inv.Expression is IdentifierNameSyntax callName && memberNames.Contains(callName.Identifier.Text) && callName.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == row.Line);
+                if (invocation == null
+                    || invocation.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault() != sameClassNode
+                    || invocation.Ancestors().OfType<MemberDeclarationSyntax>().FirstOrDefault()?.Modifiers.Any(SyntaxKind.StaticKeyword) == true
+                    || membersToMove.Any(m => m.Span.Contains(invocation.Span)))
+                {
+                    continue;
+                }
+
+                var invocationText = sameClassText.ToString(invocation.Span);
+                if (receiverCandidates.Count == 1)
+                {
+                    var rewrittenText = $"this.{receiverCandidates[0]}.{invocationText}";
+                    sameClassRewriteEdits.Add((sameClassDocument.Id, new TextChange(invocation.Span, rewrittenText)));
+                    sameClassRewriteRecords.Add(new RewrittenCallSite(sameClassDocument.FilePath!, row.Line, invocationText, rewrittenText));
+                    sameClassRewriteKeys.Add((row.FilePath, row.Line));
+                }
+                else if (receiverCandidates.Count > 1)
+                {
+                    sameClassAmbiguousReasons[(row.FilePath, row.Line)] = $"Bare same-class call; multiple candidate receivers: {string.Join(", ", receiverCandidates)}; specify callSiteFixups.";
+                }
+            }
+        }
+
+        var unresolvedRows = rows.Where(r => sameClassAmbiguousReasons.ContainsKey((r.FilePath, r.Line)) || (r.Status != CallSiteStatus.Valid && !resolvedReceivers.ContainsKey((r.FilePath, r.Line)) && !sameClassRewriteKeys.Contains((r.FilePath, r.Line)))).Select(r => sameClassAmbiguousReasons.TryGetValue((r.FilePath, r.Line), out var ambiguousReason) ? r with { BlockReason = ambiguousReason } : r).ToList();
         var skippedCallSites = new List<SkippedCallSite>();
         List<CallSiteLedgerEntry>? pendingLedgerEntries = null;
         string? pendingLedgerOperationName = null;
@@ -4467,6 +4518,17 @@ public class MemberRefactoringEngine
         // expression's own span is replaced, against each document's ORIGINAL text, so the rest of every caller file
         // (and the source/target files) stays byte-identical.
         var editsByDocument = new Dictionary<DocumentId, List<TextChange>>();
+        foreach (var (rewriteDocumentId, rewriteChange) in sameClassRewriteEdits)
+        {
+            if (!editsByDocument.TryGetValue(rewriteDocumentId, out var rewriteDocEdits))
+            {
+                rewriteDocEdits = new List<TextChange>();
+                editsByDocument[rewriteDocumentId] = rewriteDocEdits;
+            }
+
+            rewriteDocEdits.Add(rewriteChange);
+        }
+
         var fixupSites = new List<(DocumentId DocumentId, string DocumentPath, string ReportPath, int Position, string SiteKey)>();
         foreach (var group in resolvedReceivers.GroupBy(kv => kv.Key.FilePath, StringComparer.OrdinalIgnoreCase))
         {
@@ -4711,7 +4773,7 @@ public class MemberRefactoringEngine
             appliedFixups.Add(new AppliedCallSiteFixup(site.ReportPath, finalLine, source.Key, source.Value));
         }
 
-        return new MoveMemberResult(result, skippedCallSites, pendingLedgerEntries, pendingLedgerOperationName, appliedFixups, AppliedEdits: appliedEdits, Notes: notes.Count > 0 ? notes : null);
+        return new MoveMemberResult(result, skippedCallSites, pendingLedgerEntries, pendingLedgerOperationName, appliedFixups, AppliedEdits: appliedEdits, Notes: notes.Count > 0 ? notes : null, RewrittenCallSites: sameClassRewriteRecords);
     }
 
     /// <summary>

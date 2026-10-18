@@ -448,6 +448,27 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
+    // --- MoveMemberTool (same-class rewrite Finding) ---
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_InstanceSingleField_BareSameClassCall_ReportsRewriteFinding()
+    {
+        const string original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x)\n    {\n        return x + 1;\n    }\n\n    public int Caller()\n    {\n        return Foo(2);\n    }\n}\n";
+        var (dir, sourcePath) = SetPathAwareSolution("MoveMember_RewriteFinding_SingleField", ("Refactor.cs", original), ("Target.cs", "public class Target\n{\n}\n"));
+        try
+        {
+            var result = await _advTools.MoveMemberTool(reason: "test message", sourcePath, "Source", ["Foo"], "Target");
+            Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+            var text = await ReadCommittedRefactorText();
+            Assert.That(text, Does.Contain("return this._impl.Foo(2);"));
+            Assert.That(result.Findings.Any(f => f.Message.StartsWith("Rewrote same-class call Foo(2) -> this._impl.Foo(2) (", StringComparison.Ordinal)), Is.True, "A Caution finding must report the rewrite with old text, new text and location.");
+        }
+        finally
+        {
+            System.IO.File.Delete(sourcePath);
+        }
+    }
+
     // --- MoveMemberTool (fieldMap validation) ---
     [Test]
     [Category("AdvancedRefactoringTools")]
