@@ -143,6 +143,7 @@ public class CodeGenerationEngineFormatCharacterizationTests
                 "public class C : IThing",
                 "{",
                 "    public int Use() { return 1; }",
+                "",
                 "    public void Run(int x)",
                 "    {",
                 "        throw new NotImplementedException();",

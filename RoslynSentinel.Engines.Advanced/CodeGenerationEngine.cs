@@ -953,7 +953,6 @@ public class CodeGenerationEngine
             };
         }
 
-        var eol = EolUtilities.DetectNormalizableEol(await document.GetTextAsync(cancellationToken));
         var newMembers = new List<MemberDeclarationSyntax>();
         foreach (var member in unimplemented)
         {
@@ -972,10 +971,10 @@ public class CodeGenerationEngine
                         SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("NotImplementedException"))
                             .WithArgumentList(SyntaxFactory.ArgumentList())));
 
-                MemberDeclarationSyntax methodDecl = RoslynFormattingHelper.NormalizeNewChildWhitespace(SyntaxFactory.MethodDeclaration(returnType, method.Name)
+                MemberDeclarationSyntax methodDecl = SyntaxFactory.MethodDeclaration(returnType, method.Name)
                     .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
                     .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(methodParams)))
-                    .WithBody(body), eol);
+                    .WithBody(body);
                 newMembers.Add(methodDecl.WithAdditionalAnnotations(Formatter.Annotation));
             }
             else if (member is IPropertySymbol prop)
@@ -997,9 +996,9 @@ public class CodeGenerationEngine
                     accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithBody(throwBody));
                 }
 
-                MemberDeclarationSyntax propDecl = RoslynFormattingHelper.NormalizeNewChildWhitespace(SyntaxFactory.PropertyDeclaration(propType, prop.Name)
+                MemberDeclarationSyntax propDecl = SyntaxFactory.PropertyDeclaration(propType, prop.Name)
                     .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
-                    .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))), eol);
+                    .WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)));
                 newMembers.Add(propDecl.WithAdditionalAnnotations(Formatter.Annotation));
             }
         }

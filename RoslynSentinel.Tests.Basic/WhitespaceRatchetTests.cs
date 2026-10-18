@@ -60,7 +60,6 @@ public class WhitespaceRatchetTests
         ["RoslynSentinel.Engines.Advanced/ApiGenerationEngine.cs"] = 1,
         ["RoslynSentinel.Engines.Advanced/AsyncBatchEngine.cs"] = 2,
         ["RoslynSentinel.Engines.Advanced/AsyncOptimizationEngine.cs"] = 12,
-        ["RoslynSentinel.Engines.Advanced/CodeGenerationEngine.cs"] = 2,
         ["RoslynSentinel.Engines.Advanced/CodeHealingEngine.cs"] = 3,
         ["RoslynSentinel.Engines.Advanced/CodeStyleEngine.cs"] = 6,
         ["RoslynSentinel.Engines.Advanced/DocumentationEngine.cs"] = 2,
