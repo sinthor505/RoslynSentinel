@@ -74,6 +74,18 @@ produces the wrong conclusions about what these models are actually capable of. 
 test-suite redesign above is the concrete mechanism for this relaxation — once "unrelated code"
 is tested by behavior rather than text, formatting drift stops being a scoring criterion at all.
 
-**Status**: design only, not implemented. User is fixing the `Member(operation:replace)`
-blank-line-drop bug in a separate session first; this redesign + the prompt wording changes are
-tracked as follow-up work, likely also a separate implementation session.
+**Status**: IMPLEMENTED 2026-09-07, commit `9465e9b`. New files `DotnetTestRunner.cs` (shells out
+to `dotnet test`, regex-parses the console summary line, does not throw on nonzero exit — only on
+an unparseable summary) and `UnrelatedCodeEquivalenceAssert.cs` (the `AreEquivalent` fallback,
+used for `OrderPricingCalculator.DescribeOrder`/`SummarizeShipping`, which have no front door).
+`WholeFileRewriteAgentTests`/`PlanImplementVerifyAgentTests` materialize
+`ModifiedAndUnrelatedMemberTestsFileContent` (no front door needed, target names stable);
+`OrderPricingRefactorAgentTests`/`Chain*.cs` materialize `CheckoutFrontDoorTestsFileContent`
+against `OrderCheckout.GetFinalPrice` (the front door, since `CalcDisc` gets renamed to
+`CalculateDiscountedTotal` by the fix itself). Both fixtures' `[SetUp]` capture a `dotnet test`
+baseline `(Passed, Failed, Total)` before the agent runs; post-run assertion checks `Failed == 0`
+and `Total == baseline.Total` (closes the delete/skip-test loophole). Live-verified against
+qwen3.5-9b-coder on the .113 host: both `Model_FixesWholeFileRewriteBug_UsingExistingHelperPattern`
+and `Model_AppliesThreeChainedRefactors` passed end-to-end with the new assertion flow (not just
+the `Assert.Ignore` skip path). The prompt-wording relaxation ("byte-for-byte unchanged" language)
+mentioned above was NOT part of this session's change — still open follow-up work.

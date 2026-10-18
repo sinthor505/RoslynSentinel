@@ -57,76 +57,14 @@ Ideas and low priority.
 - [OPEN] Model tool-choice gap: `ApplyDiff` used instead of `ChangeAccessibility` for `ReplaceBlockFormatted`, 67.5% of all ApplyDiff failures (2026-09-05) - unactioned - [doc](model_eval_replaceblockformatted_accessibility_cost_2026_09_05.md)
 - [OPEN] Server-side telemetry/metrics for tool call counts and error rates (2026-09-05) - idea, not implemented - [doc](ideas/server_telemetry_idea.md)
 
-### Needs owner review (audit verdict UNSURE, original text left intact)
+### Needs owner review (audit verdict UNSURE)
 
-These four entries could not be verified or refuted from source on 2026-10-17. They stay verbatim until an owner decides to close, shrink or re-scope them.
+Could not be verified or refuted from source on 2026-10-17; an owner decides to close, shrink or re-scope. Full text lives in the linked doc.
 
-### `SubAgentEval` child's full `RunTest` reported 1 failed test (2657 passed) in the live smoke run - unexplained
-
-**Found:** 2026-10-01, live `SubAgentEval` smoke run (run `20261001-222319-107-295d110c`). The same
-suite in the main checkout has 0 failures. `SubAgentEvalResult` carries counts only, so the failing
-test's name was not captured. Candidates: a test that assumes the repo root has a `.git` directory
-(a worktree has a `.git` file), a path-length issue under `RoslynSentinel-TestRuns\SubAgent\<runId>\subagent\Worktree`,
-or a flake from running alongside other sessions. Next step: re-run `SubAgentEval` (or `RunTest` in a
-manual worktree at that path) and capture which test fails; consider adding the first failing test
-name to `SubAgentEvalResult` so this is visible without digging.
-
-### `MoveMember`'s ledger `TryOpen` path still unexercised with entries actually present at apply time
-
-_Note 2026-10-17: "same session as above" referred to the `"new"` sentinel entry, now closed (see CLOSED.md, found during end-to-end MoveMember testing)._
-
-**Found:** 2026-09-27, same session as above. See
-`docs/current/blockers/resolved/blocking_error_movemember_ledger_discarded_on_apply.md` (now FIXED —
-the tool-layer discard bug is resolved) for full context. Every real (non-dry-run) `MoveMember` apply
-attempted so far either had zero unresolved call sites by the time of apply (this session's real
-apply resolved all 14 via `callSiteFixups` first) or was rejected before reaching the ledger-open
-check. `((IScopedOperationLedger)_workspaceManager).TryOpen(...)` at
-`AdvancedRefactoringTools.cs`'s `MoveMember` has therefore still never actually run.
-
-**Not fixed / not yet exercised:** construct a real apply where `autoResolveCallSites` is true,
-`callSiteFixups` deliberately covers fewer than all unresolved sites, and the apply still succeeds
-overall (i.e. the *resolved* sites compile, leaving only the *deliberately-unfixed* sites as
-`PendingLedgerEntries`) — confirm the ledger actually opens, blocks an unrelated write, and can be
-resolved by a follow-up `callSiteFixups`-carrying retry.
-
-### `Member(replace)` sub-findings left open by the blank-line/newline fix (2026-09-18)
-
-Split out of `blocking_error_member_replace_strips_blank_line_between_adjacent_members.md` when that
-doc's primary symptom (inserted members losing separating blank lines/newlines) was archived as
-fixed via `RoslynFormattingHelper.InsertMemberFormattedAsync`. Two sub-findings from that doc's repro
-were explicitly left unresolved and are carried forward here rather than lost with the archive:
-
-1. **Silent no-op on `Member(replace)`**: a `replace` call against `ServerBuildInfo`'s constructor
-   (`containerName`/`memberName`/`contextSnippet` targeting) returned `"status":"applied"`, but an
-   immediate re-read showed no file content had changed at all (confirmed via the harness's own
-   "file unchanged since your last Read" signal). Not traced to source - open question is whether
-   `contextSnippet` matching silently matched nothing, or the write was computed correctly but never
-   persisted. Needs someone to trace the `Member` write path (`ValidateAndApplyHelper.ValidateAndApplyAsync`
-   -> `ApplyProposedChangesAsync`) with a minimal repro.
-2. **`CS0542` on top-level-type addressing**: `Member(replace, containerName: <namespace>,
-   memberName: <TopLevelClassName>, ...)` - i.e. addressing a top-level class by its containing
-   namespace instead of a containing type - produced `'X': member names cannot be the same as their
-   enclosing type` instead of replacing the class body. Not disambiguated whether this addressing
-   combination is meant to be supported at all, or whether it's a genuine insertion/targeting bug
-   that nests new content into the class instead of replacing it wholesale.
-
-### `docCommentId` parameter audit across all tools — not started
-
-**Found:** 2026-09-06, see [docCommentId_description_gap.md](./docCommentId_description_gap.md). `RenameSymbol`'s description
-doesn't say how to obtain `docCommentId` (via `LocateSymbol`); confirmed as the direct cause of a
-model fabricating a placeholder ID and getting rejected before self-correcting.
-
-**Scope (two parts):**
-1. Audit every tool parameter named `docCommentId` (`grep -rn docCommentId` across `[Description]`
-   attributes/tool method signatures) and add "obtain this via `LocateSymbol`" (or equivalent) to
-   each description that's missing it.
-2. While auditing, identify every tool that takes `docCommentId` *and* also has other mandatory
-   parameters (e.g. `filePath`) — flag these separately, since requiring both a resolved symbol ID
-   and a hand-supplied file path is a second place a model can supply mismatched/fabricated values
-   (the file path could point somewhere the docCommentId doesn't actually live), and the
-   description should make clear which one is authoritative for locating the target.
-
-**Not started** — deferred to its own session per the original memory's plan.
+- [OPEN] `SubAgentEval` child full `RunTest` reported 1 failed test (2657 passed), unexplained (2026-10-01) - failing test name not captured - [doc](issues/issue_tool_hygiene_open_items.md)
+- [OPEN] `MoveMember` ledger `TryOpen` path never exercised with entries present at apply time (2026-09-27) - [doc](issues/issue_movemember_open_followups.md)
+- [OPEN] `Member(replace)` sub-findings: silent no-op on a constructor replace, and CS0542 when a top-level type is addressed by namespace (2026-09-18) - [doc](member_replace_drops_leading_blank_line_and_verify_gap.md)
+- [OPEN] `docCommentId` parameter audit across all tools (2026-09-06) - not started; add "obtain via LocateSymbol" to each description and flag tools that also require `filePath` - [doc](docCommentId_description_gap.md)
 
 ## By area
 

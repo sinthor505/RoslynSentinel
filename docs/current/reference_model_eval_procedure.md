@@ -8,6 +8,28 @@ metadata:
   modified: 2026-09-05T11:06:43.811Z
 ---
 
+## Run-shape vocabulary (defined 2026-09-12; these terms were in use but never written down)
+
+- **Single** — one test, once.
+- **Batch** — same test N times for a rate rather than an anecdote. Use `-Repeats N`; never
+  hand-roll a `dotnet test` loop (build race, see below).
+- **Ladder / rung** — a *shape* of testing, not a specific test: any ordered sequence of tests where
+  each rung is strictly harder than the last. Climbed to find where a model stops succeeding; **the
+  rung it fails at is that model's capability ceiling**, and the ceiling is the result being sought
+  (not per-rung pass/fail). Each rung has its own results directory, so `Parse-AgentLog.ps1` can
+  take a whole rung folder.
+  - Currently `Model_Applies{Three,Four,…,Ten}ChainedRefactors` is the main instance; more ladders
+    are expected. Don't assume a ladder means that family — identify the rung sequence from the
+    tests actually being run.
+- **Sweep** — a parameterised matrix, distinct from a ladder: `Model_SizeThresholdSweep` runs
+  `ROSLYNSENTINEL_MODELEVAL_SIZES` × `ROSLYNSENTINEL_MODELEVAL_REPEATS`, asserts no pass/fail
+  itself, and appends one CSV row per run to locate where behavior degrades.
+- **Overnight** — any of the above run unattended and long; the term denotes the *operational mode*,
+  not a shape. Implies: partial results must be durable as they go, row count must be checked
+  against expected on return (a crashed testhost exits 0 and silently drops repeats), and
+  completion must never be inferred from exit code alone.
+
+
 Real-model integration tests live in `RoslynSentinel.Tests.ModelEval`. They drive an actual
 LM Studio server through the real in-process MCP server (same harness pattern as
 `McpTasksHarnessTests.cs`) — no mocking. Tests `Assert.Ignore` (skip, not fail) if
@@ -117,7 +139,7 @@ with the new run's data (`rm -rf _scratchbuild_112/model-eval`).
 
 ## Front-door script: `roslynsentinel-modeleval.ps1` — USE THIS INSTEAD OF A HAND-ROLLED LOOP
 
-Repo-root PowerShell script. Wraps everything above (env vars, `--artifacts-path`, filter
+PowerShell script under `scripts/`. Wraps everything above (env vars, `--artifacts-path`, filter
 syntax) into one command, in the same style as `roslynsentinel-vscode-control.ps1`. **Always
 use this for N-repeat batches** — do not hand-roll a bash/PowerShell `for` loop calling
 `dotnet test` repeatedly. Two distinct build races are in play, and each is solved by a
@@ -135,10 +157,10 @@ different mechanism, not by the same one:
   `--artifacts-path` set correctly, still hits this one because it has no such wait.
 
 ```
-.\roslynsentinel-modeleval.ps1 -HostAddress 112 -Test SizeThreshold -Size 60
-.\roslynsentinel-modeleval.ps1 -HostAddress 113 -Test MinimalGuidance
-.\roslynsentinel-modeleval.ps1 -HostAddress 113 -Test PlanThenExecute -Repeats 5
-.\roslynsentinel-modeleval.ps1 112 SizeThreshold 60          # positional shorthand
+.\scripts\roslynsentinel-modeleval.ps1 -HostAddress 112 -Test SizeThreshold -Size 60
+.\scripts\roslynsentinel-modeleval.ps1 -HostAddress 113 -Test MinimalGuidance
+.\scripts\roslynsentinel-modeleval.ps1 -HostAddress 113 -Test PlanThenExecute -Repeats 5
+.\scripts\roslynsentinel-modeleval.ps1 112 SizeThreshold 60          # positional shorthand
 ```
 
 - `-HostAddress` accepts the `112`/`113` aliases (resolved to their base URLs and to
@@ -180,7 +202,7 @@ terminals) — each gets its own `--artifacts-path` automatically, so they won't
 
 ## Analyzing results afterward: `Parse-AgentLog.ps1`
 
-Once a batch finishes (via the script above or otherwise), use `Parse-AgentLog.ps1` (repo root)
+Once a batch finishes (via the script above or otherwise), use `scripts/Parse-AgentLog.ps1`
 to turn `agent.log` transcripts into structured per-turn objects — reasoning text, tool calls with
 parsed args/results, error counts — instead of manually grepping/reconstructing raw log text. See
 [reference_parse_agent_log_script.md](./reference_parse_agent_log_script.md) for usage and the
@@ -188,3 +210,20 @@ directory-layout edge cases it handles (including `PlanImplementVerify`'s nested
 
 See also [reference_known_failing_tests.md](./reference_known_failing_tests.md) for the harness's
 own known pre-existing test failure.
+
+## PlanStepRunner runs: `scripts/roslynsentinel-planstep.ps1`
+
+Same front-door idea for plan-step runs (PlanStepRunner, not ModelEval tests). `-HostAddress` is a
+mandatory first parameter (`112`/`113` alias or a base URL), `-Model` defaults to
+`qwen/qwen3.6-35b-a3b`. Script defaults: `-TurnCap 40`, `-WallClockCapMinutes 30`
+(`scripts/roslynsentinel-planstep.ps1` param block).
+
+Standing preferences (user, 2026-09-13):
+- **Host:** use `-HostAddress 113` (RTX 4060) by default and do not ask; 112 (GTX 1080) is too slow for
+  complex tasks. Use 112 only when the user asks (to free 113 or to test on weaker hardware). The same
+  default applies to `roslynsentinel-modeleval.ps1`.
+- **Caps:** for large mechanical multi-file steps pass `-TurnCap 60 -WallClockCapMinutes 45`. Evidence:
+  run `20260913-075825-264` step 02 (`02-phase1-types-and-engine-fix`) hit `WallClockCapExceeded` at the
+  30-minute default while the model was still working correctly (clean build at turn 30, just before
+  tests/commit). Complex refactoring steps legitimately need more real time, not just more turns. Use a
+  different value only if the user asks for one for that run.

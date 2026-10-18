@@ -91,3 +91,44 @@ premise: today's brittle text-matching assertions are actively producing wrong c
 model capability, and both the `Member` formatting bug (user fixing separately) and the fixture
 redesign (design written, not yet implemented) are the correct fixes — not further prompt
 engineering.
+
+**2026-09-28 related instances, both FIXED same day:**
+- Doubled-blank-line bug on `Member(addMember, position: "after:X")` - root cause confirmed
+  DIFFERENT mechanism from this file's original dropped-blank-line bug: doubling came from
+  `RoslynFormattingHelper.cs` `InsertMemberFormattedAsync` hand-constructing `[CRLF, CRLF]` trivia
+  on top of trivia the neighboring member already carried (2 separate sites: blankLineBefore ~line
+  254, following-sibling leading trivia ~line 267-270). The original dropped-blank-line bug goes
+  through `ReplaceNodeFormattedAsync`/removal, which reuses `oldNode.GetLeadingTrivia()` instead -
+  confirmed NOT the same root cause despite being the same symptom family. Fixed commit
+  `350cf706ae5577eca5468f613ea312e44d488c21`, tests in
+  `RoslynSentinel.Tests.Battery/MemberInsertAfterEolTests.cs` (4/4, LF+CRLF x middle+last-member).
+  This file's ORIGINAL replace/remove dropped-blank-line bug remains UNFIXED.
+- `Member(replace/addMember)` given multi-member `newMemberSource` gave a misleading "not a valid
+  member declaration" error instead of saying replace/add takes exactly one member. Root cause:
+  `RefactoringEngine.cs`'s `ContainsDiagnostics` check on `ParseMemberDeclaration` ran before any
+  trailing-declaration check. Fixed via new `DetectMultipleMemberDeclarations` helper, wired into
+  replace/add/insert-after/insert-before. Commit `b4e6dd4c3612140e2a1f3faf088db98d6fd9aa92`, tests
+  in `RoslynSentinel.Tests.Battery/MemberSingleDeclarationTests.cs` (5/5). The
+  `newMemberSource` `[Description]` wording update in
+  `RoslynSentinel.Server.Basic/RefactoringStructuralTools.cs` has since landed (verified 2026-10-18); it was
+  left uncommitted at first because that file was entangled with unrelated work (a using-statement
+  removal) from a different task.
+
+## Sub-findings left open by the blank-line/newline fix (2026-09-18, moved from TODO.md 2026-10-18)
+
+Split out of `blocking_error_member_replace_strips_blank_line_between_adjacent_members.md` when its
+primary symptom (inserted members losing separating blank lines/newlines) was archived as fixed via
+`RoslynFormattingHelper.InsertMemberFormattedAsync`. Two sub-findings from that repro were left
+unresolved:
+
+1. **Silent no-op on `Member(replace)`**: a `replace` call against `ServerBuildInfo`'s constructor
+   (`containerName`/`memberName`/`contextSnippet` targeting) returned `"status":"applied"`, but an
+   immediate re-read showed no file content had changed (confirmed via the harness's "file unchanged
+   since your last Read" signal). Not traced to source: either `contextSnippet` matching silently
+   matched nothing, or the write was computed correctly but never persisted. Trace the `Member` write
+   path (`ValidateAndApplyHelper.ValidateAndApplyAsync` -> `ApplyProposedChangesAsync`) with a minimal repro.
+2. **`CS0542` on top-level-type addressing**: `Member(replace, containerName: <namespace>,
+   memberName: <TopLevelClassName>, ...)` - addressing a top-level class by its containing namespace -
+   produced `'X': member names cannot be the same as their enclosing type` instead of replacing the
+   class body. Not disambiguated whether this addressing is meant to be supported, or is a targeting
+   bug that nests new content into the class instead of replacing it wholesale.

@@ -25,3 +25,13 @@ add a test that forces an exception path and asserts no exception text is expose
 ### Battery tests with bare relative file names leak files into the working directory (2026-10-17) - not started
 
 Found fixing BatteryTwentyFourTests.MethodSignature_Remove_LastParameter_UpdatesCallSite: a stale CRLF Order.cs in the test bin dir (left by another test) was read by the chokepoint's disk pre-image check (PersistentWorkspaceManager ~:1582) and tripped EolChangeGuard. Only BatteryTwentyFourTests got a Setup/TearDown cleanup; other battery classes using bare names can leak the same way. Consider a shared test-base cleanup.
+
+### `SubAgentEval` child's full `RunTest` reported 1 failed test (2657 passed) - unexplained (2026-10-01; moved from TODO.md 2026-10-18)
+
+Found in the live `SubAgentEval` smoke run (run `20261001-222319-107-295d110c`). The same suite in the
+main checkout has 0 failures. `SubAgentEvalResult` carries counts only, so the failing test's name was
+not captured. Candidates: a test that assumes the repo root has a `.git` directory (a worktree has a
+`.git` file), a path-length issue under `RoslynSentinel-TestRuns\SubAgent\<runId>\subagent\Worktree`, or
+a flake from running alongside other sessions. Next step: re-run `SubAgentEval` (or `RunTest` in a
+manual worktree at that path) and capture which test fails; consider adding the first failing test name
+to `SubAgentEvalResult` so this is visible without digging. Audit verdict UNSURE (not verifiable from source).

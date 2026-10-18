@@ -1,6 +1,6 @@
 ---
 name: reference_parse_agent_log_script
-description: "Parse-AgentLog.ps1 (repo root) turns agent.log transcripts into structured per-turn PowerShell/JSON objects for cross-run analysis — use instead of manual grep/reconstruction"
+description: "scripts/Parse-AgentLog.ps1 turns agent.log transcripts into structured per-turn PowerShell/JSON objects for cross-run analysis — use instead of manual grep/reconstruction"
 metadata:
   node_type: memory
   type: reference
@@ -8,7 +8,7 @@ metadata:
   modified: 2026-09-05T11:06:36.509Z
 ---
 
-`Parse-AgentLog.ps1` (repo root, committed `861cd10`) parses one or many `agent.log` files (the
+`scripts/Parse-AgentLog.ps1` (committed `861cd10`) parses one or many `agent.log` files (the
 `FlushingFileLoggerProvider` transcript every model-eval run produces — see
 [reference_model_eval_procedure.md](./reference_model_eval_procedure.md)) into structured objects: per-run `ToolsExposedCount`,
 `UserPrompt`, and `Turns[]`, each turn carrying `ReasoningText`, `ContentText`, `ToolCallCount`,
@@ -31,15 +31,15 @@ per turn."
 
 ```powershell
 # One run
-.\Parse-AgentLog.ps1 -LogPath .\ModelTestingResults\113\Model_AppliesSevenChainedRefactors\20260905-104034-728\agent.log
+.\scripts\Parse-AgentLog.ps1 -LogPath .\ModelTestingResults\113\Model_AppliesSevenChainedRefactors\20260905-104034-728\agent.log
 
 # Every run under a rung's results directory (recursive) — piped analysis
-.\Parse-AgentLog.ps1 -LogPath .\ModelTestingResults\113\Model_AppliesSevenChainedRefactors | `
+.\scripts\Parse-AgentLog.ps1 -LogPath .\ModelTestingResults\113\Model_AppliesSevenChainedRefactors | `
     ForEach-Object { $_.Turns.ToolCalls } | Where-Object ToolName -eq 'ApplyDiff' | `
     Select-Object -ExpandProperty Args | Select-Object -ExpandProperty reason
 
 # Cache a whole batch as JSON for repeated offline querying without re-parsing
-.\Parse-AgentLog.ps1 -LogPath .\ModelTestingResults\113 -OutDir .\ModelTestingResults\_parsed
+.\scripts\Parse-AgentLog.ps1 -LogPath .\ModelTestingResults\113 -OutDir .\ModelTestingResults\_parsed
 ```
 
 `-LogPath` accepts a single file or a directory (searched recursively for `agent.log`). `-AsJson`
@@ -79,3 +79,17 @@ tree, 993 runs, before committing)
 See also [reference_model_eval_procedure.md](./reference_model_eval_procedure.md) for the
 front-door `roslynsentinel-modeleval.ps1` script this pairs with (that one *runs* the batches; this
 one *analyzes* the resulting logs).
+
+## Known gap: drops ContentText on turns split across tool-call/response boundaries
+
+Found reviewing project_planstep_run402_review (PlanStepRunner run 20260910-083738-402, not a model-eval batch, but
+same `agent.log` format). When a turn logs only tool calls under "Turn N: calling X" and the
+"Turn N: model responded..." line for that *same* N is emitted later — as happens whenever
+`ToolCallCount` and reasoning/content stream back in a follow-up log line still tagged with the
+original turn number — naive consumption of `$run.Turns` (one record expected per turn number)
+undercounts turns and silently drops `ContentText` for turns that do have it. Manual `grep`/`tail`
+on the raw log was required to recover the model's final natural-language conclusions in that
+review; the parsed `-AsJson` output was not trustworthy standalone without the raw log as backup.
+Not yet fixed — worth patching the merge logic (key by turn number but append/merge rather than
+overwrite-or-skip) or at minimum documenting the caveat so future consumers don't trust
+`ContentText` being present as a promise.

@@ -107,3 +107,32 @@ quality the way fully disabling thinking would.
    reasonable resilience improvement so one corrupted turn doesn't fail an entire ladder run.
 4. Periodically re-check lmstudio-ai/lmstudio-bug-tracker#1592 and #827 for a real fix landing in a
    future LM Studio release, since disabling thinking is a workaround, not a resolution.
+
+## Preserve Thinking ON — confirmed live 2026-09-08
+
+User enabled "Preserve Thinking" and, in the same overnight/morning window, saw both: (1) strong
+non-infra pass rates (the 2026-09-08 whole-file-write gating overnight result — 26/26 on
+`PlanImplementVerify` excluding infra errors) and (2) a concretely observed case of correct
+cross-turn continuity — `Model_AppliesSevenChainedRefactors` run `20260908-191317-977`
+(qwen3.6-35b on .113): turn 13 read back `ExtractMembers`' output; turn 14's reasoning correctly
+referenced that turn-13 result verbatim ("The `ExtractMembers` tool extracted all members... but
+the task requires only `CalculateDiscountedTotal`") and repaired it with a precise `ApplyUnifiedDiff`
+call rather than losing track of what it had just done. This is exactly the continuity mechanism
+described in the "Possible alternate/additional fix" section above, now observed working rather
+than theorized. Not a controlled A/B (thinking preservation wasn't toggled off in the same batch
+for comparison), but consistent with and reinforcing the theory. User's framing: without reasoning
+chain preserved across turns, Qwen3.6 "completely forgets what it did in the last turn" — this run
+is a concrete counterexample with the setting on.
+
+**Open sub-theory (user, 2026-09-08, unconfirmed)**: even with Preserve Thinking ON, the model may
+not have true continuity of "having reasoned" — it may instead treat the prior turn's preserved
+`<think>` block as flat re-read context and re-derive conclusions from scratch each turn, rather
+than actually recalling its own prior reasoning process. Functionally near-indistinguishable from
+true continuity in the common case (both predict turn 14 correctly referencing turn 13's result,
+which is what was observed), so the `20260908-191317-977` transcript does NOT distinguish between
+these two explanations. This sub-theory would predict different failure modes than plain
+context-loss: inconsistent conclusions if the model re-derives differently from the same preserved
+block on a later turn, or attention dilution as preserved-thinking history grows long (would echo
+the granite-4.2-8b schema-size finding, but for context length
+instead of tool count). Not yet tested — would need a case where re-reasoning from flat context
+and true recall would predict different outputs.

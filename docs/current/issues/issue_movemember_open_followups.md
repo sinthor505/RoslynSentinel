@@ -27,3 +27,15 @@ These came out of the fix in 4dedc78, a23c581, 4aa2dc2 and 389ae1b. The details 
   - Q2a: if `ValidateAndApplyAsync` itself writes then throws, that project's ChangeId is lost (per-project try/catch only keeps earlier projects').
   - Q2a: no multi-project solution-scope apply test and no `partially_applied`/all-rejected test (no natural trigger found for a rejected project).
   - Q2a: `QualifyCrefs` tool description does not mention `changeId`s (one per project, revertible with `UndoLastApply`) or the statuses `dry_run_ok`, `applied`, `partially_applied`, `no_changes`; add one sentence (fold into Q2b).
+
+### `MoveMember`'s ledger `TryOpen` path still unexercised with entries present at apply time (2026-09-27; moved from TODO.md 2026-10-18)
+
+See `blockers/resolved/blocking_error_movemember_ledger_discarded_on_apply.md` (FIXED; the tool-layer
+discard bug is resolved). Every real (non-dry-run) `MoveMember` apply so far either had zero unresolved
+call sites at apply time (the real apply resolved all 14 via `callSiteFixups` first) or was rejected
+before the ledger-open check, so `((IScopedOperationLedger)_workspaceManager).TryOpen(...)` in
+`AdvancedRefactoringTools`'s `MoveMember` has never actually run. **Not yet exercised:** a real apply
+where `autoResolveCallSites` is true, `callSiteFixups` deliberately covers fewer than all unresolved
+sites, and the apply still succeeds overall (the resolved sites compile, leaving only the
+deliberately-unfixed sites as `PendingLedgerEntries`) - confirm the ledger opens, blocks an unrelated
+write, and can be resolved by a follow-up `callSiteFixups`-carrying retry. Audit verdict UNSURE.
