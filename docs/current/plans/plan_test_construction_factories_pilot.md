@@ -55,8 +55,19 @@ Field renames can follow later purely for readability (`RenameSymbol`, one call 
 - If declined: fall back to `implementer-sweep` batches of `ReplaceSnippet`, which is over tier limits for
   most classes; report rather than brute-force.
 
-### Step 1 - Survey construction sites in Tests.Tools.Basic
-- Dispatch `explore-sonnet`. Use `Search(mode: constructor/references)`, not Grep.
+### Step 1 - Survey construction sites in Tests.Tools.Basic - DONE 2026-10-17
+- Result: 766 sites in 62 files, 49 constructed types (earlier count said 719; not reconciled). 336 sites
+  are in 32 `BuildTools`-style helpers, 199 in `[SetUp]`, 230 in test methods. CSV (766 rows):
+  `.claude/handoff/ctor_sites_tests_tools_basic.csv` (local-only; regenerate with `Search`).
+- Findings that shape Step 2: most classes have one dominant shape (e.g. `PersistentWorkspaceManager[logger]`
+  103, `SymbolNavigationEngine[wm,logger]` 71, `DiffEngine[]` 64, `ValidationEngine[wm,diff,logger]` 59,
+  `SentinelConfiguration[]` 43). 513 sites take a workspace manager, and in 86 of 105 methods two or more
+  constructions must share one manager, so factories take it as a parameter typed `IWorkspaceManager`
+  (also satisfies the `ISolutionProvider` ctors). 3 sites use object initializers and will be skipped
+  (`GitToolsSmokeTests.cs:44`, `DocumentationToolsTests.cs:32`, `SearchModeTests.cs:71`). 23 files build
+  10+ classes and hold 69% of sites. 15 `BuildTools` helpers share the 15-arg `WorkspaceTools` plus
+  `WorkspaceReadNavigationImpl` shape, so one `TestTools.WorkspaceTools(wm)` covers them.
+- Original brief: dispatch `explore-sonnet`. Use `Search(mode: constructor/references)`, not Grep.
 - Output: a deduped CSV in the scratchpad: class, file, line, arity, argument kinds (field, local,
   `new`, fake, literal), enclosing construct (field initializer, `[SetUp]`, `BuildTools` helper).
 - Group by (class, argument shape); list the distinct shapes per class and their site counts. Flag
