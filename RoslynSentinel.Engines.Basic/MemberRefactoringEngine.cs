@@ -3383,6 +3383,85 @@ public class MemberRefactoringEngine
     }
 
     /// <summary>
+    /// Refuses oldMember keep-mode requests this slice cannot honour, before any route runs or any write.
+    /// With oldMember remove it only rejects a forwarderReceiver, which would otherwise be a silent no-op.
+    /// </summary>
+    private static void RequireKeepModeEligible(MoveMemberOldMember oldMember, string? forwarderReceiver, IReadOnlyList<MemberDeclarationSyntax> membersToMove, string className, string targetClassName, bool targetIsBaseType, INamedTypeSymbol? classSymbol, SemanticModel? semanticModel, CancellationToken cancellationToken)
+    {
+        if (oldMember == MoveMemberOldMember.remove)
+        {
+            if (forwarderReceiver != null)
+            {
+                throw new ToolInvalidArgumentException("forwarderReceiver needs oldMember keepDelegator or keepAsDeprecatedWrapper. With oldMember remove the source member is deleted and there is no forwarder to receive it. Omit forwarderReceiver or choose a keep mode.");
+            }
+
+            return;
+        }
+
+        if (targetIsBaseType)
+        {
+            throw new ToolTargetIneligibleException($"oldMember '{oldMember}' cannot be used when '{targetClassName}' is a base type of '{className}': the source already inherits the member and a forwarder would hide the base member. Use oldMember remove.");
+        }
+
+        if (membersToMove.Any(m => m is not MethodDeclarationSyntax))
+        {
+            throw new ToolTargetIneligibleException($"oldMember '{oldMember}' supports only methods in this slice; a property, field or nested type was requested. Move methods only, or use oldMember remove.");
+        }
+
+        if (classSymbol != null && classSymbol.DeclaringSyntaxReferences.Length > 1)
+        {
+            throw new ToolTargetIneligibleException($"oldMember '{oldMember}' cannot be used: class '{className}' is partial ({classSymbol.DeclaringSyntaxReferences.Length} declaration parts) and receiver lookup reads one part only. Use oldMember remove, or move from a non-partial class.");
+        }
+
+        foreach (var method in membersToMove.OfType<MethodDeclarationSyntax>())
+        {
+            var methodSymbol = semanticModel?.GetDeclaredSymbol(method, cancellationToken) as IMethodSymbol;
+            if (method.TypeParameterList != null || methodSymbol?.IsGenericMethod == true)
+            {
+                throw new ToolNotImplementedException($"oldMember '{oldMember}' does not support generic method '{method.Identifier.Text}' yet. Use oldMember remove.");
+            }
+
+            if (methodSymbol?.IsExtensionMethod == true)
+            {
+                throw new ToolNotImplementedException($"oldMember '{oldMember}' does not support extension method '{method.Identifier.Text}' yet. Use oldMember remove.");
+            }
+
+            if (methodSymbol != null && (methodSymbol.IsVirtual || methodSymbol.IsAbstract || methodSymbol.IsOverride))
+            {
+                throw new ToolTargetIneligibleException($"oldMember '{oldMember}' cannot forward '{method.Identifier.Text}': it is virtual, abstract or override, and a forwarder would change dispatch. Use oldMember remove.");
+            }
+
+            if (methodSymbol != null && classSymbol != null && ImplementsInterfaceMember(classSymbol, methodSymbol))
+            {
+                throw new ToolTargetIneligibleException($"oldMember '{oldMember}' cannot forward '{method.Identifier.Text}': it implements an interface member. Use oldMember remove.");
+            }
+        }
+
+        if (forwarderReceiver != null && membersToMove.All(IsStaticMember))
+        {
+            throw new ToolInvalidArgumentException("forwarderReceiver applies only to instance moves, and the moved members are static. Omit forwarderReceiver for a static move.");
+        }
+
+        throw new ToolNotImplementedException($"keep modes are not wired for this route yet (oldMember '{oldMember}', target '{targetClassName}'). Use oldMember remove until the keep route ships.");
+    }
+
+    private static bool IsStaticMember(MemberDeclarationSyntax member)
+    {
+        var modifiers = member switch
+        {
+            MethodDeclarationSyntax meth => meth.Modifiers,
+            PropertyDeclarationSyntax prop => prop.Modifiers,
+            FieldDeclarationSyntax field => field.Modifiers,
+            _ => default
+        };
+        return modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword));
+    }
+
+    private static bool ImplementsInterfaceMember(INamedTypeSymbol type, IMethodSymbol method) =>
+        type.AllInterfaces.Any(i => i.GetMembers().OfType<IMethodSymbol>().Any(im =>
+            SymbolEqualityComparer.Default.Equals(type.FindImplementationForInterfaceMember(im), method)));
+
+    /// <summary>
     /// Moves named members from a class into a target class atomically -> one combined change set,
     /// so it validates and writes as a single unit instead of the remove-then-add sequence that
     /// otherwise fails the write-path chokepoint's per-write compiler check (source ends up with
@@ -3400,7 +3479,7 @@ public class MemberRefactoringEngine
     ///  - No existing class named targetClassName: synthesizes a new class (same behavior as the
     ///    former ExtractMembers as=class). STATIC MEMBERS ONLY, same reasoning as above.
     /// </summary>
-    public async Task<MoveMemberResult> MoveMemberAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default, bool autoResolveCallSites = true, Dictionary<string, string>? callSiteFixups = null, IReadOnlyDictionary<string, string>? fieldMap = null)
+    public async Task<MoveMemberResult> MoveMemberAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default, bool autoResolveCallSites = true, Dictionary<string, string>? callSiteFixups = null, IReadOnlyDictionary<string, string>? fieldMap = null, MoveMemberOldMember oldMember = MoveMemberOldMember.remove, string? forwarderReceiver = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -3474,6 +3553,7 @@ public class MemberRefactoringEngine
         var classSymbol = semanticModel?.GetDeclaredSymbol(classNode, cancellationToken) as INamedTypeSymbol;
         var baseType = classSymbol?.BaseType;
         bool targetIsBaseType = baseType != null && baseType.SpecialType != SpecialType.System_Object && baseType.Name == targetClassName;
+        RequireKeepModeEligible(oldMember, forwarderReceiver, membersToMove, className, targetClassName, targetIsBaseType, classSymbol, semanticModel, cancellationToken);
         // Resolved BEFORE RequireNoUnmovedDependencies so that guardrail can tell "must move with
         // this member" apart from "already satisfied by an existing same-name/compatible-type field
         // on the target" -> see RequireNoUnmovedDependencies's own doc comment for why this ordering
