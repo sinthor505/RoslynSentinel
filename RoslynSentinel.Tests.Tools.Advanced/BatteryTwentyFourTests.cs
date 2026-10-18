@@ -735,13 +735,195 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(text, Does.Not.Match("(?<!\r)\n"), "The forwarder must keep the file's CRLF line endings.");
     }
 
+    private (string Dir, string SourcePath) SetPathAwareSolution(string dirName, params (string Name, string Content)[] files)
+    {
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), dirName);
+        if (System.IO.Directory.Exists(dir))
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+        System.IO.Directory.CreateDirectory(dir);
+        var docs = files.Select(f => (f.Name, f.Content, System.IO.Path.Combine(dir, f.Name))).ToArray();
+        foreach (var doc in docs)
+        {
+            System.IO.File.WriteAllText(doc.Item3, doc.Content);
+        }
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", System.IO.Path.Combine(dir, "TestProj.csproj"), docs);
+        _workspaceManager.SetTestSolution(solution);
+        return (dir, System.IO.Path.Combine(dir, "Refactor.cs"));
+    }
+
     [Test]
     [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_InstanceMethod_StillNotImplemented()
+    public async Task MoveMember_KeepDelegator_InstanceToExistingClass_SingleField_LeavesForwarder()
     {
-        const string original = "public class Source\n{\n    private Target _impl = new Target();\n    public int Get() => 1;\n}\n\npublic class Target\n{\n}\n";
+        const string original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
+        const string caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
+        var (dir, sourcePath) = SetPathAwareSolution("MoveMember_KeepDelegator_SingleField", ("Refactor.cs", original), ("Caller.cs", caller));
+        try
+        {
+            var result = await _advTools.MoveMemberTool(reason: "test message", sourcePath, "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+            Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+            var text = await ReadCommittedRefactorText();
+            var sourcePart = text.Substring(0, text.IndexOf("class Target", StringComparison.Ordinal));
+            var targetPart = text.Substring(text.IndexOf("class Target", StringComparison.Ordinal));
+            Assert.That(sourcePart, Does.Contain("public int Foo(int x) => this._impl.Foo(x);"), "The source keeps a forwarder through the single target-typed field.");
+            Assert.That(targetPart, Does.Contain("public int Foo(int x) { return x + 1; }"), "The target holds the full moved method.");
+            Assert.That(await ReadCommittedText("Caller.cs"), Is.EqualTo(caller), "Keep modes leave outside callers untouched.");
+            var diagnostics = await GetCommittedDiagnosticsAsync();
+            Assert.That(diagnostics.Where(d => d.StartsWith("Error", StringComparison.Ordinal)), Is.Empty, "The solution must build after the forwarder is written.");
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_InstanceTwoCandidateFields_NoForwarderReceiver_ReturnsInvalidArgument()
+    {
+        const string original = "public class Source\n{\n    private readonly Target _a = new Target();\n    private readonly Target _b = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
+        var (dir, sourcePath) = SetPathAwareSolution("MoveMember_KeepDelegator_TwoCandidates", ("Refactor.cs", original));
+        try
+        {
+            var result = await _advTools.MoveMemberTool(reason: "test message", sourcePath, "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+            Assert.That(result.IsError, Is.True);
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+            Assert.That(result.ErrorData?.Message, Does.Contain("forwarderReceiver"), "The refusal must name the parameter to pass.");
+            Assert.That(result.ErrorData?.Message, Does.Contain("_a").And.Contain("_b"), "The refusal must list both candidate fields.");
+            Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_InstanceTwoCandidateFields_WithForwarderReceiver_UsesGivenReceiver()
+    {
+        const string original = "public class Source\n{\n    private readonly Target _a = new Target();\n    private readonly Target _b = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
+        const string caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
+        var (dir, sourcePath) = SetPathAwareSolution("MoveMember_KeepDelegator_ForwarderReceiver", ("Refactor.cs", original), ("Caller.cs", caller));
+        try
+        {
+            var result = await _advTools.MoveMemberTool(reason: "test message", sourcePath, "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator, forwarderReceiver: "_b");
+            Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+            var text = await ReadCommittedRefactorText();
+            Assert.That(text, Does.Contain("public int Foo(int x) => this._b.Foo(x);"), "The forwarder must call through the given receiver.");
+            Assert.That(text, Does.Not.Contain("this._a.Foo(x)"), "The other candidate must not be used.");
+            Assert.That(await ReadCommittedText("Caller.cs"), Is.EqualTo(caller), "Keep modes leave outside callers untouched.");
+            var diagnostics = await GetCommittedDiagnosticsAsync();
+            Assert.That(diagnostics.Where(d => d.StartsWith("Error", StringComparison.Ordinal)), Is.Empty, "The solution must build after the forwarder is written.");
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepAsDeprecatedWrapper_InstanceToExistingClass_AddsObsoleteAttribute()
+    {
+        const string original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
+        const string caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
+        var (dir, sourcePath) = SetPathAwareSolution("MoveMember_KeepAsDeprecatedWrapper_Instance", ("Refactor.cs", original), ("Caller.cs", caller));
+        try
+        {
+            var result = await _advTools.MoveMemberTool(reason: "test message", sourcePath, "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper);
+            Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+            var text = await ReadCommittedRefactorText();
+            Assert.That(text, Does.Contain("[global::System.Obsolete(\"Deprecated wrapper: call Target.Foo instead.\", DiagnosticId = \"RSDEPRECATED\")]\n    public int Foo(int x) => this._impl.Foo(x);"), "The Obsolete attribute must precede the forwarder.");
+            Assert.That(await ReadCommittedText("Caller.cs"), Is.EqualTo(caller), "Keep modes leave outside callers untouched.");
+            var diagnostics = await GetCommittedDiagnosticsAsync();
+            Assert.That(diagnostics.Where(d => d.StartsWith("Error", StringComparison.Ordinal)), Is.Empty, "The solution must build with the deprecated wrapper.");
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_InstanceWithFieldMap_RewritesBodyAndLeavesForwarder()
+    {
+        const string original = "public class Source\n{\n    private int _base = 1;\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + _base; }\n}\n\npublic class Target\n{\n    private int _b = 0;\n}\n";
+        var (dir, sourcePath) = SetPathAwareSolution("MoveMember_KeepDelegator_FieldMap", ("Refactor.cs", original));
+        try
+        {
+            var result = await _advTools.MoveMemberTool(reason: "test message", sourcePath, "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator, fieldMap: new Dictionary<string, string> { ["_base"] = "_b" });
+            Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+            var text = await ReadCommittedRefactorText();
+            var sourcePart = text.Substring(0, text.IndexOf("class Target", StringComparison.Ordinal));
+            var targetPart = text.Substring(text.IndexOf("class Target", StringComparison.Ordinal));
+            Assert.That(targetPart, Does.Contain("return x + _b;"), "The moved body must reference the mapped target field.");
+            Assert.That(targetPart, Does.Not.Contain("_base"), "No reference to the source field may remain in the moved body.");
+            Assert.That(sourcePart, Does.Contain("public int Foo(int x) => this._impl.Foo(x);"), "The forwarder is still written beside the mapped move.");
+            Assert.That(sourcePart, Does.Contain("private int _base"), "The source field stays in place.");
+            var diagnostics = await GetCommittedDiagnosticsAsync();
+            Assert.That(diagnostics.Where(d => d.StartsWith("Error", StringComparison.Ordinal)), Is.Empty, "The solution must build after the forwarder is written.");
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_InstanceAutoResolveCallSitesFalse_StillSucceeds()
+    {
+        const string original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
+        const string caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
+        var (dir, sourcePath) = SetPathAwareSolution("MoveMember_KeepDelegator_NoAutoResolve", ("Refactor.cs", original), ("Caller.cs", caller));
+        try
+        {
+            var result = await _advTools.MoveMemberTool(reason: "test message", sourcePath, "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator, autoResolveCallSites: false);
+            Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+            var text = await ReadCommittedRefactorText();
+            Assert.That(text, Does.Contain("public int Foo(int x) => this._impl.Foo(x);"), "The forwarder is written with nothing to resolve.");
+            Assert.That(await ReadCommittedText("Caller.cs"), Is.EqualTo(caller), "Keep modes leave outside callers untouched.");
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_InstanceSameClassBareCall_LeftValid()
+    {
+        const string original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + 1; }\n    public int Bar() => Foo(1);\n}\n\npublic class Target\n{\n}\n";
+        var (dir, sourcePath) = SetPathAwareSolution("MoveMember_KeepDelegator_SameClassBareCall", ("Refactor.cs", original));
+        try
+        {
+            var result = await _advTools.MoveMemberTool(reason: "test message", sourcePath, "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+            Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+            var text = await ReadCommittedRefactorText();
+            var sourcePart = text.Substring(0, text.IndexOf("class Target", StringComparison.Ordinal));
+            Assert.That(sourcePart, Does.Contain("public int Bar() => Foo(1);"), "The same-class bare call is left as written.");
+            Assert.That(sourcePart, Does.Contain("public int Foo(int x) => this._impl.Foo(x);"), "The forwarder keeps the bare call valid.");
+            var diagnostics = await GetCommittedDiagnosticsAsync();
+            Assert.That(diagnostics.Where(d => d.StartsWith("Error", StringComparison.Ordinal)), Is.Empty, "The bare call must still compile through the forwarder.");
+        }
+        finally
+        {
+            System.IO.Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_InstanceToStaticClass_StillNotImplemented()
+    {
+        const string original = "public class Source\n{\n    public int Foo(int x) { return x + 1; }\n}\n\npublic static class Target\n{\n}\n";
         SetMultiFile(("Refactor.cs", original));
-        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented));
         Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");

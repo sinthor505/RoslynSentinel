@@ -3442,10 +3442,6 @@ public class MemberRefactoringEngine
             throw new ToolInvalidArgumentException("forwarderReceiver applies only to instance moves, and the moved members are static. Omit forwarderReceiver for a static move.");
         }
 
-        if (!membersToMove.All(IsStaticMember))
-        {
-            throw new ToolNotImplementedException($"keep modes are not wired for this route yet (oldMember '{oldMember}', target '{targetClassName}'). Use oldMember remove until the keep route ships.");
-        }
     }
 
     private static bool IsStaticMember(MemberDeclarationSyntax member)
@@ -3664,6 +3660,11 @@ public class MemberRefactoringEngine
             // Static target class: the instance methods/properties were verified stateless above, so they move as STATIC
             // members (a static modifier is added to each) and every instance-qualified caller is rewritten to the target type.
             var staticTargetMemberSymbols = membersToMove.Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
+            if (oldMember != MoveMemberOldMember.remove)
+            {
+                throw new ToolNotImplementedException($"keep modes are not wired for instance members moved into static class '{targetClassName}' yet (oldMember '{oldMember}'). Use oldMember remove, or make the members static first.");
+            }
+
             var conversionNotes = new List<string>();
             var moved = await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, staticTargetMemberSymbols, instanceMembersToConvert, conversionNotes, oldMember, cancellationToken);
             return moved with { Notes = conversionNotes };
@@ -3671,7 +3672,12 @@ public class MemberRefactoringEngine
 
         if (nonStaticMembers.Count > 0)
         {
-            if (!autoResolveCallSites)
+            if (oldMember != MoveMemberOldMember.remove && (targetDoc == null || targetClassNode == null))
+            {
+                throw new ToolNotImplementedException($"keep modes are not wired for instance members moved into a new class yet (oldMember '{oldMember}', target '{targetClassName}'). Use oldMember remove, or move into an existing class.");
+            }
+
+            if (!autoResolveCallSites && oldMember == MoveMemberOldMember.remove)
             {
                 var names = string.Join(", ", nonStaticMembers.Select(m => m switch
                 {
@@ -3683,7 +3689,7 @@ public class MemberRefactoringEngine
                 throw new ToolNotFoundException($"Cannot move instance member(s) [{names}] to '{targetClassName}': it is not an existing base class of '{className}'. " + "Moving an instance member elsewhere requires rewriting every call site's receiver expression. Pass " + "autoResolveCallSites:true (the default) to have this resolved automatically where unambiguous, or " + "make the member(s) static first, or move to an existing base class of the source type.");
             }
 
-            return await MoveInstanceMembersAsync(solution, filePath, className, membersToMove, targetClassName, memberNames, targetFilePath, targetDoc, targetClassNode, callSiteFixups, fieldMap, cancellationToken);
+            return await MoveInstanceMembersAsync(solution, filePath, className, membersToMove, targetClassName, memberNames, targetFilePath, targetDoc, targetClassNode, callSiteFixups, fieldMap, oldMember, forwarderReceiver, cancellationToken);
         }
 
         if (targetDoc?.FilePath != null && targetClassNode != null)
@@ -4269,13 +4275,13 @@ public class MemberRefactoringEngine
     /// written into an existing target (empty for a brand-new class file): the data MovePositionMap needs to map
     /// source positions into the trial text.
     /// </summary>
-    public static async Task<(Dictionary<DocumentId, SourceText> Texts, Dictionary<FilePathWrapper, string> NewFiles, List<MovedMemberRegion> MovedRegions)> AddInstanceMoveStructuralEditsAsync(Dictionary<DocumentId, List<TextChange>> editsByDocument, Document sourceDocument, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string targetClassName, Document? targetDocument, ClassDeclarationSyntax? targetClassNode, bool createNewClassFile, CancellationToken cancellationToken)
+    public static async Task<(Dictionary<DocumentId, SourceText> Texts, Dictionary<FilePathWrapper, string> NewFiles, List<MovedMemberRegion> MovedRegions)> AddInstanceMoveStructuralEditsAsync(Dictionary<DocumentId, List<TextChange>> editsByDocument, Document sourceDocument, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string targetClassName, Document? targetDocument, ClassDeclarationSyntax? targetClassNode, bool createNewClassFile, CancellationToken cancellationToken, ISet<MemberDeclarationSyntax>? keptMembers = null, Func<MemberDeclarationSyntax, string>? forwarderText = null)
     {
         var sourceText = await sourceDocument.GetTextAsync(cancellationToken);
         var texts = new Dictionary<DocumentId, SourceText> { [sourceDocument.Id] = sourceText };
         var newFiles = new Dictionary<FilePathWrapper, string>();
         var movedRegions = new List<MovedMemberRegion>();
-        var sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, editsByDocument.TryGetValue(sourceDocument.Id, out var existingSourceEdits) ? existingSourceEdits : new List<TextChange>(), out var insideMovedMemberEdits);
+        var sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, editsByDocument.TryGetValue(sourceDocument.Id, out var existingSourceEdits) ? existingSourceEdits : new List<TextChange>(), keptMembers ?? new HashSet<MemberDeclarationSyntax>(), forwarderText ?? (_ => string.Empty), out var insideMovedMemberEdits);
         editsByDocument[sourceDocument.Id] = sourceEdits;
         if (targetDocument?.FilePath != null && targetClassNode != null)
         {
@@ -4397,9 +4403,14 @@ public class MemberRefactoringEngine
         _ => true
     };
 
-    private async Task<MoveMemberResult> MoveInstanceMembersAsync(Solution solution, FilePathWrapper filePath, string className, List<MemberDeclarationSyntax> membersToMove, string targetClassName, string[] memberNames, FilePathWrapper? targetFilePath, Document? existingTargetDoc, ClassDeclarationSyntax? existingTargetClassNode, Dictionary<string, string>? callSiteFixups, IReadOnlyDictionary<string, string>? fieldMap, CancellationToken cancellationToken)
+    private async Task<MoveMemberResult> MoveInstanceMembersAsync(Solution solution, FilePathWrapper filePath, string className, List<MemberDeclarationSyntax> membersToMove, string targetClassName, string[] memberNames, FilePathWrapper? targetFilePath, Document? existingTargetDoc, ClassDeclarationSyntax? existingTargetClassNode, Dictionary<string, string>? callSiteFixups, IReadOnlyDictionary<string, string>? fieldMap, MoveMemberOldMember oldMember, string? forwarderReceiver, CancellationToken cancellationToken)
     {
         var rows = await PreviewInstanceMoveCallSitesAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken);
+        if (oldMember != MoveMemberOldMember.remove)
+        {
+            // Keep modes leave every caller untouched: no receiver rewrites and no pending ledger entries for caller sites.
+            rows = rows.Take(0).ToList();
+        }
         var fixups = CallSiteFixupMap.Parse(callSiteFixups, _workspaceManager.GetSolutionRoot());
         // Caller-supplied fixups actually applied, keyed by CallerFixupSiteKey(file, original line).
         // Auto-resolved (Valid) rows are deliberately absent: only a caller's own value can be blamed
@@ -4530,7 +4541,8 @@ public class MemberRefactoringEngine
         var crefEdits = await InstanceMoveCrefEdits.CollectRetargetEditsAsync(solution, document.Id, membersToMove, movedSymbols, targetClassName, cancellationToken);
         var notes = new List<string>();
         var retargeted = 0;
-        foreach (var (crefDocId, crefDocEdits) in crefEdits.EditsByDocument)
+        // Keep modes leave callers untouched, so caller cref retargeting is skipped: the forwarder keeps the old name valid.
+        foreach (var (crefDocId, crefDocEdits) in crefEdits.EditsByDocument.Where(_ => oldMember == MoveMemberOldMember.remove))
         {
             if (!editsByDocument.TryGetValue(crefDocId, out var docEdits))
             {
@@ -4637,7 +4649,43 @@ public class MemberRefactoringEngine
             notes.Add("Bare doc-comment crefs in the moved member(s) could not be verified against inherited members of the source class; check any that name one.");
         }
 
-        var (texts, newFiles, _) = await AddInstanceMoveStructuralEditsAsync(editsByDocument, document, root, classNode, membersToMove, targetClassName, existingTargetDoc, existingTargetClassNode, true, cancellationToken);
+        // Keep modes: each moved method is replaced over its Span by a forwarder to <receiver>.M(...). The receiver is
+        // forwarderReceiver when given, else the single non-static field/property of the source class whose type is the target.
+        var keptMembers = new HashSet<MemberDeclarationSyntax>();
+        Func<MemberDeclarationSyntax, string>? forwarderText = null;
+        if (oldMember != MoveMemberOldMember.remove)
+        {
+            var targetType = existingTargetDoc is null || existingTargetClassNode is null
+                ? null
+                : (await existingTargetDoc.GetSemanticModelAsync(cancellationToken))?.GetDeclaredSymbol(existingTargetClassNode, cancellationToken) as INamedTypeSymbol;
+            string receiver;
+            if (forwarderReceiver != null)
+            {
+                receiver = SyntaxFacts.IsValidIdentifier(forwarderReceiver) ? $"this.{forwarderReceiver}" : forwarderReceiver;
+            }
+            else
+            {
+                var candidates = sourceType is null || targetType is null
+                    ? new List<string>()
+                    : sourceType.GetMembers()
+                        .Where(s => !s.IsStatic && !s.IsImplicitlyDeclared && (s is IFieldSymbol { Type: var ft } ? ft : s is IPropertySymbol { Type: var pt } ? pt : null) is { } memberType && SymbolEqualityComparer.Default.Equals(memberType, targetType))
+                        .Select(s => s.Name).ToList();
+                if (candidates.Count != 1)
+                {
+                    var listed = candidates.Count == 0 ? "none" : string.Join(", ", candidates);
+                    throw new ToolInvalidArgumentException($"oldMember '{oldMember}' needs a forwarder receiver in '{className}': found {candidates.Count} field or property of type '{targetClassName}' ({listed}). Pass forwarderReceiver with the receiver expression to use inside '{className}'.");
+                }
+
+                receiver = $"this.{candidates[0]}";
+            }
+
+            var deprecated = oldMember == MoveMemberOldMember.keepAsDeprecatedWrapper;
+            var eol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
+            keptMembers = membersToMove.ToHashSet();
+            forwarderText = m => MoveMemberTextEdits.BuildForwarder((MethodDeclarationSyntax)m, receiver, deprecated, targetClassName, eol);
+        }
+
+        var (texts, newFiles, _) = await AddInstanceMoveStructuralEditsAsync(editsByDocument, document, root, classNode, membersToMove, targetClassName, existingTargetDoc, existingTargetClassNode, true, cancellationToken, keptMembers, forwarderText);
         // AppliedEdits covers every existing file the move touches (source, target and caller documents); the brand-new
         // class file in newFiles has no original text, so it is added to the result below but gets no edit entry.
         var (result, appliedEdits) = await MaterializeDocumentEditsWithAppliedEditsAsync(solution, editsByDocument, texts, cancellationToken);
