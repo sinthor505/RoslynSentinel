@@ -54,7 +54,9 @@ public record TestRunResult(
     TimeSpan Duration,
     string? Detail = null,
     bool RunCompleted = true,
-    List<ProjectTestSummary>? ProjectSummaries = null
+    List<ProjectTestSummary>? ProjectSummaries = null,
+    string? FullResultsId = null,
+    int OmittedResultCount = 0
 ) : IResultStatus
 {
     // The RunTest tool itself sets the MCP isError only when !RunCompleted (WorkspaceBuildTestImpl.cs ~311).

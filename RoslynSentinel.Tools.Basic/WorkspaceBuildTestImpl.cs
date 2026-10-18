@@ -223,6 +223,38 @@ public class WorkspaceBuildTestImpl
         }
     }
 
+    // Stores the uncapped test result list for GetLargeResultTool. A storage failure must not turn a finished
+    // test report into a tool error, so it degrades to "no id".
+    private async Task<string?> StoreFullTestResultAsync(TestRunResult fullResult, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(fullResult, SharedJsonOptions.Compact);
+            var stored = await LargeResultHelper.StoreRawJsonAsync(json, _workspaceManager.GetSolutionRoot(), cancellationToken);
+            return stored.resultId;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "RunTest: could not store the full test result");
+            return null;
+        }
+    }
+
+    // Groups a failed row by its test class: "Namespace.Class.Method(args)" -> "Namespace.Class".
+    private static string TestClassOf(TestCaseResult row)
+    {
+        var name = row.TestName;
+        var paren = name.IndexOf('(');
+        if (paren >= 0)
+        {
+            name = name[..paren];
+        }
+
+        name = name.Trim();
+        var dot = name.LastIndexOf('.');
+        return dot >= 0 ? name[..dot] : name;
+    }
+
     public async Task<SentinelCallToolResult<object>> Build(ToolCallReason reason, BuildVerifyLevel level = BuildVerifyLevel.fullBuild,
         ToolScope scope = ToolScope.solution, string? scopeName = null, int maxDetails = 20,
         bool useScratchDir = false, bool includeOutput = false, bool includeWarnings = false,
@@ -290,7 +322,7 @@ public class WorkspaceBuildTestImpl
 
     public async Task<SentinelCallToolResult<object>> RunTest(ToolCallReason reason, ToolScope scope = ToolScope.solution,
         string? scopeName = null, string? filter = null, TestResultsFilter resultsType = TestResultsFilter.failed,
-        int maxDetails = 50, int timeoutSeconds = 600, bool summary = false, bool useScratchDir = false,
+        int maxDetails = 50, int timeoutSeconds = 600, bool summary = false, bool useScratchDir = false, bool includeOutput = false,
         CancellationToken cancellationToken = default)
     {
         try
@@ -308,12 +340,28 @@ public class WorkspaceBuildTestImpl
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, result.Error?.Message ?? "Test run failed unexpectedly."), Findings = result.Findings };
             }
 
-            if (!testRunResult.RunCompleted)
+            var projected = TestRunResultProjector.Project(testRunResult, resultsType, includeOutput: includeOutput);
+            if (summary)
             {
-                return new SentinelCallToolResult<object>() { IsError = true, SuccessData = testRunResult, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, testRunResult.Detail ?? "Test run did not complete."), StatusMessage = testRunResult.Detail ?? "Test run did not complete.", WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
+                projected = projected with { OmittedResultCount = 0 };
             }
 
-            return new SentinelCallToolResult<object>() { IsError = false, SuccessData = WithoutTailsWhenClean(testRunResult), StatusMessage = SummarizeTestRun(testRunResult), WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
+            if (!testRunResult.RunCompleted)
+            {
+                return new SentinelCallToolResult<object>() { IsError = true, SuccessData = projected, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, testRunResult.Detail ?? "Test run did not complete."), StatusMessage = testRunResult.Detail ?? "Test run did not complete.", WorkspaceVersion = _workspaceManager.WorkspaceVersion, Findings = result.Findings };
+            }
+
+            if (testRunResult.FailedCount > 0 && !summary)
+            {
+                projected = projected with { FullResultsId = await StoreFullTestResultAsync(testRunResult, cancellationToken) };
+            }
+
+            var failedRows = testRunResult.Results.Where(r => r.Outcome == TestOutcome.Failed).ToList();
+            var toolResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
+                WithoutTailsWhenClean(projected), _workspaceManager.GetSolutionRoot(), "TestRunResult", ResultWrapperType.Raw,
+                totalRecords: testRunResult.FailedCount, workspaceVersion: _workspaceManager.WorkspaceVersion,
+                statusMessage: SummarizeTestRun(testRunResult), listSummary: SummarizeListResult.Build(failedRows, TestClassOf), cancellationToken: cancellationToken);
+            return toolResult with { Findings = result.Findings, StatusMessage = SummarizeTestRun(testRunResult) };
         }
         catch (Exception ex)
         {
