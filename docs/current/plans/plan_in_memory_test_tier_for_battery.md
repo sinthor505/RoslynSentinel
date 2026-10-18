@@ -1,6 +1,6 @@
 # Plan: Move engine-correctness Battery tests onto an in-memory workspace tier
 
-**Status:** IN PROGRESS 2026-10-02. Step 0 landed: commit 5bc79a1 (fakes, `DiskWriteRoundTripTests`, `ModifyModifierBatchTests`) plus a second commit for the batch-edit fixes and the converted `ModifyAttributeBatchTests`/`ModifyBaseTypeBatchTests` (Build 0 errors, 48/48 batch tests pass). Steps 1-3 remain.
+**Status:** IN PROGRESS 2026-10-02. Step 0 landed: commit 5bc79a1 (fakes, `DiskWriteRoundTripTests`, `ModifyModifierBatchTests`) plus a second commit for the batch-edit fixes and the converted `ModifyAttributeBatchTests`/`ModifyBaseTypeBatchTests` (Build 0 errors, 48/48 batch tests pass). Step 1 mostly done; Step 2 measured once (see below). 2026-10-17: PreviewInstanceMoveCallSitesTests is no longer parked - its tests were already in-memory and the shared disk `SetUp` was removed (23.8 s -> 11.2 s filtered). Next: scan the other slow fixtures for shared `[SetUp]` disk cost before converting them, then re-measure Battery.Basic (Step 2).
 
 ## Problem
 Battery.Basic was the slowest project. Test-level parallelism (commit 3037e5b) fixed serialization, leaving it CPU-bound:

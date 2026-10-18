@@ -21,33 +21,6 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 [Category("PreviewCallSite")] // sentinel:auto-category
 public class PreviewInstanceMoveCallSitesTests
 {
-    private TestSolutionFixture _fixture;
-    private PersistentWorkspaceManager _workspaceManager;
-    private MemberRefactoringEngine _engine;
-
-    [SetUp]
-    public async Task SetUpAsync()
-    {
-        _fixture = new TestSolutionFixture();
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await _workspaceManager.LoadSolutionAsync(_fixture.SolutionPath);
-
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(_workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var symbolNav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        _engine = new MemberRefactoringEngine(_workspaceManager, symbolNav, validationEngine);
-    }
-
-    [TearDown]
-    public void TearDown()
-    {
-        // Keep SetUp/TearDown for disk-tier test: CrossProjectSiblingField_ClassifiesAsValidNotNoCandidateIntroducibleAsync
-        // requires TestSolutionBuilder.CreateTwoProjectSolution for cross-project compilation checks, which cannot be
-        // simulated in InMemoryWorkspace.
-        _workspaceManager?.Dispose();
-        _fixture?.Dispose();
-    }
-
     private static (InMemoryWorkspace workspace, MemberRefactoringEngine engine) CreateInMemoryTestFixture(
         params (string relativePath, string content)[] files)
     {
@@ -1154,9 +1127,20 @@ public class PreviewInstanceMoveCallSitesTests
             "DownstreamApp",
             [("Caller.cs", downstreamSource)]);
 
-        _workspaceManager.SetTestSolution(solution);
+        // Disk-tier only: this test needs the real disk fixture and its two-project compilation (see the
+        // comment above). Every other test in this fixture runs on InMemoryWorkspace and creates no disk state.
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
 
-        var results = await _engine.PreviewInstanceMoveCallSitesAsync("UpstreamServiceA.cs", "UpstreamServiceA", ["Foo"], "UpstreamServiceB");
+        var diffEngine = new DiffEngine();
+        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
+        var symbolNav = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var engine = new MemberRefactoringEngine(workspaceManager, symbolNav, validationEngine);
+
+        workspaceManager.SetTestSolution(solution);
+
+        var results = await engine.PreviewInstanceMoveCallSitesAsync("UpstreamServiceA.cs", "UpstreamServiceA", ["Foo"], "UpstreamServiceB");
 
         var fooSite = results.Single(r => r.CallExpression.Contains("Foo"));
         Assert.Multiple(() =>

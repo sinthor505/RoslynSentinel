@@ -1,6 +1,9 @@
 # Finding: Battery.Basic's remaining slow fixtures mostly need the disk tier; one big in-memory candidate is left
 
-**Status:** ANALYSIS COMPLETE 2026-10-02. Eight fixtures converted to the in-memory tier; PreviewInstanceMoveCallSitesTests analyzed and classified - see test-by-test table below. 13 of 15 tests are convertible; 2 require disk/ledger support.
+**Status:** UPDATED 2026-10-17. Eight fixtures converted to the in-memory tier. The PreviewInstanceMoveCallSitesTests classification below is STALE: the fixture now has 26 tests and the Category A/B tests were already converted in-memory (ledger test in 47d41807). Remaining cost was the per-test disk SetUp, now removed (see "Update 2026-10-17"). Only the cross-project test still uses the disk fixture.
+
+## Update 2026-10-17
+`SetUpAsync` built a disk-backed `TestSolutionFixture` + `PersistentWorkspaceManager` for every test in PreviewInstanceMoveCallSitesTests, though only `CrossProjectSiblingField_...` needs it. Moved that setup into the one test. Filtered run (26 tests, all pass): 23.8 s -> 11.2 s wall, in-memory tests ~13.8 s -> ~2.4-3.5 s each (single before-sample). Lesson: the per-test cost in other "slow" fixtures may be shared SetUp, not the test bodies - check `[SetUp]` before converting a fixture.
 
 ## Context
 After test-level parallelism (commit 3037e5b) Battery.Basic was CPU-bound: ~933 test-seconds, ~78 s wall on 16 cores.
