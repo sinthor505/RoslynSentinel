@@ -1119,6 +1119,11 @@ public static class RoslynSentinelServiceExtensionsBasic
                     if (wrapNotes is not null)
                         aliasNotes = aliasNotes is null ? wrapNotes : [.. aliasNotes, .. wrapNotes];
 
+                    var coerceNotes = ToolArgumentValidator.CoerceStringToStructured(
+                        context.Server, context.Params?.Name, context.Params?.Arguments);
+                    if (coerceNotes is not null)
+                        aliasNotes = aliasNotes is null ? coerceNotes : [.. aliasNotes, .. coerceNotes];
+
                     var validationError = ToolArgumentValidator.Validate(
                         context.Server, context.Params?.Name, context.Params?.Arguments);
 

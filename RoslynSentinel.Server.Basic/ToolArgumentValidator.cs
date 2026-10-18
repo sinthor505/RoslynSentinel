@@ -687,6 +687,123 @@ public static class ToolArgumentValidator
     }
 
     /// <summary>
+    /// Repairs a call that sends a declared object or array parameter as a JSON string (for example
+    /// <c>fieldMap</c> sent as the text of a JSON object) by parsing the text into the declared shape,
+    /// so the framework binder receives a real JSON value instead of throwing a JsonException.
+    /// <para>
+    /// Schema-driven: a candidate is an argument sent as a JSON string whose emitted property schema
+    /// declares <c>type</c> as <c>object</c> or <c>array</c>, alone or with <c>null</c> (a
+    /// <c>["object","null"]</c> union). A property that also declares <c>string</c>, or that has an
+    /// <c>enum</c>, is never a candidate. The text is trimmed and must start with the declared opener
+    /// (<c>{</c> or <c>[</c>) and parse as JSON of that same kind; otherwise the argument is left
+    /// untouched and no note is added, so <see cref="Validate"/> rejects it with the expected shape.
+    /// </para>
+    /// </summary>
+    /// <returns>One note per call listing the coerced parameters, or <see langword="null"/> when nothing changed.</returns>
+    public static System.Collections.Generic.IReadOnlyList<string>? CoerceStringToStructured(
+        ModelContextProtocol.Server.McpServer? server,
+        string? toolName,
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments)
+    {
+        if (arguments is null || arguments.Count == 0 || string.IsNullOrEmpty(toolName))
+            return null;
+
+        var schema = TryGetSchemaParameters(server, toolName);
+        if (schema is null)
+            return null;
+
+        var propertySchemas = schema.Value.Properties;
+
+        // Copy first: the coercion replaces entries in the dictionary being inspected.
+        var candidates = arguments.Keys.ToList();
+        var coerced = new System.Collections.Generic.List<(string Name, string Kind)>();
+        foreach (var name in candidates)
+        {
+            if (arguments[name].ValueKind != System.Text.Json.JsonValueKind.String ||
+                !propertySchemas.TryGetValue(name, out var propertySchema))
+                continue;
+
+            if (propertySchema.TryGetProperty("enum", out _))
+                continue;
+
+            if (!propertySchema.TryGetProperty("type", out var typeNode))
+                continue;
+
+            var declaredTypes = new System.Collections.Generic.List<string>();
+            if (typeNode.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var declared = typeNode.GetString();
+                if (declared is not null)
+                    declaredTypes.Add(declared);
+            }
+            else if (typeNode.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var entry in typeNode.EnumerateArray())
+                {
+                    if (entry.ValueKind == System.Text.Json.JsonValueKind.String && entry.GetString() is { } declaredEntry)
+                        declaredTypes.Add(declaredEntry);
+                }
+            }
+
+            if (declaredTypes.Contains("string"))
+                continue;
+
+            var nonNullTypes = declaredTypes.Where(t => t != "null").ToList();
+            if (nonNullTypes.Count != 1 || !(nonNullTypes[0] == "object" || nonNullTypes[0] == "array"))
+                continue;
+
+            var kind = nonNullTypes[0];
+            var text = (arguments[name].GetString() ?? "").Trim();
+            var opener = kind == "object" ? '{' : '[';
+            if (text.Length == 0 || text[0] != opener)
+                continue;
+
+            System.Text.Json.JsonDocument? document = null;
+            try
+            {
+                document = System.Text.Json.JsonDocument.Parse(text);
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                continue;
+            }
+
+            using (document)
+            {
+                var root = document.RootElement;
+                var parsedMatches = kind == "object"
+                    ? root.ValueKind == System.Text.Json.JsonValueKind.Object
+                    : root.ValueKind == System.Text.Json.JsonValueKind.Array;
+                if (!parsedMatches)
+                    continue;
+
+                arguments[name] = root.Clone();
+            }
+
+            coerced.Add((name, kind));
+        }
+
+        if (coerced.Count == 0)
+            return null;
+
+        if (coerced.Count == 1)
+        {
+            var (single, singleKind) = coerced[0];
+            var article = singleKind == "object" ? "an object" : "an array";
+            return
+            [
+                $"Note: '{single}' was sent as a JSON string; it was parsed as {article}. Pass a real JSON {singleKind} (not a string) in future calls."
+            ];
+        }
+
+        var names = string.Join(", ", coerced.Select(c => $"'{c.Name}'"));
+        return
+        [
+            $"Note: {names} were sent as JSON strings; they were parsed as their declared JSON shapes. Pass real JSON values (not strings) in future calls."
+        ];
+    }
+
+    /// <summary>
     /// Reads the declared item property names (case-insensitive -> declared spelling) out of an
     /// array parameter's emitted schema, or <see langword="null"/> when the items are not an inline
     /// object schema with properties (e.g. a <c>$ref</c>, which this repair deliberately does not chase).
@@ -898,6 +1015,41 @@ public static class ToolArgumentValidator
                         var suggestion = SuggestClosest(actualValue, members);
                         var suggestionText = suggestion is not null ? $" Did you mean '{suggestion}'?" : "";
                         return $"'{actualValue}' is not a valid value for parameter '{argument.Key}' of tool '{toolName}'.{suggestionText} Valid values are: {string.Join(", ", members)}. Nothing was executed.";
+                    }
+                }
+
+                // 3c. Declared object or array (alone or with null, never also string, never an enum) but
+                //     the caller sent a string that CoerceStringToStructured could not parse into that shape.
+                if (actualKind == System.Text.Json.JsonValueKind.String &&
+                    !propertySchema.TryGetProperty("enum", out _) &&
+                    propertySchema.TryGetProperty("type", out var structuredTypeNode))
+                {
+                    var structuredTypes = new System.Collections.Generic.List<string>();
+                    if (structuredTypeNode.ValueKind == System.Text.Json.JsonValueKind.String)
+                    {
+                        var structuredType = structuredTypeNode.GetString();
+                        if (structuredType is not null)
+                            structuredTypes.Add(structuredType);
+                    }
+                    else if (structuredTypeNode.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var structuredEntry in structuredTypeNode.EnumerateArray())
+                        {
+                            if (structuredEntry.ValueKind == System.Text.Json.JsonValueKind.String &&
+                                structuredEntry.GetString() is { } structuredName)
+                                structuredTypes.Add(structuredName);
+                        }
+                    }
+
+                    var nonNullStructured = structuredTypes.Where(t => t != "null").ToList();
+                    if (!structuredTypes.Contains("string") &&
+                        nonNullStructured.Count == 1 &&
+                        (nonNullStructured[0] == "object" || nonNullStructured[0] == "array"))
+                    {
+                        var structuredWord = nonNullStructured[0];
+                        var exampleValue = structuredWord == "object" ? "{\"oldName\": \"newName\"}" : "[\"value1\", \"value2\"]";
+                        return $"Parameter '{argument.Key}' for tool '{toolName}' takes a JSON {structuredWord}, not a string, and the string given is not valid JSON of that shape. " +
+                               $"Pass it as a real JSON {structuredWord} (for example {exampleValue}), not as quoted text. Nothing was executed.";
                     }
                 }
             }
