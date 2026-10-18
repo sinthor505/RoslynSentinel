@@ -1,6 +1,6 @@
 # MoveMember: leave a forwarder behind (`oldMember`), handle same-class calls, and answer a string-for-object argument
 
-**Status:** PROPOSED 2026-10-17. Shape (three-value `oldMember`) and first-slice scope (methods only, static and instance) decided by the user on 2026-10-17; everything else below is a recommendation awaiting review, with the open questions marked as such. Slices are to be dispatched in a later session.
+**Status:** PROPOSED 2026-10-17; open questions resolved 2026-10-17. Decided by the user: three-value `oldMember`, methods-only first slice (static and instance), callers untouched in keep modes, a dedicated `forwarderReceiver` parameter, XML doc kept on both members, no attributes copied. Remaining "recommended" text is the author's default. One follow-up is awaiting the user: whether to keep the tool schema flat instead of adding a DTO (open question 2). Slices are to be dispatched in a later session.
 
 ## Motivation
 
@@ -70,11 +70,11 @@ step 3b (`RoslynSentinel.Server.Basic/ToolArgumentValidator.cs:751-907`) rejects
 
 **Placement.**
 - Engine: `MoveMemberAsync(..., IReadOnlyDictionary<string,string>? fieldMap = null, MoveMemberOldMember oldMember =
-  MoveMemberOldMember.remove)`. After `fieldMap`, mid-signature `CancellationToken` untouched, following the existing
+  MoveMemberOldMember.remove, string? forwarderReceiver = null)`. Both after `fieldMap`, mid-signature `CancellationToken` untouched, following the existing
   precedent (CLAUDE.md says new signatures put `CancellationToken` last; this method already does not, and
   reordering would break 36 callers for no gain).
 - Tool: `MoveMemberTool` gets `[Description(...)] MoveMemberOldMember oldMember = MoveMemberOldMember.remove`,
-  after `fieldMap`, before `CancellationToken`, and passes it as the last engine argument (:479).
+  then `string? forwarderReceiver = null`, after `fieldMap` and before `CancellationToken`, and passes both as the last engine arguments (:479).
 - Migration-first note: no `[Obsolete]` overload is needed because the new parameter is optional and last of the
   optional set.
 
@@ -97,7 +97,7 @@ step 3b (`RoslynSentinel.Server.Basic/ToolArgumentValidator.cs:751-907`) rejects
   Reference edits inside a moved member's `FullSpan` already travel with the member
   (`insideMovedMemberEdits`, :211-212), so they cannot overlap the replacement.
 
-**Callers are left untouched in both keep modes (recommended, needs confirmation).** The point of a delegator and of
+**Callers are left untouched in both keep modes (decided by the user, 2026-10-17).** The point of a delegator and of
 a deprecated wrapper is that existing callers keep compiling and migrate later (the `InlineDeprecatedCalls` step in
 the parallel-change proposal). So in keep modes the engine skips the outside-the-moved-members caller rewrite
 (`CollectStaticMoveReferenceEditsAsync` for static moves, the receiver rewrite loop in `MoveInstanceMembersAsync`
@@ -109,12 +109,12 @@ for instance moves), and keeps only the edits inside the moved bodies. Consequen
 - For `keepAsDeprecatedWrapper` every remaining caller now carries an `RSDEPRECATED` warning. That is the intended
   worklist for the later inline step.
 
-**Receiver for an instance forwarder (open).** An instance move into an existing class today resolves a receiver only
-at *callers* (`PreviewInstanceMoveCallSitesAsync`); nothing in the engine chooses a receiver for code inside the source
-class. Recommendation: use the source class's single field or property of the target type when there is exactly one;
-otherwise refuse with `InvalidArgument` listing the candidates and naming the override, a reserved
-`callSiteFixups` key `"@forwarder"` whose value is a receiver expression (for example `"_impl"`). Reusing
-`callSiteFixups` avoids a fourth new parameter; the key is documented in the parameter description.
+**Receiver for an instance forwarder (decided: dedicated `forwarderReceiver` parameter).** An instance move into an
+existing class today resolves a receiver only at *callers* (`PreviewInstanceMoveCallSitesAsync`); nothing in the engine
+chooses a receiver for code inside the source class. The optional `string? forwarderReceiver` is a receiver expression
+valid inside the source class (for example `_impl`); the forwarder body is `<forwarderReceiver>.M(...)`. When omitted, the
+engine uses the source class's single field or property of the target type; with zero or several candidates it
+refuses with `InvalidArgument` listing them and naming `forwarderReceiver`. See the refusal table for misuse.
 
 **Refusals in both keep modes.** Nothing is written; each uses an existing code, no new code is added:
 
@@ -123,10 +123,12 @@ otherwise refuse with `InvalidArgument` listing the candidates and naming the ov
 | `oldMember` value not in the enum | `InvalidArgument` (from the pre-bind filter 3b) | already handled |
 | Member is not a method (property, field, event, nested type, indexer, operator, ctor) | `TargetIneligible` | out of scope for the first slices; section "Out of scope" |
 | Member is `virtual`, `abstract`, `override`, or implements an interface member | `TargetIneligible` | a forwarder changes dispatch; also named in the parallel-change proposal |
-| Member is generic (has type parameters) | `TargetIneligible`, message says "not yet supported" | forwarder would need type parameters, constraints and explicit type arguments; deferred, not rejected on principle |
-| Member is an extension method (`this` first parameter) | `TargetIneligible` | the moved member's receiver changes meaning; deferred |
+| Member is generic (has type parameters) | `NotImplemented` ("not yet supported") | forwarder would need type parameters, constraints and explicit type arguments; deferred, not rejected on principle |
+| Member is an extension method (`this` first parameter) | `NotImplemented` | the moved member's receiver changes meaning; deferred |
 | Route is base-type pull-up (`MoveMembersToBaseTypeAsync`) | `TargetIneligible` | the source already inherits the member; a forwarder would hide the base member |
-| Instance move with zero or several receiver candidates and no `@forwarder` key | `InvalidArgument` | see above |
+| Instance move with zero or several receiver candidates and no `forwarderReceiver` | `InvalidArgument` | see above |
+| Source class has more than one declaration part (partial) | `TargetIneligible` | receiver lookup scans one part only (open question 10) |
+| `forwarderReceiver` given with `remove`, or with a static move | `InvalidArgument` | never a silent no-op (honoured in `remove` only after slice 7) |
 | Moved member is `ref`/`out`/`in`/`params` | **allowed** | mirrored in the call; covered by a unit test |
 
 The refusal check is one new private method in `MemberRefactoringEngine` called before any route runs, so a refused
@@ -252,35 +254,22 @@ Both parts are schema-driven, no per-tool table, matching the file's stated desi
 - **Reorder `MoveMemberAsync` so `CancellationToken` is last.** Breaks 36 callers across 7 files for no behavioural
   gain.
 
-## Open questions
+## Open questions (all resolved 2026-10-17)
 
-1. **Do keep modes leave callers untouched?** Recommended yes (section 1). Needs the user's confirmation because the
-   brief fixed the shape and scope but not this.
-2. **Receiver for an instance forwarder.** Unique target-typed member, else a reserved `callSiteFixups["@forwarder"]`
-   key: recommended, not decided. Alternative: a dedicated optional `forwarderReceiver` parameter (clearer, one more
-   parameter in the schema).
-3. **XML docs.** Recommended default: the forwarder keeps the original doc comment (it stays in the leading trivia)
-   and the moved member gets a copy, so both are documented. Alternative: replace the forwarder's doc with
-   `/// <inheritdoc cref="..."/>`. Open.
-4. **Attributes other than `McpServerTool`.** The recommendation drops all member attributes from the forwarder. Some
-   (for example `[MethodImpl]`, `[EditorBrowsable]`) arguably belong on both. Open; start by dropping all.
-5. **`global::` prefix.** Always emit it, or only when a same-named type is in scope. Always emitting is safest and ugly.
-6. **Does `CS0618` fire for a call inside the declaring type?** Hypothesis: yes, so keeping same-class callers on a
-   deprecated wrapper yields warnings in the source class too. Verify in slice 5's test with an `RSDEPRECATED`
-   diagnostic assertion.
-7. **Warnings-as-errors.** If a consuming project sets `TreatWarningsAsErrors`, an `Obsolete` wrapper turns every
-   remaining caller into an error, and the compile gate would reject the move. Not checked whether any project in
-   this solution does. Slice 5 needs a fixture with `TreatWarningsAsErrors` to find out what the gate does.
-8. **Which exception carries "not yet supported".** The exception subclass list read for this doc has
-   `InvalidArgument`/`NotFound`/`TargetIneligible`/`Ambiguous`; whether a subclass maps to `NotImplemented` was not
-   checked. If none does, slice 1 uses `TargetIneligible` with the "not yet supported" text for the interim.
-9. **Response shape for the rewrite report** (section 2): `AppliedChangeSummary` was not opened.
-10. **Partial classes.** A member of a partial source class in another file: the replacement is a single-file edit, but
-    the receiver lookup (section 1) must scan all parts. Not examined.
-11. **Installed Microsoft.Extensions.AI.Abstractions version.** The traced binding code is from a local clone
-    (`v10.9.0-37-gf46f53608c`); the NuGet cache lists several versions and I could not tie one to ModelContextProtocol
-    2.2.0 (`RoslynSentinel.Common.csproj:20`). The exception type is therefore taken from TODO.md:66 and the validator's
-    doc comment, not from a repro.
+"Decided" means the user chose it; "Resolved" means a fact was looked up (2026-10-17, by reading, not by running code); "Set by author" is a recommendation taken as the default.
+
+1. **Do keep modes leave callers untouched?** Decided: yes. The forwarder keeps old callers compiling and they migrate later.
+2. **Receiver for an instance forwarder.** Decided: a dedicated optional `string? forwarderReceiver` parameter (engine and tool, after `oldMember`), not a reserved `callSiteFixups` key. Semantics: it is a receiver expression valid inside the source class, for example `_impl`; the forwarder body is `<forwarderReceiver>.M(...)`. When omitted, the engine uses the source class's single field or property of the target type; zero or several candidates -> `InvalidArgument` listing them and naming `forwarderReceiver`. Given with `remove` (until slice 7) or with a static move -> `InvalidArgument`, so it is never a silent no-op. After slice 7 it is also honoured in `remove` mode as the receiver for rewritten same-class bare calls.
+   - *Author's recommendation on the user's follow-up question (a DTO to cut `MoveMember` parameters), to be confirmed:* keep the tool schema flat; no DTO. `oldMember` and `forwarderReceiver` are two scalars, and a nested object is exactly the failure class of section 3 (a client sends it as a string) and of the schema-true defect that breaks LM Studio. Weak models also fill flat scalars more reliably than nested objects. A DTO would help only the C# engine signature (11 parameters after this change); an internal `MoveMemberOptions` record is worth doing as its own refactor when the next parameter arrives, since it touches the 36 existing callers. Not part of these slices.
+3. **XML docs.** Decided: copy to both. The forwarder replaces only the member `Span`, so the original doc comment stays in its leading trivia, and the moved member carries the same comment with it.
+4. **Attributes other than `McpServerTool`.** Decided: copy none to the forwarder for now. `[MethodImpl]` and `[EditorBrowsable]` can be reconsidered later.
+5. **`global::` prefix.** Set by author: always emit it. It is the safest form and can be relaxed later without changing behaviour.
+6. **Does `CS0618` fire for a call inside the declaring type?** Still unverified. No existing test covers it: the only CS0618 assertion is `BuildEngineTests.cs:57-96`, and its caller is a different class. Slice 5 adds the assertion. The design does not depend on the answer; it only decides whether the source class itself shows warnings.
+7. **Warnings-as-errors.** Resolved: no project in this solution sets `TreatWarningsAsErrors`, `WarningsAsErrors` or `NoWarn` (`Directory.Build.props:1-7` sets only `NuGetAudit`; the `.editorconfig` files set only CA/IDE severities), so `CS0618` is an ordinary warning here and the compile gate is not affected. A user's own solution could differ, so slice 5 keeps one fixture with `TreatWarningsAsErrors` that records the outcome, but it is no longer a blocker. Parent directories above the repo root were not checked.
+8. **Which exception carries "not yet supported".** Resolved: `ToolNotImplementedException` -> `ToolErrorCode.NotImplemented` exists (`RoslynSentinel.Common/ToolException.cs:140-149`; its doc describes a deliberate stub). Set by author: generic and extension methods, and the slice-1 placeholder for unwired routes, use `NotImplemented`; "this member can never be forwarded" cases (virtual, abstract, override, interface implementation, non-method, base-type pull-up) keep `TargetIneligible`. The refusal table is updated to match.
+9. **Response shape for the rewrite report.** Resolved: `AppliedChangeSummary` is a record shared by every write tool (`RoslynSentinel.Common/AppliedChangeSummary.cs:10-20`), so it gets no new field. Set by author: a new record `RewrittenCallSite(FilePath, Line, OldText, NewText)` and a `RewrittenCallSites` list on `MoveMemberResult` (same pattern as `AppliedFixups` and `Notes`, `MemberRefactoringEngine.cs:20-27`), surfaced as one `Finding` per row on the tool result (as `Notes` are, `AdvancedRefactoringTools.cs:~542`), capped at 25 rows plus a count. None of the existing row types (`PreviewCallSite`, `CallSiteLedgerEntry`, `AppliedCallSiteFixup`, `SkippedCallSite`) carries old and new text.
+10. **Partial classes.** Resolved: `MoveMemberAsync` locates the source class from `filePath`'s document only (first `ClassDeclarationSyntax` with that name, `MemberRefactoringEngine.cs:~3407-3424`) and never looks at other parts. Set by author: in keep modes a source class with more than one declaration part is refused with `TargetIneligible`. Separate, pre-existing observation, not fixed here: when some requested names are in other parts and some are not, the missing ones appear to be skipped silently; worth a TODO line once confirmed.
+11. **Installed package versions.** Resolved: ModelContextProtocol 2.2.0 and Microsoft.Extensions.AI.Abstractions 10.8.3 (transitive; read from `project.assets.json`). The binding code traced in section 3 is from a clone at v10.9.0-37, so the first test of slice 8 must reproduce the failure against the real pipeline before any fix.
 
 ## Cost / risk
 
@@ -330,22 +319,22 @@ Slice 8 (validator) is independent of 1-7 and may run at any point. Slices 1-7 a
 **Slice 1 - plumbing and refusals, no behaviour change (3 files, about 8 edits).**
 - `RoslynSentinel.Common/ToolEnums.cs`: add `MoveMemberOldMember { remove, keepDelegator, keepAsDeprecatedWrapper }` with
   `[JsonConverter(typeof(JsonStringEnumConverter))]`.
-- `MemberRefactoringEngine.MoveMemberAsync`: append `MoveMemberOldMember oldMember = MoveMemberOldMember.remove` after
+- `MemberRefactoringEngine.MoveMemberAsync`: append `MoveMemberOldMember oldMember = MoveMemberOldMember.remove` and `string? forwarderReceiver = null` after
   `fieldMap`; add a private `RequireKeepModeEligible(...)` called before routing that throws the refusals in the table
   for non-method / virtual / abstract / override / interface-implementing / generic / extension members and for the
-  base-type pull-up route. For an eligible member in a keep mode, throw `TargetIneligible` with "keep modes are not
+  base-type pull-up route. For an eligible member in a keep mode, throw `NotImplemented` with "keep modes are not
   wired for this route yet" (to be removed in slices 5-6).
-- `MoveMemberTool`: add the `oldMember` parameter with a `[Description]` listing the three values and pass it to the
+- `MoveMemberTool`: add the `oldMember` and `forwarderReceiver` parameters with `[Description]`s (the first lists the three values) and pass them to the
   engine.
 - Acceptance: `Build` 0 errors; the full existing MoveMember test set is unchanged (default path); `McpServerStatus`
   or the generated tool table shows `oldMember` with an enum of the three values after a `fullBuild` and server restart.
 
-**Slice 2 - tests for slice 1 (1 file: `RoslynSentinel.Tests.Tools.Advanced/BatteryTwentyFourTests.cs`, about 6 new tests, `test-writer`).**
+**Slice 2 - tests for slice 1 (1 file: `RoslynSentinel.Tests.Tools.Advanced/BatteryTwentyFourTests.cs`, about 8 new tests, `test-writer`).**
 - Named after the existing `MoveMember_FieldMap...` cases (:454-483): `MoveMember_KeepDelegator_VirtualMethod_ReturnsTargetIneligible`,
-  `..._AbstractMethod_...`, `..._OverrideMethod_...`, `..._Property_...`, `..._GenericMethod_...`,
+  `..._AbstractMethod_...`, `..._OverrideMethod_...`, `..._Property_...`, `..._GenericMethod_...` (NotImplemented), `..._PartialSourceClass_...`, `MoveMember_ForwarderReceiver_WithRemove_ReturnsInvalidArgument`,
   `MoveMember_KeepAsDeprecatedWrapper_ToBaseClass_ReturnsTargetIneligible`, and `MoveMember_DefaultOldMember_Unchanged`
   (an existing happy-path move with `oldMember` omitted gives the same changed content as before).
-- Acceptance: new tests pass; each refusal test asserts `ErrorData.ErrorCode == ToolErrorCode.TargetIneligible` and that
+- Acceptance: new tests pass; each refusal test asserts `ErrorData.ErrorCode == ToolErrorCode.TargetIneligible` (`NotImplemented` for generic) and that
   `dryRun`-independent disk content is unchanged.
 
 **Slice 3 - characterise the same-class gap (1 file: `RoslynSentinel.Tests.Battery.Basic/PreviewInstanceMoveCallSitesTests.cs`, about 4 tests, `test-writer`).**
@@ -381,12 +370,12 @@ Slice 8 (validator) is independent of 1-7 and may run at any point. Slices 1-7 a
 
 **Slice 6 - wire the instance route (3 files, about 10 edits).**
 - `MemberRefactoringEngine.cs`: in `MoveInstanceMembersAsync` (:4254) for `oldMember != remove`, resolve the forwarder
-  receiver (unique target-typed field/property of the source class, else `callSiteFixups["@forwarder"]`, else
+  receiver (`forwarderReceiver` if given, else the unique target-typed field/property of the source class, else
   `InvalidArgument` listing candidates), build `this.<receiver>.M(...)` forwarders, skip the caller receiver rewrite
   (:4333 loop), skip opening pending ledger entries for caller sites, keep the `fieldMap` rewrite inside moved bodies;
-  remove the placeholder refusal for this route. `MoveMemberTool` description for `callSiteFixups` gains the
-  `"@forwarder"` sentence.
-- Tests: instance move with one candidate field; with two candidates and no key (refusal naming both); with the key;
+  remove the placeholder refusal for this route. Finalise the `forwarderReceiver` `[Description]` (example `_impl`); the
+  `callSiteFixups` description is unchanged.
+- Tests: instance move with one candidate field; with two candidates and no `forwarderReceiver` (refusal naming both); with `forwarderReceiver`;
   `fieldMap` combined with `keepDelegator`; a caller in another file left untouched; same-class bare call left valid.
 - Acceptance: new tests pass; `autoResolveCallSites: false` with a keep mode still succeeds (nothing to resolve).
 
@@ -407,7 +396,7 @@ Slice 8 (validator) is independent of 1-7 and may run at any point. Slices 1-7 a
 - Tests in `RoslynSentinel.Tests.Server` using a real tool collection (not `server: null`): `fieldMap` sent as the string
   `"{\"_a\":\"_b\"}"` is parsed and the call proceeds with a note; `fieldMap` sent as `"hello"` is rejected with the
   step-3c message and no `JsonException`, stack trace or path in it; an array/object sent correctly is untouched.
-- Acceptance: new tests pass; `ToolArgumentValidator` unit tests in `ApplyLegacySearchReferencesKindTests.cs` and the
+- Acceptance: new tests pass (the first, a repro of the failure against the real pipeline, must fail before the fix); `ToolArgumentValidator` unit tests in `ApplyLegacySearchReferencesKindTests.cs` and the
   e2e cases in `McpToolsetControlTests.cs` unchanged. After a `fullBuild` and server restart, a live
   `MoveMember(fieldMap: "{...}")` call with a JSON string no longer returns the generic
   `An error occurred invoking 'MoveMember'.` text.
