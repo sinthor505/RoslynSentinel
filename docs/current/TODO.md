@@ -62,7 +62,7 @@ A directive opened in a using's leading trivia and closed after the last using (
 
 **Done:** `fieldMap` (source private field -> target field, instance moves into an existing class) with validation, body rewrite, collision guard for a moved local named like the target field, tool parameter and tool-level tests (valid move, dry run, invalid value); a guard refusing to move a field that a source constructor assigns; the `Search` move itself (`WorkspaceReadNavigationTools` now takes `SymbolNavigationImpl`/`SymbolRelationshipImpl` by DI; `WorkspaceTools.SearchSolutionTool` stays as an attribute-less delegator; five duplicate WorkspaceTools tool methods became delegators). Option (a) (moving a ctor assignment with its field) is dropped: `ConstructorParameter` plus `fieldMap` covers it. A static-only move with `fieldMap` is refused on purpose (a static member cannot use an instance field).
 
-**Still open (TOOL-GAPs from the Search move):**
+**Still open (TOOL-GAPs from the Search move).** The first three are designed in `proposals/proposal_movemember_keep_delegator_and_same_class_calls.md` (PROPOSED 2026-10-17; slices 1-8, not built):
 - The MoveMember client schema cached by a running client can lack `fieldMap` (the value was sent as a string and the server threw a `JsonException`); refresh schemas on server restart, or answer a string-for-object with a hint.
 - MoveMember neither rewrites nor reports unqualified same-class calls to moved members (a delegator's own call became CS0103 until qualified with `this.`).
 - MoveMember has no "leave a delegator behind" option (`keepDelegator`); see `proposals/proposal_parallel_change_deprecated_wrappers.md`. The Search move needed a temporary-name staging trick to keep a delegator.
