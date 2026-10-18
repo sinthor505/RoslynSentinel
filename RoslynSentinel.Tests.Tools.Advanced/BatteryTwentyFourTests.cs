@@ -602,11 +602,183 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
     }
 
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_StaticToExistingClass_LeavesForwarder()
+    {
+        const string original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
+        const string caller = "public class Caller\n{\n    public int Call() => Src.Foo(1);\n}\n";
+        SetMultiFile(("Refactor.cs", original), ("Caller.cs", caller));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Src", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var text = await ReadCommittedRefactorText();
+        var sourcePart = text.Substring(0, text.IndexOf("class Target", StringComparison.Ordinal));
+        var targetPart = text.Substring(text.IndexOf("class Target", StringComparison.Ordinal));
+        Assert.That(sourcePart, Does.Contain("public static int Foo(int x) => global::Target.Foo(x);"), "The source keeps a plain forwarder to the moved member.");
+        Assert.That(targetPart, Does.Contain("public static int Foo(int x) { return x + 1; }"), "The target holds the full moved method.");
+        Assert.That(await ReadCommittedText("Caller.cs"), Is.EqualTo(caller), "Keep modes leave outside callers untouched.");
+        var diagnostics = await GetCommittedDiagnosticsAsync();
+        Assert.That(diagnostics.Where(d => d.StartsWith("Error", StringComparison.Ordinal)), Is.Empty, "The solution must build after the forwarder is written.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepAsDeprecatedWrapper_StaticToExistingClass_AddsObsoleteAttribute()
+    {
+        const string original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
+        const string caller = "public class Caller\n{\n    public int Call() => Src.Foo(1);\n}\n";
+        SetMultiFile(("Refactor.cs", original), ("Caller.cs", caller));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Src", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var text = await ReadCommittedRefactorText();
+        Assert.That(text, Does.Contain("[global::System.Obsolete(\"Deprecated wrapper: call Target.Foo instead.\", DiagnosticId = \"RSDEPRECATED\")]\n    public static int Foo(int x) => global::Target.Foo(x);"), "The Obsolete attribute must precede the forwarder.");
+        Assert.That(await ReadCommittedText("Caller.cs"), Is.EqualTo(caller), "Keep modes leave outside callers untouched.");
+        // Recorded outcome (open question 6/7): a caller in another class receives an RSDEPRECATED warning from the
+        // Obsolete attribute, and the solution has no errors.
+        var diagnostics = await GetCommittedDiagnosticsAsync();
+        Assert.That(diagnostics.Where(d => d.StartsWith("Error", StringComparison.Ordinal)), Is.Empty, "The solution must build with the deprecated wrapper.");
+        Assert.That(diagnostics, Does.Contain("Warning RSDEPRECATED Caller.cs"), "Recorded outcome: the deprecated wrapper warns at the outside caller.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_StaticToNewClass_LeavesForwarder()
+    {
+        const string original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n";
+        const string caller = "public class Caller\n{\n    public int Call() => Src.Foo(1);\n}\n";
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "TestProj");
+        System.IO.Directory.CreateDirectory(dir);
+        var sourcePath = System.IO.Path.Combine(dir, "Refactor.cs");
+        var callerPath = System.IO.Path.Combine(dir, "Caller.cs");
+        var newFile = System.IO.Path.Combine(dir, "NewTarget.cs");
+        System.IO.File.Delete(sourcePath);
+        System.IO.File.Delete(callerPath);
+        System.IO.File.Delete(newFile);
+        try
+        {
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", System.IO.Path.Combine(dir, "TestProj.csproj"),
+                new (string name, string content, string filePath)[] { ("Refactor.cs", original, sourcePath), ("Caller.cs", caller, callerPath) });
+            _workspaceManager.SetTestSolution(solution);
+            var result = await _advTools.MoveMemberTool(reason: "test message", sourcePath, "Src", ["Foo"], "NewTarget", oldMember: MoveMemberOldMember.keepDelegator);
+            Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+            var text = await ReadCommittedRefactorText();
+            Assert.That(text, Does.Contain("public static int Foo(int x) => global::NewTarget.Foo(x);"), "The source keeps a plain forwarder to the new class.");
+            var newText = await ReadCommittedText("NewTarget.cs");
+            Assert.That(newText, Does.Contain("class NewTarget"), "The new class is created in the new file beside the source.");
+            Assert.That(newText, Does.Contain("public static int Foo(int x) { return x + 1; }"), "The new class holds the full moved method.");
+            Assert.That(await ReadCommittedText("Caller.cs"), Is.EqualTo(caller), "Keep modes leave outside callers untouched.");
+            var diagnostics = await GetCommittedDiagnosticsAsync();
+            Assert.That(diagnostics.Where(d => d.StartsWith("Error", StringComparison.Ordinal)), Is.Empty, "The solution must build after the forwarder is written.");
+        }
+        finally
+        {
+            System.IO.File.Delete(sourcePath);
+            System.IO.File.Delete(callerPath);
+            System.IO.File.Delete(newFile);
+        }
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepAsDeprecatedWrapper_StaticToNewClass_AddsObsoleteAttribute()
+    {
+        const string original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n";
+        var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "TestProj");
+        System.IO.Directory.CreateDirectory(dir);
+        var sourcePath = System.IO.Path.Combine(dir, "Refactor.cs");
+        var newFile = System.IO.Path.Combine(dir, "NewTarget.cs");
+        System.IO.File.Delete(sourcePath);
+        System.IO.File.Delete(newFile);
+        try
+        {
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", System.IO.Path.Combine(dir, "TestProj.csproj"),
+                new (string name, string content, string filePath)[] { ("Refactor.cs", original, sourcePath) });
+            _workspaceManager.SetTestSolution(solution);
+            var result = await _advTools.MoveMemberTool(reason: "test message", sourcePath, "Src", ["Foo"], "NewTarget", oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper);
+            Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+            var text = await ReadCommittedRefactorText();
+            Assert.That(text, Does.Contain("[global::System.Obsolete(\"Deprecated wrapper: call NewTarget.Foo instead.\", DiagnosticId = \"RSDEPRECATED\")]\n    public static int Foo(int x) => global::NewTarget.Foo(x);"), "The Obsolete attribute must precede the forwarder to the new class.");
+            var newText = await ReadCommittedText("NewTarget.cs");
+            Assert.That(newText, Does.Contain("class NewTarget"), "The new class is created in the new file beside the source.");
+        }
+        finally
+        {
+            System.IO.File.Delete(sourcePath);
+            System.IO.File.Delete(newFile);
+        }
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_StaticToExistingClass_DryRun_WritesNothing()
+    {
+        const string original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
+        SetMultiFile(("Refactor.cs", original));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Src", ["Foo"], "Target", dryRun: true, returnDiff: true, oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.DryRun, Is.True);
+        Assert.That(summary.Diff, Does.Contain("global::Target.Foo(x)"), "The dry-run diff must show the forwarder.");
+        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A dry run must not write.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_StaticToExistingClass_NoEolOrCollateralRefusal()
+    {
+        const string original = "public class Src\r\n{\r\n    public static int Foo(int x) { return x + 1; }\r\n}\r\n\r\npublic class Target\r\n{\r\n}\r\n";
+        SetMultiFile(("Refactor.cs", original));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Src", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var text = await ReadCommittedRefactorText();
+        Assert.That(text, Does.Contain("public static int Foo(int x) => global::Target.Foo(x);"), "The forwarder is written.");
+        Assert.That(text, Does.Not.Match("(?<!\r)\n"), "The forwarder must keep the file's CRLF line endings.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_KeepDelegator_InstanceMethod_StillNotImplemented()
+    {
+        const string original = "public class Source\n{\n    private Target _impl = new Target();\n    public int Get() => 1;\n}\n\npublic class Target\n{\n}\n";
+        SetMultiFile(("Refactor.cs", original));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented));
+        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
+    }
+
     private async Task<string> ReadCommittedRefactorText()
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         var doc = solution.Projects.SelectMany(p => p.Documents).Single(d => d.Name == "Refactor.cs");
         return (await doc.GetTextAsync()).ToString();
+    }
+
+    private async Task<string> ReadCommittedText(string fileName)
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var doc = solution.Projects.SelectMany(p => p.Documents).Single(d => d.Name == fileName);
+        return (await doc.GetTextAsync()).ToString();
+    }
+
+    /// <summary>
+    /// Compiler errors and warnings of the committed solution, one "Severity Id File" line each. Used to check that a
+    /// keep-mode forwarder leaves the solution building and to record which warnings a deprecated wrapper produces.
+    /// </summary>
+    private async Task<List<string>> GetCommittedDiagnosticsAsync()
+    {
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var lines = new List<string>();
+        foreach (var project in solution.Projects)
+        {
+            var compilation = await project.GetCompilationAsync(CancellationToken.None);
+            foreach (var diagnostic in compilation!.GetDiagnostics().Where(d => d.Severity >= Microsoft.CodeAnalysis.DiagnosticSeverity.Warning))
+            {
+                var file = System.IO.Path.GetFileName(diagnostic.Location.SourceTree?.FilePath ?? string.Empty);
+                lines.Add($"{diagnostic.Severity} {diagnostic.Id} {file}");
+            }
+        }
+        return lines;
     }
 
     [Test]

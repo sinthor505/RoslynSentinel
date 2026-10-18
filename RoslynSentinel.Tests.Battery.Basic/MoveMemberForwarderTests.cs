@@ -106,7 +106,7 @@ public class MoveMemberForwarderTests
     {
         var text = Forwarder("public static int M() { return 1; }", deprecated: true, eol: "\n");
         Assert.That(text, Is.EqualTo(
-            "[Obsolete(\"Deprecated wrapper: call Target.M instead.\", DiagnosticId = \"RSDEPRECATED\")]\n" +
+            "[global::System.Obsolete(\"Deprecated wrapper: call Target.M instead.\", DiagnosticId = \"RSDEPRECATED\")]\n" +
             "    public static int M() => global::Ns.Target.M();"));
     }
 
@@ -115,7 +115,7 @@ public class MoveMemberForwarderTests
     {
         var text = Forwarder("public static int M() { return 1; }", deprecated: true, eol: "\r\n");
         Assert.That(text, Is.EqualTo(
-            "[Obsolete(\"Deprecated wrapper: call Target.M instead.\", DiagnosticId = \"RSDEPRECATED\")]\r\n" +
+            "[global::System.Obsolete(\"Deprecated wrapper: call Target.M instead.\", DiagnosticId = \"RSDEPRECATED\")]\r\n" +
             "    public static int M() => global::Ns.Target.M();"));
     }
 

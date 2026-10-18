@@ -3442,7 +3442,10 @@ public class MemberRefactoringEngine
             throw new ToolInvalidArgumentException("forwarderReceiver applies only to instance moves, and the moved members are static. Omit forwarderReceiver for a static move.");
         }
 
-        throw new ToolNotImplementedException($"keep modes are not wired for this route yet (oldMember '{oldMember}', target '{targetClassName}'). Use oldMember remove until the keep route ships.");
+        if (!membersToMove.All(IsStaticMember))
+        {
+            throw new ToolNotImplementedException($"keep modes are not wired for this route yet (oldMember '{oldMember}', target '{targetClassName}'). Use oldMember remove until the keep route ships.");
+        }
     }
 
     private static bool IsStaticMember(MemberDeclarationSyntax member)
@@ -3662,7 +3665,7 @@ public class MemberRefactoringEngine
             // members (a static modifier is added to each) and every instance-qualified caller is rewritten to the target type.
             var staticTargetMemberSymbols = membersToMove.Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
             var conversionNotes = new List<string>();
-            var moved = await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, staticTargetMemberSymbols, instanceMembersToConvert, conversionNotes, cancellationToken);
+            var moved = await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, staticTargetMemberSymbols, instanceMembersToConvert, conversionNotes, oldMember, cancellationToken);
             return moved with { Notes = conversionNotes };
         }
 
@@ -3686,11 +3689,11 @@ public class MemberRefactoringEngine
         if (targetDoc?.FilePath != null && targetClassNode != null)
         {
             var existingClassMemberSymbols = membersToMove.Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
-            return await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, existingClassMemberSymbols, null, null, cancellationToken);
+            return await MoveMembersToExistingClassAsync(solution, filePath, root, classNode, membersToMove, targetDoc.FilePath, targetClassNode, targetClassName, existingClassMemberSymbols, null, null, oldMember, cancellationToken);
         }
 
         var newClassMemberSymbols = membersToMove.Select(m => semanticModel?.GetDeclaredSymbol(m is FieldDeclarationSyntax f ? f.Declaration.Variables.First() : m)).Where(s => s != null).Cast<ISymbol>().ToList();
-        return await MoveMembersToNewClassAsync(solution, filePath, root, classNode, membersToMove, targetClassName, newClassMemberSymbols, cancellationToken);
+        return await MoveMembersToNewClassAsync(solution, filePath, root, classNode, membersToMove, targetClassName, newClassMemberSymbols, oldMember, cancellationToken);
     }
 
     /// <summary>
@@ -4109,7 +4112,7 @@ public class MemberRefactoringEngine
     /// rewrite is then unambiguous everywhere (ClassA.Foo() -> TargetClassName.Foo(), no receiver
     /// instance involved) -> MoveMemberAsync's caller already guarantees every member here is static.
     /// </summary>
-    private static async Task<MoveMemberResult> MoveMembersToExistingClassAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, FilePathWrapper targetFilePath, ClassDeclarationSyntax targetClassNode, string targetClassName, List<ISymbol> memberSymbols, List<MemberDeclarationSyntax>? convertToStatic, List<string>? notesSink, CancellationToken cancellationToken)
+    private static async Task<MoveMemberResult> MoveMembersToExistingClassAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, FilePathWrapper targetFilePath, ClassDeclarationSyntax targetClassNode, string targetClassName, List<ISymbol> memberSymbols, List<MemberDeclarationSyntax>? convertToStatic, List<string>? notesSink, MoveMemberOldMember oldMember, CancellationToken cancellationToken)
     {
         var sourceDocument = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).First()!;
         var targetDocument = solution.GetDocumentIdsWithFilePath(targetFilePath).Select(solution.GetDocument).First()!;
@@ -4131,7 +4134,28 @@ public class MemberRefactoringEngine
         }
 
         // Source document: cut the moved members out; reference edits that fall inside them travel with them.
-        var sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, editsByDocument.TryGetValue(sourceDocument.Id, out var existingSourceEdits) ? existingSourceEdits : new List<TextChange>(), out var insideMovedMemberEdits);
+        if (oldMember != MoveMemberOldMember.remove)
+        {
+            // Keep modes leave callers untouched: only the edits inside the moved bodies survive, and no other document is touched.
+            var movedBodyEdits = editsByDocument.TryGetValue(sourceDocument.Id, out var keepSourceEdits) ? keepSourceEdits.Where(e => membersToMove.Any(m => m.FullSpan.Contains(e.Span))).ToList() : new List<TextChange>();
+            editsByDocument = new Dictionary<DocumentId, List<TextChange>> { [sourceDocument.Id] = movedBodyEdits };
+        }
+
+        var sourceReferenceEdits = editsByDocument.TryGetValue(sourceDocument.Id, out var existingSourceEdits) ? existingSourceEdits : new List<TextChange>();
+        List<TextChange> sourceEdits;
+        List<TextChange> insideMovedMemberEdits;
+        if (oldMember == MoveMemberOldMember.remove)
+        {
+            sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, sourceReferenceEdits, out insideMovedMemberEdits);
+        }
+        else
+        {
+            var deprecated = oldMember == MoveMemberOldMember.keepAsDeprecatedWrapper;
+            var eol = EolUtilities.DetectDominantEol(sourceText);
+            var targetSymbol = (await targetDocument.GetSemanticModelAsync(cancellationToken))?.GetDeclaredSymbol(targetClassNode, cancellationToken) as INamedTypeSymbol;
+            var qualifiedReceiver = targetSymbol?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) ?? $"global::{targetClassName}";
+            sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, sourceReferenceEdits, membersToMove.ToHashSet(), m => MoveMemberTextEdits.BuildForwarder((MethodDeclarationSyntax)m, qualifiedReceiver, deprecated, targetClassName, eol), out insideMovedMemberEdits);
+        }
 
         // Target document: append the moved members, re-indented to the target class and in its EOL.
         var targetEol = EolUtilities.DetectDominantEol(targetText);
@@ -4174,7 +4198,7 @@ public class MemberRefactoringEngine
         return new MoveMemberResult(result, new List<SkippedCallSite>(), AppliedEdits: appliedEdits);
     }
 
-    private static async Task<MoveMemberResult> MoveMembersToNewClassAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string newClassName, List<ISymbol> memberSymbols, CancellationToken cancellationToken)
+    private static async Task<MoveMemberResult> MoveMembersToNewClassAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, string newClassName, List<ISymbol> memberSymbols, MoveMemberOldMember oldMember, CancellationToken cancellationToken)
     {
         // Static members only (guaranteed by MoveMemberAsync's caller) -> no `this.Member()` case to
         // rewrite, and no accessor property needed; bare Member() becomes NewClassName.Member() directly.
@@ -4183,7 +4207,29 @@ public class MemberRefactoringEngine
         var eol = EolUtilities.DetectDominantEol(sourceText);
 
         var editsByDocument = await CollectStaticMoveReferenceEditsAsync(solution, sourceDocument.Id, membersToMove, memberSymbols, newClassName, cancellationToken);
-        editsByDocument[sourceDocument.Id] = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, editsByDocument.TryGetValue(sourceDocument.Id, out var existingSourceEdits) ? existingSourceEdits : new List<TextChange>(), out var insideMovedMemberEdits);
+        var movedBodyEdits = editsByDocument.TryGetValue(sourceDocument.Id, out var existingSourceEdits) ? existingSourceEdits : new List<TextChange>();
+        if (oldMember != MoveMemberOldMember.remove)
+        {
+            // Keep modes leave callers untouched: only the edits inside the moved bodies survive, and no other document is touched.
+            movedBodyEdits = movedBodyEdits.Where(e => membersToMove.Any(m => m.FullSpan.Contains(e.Span))).ToList();
+            editsByDocument.Clear();
+        }
+
+        List<TextChange> sourceEdits;
+        List<TextChange> insideMovedMemberEdits;
+        if (oldMember == MoveMemberOldMember.remove)
+        {
+            sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, movedBodyEdits, out insideMovedMemberEdits);
+        }
+        else
+        {
+            var newClassNamespace = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString();
+            var qualifiedReceiver = newClassNamespace == null ? $"global::{newClassName}" : $"global::{newClassNamespace}.{newClassName}";
+            var deprecated = oldMember == MoveMemberOldMember.keepAsDeprecatedWrapper;
+            sourceEdits = MoveMemberTextEdits.BuildSourceEdits(sourceText, membersToMove, movedBodyEdits, membersToMove.ToHashSet(), m => MoveMemberTextEdits.BuildForwarder((MethodDeclarationSyntax)m, qualifiedReceiver, deprecated, newClassName, eol), out insideMovedMemberEdits);
+        }
+
+        editsByDocument[sourceDocument.Id] = sourceEdits;
 
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
         var newFilePath = Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs");

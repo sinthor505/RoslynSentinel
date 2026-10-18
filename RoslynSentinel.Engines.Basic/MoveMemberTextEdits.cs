@@ -257,7 +257,7 @@ public static class MoveMemberTextEdits
         }
 
         var indent = LeadingWhitespaceOfLine(method.SyntaxTree.GetText(), method.SpanStart);
-        return "[Obsolete(\"Deprecated wrapper: call " + targetDisplayName + "." + name + " instead.\", DiagnosticId = \"RSDEPRECATED\")]" + eol + indent + signature.ToString();
+        return "[global::System.Obsolete(\"Deprecated wrapper: call " + targetDisplayName + "." + name + " instead.\", DiagnosticId = \"RSDEPRECATED\")]" + eol + indent + signature.ToString();
     }
 
     private static string FormatForwarderParameter(ParameterSyntax parameter)
