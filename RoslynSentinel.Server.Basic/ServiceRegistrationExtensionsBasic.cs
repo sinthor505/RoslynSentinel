@@ -258,6 +258,8 @@ public static class RoslynSentinelServiceExtensionsBasic
         if (activeToolClasses.Contains("WorkspaceTools"))
         {
             services.AddSingleton<WorkspaceReadNavigationImpl>();
+            services.TryAddSingleton<SymbolNavigationImpl>();
+            services.TryAddSingleton<SymbolRelationshipImpl>();
             services.AddSingleton<WorkspaceReadNavigationTools>();
             services.AddSingleton<WorkspaceTools>();
             mcpBuilder.WithSentinelTools<WorkspaceTools>();
@@ -289,6 +291,8 @@ public static class RoslynSentinelServiceExtensionsBasic
         if (activeToolClasses.Contains("WorkspaceReadNavigationTools"))
         {
             services.TryAddSingleton<WorkspaceReadNavigationImpl>();
+            services.TryAddSingleton<SymbolNavigationImpl>();
+            services.TryAddSingleton<SymbolRelationshipImpl>();
             services.TryAddSingleton<WorkspaceReadNavigationTools>();
             mcpBuilder.WithSentinelTools<WorkspaceReadNavigationTools>();
         }

@@ -536,6 +536,36 @@ public class McpToolsetControlTests
         }
     }
 
+    [TestCase(true, "Workspace")]
+    [TestCase(false, "Workspace")]
+    [TestCase(true, "Claude")]
+    [TestCase(false, "Claude")]
+    [TestCase(true, "claude-lean")]
+    [TestCase(false, "claude-lean")]
+    [Category("ToolClassRegistry")]
+    public void WorkspaceTools_AndReadNavigationTools_ResolveFromTheContainer_AndSearchIsDeclaredOnce(bool advanced, string mode)
+    {
+        using var host = BuildHost(advanced, mode, includeTools: null);
+
+        Assert.That(host.Services.GetService<WorkspaceTools>(), Is.Not.Null, "WorkspaceTools must resolve");
+        Assert.That(host.Services.GetService<WorkspaceReadNavigationTools>(), Is.Not.Null, "WorkspaceReadNavigationTools must resolve");
+
+        // Tool names declared by the two classes, as the registry would expose them: each name exactly once.
+        var declared = new[] { typeof(WorkspaceTools), typeof(WorkspaceReadNavigationTools) }
+            .SelectMany(t => t.GetMethods()
+                .Select(m => (Class: t.Name, Attr: m.GetCustomAttributes(typeof(McpServerToolAttribute), inherit: false).OfType<McpServerToolAttribute>().FirstOrDefault()))
+                .Where(x => x.Attr?.Name is not null)
+                .Select(x => (x.Class, Name: x.Attr!.Name!)))
+            .ToArray();
+        Assert.That(declared.GroupBy(x => x.Name).Where(g => g.Count() > 1).Select(g => g.Key), Is.Empty, "no tool name may be declared by both classes");
+
+        foreach (var name in new[] { "Search", "GetMethodSource", "GetFileOutline", "ListAll", "GetOperationDetail", "GetLargeResult" })
+        {
+            Assert.That(declared.Count(x => x.Name == name), Is.EqualTo(1), $"{name} must be declared exactly once");
+            Assert.That(declared.Single(x => x.Name == name).Class, Is.EqualTo(nameof(WorkspaceReadNavigationTools)), $"{name} lives on WorkspaceReadNavigationTools");
+        }
+    }
+
     [Test]
     public void LeanHost_StartsWithNoDynamicToolsAndTheExactCoreSurface()
     {

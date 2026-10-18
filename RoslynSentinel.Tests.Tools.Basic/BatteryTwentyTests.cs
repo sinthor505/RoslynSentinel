@@ -356,7 +356,7 @@ public class BatteryTwentyTests
     {
         // BuildTool source with KindListingMaxItems + 5 classes (105 total)
         var sb = new StringBuilder("namespace TestProj;\r\n");
-        for (int i = 0; i < WorkspaceTools.KindListingMaxItems + 5; i++)
+        for (int i = 0; i < WorkspaceReadNavigationTools.KindListingMaxItems + 5; i++)
         {
             sb.AppendLine($"public class C{i} {{ }}");
         }
@@ -366,26 +366,26 @@ public class BatteryTwentyTests
 
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.HasMoreData, Is.True);
-        Assert.That(result.TotalRecords, Is.EqualTo(WorkspaceTools.KindListingMaxItems + 5));
+        Assert.That(result.TotalRecords, Is.EqualTo(WorkspaceReadNavigationTools.KindListingMaxItems + 5));
         Assert.That(result.WarningDetails, Does.Contain("mode: symbol"));
-        Assert.That(result.WarningDetails, Does.Contain((WorkspaceTools.KindListingMaxItems + 5).ToString()));
+        Assert.That(result.WarningDetails, Does.Contain((WorkspaceReadNavigationTools.KindListingMaxItems + 5).ToString()));
 
         // Returned row count: check both in-memory and offloaded cases
         var returnedCount = (result.SuccessData as List<SolutionSymbolEntry>)?.Count ?? result.LargeResult!.TotalRecords;
-        Assert.That(returnedCount, Is.EqualTo(WorkspaceTools.KindListingMaxItems));
+        Assert.That(returnedCount, Is.EqualTo(WorkspaceReadNavigationTools.KindListingMaxItems));
 
         // Truncated results carry a summary over ALL matches, not just the returned rows.
         var summary = result.ListSummary;
         Assert.That(summary, Is.Not.Null);
-        Assert.That(summary!.TotalCount, Is.EqualTo(WorkspaceTools.KindListingMaxItems + 5));
+        Assert.That(summary!.TotalCount, Is.EqualTo(WorkspaceReadNavigationTools.KindListingMaxItems + 5));
         Assert.That(summary.FileCount, Is.EqualTo(1));
         Assert.That(summary.ByFile, Has.Count.EqualTo(1));
-        Assert.That(summary.ByFile[0].Count, Is.EqualTo(WorkspaceTools.KindListingMaxItems + 5));
+        Assert.That(summary.ByFile[0].Count, Is.EqualTo(WorkspaceReadNavigationTools.KindListingMaxItems + 5));
         Assert.That(summary.TruncatedFileCount, Is.EqualTo(0));
         Assert.That(summary.ByProject, Is.Not.Null);
         Assert.That(summary.ByProject, Has.Count.EqualTo(1));
         Assert.That(summary.ByProject![0].ProjectName, Is.EqualTo("TestProj"));
-        Assert.That(summary.ByProject[0].Count, Is.EqualTo(WorkspaceTools.KindListingMaxItems + 5));
+        Assert.That(summary.ByProject[0].Count, Is.EqualTo(WorkspaceReadNavigationTools.KindListingMaxItems + 5));
         Assert.That(result.WarningDetails, Does.Contain("Search(mode: references)"));
         Assert.That(result.WarningDetails, Does.Contain("GetFileOutline"));
         Assert.That(result.WarningDetails, Does.Contain("mode: symbol"));
@@ -439,7 +439,7 @@ public class BatteryTwentyTests
     {
         // BuildTool source with KindListingMaxItems + 5 classes (105 total)
         var sb = new StringBuilder("namespace TestProj;\r\n");
-        for (int i = 0; i < WorkspaceTools.KindListingMaxItems + 5; i++)
+        for (int i = 0; i < WorkspaceReadNavigationTools.KindListingMaxItems + 5; i++)
         {
             sb.AppendLine($"public class C{i} {{ }}");
         }
@@ -447,7 +447,7 @@ public class BatteryTwentyTests
 
         var result = await _workspaceTools.ListAllTool(reason: "test message", kind: ListAllKind.@class);
 
-        Assert.That(result.TotalRecords, Is.EqualTo(WorkspaceTools.KindListingMaxItems + 5));
+        Assert.That(result.TotalRecords, Is.EqualTo(WorkspaceReadNavigationTools.KindListingMaxItems + 5));
         Assert.That(result.HasMoreData, Is.False);
     }
 
@@ -458,8 +458,8 @@ public class BatteryTwentyTests
         // Verify that the cap number is hard-coded in the description strings.
         // This test will fail if someone changes the constant without updating the description text.
 
-        // Get the SearchSolutionTool method from WorkspaceTools
-        var searchMethod = typeof(WorkspaceTools).GetMethods()
+        // Get the SearchSolutionTool method from WorkspaceReadNavigationTools (it carries the [McpServerTool]; WorkspaceTools only delegates)
+        var searchMethod = typeof(WorkspaceReadNavigationTools).GetMethods()
             .First(m => m.Name == "SearchSolutionTool");
 
         // Get the method-level [Description] attribute
@@ -467,7 +467,7 @@ public class BatteryTwentyTests
             .OfType<System.ComponentModel.DescriptionAttribute>()
             .First();
 
-        var capValue = WorkspaceTools.KindListingMaxItems.ToString();
+        var capValue = WorkspaceReadNavigationTools.KindListingMaxItems.ToString();
         Assert.That(methodDesc.Description, Does.Contain(capValue), "Method [Description] must contain the cap value");
         Assert.That(methodDesc.Description, Does.Contain("name filter"), "Method [Description] must mention 'name filter'");
 

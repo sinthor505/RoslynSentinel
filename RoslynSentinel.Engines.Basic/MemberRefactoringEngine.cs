@@ -3400,7 +3400,7 @@ public class MemberRefactoringEngine
     ///  - No existing class named targetClassName: synthesizes a new class (same behavior as the
     ///    former ExtractMembers as=class). STATIC MEMBERS ONLY, same reasoning as above.
     /// </summary>
-    public async Task<MoveMemberResult> MoveMemberAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default, bool autoResolveCallSites = true, Dictionary<string, string>? callSiteFixups = null)
+    public async Task<MoveMemberResult> MoveMemberAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default, bool autoResolveCallSites = true, Dictionary<string, string>? callSiteFixups = null, IReadOnlyDictionary<string, string>? fieldMap = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -3493,7 +3493,9 @@ public class MemberRefactoringEngine
         HashSet<string> alreadySatisfiedFields = new(StringComparer.Ordinal);
         if (classSymbol != null && semanticModel != null)
         {
-            alreadySatisfiedFields = RequireNoUnmovedDependencies(classSymbol, semanticModel, membersToMove, memberNames, className, targetClassName, targetClassSymbol);
+            ValidateFieldMap(classSymbol, semanticModel, membersToMove, className, targetClassName, targetIsBaseType, targetClassSymbol, fieldMap);
+            alreadySatisfiedFields = RequireNoUnmovedDependencies(classSymbol, semanticModel, membersToMove, memberNames, className, targetClassName, targetClassSymbol, fieldMap);
+            RequireCtorAssignedFieldsNotMoved(classNode, classSymbol, semanticModel, membersToMove, alreadySatisfiedFields, className);
         }
 
         if (alreadySatisfiedFields.Count > 0)
@@ -3578,7 +3580,7 @@ public class MemberRefactoringEngine
                 throw new ToolNotFoundException($"Cannot move instance member(s) [{names}] to '{targetClassName}': it is not an existing base class of '{className}'. " + "Moving an instance member elsewhere requires rewriting every call site's receiver expression. Pass " + "autoResolveCallSites:true (the default) to have this resolved automatically where unambiguous, or " + "make the member(s) static first, or move to an existing base class of the source type.");
             }
 
-            return await MoveInstanceMembersAsync(solution, filePath, className, membersToMove, targetClassName, memberNames, targetFilePath, targetDoc, targetClassNode, callSiteFixups, cancellationToken);
+            return await MoveInstanceMembersAsync(solution, filePath, className, membersToMove, targetClassName, memberNames, targetFilePath, targetDoc, targetClassNode, callSiteFixups, fieldMap, cancellationToken);
         }
 
         if (targetDoc?.FilePath != null && targetClassNode != null)
@@ -3646,7 +3648,7 @@ public class MemberRefactoringEngine
     /// only fails to compile afterward, as an unexplained CS0246/CS0103 pointing at the target file
     /// rather than at the real cause (an un-moved dependency back in the source class).
     /// </summary>
-    private static HashSet<string> RequireNoUnmovedDependencies(INamedTypeSymbol classSymbol, SemanticModel semanticModel, List<MemberDeclarationSyntax> membersToMove, string[] memberNames, string className, string targetClassName, INamedTypeSymbol? targetClassSymbol)
+    private static HashSet<string> RequireNoUnmovedDependencies(INamedTypeSymbol classSymbol, SemanticModel semanticModel, List<MemberDeclarationSyntax> membersToMove, string[] memberNames, string className, string targetClassName, INamedTypeSymbol? targetClassSymbol, IReadOnlyDictionary<string, string>? fieldMap)
     {
         var alreadySatisfiedFields = new HashSet<string>(StringComparer.Ordinal);
         var siblingsByName = classSymbol.GetMembers().Where(s => s.DeclaredAccessibility is Accessibility.Private or Accessibility.Internal or Accessibility.NotApplicable).Where(s => !memberNames.Contains(s.Name)).ToLookup(s => s.Name, StringComparer.Ordinal);
@@ -3673,6 +3675,13 @@ public class MemberRefactoringEngine
                 var resolved = symbolInfo.Symbol ?? symbolInfo.CandidateSymbols.FirstOrDefault();
                 if (resolved == null || !SymbolEqualityComparer.Default.Equals(resolved.ContainingType, classSymbol))
                 {
+                    continue;
+                }
+
+                if (resolved is IFieldSymbol mappedField && fieldMap != null && fieldMap.ContainsKey(mappedField.Name))
+                {
+                    // Mapped by fieldMap (validated in ValidateFieldMap): satisfied via the same mechanism as a same-name target field.
+                    alreadySatisfiedFields.Add(mappedField.Name);
                     continue;
                 }
 
@@ -3713,6 +3722,145 @@ public class MemberRefactoringEngine
         }
 
         return alreadySatisfiedFields;
+    }
+
+    /// <summary>
+    /// Validates a caller-supplied fieldMap (source-class private field name -> target-class field name)
+    /// before any edit is built. Only the instance-move route into an existing class accepts a map. Each key
+    /// must be a field of the source class that the moved members reference (and is not itself moved), and
+    /// each value must be a field of the target class whose type is the same as, or implicitly convertible
+    /// from, the source field's type. Throws ToolInvalidArgumentException on the first violation.
+    /// </summary>
+    private static void ValidateFieldMap(INamedTypeSymbol classSymbol, SemanticModel semanticModel, List<MemberDeclarationSyntax> membersToMove, string className, string targetClassName, bool targetIsBaseType, INamedTypeSymbol? targetClassSymbol, IReadOnlyDictionary<string, string>? fieldMap)
+    {
+        if (fieldMap == null || fieldMap.Count == 0)
+        {
+            return;
+        }
+
+        bool hasInstanceMember = membersToMove.Any(m => m switch
+        {
+            MethodDeclarationSyntax meth => !meth.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)),
+            PropertyDeclarationSyntax prop => !prop.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)),
+            FieldDeclarationSyntax field => !field.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)),
+            _ => false
+        });
+        bool instanceRoute = !targetIsBaseType && targetClassSymbol is { IsStatic: false } && hasInstanceMember;
+        if (!instanceRoute)
+        {
+            throw new ToolInvalidArgumentException($"fieldMap is only supported for instance moves into an existing class. The move of '{className}' to '{targetClassName}' resolves to a base-type, static or new-class route, so omit fieldMap for this move.");
+        }
+
+        foreach (var (sourceName, targetName) in fieldMap)
+        {
+            var sourceField = classSymbol.GetMembers(sourceName).OfType<IFieldSymbol>().FirstOrDefault();
+            if (sourceField == null)
+            {
+                throw new ToolInvalidArgumentException($"fieldMap key '{sourceName}' is not a field of '{className}'. Keys must name a private field of the source class.");
+            }
+
+            if (membersToMove.Any(m => m is FieldDeclarationSyntax fd && fd.Declaration.Variables.Any(v => v.Identifier.Text == sourceName)))
+            {
+                throw new ToolInvalidArgumentException($"fieldMap key '{sourceName}' names a field that is itself being moved. Remove it from memberNames or from fieldMap.");
+            }
+
+            bool referenced = membersToMove.SelectMany(m => m.DescendantNodes().OfType<SimpleNameSyntax>()).Any(id => semanticModel.GetSymbolInfo(id).Symbol is IFieldSymbol f && SymbolEqualityComparer.Default.Equals(f, sourceField));
+            if (!referenced)
+            {
+                throw new ToolInvalidArgumentException($"fieldMap key '{sourceName}' is not referenced by the moved member(s). Remove it from fieldMap; only fields the moved bodies use can be mapped.");
+            }
+
+            var targetField = targetClassSymbol!.GetMembers(targetName).OfType<IFieldSymbol>().FirstOrDefault();
+            if (targetField == null)
+            {
+                throw new ToolInvalidArgumentException($"fieldMap value '{targetName}' (for key '{sourceName}') is not a field of '{targetClassName}'. Values must name a field of the target class.");
+            }
+
+            bool sameType = SymbolEqualityComparer.Default.Equals(sourceField.Type, targetField.Type);
+            bool implicitlyConvertible = !sameType && semanticModel.Compilation.ClassifyConversion(sourceField.Type, targetField.Type).IsImplicit;
+            if (!sameType && !implicitlyConvertible)
+            {
+                throw new ToolInvalidArgumentException($"fieldMap maps '{sourceName}' (type '{sourceField.Type}') to '{targetName}' of '{targetClassName}' (type '{targetField.Type}'), which is neither the same type nor implicitly convertible. Map it to a target field of a compatible type.");
+            }
+        }
+
+        foreach (var (sourceName, targetName) in fieldMap)
+        {
+            foreach (var member in membersToMove)
+            {
+                foreach (var node in member.DescendantNodes())
+                {
+                    var declaredName = DeclaredLocalOrParameterName(node);
+                    if (declaredName == targetName)
+                    {
+                        var memberName = member switch
+                        {
+                            MethodDeclarationSyntax meth => meth.Identifier.Text,
+                            PropertyDeclarationSyntax prop => prop.Identifier.Text,
+                            FieldDeclarationSyntax fld => fld.Declaration.Variables.First().Identifier.Text,
+                            _ => member.Kind().ToString()
+                        };
+                        throw new ToolInvalidArgumentException($"fieldMap maps '{sourceName}' to '{targetName}', but moved member '{memberName}' declares a local, parameter or pattern variable named '{declaredName}', which would capture the rewritten reference to '{targetName}'. Rename that local or choose another mapping.");
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the name a syntax node declares as a local, parameter, pattern, foreach, catch or local-function
+    /// identifier, or null when the node declares none of those. Field declarators are excluded.
+    /// </summary>
+    private static string? DeclaredLocalOrParameterName(SyntaxNode node) => node switch
+    {
+        VariableDeclaratorSyntax v when v.Parent?.Parent is not FieldDeclarationSyntax => v.Identifier.Text,
+        ParameterSyntax p => p.Identifier.Text,
+        SingleVariableDesignationSyntax d => d.Identifier.Text,
+        ForEachStatementSyntax f => f.Identifier.Text,
+        CatchDeclarationSyntax c => c.Identifier.Text,
+        LocalFunctionStatementSyntax l => l.Identifier.Text,
+        _ => null
+    };
+
+    /// <summary>
+    /// Refuses when a moved field has no declaration initializer and is assigned inside a constructor
+    /// of the source class. The field declaration moves but the constructor assignment does not, so the
+    /// target would get a field that is never assigned. Fields already satisfied by the target's own
+    /// field are dropped from the move and are skipped here.
+    /// </summary>
+    private static void RequireCtorAssignedFieldsNotMoved(ClassDeclarationSyntax classNode, INamedTypeSymbol classSymbol, SemanticModel semanticModel, List<MemberDeclarationSyntax> membersToMove, HashSet<string> alreadySatisfiedFields, string className)
+    {
+        var movedFieldNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var field in membersToMove.OfType<FieldDeclarationSyntax>())
+        {
+            foreach (var variable in field.Declaration.Variables)
+            {
+                if (variable.Initializer == null && !alreadySatisfiedFields.Contains(variable.Identifier.Text))
+                {
+                    movedFieldNames.Add(variable.Identifier.Text);
+                }
+            }
+        }
+
+        if (movedFieldNames.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var constructor in classNode.Members.OfType<ConstructorDeclarationSyntax>())
+        {
+            foreach (var assignment in constructor.DescendantNodes().OfType<AssignmentExpressionSyntax>())
+            {
+                if (semanticModel.GetSymbolInfo(assignment.Left).Symbol is not IFieldSymbol assignedField
+                    || !SymbolEqualityComparer.Default.Equals(assignedField.ContainingType, classSymbol)
+                    || !movedFieldNames.Contains(assignedField.Name))
+                {
+                    continue;
+                }
+
+                throw new ToolInvalidArgumentException($"Field '{assignedField.Name}' is assigned in the constructor of '{className}' but the constructor assignment is not moved with it. " + "Move the dependency to the target through its constructor first (ConstructorParameter / MethodSignature), then map the field with fieldMap, or remove the assignment.");
+            }
+        }
     }
 
     private static async Task<MoveMemberResult> MoveMembersToBaseTypeAsync(Solution solution, FilePathWrapper filePath, CompilationUnitSyntax root, ClassDeclarationSyntax classNode, List<MemberDeclarationSyntax> membersToMove, INamedTypeSymbol baseType, CancellationToken cancellationToken)
@@ -4060,7 +4208,50 @@ public class MemberRefactoringEngine
         return (result, appliedEdits);
     }
 
-    private async Task<MoveMemberResult> MoveInstanceMembersAsync(Solution solution, FilePathWrapper filePath, string className, List<MemberDeclarationSyntax> membersToMove, string targetClassName, string[] memberNames, FilePathWrapper? targetFilePath, Document? existingTargetDoc, ClassDeclarationSyntax? existingTargetClassNode, Dictionary<string, string>? callSiteFixups, CancellationToken cancellationToken)
+    /// <summary>
+    /// Text edits that retarget every reference, inside the moved members' bodies, to a source-class field named in
+    /// <paramref name = "fieldMap"/> onto the mapped target field name. A reference is rewritten only when the semantic model
+    /// binds it to that exact source field (so a same-named local or an unrelated symbol is never touched) and it is
+    /// a bare name or a `this.`-qualified one (only the name token changes). Qualification by any other receiver is left
+    /// alone: after the move it cannot bind to the target field either way, so the compile gate reports it.
+    /// </summary>
+    private static List<TextChange> CollectFieldMapRewriteEdits(SemanticModel semanticModel, INamedTypeSymbol sourceType, IReadOnlyList<MemberDeclarationSyntax> membersToMove, IReadOnlyDictionary<string, string> fieldMap, CancellationToken cancellationToken)
+    {
+        var edits = new List<TextChange>();
+        foreach (var member in membersToMove)
+        {
+            foreach (var name in member.DescendantNodes().OfType<IdentifierNameSyntax>())
+            {
+                if (!IsFieldMapRewritableReference(name))
+                {
+                    continue;
+                }
+
+                if (semanticModel.GetSymbolInfo(name, cancellationToken).Symbol is IFieldSymbol field && SymbolEqualityComparer.Default.Equals(field.ContainingType.OriginalDefinition, sourceType) && fieldMap.TryGetValue(field.Name, out var targetName) && targetName != field.Name)
+                {
+                    edits.Add(new TextChange(name.Identifier.Span, targetName));
+                }
+            }
+        }
+
+        return edits;
+    }
+
+    /// <summary>
+    /// True when an identifier that binds to a source field names it as the current instance's field: a bare name or
+    /// `this.Name`. False for `other.Name`, `?.Name`, a property-pattern/named-argument label and an object-initializer
+    /// member label, none of which are a use of the moving instance's field.
+    /// </summary>
+    private static bool IsFieldMapRewritableReference(IdentifierNameSyntax name) => name.Parent switch
+    {
+        MemberAccessExpressionSyntax memberAccess when memberAccess.Name == name => memberAccess.Expression is ThisExpressionSyntax,
+        MemberBindingExpressionSyntax => false,
+        NameColonSyntax => false,
+        AssignmentExpressionSyntax assignment when assignment.Left == name && assignment.Parent.IsKind(SyntaxKind.ObjectInitializerExpression) => false,
+        _ => true
+    };
+
+    private async Task<MoveMemberResult> MoveInstanceMembersAsync(Solution solution, FilePathWrapper filePath, string className, List<MemberDeclarationSyntax> membersToMove, string targetClassName, string[] memberNames, FilePathWrapper? targetFilePath, Document? existingTargetDoc, ClassDeclarationSyntax? existingTargetClassNode, Dictionary<string, string>? callSiteFixups, IReadOnlyDictionary<string, string>? fieldMap, CancellationToken cancellationToken)
     {
         var rows = await PreviewInstanceMoveCallSitesAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken);
         var fixups = CallSiteFixupMap.Parse(callSiteFixups, _workspaceManager.GetSolutionRoot());
@@ -4257,6 +4448,36 @@ public class MemberRefactoringEngine
             if (qualifyResult.DroppedByRebind > 0)
             {
                 notes.Add($"{qualifyResult.DroppedByRebind} cref qualification(s) in the source file were dropped because the qualified form did not rebind to the same member.");
+            }
+        }
+
+        // fieldMap (validated in MoveMemberAsync): the moved bodies still say `_a` / `this._a` for a private source field
+        // that stays behind, so every such reference is retargeted to the mapped target field. These edits sit inside the
+        // moved members, so BuildSourceEdits routes them into the moved text (like the doc-comment qualification above):
+        // the source file's own edit list only gains the member removal, the target gets the rewritten text.
+        if (fieldMap is { Count: > 0 } && semanticModel is not null && sourceType is not null)
+        {
+            if (!editsByDocument.TryGetValue(document.Id, out var fieldMapDocEdits))
+            {
+                fieldMapDocEdits = new List<TextChange>();
+                editsByDocument[document.Id] = fieldMapDocEdits;
+            }
+
+            var fieldRewrites = 0;
+            foreach (var fieldEdit in CollectFieldMapRewriteEdits(semanticModel, sourceType, membersToMove, fieldMap, cancellationToken))
+            {
+                if (fieldMapDocEdits.Any(e => e.Span.OverlapsWith(fieldEdit.Span)))
+                {
+                    continue;
+                }
+
+                fieldMapDocEdits.Add(fieldEdit);
+                fieldRewrites++;
+            }
+
+            if (fieldRewrites > 0)
+            {
+                notes.Add($"Rewrote {fieldRewrites} reference(s) in the moved member(s) from source field(s) to the mapped field(s) of '{targetClassName}' per fieldMap.");
             }
         }
 

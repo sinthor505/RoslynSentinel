@@ -41,6 +41,8 @@ public class WorkspaceTools
 
     private readonly WorkspaceHealthMiscTools _healthMisc;
 
+    private readonly WorkspaceReadNavigationTools _readNavTools;
+
     public WorkspaceTools(IWorkspaceManager workspaceManager, ValidationEngine validationEngine, DiffEngine diffEngine, DiagnosticEngine diagnosticEngine, SolutionManagementEngine solutionManagementEngine, StructuralRefinementEngine structuralRefinementEngine, DependencyEngine dependencyEngine, ProjectConsistencyEngine projectConsistencyEngine, SentinelConfiguration config, ILogger<WorkspaceTools> logger, BuildEngine buildEngine, SymbolNavigationEngine symbolNavigationEngine, TestRunEngine testRunEngine, WorkspaceReadNavigationImpl readNav, WriteToolAdviceHelper writeAdvice)
     {
         _workspaceManager = workspaceManager;
@@ -71,6 +73,7 @@ public class WorkspaceTools
         // don't all need updating for a dependency only Search uses.
         _symbolNavigation = new SymbolNavigationImpl(symbolNavigationEngine, new ImpactAnalyzer(workspaceManager), workspaceManager, logger);
         _symbolRelationship = new SymbolRelationshipImpl(new DiscoveryEngine(workspaceManager), symbolNavigationEngine, workspaceManager, logger);
+        _readNavTools = new WorkspaceReadNavigationTools(readNav, _symbolNavigation, _symbolRelationship);
     }
     [McpServerTool(Name = "Features")]
     [Produces(DataTag.Report)]
@@ -562,17 +565,10 @@ public class WorkspaceTools
         => _projectManagement.SplitProjectByFolderTool(reason, sourceProjectName, folderName, targetProjectName, cancellationToken);
 
     // ── Phase 1 -> Low-level fallback tools ──────────────────────────────────
-    [McpServerTool(Name = "GetMethodSource")]
-    [Produces(DataTag.SourceCode)]
-    [Description("Returns a method's or constructor's full source text and attributes. For a constructor, pass the class name.")]
+    // Non-tool delegator: the GetMethodSource [McpServerTool] lives on WorkspaceReadNavigationTools.
     public Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSourceTool(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.MethodName, required: true)] string methodName, // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
-        return _readNav.GetMethodSource(reason, filePathResolved, methodName, cancellationToken);
-    }
+        ToolCallReason reason, string filePath, string methodName, CancellationToken cancellationToken = default)
+        => _readNavTools.GetMethodSourceTool(reason, filePath, methodName, cancellationToken);
 
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "ReadFile")]
@@ -588,203 +584,35 @@ public class WorkspaceTools
         CancellationToken cancellationToken = default)
         => _fileEdit.ReadFileTool(reason, filePath, startLine, endLine, memberName, containerName, cancellationToken);
 
-    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
-    [McpServerTool(Name = "GetFileOutline")]
-    [Produces(DataTag.Report)]
-    [Description("Returns a structural outline of a file's types and members with 1-based line ranges (no bodies).")]
+    // Non-tool delegator: the GetFileOutline [McpServerTool] lives on WorkspaceReadNavigationTools.
     public Task<SentinelCallToolResult<FileOutlineResult, ResultError>> GetFileOutlineTool(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath, // RequestContext<CallToolRequestParams> requestParams = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
-        return _readNav.GetFileOutline(reason, filePathResolved, cancellationToken);
-    }
+        ToolCallReason reason, string filePath, CancellationToken cancellationToken = default)
+        => _readNavTools.GetFileOutlineTool(reason, filePath, cancellationToken);
 
-    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
-    [McpServerTool(Name = "ListAll")]
-    [Produces(DataTag.Report)]
-    [Description("Lists every declared symbol in the loaded solution with file, kind, name, container, and line range. Call this first if you don't know an exact symbol name.")]
+    // Non-tool delegator: the ListAll [McpServerTool] lives on WorkspaceReadNavigationTools.
     public Task<SentinelCallToolResult<object>> ListAllTool(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Description(ToolParams.ListAllKindValues)][ExternalInputRequired(DataTag.SymbolKind, required: false)] ListAllKind kind = ListAllKind.all,
-        [Description("Restricts to one project. Omit for the whole solution.")]
-        [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
-        [Description("false (default) = skip test projects; true = include them. Naming a test project in projectName/filePath always includes it.")] bool includeTests = false,
+        ToolCallReason reason, ListAllKind kind = ListAllKind.all, string? projectName = null, bool includeTests = false,
         CancellationToken cancellationToken = default)
-        => _readNav.ListAll(reason, kind, projectName, includeTests: includeTests, cancellationToken: cancellationToken);
-
-    [McpServerTool(Name = "Search")]
-    [Produces(DataTag.Report)]
-    [Produces(DataTag.FileList)]
-    [Produces(DataTag.DocCommentId)]
-    [Produces(DataTag.ProjectName)]
-    [Description("Unified search. mode selects what's searched: text (free-text/regex scan), symbol (declaration lookup by name), references (callers and/or implementations of a symbol: use mode callers for call sites, implementations for overrides/interface implementers, references for both), attribute (every place an attribute is applied, by name e.g. TestFixture or TestFixtureAttribute; returns decorated symbol, target kind, arguments, file, line), or a declaration-kind listing (all, namespace, class, interface, method, property, struct, record, enum, enum member, constructor, field). query: mode text = pattern matched as both a literal and a regex (use fileGlob, not a path parameter, to restrict files); symbol/references = symbol name; declaration-kind modes = optional case-insensitive name filter (exact name unless exactMatch is false). Declaration-kind listings return at most 30 rows: when more match, totalRecords holds the full match count, hasMoreData is true, listSummary gives per-project (byProject) and top-10 per-file (byFile, truncatedFileCount) match counts over ALL matches, and warningDetails says the list was truncated - narrow with query or projectName, or use mode: symbol. Zero matches is not an error: it returns an empty result (isError false, totalRecords 0) whose statusMessage says what to try next.")]
-    public Task<SentinelCallToolResult<object>> SearchSolutionTool(
-    [Description(ToolParams.Reason)] ToolCallReason reason,
-    SearchMode mode,
-    [Description("mode: text = pattern matched as both a literal and a regex; symbol/references/callers/implementations = symbol name; attribute = attribute name; declaration-kind modes = optional case-insensitive name filter (see exactMatch). Omit in declaration-kind modes only if you want up to 30 rows of that kind. Text mode is case-insensitive and per line, .cs files only; use | for alternation. Required for modes text, symbol, references, callers, implementations and attribute.")]
-        string? query = null,
-    [Description("mode: text only. Glob restricting file paths (omit for all files). " +
-        "Supports '*' (within one path segment), '**' (any depth), '?' (one char), " +
-        "'{a,b,...}' alternation, and '[abc]'/'[!abc]' character classes. A glob " +
-        "containing '/' matches the solution-relative path (e.g. '**/Foo.cs', 'MyProj/*.cs'); a " +
-        "glob with no '/' matches the bare filename only (e.g. '*.cs', 'Foo.cs').")]
-        [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
-    [Description("mode: text only. Caps total matches scanned.")]
-        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,
-    [Description("mode: symbol only. Restricts to one kind of symbol.")]
-        [ExternalInputRequired(DataTag.SymbolKind)] SymbolKindFilter symbolKind = SymbolKindFilter.any,
-    [Description("mode: symbol only. Restricts to symbols declared inside this type.")]
-        [ExternalInputRequired(DataTag.ContainingType)] string? containingType = null,
-    [Description("mode: symbol only. Restricts to symbols declared inside this namespace.")]
-        [ExternalInputRequired(DataTag.ContainingNamespace)] string? containingNamespace = null,
-    [Description("Restricts to one project (symbol/all/declaration-kind/attribute modes).")]
-        [Consumes(DataTag.ProjectName, required: false)] string? projectName = null,
-    [Description("mode: symbol and declaration-kind modes. true (default) = exact name match; false = substring (contains) match.")]
-        [ToolOption(ToolOptionTag.MatchType)] bool exactMatch = true,
-    [Description("mode: symbol/references/callers/implementations/attribute only. Pins resolution when the name is ambiguous across files. Ignored in text and declaration-kind modes - use fileGlob in text mode.")]
-        [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
-    [Description("mode: references/callers/implementations only. Optional; use when the name is ambiguous. " + ToolParams.ContextSnippet)]
-        [Consumes(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
-    [Description("mode: references/callers/implementations only. " + ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
-    [Description("mode: references/callers/implementations only. " + ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-    [Description("false (default) = skip test projects in every mode, including symbol; true = include them. Naming a test project in projectName/filePath always includes it.")] bool includeTests = false,
-    [Description("mode: attribute only. Owner must also carry this attribute.")] string? hasAttribute = null,
-    CancellationToken cancellationToken = default)
-    => DispatchSearch(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, cancellationToken);
+        => _readNavTools.ListAllTool(reason, kind, projectName, includeTests, cancellationToken);
 
     /// <summary>
-    /// Hard cap on rows returned by Search in declaration-kind modes; extra matches are counted in totalRecords and flagged via hasMoreData/warningDetails.
+    /// Non-tool delegator kept so existing callers of <c>WorkspaceTools.SearchSolutionTool</c> keep compiling.
+    /// The Search tool itself (the [McpServerTool] attribute) lives on <see cref="WorkspaceReadNavigationTools"/>.
     /// </summary>
-    public const int KindListingMaxItems = 30;
-
-    private static ListAllKind SearchModeToListAllKind(SearchMode mode) => mode switch
-    {
-        SearchMode.all => ListAllKind.all,
-        SearchMode.@namespace => ListAllKind.@namespace,
-        SearchMode.@class => ListAllKind.@class,
-        SearchMode.@interface => ListAllKind.@interface,
-        SearchMode.method => ListAllKind.method,
-        SearchMode.property => ListAllKind.property,
-        SearchMode.@struct => ListAllKind.@struct,
-        SearchMode.record => ListAllKind.record,
-        SearchMode.@enum => ListAllKind.@enum,
-        SearchMode.enumMember => ListAllKind.enumMember,
-        SearchMode.constructor => ListAllKind.constructor,
-        SearchMode.field => ListAllKind.field,
-        _ => throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unhandled SearchMode in declaration-listing dispatch.")
-    };
-
-    private Task<SentinelCallToolResult<object>> DispatchSearchCore(
-    ToolCallReason reason, SearchMode mode, string? query, string? fileGlob, int maxResults,
-    SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName,
-    bool exactMatch, string? filePath, string? contextSnippet,
-    string? lineBefore, string? lineAfter, bool includeTests, string? hasAttribute, CancellationToken cancellationToken)
-    {
-        switch (mode)
-        {
-            case SearchMode.text:
-                return _readNav.SearchSolutionText(reason, query ?? string.Empty, fileGlob, maxResults, includeTests, cancellationToken);
-            case SearchMode.symbol:
-                return _symbolNavigation.LocateSymbol(reason, query ?? string.Empty, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch, includeTests: includeTests, cancellationToken: cancellationToken);
-            case SearchMode.references:
-                return _symbolRelationship.FindReferences(reason, query ?? string.Empty, FindReferencesKind.all, filePath, contextSnippet, lineBefore, lineAfter, includeTests: includeTests, cancellationToken: cancellationToken);
-            case SearchMode.callers:
-                return _symbolRelationship.FindReferences(reason, query ?? string.Empty, FindReferencesKind.callers, filePath, contextSnippet, lineBefore, lineAfter, includeTests: includeTests, cancellationToken: cancellationToken);
-            case SearchMode.implementations:
-                return _symbolRelationship.FindReferences(reason, query ?? string.Empty, FindReferencesKind.implementations, filePath, contextSnippet, lineBefore, lineAfter, includeTests: includeTests, cancellationToken: cancellationToken);
-            case SearchMode.attribute:
-                return _symbolRelationship.QuerySymbolRelationships(reason, query ?? string.Empty, FindUsagesSearchKind.attributeUsages, projectName, filePath, includeTests: includeTests, hasAttribute: hasAttribute, cancellationToken: cancellationToken);
-            default:
-                return _readNav.ListAll(reason, SearchModeToListAllKind(mode), projectName, query, exactMatch, KindListingMaxItems, includeTests: includeTests, cancellationToken: cancellationToken);
-        }
-    }
-
-    private async Task<SentinelCallToolResult<object>> DispatchSearch(
-    ToolCallReason reason, SearchMode mode, string? query, string? fileGlob, int maxResults,
-    SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName,
-    bool exactMatch, string? filePath, string? contextSnippet,
-    string? lineBefore, string? lineAfter, bool includeTests, string? hasAttribute, CancellationToken cancellationToken)
-    {
-        if (mode is SearchMode.text or SearchMode.symbol or SearchMode.references or SearchMode.callers or SearchMode.implementations or SearchMode.attribute
-            && string.IsNullOrWhiteSpace(query))
-        {
-            var what = mode switch
-            {
-                SearchMode.text => "text or regex pattern",
-                SearchMode.attribute => "attribute name (with or without the Attribute suffix, e.g. TestFixture)",
-                _ => "symbol name"
-            };
-            return new SentinelCallToolResult<object>
-            {
-                IsError = true,
-                ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"query is required for mode: {mode}. Pass the {what} in query.")
-            };
-        }
-
-        var result = await DispatchSearchCore(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, cancellationToken);
-
-        var ignored = FindIgnoredSearchParameters(mode, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, hasAttribute);
-        if (ignored.Count == 0)
-        {
-            return result;
-        }
-
-        var priorWarning = string.IsNullOrEmpty(result.WarningDetails) ? string.Empty : result.WarningDetails + " ";
-        return result with { WarningDetails = priorWarning + $"Ignored parameter(s) for mode {mode}: {string.Join(", ", ignored)}." };
-    }
-
-    private static List<string> FindIgnoredSearchParameters(SearchMode mode, string? fileGlob, int maxResults, SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName, bool exactMatch, string? filePath, string? contextSnippet, string? lineBefore, string? lineAfter, string? hasAttribute)
-    {
-        var used = mode switch
-        {
-            SearchMode.text => new[] { "fileGlob", "maxResults" },
-            SearchMode.symbol => new[] { "symbolKind", "containingType", "containingNamespace", "projectName", "exactMatch", "filePath" },
-            SearchMode.references or SearchMode.callers or SearchMode.implementations => new[] { "filePath", "contextSnippet", "lineBefore", "lineAfter" },
-            SearchMode.attribute => new[] { "projectName", "filePath", "hasAttribute" },
-            _ => new[] { "projectName", "exactMatch" }
-        };
-
-        var ignored = new List<string>();
-        void Check(string name, bool supplied)
-        {
-            if (supplied && !used.Contains(name))
-            {
-                ignored.Add(name);
-            }
-        }
-
-        Check("fileGlob", fileGlob is not null);
-        Check("maxResults", maxResults != 200);
-        Check("symbolKind", symbolKind != SymbolKindFilter.any);
-        Check("containingType", containingType is not null);
-        Check("containingNamespace", containingNamespace is not null);
-        Check("projectName", projectName is not null);
-        Check("exactMatch", !exactMatch);
-        Check("filePath", filePath is not null);
-        Check("contextSnippet", contextSnippet is not null);
-        Check("lineBefore", lineBefore is not null);
-        Check("lineAfter", lineAfter is not null);
-        Check("hasAttribute", hasAttribute is not null);
-        return ignored;
-    }
-
-    [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
-    [McpServerTool(Name = "GetOperationDetail")]
-    [Produces(DataTag.ResultOnly)]
-    [Description("Returns a filtered, paged slice of an operation result blob by changeId.")]
-    public Task<SentinelCallToolResult<object>> GetOperationDetailTool(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.ChangeId, required: true)] string changeId,
-        [Description("Filters items by outcome (failures/skipped/succeeded/rolledback/NeedsManualReview, with common synonyms) or by file:<path>. Omit for all.")]
-        [ToolOptionAttribute(ToolOptionTag.Filter)] string? filter = null,
-        [Description("Caps how many filtered items this page returns.")]
-        [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxItems = 50,
-        [Description("Filtered items to skip. Pass NextOffset from the previous response to continue paging.")]
-        [ToolOptionAttribute(ToolOptionTag.Offset)] int offset = 0, // RequestContext<CallToolRequestParams> requestParams = null,
+    public Task<SentinelCallToolResult<object>> SearchSolutionTool(
+        ToolCallReason reason, SearchMode mode, string? query = null, string? fileGlob = null, int maxResults = 200,
+        SymbolKindFilter symbolKind = SymbolKindFilter.any, string? containingType = null, string? containingNamespace = null,
+        string? projectName = null, bool exactMatch = true, string? filePath = null, string? contextSnippet = null,
+        string? lineBefore = null, string? lineAfter = null, bool includeTests = false, string? hasAttribute = null,
         CancellationToken cancellationToken = default)
-        => _readNav.GetOperationDetail(reason, changeId, filter, maxItems, offset, cancellationToken);
+        => _readNavTools.SearchSolutionTool(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, cancellationToken);
+
+    // Non-tool delegator: the GetOperationDetail [McpServerTool] lives on WorkspaceReadNavigationTools.
+    public Task<SentinelCallToolResult<object>> GetOperationDetailTool(
+        ToolCallReason reason, string changeId, string? filter = null, int maxItems = 50, int offset = 0,
+        CancellationToken cancellationToken = default)
+        => _readNavTools.GetOperationDetailTool(reason, changeId, filter, maxItems, offset, cancellationToken);
+
     [McpServerTool(Name = "UndoLastApply")]
     [Produces(DataTag.ResultOnly)]
     [Description("Reverts files from a previous apply back to their pre-apply state.")]
@@ -815,28 +643,11 @@ public class WorkspaceTools
 
     // ── get_large_result ────────────────────────────────────────────────────────
 
-    [McpServerTool(Name = "GetLargeResult")]
-    [Produces(DataTag.Report)]
-    [Description("Pages through a large result written to disk after exceeding the inline size threshold. Page with offset; the response carries nextOffset and hasMoreData.")]
+    // Non-tool delegator: the GetLargeResult [McpServerTool] lives on WorkspaceReadNavigationTools.
     public Task<SentinelCallToolResult<object>> GetLargeResultTool(
-        [Description(ToolParams.Reason)] ToolCallReason reason,
-        // CONDITIONAL-PARAM-REVIEW-REQUIRED: exactly one of resultId/filePath must be supplied;
-        // neither is individually required but the tool fails if both are omitted.
-        [Description("The resultId from the original truncated result. Required if filePath is omitted.")]
-        [Consumes(DataTag.ResultId)] string? resultId = null,
-        [Description("Path to a largeresult_*.json file. Required if resultId is omitted.")]
-        [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
-        [Description("Max records to return. Ignored for Raw/text results - use charLimit. A page may return fewer rows than limit when the result exceeds the inline size backstop; always continue from nextOffset while hasMoreData is true.")]
-        [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
-        [Description("Records (or characters, for text results) to skip before the next page.")]
-        [ToolOption(ToolOptionTag.Offset)] int offset = 0,
-        [Description("Max characters to return for a Raw/text result. Other result types use limit instead.")]
-        [ToolOption(ToolOptionTag.CharLimit)] int? charLimit = null,
-        CancellationToken cancellationToken = default)
-    {
-        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
-        return _readNav.GetLargeResult(reason, resultId, filePathResolved, limit, offset, charLimit: charLimit, cancellationToken: cancellationToken);
-    }
+        ToolCallReason reason, string? resultId = null, string? filePath = null, int limit = 50, int offset = 0,
+        int? charLimit = null, CancellationToken cancellationToken = default)
+        => _readNavTools.GetLargeResultTool(reason, resultId, filePath, limit, offset, charLimit, cancellationToken);
 
     private readonly SymbolNavigationImpl _symbolNavigation;
 

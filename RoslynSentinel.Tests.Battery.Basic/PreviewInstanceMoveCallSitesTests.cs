@@ -481,6 +481,138 @@ public class PreviewInstanceMoveCallSitesTests
     }
 
     [Test]
+    public async Task MoveMemberAsync_FieldMapSatisfiesSourceFieldDependency_DoesNotRefuseAsync()
+    {
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/FieldMapSourceClass.cs", """
+                namespace ContosoOrders.Core;
+
+                public class FieldMapSourceClass
+                {
+                    private readonly string _a = "source";
+
+                    public string ReadA()
+                    {
+                        return _a;
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/FieldMapTargetClass.cs", """
+                namespace ContosoOrders.Core;
+
+                public class FieldMapTargetClass
+                {
+                    private readonly string _b = "target";
+                }
+                """));
+
+        var fieldMap = new Dictionary<string, string> { ["_a"] = "_b" };
+        try
+        {
+            await engine.MoveMemberAsync(
+                workspace.PathOf("ContosoOrders.Core/FieldMapSourceClass.cs"),
+                "FieldMapSourceClass", ["ReadA"], "FieldMapTargetClass",
+                null, CancellationToken.None, true, null, fieldMap);
+        }
+        catch (RoslynSentinel.Common.ToolInvalidArgumentException ex) when (ex.Message.Contains("private/internal"))
+        {
+            Assert.Fail($"fieldMap should satisfy the '_a' dependency, but the move still refused it: {ex.Message}");
+        }
+    }
+
+    [Test]
+    public async Task MoveMemberAsync_FieldMapRewritesMappedFieldReferencesInMovedBody_TargetCompilesAsync()
+    {
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/FieldMapRewriteSourceClass.cs", """
+                namespace ContosoOrders.Core;
+
+                public class FieldMapRewriteSourceClass
+                {
+                    private readonly string _a = "source";
+
+                    public string M()
+                    {
+                        var first = _a;
+                        return first + this._a;
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/FieldMapRewriteTargetClass.cs", """
+                namespace ContosoOrders.Core;
+
+                public class FieldMapRewriteTargetClass
+                {
+                    private readonly string _b = "target";
+                }
+                """));
+
+        var fieldMap = new Dictionary<string, string> { ["_a"] = "_b" };
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/FieldMapRewriteSourceClass.cs"),
+            "FieldMapRewriteSourceClass", ["M"], "FieldMapRewriteTargetClass",
+            null, CancellationToken.None, true, null, fieldMap);
+
+        var sourceText = result.Changes.Single(kv => kv.Key.ToString().Contains("FieldMapRewriteSourceClass")).Value;
+        var targetText = result.Changes.Single(kv => kv.Key.ToString().Contains("FieldMapRewriteTargetClass")).Value;
+
+        // The moved body is compiled together with the (unmoved) source class, exactly as the compile gate would see it.
+        var trustedAssemblies = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator);
+        var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
+            "FieldMapRewriteCheck",
+            new[] { sourceText, targetText }.Select(t => Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(t)),
+            trustedAssemblies.Select(p => Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(p)),
+            new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary));
+        var errors = compilation.GetDiagnostics().Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error).Select(d => d.ToString()).ToList();
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(targetText, Does.Contain("var first = _b;"), "the bare reference in the moved body must bind to the target field");
+            Assert.That(targetText, Does.Contain("this._b"), "the this-qualified reference in the moved body must bind to the target field");
+            Assert.That(targetText, Does.Not.Contain("_a"), "no reference to the source field may remain in the target");
+            Assert.That(sourceText, Does.Contain("private readonly string _a"), "the source class keeps its field");
+            Assert.That(sourceText, Does.Not.Contain("string M()"), "the method left the source class");
+            Assert.That(errors, Is.Empty, "source and target must compile together after the move");
+        });
+    }
+
+    [Test]
+    public async Task MoveMemberAsync_FieldMapRefusesMovedLocalNamedLikeMappedTargetFieldAsync()
+    {
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/FieldMapShadowSourceClass.cs", """
+                namespace ContosoOrders.Core;
+
+                public class FieldMapShadowSourceClass
+                {
+                    private readonly string _a = "source";
+
+                    public string M()
+                    {
+                        var _b = "local";
+                        return _a + _b;
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/FieldMapShadowTargetClass.cs", """
+                namespace ContosoOrders.Core;
+
+                public class FieldMapShadowTargetClass
+                {
+                    private readonly string _b = "target";
+                }
+                """));
+
+        var fieldMap = new Dictionary<string, string> { ["_a"] = "_b" };
+        var ex = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () => await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/FieldMapShadowSourceClass.cs"),
+            "FieldMapShadowSourceClass", ["M"], "FieldMapShadowTargetClass",
+            null, CancellationToken.None, true, null, fieldMap));
+
+        Assert.That(ex!.Message, Does.Contain("_b"), "the refusal must name the colliding local and the mapped target field");
+    }
+
+    [Test]
     public async Task MoveMemberAsync_FieldDependencyIncompatibleTypeOnTarget_FailsWithCollisionMessageAsync()
     {
         var (workspace, engine) = CreateInMemoryTestFixture(
@@ -515,6 +647,48 @@ public class PreviewInstanceMoveCallSitesTests
         {
             Assert.That(ex!.Message, Does.Contain("incompatible type"));
             Assert.That(ex.Message, Does.Contain("_shared"));
+        });
+    }
+
+    [Test]
+    public async Task MoveMemberAsync_FieldAssignedInSourceConstructor_RefusedWithConstructorMessageAsync()
+    {
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/CtorAssignedSourceClass.cs", """
+                namespace ContosoOrders.Core;
+
+                public class CtorAssignedSourceClass
+                {
+                    private string _name;
+
+                    public CtorAssignedSourceClass(string name)
+                    {
+                        _name = name;
+                    }
+
+                    public string ReadName()
+                    {
+                        return _name;
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/CtorAssignedTargetClass.cs", """
+                namespace ContosoOrders.Core;
+
+                public class CtorAssignedTargetClass
+                {
+                }
+                """));
+
+        var ex = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () =>
+            await engine.MoveMemberAsync(
+                workspace.PathOf("ContosoOrders.Core/CtorAssignedSourceClass.cs"),
+                "CtorAssignedSourceClass", ["ReadName", "_name"], "CtorAssignedTargetClass"));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(ex!.Message, Does.Contain("_name"));
+            Assert.That(ex.Message, Does.Contain("constructor"));
         });
     }
 

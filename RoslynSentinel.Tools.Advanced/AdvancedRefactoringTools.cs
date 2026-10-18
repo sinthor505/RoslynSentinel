@@ -458,7 +458,7 @@ public class AdvancedRefactoringTools
     [Description("Moves methods/properties/fields from one class to another as a single atomic change, rewriting call sites.")]
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> MoveMemberTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.ClassName, required: true)] string className, [Description("Members to move.")][Consumes(DataTag.SymbolName, required: true)] string[] memberNames, [Description("Target class name: an existing base type pulls members up; an existing unrelated class receives them as-is (receivers rewritten per callSiteFixups); an existing STATIC class receives instance members that use no instance state as STATIC; callers are rewritten to 'Target.Member'; a nonexistent name creates a new class.")][ExternalInputRequired(DataTag.ClassName, required: true)] string targetClassName, [Description("Narrows which class named targetClassName to use, if ambiguous.")][ExternalInputRequired(DataTag.SourceFilepath)] string? targetFilepath = null, // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        // [Description(ToolParams.AutoStage)][ToolOption(ToolOptionTag.AutoStage, required: false)] bool autoStage = true,
-        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [Description("Auto-rewrites unambiguous call sites when moving instance members. Set false to require manual resolution via callSiteFixups.")] bool autoResolveCallSites = true, [Description("Manual resolution for call sites autoResolveCallSites couldn't handle. Key: \"FilePath:Line\", \"FilePath:*\" (every unresolved site in that file) or \"*\" (every unresolved site); an exact line beats FilePath:*, which beats *. Value: a receiver expression (e.g. \"_target\" or \"new Target(_dep, _config)\" - pass ALL constructor arguments), or \"new\" = zero-argument 'new Target()' only.")] Dictionary<string, string>? callSiteFixups = null, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, [Description("Auto-rewrites unambiguous call sites when moving instance members. Set false to require manual resolution via callSiteFixups.")] bool autoResolveCallSites = true, [Description("Manual resolution for call sites autoResolveCallSites couldn't handle. Key: \"FilePath:Line\", \"FilePath:*\" (every unresolved site in that file) or \"*\" (every unresolved site); an exact line beats FilePath:*, which beats *. Value: a receiver expression (e.g. \"_target\" or \"new Target(_dep, _config)\" - pass ALL constructor arguments), or \"new\" = zero-argument 'new Target()' only.")] Dictionary<string, string>? callSiteFixups = null, [Description("Instance moves only. Maps a private field of the source class that the moved members use to an existing field of the target class with the same or a convertible type, e.g. {\"_readNav\":\"_impl\"}. References to the source field inside the moved bodies are rewritten to the target field; the source field stays in place.")] Dictionary<string, string>? fieldMap = null, // RequestContext<CallToolRequestParams> requestParams = null,
  CancellationToken cancellationToken = default)
     {
         // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
@@ -476,7 +476,7 @@ public class AdvancedRefactoringTools
             }
 
             FilePathWrapper? targetFilePath = string.IsNullOrEmpty(targetFilepath) ? (FilePathWrapper?)null : _workspaceManager.ResolveFromWire(targetFilepath);
-            var result = await _memberRefactoringEngine.MoveMemberAsync(resolvedFilePath, className, memberNames, targetClassName, targetFilePath, cancellationToken, autoResolveCallSites, callSiteFixups);
+            var result = await _memberRefactoringEngine.MoveMemberAsync(resolvedFilePath, className, memberNames, targetClassName, targetFilePath, cancellationToken, autoResolveCallSites, callSiteFixups, fieldMap);
             if (!autoStage)
             {
                 return new SentinelCallToolResult<AppliedChangeSummary>()
@@ -489,9 +489,10 @@ public class AdvancedRefactoringTools
             var apply = await ValidateAndApplyAsync(result.Changes, $"Move [{string.Join(", ", memberNames)}] from '{className}' to '{targetClassName}'.", "MoveMember", dryRun, returnDiff, cancellationToken: cancellationToken, expectedEdits: result.AppliedEdits);
             if (apply.Error is not null)
             {
-                // A collateral-change refusal is the real cause on its own (a step after the engine's edits rewrote text they
-                // did not touch), so return it as-is rather than let the unresolved-call-site hints below mask it.
-                if (apply.Error.ErrorCode == ToolErrorCode.CollateralChangeRefused)
+                // A collateral-change or EOL-change refusal is the real cause on its own (a step after the engine's edits
+                // rewrote text they did not touch, or the write would flip line endings), so return it as-is rather than
+                // let the unresolved-call-site hints below mask it.
+                if (IsRefusalThatMustNotBeMasked(apply.Error.ErrorCode))
                 {
                     return new SentinelCallToolResult<AppliedChangeSummary>
                     {
@@ -1650,4 +1651,11 @@ public class AdvancedRefactoringTools
             };
         }
     }
+
+    /// <summary>
+    /// True for refusal codes that MoveMemberTool must return as-is instead of letting the unresolved-call-site
+    /// hints mask them. Public static (not internal) because Tools.Advanced has no InternalsVisibleTo for its tests.
+    /// </summary>
+    public static bool IsRefusalThatMustNotBeMasked(string errorCode) =>
+        errorCode is ToolErrorCode.CollateralChangeRefused or ToolErrorCode.EolChangeRefused;
 }

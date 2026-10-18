@@ -178,13 +178,13 @@ public class ArchitectureDocFreshnessTests
         var markdown = ArchitectureDocGenerator.GenerateToolsMarkdown();
 
         var build = FindModes(markdown, "WorkspaceTools", "Build");
-        var listAll = FindModes(markdown, "WorkspaceTools", "ListAll");
+        var listAll = FindModes(markdown, "WorkspaceReadNavigationTools", "ListAll");
         var bridge = FindModes(markdown, "AsyncifyTools", "BridgeAsyncMethods");
         var parameterEdit = FindModes(markdown, "ParameterEditTools", "ParameterEdit");
         var modifyEnum = FindModes(markdown, "RefactoringStructuralTools", "ModifyEnum");
 
         Assert.That(build, Is.Not.Null, "WorkspaceTools|Build row missing");
-        Assert.That(listAll, Is.Not.Null, "WorkspaceTools|ListAll row missing");
+        Assert.That(listAll, Is.Not.Null, "WorkspaceReadNavigationTools|ListAll row missing");
         Assert.That(bridge, Is.Not.Null, "AsyncifyTools|BridgeAsyncMethods row missing");
         Assert.That(parameterEdit, Is.Not.Null, "ParameterEditTools|ParameterEdit row missing");
         Assert.That(modifyEnum, Is.Not.Null, "RefactoringStructuralTools|ModifyEnum row missing");

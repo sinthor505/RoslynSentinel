@@ -448,6 +448,50 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
+    // --- MoveMemberTool (fieldMap validation) ---
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_FieldMapValueNotTargetField_ReturnsInvalidArgument()
+    {
+        SetMultiFile(("Refactor.cs", "public class Source\n{\n    private int _a;\n    public int Get() => _a;\n}\n\npublic class Target\n{\n    private int _b;\n}\n"));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", fieldMap: new Dictionary<string, string> { ["_a"] = "_nope" });
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_FieldMapValidInstanceMove_RewritesBodyToTargetField()
+    {
+        SetMultiFile(("Refactor.cs", "public class Source\n{\n    private string _a = \"source\";\n    public string M() { var first = _a; return first + this._a; }\n}\n\npublic class Target\n{\n    private string _b = \"target\";\n}\n"));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["M"], "Target", fieldMap: new Dictionary<string, string> { ["_a"] = "_b" });
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var doc = solution.Projects.SelectMany(p => p.Documents).Single(d => d.Name == "Refactor.cs");
+        var text = (await doc.GetTextAsync()).ToString();
+        var targetPart = text.Substring(text.IndexOf("class Target", StringComparison.Ordinal));
+        Assert.That(targetPart, Does.Contain("var first = _b"), "The moved body must reference the target field.");
+        Assert.That(targetPart, Does.Not.Contain("_a"), "No reference to the source field may remain in the moved body.");
+        Assert.That(text, Does.Contain("private string _a"), "The source field stays in place.");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_FieldMapDryRun_AppliesMappingWithoutWriting()
+    {
+        SetMultiFile(("Refactor.cs", "public class Source\n{\n    private string _a = \"source\";\n    public string M() { var first = _a; return first + this._a; }\n}\n\npublic class Target\n{\n    private string _b = \"target\";\n}\n"));
+        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["M"], "Target", dryRun: true, returnDiff: true, fieldMap: new Dictionary<string, string> { ["_a"] = "_b" });
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.DryRun, Is.True);
+        Assert.That(summary.Diff, Does.Contain("var first = _b"), "The dry-run diff must show the mapped field in the moved body.");
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var doc = solution.Projects.SelectMany(p => p.Documents).Single(d => d.Name == "Refactor.cs");
+        var text = (await doc.GetTextAsync()).ToString();
+        Assert.That(text, Does.Contain("var first = _a"), "A dry run must leave the committed source body unchanged.");
+        Assert.That(text, Does.Not.Contain("var first = _b"), "A dry run must not write the moved body to the target.");
+    }
+
     // --- MoveMemberTool (pull-up to existing base class) ---
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
@@ -1556,5 +1600,13 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
                 Directory.Delete(tempDir, recursive: true);
             }
         }
+    }
+
+    [Test]
+    public void IsRefusalThatMustNotBeMasked_SelectsCollateralAndEolRefusalsOnly()
+    {
+        Assert.That(AdvancedRefactoringTools.IsRefusalThatMustNotBeMasked(RoslynSentinel.Common.ToolErrorCode.CollateralChangeRefused), Is.True);
+        Assert.That(AdvancedRefactoringTools.IsRefusalThatMustNotBeMasked(RoslynSentinel.Common.ToolErrorCode.EolChangeRefused), Is.True);
+        Assert.That(AdvancedRefactoringTools.IsRefusalThatMustNotBeMasked(RoslynSentinel.Common.ToolErrorCode.UnresolvedCallSites), Is.False);
     }
 }

@@ -5,6 +5,10 @@ RoslynSentinel's control). Split out of TODO.md on 2026-09-10 to keep that file 
 entries below are otherwise unchanged from when they were closed. Newly-fixed TODO.md items should
 be moved here going forward, not deleted.
 
+## MoveMember tool masked EolChangeRefused as UnresolvedCallSites - resolved 2026-10-17
+
+Root cause: the early return in `MoveMemberTool` covered only `CollateralChangeRefused`, so an EOL refusal with ledger entries or skipped call sites fell into the `UnresolvedCallSites` branches. Fix: `AdvancedRefactoringTools.IsRefusalThatMustNotBeMasked` selects both refusal codes for the early return. Test: `IsRefusalThatMustNotBeMasked_SelectsCollateralAndEolRefusalsOnly` (unit test of the condition only; no end-to-end tool-level EOL refusal fixture exists).
+
 ## MoveTypeToOuterScopeAsync dropped the nested type - resolved 2026-10-17
 
 Root cause: the namespace was looked up in the pre-removal root, so ReplaceNode silently no-op'd (no-namespace case duplicated the type). Fix: track the type and target container in the original root, re-find after removal, annotate only the re-added type and format via FormatAnnotatedSpansAsync. 25 byte-exact tests in MoveTypeToOuterScopeFormatCharacterizationTests.
