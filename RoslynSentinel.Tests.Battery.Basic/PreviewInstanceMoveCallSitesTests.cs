@@ -1505,4 +1505,136 @@ public class PreviewInstanceMoveCallSitesTests
     // reached when the site no longer binds in the trial text, e.g. a typed receiver `a.Foo()` inside the moved
     // Baz (PreviewInstanceMoveCallSites_QualifiedCallInsideMovedBody_IsMoveOrderDependentAsync). An unqualified
     // Foo() or this.Foo() inside the moved Baz binds to the moved Foo on the destination and stays Valid.
+
+    // Characterisation (TODO.md same-class gap; slice 3 of proposal_movemember_keep_delegator_and_same_class_calls.md).
+    // Hypothesis (a) HELD in part: the bare Foo(2) is left untouched (no MemberAccessExpression to rewrite), so the source
+    // would not compile (CS0103; this test does not compile it). NOT held: the site is not silent - it is reported as a
+    // pending ledger entry with status NoCandidateIntroducible; the move is not refused.
+    [Test]
+    public async Task KnownLimitation_InstanceMove_BareSameClassCall_IsNotRewrittenAsync()
+    {
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/KnownLimitSrcA.cs", """
+                namespace ContosoOrders.Core;
+
+                public class KnownLimitSrcA
+                {
+                    public int Foo(int x)
+                    {
+                        return x + 1;
+                    }
+
+                    public int Caller()
+                    {
+                        return Foo(2);
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/KnownLimitTgtB.cs", """
+                namespace ContosoOrders.Core;
+
+                public class KnownLimitTgtB
+                {
+                }
+                """));
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/KnownLimitSrcA.cs"),
+            "KnownLimitSrcA", ["Foo"], "KnownLimitTgtB");
+
+        var sourceChange = result.Changes.Single(kv => kv.Key.ToString().Contains("KnownLimitSrcA")).Value;
+        Assert.Multiple(() =>
+        {
+            Assert.That(sourceChange, Does.Contain("return Foo(2);"));
+            Assert.That(sourceChange, Does.Not.Contain("this."));
+            Assert.That(result.PendingLedgerEntries, Is.Not.Null.And.Count.EqualTo(1));
+            var entry = result.PendingLedgerEntries!.Single();
+            Assert.That(entry.FilePath, Does.Contain("KnownLimitSrcA"));
+            Assert.That(entry.Status, Is.EqualTo(CallSiteStatus.NoCandidateIntroducible));
+        });
+    }
+
+    // Characterisation (slice 3 (b)). Hypothesis: a STATIC move into an existing class inserts the destination type as
+    // a qualifier on the bare Foo(2) (CollectStaticMoveReferenceEditsAsync), so the source reads KnownLimitTgtS.Foo(2).
+    // HELD: the source change contains KnownLimitTgtS.Foo(2). Compile of the result is not checked by this test.
+    [Test]
+    public async Task KnownLimitation_StaticMove_BareSameClassCall_IsQualifiedWithTargetTypeAsync()
+    {
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/KnownLimitSrcS.cs", """
+                namespace ContosoOrders.Core;
+
+                public static class KnownLimitSrcS
+                {
+                    public static int Foo(int x)
+                    {
+                        return x + 1;
+                    }
+
+                    public static int Caller()
+                    {
+                        return Foo(2);
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/KnownLimitTgtS.cs", """
+                namespace ContosoOrders.Core;
+
+                public static class KnownLimitTgtS
+                {
+                }
+                """));
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/KnownLimitSrcS.cs"),
+            "KnownLimitSrcS", ["Foo"], "KnownLimitTgtS");
+
+        var sourceChange = result.Changes.Single(kv => kv.Key.ToString().Contains("KnownLimitSrcS")).Value;
+        Assert.That(sourceChange, Does.Contain("KnownLimitTgtS.Foo(2)"));
+    }
+
+    // Characterisation (variant c). Same bare call as (a), but the source holds exactly one field of the destination
+    // type, so a receiver is unambiguous. Hypothesis: still not rewritten; a receiver is only chosen for callers.
+    // HELD: the bare call stays Foo(2) with no _tgt. receiver.
+    [Test]
+    public async Task KnownLimitation_InstanceMove_BareSameClassCall_WithSingleTargetField_IsNotRewrittenAsync()
+    {
+        var (workspace, engine) = CreateInMemoryTestFixture(
+            ("ContosoOrders.Core/KnownLimitSrcC.cs", """
+                namespace ContosoOrders.Core;
+
+                public class KnownLimitSrcC
+                {
+                    private readonly KnownLimitTgtC _tgt = new KnownLimitTgtC();
+
+                    public int Foo(int x)
+                    {
+                        return x + 1;
+                    }
+
+                    public int Caller()
+                    {
+                        return Foo(2);
+                    }
+                }
+                """),
+            ("ContosoOrders.Core/KnownLimitTgtC.cs", """
+                namespace ContosoOrders.Core;
+
+                public class KnownLimitTgtC
+                {
+                }
+                """));
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/KnownLimitSrcC.cs"),
+            "KnownLimitSrcC", ["Foo"], "KnownLimitTgtC");
+
+        var sourceChange = result.Changes.Single(kv => kv.Key.ToString().Contains("KnownLimitSrcC")).Value;
+        Assert.Multiple(() =>
+        {
+            Assert.That(sourceChange, Does.Contain("return Foo(2);"));
+            Assert.That(sourceChange, Does.Not.Contain("_tgt.Foo"));
+        });
+    }
 }
