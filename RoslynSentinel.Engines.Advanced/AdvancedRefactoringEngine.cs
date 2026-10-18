@@ -119,7 +119,7 @@ public class AdvancedRefactoringEngine
                 continue;
             }
 
-            replacements[inv] = SyntaxFactory.ParenthesizedExpression(SyntaxFactory.AwaitExpression(SyntaxFactory.Token(SyntaxKind.AwaitKeyword).WithTrailingTrivia(SyntaxFactory.Space), maAwaiter.Expression.WithoutTrivia())).WithTriviaFrom(inv);
+            replacements[inv] = SyntaxFactory.ParenthesizedExpression(SyntaxFactory.AwaitExpression(SyntaxFactory.Token(SyntaxKind.AwaitKeyword).WithTrailingTrivia(SyntaxFactory.Space), maAwaiter.Expression.WithoutTrivia())).WithTriviaFrom(inv).WithAdditionalAnnotations(Formatter.Annotation);
             CollectMethod(inv);
         }
 
@@ -151,7 +151,7 @@ public class AdvancedRefactoringEngine
                 continue;
             }
 
-            replacements[inv] = SyntaxFactory.AwaitExpression(SyntaxFactory.Token(SyntaxKind.AwaitKeyword).WithTrailingTrivia(SyntaxFactory.Space), maWait.Expression.WithoutTrivia()).WithTriviaFrom(inv);
+            replacements[inv] = SyntaxFactory.AwaitExpression(SyntaxFactory.Token(SyntaxKind.AwaitKeyword).WithTrailingTrivia(SyntaxFactory.Space), maWait.Expression.WithoutTrivia()).WithTriviaFrom(inv).WithAdditionalAnnotations(Formatter.Annotation);
             CollectMethod(inv);
         }
 
@@ -173,7 +173,7 @@ public class AdvancedRefactoringEngine
                 continue;
             }
 
-            replacements[ma] = SyntaxFactory.ParenthesizedExpression(SyntaxFactory.AwaitExpression(SyntaxFactory.Token(SyntaxKind.AwaitKeyword).WithTrailingTrivia(SyntaxFactory.Space), ma.Expression.WithoutTrivia())).WithTriviaFrom(ma);
+            replacements[ma] = SyntaxFactory.ParenthesizedExpression(SyntaxFactory.AwaitExpression(SyntaxFactory.Token(SyntaxKind.AwaitKeyword).WithTrailingTrivia(SyntaxFactory.Space), ma.Expression.WithoutTrivia())).WithTriviaFrom(ma).WithAdditionalAnnotations(Formatter.Annotation);
             CollectMethod(ma);
         }
 
@@ -201,16 +201,16 @@ public class AdvancedRefactoringEngine
                 continue;
             }
 
-            var asyncToken = SyntaxFactory.Token(SyntaxKind.AsyncKeyword).WithTrailingTrivia(SyntaxFactory.Space);
+            var asyncToken = SyntaxFactory.Token(SyntaxKind.AsyncKeyword).WithTrailingTrivia(SyntaxFactory.Space).WithAdditionalAnnotations(Formatter.Annotation);
             var newModifiers = current.Modifiers.Add(asyncToken);
             TypeSyntax newReturn = current.ReturnType;
             if (current.ReturnType is PredefinedTypeSyntax pred && pred.Keyword.IsKind(SyntaxKind.VoidKeyword))
             {
-                newReturn = SyntaxFactory.IdentifierName("Task").WithTriviaFrom(current.ReturnType);
+                newReturn = SyntaxFactory.IdentifierName("Task").WithTriviaFrom(current.ReturnType).WithAdditionalAnnotations(Formatter.Annotation);
             }
             else if (!IsTaskReturnType(current.ReturnType))
             {
-                newReturn = SyntaxFactory.GenericName(SyntaxFactory.Identifier("Task")).WithTypeArgumentList(SyntaxFactory.TypeArgumentList(SyntaxFactory.SingletonSeparatedList(current.ReturnType.WithoutTrivia()))).WithTriviaFrom(current.ReturnType);
+                newReturn = SyntaxFactory.GenericName(SyntaxFactory.Identifier("Task")).WithTypeArgumentList(SyntaxFactory.TypeArgumentList(SyntaxFactory.SingletonSeparatedList(current.ReturnType.WithoutTrivia()))).WithTriviaFrom(current.ReturnType).WithAdditionalAnnotations(Formatter.Annotation);
             }
 
             methodUpdates[current] = current.WithModifiers(newModifiers).WithReturnType(newReturn);
@@ -224,7 +224,7 @@ public class AdvancedRefactoringEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            UpdatedText = (await (await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken)).GetTextAsync(cancellationToken)).ToString(),
             FilePath = filePath
         };
     }
@@ -322,8 +322,6 @@ public class AdvancedRefactoringEngine
         // Collect existing interface member signatures (for deduplication)
         var existingMethodSigs = interfaceNode.Members.OfType<MethodDeclarationSyntax>().Select(m => m.Identifier.Text + "|" + string.Join(",", m.ParameterList.Parameters.Select(p => p.Type?.ToString().Trim()))).ToHashSet(StringComparer.Ordinal);
         var existingPropertyNames = interfaceNode.Members.OfType<PropertyDeclarationSyntax>().Select(p => p.Identifier.Text).ToHashSet(StringComparer.Ordinal);
-        // The new members are inserted into the interface's document, so its line ending is the target EOL.
-        var eol = EolUtilities.DetectNormalizableEol(await interfaceDocument.GetTextAsync(cancellationToken));
         var newMembers = new List<MemberDeclarationSyntax>();
         foreach (var method in publicMethods)
         {
@@ -334,9 +332,9 @@ public class AdvancedRefactoringEngine
             }
 
             // Build interface method: return type + name + params, no body. The parts reused from the class method are
-            // stripped of ALL trivia (comments and newlines included) so the new member passes the NormalizeNewChild guard,
-            // which rejects existing formatting; the doc comment or an inline comment on the class method is dropped on purpose.
-            var ifaceMethod = (MemberDeclarationSyntax)RoslynFormattingHelper.NormalizeNewChildWhitespace(SyntaxFactory.MethodDeclaration(RoslynFormattingHelper.StripAllTriviaForNormalize(method.ReturnType), method.Identifier.WithoutTrivia()).WithParameterList(RoslynFormattingHelper.StripAllTriviaForNormalize(method.ParameterList)).WithTypeParameterList(method.TypeParameterList is null ? null : RoslynFormattingHelper.StripAllTriviaForNormalize(method.TypeParameterList)).WithConstraintClauses(SyntaxFactory.List(method.ConstraintClauses.Select(c => RoslynFormattingHelper.StripAllTriviaForNormalize(c)))).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()), eol);
+            // stripped of ALL trivia (comments and newlines included) so the new member starts with no existing formatting,
+            // the doc comment or an inline comment on the class method is dropped on purpose.
+            var ifaceMethod = SyntaxFactory.MethodDeclaration(RoslynFormattingHelper.StripAllTriviaForNormalize(method.ReturnType), method.Identifier.WithoutTrivia()).WithParameterList(RoslynFormattingHelper.StripAllTriviaForNormalize(method.ParameterList)).WithTypeParameterList(method.TypeParameterList is null ? null : RoslynFormattingHelper.StripAllTriviaForNormalize(method.TypeParameterList)).WithConstraintClauses(SyntaxFactory.List(method.ConstraintClauses.Select(c => RoslynFormattingHelper.StripAllTriviaForNormalize(c)))).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()).WithAdditionalAnnotations(Formatter.Annotation);
             newMembers.Add(ifaceMethod);
         }
 
@@ -367,7 +365,7 @@ public class AdvancedRefactoringEngine
                 accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.InitAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
             }
 
-            var ifaceProp = (MemberDeclarationSyntax)RoslynFormattingHelper.NormalizeNewChildWhitespace(SyntaxFactory.PropertyDeclaration(RoslynFormattingHelper.StripAllTriviaForNormalize(prop.Type), prop.Identifier.WithoutTrivia()).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))).WithModifiers(SyntaxFactory.TokenList()), eol);
+            var ifaceProp = SyntaxFactory.PropertyDeclaration(RoslynFormattingHelper.StripAllTriviaForNormalize(prop.Type), prop.Identifier.WithoutTrivia()).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))).WithModifiers(SyntaxFactory.TokenList()).WithAdditionalAnnotations(Formatter.Annotation);
             newMembers.Add(ifaceProp);
         }
 
