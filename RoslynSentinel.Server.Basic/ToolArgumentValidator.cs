@@ -332,6 +332,9 @@ public static class ToolArgumentValidator
             ["Git"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["maxCount"] = "count",
+                ["target"] = "ref",
+                ["commitHash"] = "ref",
+                ["files"] = "paths",
             },
             ["Member"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {

@@ -176,16 +176,16 @@ $cases += [pscustomobject]@{
 # with paths staged it is allowed. Both run against a throwaway repo (RepoFixture) so the result
 # does not depend on the real repo's state.
 $cases += [pscustomobject]@{
-    N = 'FC8: bare commit, no files/scope, nothing staged (category 5, revised rule)'
+    N = 'FC8: bare commit, no paths/scope, nothing staged (category 5, revised rule)'
     Kind = 'dogfood'
     RepoFixture = 'empty'
     Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Git'; tool_input = @{ operation = 'commit'; message = "Rename HasMorePages to HasMoreData`n`nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" } }
     Want = 'DENY'
-    MustContainInOutput = @('nothing staged', 'files:')
+    MustContainInOutput = @('nothing staged', 'paths:')
 }
 
 $cases += [pscustomobject]@{
-    N = 'FC8b: bare commit, no files/scope, paths staged (commits exactly the index)'
+    N = 'FC8b: bare commit, no paths/scope, paths staged (commits exactly the index)'
     Kind = 'dogfood'
     RepoFixture = 'staged'
     Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Git'; tool_input = @{ operation = 'commit'; message = "Rename HasMorePages to HasMoreData`n`nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" } }
@@ -193,10 +193,10 @@ $cases += [pscustomobject]@{
 }
 
 $cases += [pscustomobject]@{
-    N = 'FC8c: commit with files only (no scope) is an explicit listing'
+    N = 'FC8c: commit with paths only (no scope) is an explicit listing'
     Kind = 'dogfood'
     RepoFixture = 'empty'
-    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Git'; tool_input = @{ operation = 'commit'; files = 'A.cs,B.cs'; message = "Rename HasMorePages to HasMoreData`n`nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" } }
+    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Git'; tool_input = @{ operation = 'commit'; paths = 'A.cs,B.cs'; message = "Rename HasMorePages to HasMoreData`n`nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" } }
     Want = 'allow'
 }
 
@@ -205,7 +205,7 @@ $cases += [pscustomobject]@{
 $cases += [pscustomobject]@{
     N = 'FC9: commit message missing Co-Authored-By trailer'
     Kind = 'dogfood'
-    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Git'; tool_input = @{ operation = 'commit'; scope = 'listed'; files = 'A.cs,B.cs'; message = 'Fix the thing' } }
+    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Git'; tool_input = @{ operation = 'commit'; scope = 'listed'; paths = 'A.cs,B.cs'; message = 'Fix the thing' } }
     Want = 'DENY'
     MustContainInOutput = @('Co-Authored-By')
 }
@@ -213,7 +213,7 @@ $cases += [pscustomobject]@{
 $cases += [pscustomobject]@{
     N = 'FC10: commit with explicit scope=listed + trailer passes cleanly'
     Kind = 'dogfood'
-    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Git'; tool_input = @{ operation = 'commit'; scope = 'listed'; files = 'A.cs,B.cs'; message = "Fix the thing`n`nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" } }
+    Payload = @{ tool_name = 'mcp__root_roslyn_sentinel_advanced_stdio__Git'; tool_input = @{ operation = 'commit'; scope = 'listed'; paths = 'A.cs,B.cs'; message = "Fix the thing`n`nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>" } }
     Want = 'allow'
 }
 

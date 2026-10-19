@@ -45,7 +45,7 @@
 #     symbol resolution) when a batchEdits entry's newContent references an identifier that no
 #     earlier entry in the same batch appears to define.
 #   - Git(operation: commit) missing a Co-Authored-By trailer, a scope-less commit with nothing
-#     staged, or scope=all/tracked with no files/paths list while the tree is dirty.
+#     staged, or scope=all/tracked with no paths list while the tree is dirty.
 #
 # Deliberate bypass (out-of-repo auto-exempt, inline keyword, token file): see the
 # "Deliberate bypass" block below and CLAUDE.md "Hook bypass".
@@ -703,10 +703,10 @@ BLOCKED by dog-fooding policy: git via shell.
 status, log, diff, stage/add, commit (incl. amend), revert, tag, stash and worktree are covered by the MCP Git tool:
 
   Git(operation: "status")
-  Git(operation: "diff",   target: "staged")
-  Git(operation: "stage",  files: "a.cs,b.cs")
-  Git(operation: "hunks",  files: "a.cs")   # then stage with hunkIds + hunkFingerprint (replaces git add -p)
-  Git(operation: "stage",  files: "a.cs", hunkIds: "1,3", hunkFingerprint: "...")
+  Git(operation: "diff",   ref: "staged")
+  Git(operation: "stage",  paths: "a.cs,b.cs")
+  Git(operation: "hunks",  paths: "a.cs")   # then stage with hunkIds + hunkFingerprint (replaces git add -p)
+  Git(operation: "stage",  paths: "a.cs", hunkIds: "1,3", hunkFingerprint: "...")
   Git(operation: "commit", message: "...")
   Git(operation: "commit", amend: true)   # keeps HEAD's message (--no-edit)
   Git(operation: "commit", amend: true, message: "...")   # replaces it
@@ -752,19 +752,19 @@ Every commit here needs the attribution trailer. Add it to the message:
 "@
             }
 
-            # Scope check. Since the Git tool change, a commit that names files (with or without
+            # Scope check. Since the Git tool change, a commit that names paths (with or without
             # scope) commits exactly those paths, and a scope-less, file-less commit commits
             # exactly what is already staged - it stages nothing itself, so nothing else can be
-            # swept in. `files`/`paths` alone therefore IS the explicit listing (the tool infers
+            # swept in. `paths` (or its alias `files`) alone therefore IS the explicit listing (the tool infers
             # scope=listed from them). The hook cannot tell which session staged what, so for the
             # scope-less, file-less shape the only thing left to catch is an empty index.
             #
             # An explicit scope=all or scope=tracked with no file list is different: the tool
             # pre-stages every dirty path itself, which is a real sweep, so that shape keeps the
-            # git-status dirty-count check. scope=all/tracked WITH files is trusted outright, as
-            # before (the tool refuses that combination itself). scope=listed with no files is
+            # git-status dirty-count check. scope=all/tracked WITH paths is trusted outright, as
+            # before (the tool refuses that combination itself). scope=listed with no paths is
             # left to the tool, which refuses it with its own actionable error.
-            $explicitFiles = [string]$toolInput.files
+            $explicitFiles = [string]$toolInput.files   # legacy alias of paths, still accepted
             $explicitPaths = [string]$toolInput.paths
             $scope         = [string]$toolInput.scope
             if (-not $explicitFiles -and -not $explicitPaths) {
@@ -784,14 +784,14 @@ Every commit here needs the attribution trailer. Add it to the message:
                         Deny @"
 BLOCKED by dog-fooding policy: commit with nothing staged.
 
-A commit with no files and no scope commits exactly what is already staged, and the
-index is empty, so there is nothing to commit. Stage first, or pass the files:
+A commit with no paths and no scope commits exactly what is already staged, and the
+index is empty, so there is nothing to commit. Stage first, or pass paths:
 
-  Git(operation: "commit", files: "RoslynSentinel.Foo/Bar.cs,RoslynSentinel.Foo/Baz.cs", message: "...")
+  Git(operation: "commit", paths: "RoslynSentinel.Foo/Bar.cs,RoslynSentinel.Foo/Baz.cs", message: "...")
 
 or:
 
-  Git(operation: "stage", files: "RoslynSentinel.Foo/Bar.cs")
+  Git(operation: "stage", paths: "RoslynSentinel.Foo/Bar.cs")
   Git(operation: "commit", message: "...")
 
 Per CLAUDE.md, list only the files changed in the current session. Nothing was committed.
@@ -807,15 +807,15 @@ Per CLAUDE.md, list only the files changed in the current session. Nothing was c
 
                     if ($dirtyCount -gt 0) {
                         Deny @"
-BLOCKED by dog-fooding policy: commit with scope="$scope" and no file list.
+BLOCKED by dog-fooding policy: commit with scope="$scope" and no paths.
 
 scope="$scope" stages the whole working tree before committing, and git status shows
 $dirtyCount dirty path(s). Per CLAUDE.md, a commit includes only the files changed in the
 current session - other sessions or in-flight work may share this worktree.
 
-Name the files instead (scope is inferred as "listed"):
+Name the paths instead (scope is inferred as "listed"):
 
-  Git(operation: "commit", files: "RoslynSentinel.Foo/Bar.cs,RoslynSentinel.Foo/Baz.cs", message: "...")
+  Git(operation: "commit", paths: "RoslynSentinel.Foo/Bar.cs,RoslynSentinel.Foo/Baz.cs", message: "...")
 
 If everything currently dirty really was touched this session, list them all
 explicitly anyway - that is what makes the scope auditable, not an assumption

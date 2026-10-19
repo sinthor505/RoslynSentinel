@@ -167,6 +167,51 @@ public class ToolParameterAliasTests
         Assert.That(TextOf(result), Does.Contain("notAnAlias"));
     }
 
+    [TestCase("log", "target", "ref")]
+    [TestCase("show", "commitHash", "ref")]
+    [TestCase("log", "files", "paths")]
+    public async Task GitAlias_IsRenamed_AndNoteNamesTheDeclaredParameter(string operation, string alias, string canonical)
+    {
+        // Slice 6a folded Git's target/commitHash into ref and files into paths. The repo state does not
+        // matter here: the rename and its note happen before the tool runs, so even a git failure carries them.
+        var result = await _client.CallToolAsync(
+            "Git",
+            new Dictionary<string, object?>
+            {
+                ["reason"] = "test message",
+                ["operation"] = operation,
+                [alias] = "HEAD",
+            }!,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        var text = TextOf(result);
+        Assert.That(text, Does.Not.Contain("Unknown parameter"), $"The alias '{alias}' must be treated as '{canonical}'. Got: {text}");
+        Assert.That(text, Does.Contain($"'{alias}' is not a parameter of Git"), $"The response must carry a note about the alias. Got: {text}");
+        Assert.That(text, Does.Contain($"treated as '{canonical}'"), $"The note must name the declared parameter. Got: {text}");
+    }
+
+    [TestCase("target", "ref")]
+    [TestCase("commitHash", "ref")]
+    [TestCase("files", "paths")]
+    public async Task GitAlias_AlongsideItsDeclaredParameter_IsRejectedAsUnknown(string alias, string canonical)
+    {
+        var result = await _client.CallToolAsync(
+            "Git",
+            new Dictionary<string, object?>
+            {
+                ["reason"] = "test message",
+                ["operation"] = "log",
+                [canonical] = "HEAD",
+                [alias] = "HEAD~1",
+            }!,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        var text = TextOf(result);
+        Assert.That(result.IsError, Is.True, $"An alias alongside '{canonical}' must be rejected. Got: {text}");
+        Assert.That(text, Does.Contain(alias), $"The rejection must name the unrecognised alias. Got: {text}");
+        Assert.That(text, Does.Not.Contain("treated as"), "No rename may have happened.");
+    }
+
     [Test]
     [Category("ToolArgumentValidator")] // sentinel:auto-category
     public async Task EveryAliasEntry_ForAnActiveTool_PointsAtADeclaredParameter_AndIsNotItselfDeclared()

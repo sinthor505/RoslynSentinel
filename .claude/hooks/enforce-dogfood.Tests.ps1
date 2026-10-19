@@ -181,7 +181,7 @@ $cases = @(
     @{ n = 'bypass token: paths list vs shell (no target)'; want = 'DENY'; fx = 'tok'; token = @{ reason = 'deliberate manual read'; paths = @('Foo.cs') }
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'cat Foo.cs' } } }
     @{ n = 'bypass token: does not cover commit-trailer check'; want = 'DENY'; fx = 'tok'; token = @{ reason = 'deliberate manual edit' }
-       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; files = 'A.cs'; message = 'Fix it' } } }
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; paths = 'A.cs'; message = 'Fix it' } } }
 
     # --- tool-experience journal writes quoting git in the note text ---
     @{ n = 'journal Add-Content quoting git diff'; want = 'allow'
@@ -353,21 +353,21 @@ $cases = @(
        p = @{ tool_name = 'Bash'; tool_input = @{ command = 'git check-ignore -v x.json' } } }
 
     # --- MCP Git(commit): scope check uses the staged set, not the dirty worktree ---
-    @{ n = 'commit, no scope/files, empty index'; want = 'DENY'; fx = 'empty'
+    @{ n = 'commit, no scope/paths, empty index'; want = 'DENY'; fx = 'empty'
        p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; message = $msg } } }
-    @{ n = 'commit, no scope/files, paths staged'; want = 'allow'; fx = 'staged'
+    @{ n = 'commit, no scope/paths, paths staged'; want = 'allow'; fx = 'staged'
        p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; message = $msg } } }
-    @{ n = 'commit, files only (no scope), empty index'; want = 'allow'; fx = 'empty'
+    @{ n = 'commit, legacy files alias only (no scope), empty index'; want = 'allow'; fx = 'empty'
        p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; files = 'A.cs,B.cs'; message = $msg } } }
     @{ n = 'commit, paths only (no scope), empty index'; want = 'allow'; fx = 'empty'
        p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; paths = 'A.cs'; message = $msg } } }
-    @{ n = 'commit, scope=listed + files, empty index'; want = 'allow'; fx = 'empty'
-       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; scope = 'listed'; files = 'A.cs'; message = $msg } } }
-    @{ n = 'commit, scope=all + files (trusted as before)'; want = 'allow'; fx = 'empty'
-       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; scope = 'all'; files = 'A.cs'; message = $msg } } }
-    @{ n = 'commit, files only, missing trailer'; want = 'DENY'; fx = 'staged'
-       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; files = 'A.cs'; message = 'Fix it' } } }
-    @{ n = 'commit, no scope/files, staged, missing trailer'; want = 'DENY'; fx = 'staged'
+    @{ n = 'commit, scope=listed + paths, empty index'; want = 'allow'; fx = 'empty'
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; scope = 'listed'; paths = 'A.cs'; message = $msg } } }
+    @{ n = 'commit, scope=all + paths (trusted as before)'; want = 'allow'; fx = 'empty'
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; scope = 'all'; paths = 'A.cs'; message = $msg } } }
+    @{ n = 'commit, paths only, missing trailer'; want = 'DENY'; fx = 'staged'
+       p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; paths = 'A.cs'; message = 'Fix it' } } }
+    @{ n = 'commit, no scope/paths, staged, missing trailer'; want = 'DENY'; fx = 'staged'
        p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; message = 'Fix it' } } }
     @{ n = 'commit, amend (reword) with empty index'; want = 'allow'; fx = 'empty'
        p = @{ tool_name = 'Git'; tool_input = @{ operation = 'commit'; amend = $true; message = $msg } } }

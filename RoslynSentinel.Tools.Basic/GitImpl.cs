@@ -60,7 +60,7 @@ public static class GitErrorCodes
     public const string NothingToCommit = "GitNothingToCommit";
     /// <summary>The operation failed and left (or found) a merge, rebase, revert, cherry-pick or am in progress.</summary>
     public const string OperationInProgress = "GitOperationInProgress";
-    /// <summary>A ref (reset ref, revert commitHash, checkout branchName) was required and not supplied.</summary>
+    /// <summary>A ref (reset/revert ref, checkout branchName) was required and not supplied.</summary>
     public const string RefRequired = "GitRefRequired";
     /// <summary>action is missing, or not valid for this operation (tag, stash, worktree).</summary>
     public const string ActionRequired = "GitActionRequired";
@@ -100,11 +100,11 @@ public static class GitErrorCodes
 internal static class GitErrorDetails
 {
     internal const string PathNotFound = "Paths must be repo-relative and inside the repository root. Call Git(operation: status) to list changed and untracked paths, then retry with exact names.";
-    internal const string IgnoredPath = "Remove the ignored paths from files, or un-ignore them in .gitignore, then retry. This tool never force-adds ignored files.";
-    internal const string NothingToCommit = "Stage changes first with Git(operation: stage, files: \"...\"), or pass files/scope on the commit call. Call Git(operation: status) to see what changed.";
+    internal const string IgnoredPath = "Remove the ignored entries from paths, or un-ignore them in .gitignore, then retry. This tool never force-adds ignored files.";
+    internal const string NothingToCommit = "Stage changes first with Git(operation: stage, paths: \"...\"), or pass paths/scope on the commit call. Call Git(operation: status) to see what changed.";
     internal const string OperationInProgress = "Call Git(operation: abort) to back out of the in-progress operation, or resolve the conflicts in the working tree and commit.";
     internal const string RefRequiredReset = "Pass ref, e.g. ref: \"HEAD~1\" to undo the last commit with the working tree kept, or call Git(operation: unstage) to unstage without moving HEAD.";
-    internal const string RefRequiredRevert = "Pass commitHash, e.g. a hash taken from Git(operation: log).";
+    internal const string RefRequiredRevert = "Pass ref, e.g. a hash taken from Git(operation: log).";
     internal const string RefRequiredCheckout = "Pass branchName, with createBranch=true if it does not exist yet. Git(operation: branch) lists existing branches.";
     internal const string RefRequiredStash = "Pass stashIndex (0 = newest). Git(operation: stash, action: list) shows every entry.";
     internal const string RefRequiredTag = "Pass tagName, e.g. Git(operation: tag, action: create, tagName: 'v1.0.0').";
@@ -117,9 +117,9 @@ internal static class GitErrorDetails
     internal const string NoChanges = "Nothing to act on. Call Git(operation: status) to see what changed, then retry with the paths that have changes.";
     internal const string StashConflict = "Check out the commit or branch the stash was created on (Git(operation: checkout)), then apply again; Git(operation: stash, action: list) shows where each entry was made.";
     internal const string Refused = "Take the safe alternative the message names, then retry. Nothing was changed.";
-    internal const string HunkUnsupported = "Stage the whole file with Git(operation: stage, files: '<path>') instead, or use a file kind that has text hunks.";
-    internal const string HunkSelection = "Call Git(operation: hunks, files: '<path>') and pass hunkIds or lineRange exactly as it lists them.";
-    internal const string HunkStale = "Re-run Git(operation: hunks, files: '<path>') and pick again with the new hunkFingerprint. Nothing was staged.";
+    internal const string HunkUnsupported = "Stage the whole file with Git(operation: stage, paths: '<path>') instead, or use a file kind that has text hunks.";
+    internal const string HunkSelection = "Call Git(operation: hunks, paths: '<path>') and pass hunkIds or lineRange exactly as it lists them.";
+    internal const string HunkStale = "Re-run Git(operation: hunks, paths: '<path>') and pick again with the new hunkFingerprint. Nothing was staged.";
 }
 
 public record GitRawResult
@@ -1798,7 +1798,7 @@ public class GitImpl : IGitOperations
     }
 
     private static FileDiffLoad NoUnstagedChangesLoad(string path) => new(path, null, GitErrorCodes.NoChanges,
-    $"No unstaged changes in '{path}'. Already staged? Git(operation: diff, target: staged, files: ...). Nothing was changed.",
+    $"No unstaged changes in '{path}'. Already staged? Git(operation: diff, ref: staged, paths: ...). Nothing was changed.",
     GitErrorDetails.NoChanges);
 
     /// <summary>Outcome of loading one file's unstaged diff: Diff is set on success; otherwise ErrorKind, Error and
@@ -1853,8 +1853,8 @@ public class GitImpl : IGitOperations
         if (list.Length == 0)
         {
             return new FileDiffLoad("", null, GitErrorCodes.RefRequired,
-                "Hunk selection needs files naming exactly one file. Nothing was changed.",
-                "Pass files: '<one repo-relative path>'");
+                "Hunk selection needs paths naming exactly one file. Nothing was changed.",
+                "Pass paths: '<one repo-relative path>'");
         }
         if (list.Length > 1)
         {
@@ -1875,7 +1875,7 @@ public class GitImpl : IGitOperations
                 return new FileDiffLoad(path, null, GitErrorCodes.HunkUnsupported,
                     isDirectory
                         ? $"'{path}' is a directory; hunks works on one tracked file at a time. Nothing was changed."
-                        : $"'{path}' is untracked: untracked files have no hunks to choose from; stage the whole file with Git(operation: stage, files: ...). Nothing was changed.",
+                        : $"'{path}' is untracked: untracked files have no hunks to choose from; stage the whole file with Git(operation: stage, paths: ...). Nothing was changed.",
                     GitErrorDetails.HunkUnsupported);
             case PathClassification.Missing:
                 return new FileDiffLoad(path, null, GitErrorCodes.PathNotFound,
@@ -1912,7 +1912,7 @@ public class GitImpl : IGitOperations
             TotalHunks = diff.Hunks.Count,
             IsTruncated = diff.Hunks.Count > limit,
             Hunks = diff.Hunks.Take(limit).Select(ToHunkEntry).ToList(),
-            Note = $"Pass hunkIds with this hunkFingerprint to Git(operation: stage, files: '{path}'), or lineRange. " +
+            Note = $"Pass hunkIds with this hunkFingerprint to Git(operation: stage, paths: '{path}'), or lineRange. " +
                    "Hunks are zero-context: adjacent edits are separate hunks."
         };
     }
@@ -1951,7 +1951,7 @@ public class GitImpl : IGitOperations
             {
                 return (GitErrorCodes.HunkStale,
                     $"'{path}' changed since the hunks were listed (fingerprint {given} vs {diff.Fingerprint}). " +
-                    $"Re-run Git(operation: hunks, files: '{path}') and pick again. Nothing was staged.", GitErrorDetails.HunkStale);
+                    $"Re-run Git(operation: hunks, paths: '{path}') and pick again. Nothing was staged.", GitErrorDetails.HunkStale);
             }
             if (!GitHunkParser.TryParseHunkIds(hunkIds, diff.Hunks.Count, out selected, out var idError))
                 return (GitErrorCodes.HunkSelection, $"{idError} {DescribeHunkSpans(diff)} Nothing was staged.", GitErrorDetails.HunkSelection);
@@ -2009,7 +2009,7 @@ public class GitImpl : IGitOperations
         if (remaining != expected)
         {
             warnings.Add($"Staged {selected.Count} hunk(s) but the remaining count is {remaining?.ToString() ?? "unknown"} " +
-                         $"(expected {expected}); verify with Git(operation: diff, target: staged).");
+                         $"(expected {expected}); verify with Git(operation: diff, ref: staged).");
         }
 
         var status = await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
@@ -2075,7 +2075,7 @@ public class GitImpl : IGitOperations
             {
                 return StageHunksFailure(load.Path, GitErrorCodes.Fallback,
                     $"git apply rejected the selected hunks: {CleanGitStderr(apply.Stderr)}. Nothing was staged.",
-                    "Re-run Git(operation: hunks, files: '<path>') and pick again, or stage the whole file with Git(operation: stage, files: '<path>').");
+                    "Re-run Git(operation: hunks, paths: '<path>') and pick again, or stage the whole file with Git(operation: stage, paths: '<path>').");
             }
 
             return await BuildStageHunksResultAsync(gitRoot, paths, load.Path, load.Diff, selected, cancellationToken);
@@ -2325,7 +2325,7 @@ public class GitImpl : IGitOperations
 
             // core.quotePath=false keeps non-ASCII paths verbatim (not "\303\251"-style escapes) and
             // -z makes each record NUL-terminated with no quoting at all, so spaces and any other
-            // character round-trip into the `files` parameter unchanged.
+            // character round-trip into the `paths` parameter unchanged.
             var statusRaw = await RunGitAsync(gitRoot,
                 ["-c", "core.quotePath=false", "status", "--porcelain=v1", "-z", "--untracked-files=all"], cancellationToken);
             if (statusRaw.ExitCode != 0)
@@ -2994,8 +2994,8 @@ public class GitImpl : IGitOperations
             {
                 IsError = true,
                 Error = "scope=\"listed\" stages exactly the files you name, but no files were given. " +
-                        "Pass files (or paths) as a comma-separated list of repo-relative paths, e.g. " +
-                        "files: \"src/Foo.cs,docs/notes.md\". To stage without naming files use " +
+                        "Pass paths as a comma-separated list of repo-relative paths, e.g. " +
+                        "paths: \"src/Foo.cs,docs/notes.md\". To stage without naming files use " +
                         "scope=\"tracked\" (already-tracked changes only) or scope=\"all\" (everything, " +
                         "untracked included). Nothing was staged."
             };
@@ -3418,7 +3418,7 @@ public class GitImpl : IGitOperations
             var finalMessage = msgRaw.ExitCode == 0 ? msgRaw.Stdout.Trim() : message ?? "";
 
             // Populate RemainingStaged: list of paths still in the index after the commit
-            // core.quotePath=false so non-ASCII paths come back verbatim and can be passed to `files`.
+            // core.quotePath=false so non-ASCII paths come back verbatim and can be passed to `paths`.
             var remainingRaw = await RunGitAsync(gitRoot, new[] { "-c", "core.quotePath=false", "diff", "--cached", "--name-only" }, cancellationToken);
             var remainingStaged = new List<string>();
             if (remainingRaw.ExitCode == 0 && !string.IsNullOrWhiteSpace(remainingRaw.Stdout))
@@ -3481,7 +3481,7 @@ public class GitImpl : IGitOperations
         string gitRoot, string? commitHash, bool noCommit, int? mainline, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(commitHash))
-            return new GitRevertResult { IsError = true, ErrorKind = GitErrorCodes.RefRequired, ErrorDetail = GitErrorDetails.RefRequiredRevert, Error = "commitHash is required for operation=revert." };
+            return new GitRevertResult { IsError = true, ErrorKind = GitErrorCodes.RefRequired, ErrorDetail = GitErrorDetails.RefRequiredRevert, Error = "ref is required for operation=revert." };
 
         if (mainline is < 1)
             return new GitRevertResult { IsError = true, Error = $"mainline must be 1 or greater (got {mainline}); 1 is the parent that was merged into. Nothing was reverted." };
@@ -3492,7 +3492,7 @@ public class GitImpl : IGitOperations
             // `mainline` parameter, rather than git's "commit X is a merge but no -m option was given".
             var parentsRaw = await RunGitAsync(gitRoot, ["rev-list", "--parents", "-n", "1", commitHash, "--"], cancellationToken);
             if (parentsRaw.ExitCode != 0)
-                return new GitRevertResult { IsError = true, CommitHash = commitHash, Error = $"Cannot resolve commitHash '{commitHash}': {CleanGitStderr(parentsRaw.Stderr)} Nothing was reverted." };
+                return new GitRevertResult { IsError = true, CommitHash = commitHash, Error = $"Cannot resolve ref '{commitHash}': {CleanGitStderr(parentsRaw.Stderr)} Nothing was reverted." };
 
             var parentCount = parentsRaw.Stdout.Split([' ', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).Length - 1;
             if (parentCount > 1 && mainline is null)
