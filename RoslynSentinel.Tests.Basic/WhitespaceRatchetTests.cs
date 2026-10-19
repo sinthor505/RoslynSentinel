@@ -38,6 +38,10 @@ public class WhitespaceRatchetTests
         // Legitimate format-document tools (whole-document format is their job).
         "RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::FormatDocumentAsync",
         "RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::FormatDocumentPreviewAsync",
+        // Slice C9 (owner-approved): renders caller-supplied attribute text into a TextEdit string, not a document node,
+        // so there is no Document for the annotation formatter; every trivia is checked (comments rejected) and stripped
+        // first, so NormalizeWhitespace discards no user formatting. Replaced the NormalizeNewChildWhitespace site there.
+        "RoslynSentinel.Engines.Basic/AttributeTextEditBuilder.cs::NormalizeAttributeText",
     };
 
     // Test 2 names: invocations of these outside the helper count against the baseline below.
@@ -54,10 +58,9 @@ public class WhitespaceRatchetTests
     // FormatAnnotatedSpansAsync / FormatWholeDocumentAsync; never raise it.
     private static readonly Dictionary<string, int> NormalizeHelperBaseline = new(StringComparer.Ordinal)
     {
-        // Sum of this dictionary: 5 call sites in 3 files; none in Common or Tools.
+        // Sum of this dictionary: 4 call sites in 2 files; none in Common or Tools.
         ["RoslynSentinel.Engines.Advanced/AsyncBatchEngine.cs"] = 2,
         ["RoslynSentinel.Engines.Advanced/AsyncOptimizationEngine.cs"] = 2,
-        ["RoslynSentinel.Engines.Basic/AttributeTextEditBuilder.cs"] = 1,
     };
 
     [Test]

@@ -153,24 +153,44 @@ public static class AttributeTextEditBuilder
 
     /// <summary>
     /// Renders caller-supplied attribute text (parsed inside a dummy class) with canonical whitespace. The text never
-    /// came from a file, so its whitespace and end-of-line trivia are discarded and <c>NormalizeWhitespace</c> rebuilds
-    /// the spacing. Comments are kept by <see cref="RoslynFormattingHelper.StripFormattingTriviaForNormalize{T}"/>
-    /// wherever they sit (boundary and inner alike), so the new-node guard rejects every one of them; the guard's
-    /// <see cref="ArgumentException"/> is turned into a <see cref="ToolInvalidArgumentException"/> with an actionable
-    /// message, so no internal API name reaches the caller. Only the guard's own rejection (parameter <c>node</c>) is
-    /// translated; a bad <paramref name="eol"/> still surfaces as the programming error it is.
+    /// came from a file, so it has no user formatting to keep: every trivia is dropped from a detached copy and
+    /// <c>NormalizeWhitespace</c> rebuilds the spacing. This deliberately stays self-contained instead of going through
+    /// the RoslynFormattingHelper NormalizeNew* family (whitespace slice C9): the result is a string for a text edit, not a
+    /// node in a document, so there is no Document to run the annotation formatter on.
+    /// <para>
+    /// Any trivia other than whitespace and end-of-line (comments, documentation comments, directives, disabled text,
+    /// skipped tokens), on the boundary tokens or inside, is rejected with a <see cref="ToolInvalidArgumentException"/>
+    /// instead of being dropped silently. A bad <paramref name="eol"/> is checked first and surfaces as the programming
+    /// error it is (<see cref="ArgumentException"/> with parameter <c>eol</c>).
+    /// </para>
     /// </summary>
     private static string NormalizeAttributeText(SyntaxNode node, string eol)
     {
-        var detached = RoslynFormattingHelper.StripFormattingTriviaForNormalize(node);
-        try
+        ArgumentNullException.ThrowIfNull(node);
+        ArgumentNullException.ThrowIfNull(eol);
+        if (eol != "\n" && eol != "\r\n")
         {
-            return RoslynFormattingHelper.NormalizeNewChildWhitespace(detached, eol).ToString();
+            throw new ArgumentException(
+                "The end-of-line sequence must be exactly \"\\n\" or \"\\r\\n\"; pass the target file's or project's line ending.",
+                nameof(eol));
         }
-        catch (ArgumentException ex) when (ex.ParamName == "node")
+
+        // DescendantTrivia covers the leading trivia of the first token and the trailing trivia of the last token too,
+        // so a boundary comment is rejected exactly like an inner one.
+        var allTrivia = node.DescendantTrivia(descendIntoTrivia: false).ToList();
+        if (allTrivia.Any(t => !t.IsKind(SyntaxKind.WhitespaceTrivia) && !t.IsKind(SyntaxKind.EndOfLineTrivia)))
         {
             throw new ToolInvalidArgumentException(CommentsNotAllowedMessage);
         }
+
+        var detached = node.WithoutTrivia();
+        var innerTrivia = detached.DescendantTrivia(descendIntoTrivia: false).ToList();
+        if (innerTrivia.Count > 0)
+        {
+            detached = detached.ReplaceTrivia(innerTrivia, (_, _) => default);
+        }
+
+        return detached.NormalizeWhitespace("    ", eol, elasticTrivia: true).ToString();
     }
 
     private static SyntaxList<AttributeListSyntax> GetAttributeLists(SyntaxNode target)
