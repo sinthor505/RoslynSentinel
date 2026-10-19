@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynSentinel.Engines.Advanced;
@@ -12,6 +13,46 @@ public class AsyncOptimizationEngine
     public AsyncOptimizationEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
+    }
+
+    /// <summary>
+    /// Formats only the nodes of <paramref name="newRoot"/> that the rewrite annotated with <see cref="Formatter.Annotation"/>
+    /// (through <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/>) and returns the full text: lines the rewrite
+    /// did not touch keep their text and terminator, and every changed line takes the document's dominant line ending.
+    /// </summary>
+    private static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode newRoot, CancellationToken cancellationToken)
+    {
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+    }
+
+    /// <summary>
+    /// Returns <paramref name="leading"/> with a line break in front, so a member inserted after another member is
+    /// separated from it by a blank line; leading trivia that already starts with a line break is returned unchanged.
+    /// </summary>
+    private static SyntaxTriviaList WithBlankLineSeparator(SyntaxTriviaList leading) =>
+        leading.Count > 0 && leading[0].IsKind(SyntaxKind.EndOfLineTrivia)
+            ? leading
+            : leading.Insert(0, SyntaxFactory.CarriageReturnLineFeed);
+
+    /// <summary>
+    /// <see cref="ReplaceOrAddAttribute"/> plus the trivia the appended list needs without a whole-subtree whitespace
+    /// pass: the method's leading trivia (blank line, doc comment, indentation) stays in front of its first attribute
+    /// list, and the appended list ends in a line break and is annotated with <see cref="Formatter.Annotation"/>.
+    /// </summary>
+    private static (MethodDeclarationSyntax Updated, bool WasPresent) ReplaceOrAddAttributeOnOwnLine(
+        MethodDeclarationSyntax method,
+        string shortName,
+        string fullName,
+        string? patternKey,
+        AttributeSyntax newAttribute)
+    {
+        var (updated, wasPresent) = ReplaceOrAddAttribute(method.WithoutLeadingTrivia(), shortName, fullName, patternKey, newAttribute);
+        var added = updated.AttributeLists.Last();
+        updated = updated.ReplaceNode(
+            added,
+            added.WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed).WithAdditionalAnnotations(Formatter.Annotation));
+        return (updated.WithLeadingTrivia(method.GetLeadingTrivia()), wasPresent);
     }
 
     /// <summary>
@@ -245,9 +286,13 @@ public class AsyncOptimizationEngine
             }
         }
 
-        var newMethodNode = methodNode.WithBody(SyntaxFactory.Block(newStatements));
+        // New statements get a line break and the formatter annotation; statements kept from the body keep their trivia.
+        var annotatedStatements = newStatements.Select(s => statements.Contains(s)
+            ? s
+            : s.WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed).WithAdditionalAnnotations(Formatter.Annotation));
+        var newMethodNode = methodNode.WithBody(methodNode.Body.WithStatements(SyntaxFactory.List(annotatedStatements)));
         var newRoot = root!.ReplaceNode(methodNode, newMethodNode);
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -348,10 +393,16 @@ public class AsyncOptimizationEngine
                         SyntaxFactory.CarriageReturnLineFeed)));
 
         asyncMethod = asyncMethod.WithBody(scaffoldBody);
+        // The overload is a whole new member: a blank line before it, the original trailing line break after its new
+        // body, and the formatter annotation.
+        asyncMethod = asyncMethod
+            .WithLeadingTrivia(WithBlankLineSeparator(methodNode.GetLeadingTrivia()))
+            .WithTrailingTrivia(methodNode.GetTrailingTrivia())
+            .WithAdditionalAnnotations(Formatter.Annotation);
         var newClassNode = classNode.InsertNodesAfter(methodNode, new[] { asyncMethod });
         var newRoot = root!.ReplaceNode(classNode, newClassNode);
 
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -590,6 +641,9 @@ public class AsyncOptimizationEngine
                                               .First(m => m.Identifier.Text == methodName);
         var classWithBoth = classWithBridge.InsertNodesAfter(bridgeInNewClass, new[] { asyncMethod });
 
+        // Deliberately still a whole-subtree pass: with annotated-span output the Asyncify bridge batch
+        // (AsyncBatchEngine.RunBridgeBatchAsync plus caller uplift) leaves the file unbridged
+        // (SentinelAsyncifyToolsTests.T20); migrate only after that interaction is understood.
         var newRoot = root.ReplaceNode(classNode, classWithBoth);
         return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
     }
@@ -674,7 +728,12 @@ public class AsyncOptimizationEngine
         // Add async modifier.
         var asyncToken = SyntaxFactory.Token(SyntaxKind.AsyncKeyword)
             .WithTrailingTrivia(SyntaxFactory.Space);
-        var asyncMethod = annotatedMethodNode.WithModifiers(annotatedMethodNode.Modifiers.Add(asyncToken));
+        // With no modifiers the method's leading trivia sits on the return type: move it onto the new keyword.
+        var asyncMethod = annotatedMethodNode.Modifiers.Count == 0
+            ? annotatedMethodNode
+                .WithReturnType(annotatedMethodNode.ReturnType.WithoutLeadingTrivia())
+                .WithModifiers(SyntaxFactory.TokenList(asyncToken.WithLeadingTrivia(annotatedMethodNode.ReturnType.GetLeadingTrivia())))
+            : annotatedMethodNode.WithModifiers(annotatedMethodNode.Modifiers.Add(asyncToken));
 
         // Replace ONLY the annotated bridge-call invocations: bridgeMethod(args) -> await bridgeMethodAsync(args).
         // Calls with the same name on unrelated types are untouched. No CT -> event handlers have none.
@@ -724,13 +783,14 @@ public class AsyncOptimizationEngine
 
         // Strip all [MigrationCandidate] attributes -> the handler is now converted and no
         // longer needs any migration marker. Leaving them causes stale-flag failures on re-runs.
-        rewrittenMethod = StripMigrationCandidateAttributes(rewrittenMethod);
+        // Removing the first attribute list would take the method's leading trivia with it: put it back.
+        rewrittenMethod = StripMigrationCandidateAttributes(rewrittenMethod).WithLeadingTrivia(rewrittenMethod.GetLeadingTrivia());
 
         var newRoot2 = root.ReplaceNode(methodNode, rewrittenMethod);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot2).ToFullString(),
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot2, cancellationToken),
             FilePath = filePath,
         };
     }
@@ -887,14 +947,16 @@ public class AsyncOptimizationEngine
                 return (needsParens
                     ? (ExpressionSyntax)SyntaxFactory.ParenthesizedExpression(awaitExpr)
                     : awaitExpr)
-                    .WithLeadingTrivia(original.GetLeadingTrivia());
+                    .WithLeadingTrivia(original.GetLeadingTrivia())
+                    // The appended CT argument has no trivia: the formatter spaces the argument list.
+                    .WithAdditionalAnnotations(Formatter.Annotation);
             });
 
         // Mark any lambdas/anonymous functions that now contain await as async.
         rewrittenMethod = (MethodDeclarationSyntax)new AsyncifyAnonymousFunctionsRewriter().Visit(rewrittenMethod)!;
 
         var newRoot = root.ReplaceNode(methodNode, rewrittenMethod);
-        var updatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
+        var updatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken);
         progress?.Report(new EngineProgress(
             (float)bridgeTargets.Count / bridgeTargets.Count,
             $"Rewrote {bridgeTargets.Count} bridge call(s) in '{asyncMethodName}' body in {filePath}"));
@@ -970,10 +1032,11 @@ public class AsyncOptimizationEngine
                     SyntaxFactory.Argument(
                         SyntaxFactory.LiteralExpression(
                             libraryMode ? SyntaxKind.FalseLiteralExpression : SyntaxKind.TrueLiteralExpression)))));
-            return orig.WithExpression(configureAwait);
+            // Keep the awaited expression's trivia on the whole ConfigureAwait call.
+            return orig.WithExpression(configureAwait.WithTriviaFrom(orig.Expression));
         });
 
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -1010,7 +1073,7 @@ public class AsyncOptimizationEngine
             return baseExpr.WithTriviaFrom(orig);
         });
 
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -1191,11 +1254,17 @@ public class AsyncOptimizationEngine
                 newMethod = newMethod.WithBody(SyntaxFactory.Block(newStatements));
             }
 
+            // The signature and body are rebuilt from factory nodes: keep the original method's outer trivia and
+            // annotate the whole method for the formatter.
+            newMethod = newMethod
+                .WithLeadingTrivia(methodNode.GetLeadingTrivia())
+                .WithTrailingTrivia(methodNode.GetTrailingTrivia())
+                .WithAdditionalAnnotations(Formatter.Annotation);
             var newRoot = root.ReplaceNode(methodNode, newMethod);
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
-                UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+                UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
                 FilePath = filePath
             };
         }
@@ -1365,11 +1434,12 @@ public class AsyncOptimizationEngine
             {
                 var ctArg = SyntaxFactory.Argument(SyntaxFactory.IdentifierName("cancellationToken"));
                 var newArgList = inv.ArgumentList.AddArguments(ctArg);
-                replacements[inv] = inv.WithArgumentList(newArgList);
+                replacements[inv] = inv.WithArgumentList(newArgList.WithAdditionalAnnotations(Formatter.Annotation));
             }
         }
 
-        var newMethodNode = methodNode.WithParameterList(newParamList);
+        // The new parameter and arguments carry no trivia: the formatter spaces both lists.
+        var newMethodNode = methodNode.WithParameterList(newParamList.WithAdditionalAnnotations(Formatter.Annotation));
         if (replacements.Count > 0)
         {
             var newBody = bodyToRewrite.ReplaceNodes(replacements.Keys, (orig, _) => replacements[orig]);
@@ -1387,7 +1457,7 @@ public class AsyncOptimizationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
             FilePath = filePath
         };
     }
@@ -1868,11 +1938,11 @@ internal sealed class MigrationCandidateAttribute : Attribute
             SyntaxFactory.AttributeArgumentList(
                 SyntaxFactory.SeparatedList(arguments)));
 
-        var (updatedMethod, wasAlreadyFlagged) = ReplaceOrAddAttribute(
+        var (updatedMethod, wasAlreadyFlagged) = ReplaceOrAddAttributeOnOwnLine(
             methodNode, MigrationCandidateShortName, MigrationCandidateFullName, pattern, newAttr);
 
         var newRoot = root.ReplaceNode(methodNode, updatedMethod);
-        var newSource = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
+        var newSource = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken);
 
         var result = new Dictionary<FilePathWrapper, string> { { filePath, newSource } };
 
@@ -2042,7 +2112,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                     SyntaxFactory.IdentifierName(MigrationCandidateShortName),
                     SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(args)));
 
-                var (updatedMethod, wasAlreadyFlagged) = ReplaceOrAddAttribute(
+                var (updatedMethod, wasAlreadyFlagged) = ReplaceOrAddAttributeOnOwnLine(
                     methodNode, MigrationCandidateShortName, MigrationCandidateFullName, pattern, newAttr);
 
                 root = root.ReplaceNode(methodNode, updatedMethod);
@@ -2056,7 +2126,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
             }
 
             // Write final combined source once for all methods in this file.
-            var finalSource = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root).ToFullString();
+            var finalSource = await FormatAnnotatedTextAsync(document, root, cancellationToken);
             var fileChanges = new Dictionary<FilePathWrapper, string> { { filePath, finalSource } };
 
             // Inject MigrationCandidateAttribute.cs if not yet in solution (check once per file).

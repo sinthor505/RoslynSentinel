@@ -54,11 +54,11 @@ public class WhitespaceRatchetTests
     // FormatAnnotatedSpansAsync / FormatWholeDocumentAsync; never raise it.
     private static readonly Dictionary<string, int> NormalizeHelperBaseline = new(StringComparer.Ordinal)
     {
-        // Sum of this dictionary: 35 call sites in 7 files; none in Common or Tools.
+        // Sum of this dictionary: 25 call sites in 7 files; none in Common or Tools.
         ["RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs"] = 16,
         ["RoslynSentinel.Engines.Advanced/ApiGenerationEngine.cs"] = 1,
         ["RoslynSentinel.Engines.Advanced/AsyncBatchEngine.cs"] = 2,
-        ["RoslynSentinel.Engines.Advanced/AsyncOptimizationEngine.cs"] = 12,
+        ["RoslynSentinel.Engines.Advanced/AsyncOptimizationEngine.cs"] = 2,
         ["RoslynSentinel.Engines.Advanced/DocumentationEngine.cs"] = 2,
         ["RoslynSentinel.Engines.Basic/AttributeTextEditBuilder.cs"] = 1,
         ["RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs"] = 1,
