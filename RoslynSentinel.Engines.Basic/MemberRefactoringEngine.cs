@@ -5053,7 +5053,7 @@ public class MemberRefactoringEngine
             return param;
         }).ToArray();
         // Build extracted method body
-        var bodyStmts = selectedStatements.Select(s => s.WithoutLeadingTrivia().WithoutTrailingTrivia()).Cast<StatementSyntax>().ToList();
+        var bodyStmts = selectedStatements.Select(s => s.WithoutLeadingTrivia().WithTrailingTrivia(SyntaxFactory.ElasticMarker)).Cast<StatementSyntax>().ToList();
         if (returnVar != null)
         {
             bodyStmts.Add(SyntaxFactory.ReturnStatement(SyntaxFactory.IdentifierName(returnVar.Name)));
@@ -5073,7 +5073,7 @@ public class MemberRefactoringEngine
             modifiers.Add(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
         }
 
-        var extractedMethod = (MethodDeclarationSyntax)RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(SyntaxFactory.MethodDeclaration(returnType, newMethodName).WithModifiers(SyntaxFactory.TokenList(modifiers)).WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(paramSyntax))).WithBody(SyntaxFactory.Block(bodyStmts)));
+        var extractedMethod = SyntaxFactory.MethodDeclaration(returnType, newMethodName).WithModifiers(SyntaxFactory.TokenList(modifiers)).WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(paramSyntax))).WithBody(SyntaxFactory.Block(bodyStmts));
         // Build call site -> include ref/out/in keywords for parameter symbols
         var argList = parameters.Select(sym =>
         {
@@ -5140,10 +5140,27 @@ public class MemberRefactoringEngine
         var beforeSnippet = string.Concat(selectedStatements.Select(s => s.ToFullString())).Trim();
         // callStatement carries the original statement's leading trivia (the user's indentation, and any comment
         // above it) for the in-place edit above. The standalone snippet is a new node, so drop that copied trivia
-        // before normalizing it; NormalizeNewChildWhitespace rejects existing formatting.
-        var callSiteText = RoslynFormattingHelper.NormalizeNewChildWhitespace(callStatement.WithoutLeadingTrivia(), EolUtilities.DetectNormalizableEol(text)).ToFullString().Trim();
-        var extractedMethodText = extractedMethod.ToFullString().Trim();
+        // before formatting it, so the snippet is only the statement.
+        var callSiteText = await FormatNewSnippetAsync(document, SyntaxFactory.GlobalStatement(callStatement.WithoutLeadingTrivia()), cancellationToken);
+        var extractedMethodText = await FormatNewSnippetAsync(document, extractedMethod, cancellationToken);
         return new ExtractMethodResult(false, null, beforeSnippet, callSiteText, extractedMethodText, updatedContent);
+    }
+
+    /// <summary>
+    /// Formats a newly built member (or global statement) that is returned as a standalone snippet, not inserted into
+    /// <paramref name="document"/>, and returns its text without surrounding blank lines. The node is annotated with
+    /// <see cref="Formatter.Annotation"/> and formatted through <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/>
+    /// inside a throwaway compilation unit. The pre-image handed to the helper carries only the document's dominant line
+    /// ending, so every line of the snippet takes that ending and none can inherit a stray terminator by text-matching a
+    /// line of the document.
+    /// </summary>
+    private static async Task<string> FormatNewSnippetAsync(Document document, MemberDeclarationSyntax member, CancellationToken cancellationToken)
+    {
+        var documentText = await document.GetTextAsync(cancellationToken);
+        var snippetPreImage = document.WithText(SourceText.From(EolUtilities.DetectDominantEol(documentText), documentText.Encoding, documentText.ChecksumAlgorithm));
+        var snippetRoot = SyntaxFactory.CompilationUnit().AddMembers(member.WithAdditionalAnnotations(Formatter.Annotation));
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(snippetPreImage, snippetRoot, cancellationToken);
+        return (await formatted.GetTextAsync(cancellationToken)).ToString().Trim();
     }
 
     /// <summary>
