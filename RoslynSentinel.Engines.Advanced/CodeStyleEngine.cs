@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 
 using RoslynSentinel.Common;
 
@@ -72,7 +73,11 @@ public class CodeStyleEngine
                         .WithInitializer(SyntaxFactory.EqualsValueClause(
                             SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("Lock"))
                             .WithArgumentList(SyntaxFactory.ArgumentList())))))
-                    .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
+                    .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword))
+                    // New member: it ends its own line (FormatAnnotatedSpansAsync puts that line break in the document's
+                    // dominant ending) and is the only node of the class that gets formatted.
+                    .WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed)
+                    .WithAdditionalAnnotations(Formatter.Annotation);
 
                 newRoot = newRoot.ReplaceNodes(
                     classesToUpdate,
@@ -81,7 +86,9 @@ public class CodeStyleEngine
                 if (!newRoot.Usings.Any(u => u.Name?.ToString() == "System.Threading"))
                 {
                     newRoot = newRoot.AddUsings(
-                        SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("System.Threading")));
+                        SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("System.Threading"))
+                            .WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed)
+                            .WithAdditionalAnnotations(Formatter.Annotation));
                 }
             }
         }
@@ -90,7 +97,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (newRoot is null ? null : RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()) ?? root.ToFullString()
+            UpdatedText = newRoot is null ? root.ToFullString() : await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -209,7 +216,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (newRoot is null ? null : RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()) ?? root.ToFullString()
+            UpdatedText = newRoot is null ? root.ToFullString() : await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -254,7 +261,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (newRoot is null ? null : RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()) ?? root.ToFullString()
+            UpdatedText = newRoot is null ? root.ToFullString() : await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -313,14 +320,17 @@ public class CodeStyleEngine
         var newClassNode = cu.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
         if (newClassNode != null && providerField == null)
         {
-            var field = SyntaxFactory.FieldDeclaration(SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("TimeProvider")).AddVariables(SyntaxFactory.VariableDeclarator(fieldName))).AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
+            // New member: it ends its own line (put in the document's dominant ending) and is the only node formatted.
+            var field = SyntaxFactory.FieldDeclaration(SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("TimeProvider")).AddVariables(SyntaxFactory.VariableDeclarator(fieldName))).AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword))
+                .WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed)
+                .WithAdditionalAnnotations(Formatter.Annotation);
             cu = cu.ReplaceNode(newClassNode, newClassNode.WithMembers(newClassNode.Members.Insert(0, field)));
         }
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(cu).ToFullString()
+            UpdatedText = await FormatAnnotatedTextAsync(document, cu, cancellationToken)
         };
     }
 
@@ -365,7 +375,7 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -410,8 +420,19 @@ public class CodeStyleEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
+    }
+
+    /// <summary>
+    /// Formats only the nodes of <paramref name="newRoot"/> that the rewrite annotated with <see cref="Formatter.Annotation"/>
+    /// (through <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/>) and returns the full text: lines the rewrite
+    /// did not touch keep their text and terminator, and every changed line takes the document's dominant line ending.
+    /// </summary>
+    private static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode newRoot, CancellationToken cancellationToken)
+    {
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
     public async Task<List<AntiPatternFinding>> FindUseFrozenCollectionsAsync(
@@ -516,7 +537,7 @@ public class CodeStyleEngine
         public override SyntaxNode? VisitLockStatement(LockStatementSyntax node)
         {
             var expr = node.Expression.ToString();
-            if (expr is "this" or "typeof") { MadeChanges = true; return node.WithExpression(SyntaxFactory.IdentifierName("_lockObj")).WithTriviaFrom(node); }
+            if (expr is "this" or "typeof") { MadeChanges = true; return node.WithExpression(SyntaxFactory.IdentifierName("_lockObj").WithTriviaFrom(node.Expression).WithAdditionalAnnotations(Formatter.Annotation)).WithTriviaFrom(node); }
             return base.VisitLockStatement(node);
         }
     }
@@ -530,7 +551,7 @@ public class CodeStyleEngine
         {
             if (node.Parent is EqualsValueClauseSyntax evc && evc.Parent is VariableDeclaratorSyntax vd && vd.Parent is VariableDeclarationSyntax vds2 && vds2.Type.ToString() == node.Type.ToString())
             {
-                return SyntaxFactory.ImplicitObjectCreationExpression(node.ArgumentList ?? SyntaxFactory.ArgumentList(), node.Initializer).WithTriviaFrom(node);
+                return SyntaxFactory.ImplicitObjectCreationExpression(node.ArgumentList ?? SyntaxFactory.ArgumentList(), node.Initializer).WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
             }
 
             return base.VisitObjectCreationExpression(node);
@@ -553,7 +574,7 @@ public class CodeStyleEngine
                         right = SyntaxFactory.ImplicitObjectCreationExpression(oce.ArgumentList ?? SyntaxFactory.ArgumentList(), oce.Initializer).WithTriviaFrom(oce);
                     }
 
-                    return SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(SyntaxKind.CoalesceAssignmentExpression, assignment.Left, right)).WithTriviaFrom(node);
+                    return SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(SyntaxKind.CoalesceAssignmentExpression, assignment.Left, right)).WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
                 }
             }
             return base.VisitIfStatement(node);
@@ -566,17 +587,17 @@ public class CodeStyleEngine
         {
             if (node.Initializer == null || node.Initializer.Expressions.Count == 0)
             {
-                return SyntaxFactory.CollectionExpression().WithTriviaFrom(node);
+                return SyntaxFactory.CollectionExpression().WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
             }
 
-            return SyntaxFactory.CollectionExpression(SyntaxFactory.SeparatedList<CollectionElementSyntax>(node.Initializer.Expressions.Select(e => SyntaxFactory.ExpressionElement(e)))).WithTriviaFrom(node);
+            return SyntaxFactory.CollectionExpression(SyntaxFactory.SeparatedList<CollectionElementSyntax>(node.Initializer.Expressions.Select(e => SyntaxFactory.ExpressionElement(e)))).WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
         }
 
         public override SyntaxNode? VisitObjectCreationExpression(ObjectCreationExpressionSyntax node)
         {
             if (node.Type.ToString().StartsWith("List<") && node.Initializer != null)
             {
-                return SyntaxFactory.CollectionExpression(SyntaxFactory.SeparatedList<CollectionElementSyntax>(node.Initializer.Expressions.Select(e => SyntaxFactory.ExpressionElement(e)))).WithTriviaFrom(node);
+                return SyntaxFactory.CollectionExpression(SyntaxFactory.SeparatedList<CollectionElementSyntax>(node.Initializer.Expressions.Select(e => SyntaxFactory.ExpressionElement(e)))).WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
             }
             return base.VisitObjectCreationExpression(node);
         }
@@ -593,7 +614,7 @@ public class CodeStyleEngine
             if ((expr is "DateTime" or "DateTimeOffset") && node.Name.Identifier.Text is "UtcNow" or "Now" or "Today")
             {
                 var method = node.Name.Identifier.Text == "UtcNow" ? "GetUtcNow()" : "GetLocalNow()";
-                return SyntaxFactory.ParseExpression($"{_fieldName}.{method}").WithTriviaFrom(node);
+                return SyntaxFactory.ParseExpression($"{_fieldName}.{method}").WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
             }
             return base.VisitMemberAccessExpression(node);
         }
@@ -605,7 +626,8 @@ public class CodeStyleEngine
         {
             if (node.Alias.Identifier.Text == "global")
             {
-                return node.Name;
+                // Keep the alias's trivia (e.g. the statement's indentation when "global::" starts the line).
+                return node.Name.WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
             }
 
             return base.VisitAliasQualifiedName(node);
@@ -625,7 +647,10 @@ public class CodeStyleEngine
                     if (left.EndsWith(".Length") || left.EndsWith(".Count"))
                     {
                         return node.WithArgumentList(SyntaxFactory.BracketedArgumentList(SyntaxFactory.SingletonSeparatedList(
-                            SyntaxFactory.Argument(SyntaxFactory.PrefixUnaryExpression(SyntaxKind.IndexExpression, SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1)))))));
+                            SyntaxFactory.Argument(SyntaxFactory.PrefixUnaryExpression(SyntaxKind.IndexExpression, SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1))))))
+                            // Keep the original brackets' trivia (e.g. the space after "]" before a following operator).
+                            .WithTriviaFrom(node.ArgumentList)
+                            .WithAdditionalAnnotations(Formatter.Annotation));
                     }
                 }
             }

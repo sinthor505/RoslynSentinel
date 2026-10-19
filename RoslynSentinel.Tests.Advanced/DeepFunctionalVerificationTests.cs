@@ -241,7 +241,9 @@ public class Order
 
         // Assert
         Assert.That(result.UpdatedText!, Contains.Substring("private readonly Lock _lockObj = new Lock()"));
-        Assert.That(result.UpdatedText!, Contains.Substring("lock (_lockObj)"));
+        // Only the lock expression is replaced and formatted, so the source's own "lock(" spacing is kept (the
+        // pre-C6-5 whole-subtree pass re-spaced it to "lock (").
+        Assert.That(result.UpdatedText!, Contains.Substring("lock(_lockObj)"));
         Assert.That(result.UpdatedText!, Contains.Substring("using System.Threading;"));
     }
 

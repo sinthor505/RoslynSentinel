@@ -86,12 +86,13 @@ public class IDEStyleEngine
         }
 
         var newRoot = RewriteBlocksWithObjectInitializers(root);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Object initializers applied.",
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -153,7 +154,7 @@ public class IDEStyleEngine
                                 SyntaxKind.ObjectInitializerExpression,
                                 SyntaxFactory.SeparatedList(initAssignments));
 
-                            var newObjCreation = objCreation.WithInitializer(initializer);
+                            var newObjCreation = objCreation.WithInitializer(initializer).WithAdditionalAnnotations(Formatter.Annotation);
                             var newVariable = variable.WithInitializer(
                                 variable.Initializer!.WithValue(newObjCreation));
                             var newLocalDecl = localDecl.WithDeclaration(
@@ -219,12 +220,13 @@ public class IDEStyleEngine
 
         var rewriter = new NullPropagationRewriter();
         var newRoot = rewriter.Visit(root);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Null-propagation applied.",
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -251,7 +253,8 @@ public class IDEStyleEngine
                 return base.VisitIfStatement(node);
             }
 
-            var checkedExpr = rightIsNull ? bin.Left : bin.Right;
+            // Without trivia: bin.Left carries the space before "!=", which would otherwise land before "?.".
+            var checkedExpr = (rightIsNull ? bin.Left : bin.Right).WithoutTrivia();
             var checkedStr = checkedExpr.ToString();
 
             // Unwrap single-statement block
@@ -295,7 +298,8 @@ public class IDEStyleEngine
 
             return SyntaxFactory.ExpressionStatement(nullConditional)
                 .WithLeadingTrivia(node.GetLeadingTrivia())
-                .WithTrailingTrivia(node.GetTrailingTrivia());
+                .WithTrailingTrivia(node.GetTrailingTrivia())
+                .WithAdditionalAnnotations(Formatter.Annotation);
         }
     }
 }

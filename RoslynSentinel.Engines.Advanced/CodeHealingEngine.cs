@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace RoslynSentinel.Engines.Advanced;
 
@@ -51,12 +52,13 @@ public class CodeHealingEngine
         }
 
         var rewriter = new ThreadSleepRewriter();
-        var newRoot = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(rewriter.Visit(root));
+        var newRoot = rewriter.Visit(root);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = newRoot.ToFullString()
+            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -73,7 +75,7 @@ public class CodeHealingEngine
                     var delay = SyntaxFactory.InvocationExpression(
                         SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("Task"), SyntaxFactory.IdentifierName("Delay")),
                         node.ArgumentList);
-                    return SyntaxFactory.AwaitExpression(delay).WithTriviaFrom(node);
+                    return SyntaxFactory.AwaitExpression(delay).WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
                 }
             }
             return base.VisitInvocationExpression(node);
@@ -157,13 +159,17 @@ public class CodeHealingEngine
             SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression),
             SyntaxFactory.Block(SyntaxFactory.TryStatement(tryBody, SyntaxFactory.SingletonList(catchClause), null)));
 
-        var newMethod = method.WithBody(SyntaxFactory.Block(retryDecl, whileStmt));
+        // The new body keeps the old body's brace trivia (indentation, the line break after the closing brace), so the
+        // lines around the method keep their layout; only the annotated body is formatted.
+        var newBody = SyntaxFactory.Block(retryDecl, whileStmt).WithTriviaFrom(method.Body).WithAdditionalAnnotations(Formatter.Annotation);
+        var newMethod = method.WithBody(newBody);
         var newRoot = root.ReplaceNode(method, newMethod);
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = f,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }
 
@@ -194,9 +200,10 @@ public class CodeHealingEngine
             {
                 var ns = root?.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString();
                 var newExceptionName = target.NewExceptionName;
-                var newOce = oce.WithType(SyntaxFactory.ParseTypeName(newExceptionName));
+                var newOce = oce.WithType(SyntaxFactory.ParseTypeName(newExceptionName).WithTriviaFrom(oce.Type).WithAdditionalAnnotations(Formatter.Annotation));
                 var newRoot = root!.ReplaceNode(oce, newOce);
-                changes[target.FilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
+                var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+                changes[target.FilePath] = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
 
                 // Generate the new exception class
                 var nsDeclaration = string.IsNullOrEmpty(ns) ? "" : $"namespace {ns};\n";
