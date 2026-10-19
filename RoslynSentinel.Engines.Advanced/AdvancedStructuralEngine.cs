@@ -465,6 +465,35 @@ public class StructuralRefactoringEngine
             .WithTrailingTrivia(block.GetTrailingTrivia())
             .WithAdditionalAnnotations(Formatter.Annotation);
 
+    /// <summary>
+    /// Removes a member declaration with its own trivia (its comments go with it; unbalanced preprocessor directives
+    /// stay). When it was the first member of its type, the blank line that separated it from the next member would end up
+    /// directly after the opening brace, so that blank line is dropped as well. Everything else keeps its text.
+    /// </summary>
+    private static SyntaxNode RemoveMemberDeclaration(SyntaxNode root, MemberDeclarationSyntax member)
+    {
+        if (member.Parent is TypeDeclarationSyntax type && type.Members.Count > 1 && type.Members[0] == member)
+        {
+            var withoutMember = type.RemoveNode(member, SyntaxRemoveOptions.KeepUnbalancedDirectives)!;
+            var first = withoutMember.Members[0];
+            var leading = first.GetLeadingTrivia();
+            var index = 0;
+            while (index < leading.Count && leading[index].IsKind(SyntaxKind.WhitespaceTrivia))
+            {
+                index++;
+            }
+
+            if (index < leading.Count && leading[index].IsKind(SyntaxKind.EndOfLineTrivia))
+            {
+                withoutMember = withoutMember.ReplaceNode(first, first.WithLeadingTrivia(leading.Skip(index + 1)));
+            }
+
+            return root.ReplaceNode(type, withoutMember);
+        }
+
+        return root.RemoveNode(member, SyntaxRemoveOptions.KeepUnbalancedDirectives) ?? root;
+    }
+
     private static SyntaxNode ApplyRemoveBraces(SyntaxNode root, int line)
     {
         // Find an if/while/for at the target line with a single-statement block body
@@ -1175,7 +1204,11 @@ public class StructuralRefactoringEngine
 
             if (!string.IsNullOrEmpty(namespaceName))
             {
-                var namespaceDecl = SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName(namespaceName)).WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(newClassNode));
+                // The namespace kind follows the source file: the moved members keep their own indentation, which only
+                // fits the new file when the class sits at the same nesting depth as in the source.
+                var namespaceDecl = fileScopedNamespaceOpt != null && namespaceDeclOpt == null
+                    ? (BaseNamespaceDeclarationSyntax)SyntaxFactory.FileScopedNamespaceDeclaration(SyntaxFactory.ParseName(namespaceName)).WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(newClassNode))
+                    : SyntaxFactory.NamespaceDeclaration(SyntaxFactory.ParseName(namespaceName)).WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(newClassNode));
                 newCompilationUnit = newCompilationUnit.WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(namespaceDecl));
             }
             else
@@ -1183,13 +1216,9 @@ public class StructuralRefactoringEngine
                 newCompilationUnit = newCompilationUnit.WithMembers(SyntaxFactory.SingletonList<MemberDeclarationSyntax>(newClassNode));
             }
 
-            // Format with proper newlines
-            var formattedCode = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newCompilationUnit).ToFullString();
-            // Ensure proper spacing after usings before namespace
-            if (usings.Count != 0 && !string.IsNullOrEmpty(namespaceName))
-            {
-                formattedCode = formattedCode.Replace(";namespace", ";\n\nnamespace");
-            }
+            // A new file that embeds existing code: the using directives and the moved members (with their comments) are
+            // left byte-exact, only the synthesized namespace and class structure is formatted.
+            var formattedCode = await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, newCompilationUnit, n => n is not (UsingDirectiveSyntax or MemberDeclarationSyntax { Parent: ClassDeclarationSyntax }), cancellationToken);
 
             return new Dictionary<FilePathWrapper, string>
             {
@@ -1600,7 +1629,7 @@ public class StructuralRefactoringEngine
         // Find ALL references across the solution grouped by document
         var references = await SymbolFinder.FindReferencesAsync(methodSymbol, solution, cancellationToken);
         var byDocument = references.SelectMany(r => r.Locations).Where(l => l.Document.FilePath != null).GroupBy(l => l.Document.Id).ToDictionary(g => g.Key, g => g.ToList());
-        var result = new Dictionary<FilePathWrapper, string>();
+        var updatedRoots = new Dictionary<DocumentId, SyntaxNode>();
         var expressionTemplate = expressionToInline; // capture once
         // Process each document that has call sites (including the defining document)
         foreach (var (docId, locations) in byDocument)
@@ -1632,24 +1661,23 @@ public class StructuralRefactoringEngine
                 continue;
             }
 
-            var updatedDocRoot = docRoot.ReplaceNodes(callSiteNodes, (original, _) => expressionTemplate.WithTriviaFrom(original));
-            result[doc.FilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedDocRoot).ToFullString();
+            // The inlined expression is the only changed node and the only one formatted; the rest of the file keeps its text.
+            updatedRoots[docId] = docRoot.ReplaceNodes(callSiteNodes, (original, _) => expressionTemplate.WithTriviaFrom(original).WithAdditionalAnnotations(Formatter.Annotation));
         }
 
-        // Remove the method declaration from the defining document
-        var definingFilePath = document.FilePath!;
-        var definingRoot = result.TryGetValue(definingFilePath, out var already) ? Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(already, cancellationToken: cancellationToken).GetRoot(cancellationToken) : root;
+        // Remove the method declaration from the defining document, on top of its inlined call sites when it has any.
+        var definingRoot = updatedRoots.TryGetValue(document.Id, out var inlinedDefiningRoot) ? inlinedDefiningRoot : root;
         var methodToRemove = definingRoot.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodToRemove != null)
         {
-            var withoutMethod = definingRoot.RemoveNode(methodToRemove, SyntaxRemoveOptions.KeepUnbalancedDirectives);
-            result[definingFilePath] = (withoutMethod is null ? null : RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(withoutMethod).ToFullString()) ?? definingRoot.ToFullString();
+            updatedRoots[document.Id] = RemoveMemberDeclaration(definingRoot, methodToRemove);
         }
-        else if (!result.ContainsKey(definingFilePath))
+
+        var result = new Dictionary<FilePathWrapper, string>();
+        foreach (var (docId, updatedRoot) in updatedRoots)
         {
-            // Method had no callers but still needs the declaration removed
-            var withoutMethod = root.RemoveNode(method, SyntaxRemoveOptions.KeepUnbalancedDirectives);
-            result[definingFilePath] = (withoutMethod is null ? null : RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(withoutMethod).ToFullString()) ?? root.ToFullString();
+            var doc = solution.GetDocument(docId)!;
+            result[doc.FilePath!] = await FormatAnnotatedTextAsync(doc, updatedRoot, cancellationToken);
         }
 
         return result;
@@ -1692,23 +1720,21 @@ public class StructuralRefactoringEngine
             classRoot = classRoot.AddMembers(newClass);
         }
 
-        // classRoot stays on the raw NormalizeWholeSubtreeWhitespace (slice C6 owns it, see
-        // proposal_enforce_normalize_whole_subtree_whitespace_rule.md): it embeds the existing file's using directives,
-        // namespace name and tuple element types, and NormalizeWhitespace keeps the comments inside them (a trailing comment
-        // on a using, "int /* id */ Id"). NormalizeNewRootWhitespace* rejects every comment and stripping would lose them
-        // silently, so migrating needs a comment-preserving new-root variant. Pinned by
-        // PinnedC6_AdvancedStructural_ConvertTupleToClass_* in RoslynFormattingHelperNormalizeNewTests.
-        var newMethodNode = methodNode.WithReturnType(SyntaxFactory.ParseTypeName(newClassName));
+        // The method keeps its formatting; only the replaced return type is formatted. classRoot is a new file that embeds
+        // existing code (the source's using directives and the tuple element types, comments included, such as a trailing
+        // comment on a using or "int /* id */ Id"): those nodes are left byte-exact and only the synthesized structure is
+        // formatted.
+        var newMethodNode = methodNode.WithReturnType(SyntaxFactory.ParseTypeName(newClassName).WithTriviaFrom(methodNode.ReturnType).WithAdditionalAnnotations(Formatter.Annotation));
         var updatedRoot = root.ReplaceNode(methodNode, newMethodNode);
         return new Dictionary<FilePathWrapper, string>
         {
             {
                 filePath,
-                RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedRoot).ToFullString()
+                await FormatAnnotatedTextAsync(document, updatedRoot, cancellationToken)
             },
             {
                 Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"),
-                RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(classRoot).ToFullString()
+                await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, classRoot, n => n is not (UsingDirectiveSyntax or TypeSyntax { Parent: PropertyDeclarationSyntax }), cancellationToken)
             }
         };
     }
@@ -1753,13 +1779,13 @@ public class StructuralRefactoringEngine
                 return SyntaxFactory.PropertyDeclaration(SyntaxFactory.ParseTypeName("object"), char.ToUpper(name[0]) + name.Substring(1)).AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)).AddAccessorListAccessors(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)), SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
             });
             var newClass = SyntaxFactory.ClassDeclaration(newClassName).AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)).AddMembers(properties.ToArray());
-            // The class is built from scratch (NewChild), so it carries no user formatting; it takes the line ending of the document it was extracted from.
-            var eol = EolUtilities.DetectNormalizableEol(await document.GetTextAsync(cancellationToken));
+            // The class is built from scratch, so every node is new and formatted; the file takes the dominant line ending
+            // of the document it was extracted from.
             return new Dictionary<FilePathWrapper, string>
             {
                 {
                     Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"),
-                    RoslynFormattingHelper.NormalizeNewChildWhitespace(newClass, eol).ToFullString()
+                    await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, SyntaxFactory.CompilationUnit().AddMembers(newClass), _ => true, cancellationToken)
                 }
             };
         }

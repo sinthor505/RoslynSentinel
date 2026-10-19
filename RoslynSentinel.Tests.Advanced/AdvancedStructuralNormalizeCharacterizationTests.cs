@@ -20,6 +20,14 @@ namespace RoslynSentinel.Tests.Advanced;
 /// whole-subtree pass emitted LF for every input, re-spaced and split every untouched member, dropped blank lines between
 /// members, lost the constructor's leading comment and the interface members' comments, and split
 /// <c>if (x > 0) DoWork();</c> lines that no refactoring touched.
+/// <para>
+/// Slice C7b adds ExtractMembersToPartial, InlineMethod (with and without callers), ConvertTupleToClass and
+/// ConvertAnonymousToNamed. New files (FormatNewRootKeepingTriviaAsync) keep the embedded usings, members and element
+/// types byte-exact, format only the synthesized structure, follow the source's namespace kind and end with a line
+/// break. Before C7b they were LF-only (a CRLF doc comment kept its CRLF), always used a block namespace, re-spaced the
+/// moved members and ended without a line break; InlineMethod and ConvertTupleToClass re-spaced and split every
+/// untouched member of the files they edited, and the anonymous-type class had no trailing line break.
+/// </para>
 /// </summary>
 [TestFixture]
 [Category("StructuralRefactoringEngine")] // sentinel:auto-category
@@ -377,5 +385,210 @@ public class AdvancedStructuralNormalizeCharacterizationTests
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         AssertPinned(result.UpdatedText, MicroExpected(line == 2 ? "none" : refactoringId, eol));
+    }
+
+    /// <summary>
+    /// Wraps a type whose member lines are written at file-scoped indentation in namespace Demo: file-scoped as given, or a
+    /// block namespace with every non-empty type line indented one level deeper.
+    /// </summary>
+    private static string[] InNamespace(bool fileScoped, string[] header, string typeDeclaration, string[] body) =>
+        fileScoped
+            ? [.. header, "namespace Demo;", "", typeDeclaration, "{", .. body, "}"]
+            : [.. header, "namespace Demo", "{", "    " + typeDeclaration, "    {", .. body.Select(l => l.Length == 0 ? l : "    " + l), "    }", "}"];
+
+    [TestCase("LF", false)]
+    [TestCase("CRLF", false)]
+    [TestCase("Mixed", false)]
+    [TestCase("LF", true)]
+    [TestCase("CRLF", true)]
+    [TestCase("Mixed", true)]
+    public async Task ExtractMembersToPartial_NewFile_ByteExact(string eol, bool fileScoped)
+    {
+        string[] moved =
+        [
+            "    // the name~",
+            "    public string Name { get; set; }",
+            "",
+            "    /// <summary>Total.</summary>",
+            "    public   int Total(int a)",
+            "    {",
+            "        return  a; // keep",
+            "    }",
+        ];
+        string[] header = ["using System; // for Console", "using System.Linq;", ""];
+        SetSources(("Test.cs", Build(eol, InNamespace(fileScoped, header, "public partial class Customer", [.. moved, "", UntouchedLine]))));
+
+        var result = await _engine.ExtractMembersToPartialAsync("Test.cs", "Customer", ["Name", "Total"]);
+
+        Assert.That(result.Keys.Select(k => k.ToString()), Is.EquivalentTo(new[] { "Customer.Partial.cs" }));
+        // The new file mirrors the source's namespace kind; usings and moved members (comments, spacing, line endings)
+        // are byte-exact, the synthesized structure takes the dominant ending and the file ends with a line break.
+        AssertPinned(result.Values.Single(), Build(eol, [.. InNamespace(fileScoped, header, "public partial class Customer", moved), ""]));
+    }
+
+    [TestCase("LF")]
+    [TestCase("CRLF")]
+    [TestCase("Mixed")]
+    public async Task InlineMethod_WithCallers_ByteExact(string eol)
+    {
+        SetSources(
+            ("Calc.cs", Build(eol,
+                "using System;",
+                "",
+                "namespace Demo",
+                "{",
+                "    public class Calc",
+                "    {",
+                "        // the answer~",
+                "        public static int   Answer( ) => 40 + 2;",
+                "",
+                "        public int Use()",
+                "        {",
+                "            return  Answer() + 1; // keep",
+                "        }",
+                "",
+                "    " + UntouchedLine,
+                "    }",
+                "}")),
+            ("Other.cs", Build(eol,
+                "namespace Demo",
+                "{",
+                "    public class Other",
+                "    {",
+                "        public int Get() =>  Calc.Answer( ) * 2;~",
+                "    " + UntouchedLine,
+                "    }",
+                "}")));
+
+        var result = await _engine.InlineMethodAsync("Calc.cs", "Answer");
+
+        Assert.That(result.Keys.Select(k => k.ToString()), Is.EquivalentTo(new[] { "Calc.cs", "Other.cs" }));
+        Assert.Multiple(() =>
+        {
+            // Only the inlined expression is formatted (including the space in front of it); the removed method takes
+            // its comment along and leaves no blank line after the opening brace; everything else is byte-exact.
+            AssertPinned(result["Calc.cs"], Build(eol,
+                "using System;",
+                "",
+                "namespace Demo",
+                "{",
+                "    public class Calc",
+                "    {",
+                "        public int Use()",
+                "        {",
+                "            return 40 + 2 + 1; // keep",
+                "        }",
+                "",
+                "    " + UntouchedLine,
+                "    }",
+                "}"));
+            AssertPinned(result["Other.cs"], Build(eol,
+                "namespace Demo",
+                "{",
+                "    public class Other",
+                "    {",
+                "        public int Get() => 40 + 2 * 2;",
+                "    " + UntouchedLine,
+                "    }",
+                "}"));
+        });
+    }
+
+    [TestCase("LF")]
+    [TestCase("CRLF")]
+    [TestCase("Mixed")]
+    public async Task InlineMethod_NoCallers_ByteExact(string eol)
+    {
+        SetSources(("Calc.cs", Build(eol,
+            "namespace Demo;",
+            "",
+            "public class Calc",
+            "{",
+            "    // unused~",
+            "    private int   Seed( )",
+            "    {",
+            "        return 7;",
+            "    }",
+            "",
+            UntouchedLine,
+            "}")));
+
+        var result = await _engine.InlineMethodAsync("Calc.cs", "Seed");
+
+        Assert.That(result.Keys.Select(k => k.ToString()), Is.EquivalentTo(new[] { "Calc.cs" }));
+        AssertPinned(result["Calc.cs"], Build(eol,
+            "namespace Demo;",
+            "",
+            "public class Calc",
+            "{",
+            UntouchedLine,
+            "}"));
+    }
+
+    [TestCase("LF", false)]
+    [TestCase("CRLF", false)]
+    [TestCase("Mixed", false)]
+    [TestCase("LF", true)]
+    [TestCase("CRLF", true)]
+    [TestCase("Mixed", true)]
+    public async Task ConvertTupleToClass_ByteExact(string eol, bool fileScoped)
+    {
+        string[] header = ["using System; // for Console", ""];
+        SetSources(("Repo.cs", Build(eol, InNamespace(fileScoped, header, "public class Repo",
+        [
+            "    // returns a pair~",
+            "    public (int /* id */ id, string  name) GetPair( ) => (1, \"a\");",
+            "",
+            UntouchedLine,
+        ]))));
+
+        var result = await _engine.ConvertTupleToClassAsync("Repo.cs", "GetPair", "Pair");
+
+        Assert.That(result.Keys.Select(k => k.ToString()), Is.EquivalentTo(new[] { "Repo.cs", "Pair.cs" }));
+        Assert.Multiple(() =>
+        {
+            // Only the replaced return type is formatted; the rest of the method and file is byte-exact.
+            AssertPinned(result["Repo.cs"], Build(eol, InNamespace(fileScoped, header, "public class Repo",
+            [
+                "    // returns a pair~",
+                "    public Pair GetPair( ) => (1, \"a\");",
+                "",
+                UntouchedLine,
+            ])));
+            // New file: the using (with its comment) and the element types (with theirs) are embedded byte-exact; the
+            // synthesized structure takes the dominant ending and the file ends with a line break.
+            AssertPinned(result["Pair.cs"], Build(eol, [.. InNamespace(fileScoped, header, "public class Pair",
+            [
+                "    public int /* id */ Id { get; set; }",
+                "    public string Name { get; set; }",
+            ]), ""]));
+        });
+    }
+
+    [TestCase("LF")]
+    [TestCase("CRLF")]
+    [TestCase("Mixed")]
+    public async Task ConvertAnonymousToNamed_NewFile_ByteExact(string eol)
+    {
+        SetSources(("Maker.cs", Build(eol,
+            "namespace Demo;",
+            "",
+            "public class Maker",
+            "{",
+            "    public object Make() => new { Id = 1, name = \"a\" };~",
+            UntouchedLine,
+            "}")));
+
+        var result = await _engine.ConvertAnonymousToNamedAsync("Maker.cs", "Item");
+
+        Assert.That(result.Keys.Select(k => k.ToString()), Is.EquivalentTo(new[] { "Item.cs" }));
+        // Every node is new: the class takes the dominant line ending throughout and the file ends with a line break.
+        AssertPinned(result.Values.Single(), Build(eol == "CRLF" ? "CRLF" : "LF",
+            "public class Item",
+            "{",
+            "    public object Id { get; set; }",
+            "    public object Name { get; set; }",
+            "}",
+            ""));
     }
 }
