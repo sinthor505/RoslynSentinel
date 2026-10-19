@@ -169,6 +169,40 @@ public class W : IDisposable
     }
 
     [Test]
+    public async Task ConvertToBackgroundService_NonInterfaceBaseClass_IsRefusedNamingTheBase()
+    {
+        const string source = @"
+using System;
+
+public class Foo { }
+
+public class W : Foo, IDisposable
+{
+    public void Dispose() { }
+}";
+        SetSource(source);
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "W"));
+        Assert.That(ex!.Message, Does.Contain("Class 'W' already derives from 'Foo'"));
+        Assert.That(ex.Message, Does.Contain("Convert it manually or remove the base class first"));
+        // The refusal happens before any text is produced, so the committed document is unchanged.
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var text = await solution.Projects.SelectMany(p => p.Documents).Single(d => d.Name == "Test.cs").GetTextAsync();
+        Assert.That(text.ToString(), Is.EqualTo(source));
+    }
+
+    [Test]
+    public async Task ConvertToBackgroundService_UnresolvedBaseType_IsRefusedNamingTheBase()
+    {
+        SetSource(@"
+public class W : Missing
+{
+}");
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "W"));
+        Assert.That(ex!.Message, Does.Contain("Class 'W'"));
+        Assert.That(ex.Message, Does.Contain("'Missing'"));
+    }
+
+    [Test]
     public async Task ConvertToBackgroundService_ClassNotFound_ThrowsException()
     {
         SetSource("public class Foo { }", "Test.cs");

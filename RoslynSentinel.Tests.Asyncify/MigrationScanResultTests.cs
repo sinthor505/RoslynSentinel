@@ -300,6 +300,9 @@ public class Svc
     {
         // 55 candidates with the default limit of 50 -> page ≈ 50 × ~200 bytes ≈ 14 KB.
         // The server threshold is 15 KB KB. This must stay inline.
+        // Sensitivity: the page is only just under the 15 KB inline threshold and every finding carries the
+        // document path, so a longer DocumentRoot path, a longer finding message or a new finding field can push
+        // it over and look like a threshold bug. See DocumentRoot above before changing the threshold.
         SetSource(BuildManyFlaggedMethods(55));
 
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(reason: "test message"); // default limit=50, offset=0

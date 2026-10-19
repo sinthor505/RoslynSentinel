@@ -544,6 +544,11 @@ public class SolutionStructureEngine
     /// <summary>
     /// Converts a class into a .NET BackgroundService.
     /// </summary>
+    /// <remarks>
+    /// Limitation: existing interfaces are kept after BackgroundService, but a class that derives from a non-interface
+    /// base class (or from a base type the semantic model cannot resolve) is refused with a
+    /// <see cref="ToolTargetIneligibleException"/>, because it cannot derive from both that base and BackgroundService.
+    /// </remarks>
     public async Task<DocumentEditResult> ConvertToBackgroundServiceAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -553,20 +558,24 @@ public class SolutionStructureEngine
         // Existing interfaces must survive the conversion. A base class cannot be told apart from an interface
         // by syntax alone, so classify through the semantic model of the original (unmodified) tree.
         var keptInterfaces = new List<BaseTypeSyntax>();
-        var hasNonInterfaceBase = false;
         if (classNode.BaseList != null)
         {
             var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
             foreach (var existing in classNode.BaseList.Types)
             {
-                if (semanticModel?.GetTypeInfo(existing.Type, cancellationToken).Type?.TypeKind == TypeKind.Interface)
+                var existingType = semanticModel?.GetTypeInfo(existing.Type, cancellationToken).Type;
+                if (existingType?.TypeKind == TypeKind.Interface)
                 {
                     keptInterfaces.Add(existing.WithoutTrivia());
+                    continue;
                 }
-                else
-                {
-                    hasNonInterfaceBase = true;
-                }
+
+                // Refuse before any text is produced so the file is left unchanged.
+                var baseName = existing.Type.ToString();
+                var isResolvedClass = existingType != null && existingType.TypeKind != TypeKind.Error;
+                throw new ToolTargetIneligibleException(isResolvedClass
+                    ? $"Class '{className}' already derives from '{baseName}'; a class cannot derive from both {baseName} and BackgroundService. Convert it manually or remove the base class first."
+                    : $"Class '{className}' has base type '{baseName}' that could not be resolved as an interface, so it may be a base class; a class cannot derive from both a base class and BackgroundService. Make sure '{baseName}' resolves (or is an interface), or convert the class manually.");
             }
         }
 
@@ -581,14 +590,9 @@ public class SolutionStructureEngine
         // 2. Change base class
         var baseType = SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName("BackgroundService"));
         // The base list takes over the line break that ended the class header, so the brace stays on its own line.
-        // BackgroundService first, then the kept interfaces. An existing non-interface base class conflicts with
-        // BackgroundService; that case keeps the old behaviour (the whole base list is replaced) pending a design decision.
+        // BackgroundService first, then the kept interfaces.
         var baseTypes = new List<BaseTypeSyntax> { baseType };
-        if (!hasNonInterfaceBase)
-        {
-            baseTypes.AddRange(keptInterfaces);
-        }
-
+        baseTypes.AddRange(keptInterfaces);
         var baseList = SyntaxFactory.BaseList(SyntaxFactory.SeparatedList(baseTypes));
         ClassDeclarationSyntax newClass;
         if (classNode.BaseList != null)
