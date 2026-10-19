@@ -80,7 +80,7 @@
 | RefactoringSignatureTools | ConstructorParameter | Claude, Refactor, RefactorSignature | - | Add, remove, or view DI constructor parameters on a class. |
 | RefactoringSignatureTools | MethodSignature | Claude, Refactor, RefactorSignature | - | Add, remove, or view a method's parameters (any method; ConstructorParameter handles DI constructor parameters with a... |
 | RefactoringSignatureTools | RenameSymbol | Claude, claude-lean, Refactor, RefactorSignature | - | Renames a symbol and all its references across the solution, including XML doc comments, inline comments and string... |
-| RefactoringStructuralTools | Member | Claude, claude-lean, Refactor, RefactoringStructural | - | Add, remove, replace, or view a raw source member, a typed property/field, or a brand-new top-level type. |
+| RefactoringStructuralTools | Member | Claude, claude-lean, Refactor, RefactoringStructural | - | Add, remove, replace, or view a raw source member, or add a brand-new top-level type. |
 | RefactoringStructuralTools | ModifyAttribute | Claude, Refactor, RefactoringStructural | - | Adds, replaces, or removes an [Attribute] on a type or member. |
 | RefactoringStructuralTools | ModifyBaseType | Claude, Refactor, RefactoringStructural | - | Adds or removes a base type or interface from a type declaration. |
 | RefactoringStructuralTools | ModifyEnum | Claude, claude-lean (on demand), Refactor, RefactoringStructural | - | Replaces an enum's complete member list in one operation. |
@@ -96,6 +96,7 @@
 | SymbolRelationshipTools | QuerySymbolRelationships | Claude, claude-lean (on demand), SymbolRelationship, Workspace | - | Queries type-relationship facts by name: implementors of an interface, attribute usages, object-creation sites,... |
 | TestCategoryTaggingTools | TagTestCategories | claude-lean (on demand), TestCategories | - | Plan test-category attributes: for every test method, find the production types it references (semantic model: calls,... |
 | ToolsetControlTools | McpToolsetControl | claude-lean | - | Switches an on-demand toolset on or off (tools/list_changed refreshes your tool list). declarations = Declaration,... |
+| TypedMemberTools | TypedMember | Claude, claude-lean (on demand), Refactor, RefactoringStructural | - | Generates a typed property or field in an existing type. |
 | WholeFileWriteTools | ApplyDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a change set as either full file contents (changesetFormat=files) or a unified diff... |
 | WholeFileWriteTools | ApplyUnifiedDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a unified diff against a single file; mismatched hunk lines are re-anchored nearby. |
 | WholeFileWriteTools | DeleteFile | Claude, claude-lean, WholeFileWrite | - | Deletes a file from disk; fails if it doesn't exist. |

@@ -22,7 +22,7 @@ public class ToolsetControlTools
     [McpServerTool(Name = ToolsetCatalog.ControlToolName)]
     [Produces(DataTag.ResultOnly)]
     [Description("Switches an on-demand toolset on or off (tools/list_changed refreshes your tool list). " +
-        "declarations = Declaration, ParameterEdit, ModifyEnum, ChangeSignature, SyncTypeAndFilename, UsingDirective. " +
+        "declarations = Declaration, ParameterEdit, ModifyEnum, ChangeSignature, SyncTypeAndFilename, UsingDirective, TypedMember. " +
         "moveExtract = MoveMember, MoveType, MoveAllTypesToFiles, Extract*, Inline*, Introduce*, WrapRange, InvertAssignments, ConvertAnonymousToNamed, SyncInterface, SummaryComment, DeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments, QualifyCrefs, WriteFile. " +
         "projectAdmin = CreateProject, SplitProjectByFolder, ListSolutionItems, ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth, GetOperationDetail, RetryFailedChanges, GetTypeInfo, QuerySymbolRelationships, GetBestInsertionPoint, GetDiagnostics, InspectSymbol. " +
         "testCategories = TagTestCategories (dry run by default). " +

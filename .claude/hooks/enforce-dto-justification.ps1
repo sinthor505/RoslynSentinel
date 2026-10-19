@@ -13,7 +13,7 @@
 #
 # Covered tools (bare name, or mcp__<server>__ prefixed as the harness sends it):
 #   Member      operation addTopLevelType or addMember (case-insensitive). Types are parsed from
-#               newMemberSource. Other operations (addTypedMember, remove, replace, view) never trigger.
+#               newMemberSource. Other operations (remove, replace, view) never trigger; the TypedMember tool is never covered.
 #   CreateFile  typeKind class|record|struct triggers; the type name is typeName.
 #               interface, enum and staticClass never trigger.
 #   WriteFile   operation CreateFile|Create|ReplaceFile; types are parsed from content. For ReplaceFile,

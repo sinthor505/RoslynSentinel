@@ -31,6 +31,7 @@ public class BatteryTwentyFourTests
     private ValidationEngine _validationEngine;
     private SymbolNavigationEngine _symbolNavigationEngine;
     private RefactoringStructuralTools _refactoringStructuralTools;
+    private TypedMemberTools _typedMemberTools;
     private RefactoringSignatureTools _refactoringSignatureTools;
     private RefactoringExtractionDocsTools _refactoringExtractionDocsTools;
     private MsToolAugmentEngine _msToolAugmentEngine;
@@ -128,6 +129,7 @@ public enum Status { Active = 1, Pending = 2 }
         var refactoringStructuralImpl = new RefactoringStructuralImpl(_refactoringEngine, _memberRefactoringEngine, _structuralRefinementEngine, _symbolNavigationEngine, _workspaceManager, _validationEngine, NullLogger<RefactoringStructuralImpl>.Instance);
         var refactoringSignatureImpl = new RefactoringSignatureImpl(_refactoringEngine, _memberRefactoringEngine, _workspaceManager, _validationEngine, _symbolNavigationEngine, NullLogger<RefactoringSignatureImpl>.Instance);
         _refactoringStructuralTools = new RefactoringStructuralTools(refactoringStructuralImpl);
+        _typedMemberTools = new TypedMemberTools(refactoringStructuralImpl);
         _refactoringSignatureTools = new RefactoringSignatureTools(refactoringSignatureImpl);
         _refactoringExtractionDocsTools = new RefactoringExtractionDocsTools(new RefactoringExtractionDocsImpl(_refactoringEngine, _msToolAugmentEngine, _symbolNavigationEngine, _workspaceManager, _validationEngine, NullLogger<RefactoringExtractionDocsImpl>.Instance));
         _advTools = new AdvancedRefactoringTools(_workspaceManager);
@@ -1077,7 +1079,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddProperty_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringStructuralTools.MemberTool(reason: "test message", "Order.cs", MemberAction.addTypedMember, "Order", typedKind: TypedMemberKind.property, typedName: "Description", typedType: "string");
+        var result = await _typedMemberTools.TypedMemberTool(reason: "test message", "Order.cs", containerName: "Order", typedKind: TypedMemberKind.property, typedName: "Description", typedType: "string");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1087,7 +1089,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddField_AutoStageTrue_ReturnsNotNull()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringStructuralTools.MemberTool(reason: "test message", "Order.cs", MemberAction.addTypedMember, "Order", typedKind: TypedMemberKind.field, typedName: "_tag", typedType: "string");
+        var result = await _typedMemberTools.TypedMemberTool(reason: "test message", "Order.cs", containerName: "Order", typedKind: TypedMemberKind.field, typedName: "_tag", typedType: "string");
         Assert.That(result, Is.Not.Null);
     }
 

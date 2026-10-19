@@ -242,7 +242,6 @@ public enum MemberAction
 {
     addMember,
     addTopLevelType,
-    addTypedMember,
     remove,
     replace,
     view

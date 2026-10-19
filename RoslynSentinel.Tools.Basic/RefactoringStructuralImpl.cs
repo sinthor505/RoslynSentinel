@@ -533,15 +533,6 @@ public class RefactoringStructuralImpl
         string? memberName = null,
         string? newMemberSource = null,
         string? position = null,
-        TypedMemberKind? typedKind = null,
-        string? typedName = null,
-        string? typedType = null,
-        string accessibility = "public",
-        bool hasSetter = true,
-        bool isInit = false,
-        bool isReadonly = false,
-        bool isStatic = false,
-        string? initializer = null,
         bool skipPrecheck = false,
         string? contextSnippet = null,
         string? lineBefore = null,
@@ -696,39 +687,18 @@ public class RefactoringStructuralImpl
                 return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], removeMessage, apply.DryRun, apply.Diff, _workspaceManager.WorkspaceVersion, ChangedContentResultId: apply.ChangedContentResultId), WarningDetails = removeWarning };
             }
 
-            // operation is addMember, addTopLevelType, or addTypedMember below.
+            // operation is addMember or addTopLevelType below (a generated typed property/field is the TypedMember tool).
             static string RequiredParamsHint(MemberAction op) => op switch
             {
                 MemberAction.addMember => "Required params for addMember: containerName, newMemberSource. Optional: position.",
                 MemberAction.addTopLevelType => "Required params for addTopLevelType: newMemberSource (the full type declaration). Optional: namespaceName.",
-                MemberAction.addTypedMember => "Required params for addTypedMember: containerName, typedKind, typedName, typedType. Optional: accessibility, hasSetter/isInit (typedKind=property), isReadonly/isStatic/initializer (typedKind=field).",
                 _ => throw new ArgumentOutOfRangeException(nameof(op))
             };
-
-            static string? IgnoredNonDefaultTypedOnlyParamsNote(MemberAction op, string accessibility, bool hasSetter, bool isInit, bool isReadonly, bool isStatic, string? initializer)
-            {
-                if (op == MemberAction.addTypedMember)
-                    return null;
-
-                var ignored = new List<string>();
-                if (accessibility != "public") ignored.Add($"accessibility={accessibility}");
-                if (!hasSetter) ignored.Add($"hasSetter={hasSetter}");
-                if (isInit) ignored.Add($"isInit={isInit}");
-                if (isReadonly) ignored.Add($"isReadonly={isReadonly}");
-                if (isStatic) ignored.Add($"isStatic={isStatic}");
-                if (initializer != null) ignored.Add($"initializer=\"{initializer}\"");
-
-                return ignored.Count == 0
-                    ? null
-                    : $"informational: {string.Join(", ", ignored)} was supplied but is not used for {op}.";
-            }
 
             if (operation == MemberAction.addTopLevelType)
             {
                 if (containerName != null)
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is not used for operation 'addTopLevelType' (there is no container - the type is added at the top level). {RequiredParamsHint(operation)} If you meant to add a member to an existing container, use operation 'addMember' instead.") };
-                if (typedKind != null || typedName != null || typedType != null)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: typedKind/typedName/typedType are not used for operation 'addTopLevelType'. {RequiredParamsHint(operation)}") };
                 if (position != null)
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: position is not used for operation 'addTopLevelType' (the type is always appended). {RequiredParamsHint(operation)}") };
                 if (string.IsNullOrEmpty(newMemberSource))
@@ -757,9 +727,6 @@ public class RefactoringStructuralImpl
                     };
                 }
                 var topLevelDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
-                var topLevelNote = IgnoredNonDefaultTypedOnlyParamsNote(operation, accessibility, hasSetter, isInit, isReadonly, isStatic, initializer);
-                if (topLevelNote != null)
-                    topLevelDescription += " " + topLevelNote;
 
                 var topLevelChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = topLevelResult.UpdatedText! };
                 var topLevelApply = await ValidateAndApplyAsync(topLevelChanges, topLevelDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
@@ -777,30 +744,10 @@ public class RefactoringStructuralImpl
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is required for operation 'addMember'. {RequiredParamsHint(operation)}") };
                 if (string.IsNullOrEmpty(newMemberSource))
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is required for operation 'addMember'. {RequiredParamsHint(operation)}") };
-                if (typedKind != null || typedName != null || typedType != null)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: typedKind/typedName/typedType are not used for operation 'addMember' - use addTypedMember instead. {RequiredParamsHint(operation)}") };
             }
-            else // operation == MemberAction.addTypedMember
-            {
-                if (string.IsNullOrEmpty(containerName))
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is required for operation 'addTypedMember'. {RequiredParamsHint(operation)}") };
-                if (typedKind == null)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: typedKind is required for operation 'addTypedMember'. {RequiredParamsHint(operation)}") };
-                if (string.IsNullOrEmpty(typedName) || string.IsNullOrEmpty(typedType))
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: typedName and typedType are required for operation 'addTypedMember'. {RequiredParamsHint(operation)}") };
-                if (!string.IsNullOrEmpty(newMemberSource))
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is not used for operation 'addTypedMember' - use typedKind/typedName/typedType instead. {RequiredParamsHint(operation)}") };
-                if (position != null)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: position is not used for operation 'addTypedMember' (generated members are always appended). {RequiredParamsHint(operation)}") };
-            }
-
-            var hasTypedSpec = operation == MemberAction.addTypedMember;
 
             if (await _symbolNavigationEngine.IsEnumContainerAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken))
             {
-                if (hasTypedSpec)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: '{containerName}' is an enum - typedKind (property/field generation) doesn't apply. Pass newMemberSource as a bare member token ('Name' or 'Name=IntValue') instead via addMember, or retry using ModifyEnum(enumName: \"{containerName}\", values: ...) directly.") };
-
                 string? afterName = position != null && position.StartsWith("after:", StringComparison.OrdinalIgnoreCase) ? position.Substring("after:".Length) : null;
                 string? beforeName = position != null && position.StartsWith("before:", StringComparison.OrdinalIgnoreCase) ? position.Substring("before:".Length) : null;
                 if (position != null && afterName == null && beforeName == null && position != "end")
@@ -832,9 +779,6 @@ public class RefactoringStructuralImpl
                 }
 
                 var enumAddDescription = $"Added member to enum '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-                var enumAddNote = IgnoredNonDefaultTypedOnlyParamsNote(operation, accessibility, hasSetter, isInit, isReadonly, isStatic, initializer);
-                if (enumAddNote != null)
-                    enumAddDescription += " " + enumAddNote;
                 var enumAddChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumAdded.UpdatedText! };
                 var enumAddApply = await ValidateAndApplyAsync(enumAddChanges, enumAddDescription, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
                 if (enumAddApply.Error is not null)
@@ -847,29 +791,7 @@ public class RefactoringStructuralImpl
 
             DocumentEditResult updated;
             string description;
-            // Only the raw-source path has the added member's exact text available verbatim
-            // (the caller already supplied it). The typed-generation path (AddPropertyAsync/
-            // AddFieldAsync) builds its source string inside the engine and doesn't return it
-            // separately from the whole-file UpdatedText, so ChangedContent stays null there
-            // rather than duplicating the engine's formatting logic at the tool layer.
-            string? addedMemberSource = hasTypedSpec ? null : newMemberSource;
-            if (hasTypedSpec)
-            {
-                if (string.IsNullOrWhiteSpace(typedName) || string.IsNullOrWhiteSpace(typedType))
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: typedName and typedType are required for operation 'addTypedMember'. {RequiredParamsHint(operation)}") };
-
-                if (typedKind == TypedMemberKind.property)
-                {
-                    updated = await _memberRefactoringEngine.AddPropertyAsync(filePathResolved, containerName, typedName, typedType, accessibility, hasSetter, isInit, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
-                    description = $"Added '{typedType} {typedName}' property to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-                }
-                else
-                {
-                    updated = await _memberRefactoringEngine.AddFieldAsync(filePathResolved, containerName, typedName, typedType, accessibility, isReadonly, isStatic, initializer, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
-                    description = $"Added '{typedType} {typedName}' field to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
-                }
-            }
-            else if (string.IsNullOrEmpty(position) || position == "end")
+            if (string.IsNullOrEmpty(position) || position == "end")
             {
                 updated = await _memberRefactoringEngine.AddMemberAsync(filePathResolved, containerName, newMemberSource!, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
                 description = $"{DescribeMemberOutcome(updated, "Added new member")} to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
@@ -911,23 +833,99 @@ public class RefactoringStructuralImpl
                         Validated: false)
                 };
             }
-            var addNote = IgnoredNonDefaultTypedOnlyParamsNote(operation, accessibility, hasSetter, isInit, isReadonly, isStatic, initializer);
-            if (addNote != null)
-                description += " " + addNote;
-
-            var addChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
-            var addApply = await ValidateAndApplyAsync(addChanges, description, "Member", dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
-            if (addApply.Error is not null)
-                return new SentinelCallToolResult<object> { IsError = true, ErrorData = addApply.Error };
-            return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
-                new AppliedChangeSummary(addApply.ChangeId, [filePathResolved], description, addApply.DryRun, addApply.Diff, Validated: true, LineChanges: addApply.LineChanges, ChangedContentResultId: addApply.ChangedContentResultId),
-                _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
-                workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description, cancellationToken: cancellationToken);
+            return await ApplyAddedMemberAsync(updated, description, filePathResolved, "Member", dryRun, returnDiff, cancellationToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Member ({Operation}) failed for '{ContainerOrMemberName}' in '{FilePathWrapper}'", operation, containerName ?? memberName, filePathResolved);
             return new SentinelCallToolResult<object>() { IsError = true, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "Member") };
+        }
+    }
+
+    /// <summary>
+    /// Shared tail of the add paths (Member's addMember branch and TypedMember): validates and
+    /// writes the already-computed <paramref name="updated"/> text and wraps the result as an AppliedChangeSummary.
+    /// </summary>
+    private async Task<SentinelCallToolResult<object>> ApplyAddedMemberAsync(
+        DocumentEditResult updated,
+        string description,
+        FilePathWrapper filePathResolved,
+        string operationName,
+        bool dryRun,
+        bool returnDiff,
+        CancellationToken cancellationToken)
+    {
+        var addChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
+        var addApply = await ValidateAndApplyAsync(addChanges, description, operationName, dryRun, returnDiff || dryRun, cancellationToken: cancellationToken);
+        if (addApply.Error is not null)
+            return new SentinelCallToolResult<object> { IsError = true, ErrorData = addApply.Error };
+        return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
+            new AppliedChangeSummary(addApply.ChangeId, [filePathResolved], description, addApply.DryRun, addApply.Diff, Validated: true, LineChanges: addApply.LineChanges, ChangedContentResultId: addApply.ChangedContentResultId),
+            _workspaceManager.GetSolutionRoot(), "AppliedChangeSummary", ResultWrapperType.AppliedChangeSummaryResult,
+            workspaceVersion: _workspaceManager.WorkspaceVersion, statusMessage: description, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>
+    /// Generates a typed property or field in an existing container (the TypedMember tool). Split out of
+    /// <see cref="Member"/> so the always-loaded Member schema does not carry the nine typed-only params.
+    /// </summary>
+    public async Task<SentinelCallToolResult<object>> TypedMember(
+        ToolCallReason reason,
+        string filePath,
+        string? containerName,
+        TypedMemberKind? typedKind,
+        string? typedName,
+        string? typedType,
+        string accessibility = "public",
+        bool hasSetter = true,
+        bool isInit = false,
+        bool isReadonly = false,
+        bool isStatic = false,
+        string? initializer = null,
+        string? contextSnippet = null,
+        string? lineBefore = null,
+        string? lineAfter = null,
+        bool dryRun = false,
+        bool returnDiff = false,
+        CancellationToken cancellationToken = default)
+    {
+        FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
+        try
+        {
+            const string requiredParamsHint = "Required params: containerName, typedKind, typedName, typedType. Optional: accessibility, hasSetter/isInit (typedKind=property), isReadonly/isStatic/initializer (typedKind=field).";
+            if (string.IsNullOrEmpty(containerName))
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"TypedMember: containerName is required. {requiredParamsHint}") };
+            if (typedKind == null)
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"TypedMember: typedKind is required. {requiredParamsHint}") };
+            if (string.IsNullOrWhiteSpace(typedName) || string.IsNullOrWhiteSpace(typedType))
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"TypedMember: typedName and typedType are required. {requiredParamsHint}") };
+
+            if (await _symbolNavigationEngine.IsEnumContainerAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken))
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"TypedMember: '{containerName}' is an enum - typedKind (property/field generation) doesn't apply. Pass newMemberSource as a bare member token ('Name' or 'Name=IntValue') via Member(operation: addMember) instead, or use ModifyEnum(enumName: \"{containerName}\", values: ...) directly.") };
+
+            DocumentEditResult updated;
+            string description;
+            // The typed-generation path (AddPropertyAsync/AddFieldAsync) builds its source string inside the engine
+            // and doesn't return it separately from the whole-file UpdatedText, so there is no ChangedContent to echo.
+            if (typedKind == TypedMemberKind.property)
+            {
+                updated = await _memberRefactoringEngine.AddPropertyAsync(filePathResolved, containerName, typedName, typedType, accessibility, hasSetter, isInit, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                description = $"Added '{typedType} {typedName}' property to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
+            }
+            else
+            {
+                updated = await _memberRefactoringEngine.AddFieldAsync(filePathResolved, containerName, typedName, typedType, accessibility, isReadonly, isStatic, initializer, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
+                description = $"Added '{typedType} {typedName}' field to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
+            }
+
+            if (RefactoringToolHelpers.RequireUpdatedText(updated, "TypedMember", filePathResolved) is { } guardResult)
+                return guardResult;
+            return await ApplyAddedMemberAsync(updated, description, filePathResolved, "TypedMember", dryRun, returnDiff, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "TypedMember ({Kind}) failed for '{ContainerName}' in '{FilePathWrapper}'", typedKind, containerName, filePathResolved);
+            return new SentinelCallToolResult<object>() { IsError = true, ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, "TypedMember") };
         }
     }
 

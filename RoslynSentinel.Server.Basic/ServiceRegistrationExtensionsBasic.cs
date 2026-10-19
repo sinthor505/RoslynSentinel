@@ -382,6 +382,13 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<RefactoringStructuralTools>();
             mcpBuilder.WithSentinelTools<RefactoringStructuralTools>();
         }
+        if (activeToolClasses.Contains("TypedMemberTools"))
+        {
+            // Shares RefactoringStructuralImpl with RefactoringStructuralTools; TryAdd so either order works.
+            services.TryAddSingleton<RefactoringStructuralImpl>();
+            services.AddSingleton<TypedMemberTools>();
+            mcpBuilder.WithSentinelTools<TypedMemberTools>();
+        }
         if (activeToolClasses.Contains("RefactoringExtractionDocsTools"))
         {
             services.TryAddSingleton<RefactoringExtractionDocsImpl>();

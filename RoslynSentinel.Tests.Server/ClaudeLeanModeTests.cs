@@ -57,7 +57,7 @@ public class ClaudeLeanModeTests
         "ModifyEnum", "ModifyModifier", "MoveAllTypesToFiles", "MoveMember", "MoveType",
         "PreviewRenameImpact", "ProjectDoc", "QuerySymbolRelationships", "ReadFile", "RenameSymbol",
         "ReplaceSnippet", "RetryFailedChanges", "RunTest", "DeleteUnusedSymbol", "Search",
-        "SplitProjectByFolder", "SummaryComment", "SyncInterface", "SyncTypeAndFilename", "UndoLastApply",
+        "SplitProjectByFolder", "SummaryComment", "SyncInterface", "SyncTypeAndFilename", "TypedMember", "UndoLastApply",
         "UsingDirective", "WrapRange", "WriteFile",
     ];
 

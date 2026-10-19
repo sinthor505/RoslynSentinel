@@ -144,6 +144,19 @@ public class McpServerStatusToolListingTests
     }
 
     [Test]
+    [Category("ServerStatusTools")]
+    public void TypedMember_IsDeclaredByItsOwnClass_AndExplainsHowToEnableIt()
+    {
+        var modes = new Dictionary<string, IReadOnlyList<string>> { ["TypedMemberTools"] = ["Refactor", "Claude"] };
+        var status = Call(["RefactoringStructuralTools"], McpServerStatusToolListing.inactive, filter: "TypedMember", classModes: modes);
+
+        var typedMember = status.AllDeclaredTools.Single(t => t.Name == "TypedMember");
+        Assert.That(typedMember.ClassName, Is.EqualTo("TypedMemberTools"));
+        Assert.That(typedMember.ActiveForThisMode, Is.False);
+        Assert.That(typedMember.EnabledBy, Is.EqualTo("--mode Refactor or Claude, or --include-tools TypedMemberTools"));
+    }
+
+    [Test]
     public void ToolNameFilter_MatchesToolOrClassName_CaseInsensitively()
     {
         var status = Call([], McpServerStatusToolListing.all, filter: "gittools");

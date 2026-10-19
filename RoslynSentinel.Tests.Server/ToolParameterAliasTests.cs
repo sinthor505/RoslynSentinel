@@ -238,6 +238,16 @@ public class ToolParameterAliasTests
     }
 
     [Test]
+    public void TypedMemberClassNameAlias_IsInTheAliasTable_AsMemberHasIt()
+    {
+        // Slice 7 moved addTypedMember out of Member into TypedMember, which keeps Member's className habit. The
+        // fixture hosts only the Workspace mode (no structural refactoring tools), so the table is asserted directly;
+        // EveryAliasEntry_ForAnActiveTool_... below guards entries of tools that are active here.
+        Assert.That(ToolArgumentValidator.ParameterAliases["TypedMember"]["className"], Is.EqualTo("containerName"));
+        Assert.That(ToolArgumentValidator.ParameterAliases["Member"]["className"], Is.EqualTo("containerName"));
+    }
+
+    [Test]
     [Category("ToolArgumentValidator")] // sentinel:auto-category
     public async Task EveryAliasEntry_ForAnActiveTool_PointsAtADeclaredParameter_AndIsNotItselfDeclared()
     {

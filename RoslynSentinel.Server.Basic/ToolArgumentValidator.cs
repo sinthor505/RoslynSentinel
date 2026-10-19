@@ -351,6 +351,11 @@ public static class ToolArgumentValidator
                 ["memberSource"] = "newMemberSource",
                 ["className"] = "containerName",
             },
+            ["TypedMember"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                // Same habit Member has: addTypedMember used to live there.
+                ["className"] = "containerName",
+            },
             ["Search"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["pattern"] = "query",
