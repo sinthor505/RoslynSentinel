@@ -953,9 +953,18 @@ public class LogicSimplificationEngine
                 {
                     // The new token gets an explicit space instead of an annotation: annotating the class would re-space
                     // every member. With no modifiers, the keyword's leading trivia (indentation, doc comment) moves onto it.
+                    // 'partial' must stay immediately before 'class' (CS0267), so 'static' goes in front of it, not after.
+                    var partialIndex = classNode.Modifiers.IndexOf(SyntaxKind.PartialKeyword);
                     var newClass = classNode.Modifiers.Count == 0
                         ? classNode.WithKeyword(classNode.Keyword.WithLeadingTrivia()).WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(classNode.Keyword.LeadingTrivia, SyntaxKind.StaticKeyword, SyntaxFactory.TriviaList(SyntaxFactory.Space))))
-                        : classNode.WithModifiers(classNode.Modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword).WithTrailingTrivia(SyntaxFactory.Space)));
+                        : partialIndex < 0
+                            ? classNode.WithModifiers(classNode.Modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword).WithTrailingTrivia(SyntaxFactory.Space)))
+                            : partialIndex == 0
+                                // Only 'partial' present: the keyword's leading trivia (indentation, doc comment) moves onto 'static'.
+                                ? classNode.WithModifiers(SyntaxFactory.TokenList(
+                                    SyntaxFactory.Token(classNode.Modifiers[0].LeadingTrivia, SyntaxKind.StaticKeyword, SyntaxFactory.TriviaList(SyntaxFactory.Space)),
+                                    classNode.Modifiers[0].WithLeadingTrivia()))
+                                : classNode.WithModifiers(classNode.Modifiers.Insert(partialIndex, SyntaxFactory.Token(SyntaxKind.StaticKeyword).WithTrailingTrivia(SyntaxFactory.Space)));
                     updatedRoot = updatedRoot.ReplaceNode(classNode, newClass);
                 }
 

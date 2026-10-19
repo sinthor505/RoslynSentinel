@@ -194,6 +194,26 @@ public class OrderService : IOrderService
     }
 
     [Test]
+    [Category("LogicSimplificationEngine")]
+    [TestCase("public partial class Ext { public static void M(string s) { } }", "public static partial class Ext")]
+    [TestCase("partial class Ext { public static void M(string s) { } }", "static partial class Ext")]
+    [TestCase("public static partial class Ext { public static void M(string s) { } }", "public static partial class Ext")]
+    public async Task ConvertStaticToExtension_PartialClass_PutsStaticBeforePartial_NoCS0267(string source, string expectedDeclaration)
+    {
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
+        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M");
+        Assert.That(result.UpdatedText!, Does.Contain(expectedDeclaration));
+        Assert.That(result.UpdatedText!, Does.Not.Contain("partial static"));
+        var syntaxErrors = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(result.UpdatedText!)
+            .GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .Select(d => d.Id)
+            .ToList();
+        Assert.That(syntaxErrors, Does.Not.Contain("CS0267"));
+        Assert.That(syntaxErrors, Is.Empty);
+    }
+
+    [Test]
     [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task InlineField_Should_Replace_Field_With_Value()
     {
