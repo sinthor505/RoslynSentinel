@@ -12,22 +12,20 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 [TestFixture]
 public class ScopedOperationLedgerBlockingTests
 {
-    private TestSolutionFixture _fixture;
     private PersistentWorkspaceManager _workspaceManager;
 
+    // No solution is loaded here. The two RecordUndo_* tests use fake paths and touch only the ledger;
+    // the three tests that write real files load their own disk fixture inline.
     [SetUp]
-    public async Task SetUpAsync()
+    public void SetUp()
     {
-        _fixture = new TestSolutionFixture();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await _workspaceManager.LoadSolutionAsync(_fixture.SolutionPath);
     }
 
     [TearDown]
     public void TearDown()
     {
         _workspaceManager?.Dispose();
-        _fixture?.Dispose();
     }
 
     private IScopedOperationLedger Ledger => _workspaceManager;
@@ -35,10 +33,14 @@ public class ScopedOperationLedgerBlockingTests
     [Test]
     public async Task OpenLedgerEntry_AllowsWriteToItsOwnTrackedFileAsync()
     {
+        // Disk tier: the allowed write must land on a real file in a loaded solution.
+        using var fixture = new TestSolutionFixture();
+        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
         // The ledger's own tracked file is exactly where RecordFix's resolving edit must land ->
         // IsBlocked deliberately lets writes to that file through while entries remain unresolved.
         var targetFile = Directory
-            .EnumerateFiles(_fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
+            .EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
             .First(f => !f.Contains("obj", StringComparison.OrdinalIgnoreCase));
         var original = await File.ReadAllTextAsync(targetFile);
         var filePath = _workspaceManager.ResolveFromWire(targetFile);
@@ -72,10 +74,14 @@ public class ScopedOperationLedgerBlockingTests
     [Test]
     public async Task NoOpenLedger_WritesStillSucceedAsync()
     {
+        // Disk tier: a healthy write must actually reach a real file in a loaded solution.
+        using var fixture = new TestSolutionFixture();
+        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
         // Guards against the ledger blocking by default -> a false positive here would disable
         // every mutating tool on a healthy server with no ledger ever opened.
         var targetFile = Directory
-            .EnumerateFiles(_fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
+            .EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
             .First(f => !f.Contains("obj", StringComparison.OrdinalIgnoreCase));
         var original = await File.ReadAllTextAsync(targetFile);
 
@@ -92,10 +98,14 @@ public class ScopedOperationLedgerBlockingTests
     [Test]
     public async Task OpenLedgerEntry_RefusesWriteToUnrelatedFileAsync()
     {
+        // Disk tier: the refusal must be proven against real files in a loaded solution.
+        using var fixture = new TestSolutionFixture();
+        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
         // A file the open ledger has no entry for is exactly the "unrelated change" the ledger
         // exists to hold back until every tracked entry is resolved.
         var files = Directory
-            .EnumerateFiles(_fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
+            .EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
             .Where(f => !f.Contains("obj", StringComparison.OrdinalIgnoreCase))
             .Take(2)
             .ToList();

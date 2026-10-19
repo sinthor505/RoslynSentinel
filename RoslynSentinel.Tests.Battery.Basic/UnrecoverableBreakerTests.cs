@@ -19,22 +19,20 @@ namespace RoslynSentinel.Tests.Battery.Basic;
 [TestFixture]
 public class UnrecoverableBreakerTests
 {
-    private TestSolutionFixture _fixture;
     private PersistentWorkspaceManager _workspaceManager;
 
+    // No solution is loaded here. The breaker and mutation-status tests need only the manager's in-memory
+    // state; the two file-write tests load their own disk fixture inline.
     [SetUp]
-    public async Task SetUpAsync()
+    public void SetUp()
     {
-        _fixture = new TestSolutionFixture();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
-        await _workspaceManager.LoadSolutionAsync(_fixture.SolutionPath);
     }
 
     [TearDown]
     public void TearDown()
     {
         _workspaceManager?.Dispose();
-        _fixture?.Dispose();
     }
 
     private IUnrecoverableBreaker Breaker => _workspaceManager;
@@ -80,11 +78,15 @@ public class UnrecoverableBreakerTests
     [Test]
     public async Task Tripped_RefusesEveryWriteAtTheChokepointAsync()
     {
+        // Disk tier: the chokepoint refusal must be proven against a real file in a loaded solution.
+        using var fixture = new TestSolutionFixture();
+        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
         // Enforced in ApplyProposedChangesAsync rather than from a list of mutating tool names:
         // every .cs write routes through there, so no tool -> including one added later -> can slip
         // past. That is the whole reason the chokepoint was chosen over a filter deny-list.
         var targetFile = Directory
-            .EnumerateFiles(_fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
+            .EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
             .First(f => !f.Contains("obj", StringComparison.OrdinalIgnoreCase));
         var original = await File.ReadAllTextAsync(targetFile);
 
@@ -106,10 +108,14 @@ public class UnrecoverableBreakerTests
     [Test]
     public async Task NotTripped_WritesStillSucceedAsync()
     {
+        // Disk tier: a healthy write must actually reach a real file in a loaded solution.
+        using var fixture = new TestSolutionFixture();
+        await _workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
         // Guards against the halt being on by default or tripping spuriously -> a false positive
         // here would disable every mutating tool on a healthy server.
         var targetFile = Directory
-            .EnumerateFiles(_fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
+            .EnumerateFiles(fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
             .First(f => !f.Contains("obj", StringComparison.OrdinalIgnoreCase));
         var original = await File.ReadAllTextAsync(targetFile);
 
