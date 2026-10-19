@@ -198,7 +198,11 @@ public static class RoslynSentinelServiceExtensionsBasic
                 services.AddSingleton(sp => new ToolsetService(
                     sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ModelContextProtocol.Server.McpServerOptions>>(),
                     sp,
-                    ToolClassRegistry.ClaudeLeanOnDemandToolClasses));
+                    // Excluded classes stay unavailable to toolsets too: SubAgent is on demand (modelEval) and the
+                    // child server's --exclude-tools=SubAgentTools recursion guard must still hold there.
+                    new HashSet<string>(
+                        ToolClassRegistry.ClaudeLeanOnDemandToolClasses.Where(c => !resolvedExcludeTools.Contains(c)),
+                        StringComparer.Ordinal)));
                 services.AddSingleton<ToolsetControlTools>();
                 mcpBuilder.WithSentinelTools<ToolsetControlTools>();
             }

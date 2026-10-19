@@ -57,7 +57,7 @@
 | ScanTools | ScanBreakingChanges | Intelligence | - | Compares a captured API baseline against current code and reports breaking changes. |
 | ScanTools | ScanDuplicateBlocksInClass | Intelligence | - | Finds duplicate statement sequences within a single class's methods via structural hashing. |
 | SubAgentEvalTools | SubAgentEval | SubAgentEval | - | Runs a prompt against a real LM Studio model in a fresh, worktree-isolated copy of the repo (branched from committed... |
-| SubAgentTools | SubAgent | claude-lean, SubAgent | - | Runs a prompt against a real LM Studio model in a fresh, worktree-isolated copy of the repo (branched from committed... |
+| SubAgentTools | SubAgent | claude-lean (on demand), SubAgent | - | Runs a prompt against a real LM Studio model in a fresh, worktree-isolated copy of the repo (branched from committed... |
 
 ## RoslynSentinel.Tools.Basic
 
@@ -94,7 +94,7 @@
 | SymbolRelationshipTools | PreviewRenameImpact | Claude, claude-lean (on demand), SymbolRelationship, Workspace | - | Previews the impact of renaming a symbol across the solution without applying changes. |
 | SymbolRelationshipTools | QuerySymbolRelationships | Claude, claude-lean (on demand), SymbolRelationship, Workspace | - | Queries type-relationship facts by name: implementors of an interface, attribute usages, object-creation sites,... |
 | TestCategoryTaggingTools | TagTestCategories | claude-lean (on demand), TestCategories | - | Plan test-category attributes: for every test method, find the production types it references (semantic model: calls,... |
-| ToolsetControlTools | McpToolsetControl | claude-lean | - | Turns an on-demand toolset on or off; the server then sends tools/list_changed so your tool list updates. |
+| ToolsetControlTools | McpToolsetControl | claude-lean | - | Switches an on-demand toolset on or off (tools/list_changed refreshes your tool list). declarations = Declaration,... |
 | WholeFileWriteTools | ApplyDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a change set as either full file contents (changesetFormat=files) or a unified diff... |
 | WholeFileWriteTools | ApplyUnifiedDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a unified diff against a single file; mismatched hunk lines are re-anchored nearby. |
 | WholeFileWriteTools | DeleteFile | Claude, claude-lean, WholeFileWrite | - | Deletes a file from disk; fails if it doesn't exist. |

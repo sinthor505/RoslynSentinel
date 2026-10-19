@@ -45,7 +45,7 @@ public static class ToolClassRegistry
             "Search",
             "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
             "RenameSymbol", "CreateFile", "DeleteFile",
-            "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift", "SubAgent",
+            "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift",
             ToolsetCatalog.ControlToolName,
         ],
         StringComparer.Ordinal);
@@ -64,7 +64,7 @@ public static class ToolClassRegistry
     ];
 
     /// <summary>
-    /// The Advanced claude-lean set: <see cref="ClaudeLeanToolClasses"/> plus the Advanced-only SubAgentTools (Basic never registers SubAgentTools).
+    /// The Advanced claude-lean set: <see cref="ClaudeLeanToolClasses"/> plus the Advanced-only SubAgentTools (Basic never registers SubAgentTools); its SubAgent tool is on demand via the modelEval toolset.
     /// Must textually follow ClaudeLeanToolClasses, since static initializers run in textual order.
     /// </summary>
     private static readonly string[] AdvancedClaudeLeanToolClasses = [.. ClaudeLeanToolClasses, "SubAgentTools"];

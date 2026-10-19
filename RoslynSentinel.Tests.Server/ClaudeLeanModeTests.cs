@@ -39,11 +39,8 @@ public class ClaudeLeanModeTests
         "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
         "RenameSymbol", "CreateFile", "DeleteFile",
         "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift",
-        "McpToolsetControl", "SubAgent",
+        "McpToolsetControl",
     ];
-
-    /// <summary>CoreTools minus SubAgentTool, which is declared in Tools.Advanced and never registered by the Basic server.</summary>
-    private static readonly string[] BasicCoreTools = CoreTools.Where(t => t != "SubAgent").ToArray();
 
     /// <summary>The Advanced server's tool set for --mode claude, captured before claude-lean existed.</summary>
     private static readonly string[] ClaudeAdvancedBaseline =
@@ -119,8 +116,8 @@ public class ClaudeLeanModeTests
     [TestCase(false)]
     public async Task ClaudeLean_ExposesExactlyTheCoreToolsForItsFlavor(bool advanced)
     {
-        // SubAgentTool is Advanced-only, so the Basic claude-lean surface is one tool smaller (see BasicCoreTools).
-        var expected = advanced ? CoreTools : BasicCoreTools;
+        // Both flavours expose the same core surface; SubAgent (Advanced only) is on demand via the modelEval toolset.
+        var expected = CoreTools;
         var names = await ListToolNamesAsync(advanced, "claude-lean");
 
         Assert.That(names, Has.Length.EqualTo(expected.Length), "ToolClassRegistry.ClaudeLeanToolNames and ClaudeLeanModeTests.CoreTools must agree; edit both");
@@ -151,7 +148,7 @@ public class ClaudeLeanModeTests
         Assert.That(names, Has.Length.EqualTo(ClaudeAdvancedBaseline.Length - advancedOnlyTools.Length));
         Assert.That(names.Intersect(advancedOnlyTools), Is.Empty);
         Assert.That(names, Is.SubsetOf(ClaudeAdvancedBaseline));
-        Assert.That(names, Is.SupersetOf(BasicCoreTools.Where(t => t != "McpToolsetControl")));
+        Assert.That(names, Is.SupersetOf(CoreTools.Where(t => t != "McpToolsetControl")));
         Assert.That(names, Does.Not.Contain("McpToolsetControl"));
     }
 
@@ -276,6 +273,16 @@ public class ClaudeLeanModeTests
         Assert.That(ToolClassRegistry.ClaudeLeanToolNames, Does.Not.Contain("QualifyCrefs"));
         Assert.That(ToolsetCatalog.FindSet("QualifyCrefs"), Is.EqualTo(ToolSetName.moveExtract));
         Assert.That(ToolsetCatalog.AllToolNames, Does.Contain("QualifyCrefs"));
+    }
+
+    [Test]
+    public void SubAgent_IsOnDemandOnlyInClaudeLean_ViaTheModelEvalToolset()
+    {
+        Assert.That(ToolClassRegistry.AdvancedModeToToolClasses["SubAgent"], Is.EqualTo(new[] { "SubAgentTools" }));
+        Assert.That(ToolClassRegistry.AdvancedModeToToolClasses["claude-lean"], Does.Contain("SubAgentTools"), "the class must stay hosted in Advanced claude-lean so enabling modelEval works");
+        Assert.That(ToolClassRegistry.ClaudeLeanOnDemandToolClasses, Does.Contain("SubAgentTools"));
+        Assert.That(ToolClassRegistry.ClaudeLeanToolNames, Does.Not.Contain("SubAgent"));
+        Assert.That(ToolsetCatalog.FindSet("SubAgent"), Is.EqualTo(ToolSetName.modelEval));
     }
 
     // ---- escape-hatch advice must not name tools the allow-list removed ----

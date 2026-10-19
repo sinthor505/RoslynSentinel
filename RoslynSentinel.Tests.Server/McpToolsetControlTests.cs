@@ -56,6 +56,7 @@ public class McpToolsetControlTests
     [TestCase(ToolSetName.moveExtract)]
     [TestCase(ToolSetName.projectAdmin)]
     [TestCase(ToolSetName.testCategories)]
+    [TestCase(ToolSetName.modelEval)]
     public void Enable_AddsTheWholeSet_AndAccountsForEveryName(ToolSetName set)
     {
         var (service, collection) = CreateService();
@@ -263,10 +264,10 @@ public class McpToolsetControlTests
             service.SetEnabled(set, true);
         }
 
-        // DeclarationTool, ParameterEditTool, SemanticFindReplaceTool, NamedArgumentsTool, TagTestCategoriesTool and QualifyCrefsTool are the catalog tools --mode claude does not register (they exist
+        // DeclarationTool, ParameterEditTool, SemanticFindReplaceTool, NamedArgumentsTool, TagTestCategoriesTool, QualifyCrefsTool and SubAgentTool are the catalog tools --mode claude does not register (they exist
         // only as on-demand claude-lean tools or behind their own mode, see DeclarationToolTests, ParameterEditToolTests,
         // SemanticFindReplaceToolTests and NamedArgumentsToolTests), so there is no startup instance to compare them with.
-        foreach (var name in ToolsetCatalog.AllToolNames.Where(n => n is not ("Declaration" or "ParameterEdit" or "SemanticFindReplace" or "NamedArguments" or "TagTestCategories" or "QualifyCrefs")))
+        foreach (var name in ToolsetCatalog.AllToolNames.Where(n => n is not ("Declaration" or "ParameterEdit" or "SemanticFindReplace" or "NamedArguments" or "TagTestCategories" or "QualifyCrefs" or "SubAgent")))
         {
             Assert.That(startup.TryGetPrimitive(name, out var expected), Is.True, $"{name} should be a startup tool in --mode claude");
             Assert.That(collection.TryGetPrimitive(name, out var actual), Is.True);
@@ -524,7 +525,7 @@ public class McpToolsetControlTests
         using var host = BuildHost(advanced, "claude-lean", includeTools: null);
         var candidates = McpToolSchemaPatcher.DiscoverToolMethods(ToolAssemblies)
             .Where(t => ToolsetCatalog.AllToolNames.Contains(t.ToolName) && ToolClassRegistry.ClaudeLeanOnDemandToolClasses.Contains(t.ToolType.Name))
-            .Where(t => advanced || t.ToolType != typeof(AdvancedRefactoringTools))
+            .Where(t => advanced || (t.ToolType != typeof(AdvancedRefactoringTools) && t.ToolType != typeof(SubAgentTools)))
             .Select(t => t.ToolType)
             .Distinct()
             .ToArray();

@@ -16,6 +16,7 @@ public enum ToolSetName
     moveExtract,
     projectAdmin,
     testCategories,
+    modelEval,
 }
 
 /// <summary>
@@ -56,6 +57,11 @@ public static class ToolsetCatalog
             [
                 "TagTestCategories",
             ],
+            [ToolSetName.modelEval] =
+            [
+                // SubAgentTools lives in Tools.Advanced: on a Basic server the name is reported unavailable.
+                "SubAgent",
+            ],
         };
 
     private static readonly IReadOnlyDictionary<ToolSetName, string> Summaries =
@@ -65,6 +71,7 @@ public static class ToolsetCatalog
             [ToolSetName.moveExtract] = "move/extract/inline/introduce refactors, interface and doc sync, safe delete, rename preview, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments, QualifyCrefs, WriteFile",
             [ToolSetName.projectAdmin] = "projects and workspace: create/split projects, solution and framework listings, Features, ProjectDoc, workspace health, operation details, retry, type info, symbol relationships, GetDiagnostics, InspectSymbol",
             [ToolSetName.testCategories] = "plan test-category attributes (NUnit/xUnit/MSTest) from the production types each test references (TagTestCategories, dry run by default, dryRun: false applies)",
+            [ToolSetName.modelEval] = "dispatch a task to a local model in a child server (SubAgent, Advanced only)",
         };
 
     /// <summary>Every on-demand tool name across all sets.</summary>
