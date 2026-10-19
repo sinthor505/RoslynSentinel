@@ -283,4 +283,21 @@ public class Counter
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(result.SuccessData, Is.TypeOf<SourceTransformResult>());
     }
+
+    // The engine THROWS ToolTargetIneligibleException for a non-interface base; the tool has no inner catch for it,
+    // so the outer catch maps it via ToolErrorMapper. Pins that the actionable text reaches the caller with the
+    // TargetIneligible code (not a generic or SolutionNotLoaded error) and leaks no stack trace.
+    [Test]
+    public async Task ConvertToBackgroundService_NonInterfaceBaseClass_ToolResultCarriesTheRefusalMessage()
+    {
+        var path = SetSource("W.cs", "public class Foo { }\npublic class W : Foo\n{\n}");
+
+        var result = await _tools.ApplyClassCodeTransform("outcome test", path, "W", "convert_to_background_service");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(result.ErrorData!.Message, Does.Contain("already derives from 'Foo'"));
+        Assert.That(result.ErrorData.Message, Does.Contain("Convert it manually or remove the base class first"));
+        Assert.That(result.ErrorData.Message, Does.Not.Contain("   at "), "no stack trace in the tool result");
+    }
 }

@@ -558,7 +558,7 @@ public class CommentingEngine
             SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(arguments)));
     }
 
-    /// <summary>Strips any existing <c>[ContentHash("Comment", ...)]</c> from <paramref name="member"/>, then appends <paramref name="newAttribute"/>.</summary>
+    /// <summary>Adds <paramref name="newAttribute"/> as a new attribute list on <paramref name="member"/>, below any leading comment and indented like the declaration, using the member's own line ending. Existing attribute lists are kept as they are and the new list is appended after them; nothing is stripped.</summary>
     private static MemberDeclarationSyntax AddAttribute(MemberDeclarationSyntax member, AttributeSyntax newAttribute)
     {
         // Give the new attribute list the member's own indentation and a trailing newline explicitly
