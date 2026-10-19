@@ -375,4 +375,90 @@ public class RoslynFormattingHelperFormatSpansTests
     {
         await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatWholeDocumentAsync(null!), Throws.TypeOf<ArgumentNullException>());
     }
+
+    // ---- RemoveNodeAndFormatContainerAsync ----
+
+    // Verbatim algorithm of the three private RemoveNodeFormattedAsync copies that RemoveNodeAndFormatContainerAsync
+    // replaced (raw Formatter.FormatAsync on the annotated container, no line-ending pass). Kept here as the
+    // before-behaviour reference: a test-only copy, outside the production ratchet scan.
+    private static async Task<string> OldRemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions)
+    {
+        var container = nodeToRemove.Parent!;
+        var annotation = new SyntaxAnnotation();
+        var annotatedRoot = root.ReplaceNode(container, container.WithAdditionalAnnotations(annotation));
+        var annotatedContainer = annotatedRoot.GetAnnotatedNodes(annotation).Single();
+        var trackedNodeToRemove = annotatedContainer.DescendantNodesAndSelf().Single(n => n.IsEquivalentTo(nodeToRemove) && n.Span == nodeToRemove.Span);
+        var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, removeOptions)!;
+        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation);
+        return (await formattedDoc.GetTextAsync()).ToString();
+    }
+
+    [Test]
+    public async Task RemoveNodeAndFormatContainer_CrlfDocumentWithLfFormatterPin_LeavesNoBareLineFeed()
+    {
+        // The brace on First's signature line makes the container format insert a line break; the pinned LF formatter
+        // option would write it as a bare LF into the CRLF document.
+        var source = Src(true,
+            "public class C",
+            "{",
+            "    public void First() {",
+            "        var   a=1;",
+            "    }",
+            "",
+            "    public void Second()",
+            "    {",
+            "        var   b=2;",
+            "    }",
+            "}");
+        var document = MakeDocument(source, formatterNewLine: "lf");
+        var root = (await document.GetSyntaxRootAsync())!;
+        var second = Method(root, "Second");
+
+        // Precondition: the deleted private copies (raw formatter, no line-ending pass) did leave a bare LF here.
+        var before = await OldRemoveNodeFormattedAsync(document, root, second, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+        Assert.That(before.Replace("\r\n", ""), Does.Contain("\n"), "Scenario no longer reproduces the mixed-EOL leak; adjust it.");
+
+        var result = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, second, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+
+        Assert.That(result.Replace("\r\n", ""), Does.Not.Contain("\n"));
+        Assert.That(result, Does.Contain("public void First()"));
+        Assert.That(result, Does.Not.Contain("Second"));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task RemoveNodeAndFormatContainer_RegionAroundRemovedMember_DirectiveBehaviourUnchangedFromTheOldCopy(bool crlf)
+    {
+        var source = Src(crlf,
+            "public class C",
+            "{",
+            "    public void First()",
+            "    {",
+            "    }",
+            "",
+            "#region Gone",
+            "    public void Second()",
+            "    {",
+            "        var   b=2;",
+            "    }",
+            "#endregion",
+            "",
+            "    public void Third()",
+            "    {",
+            "    }",
+            "}");
+        var document = MakeDocument(source, formatterNewLine: crlf ? "crlf" : "lf");
+        var root = (await document.GetSyntaxRootAsync())!;
+        var second = Method(root, "Second");
+
+        var old = await OldRemoveNodeFormattedAsync(document, root, second, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+        var result = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, second, SyntaxRemoveOptions.KeepUnbalancedDirectives);
+
+        // The remove and the formatted span are identical to the old copy; only the line ending may differ (here the
+        // formatter pin equals the document ending, so the texts are expected to be equal outright).
+        Assert.That(result, Is.EqualTo(old));
+        Assert.That(result, Does.Not.Contain("Second"));
+        Assert.That(result, Does.Contain("#region Gone"));
+        Assert.That(result, Does.Contain("#endregion"));
+    }
 }

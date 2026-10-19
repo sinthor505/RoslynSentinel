@@ -15,27 +15,29 @@ namespace RoslynSentinel.Tests.Basic;
 [Category("WhitespaceRatchet")]
 public class WhitespaceRatchetTests
 {
-    // Test 1 allowlist. Keys are "<relative file>::<enclosing member>". Only shrinks.
-    private static readonly string[] RawFormatterAllowlist =
+    // Test 1 allowlist. Keys are "<relative file>::<enclosing member>"; values are the exact number of raw calls
+    // (NormalizeWhitespace, Formatter.FormatAsync, Formatter.Format) that member may contain, so a second raw call
+    // inside an already-allowlisted member fails. Only shrinks.
+    private static readonly Dictionary<string, int> RawFormatterAllowlist = new(StringComparer.Ordinal)
     {
         // The helper's own internals.
-        "RoslynSentinel.Common/RoslynFormattingHelper.cs::FormatAnnotatedSpansAsync",
-        "RoslynSentinel.Common/RoslynFormattingHelper.cs::FormatWholeDocumentAsync",
+        ["RoslynSentinel.Common/RoslynFormattingHelper.cs::FormatAnnotatedSpansAsync"] = 1,
+        ["RoslynSentinel.Common/RoslynFormattingHelper.cs::FormatWholeDocumentAsync"] = 1,
         // Semantic hash only; the normalized text is compared in memory and never written to disk.
-        "RoslynSentinel.Common/ContentHasher.cs::ComputeHash",
-        // Semantic comparison of proposed content only; nothing normalized is persisted.
-        "RoslynSentinel.Common/PersistentWorkspaceManager.cs::ApplyProposedChangesAsync",
-        // Parked private remove helpers (formatted removal path), kept until the C6 retirement.
-        "RoslynSentinel.Engines.Advanced/AdvancedStructuralEngine.cs::RemoveNodeFormattedAsync",
-        "RoslynSentinel.Engines.Basic/SemanticRefactoringEngine.cs::RemoveNodeFormattedAsync",
-        "RoslynSentinel.Engines.Basic/StructuralRefinementEngine.cs::RemoveNodeFormattedAsync",
+        ["RoslynSentinel.Common/ContentHasher.cs::ComputeHash"] = 1,
+        // Two NormalizeWhitespace calls for a semantic comparison of proposed content (nothing normalized is persisted)
+        // plus one sync Formatter.Format in the debug-only divergence diagnostic (its result is only logged, never written).
+        ["RoslynSentinel.Common/PersistentWorkspaceManager.cs::ApplyProposedChangesAsync"] = 3,
         // Legitimate format-document tools (whole-document format is their job).
-        "RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::FormatDocumentAsync",
-        "RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::FormatDocumentPreviewAsync",
+        ["RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::FormatDocumentAsync"] = 1,
+        ["RoslynSentinel.Engines.Basic/BasicRefactoringEngine.cs::FormatDocumentPreviewAsync"] = 1,
+        // Format-document tool for a file read from disk with no Document: a sync Formatter.Format over the whole root is its
+        // job (preview=true returns the text unwritten; preview=false writes through the ApplyProposedChangesAsync chokepoint).
+        ["RoslynSentinel.Engines.Basic/MsToolAugmentEngine.cs::FormatDocumentSafeAsync"] = 1,
         // Slice C9 (owner-approved): renders caller-supplied attribute text into a TextEdit string, not a document node,
         // so there is no Document for the annotation formatter; every trivia is checked (comments rejected) and stripped
         // first, so NormalizeWhitespace discards no user formatting. Replaced the NormalizeNewChildWhitespace site there.
-        "RoslynSentinel.Engines.Basic/AttributeTextEditBuilder.cs::NormalizeAttributeText",
+        ["RoslynSentinel.Engines.Basic/AttributeTextEditBuilder.cs::NormalizeAttributeText"] = 1,
     };
 
     // Test 2 names: the NormalizeWhitespace-family helpers deleted in slice D1 (plus a planned variant that was never
@@ -57,28 +59,41 @@ public class WhitespaceRatchetTests
         var sources = ParseProductionSources();
         Assert.That(sources, Is.Not.Empty, "The scan found no production .cs files; the repo root lookup is broken.");
 
-        var actual = new SortedSet<string>(StringComparer.Ordinal);
+        // Raw call count per "<file>::<member>" key.
+        var actual = new SortedDictionary<string, int>(StringComparer.Ordinal);
         foreach (var (relativePath, root) in sources)
         {
             foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
                 if (IsRawFormatterCall(invocation))
                 {
-                    actual.Add(relativePath + "::" + EnclosingMemberName(invocation));
+                    var key = relativePath + "::" + EnclosingMemberName(invocation);
+                    actual[key] = actual.GetValueOrDefault(key) + 1;
                 }
             }
         }
 
-        var allowed = new SortedSet<string>(RawFormatterAllowlist, StringComparer.Ordinal);
-        var unexpected = actual.Except(allowed).ToList();
-        var stale = allowed.Except(actual).ToList();
+        var unexpected = actual.Keys.Where(key => !RawFormatterAllowlist.ContainsKey(key)).ToList();
+        var stale = RawFormatterAllowlist.Keys.Where(key => !actual.ContainsKey(key)).Order(StringComparer.Ordinal).ToList();
+        var countMismatch = RawFormatterAllowlist
+            .Where(entry => actual.TryGetValue(entry.Key, out var count) && count != entry.Value)
+            .OrderBy(entry => entry.Key, StringComparer.Ordinal)
+            .Select(entry => $"  {entry.Key}: allowlist says {entry.Value}, tree has {actual[entry.Key]}")
+            .ToList();
 
         var problems = new List<string>();
         if (unexpected.Count > 0)
         {
-            problems.Add("Unexpected raw Formatter.FormatAsync / NormalizeWhitespace call sites. Route each one through "
+            problems.Add("Unexpected raw Formatter.FormatAsync / Formatter.Format / NormalizeWhitespace call sites. Route each one through "
                 + "RoslynFormattingHelper.FormatAnnotatedSpansAsync / FormatWholeDocumentAsync:"
-                + Environment.NewLine + string.Join(Environment.NewLine, unexpected.Select(key => "  " + key)));
+                + Environment.NewLine + string.Join(Environment.NewLine, unexpected.Select(key => "  " + key + " (" + actual[key] + " call(s))")));
+        }
+
+        if (countMismatch.Count > 0)
+        {
+            problems.Add("Raw call count differs from the allowlist for an allowlisted member. A higher count is a new raw call to route "
+                + "through the helper; a lower count means the allowlist value must shrink to match:"
+                + Environment.NewLine + string.Join(Environment.NewLine, countMismatch));
         }
 
         if (stale.Count > 0)
@@ -178,7 +193,7 @@ public class WhitespaceRatchetTests
             return true;
         }
 
-        return name == "FormatAsync"
+        return name is "FormatAsync" or "Format"
             && invocation.Expression is MemberAccessExpressionSyntax { Expression: var receiver }
             && IsFormatterReceiver(receiver);
     }

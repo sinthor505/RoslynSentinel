@@ -17,28 +17,6 @@ public class SemanticRefactoringEngine
     }
 
     /// <summary>
-    /// Removes <paramref name="nodeToRemove"/> and formats only the affected span (via a tracking
-    /// annotation on its former container), instead of the whole file.
-    /// </summary>
-    private static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions, CancellationToken cancellationToken = default)
-    {
-        var container = nodeToRemove.Parent;
-        if (container == null)
-        {
-            var bareNewRoot = root.RemoveNode(nodeToRemove, removeOptions)!;
-            var bareFormattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(bareNewRoot), cancellationToken: cancellationToken);
-            return (await bareFormattedDoc.GetTextAsync(cancellationToken)).ToString();
-        }
-        var annotation = new SyntaxAnnotation();
-        var annotatedRoot = root.ReplaceNode(container, container.WithAdditionalAnnotations(annotation));
-        var annotatedContainer = annotatedRoot.GetAnnotatedNodes(annotation).Single();
-        var trackedNodeToRemove = annotatedContainer.DescendantNodesAndSelf().Single(n => n.IsEquivalentTo(nodeToRemove) && n.Span == nodeToRemove.Span);
-        var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, removeOptions)!;
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
-        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
-    }
-
-    /// <summary>
     /// Inlines a temporary variable by replacing its usages with its initializer.
     /// 
     /// Safety rules:
@@ -108,7 +86,7 @@ public class SemanticRefactoringEngine
         {
             try
             {
-                return await RemoveNodeFormattedAsync(document, root, declarationStatement, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken);
+                return await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, declarationStatement, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken);
             }
             catch
             {

@@ -331,29 +331,6 @@ public class StructuralRefactoringEngine
     }
 
     /// <summary>
-    /// Removes <paramref name = "nodeToRemove"/> and formats only its former container (the nearest
-    /// ancestor whose node identity survives the removal), instead of the whole file.
-    /// </summary>
-    private static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions, CancellationToken cancellationToken = default)
-    {
-        var container = nodeToRemove.Parent;
-        if (container == null)
-        {
-            var bareNewRoot = root.RemoveNode(nodeToRemove, removeOptions)!;
-            var bareFormattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(bareNewRoot), cancellationToken: cancellationToken);
-            return (await bareFormattedDoc.GetTextAsync(cancellationToken)).ToString();
-        }
-
-        var annotation = new SyntaxAnnotation();
-        var annotatedRoot = root.ReplaceNode(container, container.WithAdditionalAnnotations(annotation));
-        var annotatedContainer = annotatedRoot.GetAnnotatedNodes(annotation).Single();
-        var trackedNodeToRemove = annotatedContainer.DescendantNodesAndSelf().Single(n => n.IsEquivalentTo(nodeToRemove) && n.Span == nodeToRemove.Span);
-        var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, removeOptions)!;
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
-        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
-    }
-
-    /// <summary>
     /// Dispatches a named micro-refactoring against a specific line in a file.
     /// </summary>
     /// <param name = "refactoringId">One of: type-to-var, remove-unused-local, add-braces, remove-braces, extract-constant</param>
@@ -593,7 +570,7 @@ public class StructuralRefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
-                UpdatedText = await RemoveNodeFormattedAsync(document, newRoot, newField, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken)
+                UpdatedText = await RemoveNodeAndFormatContainerAsync(document, newRoot, newField, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken)
             };
         }
 

@@ -27,28 +27,6 @@ public class StructuralRefinementEngine
     }
 
     /// <summary>
-    /// Removes <paramref name="nodeToRemove"/> and formats only the affected span (via a tracking
-    /// annotation on its former container), instead of the whole file.
-    /// </summary>
-    private static async Task<string> RemoveNodeFormattedAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions, CancellationToken cancellationToken = default)
-    {
-        var container = nodeToRemove.Parent;
-        if (container == null)
-        {
-            var bareNewRoot = root.RemoveNode(nodeToRemove, removeOptions)!;
-            var bareFormattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(bareNewRoot), cancellationToken: cancellationToken);
-            return (await bareFormattedDoc.GetTextAsync(cancellationToken)).ToString();
-        }
-        var annotation = new SyntaxAnnotation();
-        var annotatedRoot = root.ReplaceNode(container, container.WithAdditionalAnnotations(annotation));
-        var annotatedContainer = annotatedRoot.GetAnnotatedNodes(annotation).Single();
-        var trackedNodeToRemove = annotatedContainer.DescendantNodesAndSelf().Single(n => n.IsEquivalentTo(nodeToRemove) && n.Span == nodeToRemove.Span);
-        var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, removeOptions)!;
-        var formattedDoc = await Formatter.FormatAsync(document.WithSyntaxRoot(newRoot), annotation, cancellationToken: cancellationToken);
-        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
-    }
-
-    /// <summary>
     /// Synchronizes the filename to match a type declared in the file. When <paramref name="targetTypeName"/>
     /// is omitted, defaults to the first non-nested type declared in the file -> a real default for the
     /// common single-type-per-file case, not an accidental fallback, but not necessarily the file's
@@ -177,7 +155,7 @@ public class StructuralRefinementEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RemoveNodeFormattedAsync(document, root!, node!, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root!, node!, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken)
         };
     }
 
@@ -386,7 +364,7 @@ public class StructuralRefinementEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await RemoveNodeFormattedAsync(document, root, node, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, node, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken)
         };
     }
 }

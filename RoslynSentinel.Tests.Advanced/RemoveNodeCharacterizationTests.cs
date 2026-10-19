@@ -164,11 +164,9 @@ public class RemoveNodeCharacterizationTests
 
         var result = await _semanticEngine.InlineVariableAsync("Test.cs", "unused");
 
-        // Pins a DEFECT of the private copy: the container pass re-creates the trivia between the re-indented
-        // statements with the Formatter's own newline (CRLF), so an LF document comes back with mixed line endings.
-        var expected = crlf
-            ? Src(true, "public class C", "{", "    void M()", "    {", "        int y = 2;", "        System.Console.WriteLine(y);", "    }", "}")
-            : "public class C\n{\n    void M()\n    {\n        int y = 2;\r\n        System.Console.WriteLine(y);\n    }\n}";
+        // The shared helper puts every changed line in the document's dominant ending, so an LF document stays
+        // pure LF (the former private copy came back with a stray CRLF between the re-indented statements).
+        var expected = Src(crlf, "public class C", "{", "    void M()", "    {", "        int y = 2;", "        System.Console.WriteLine(y);", "    }", "}");
         Assert.That(result, Is.EqualTo(expected));
     }
 
@@ -192,7 +190,7 @@ public class RemoveNodeCharacterizationTests
         var result = await _semanticEngine.InlineVariableAsync("Test.cs", "unused");
 
         // Pinned current behaviour: the kept directive is re-indented and a blank line is inserted before it.
-        // In an LF document the inserted blank line uses the Formatter's CRLF (mixed EOL defect of the private copy).
+        // The inserted blank line takes the document's dominant ending (the former private copy wrote a stray CRLF).
         var expected = Src(crlf,
             "public class C",
             "{",
@@ -205,8 +203,6 @@ public class RemoveNodeCharacterizationTests
             "        System.Console.WriteLine(keep);",
             "    }",
             "}");
-        if (!crlf)
-            expected = expected.Replace("keep = 1;\n\n", "keep = 1;\r\n\r\n");
 
         Assert.That(result, Is.EqualTo(expected));
     }
@@ -304,11 +300,9 @@ public class RemoveNodeCharacterizationTests
         var result = await _refinementEngine.SafeDeleteSymbolAsync("Test.cs", "Unused", "private void Unused()", null, null);
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
-        // Pins a DEFECT of the private copy: untouched siblings are reformatted, and the trivia the Formatter
-        // re-creates uses its own newline (CRLF), so an LF document comes back with mixed line endings.
-        var expected = crlf
-            ? Src(true, "public class C", "{", "    public void A() { }", "", "    public void B() { }", "}")
-            : "public class C\n{\n    public void A() { }\r\n\r\n    public void B() { }\n}";
+        // Untouched siblings are reformatted, and every changed line takes the document's dominant ending, so an LF
+        // document stays pure LF (the former private copy came back with a stray CRLF).
+        var expected = Src(crlf, "public class C", "{", "    public void A() { }", "", "    public void B() { }", "}");
         Assert.That(result.UpdatedText, Is.EqualTo(expected));
     }
 
@@ -379,7 +373,7 @@ public class RemoveNodeCharacterizationTests
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
 
         // Pinned current behaviour: the kept directive is re-indented and a blank line is inserted before it.
-        // In an LF document the inserted blank line uses the Formatter's CRLF (mixed EOL defect of the private copy).
+        // The inserted blank line takes the document's dominant ending (the former private copy wrote a stray CRLF).
         var expected = Src(crlf,
             "public class C",
             "{",
@@ -389,8 +383,6 @@ public class RemoveNodeCharacterizationTests
             "    #endregion",
             "    public void B() { }",
             "}");
-        if (!crlf)
-            expected = expected.Replace("A() { }\n\n", "A() { }\r\n\r\n");
 
         Assert.That(result.UpdatedText, Is.EqualTo(expected));
     }

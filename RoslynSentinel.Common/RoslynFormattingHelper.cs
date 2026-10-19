@@ -215,6 +215,47 @@ public static class RoslynFormattingHelper
     }
 
     /// <summary>
+    /// Removes <paramref name="nodeToRemove"/> and formats only its former container (the nearest ancestor whose node
+    /// identity survives the removal), instead of the whole file, and returns the full text in the line ending of
+    /// <paramref name="document"/>. Unlike <see cref="RemoveNodePreservingTriviaAsync"/> there is no boundary-token
+    /// trivia restore, so the directive-keeping flags of <paramref name="removeOptions"/>
+    /// (<see cref="SyntaxRemoveOptions.KeepUnbalancedDirectives"/>, <see cref="SyntaxRemoveOptions.KeepDirectives"/>) are
+    /// honoured: a directive that sat in the removed node's leading trivia stays. The container is annotated with
+    /// <see cref="Formatter.Annotation"/> and formatted through <see cref="FormatAnnotatedTextAsync(Document, SyntaxNode, CancellationToken)"/>,
+    /// so lines the removal did not change keep their terminator and every changed line takes the dominant ending of
+    /// <paramref name="document"/> (the formatter's own NewLine option never leaks into the file).
+    /// A node with no parent has no container, so the whole document is formatted through
+    /// <see cref="FormatWholeDocumentAsync"/> with <paramref name="document"/> as the line-ending reference.
+    /// </summary>
+    /// <param name="document">The document before the edit. Supplies the dominant line ending, the encoding and the formatting options.</param>
+    /// <param name="root">The root that contains <paramref name="nodeToRemove"/>; it may already carry edits made to <paramref name="document"/>'s tree.</param>
+    /// <param name="nodeToRemove">The node to remove, a node of <paramref name="root"/>.</param>
+    /// <param name="removeOptions">Passed to <c>SyntaxNode.RemoveNode</c>.</param>
+    public static async Task<string> RemoveNodeAndFormatContainerAsync(Document document, SyntaxNode root, SyntaxNode nodeToRemove, SyntaxRemoveOptions removeOptions, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(root);
+        ArgumentNullException.ThrowIfNull(nodeToRemove);
+
+        var container = nodeToRemove.Parent;
+        if (container == null)
+        {
+            var bareNewRoot = root.RemoveNode(nodeToRemove, removeOptions)!;
+            var originalSourceText = await document.GetTextAsync(cancellationToken);
+            var bareFormattedDoc = await FormatWholeDocumentAsync(document.WithSyntaxRoot(bareNewRoot), originalSourceText, cancellationToken);
+            return (await bareFormattedDoc.GetTextAsync(cancellationToken)).ToString();
+        }
+
+        // A private tracking annotation finds the surviving container; Formatter.Annotation marks it for formatting.
+        var tracking = new SyntaxAnnotation();
+        var annotatedRoot = root.ReplaceNode(container, container.WithAdditionalAnnotations(tracking, Formatter.Annotation));
+        var annotatedContainer = annotatedRoot.GetAnnotatedNodes(tracking).Single();
+        var trackedNodeToRemove = annotatedContainer.DescendantNodesAndSelf().Single(n => n.IsEquivalentTo(nodeToRemove) && n.Span == nodeToRemove.Span);
+        var newRoot = annotatedRoot.RemoveNode(trackedNodeToRemove, removeOptions)!;
+        return await FormatAnnotatedTextAsync(document, newRoot, cancellationToken);
+    }
+
+    /// <summary>
     /// Inserts <paramref name = "newMember"/> into <paramref name = "container"/>'s member list at
     /// <paramref name = "insertIndex"/> (the position it should occupy in the resulting list -> i.e.
     /// pass the old index of the following member, or <c>container.Members.Count</c> to append) and
@@ -379,8 +420,12 @@ public static class RoslynFormattingHelper
     /// formatted (a format-document operation, or a file the tool just scaffolded and fully owns). To format what a
     /// rewrite changed, annotate the changed nodes with <see cref="Formatter.Annotation"/> and call
     /// <see cref="FormatAnnotatedSpansAsync"/>; to replace one node, use <see cref="ReplaceNodeAndFormatReplacementAsync"/>.
-    /// This is the one place a whole-document <c>Formatter.FormatAsync</c> is allowed (a ratchet test is planned;
-    /// see the proposal).
+    /// This is the EOL-aware whole-document chokepoint for edit paths. A few allowlisted sites still call the formatter
+    /// on a whole document or root directly, because whole-document formatting is their job (the format-document tools
+    /// in <c>BasicRefactoringEngine</c> and <c>MsToolAugmentEngine</c>) or the result is only compared or logged
+    /// (<c>PersistentWorkspaceManager.ApplyProposedChangesAsync</c>). <c>WhitespaceRatchetTests</c> fails on any other
+    /// raw <c>Formatter.FormatAsync</c>, <c>Formatter.Format</c> or <c>NormalizeWhitespace</c> call in production code
+    /// and on a higher raw-call count in an allowlisted member.
     /// <para>
     /// The result is put in the line ending of <paramref name="eolReference"/> when given, otherwise of
     /// <paramref name="document"/> as it is passed in (so a caller that builds the document with
