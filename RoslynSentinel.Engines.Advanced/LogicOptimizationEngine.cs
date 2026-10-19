@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace RoslynSentinel.Engines.Advanced;
 
@@ -13,6 +14,17 @@ public class LogicSimplificationEngine
     public LogicSimplificationEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
+    }
+
+    /// <summary>
+    /// Formats only the nodes of <paramref name="newRoot"/> that the rewrite annotated with <see cref="Formatter.Annotation"/>
+    /// (through <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/>) and returns the full text: lines the rewrite
+    /// did not touch keep their text and terminator, and every changed line takes the document's dominant line ending.
+    /// </summary>
+    private static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode newRoot, CancellationToken cancellationToken)
+    {
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
     /// <summary>
@@ -50,7 +62,7 @@ public class LogicSimplificationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Boolean expressions simplified.",
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -96,8 +108,8 @@ public class LogicSimplificationEngine
             var symbol = semanticModel.GetDeclaredSymbol(parameter, cancellationToken);
             if (symbol != null && symbol.Type.IsReferenceType)
             {
-                var guard = SyntaxFactory.ExpressionStatement(SyntaxFactory.InvocationExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("ArgumentNullException"), SyntaxFactory.IdentifierName("ThrowIfNull")), SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(SyntaxFactory.IdentifierName(parameter.Identifier))))));
-                guards.Add(guard);
+                var guard = SyntaxFactory.ExpressionStatement(SyntaxFactory.InvocationExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("ArgumentNullException"), SyntaxFactory.IdentifierName("ThrowIfNull")), SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(SyntaxFactory.IdentifierName(parameter.Identifier.WithoutTrivia()))))));
+                guards.Add(guard.WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed).WithAdditionalAnnotations(Formatter.Annotation));
             }
         }
 
@@ -110,7 +122,7 @@ public class LogicSimplificationEngine
                 Outcome = EditOutcome.Modified,
                 FilePath = filePath,
                 Message = "// Guard clauses added.",
-                UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+                UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
             };
         }
 
@@ -119,7 +131,7 @@ public class LogicSimplificationEngine
             Outcome = EditOutcome.NoCandidatesFound,
             FilePath = filePath,
             Message = "// No reference type parameters found.",
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root!).ToFullString()
+            UpdatedText = root!.ToFullString()
         };
     }
 
@@ -160,7 +172,7 @@ public class LogicSimplificationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Null coalescing operators applied.",
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -209,7 +221,7 @@ public class LogicSimplificationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Switch statements converted.",
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -226,10 +238,10 @@ public class LogicSimplificationEngine
                     var expr = node.Right.IsKind(SyntaxKind.TrueLiteralExpression) ? node.Left : node.Right;
                     if (node.IsKind(SyntaxKind.EqualsExpression))
                     {
-                        return expr;
+                        return expr.WithTriviaFrom(node);
                     }
 
-                    return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(expr));
+                    return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(expr.WithoutTrivia())).WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
                 }
 
                 if (isFalse)
@@ -237,10 +249,10 @@ public class LogicSimplificationEngine
                     var expr = node.Right.IsKind(SyntaxKind.FalseLiteralExpression) ? node.Left : node.Right;
                     if (node.IsKind(SyntaxKind.EqualsExpression))
                     {
-                        return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(expr));
+                        return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(expr.WithoutTrivia())).WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
                     }
 
-                    return expr;
+                    return expr.WithTriviaFrom(node);
                 }
             }
 
@@ -263,13 +275,13 @@ public class LogicSimplificationEngine
             // Pattern: x != null ? x : defaultValue  =>  x ?? defaultValue
             if (IsNotNullComparison(condition, out var checkedExpr) && checkedExpr != null && AreExpressionsEquivalent(checkedExpr, whenTrue))
             {
-                return SyntaxFactory.BinaryExpression(SyntaxKind.CoalesceExpression, checkedExpr, whenFalse);
+                return SyntaxFactory.BinaryExpression(SyntaxKind.CoalesceExpression, checkedExpr, whenFalse).WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
             }
 
             // Pattern: x == null ? defaultValue : x  =>  x ?? defaultValue
             if (IsNullComparison(condition, out var checkedExpr2) && checkedExpr2 != null && AreExpressionsEquivalent(checkedExpr2, whenFalse))
             {
-                return SyntaxFactory.BinaryExpression(SyntaxKind.CoalesceExpression, checkedExpr2, whenTrue);
+                return SyntaxFactory.BinaryExpression(SyntaxKind.CoalesceExpression, checkedExpr2, whenTrue).WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
             }
 
             return base.VisitConditionalExpression(node);
@@ -284,7 +296,7 @@ public class LogicSimplificationEngine
                 if (IsNullComparison(node.Condition, out var checkedExpr) && checkedExpr != null && IsAssignmentToVariable(singleStatement, checkedExpr, out var defaultValue))
                 {
                     var assignment = SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(SyntaxKind.CoalesceAssignmentExpression, checkedExpr, defaultValue));
-                    return assignment;
+                    return assignment.WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
                 }
             }
 
@@ -292,7 +304,7 @@ public class LogicSimplificationEngine
             if (node.Else == null && !(node.Statement is BlockSyntax) && IsNullComparison(node.Condition, out var checkedExpr3) && checkedExpr3 != null && IsAssignmentToVariable(node.Statement, checkedExpr3, out var defaultValue3))
             {
                 var assignment = SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(SyntaxKind.CoalesceAssignmentExpression, checkedExpr3, defaultValue3));
-                return assignment;
+                return assignment.WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
             }
 
             // Pattern: if (x != null) { } else x = defaultValue;  =>  x ??= defaultValue;
@@ -302,12 +314,12 @@ public class LogicSimplificationEngine
                 if (elseClause.Statement is IfStatementSyntax elseIf && elseIf.Else == null && IsAssignmentToVariable(elseIf.Statement, checkedExpr4, out var defaultValue4))
                 {
                     var assignment = SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(SyntaxKind.CoalesceAssignmentExpression, checkedExpr4, defaultValue4));
-                    return assignment;
+                    return assignment.WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
                 }
                 else if (IsAssignmentToVariable(elseClause.Statement, checkedExpr4, out var defaultValue5))
                 {
                     var assignment = SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(SyntaxKind.CoalesceAssignmentExpression, checkedExpr4, defaultValue5));
-                    return assignment;
+                    return assignment.WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
                 }
             }
 
@@ -405,7 +417,8 @@ public class LogicSimplificationEngine
             {
                 // We converted the entire if-else chain to a switch
                 // Now recursively visit the switch statements to handle any nested conversions
-                return Visit(switchStatement);
+                var visited = Visit(switchStatement) ?? switchStatement;
+                return visited.WithTriviaFrom(node).WithAdditionalAnnotations(Formatter.Annotation);
             }
 
             // If we couldn't convert to a switch, recursively visit child nodes as normal
@@ -787,11 +800,11 @@ public class LogicSimplificationEngine
         }
 
         var switchExpr = SyntaxFactory.SwitchExpression(SyntaxFactory.ParseExpression(condVar), SyntaxFactory.SeparatedList(arms));
-        var newRoot = root.ReplaceNode(ifStmt, SyntaxFactory.ReturnStatement(switchExpr));
+        var newRoot = root.ReplaceNode(ifStmt, SyntaxFactory.ReturnStatement(switchExpr).WithTriviaFrom(ifStmt).WithAdditionalAnnotations(Formatter.Annotation));
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
             FilePath = filePath
         };
     }
@@ -866,11 +879,11 @@ public class LogicSimplificationEngine
         }
 
         var switchStmt = SyntaxFactory.SwitchStatement(SyntaxFactory.ParseExpression(condVar)).WithSections(SyntaxFactory.List(sections));
-        var newRoot = root.ReplaceNode(ifStmt, switchStmt);
+        var newRoot = root.ReplaceNode(ifStmt, switchStmt.WithTriviaFrom(ifStmt).WithAdditionalAnnotations(Formatter.Annotation));
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
             FilePath = filePath
         };
     }
@@ -897,12 +910,12 @@ public class LogicSimplificationEngine
             var firstParam = methodNode.ParameterList.Parameters[0];
             if (firstParam.Modifiers.Any(m => m.IsKind(SyntaxKind.ThisKeyword)))
             {
-                var newParam = firstParam.WithModifiers(firstParam.Modifiers.Remove(firstParam.Modifiers.First(m => m.IsKind(SyntaxKind.ThisKeyword))));
+                var newParam = firstParam.WithModifiers(firstParam.Modifiers.Remove(firstParam.Modifiers.First(m => m.IsKind(SyntaxKind.ThisKeyword)))).WithAdditionalAnnotations(Formatter.Annotation);
                 var newMethod = methodNode.WithParameterList(methodNode.ParameterList.WithParameters(methodNode.ParameterList.Parameters.Replace(firstParam, newParam)));
                 return new DocumentEditResult
                 {
                     Outcome = EditOutcome.Modified,
-                    UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root!.ReplaceNode(methodNode, newMethod)).ToFullString(),
+                    UpdatedText = await FormatAnnotatedTextAsync(document, root!.ReplaceNode(methodNode, newMethod), cancellationToken),
                     FilePath = filePath
                 };
             }
@@ -938,7 +951,7 @@ public class LogicSimplificationEngine
             var firstParam = methodNode.ParameterList.Parameters[0];
             if (!firstParam.Modifiers.Any(m => m.IsKind(SyntaxKind.ThisKeyword)))
             {
-                var newParam = firstParam.WithModifiers(firstParam.Modifiers.Insert(0, SyntaxFactory.Token(SyntaxKind.ThisKeyword)));
+                var newParam = firstParam.WithModifiers(firstParam.Modifiers.Insert(0, SyntaxFactory.Token(SyntaxKind.ThisKeyword).WithTrailingTrivia(SyntaxFactory.Space))).WithAdditionalAnnotations(Formatter.Annotation);
                 var newMethod = methodNode.WithParameterList(methodNode.ParameterList.WithParameters(methodNode.ParameterList.Parameters.Replace(firstParam, newParam)));
                 var updatedRoot = root!.ReplaceNode(methodNode, newMethod);
                 // Also ensure the containing class is marked as static
@@ -946,14 +959,18 @@ public class LogicSimplificationEngine
                 var classNode = updatedRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.DescendantNodes().OfType<MethodDeclarationSyntax>().Any(m => m.Identifier.Text == methodName));
                 if (classNode != null && !classNode.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
                 {
-                    var newClass = classNode.WithModifiers(classNode.Modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword)));
+                    // The new token gets an explicit space instead of an annotation: annotating the class would re-space
+                    // every member. With no modifiers, the keyword's leading trivia (indentation, doc comment) moves onto it.
+                    var newClass = classNode.Modifiers.Count == 0
+                        ? classNode.WithKeyword(classNode.Keyword.WithLeadingTrivia()).WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(classNode.Keyword.LeadingTrivia, SyntaxKind.StaticKeyword, SyntaxFactory.TriviaList(SyntaxFactory.Space))))
+                        : classNode.WithModifiers(classNode.Modifiers.Add(SyntaxFactory.Token(SyntaxKind.StaticKeyword).WithTrailingTrivia(SyntaxFactory.Space)));
                     updatedRoot = updatedRoot.ReplaceNode(classNode, newClass);
                 }
 
                 return new DocumentEditResult
                 {
                     Outcome = EditOutcome.Modified,
-                    UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedRoot).ToFullString(),
+                    UpdatedText = await FormatAnnotatedTextAsync(document, updatedRoot, cancellationToken),
                     FilePath = filePath
                 };
             }
@@ -1058,11 +1075,11 @@ public class LogicSimplificationEngine
         var condition = SyntaxFactory.BinaryExpression(SyntaxKind.LessThanExpression, SyntaxFactory.IdentifierName(indexVar), SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.ParseExpression(collectionStr), SyntaxFactory.IdentifierName(lengthProp)));
         var incrementors = SyntaxFactory.SingletonSeparatedList<ExpressionSyntax>(SyntaxFactory.PostfixUnaryExpression(SyntaxKind.PostIncrementExpression, SyntaxFactory.IdentifierName(indexVar)));
         var forStatement = SyntaxFactory.ForStatement(initializer, SyntaxFactory.SeparatedList<ExpressionSyntax>(), condition, incrementors, newBody);
-        var newRoot = root.ReplaceNode(forEach, forStatement);
+        var newRoot = root.ReplaceNode(forEach, forStatement.WithTriviaFrom(forEach).WithAdditionalAnnotations(Formatter.Annotation));
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
             FilePath = filePath
         };
     }
@@ -1131,11 +1148,11 @@ public class LogicSimplificationEngine
         var rewriter = new IndexedAccessRewriter(collectionStr, indexVar, elementVar);
         var newBody = (StatementSyntax)(rewriter.Visit(forStmt.Statement) ?? forStmt.Statement);
         var forEach = SyntaxFactory.ForEachStatement(SyntaxFactory.IdentifierName("var"), SyntaxFactory.Identifier(elementVar), SyntaxFactory.ParseExpression(collectionStr), newBody);
-        var newRoot = root.ReplaceNode(forStmt, forEach);
+        var newRoot = root.ReplaceNode(forStmt, forEach.WithTriviaFrom(forStmt).WithAdditionalAnnotations(Formatter.Annotation));
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
             FilePath = filePath
         };
     }
@@ -1252,7 +1269,8 @@ public class LogicSimplificationEngine
 
         var newBody = whileBody.WithStatements(whileBody.Statements.Remove(incrementStmt));
         var incrementors = SyntaxFactory.SingletonSeparatedList<ExpressionSyntax>(SyntaxFactory.PostfixUnaryExpression(SyntaxKind.PostIncrementExpression, SyntaxFactory.IdentifierName(counterName)));
-        var forStmt = SyntaxFactory.ForStatement(localDecl.Declaration, SyntaxFactory.SeparatedList<ExpressionSyntax>(), whileStmt.Condition, incrementors, newBody);
+        // The for statement replaces both the declaration and the while, so it takes the declaration's leading trivia.
+        var forStmt = SyntaxFactory.ForStatement(localDecl.Declaration.WithoutTrivia(), SyntaxFactory.SeparatedList<ExpressionSyntax>(), whileStmt.Condition, incrementors, newBody).WithLeadingTrivia(localDecl.GetLeadingTrivia()).WithTrailingTrivia(whileStmt.GetTrailingTrivia()).WithAdditionalAnnotations(Formatter.Annotation);
         var newStmtList = new List<StatementSyntax>();
         foreach (var s in parentBlock.Statements)
         {
@@ -1269,7 +1287,7 @@ public class LogicSimplificationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
             FilePath = filePath
         };
     }
