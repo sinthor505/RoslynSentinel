@@ -293,7 +293,7 @@ public static class RoslynFormattingHelper
     /// then puts the result in the line ending of <paramref name="document"/> (the document as it was BEFORE the
     /// rewrite). This is the existing-root path of the whole-subtree-whitespace rule: the rewriter adds
     /// <see cref="Formatter.Annotation"/> to the nodes it created or changed and calls this instead of
-    /// <c>NormalizeWholeSubtreeWhitespace</c> or a whole-document format, so code the rewrite did not touch is not
+    /// a whole-subtree <c>NormalizeWhitespace</c> or a whole-document format, so code the rewrite did not touch is not
     /// re-spaced (the one exception is the whitespace and line break immediately before an annotated node, which the
     /// formatter owns and may re-space) and lines the edit did not touch keep their text.
     /// <para>
@@ -380,11 +380,9 @@ public static class RoslynFormattingHelper
 
     /// <summary>
     /// Formats a NEWLY BUILT <see cref="CompilationUnitSyntax"/> (the root of a file that does not exist yet) that embeds
-    /// EXISTING code, and returns its text. This is the comment-keeping counterpart of
-    /// <see cref="NormalizeNewRootWhitespace"/> for roots like the ones built by ExtractSuperclass,
+    /// EXISTING code, and returns its text. It serves roots like the ones built by ExtractSuperclass,
     /// ExtractMembersToPartial and ConvertTupleToClass: the using directives, members or types copied from the source file
-    /// carry the user's comments, blank lines and indentation, which <c>NormalizeWhitespace</c> would rewrite and the
-    /// <c>NormalizeNew*</c> guard rejects.
+    /// carry the user's comments, blank lines and indentation, which <c>NormalizeWhitespace</c> would rewrite.
     /// <para>
     /// <paramref name="isNewNode"/> classifies the nodes of <paramref name="newRoot"/>: <c>true</c> for structure the
     /// caller synthesized (namespace, class, name, braces), <c>false</c> for a node copied from existing source. Only the
@@ -454,300 +452,21 @@ public static class RoslynFormattingHelper
     }
 
     /// <summary>
-    /// Pure pass-through to <see cref="SyntaxNodeExtensions.NormalizeWhitespace{TNode}"/> (via
-    /// <see cref="SyntaxNode.NormalizeWhitespace"/>) with identical arguments and identical
-    /// behavior -> this method exists purely as a single, greppable chokepoint for the whole-subtree
-    /// form of whitespace normalization, not as a safety fix.
-    /// <para>
-    /// Unlike <see cref="ReplaceNodeAndFormatReplacementAsync"/>, <see cref="RemoveNodePreservingTriviaAsync"/>, and
-    /// <see cref="InsertMemberDeclarationAndFormatInsertionAsync"/> -> which are narrowly scoped to just the node being
-    /// edited via a tracking annotation, and are safe by construction regardless of what the caller
-    /// passes -> this method's safety depends entirely on what <paramref name="node"/> is:
-    /// </para>
-    /// <list type="bullet">
-    /// <item>Safe: a freshly synthesized node with no pre-existing siblings, e.g.
-    /// <c>SyntaxFactory.MethodDeclaration(...).NormalizeWhitespace()</c> -> there is no untouched
-    /// sibling content to disturb.</item>
-    /// <item>Risky: an existing tree root or container (e.g. a whole file's <c>root</c>/<c>newRoot</c>
-    /// or a <c>CompilationUnitSyntax</c>) that already contains untouched code -> normalizing it
-    /// reformats every sibling's whitespace as a side effect, which is exactly the bug class fixed in
-    /// <c>MemberRefactoringEngine.AddMemberAsync</c> by introducing <see cref="InsertMemberDeclarationAndFormatInsertionAsync"/>
-    /// (see docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md).</item>
-    /// </list>
-    /// <para>
-    /// For an edit-then-format use case on an existing tree, prefer
-    /// <see cref="InsertMemberDeclarationAndFormatInsertionAsync"/>/<see cref="ReplaceNodeAndFormatReplacementAsync"/>/
-    /// <see cref="RemoveNodePreservingTriviaAsync"/> instead of this method -> they scope the formatting
-    /// annotation to just the changed node so siblings are left untouched. Reach for this method only
-    /// when the node truly has no siblings to protect (a synthesized standalone node), or as a
-    /// mechanical drop-in during centralization, per docs/current/proposal_batch_replacesnippet.md-adjacent
-    /// audit work -> auditing/fixing individual call sites' scope is deliberately out of scope here.
-    /// </para>
-    /// </summary>
-    [Obsolete("Use RoslynFormattingHelper.FormatAnnotatedSpansAsync / FormatNewRootKeepingTriviaAsync: annotate only changed nodes")]
-    public static SyntaxNode NormalizeWholeSubtreeWhitespace(SyntaxNode node, string indentation = "    ", string eol = "\n", bool elasticTrivia = true)
-    {
-        return node.NormalizeWhitespace(indentation, eol, elasticTrivia);
-    }
-
-    /// <summary>
-    /// Rebuilds the canonical whitespace layout of a NEWLY BUILT member, statement or other child node
-    /// (one made from scratch with <see cref="SyntaxFactory"/>, never part of a user file), using the
-    /// caller's <paramref name="eol"/>. <c>NormalizeWhitespace</c> discards all existing formatting, so the
-    /// node is first checked by <c>EnsureNodeIsNew</c> and an <see cref="ArgumentException"/> is thrown
-    /// when it looks like existing code (or is a <see cref="CompilationUnitSyntax"/>, which belongs to
-    /// <see cref="NormalizeNewRootWhitespace"/>). <paramref name="eol"/> has no default: pass the target
-    /// file's or project's line ending.
-    /// <para>
-    /// Content-check exemption: a whitespace trivia that is exactly one space (what <c>SyntaxFactory.Space</c>
-    /// and a parsed single-line snippet carry) is not counted as user formatting. End-of-line, comment and
-    /// longer whitespace (indentation) trivia that is not elastic are still rejected.
-    /// </para>
-    /// </summary>
-    [Obsolete("Use RoslynFormattingHelper.FormatAnnotatedSpansAsync / FormatNewRootKeepingTriviaAsync: annotate only changed nodes")]
-    public static T NormalizeNewChildWhitespace<T>(T node, string eol, string indentation = "    ", bool elasticTrivia = true)
-        where T : SyntaxNode
-    {
-        ValidateEol(eol);
-        ArgumentNullException.ThrowIfNull(node);
-        if (node is CompilationUnitSyntax)
-        {
-            throw new ArgumentException(
-                "NormalizeNewChildWhitespace does not accept a CompilationUnitSyntax; use NormalizeNewRootWhitespace for a file root built from scratch.",
-                nameof(node));
-        }
-
-        EnsureNodeIsNew(node, nameof(node));
-        return node.NormalizeWhitespace(indentation, eol, elasticTrivia);
-    }
-
-    /// <summary>
-    /// Rebuilds the canonical whitespace layout of a NEWLY BUILT <see cref="CompilationUnitSyntax"/> (the
-    /// root of a file that does not exist yet), using the caller's <paramref name="eol"/>. A compilation
-    /// unit has the same CLR type whether it is new or the root of an existing file, so the node is
-    /// checked by <c>EnsureNodeIsNew</c> and an <see cref="ArgumentException"/> is thrown when it looks
-    /// like an existing file's root. <paramref name="eol"/> has no default: pass the target file's or
-    /// project's line ending. The content check exempts single-space whitespace trivia, exactly as
-    /// described on <see cref="NormalizeNewChildWhitespace{T}"/>.
-    /// </summary>
-    [Obsolete("Use RoslynFormattingHelper.FormatAnnotatedSpansAsync / FormatNewRootKeepingTriviaAsync: annotate only changed nodes")]
-    public static CompilationUnitSyntax NormalizeNewRootWhitespace(CompilationUnitSyntax root, string eol, string indentation = "    ", bool elasticTrivia = true)
-    {
-        ValidateEol(eol);
-        EnsureNodeIsNew(root, nameof(root));
-        return root.NormalizeWhitespace(indentation, eol, elasticTrivia);
-    }
-
-    /// <summary>
-    /// Variant of <see cref="NormalizeNewRootWhitespace"/> for a NEWLY BUILT <see cref="CompilationUnitSyntax"/> whose
-    /// using directives were copied from an existing file and so carry that file's header. The LEADING trivia of each
-    /// using directive is exempt from the content check and is kept (<c>NormalizeWhitespace</c> keeps comments and
-    /// directives and discards only the whitespace and end-of-line trivia around them).
-    /// <para>
-    /// Supported header: comments, <c>#nullable</c> and <c>#pragma</c> directives, and conditional or region
-    /// directives that are balanced wholly inside the leading trivia of the usings (an <c>#if</c> and its
-    /// <c>#endif</c> both in using leading trivia). Everything else is checked exactly as
-    /// <see cref="NormalizeNewRootWhitespace"/> checks it, so the caller must first strip the inner trivia of each
-    /// using directive with <see cref="StripUsingKeepingLeadingTrivia"/> and must not embed other existing code in the
-    /// root. <paramref name="eol"/> has no default: pass the target file's line ending.
-    /// </para>
-    /// <para>
-    /// Known limitations: only the trivia on the usings is carried. (1) A directive pair that is opened in a using's
-    /// leading trivia but closed after the last using (the <c>#endif</c> sits on the following namespace or member
-    /// token, which is rebuilt) yields an unbalanced directive (CS1027) in the output. (2) A header on a file with no
-    /// usings is not carried at all, because it lives on the first member's token.
-    /// </para>
-    /// </summary>
-    [Obsolete("Use RoslynFormattingHelper.FormatAnnotatedSpansAsync / FormatNewRootKeepingTriviaAsync: annotate only changed nodes")]
-    public static CompilationUnitSyntax NormalizeNewRootWhitespaceKeepingUsingHeaders(CompilationUnitSyntax root, string eol, string indentation = "    ", bool elasticTrivia = true)
-    {
-        ValidateEol(eol);
-        ArgumentNullException.ThrowIfNull(root);
-
-        // The guard sees a copy whose using headers are removed; the unchanged root is what gets normalized.
-        var headerlessCopy = root.WithUsings(SyntaxFactory.List(root.Usings.Select(u => u.WithLeadingTrivia(SyntaxTriviaList.Empty))));
-        EnsureNodeIsNew(headerlessCopy, nameof(root));
-        return root.NormalizeWhitespace(indentation, eol, elasticTrivia);
-    }
-
-    /// <summary>
     /// Returns a parentless copy of <paramref name="node"/> (taken from existing source, or parsed from caller text
     /// inside a dummy container) with EVERY piece of trivia removed: whitespace, end-of-line, comments and directives.
-    /// Use it to embed a reused or parsed part in a newly built node so the node passes the
-    /// <see cref="NormalizeNewChildWhitespace{T}"/> guard; <c>NormalizeWhitespace</c> then rebuilds all spacing.
+    /// Use it to embed a reused or parsed part (for example a parameter list or return type) in a newly built node.
     /// Comments are dropped silently, so call this only where losing them is acceptable (for example signature parts
-    /// reused in a generated interface member). To reject comments instead, use
-    /// <see cref="StripFormattingTriviaForNormalize{T}"/>.
+    /// reused in a generated interface member).
     /// </summary>
     public static T StripAllTriviaForNormalize<T>(T node)
         where T : SyntaxNode
     {
         ArgumentNullException.ThrowIfNull(node);
-        return DetachForNormalize(node, keepComments: false);
-    }
 
-    /// <summary>
-    /// Returns a parentless copy of a using directive taken from an existing file, with all of its trivia removed except
-    /// its LEADING trivia (the file header: a copyright comment, a <c>#nullable</c> or <c>#pragma</c> directive).
-    /// This is the exact shape <see cref="NormalizeNewRootWhitespaceKeepingUsingHeaders"/> expects for every using of a
-    /// newly built root: inner whitespace, trailing comments and the trailing end-of-line are dropped (so the guard sees
-    /// only the exempt header), and the header is kept. Engines and tests share this method so they cannot drift.
-    /// </summary>
-    public static UsingDirectiveSyntax StripUsingKeepingLeadingTrivia(UsingDirectiveSyntax usingDirective)
-    {
-        ArgumentNullException.ThrowIfNull(usingDirective);
-        return StripAllTriviaForNormalize(usingDirective).WithLeadingTrivia(usingDirective.GetLeadingTrivia());
-    }
-
-    /// <summary>
-    /// Returns a parentless copy of <paramref name="node"/> with only its whitespace and end-of-line trivia removed.
-    /// Every other trivia kind (comments, documentation comments, directives, disabled text, skipped tokens) is kept
-    /// wherever it sits, including on the node's first and last token, so the
-    /// <see cref="NormalizeNewChildWhitespace{T}"/> guard rejects it with an <see cref="ArgumentException"/> instead of it
-    /// being dropped silently at the boundary yet kept (and rejected) in the middle. Use it for text a caller
-    /// supplied, where there is no user formatting to preserve but a comment must not vanish unnoticed. To drop
-    /// comments as well, use <see cref="StripAllTriviaForNormalize{T}"/>.
-    /// </summary>
-    public static T StripFormattingTriviaForNormalize<T>(T node)
-        where T : SyntaxNode
-    {
-        ArgumentNullException.ThrowIfNull(node);
-        return DetachForNormalize(node, keepComments: true);
-    }
-
-    /// <summary>
-    /// Shared core of <see cref="StripAllTriviaForNormalize{T}"/> and <see cref="StripFormattingTriviaForNormalize{T}"/>.
-    /// <c>WithoutTrivia</c> is applied first because it drops the leading trivia of the first token and the trailing
-    /// trivia of the last token (which the descendant-trivia pass below does not reach), so when comments are kept the
-    /// non-formatting boundary trivia is captured beforehand and put back on the copy. The copy is parentless as a side
-    /// effect, but that is not the purpose: a node a caller embeds in a new member becomes part of that member's fresh
-    /// root anyway. The strip exists to remove comments, newlines and indentation so the
-    /// <see cref="NormalizeNewChildWhitespace{T}"/> guard accepts the result.
-    /// </summary>
-    private static T DetachForNormalize<T>(T node, bool keepComments)
-        where T : SyntaxNode
-    {
-        static bool IsFormatting(SyntaxTrivia trivia) => trivia.IsKind(SyntaxKind.WhitespaceTrivia) || trivia.IsKind(SyntaxKind.EndOfLineTrivia);
-
-        var keptLeading = keepComments
-            ? node.GetFirstToken(includeZeroWidth: true).LeadingTrivia.Where(t => !IsFormatting(t)).ToList()
-            : [];
-        var keptTrailing = keepComments
-            ? node.GetLastToken(includeZeroWidth: true).TrailingTrivia.Where(t => !IsFormatting(t)).ToList()
-            : [];
-
+        // WithoutTrivia drops the leading trivia of the first token and the trailing trivia of the last token, which
+        // the descendant-trivia pass does not reach; the pass then removes the rest.
         var detached = node.WithoutTrivia();
-        if (keptLeading.Count > 0)
-        {
-            detached = detached.WithLeadingTrivia(keptLeading);
-        }
-
-        if (keptTrailing.Count > 0)
-        {
-            detached = detached.WithTrailingTrivia(keptTrailing);
-        }
-
-        var removable = detached.DescendantTrivia(descendIntoTrivia: false)
-            .Where(t => !keepComments || IsFormatting(t))
-            .ToList();
+        var removable = detached.DescendantTrivia(descendIntoTrivia: false).ToList();
         return removable.Count == 0 ? detached : detached.ReplaceTrivia(removable, (_, _) => default);
-    }
-
-    /// <summary>
-    /// Shared guard for <see cref="NormalizeNewChildWhitespace{T}"/> and <see cref="NormalizeNewRootWhitespace"/>.
-    /// Rejects, in order: (2) a node attached to a tree (<see cref="SyntaxNode.Parent"/> is not null),
-    /// (3) a node whose <see cref="SyntaxTree.FilePath"/> is non-empty (it came from a file), and
-    /// (4) a subtree that carries user formatting (non-elastic whitespace other than a single space,
-    /// end-of-line or comment trivia), because <c>NormalizeWhitespace</c> would discard it. Check 1 (a
-    /// <see cref="CompilationUnitSyntax"/> passed to the child method) is made by the child method itself.
-    /// </summary>
-    private static void EnsureNodeIsNew(SyntaxNode node, string paramName)
-    {
-        ArgumentNullException.ThrowIfNull(node, paramName);
-
-        const string ExistingCodeHint = "This looks like existing code; use ReplaceNodeAndFormatReplacementAsync, or annotate the changed nodes with Formatter.Annotation and call FormatAnnotatedSpansAsync.";
-
-        // Check 2: attached to a tree, so it is not new.
-        if (node.Parent is not null)
-        {
-            throw new ArgumentException(
-                $"The node is attached to a syntax tree (its parent is a {node.Parent.Kind()}), so it is not a newly built node. {ExistingCodeHint}",
-                paramName);
-        }
-
-        // Check 3: its tree came from a file. The file name is deliberately not echoed.
-        var filePath = node.SyntaxTree.FilePath;
-        if (!string.IsNullOrEmpty(filePath))
-        {
-            throw new ArgumentException(
-                $"The node belongs to a syntax tree that has a file path, so it is part of an existing file. {ExistingCodeHint}",
-                paramName);
-        }
-
-        // Check 4: user formatting present.
-        // Whitespace and end-of-line trivia: elastic trivia is what SyntaxFactory synthesizes, so it is fine,
-        // and so is a whitespace trivia that is exactly one space. SyntaxFactory.Space and a parsed
-        // single-line snippet produce it, and it is harmless because NormalizeWhitespace rebuilds inter-token
-        // spacing anyway. This is the narrowest rule the public API allows: SyntaxFactory.ElasticWhitespace(text)
-        // carries no elastic annotation and is indistinguishable from SyntaxFactory.Whitespace(text), so
-        // multi-character whitespace (indentation) is still counted.
-        // Every other trivia kind (comments, documentation comments, directives, disabled text, skipped tokens,
-        // conflict markers) is always counted, whatever its annotations: the elastic skip must not hide it.
-        // DescendantTrivia(descendIntoTrivia: false) yields a directive as one trivia, so an end-of-line that
-        // lives inside a directive's end-of-directive token is covered by counting the directive itself.
-        var formattingTriviaCount = 0;
-        foreach (var trivia in node.DescendantTrivia(descendIntoTrivia: false))
-        {
-            if (trivia.IsKind(SyntaxKind.WhitespaceTrivia) || trivia.IsKind(SyntaxKind.EndOfLineTrivia))
-            {
-                if (trivia.HasAnnotation(SyntaxAnnotation.ElasticAnnotation))
-                {
-                    continue;
-                }
-
-                if (trivia.IsKind(SyntaxKind.WhitespaceTrivia) && trivia.ToString() == " ")
-                {
-                    continue;
-                }
-
-                formattingTriviaCount++;
-                continue;
-            }
-
-            if (trivia.IsDirective
-                || trivia.IsKind(SyntaxKind.SingleLineCommentTrivia)
-                || trivia.IsKind(SyntaxKind.MultiLineCommentTrivia)
-                || trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)
-                || trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia)
-                || trivia.IsKind(SyntaxKind.DisabledTextTrivia)
-                || trivia.IsKind(SyntaxKind.SkippedTokensTrivia)
-                || trivia.IsKind(SyntaxKind.ConflictMarkerTrivia))
-            {
-                formattingTriviaCount++;
-            }
-        }
-
-        if (formattingTriviaCount > 0)
-        {
-            throw new ArgumentException(
-                $"The node contains {formattingTriviaCount} piece(s) of non-elastic whitespace (other than a single space), end-of-line, comment or directive trivia, which is existing formatting that NormalizeWhitespace would discard. {ExistingCodeHint}",
-                paramName);
-        }
-    }
-
-    /// <summary>
-    /// Shared guard for the public <c>NormalizeNew*Whitespace</c> methods: <paramref name="eol"/> must be
-    /// exactly "\n" or "\r\n". Null throws <see cref="ArgumentNullException"/>; an empty or any other string
-    /// throws <see cref="ArgumentException"/>. Both carry the parameter name <c>eol</c>.
-    /// </summary>
-    private static void ValidateEol(string eol)
-    {
-        ArgumentNullException.ThrowIfNull(eol, nameof(eol));
-        if (eol != "\n" && eol != "\r\n")
-        {
-            throw new ArgumentException(
-                "The end-of-line sequence must be exactly \"\\n\" or \"\\r\\n\"; pass the target file's or project's line ending.",
-                nameof(eol));
-        }
     }
 }

@@ -247,4 +247,19 @@ public class RoslynFormattingHelperFormatNewRootTests
         await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, null!, _ => true), Throws.TypeOf<ArgumentNullException>());
         await Assert.ThatAsync(async () => await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, root, null!), Throws.TypeOf<ArgumentNullException>());
     }
+
+
+    // StripAllTriviaForNormalize (used by ExtractInterface and SyncInterfaceToImplementation for reused signature parts)
+    // drops every trivia, boundary and inner comments included, and returns a parentless copy.
+    [Test]
+    public void StripAllTriviaForNormalize_DropsEveryTrivia_AndDetaches()
+    {
+        var list = ParseCompilationUnit("[/* lead */ Obsolete( \"x\" , // why\n true)] // trailing\npublic class C { }")
+            .DescendantNodes().OfType<AttributeListSyntax>().First();
+
+        var stripped = RoslynFormattingHelper.StripAllTriviaForNormalize(list);
+
+        Assert.That(stripped.ToFullString(), Is.EqualTo("[Obsolete(\"x\",true)]"));
+        Assert.That(stripped.Parent, Is.Null);
+    }
 }

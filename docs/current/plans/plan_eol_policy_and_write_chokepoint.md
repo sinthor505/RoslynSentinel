@@ -216,7 +216,8 @@ Step 0 results (2026-10-18):
   call sites about 2499, 2601, 2919, 3040), and the 13 `NormalizeWholeSubtreeWhitespace` caller files.
 - Change:
   - Add an `NormalizeWholeSubtreeWhitespace` overload with a required `eol` and obsolete the
-    defaulted one.
+    defaulted one. (Superseded 2026-10-19: the whitespace initiative removed every caller and slice D1
+    deleted the helper, so this sub-step and its 13 caller files no longer apply.)
   - Replace the `SyntaxFactory.LineFeed` and CRLF literal trivia with the passed EOL.
   - Convert agent-supplied member text to the target EOL before parsing.
   - Coordinate with the Whitespace C6 work (TODO.md:25), which is retiring many of the same calls;

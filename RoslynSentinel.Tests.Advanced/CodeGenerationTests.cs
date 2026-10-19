@@ -743,7 +743,7 @@ public class SomeClass { }", "SomeClass.cs");
     [Test]
     public async Task ImplementInterfaceSafe_CrlfDocument_GeneratedMembersUseCrlfOnly()
     {
-        // The generated stubs go through NormalizeNewChildWhitespace with the document's detected EOL; a CRLF document
+        // The generated stubs are formatted and put in the document's dominant EOL; a CRLF document
         // must not pick up a bare LF anywhere (not even in a multi-line method body).
         var source = string.Join("\r\n",
             "namespace App;",

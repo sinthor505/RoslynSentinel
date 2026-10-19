@@ -254,9 +254,9 @@ public class Service : IService {
     public async Task SyncInterfaceToImplementation_AllmanStyleSignatureWithComment_IsAcceptedAndOutputIsAllCrLf()
     {
         // The reused return type, parameter list and constraint clause carry the class member's own line breaks,
-        // indentation and a comment. They must be stripped before the NormalizeNewChildWhitespace guard sees
-        // them. The CRLF check at the end is a plain all-CRLF output check; the later whole-text format step
-        // re-normalizes line endings, so it does not prove the eol plumbing into NormalizeNewChildWhitespace.
+        // indentation and a comment. They must be stripped (StripAllTriviaForNormalize) before they are reused in
+        // the generated interface member. The CRLF check at the end is a plain all-CRLF output check; the later
+        // whole-text format step re-normalizes line endings, so it does not prove any eol plumbing of its own.
         var source = string.Join("\r\n", new[]
         {
             "public interface IService { void DoA(); }",

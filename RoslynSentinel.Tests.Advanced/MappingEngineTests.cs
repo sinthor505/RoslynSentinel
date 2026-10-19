@@ -118,8 +118,8 @@ public class TargetModel
     [Test]
     public async Task GenerateMapping_CrOnlyDocument_DoesNotThrow()
     {
-        // A legacy CR-only file's dominant EOL is a lone CR, which NormalizeNewChildWhitespace rejects; the engine must
-        // hand it a normalizable style instead of failing.
+        // A legacy CR-only file's dominant EOL is a lone CR, which the former NormalizeNewChildWhitespace path rejected;
+        // the engine must handle it instead of failing.
         SetSource("public class SourceDto\r{\r    public string Name { get; set; }\r}\r\rpublic class DestEntity\r{\r    public string Name { get; set; }\r}\r", "Cr.cs");
 
         DocumentEditResult? result = null;

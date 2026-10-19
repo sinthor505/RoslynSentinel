@@ -1,11 +1,13 @@
 # Enforcing the NormalizeWholeSubtreeWhitespace risk rule (item C)
 
-**Status:** IMPLEMENTED 2026-10-19 (slices C1-C11). Production has no callers of the NormalizeWhitespace helper
-family; `NormalizeWholeSubtreeWhitespace`, `NormalizeNewChildWhitespace`, `NormalizeNewRootWhitespace` and
-`NormalizeNewRootWhitespaceKeepingUsingHeaders` are `[Obsolete]` (slice C11), and `Tests.Basic/WhitespaceRatchetTests.cs`
-guards both the empty caller baseline and the attribute. The helpers are kept, not deleted; removing them (and the
-then caller-free strip helpers) is a separate decision. Design agreed 2026-10-15; the sections below are the original
-design and were not rewritten.
+**Status:** IMPLEMENTED 2026-10-19 (slices C1-C11, helpers removed in D1). Production had no callers of the
+NormalizeWhitespace helper family after C10; C11 marked it `[Obsolete]` and slice D1 deleted it:
+`NormalizeWholeSubtreeWhitespace`, `NormalizeNewChildWhitespace`, `NormalizeNewRootWhitespace`,
+`NormalizeNewRootWhitespaceKeepingUsingHeaders`, `StripFormattingTriviaForNormalize`, `StripUsingKeepingLeadingTrivia`
+and the private `DetachForNormalize` (folded into `StripAllTriviaForNormalize`, which keeps its 3 production callers),
+`EnsureNodeIsNew` and `ValidateEol`, plus their helper-only tests. `Tests.Basic/WhitespaceRatchetTests.cs` now fails if
+any deleted name is declared or invoked again in production code. Design agreed 2026-10-15; the sections below are the
+original design and were not rewritten, so they still name the deleted helpers.
 
 > **Reading guide.** Facts were traced by exploration agents on 2026-10-13 and 2026-10-15 and were
 > NOT re-verified when this doc was written. Line numbers may have drifted by a few lines; re-anchor

@@ -8,25 +8,19 @@ namespace RoslynSentinel.Tests.Basic;
 /// <summary>
 /// Architecture ratchets for the whitespace initiative. Production sources are parsed with Roslyn and
 /// only invocation nodes are counted, so comments, doc crefs and string literals never match.
-/// Both lists may only shrink; new formatting goes through RoslynFormattingHelper.FormatAnnotatedSpansAsync
-/// or FormatWholeDocumentAsync.
+/// The allowlist may only shrink and the deleted helper names must never come back; new formatting goes through
+/// RoslynFormattingHelper.FormatAnnotatedSpansAsync or FormatWholeDocumentAsync.
 /// </summary>
 [TestFixture]
 [Category("WhitespaceRatchet")]
 public class WhitespaceRatchetTests
 {
-    private const string HelperFile = "RoslynSentinel.Common/RoslynFormattingHelper.cs";
-
     // Test 1 allowlist. Keys are "<relative file>::<enclosing member>". Only shrinks.
     private static readonly string[] RawFormatterAllowlist =
     {
-        // The helper's own internals; its NormalizeWhitespace members are the C6 retirement list.
+        // The helper's own internals.
         "RoslynSentinel.Common/RoslynFormattingHelper.cs::FormatAnnotatedSpansAsync",
         "RoslynSentinel.Common/RoslynFormattingHelper.cs::FormatWholeDocumentAsync",
-        "RoslynSentinel.Common/RoslynFormattingHelper.cs::NormalizeWholeSubtreeWhitespace",
-        "RoslynSentinel.Common/RoslynFormattingHelper.cs::NormalizeNewChildWhitespace",
-        "RoslynSentinel.Common/RoslynFormattingHelper.cs::NormalizeNewRootWhitespace",
-        "RoslynSentinel.Common/RoslynFormattingHelper.cs::NormalizeNewRootWhitespaceKeepingUsingHeaders",
         // Semantic hash only; the normalized text is compared in memory and never written to disk.
         "RoslynSentinel.Common/ContentHasher.cs::ComputeHash",
         // Semantic comparison of proposed content only; nothing normalized is persisted.
@@ -44,21 +38,17 @@ public class WhitespaceRatchetTests
         "RoslynSentinel.Engines.Basic/AttributeTextEditBuilder.cs::NormalizeAttributeText",
     };
 
-    // Test 2 names: invocations of these outside the helper count against the baseline below.
-    private static readonly HashSet<string> CountedWhitespaceHelpers = new(StringComparer.Ordinal)
+    // Test 2 names: the NormalizeWhitespace-family helpers deleted in slice D1 (plus a planned variant that was never
+    // built). No production file, RoslynFormattingHelper.cs included, may declare or invoke one again. Never shrink it.
+    private static readonly HashSet<string> DeletedWhitespaceHelpers = new(StringComparer.Ordinal)
     {
         "NormalizeWholeSubtreeWhitespace",
         "NormalizeNewChildWhitespace",
         "NormalizeNewRootWhitespace",
         "NormalizeNewRootWhitespaceKeepingComments",
         "NormalizeNewRootWhitespaceKeepingUsingHeaders",
-    };
-
-    // Per-file invocation baseline = the C6 migration debt. Lower an entry as its sites migrate to
-    // FormatAnnotatedSpansAsync / FormatWholeDocumentAsync; never raise it.
-    private static readonly Dictionary<string, int> NormalizeHelperBaseline = new(StringComparer.Ordinal)
-    {
-        // Empty: the C6 migration debt is paid (0 call sites outside the helper file). Keep it empty.
+        "StripFormattingTriviaForNormalize",
+        "StripUsingKeepingLeadingTrivia",
     };
 
     [Test]
@@ -101,61 +91,36 @@ public class WhitespaceRatchetTests
     }
 
     [Test]
-    public void NormalizeWholeSubtreeWhitespaceCallers_NeverGrow()
+    public void DeletedWhitespaceHelpers_NeverReappear()
     {
         var sources = ParseProductionSources();
         Assert.That(sources, Is.Not.Empty, "The scan found no production .cs files; the repo root lookup is broken.");
 
-        var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+        var found = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var (relativePath, root) in sources)
         {
-            if (relativePath == HelperFile)
+            foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
-                continue;
+                var name = InvokedMemberName(invocation);
+                if (name is not null && DeletedWhitespaceHelpers.Contains(name))
+                {
+                    found.Add($"  {relativePath}::{EnclosingMemberName(invocation)} calls {name}");
+                }
             }
 
-            var count = root.DescendantNodes().OfType<InvocationExpressionSyntax>()
-                .Count(invocation => CountedWhitespaceHelpers.Contains(InvokedMemberName(invocation) ?? string.Empty));
-            if (count > 0)
+            foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {
-                counts[relativePath] = count;
-            }
-        }
-
-        var problems = new List<string>();
-        foreach (var (file, count) in counts)
-        {
-            var allowed = NormalizeHelperBaseline.TryGetValue(file, out var baseline) ? baseline : 0;
-            if (count > allowed)
-            {
-                problems.Add($"  {file}: {count} call site(s), baseline {allowed}");
+                if (DeletedWhitespaceHelpers.Contains(method.Identifier.ValueText))
+                {
+                    found.Add($"  {relativePath} declares {method.Identifier.ValueText}");
+                }
             }
         }
 
-        Assert.That(problems, Is.Empty,
-            "NormalizeWhitespace-family helper call sites grew past the C6 baseline. Route new formatting through "
-            + "RoslynFormattingHelper.FormatAnnotatedSpansAsync / FormatWholeDocumentAsync instead:"
-            + Environment.NewLine + string.Join(Environment.NewLine, problems));
-    }
-
-
-    // Slice C11: the family is [Obsolete], so a new caller is flagged at compile time (CS0618) as well as by the
-    // baseline-0 scan above. Every counted name that RoslynFormattingHelper still declares must keep the attribute.
-    [Test]
-    public void CountedWhitespaceHelpers_AreObsolete()
-    {
-        var declared = typeof(RoslynSentinel.Common.RoslynFormattingHelper)
-            .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
-            .Where(method => CountedWhitespaceHelpers.Contains(method.Name))
-            .ToList();
-
-        Assert.That(declared, Is.Not.Empty, "No counted helper is declared on RoslynFormattingHelper; the name list is stale.");
-        var notObsolete = declared
-            .Where(method => !method.IsDefined(typeof(ObsoleteAttribute), inherit: false))
-            .Select(method => method.Name)
-            .ToList();
-        Assert.That(notObsolete, Is.Empty,
-            "Counted NormalizeWhitespace helpers must stay [Obsolete]: " + string.Join(", ", notObsolete));
+        Assert.That(found, Is.Empty,
+            "A deleted NormalizeWhitespace-family helper is back. Route new formatting through "
+            + "RoslynFormattingHelper.FormatAnnotatedSpansAsync / FormatNewRootKeepingTriviaAsync / FormatWholeDocumentAsync instead:"
+            + Environment.NewLine + string.Join(Environment.NewLine, found));
     }
 
     private static string RepoRoot()

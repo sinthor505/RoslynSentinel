@@ -155,8 +155,8 @@ public static class AttributeTextEditBuilder
     /// Renders caller-supplied attribute text (parsed inside a dummy class) with canonical whitespace. The text never
     /// came from a file, so it has no user formatting to keep: every trivia is dropped from a detached copy and
     /// <c>NormalizeWhitespace</c> rebuilds the spacing. This deliberately stays self-contained instead of going through
-    /// the RoslynFormattingHelper NormalizeNew* family (whitespace slice C9): the result is a string for a text edit, not a
-    /// node in a document, so there is no Document to run the annotation formatter on.
+    /// RoslynFormattingHelper (whitespace slice C9): the result is a string for a text edit, not a node in a document,
+    /// so there is no Document to run the annotation formatter on.
     /// <para>
     /// Any trivia other than whitespace and end-of-line (comments, documentation comments, directives, disabled text,
     /// skipped tokens), on the boundary tokens or inside, is rejected with a <see cref="ToolInvalidArgumentException"/>

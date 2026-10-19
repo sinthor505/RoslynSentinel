@@ -61,13 +61,13 @@ public static class EolUtilities
     }
 
     /// <summary>
-    /// The line ending to hand to <c>RoslynFormattingHelper.NormalizeNewChildWhitespace</c> /
-    /// <c>NormalizeNewRootWhitespace</c> for a node that will be inserted into <paramref name="sourceText"/>:
-    /// "\r\n" when the text's dominant line ending is CRLF, otherwise "\n". Those helpers accept only "\n" or
-    /// "\r\n", while <see cref="DetectDominantEol(SourceText)"/> can also return a lone CR, U+0085 or U+2028 (a
-    /// legacy or unusual file), which they reject; the write path then normalizes the changed lines to the
-    /// file's own dominant ending (see <see cref="NormalizeEolOfChangedLines"/>), so the new node only needs a
-    /// style the helpers accept.
+    /// The line ending to hand to code that renders a node from scratch with a fixed end-of-line (for example the
+    /// <c>NormalizeWhitespace</c> call in <c>AttributeTextEditBuilder</c>) for a node that will be inserted into
+    /// <paramref name="sourceText"/>: "\r\n" when the text's dominant line ending is CRLF, otherwise "\n". Such
+    /// renderers expect only "\n" or "\r\n", while <see cref="DetectDominantEol(SourceText)"/> can also return a lone CR,
+    /// U+0085 or U+2028 (a legacy or unusual file); the write path then normalizes the changed lines to the
+    /// file's own dominant ending (see <see cref="NormalizeEolOfChangedLines"/>), so the new node only needs one of
+    /// those two styles.
     /// An empty text (no line breaks) yields the platform default when that is CRLF, else "\n".
     /// </summary>
     public static string DetectNormalizableEol(SourceText sourceText)
