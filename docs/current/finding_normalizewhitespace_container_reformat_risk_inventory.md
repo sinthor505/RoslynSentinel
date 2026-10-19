@@ -2,6 +2,11 @@
 
 ## Status
 
+**Historical (2026-10-19).** `NormalizeWholeSubtreeWhitespace` and its family were deleted (D1); whole-subtree
+whitespace is now enforced through the EOL-aware helpers in `RoslynFormattingHelper` and the raw-formatter ratchet
+in `WhitespaceRatchetTests`. The inventory below records the call sites as they stood and no longer maps to code.
+See `CLOSED.md` ("retire the `NormalizeWholeSubtreeWhitespace` family").
+
 Informational — not a blocker, not yet scheduled for remediation. Seeds the future
 caller-fixup/breaking-change tool audit and the `RedirectCalls`/call-shape-rewrite proposal
 (`docs/current/proposal_redirect_calls_tool.md`).

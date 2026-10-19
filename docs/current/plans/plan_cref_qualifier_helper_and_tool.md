@@ -133,7 +133,7 @@ share the map.
 `docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md` is independent of this plan.
 `CrefQualifier` emits `TextChange`s against the original `SourceText` and calls neither `NormalizeWhitespace` nor
 `Formatter`, so it adds nothing to that proposal's ratchet allowlists. Keep it that way: if a future change to
-the helper needs formatting, use the helpers named there, not `NormalizeWholeSubtreeWhitespace`.
+the helper needs formatting, use the EOL-aware helpers in `RoslynFormattingHelper`, never a raw whole-tree `NormalizeWhitespace`.
 
 ## Out of scope
 

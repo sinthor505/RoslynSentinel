@@ -1,3 +1,6 @@
+> **Note (2026-10-19):** `FormattingHelper.NormalizeWholeSubtreeWhitespace` was deleted (D1). It appears below as the
+> worked example of a call-shape rewrite; read it as historical. The proposal itself is unaffected.
+
 ## Motivation
 
 `AddMemberAsync`/`InsertMemberAfterAsync`/`InsertMemberBeforeAsync`

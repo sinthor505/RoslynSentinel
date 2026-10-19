@@ -29,7 +29,7 @@ A **tripwire**, MoveMember only. The engine reports the `TextChange`s it applied
   (`AppliedChangeSummary`, `ChangedContentResultId`).
 
 **What it does not do (stated so nobody over-trusts it):** it catches post-processing applied after the engine's
-`ApplyChanges` (for example a re-added `NormalizeWholeSubtreeWhitespace`), not a wrong edit set, because the text and the
+`ApplyChanges` (for example a re-added whole-document `Formatter` or `NormalizeWhitespace` pass), not a wrong edit set, because the text and the
 edits come from the same source. It is partly circular by design.
 
 ## Execution rules

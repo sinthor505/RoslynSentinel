@@ -2,6 +2,9 @@
 
 **Status:** IN PROGRESS 2026-10-18. Steps 0-1 done (decisions, sweep, `scripts/Get-EolAudit.ps1`); next is Step 2, normalize.
 
+> **Note (2026-10-19):** `NormalizeWholeSubtreeWhitespace` (named in the sweep and Step 2 below) was deleted (D1);
+> the EOL-aware helpers in `RoslynFormattingHelper` replace it. Treat those mentions as historical.
+
 ## Problem
 
 `.cs` files keep acquiring LF and mixed line endings even though line-ending preservation and
