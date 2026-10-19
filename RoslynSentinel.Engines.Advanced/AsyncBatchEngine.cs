@@ -829,6 +829,9 @@ public class AsyncBatchEngine
                     validation.Diagnostics.Count > 0 ? $"[{validation.Diagnostics[0].Id}] {validation.Diagnostics[0].Message}" : "");
 
                 // Flag the method for manual review -> best effort, do not abort batch on failure.
+                // The skip message below reports the real write outcome, never an assumed success.
+                // Only the structured RefusalCode is surfaced; the free-text Summary and exceptions stay in the log.
+                var flagOutcome = "skipped; the manual-review flag could not be written";
                 try
                 {
                     var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
@@ -842,6 +845,13 @@ public class AsyncBatchEngine
                     {
                         _logger.LogWarning("NeedsManualReview flag write refused for {Method} in {File}: {Summary}",
                             candidate.MethodName, candidate.FilePath, flagApply.Summary);
+                        flagOutcome = string.IsNullOrEmpty(flagApply.RefusalCode)
+                            ? "skipped; the manual-review flag could not be written"
+                            : $"skipped; the manual-review flag could not be written ({flagApply.RefusalCode})";
+                    }
+                    else
+                    {
+                        flagOutcome = "flagged NeedsManualReview";
                     }
                 }
                 catch (Exception flagEx)
@@ -855,7 +865,7 @@ public class AsyncBatchEngine
                     validation.Diagnostics.Count > 0 ? $"[{validation.Diagnostics[0].Id}] {validation.Diagnostics[0].Message}" : null);
                 skipped.Add(new BridgeSkippedInfo(
                     candidate.FilePath, candidate.MethodName,
-                    $"Validation produced {validation.Diagnostics.Count} compiler error(s){DiagSummary(validation.Diagnostics)}; flagged NeedsManualReview",
+                    $"Validation produced {validation.Diagnostics.Count} compiler error(s){DiagSummary(validation.Diagnostics)}; {flagOutcome}",
                     validation.Diagnostics,
                     AttemptedSource: sourceToValidate));
                 continue;

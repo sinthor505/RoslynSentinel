@@ -340,6 +340,35 @@ public class TripService
         Assert.That(result.UpdatedText, Is.EqualTo(expected).NoClip);
     }
 
+    // OverloadLeadingTrivia falls back to CRLF when the method carries no end-of-line trivia of its own (here: a
+    // one-line method followed by another member on the same line). In an all-LF file the output must still be
+    // CR-free.
+    [Test, CancelAfter(5000)]
+    public async Task ConvertToAsyncBridge_LfFile_MethodWithoutOwnEol_OutputHasNoCarriageReturn()
+    {
+        const string source = "using System;\n"
+            + "using System.Threading;\n"
+            + "using System.Threading.Tasks;\n"
+            + "\n"
+            + "public class TripService\n"
+            + "{\n"
+            + "    public int GetTrips(int companyId) { return companyId; } public void Other() { }\n"
+            + "}\n";
+
+        SetSource(source, "TripService.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("TripService.cs"), "GetTrips");
+
+        Assert.That(result.UpdatedText, Does.Contain("GetTripsAsync"), "The bridge should have been produced.");
+        if (result.UpdatedText!.Contains('\r'))
+        {
+            TestContext.Out.WriteLine("ACTUAL:");
+            TestContext.Out.WriteLine(result.UpdatedText.Replace("\r", "<CR>").Replace("\n", "<LF>\n"));
+        }
+
+        Assert.That(result.UpdatedText, Does.Not.Contain("\r"), "An LF file must not gain CRLF line breaks.");
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // Precondition failures
     // ══════════════════════════════════════════════════════════════════════════
