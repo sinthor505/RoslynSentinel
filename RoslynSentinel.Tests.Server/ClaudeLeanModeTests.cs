@@ -49,7 +49,7 @@ public class ClaudeLeanModeTests
         "ChangeSignature", "ConstructorParameter", "ConvertAnonymousToNamed", "CreateFile", "CreateProject",
         "DeleteFile", "ExtractLocalVariable", "ExtractMembers", "ExtractMethod", "ExternalFileDrift", "Features",
         "FindReferences", "GetBestInsertionPoint", "GetDiagnostics", "GetFileOutline", "GetLargeResult",
-        "GetMethodSource", "GetOperationDetail", "GetTypeInfo", "GetWorkspaceHealth", "Git",
+        "GetMethodSource", "GetOperationDetail", "GetTypeInfo", "GetWorkspaceHealth", "Git", "GitRemote",
         "Inline", "InlineClass", "InspectSymbol", "Introduce", "IntroduceParameterObject",
         "InvertAssignments", "ListAll", "ListProjectFrameworkTargets",
         "ListSolutionItems", "ListWorkspaceSolutions", "LoadSolution", "LocateSymbol", "McpServerControl",

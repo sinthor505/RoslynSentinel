@@ -330,6 +330,11 @@ public static class RoslynSentinelServiceExtensionsBasic
             services.AddSingleton<GitTools>();
             mcpBuilder.WithSentinelTools<GitTools>();
         }
+        if (activeToolClasses.Contains("GitRemoteTools"))
+        {
+            services.AddSingleton<GitRemoteTools>();
+            mcpBuilder.WithSentinelTools<GitRemoteTools>();
+        }
         if (activeToolClasses.Contains("AdminTools"))
         {
             // Restricted/operator-only tool -> deliberately NOT included in AllModes (see

@@ -26,7 +26,8 @@ public class ToolsetControlTools
         "moveExtract = MoveMember, MoveType, MoveAllTypesToFiles, Extract*, Inline*, Introduce*, WrapRange, InvertAssignments, ConvertAnonymousToNamed, SyncInterface, SummaryComment, DeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments, QualifyCrefs, WriteFile. " +
         "projectAdmin = CreateProject, SplitProjectByFolder, ListSolutionItems, ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth, GetOperationDetail, RetryFailedChanges, GetTypeInfo, QuerySymbolRelationships, GetBestInsertionPoint, GetDiagnostics, InspectSymbol. " +
         "testCategories = TagTestCategories (dry run by default). " +
-        "modelEval = SubAgent (Advanced only).")]
+        "modelEval = SubAgent (Advanced only). " +
+        "git = GitRemote (branch, checkout, push, fetch, pull, tag, stash, worktree).")]
     public SentinelCallToolResult<object> McpToolsetControlTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("The toolset to switch.")] ToolSetName toolSet,

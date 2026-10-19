@@ -17,16 +17,25 @@ public enum GitOperation
     commit,
     revert,
     reset,
+    abort,
+    hunks
+}
+
+/// <summary>
+/// Operations of the GitRemote tool: branch/remote/ref-management operations split out of the Git tool
+/// so the always-loaded Git schema stays small.
+/// </summary>
+[JsonConverter(typeof(JsonStringEnumConverter))]
+public enum GitRemoteOperation
+{
     branch,
     checkout,
     push,
     fetch,
     pull,
-    abort,
     tag,
     stash,
-    worktree,
-    hunks
+    worktree
 }
 
 [JsonConverter(typeof(JsonStringEnumConverter))]

@@ -170,6 +170,7 @@ public class ToolParameterAliasTests
     [TestCase("log", "target", "ref")]
     [TestCase("show", "commitHash", "ref")]
     [TestCase("log", "files", "paths")]
+    [TestCase("reset", "branchName", "ref")]
     public async Task GitAlias_IsRenamed_AndNoteNamesTheDeclaredParameter(string operation, string alias, string canonical)
     {
         // Slice 6a folded Git's target/commitHash into ref and files into paths. The repo state does not
@@ -193,6 +194,7 @@ public class ToolParameterAliasTests
     [TestCase("target", "ref")]
     [TestCase("commitHash", "ref")]
     [TestCase("files", "paths")]
+    [TestCase("branchName", "ref")]
     public async Task GitAlias_AlongsideItsDeclaredParameter_IsRejectedAsUnknown(string alias, string canonical)
     {
         var result = await _client.CallToolAsync(
@@ -210,6 +212,29 @@ public class ToolParameterAliasTests
         Assert.That(result.IsError, Is.True, $"An alias alongside '{canonical}' must be rejected. Got: {text}");
         Assert.That(text, Does.Contain(alias), $"The rejection must name the unrecognised alias. Got: {text}");
         Assert.That(text, Does.Not.Contain("treated as"), "No rename may have happened.");
+    }
+
+    [TestCase("tag", "target", "ref")]
+    [TestCase("tag", "commitHash", "ref")]
+    [TestCase("stash", "files", "paths")]
+    [TestCase("tag", "maxCount", "count")]
+    public async Task GitRemoteAlias_IsRenamed_AndNoteNamesTheDeclaredParameter(string operation, string alias, string canonical)
+    {
+        // Slice 6b moved tag/stash to GitRemote, which keeps the same aliases Git has so a caller's habit survives the move.
+        var result = await _client.CallToolAsync(
+            "GitRemote",
+            new Dictionary<string, object?>
+            {
+                ["reason"] = "test message",
+                ["operation"] = operation,
+                [alias] = alias == "maxCount" ? 5 : "HEAD",
+            }!,
+            cancellationToken: TestContext.CurrentContext.CancellationToken);
+
+        var text = TextOf(result);
+        Assert.That(text, Does.Not.Contain("Unknown parameter"), $"The alias '{alias}' must be treated as '{canonical}'. Got: {text}");
+        Assert.That(text, Does.Contain($"'{alias}' is not a parameter of GitRemote"), $"The response must carry a note about the alias. Got: {text}");
+        Assert.That(text, Does.Contain($"treated as '{canonical}'"), $"The note must name the declared parameter. Got: {text}");
     }
 
     [Test]

@@ -79,7 +79,7 @@ public static class ToolClassRegistry
     /// </summary>
     public static readonly IReadOnlySet<string> ClaudeLeanOnDemandToolClasses = new HashSet<string>(
         [
-            "WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools",
+            "WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "GitRemoteTools",
             "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools",
             "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools", "DeclarationTools", "ParameterEditTools",
             "SemanticFindReplaceTools", "NamedArgumentsTools", "TestCategoryTaggingTools", "QualifyCrefsTools", "SubAgentTools",
@@ -90,11 +90,11 @@ public static class ToolClassRegistry
     public static readonly IReadOnlyDictionary<string, string[]> BasicModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Workspace"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools"],
+            ["Workspace"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "GitRemoteTools"],
             ["Admin"] = ["AdminTools"],
             ["WholeFileWrite"] = ["WholeFileWriteTools"],
             ["Refactor"] = ["RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools"],
-            ["Claude"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
+            ["Claude"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "GitRemoteTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
             [ClaudeLeanMode] = ClaudeLeanToolClasses,
 
             // Modernize/Quality/Generation/Asyncify register no classes in Basic today (commented
@@ -134,7 +134,7 @@ public static class ToolClassRegistry
     public static readonly IReadOnlyDictionary<string, string[]> AdvancedModeToToolClasses =
         new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Workspace"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "GitTools"],
+            ["Workspace"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "GitTools", "GitRemoteTools"],
             ["Admin"] = ["AdminTools"],
             ["WholeFileWrite"] = ["WholeFileWriteTools"],
             ["Refactor"] = ["RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools"],
@@ -152,7 +152,7 @@ public static class ToolClassRegistry
             ["NamedArguments"] = ["NamedArgumentsTools"],
             ["TestCategories"] = ["TestCategoryTaggingTools"],
             ["QualifyCrefs"] = ["QualifyCrefsTools"],
-            ["Claude"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
+            ["Claude"] = ["WorkspaceTools", "WorkspaceReadNavigationTools", "DocumentationTools", "SymbolNavigationTools", "SymbolRelationshipTools", "GitTools", "GitRemoteTools", "RefactoringExtractionDocsTools", "RefactoringStructuralTools", "RefactoringSignatureTools", "AdvancedRefactoringTools", "AdminTools", "WholeFileWriteTools"],
             [ClaudeLeanMode] = AdvancedClaudeLeanToolClasses,
             [ExperimentalMode] = ["CodeTransformTools"],
         };

@@ -57,6 +57,7 @@ public class McpToolsetControlTests
     [TestCase(ToolSetName.projectAdmin)]
     [TestCase(ToolSetName.testCategories)]
     [TestCase(ToolSetName.modelEval)]
+    [TestCase(ToolSetName.git)]
     public void Enable_AddsTheWholeSet_AndAccountsForEveryName(ToolSetName set)
     {
         var (service, collection) = CreateService();

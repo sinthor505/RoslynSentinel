@@ -700,7 +700,7 @@ BLOCKED by dog-fooding policy: git via shell.
 
   $($command.Trim())
 
-status, log, diff, stage/add, commit (incl. amend), revert, tag, stash and worktree are covered by the MCP Git tool:
+status, log, diff, stage/add, commit (incl. amend) and revert are covered by the MCP Git tool; tag, stash and worktree by the MCP GitRemote tool:
 
   Git(operation: "status")
   Git(operation: "diff",   ref: "staged")
@@ -710,15 +710,16 @@ status, log, diff, stage/add, commit (incl. amend), revert, tag, stash and workt
   Git(operation: "commit", message: "...")
   Git(operation: "commit", amend: true)   # keeps HEAD's message (--no-edit)
   Git(operation: "commit", amend: true, message: "...")   # replaces it
-  Git(operation: "tag",      action: "list")
-  Git(operation: "stash",    action: "push", message: "...")
-  Git(operation: "worktree", action: "add", worktreePath: "<absolute, outside the repo>", branchName: "...", createBranch: true)
-  Git(operation: "worktree", action: "remove", worktreePath: "...")
+  GitRemote(operation: "tag",      action: "list")
+  GitRemote(operation: "stash",    action: "push", message: "...")
+  GitRemote(operation: "worktree", action: "add", worktreePath: "<absolute, outside the repo>", branchName: "...", createBranch: true)
+  GitRemote(operation: "worktree", action: "remove", worktreePath: "...")
       # pass discardUncommittedChanges: true only to throw away a dirty worktree
+  (GitRemote is on demand in claude-lean: McpToolsetControl(toolSet: git, enabled: true) first.)
 
 It also avoids the shell-quoting and CRLF footguns that Bash hits on Windows paths.
 
-The tool also implements reset, branch, checkout, push, fetch, pull, show and abort; the hook does
+The tools also implement reset, show and abort (Git) and branch, checkout, push, fetch and pull (GitRemote); the hook does
 not block those in the shell yet, but prefer the tool. Still shell-only (not blocked): rebase, merge,
 cherry-pick, restore, rm, mv, clean, stash drop/clear, tag push, worktree prune/lock/move.
 

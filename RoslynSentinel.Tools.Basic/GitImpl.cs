@@ -105,17 +105,17 @@ internal static class GitErrorDetails
     internal const string OperationInProgress = "Call Git(operation: abort) to back out of the in-progress operation, or resolve the conflicts in the working tree and commit.";
     internal const string RefRequiredReset = "Pass ref, e.g. ref: \"HEAD~1\" to undo the last commit with the working tree kept, or call Git(operation: unstage) to unstage without moving HEAD.";
     internal const string RefRequiredRevert = "Pass ref, e.g. a hash taken from Git(operation: log).";
-    internal const string RefRequiredCheckout = "Pass branchName, with createBranch=true if it does not exist yet. Git(operation: branch) lists existing branches.";
-    internal const string RefRequiredStash = "Pass stashIndex (0 = newest). Git(operation: stash, action: list) shows every entry.";
-    internal const string RefRequiredTag = "Pass tagName, e.g. Git(operation: tag, action: create, tagName: 'v1.0.0').";
+    internal const string RefRequiredCheckout = "Pass branchName, with createBranch=true if it does not exist yet. GitRemote(operation: branch) lists existing branches.";
+    internal const string RefRequiredStash = "Pass stashIndex (0 = newest). GitRemote(operation: stash, action: list) shows every entry.";
+    internal const string RefRequiredTag = "Pass tagName, e.g. GitRemote(operation: tag, action: create, tagName: 'v1.0.0').";
     internal const string RefRequiredWorktree = "Pass worktreePath (absolute, outside the repo) and, for add, branchName.";
     internal const string ActionRequired = "Pass action with one of the values named in the message. Each operation documents its own actions.";
-    internal const string AlreadyExists = "Use a different name or path, or inspect the existing entry first with Git(operation: tag, action: list), Git(operation: worktree, action: list) or Git(operation: branch). This tool never overwrites an existing tag, branch or worktree.";
-    internal const string TargetNotFound = "Check the exact name with Git(operation: tag, action: list), Git(operation: stash, action: list), Git(operation: worktree, action: list) or Git(operation: branch), then retry.";
+    internal const string AlreadyExists = "Use a different name or path, or inspect the existing entry first with GitRemote(operation: tag, action: list), GitRemote(operation: worktree, action: list) or GitRemote(operation: branch). This tool never overwrites an existing tag, branch or worktree.";
+    internal const string TargetNotFound = "Check the exact name with GitRemote(operation: tag, action: list), GitRemote(operation: stash, action: list), GitRemote(operation: worktree, action: list) or GitRemote(operation: branch), then retry.";
     internal const string InvalidName = "Use a name that git accepts: no spaces, no '..', '~', '^', ':' or trailing '.lock'. Then retry.";
-    internal const string WorkingTreeDirty = "Commit them (Git(operation: commit)) or stash them (Git(operation: stash, action: push)) first; applying onto a dirty tree can mix the two sets of changes. Git(operation: status) lists the changed paths.";
+    internal const string WorkingTreeDirty = "Commit them (Git(operation: commit)) or stash them (GitRemote(operation: stash, action: push)) first; applying onto a dirty tree can mix the two sets of changes. Git(operation: status) lists the changed paths.";
     internal const string NoChanges = "Nothing to act on. Call Git(operation: status) to see what changed, then retry with the paths that have changes.";
-    internal const string StashConflict = "Check out the commit or branch the stash was created on (Git(operation: checkout)), then apply again; Git(operation: stash, action: list) shows where each entry was made.";
+    internal const string StashConflict = "Check out the commit or branch the stash was created on (GitRemote(operation: checkout)), then apply again; GitRemote(operation: stash, action: list) shows where each entry was made.";
     internal const string Refused = "Take the safe alternative the message names, then retry. Nothing was changed.";
     internal const string HunkUnsupported = "Stage the whole file with Git(operation: stage, paths: '<path>') instead, or use a file kind that has text hunks.";
     internal const string HunkSelection = "Call Git(operation: hunks, paths: '<path>') and pass hunkIds or lineRange exactly as it lists them.";
@@ -604,7 +604,7 @@ public class GitImpl : IGitOperations
         {
             IsError = true,
             ErrorKind = GitErrorCodes.ActionRequired,
-            ErrorDetail = $"Pass action, e.g. Git(operation: {operation}, action: list).",
+            ErrorDetail = $"Pass action, e.g. GitRemote(operation: {operation}, action: list).",
             Error = $"operation={operation} needs action to be one of: {validList} (got {got}). Nothing was changed."
         };
     }
@@ -723,7 +723,7 @@ public class GitImpl : IGitOperations
             var existingShort = await RunGitAsync(gitRoot, ["rev-parse", "--short", "--verify", "--quiet", $"refs/tags/{name}^{{commit}}"], cancellationToken);
             var existingHash = existingShort.ExitCode == 0 ? existingShort.Stdout.Trim() : existing.Stdout.Trim();
             return TagFailure("create", GitErrorCodes.AlreadyExists,
-                $"Tag '{name}' already exists (points at {existingHash}). This tool never overwrites or moves a tag. Use a new name, or delete it first (Git(operation: tag, action: delete, tagName: '{name}')) and recreate. Nothing was changed.",
+                $"Tag '{name}' already exists (points at {existingHash}). This tool never overwrites or moves a tag. Use a new name, or delete it first (GitRemote(operation: tag, action: delete, tagName: '{name}')) and recreate. Nothing was changed.",
                 GitErrorDetails.AlreadyExists);
         }
 
@@ -798,7 +798,7 @@ public class GitImpl : IGitOperations
                 Error = $"git tag -d failed: {CleanGitStderr(deleted.Stderr)}. Nothing was changed."
             };
 
-        var note = $"Deleted locally only. To undo: Git(operation: tag, action: create, tagName: '{name}', ref: '{previous}').";
+        var note = $"Deleted locally only. To undo: GitRemote(operation: tag, action: create, tagName: '{name}', ref: '{previous}').";
         if (wasAnnotated)
             note += " The tag was annotated; its message and tagger are not restored by that call (pass message to make the recreated tag annotated).";
         return new GitTagResult
@@ -885,7 +885,7 @@ public class GitImpl : IGitOperations
             note += entriesAfter == expected
                 ? (pop ? $" stash@{{{index}}} was applied and dropped; {entriesAfter} stash {(entriesAfter == 1 ? "entry" : "entries")} left."
                        : $" stash@{{{index}}} was applied and kept; {entriesAfter} stash {(entriesAfter == 1 ? "entry" : "entries")} total.")
-                : $" Expected {expected} stash entries afterwards but found {entriesAfter}; check Git(operation: stash, action: list).";
+                : $" Expected {expected} stash entries afterwards but found {entriesAfter}; check GitRemote(operation: stash, action: list).";
             return new GitStashResult
             {
                 Action = action,
@@ -964,7 +964,7 @@ public class GitImpl : IGitOperations
         return StashFailure(action, GitErrorCodes.StashConflict,
             $"Applying stash@{{{stashIndex}}} conflicts, and the rollback could not be verified ({string.Join("; ", failed)}). " +
             "The stash entry was kept. Run Git(operation: status) before editing.",
-            "Call Git(operation: status) to see the tree; Git(operation: stash, action: list) shows the stash entries.");
+            "Call Git(operation: status) to see the tree; GitRemote(operation: stash, action: list) shows the stash entries.");
     }
 
     private async Task<GitStashResult> StashPushAsync(
@@ -1365,7 +1365,7 @@ public class GitImpl : IGitOperations
         if (!createBranch && !exists)
             return WorktreeFailure("add", GitErrorCodes.TargetNotFound,
                 $"Branch '{branch}' does not exist. Nothing was changed.",
-                "Pass createBranch=true to create it (optionally with startPoint), or list the existing branches with Git(operation: branch).");
+                "Pass createBranch=true to create it (optionally with startPoint), or list the existing branches with GitRemote(operation: branch).");
         if (createBranch && exists)
             return WorktreeFailure("add", GitErrorCodes.AlreadyExists,
                 $"Branch '{branch}' already exists, and this tool does not silently reuse it for a new worktree. " +
@@ -1413,7 +1413,7 @@ public class GitImpl : IGitOperations
                 Action = "add",
                 IsError = true,
                 Error = $"git worktree add failed: {CleanGitStderr(added.Stderr)}. " +
-                        (registered ? "The worktree may have been partly created; check Git(operation: worktree, action: list)." : "Nothing was changed.")
+                        (registered ? "The worktree may have been partly created; check GitRemote(operation: worktree, action: list)." : "Nothing was changed.")
             };
         }
 
@@ -1464,7 +1464,7 @@ public class GitImpl : IGitOperations
         if (entry.IsMain)
             return WorktreeFailure("remove", GitErrorCodes.Refused,
                 $"Worktree '{path}' is the main worktree; this tool never removes it. Nothing was removed.",
-                "Only linked worktrees can be removed; Git(operation: worktree, action: list) shows which entry has IsMain false.");
+                "Only linked worktrees can be removed; GitRemote(operation: worktree, action: list) shows which entry has IsMain false.");
         if (entry.IsCurrent)
             return WorktreeFailure("remove", GitErrorCodes.Refused,
                 $"Worktree '{path}' is the worktree this Git tool is operating in (the loaded solution's repository); removing it would delete the directory the server is working in. Nothing was removed.",
@@ -1497,7 +1497,7 @@ public class GitImpl : IGitOperations
         if (changed.Count > 0 && !discardUncommittedChanges)
             return WorktreeFailure("remove", GitErrorCodes.WorkingTreeDirty,
                 $"Worktree '{path}' has uncommitted changes ({changed.Count} path(s): {FormatWorktreePaths(changed)}). Nothing was removed. " +
-                $"To delete it anyway and permanently lose those changes, call Git(operation: worktree, action: remove, worktreePath: '{path}', discardUncommittedChanges: true). " +
+                $"To delete it anyway and permanently lose those changes, call GitRemote(operation: worktree, action: remove, worktreePath: '{path}', discardUncommittedChanges: true). " +
                 "To keep them, commit or stash inside that worktree first.",
                 "discardUncommittedChanges: true deletes modified and untracked files in that worktree; they cannot be recovered. Committed work and the branch are not affected.");
 
@@ -1517,13 +1517,13 @@ public class GitImpl : IGitOperations
                 Action = "remove",
                 IsError = true,
                 Error = $"git worktree remove failed: {CleanGitStderr(removed.Stderr)}. " +
-                        (stillThere ? "The worktree was not removed." : "Check its state with Git(operation: worktree, action: list).")
+                        (stillThere ? "The worktree was not removed." : "Check its state with GitRemote(operation: worktree, action: list).")
             };
         }
 
         var kept = entry.Branch is null
             ? "The worktree was on a detached HEAD, so there is no branch to delete."
-            : $"The branch '{entry.Branch}' was kept; delete it with Git(operation: branch, deleteBranch: true) once merged.";
+            : $"The branch '{entry.Branch}' was kept; delete it with GitRemote(operation: branch, deleteBranch: true) once merged.";
         return new GitWorktreeResult
         {
             Action = "remove",
@@ -3667,7 +3667,7 @@ public class GitImpl : IGitOperations
                 IsError = true,
                 ErrorKind = GitErrorCodes.RefRequired,
                 ErrorDetail = GitErrorDetails.RefRequiredCheckout,
-                Error = "branchName is required for operation=checkout. Pass the branch to switch to, and createBranch=true if it doesn't exist yet."
+                Error = "branchName is required for GitRemote operation=checkout. Pass the branch to switch to, and createBranch=true if it doesn't exist yet."
             };
         }
 

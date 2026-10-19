@@ -25,6 +25,7 @@ public class GitToolsSmokeTests
 
     private string _repoDir = null!;
     private GitTools _gitTools = null!;
+    private GitRemoteTools _gitRemote = null!;
 
     [SetUp]
     public void SetUp()
@@ -43,6 +44,7 @@ public class GitToolsSmokeTests
         // "Mirrors PersistentWorkspaceManager.GetSolutionRoot()" comment).
         var workspaceManager = new FakeWorkspaceManager { SolutionPath = Path.Combine(_repoDir, "Fake.sln") };
         _gitTools = new GitTools(workspaceManager, NullLogger<GitTools>.Instance);
+        _gitRemote = new GitRemoteTools(workspaceManager, NullLogger<GitRemoteTools>.Instance);
     }
 
     [TearDown]
@@ -1265,11 +1267,7 @@ public class GitToolsSmokeTests
         Assert.That(!log.IsError, Is.True, log.ErrorData?.Message);
         Assert.That(((GitLogResult)log.SuccessData!).Commits.Select(c => c.Message), Is.EqualTo(new[] { "initial commit" }));
 
-        // log: the branchName alias still works and agrees with ref when both carry the same value.
-        var aliasLog = await _gitTools.GitTool(reason: "log from alias", GitOperation.log, branchName: "HEAD~1");
-        Assert.That(((GitLogResult)aliasLog.SuccessData!).Commits, Has.Count.EqualTo(1));
-        var sameLog = await _gitTools.GitTool(reason: "log with equal ref and alias", GitOperation.log, @ref: "HEAD~1", branchName: "HEAD~1");
-        Assert.That(!sameLog.IsError, Is.True, "identical values are not a conflict");
+        // (branchName is a validator alias for ref on Git, see ToolParameterAliasTests.)
 
         // show: ref names the commit (the commitHash/target spellings are validator aliases, see ToolParameterAliasTests).
         var show = await _gitTools.GitTool(reason: "show by ref", GitOperation.show, @ref: firstHash);
@@ -1281,42 +1279,16 @@ public class GitToolsSmokeTests
         Assert.That(!diff.IsError, Is.True, diff.ErrorData?.Message);
         Assert.That(((GitDiffResult)diff.SuccessData!).Diff.Trim(), Is.EqualTo("M\tREADME.md"));
 
-        // reset: the branchName alias is still accepted as the ref.
-        var reset = await _gitTools.GitTool(reason: "reset via alias", GitOperation.reset, branchName: "HEAD~1", mode: GitResetMode.soft);
+        // reset: ref is the commit HEAD moves to.
+        var reset = await _gitTools.GitTool(reason: "reset via ref", GitOperation.reset, @ref: "HEAD~1", mode: GitResetMode.soft);
         Assert.That(!reset.IsError, Is.True, reset.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(firstHash));
     }
 
     [Test]
-    public async Task Git_Ref_ConflictingWithAliases_IsRefusedNamingBothParametersAsync()
-    {
-        File.WriteAllText(Path.Combine(_repoDir, "README.md"), "second commit content");
-        RunGit(_repoDir, "add", "-A");
-        RunGit(_repoDir, "commit", "-m", "second commit");
-        var headBefore = RunGitCapture("rev-parse", "HEAD").Trim();
-
-        var cases = new (string Label, string AliasName, Func<Task<SentinelCallToolResult<object>>> Call)[]
-        {
-            ("log/branchName", "branchName", () => _gitTools.GitTool(reason: "conflict", GitOperation.log, @ref: "HEAD", branchName: "HEAD~1")),
-            ("reset/branchName", "branchName", () => _gitTools.GitTool(reason: "conflict", GitOperation.reset, @ref: "HEAD~1", branchName: "HEAD")),
-        };
-
-        foreach (var (label, aliasName, call) in cases)
-        {
-            var result = await call();
-            Assert.That(!result.IsError, Is.False, label);
-            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"), label);
-            Assert.That(result.ErrorData?.Message, Does.Contain(aliasName), $"{label}: message must name the alias parameter");
-            Assert.That(result.ErrorData?.Message, Does.Contain("'ref'"), $"{label}: message must name ref");
-        }
-
-        Assert.That(RunGitCapture("rev-parse", "HEAD").Trim(), Is.EqualTo(headBefore), "a refused reset must not move HEAD");
-    }
-
-    [Test]
     public async Task Git_Ref_OnUnsupportedOperation_IsRefusedAsync()
     {
-        var result = await _gitTools.GitTool(reason: "ref on branch", GitOperation.branch, @ref: "HEAD");
+        var result = await _gitTools.GitTool(reason: "ref on status", GitOperation.status, @ref: "HEAD");
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
@@ -1330,7 +1302,7 @@ public class GitToolsSmokeTests
         var baseBranch = RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim();
 
         // Missing branch: created, and reported as created.
-        var created = await _gitTools.GitTool(reason: "create and switch", GitOperation.checkout, branchName: "topic", createBranch: true);
+        var created = await _gitRemote.GitRemoteTool(reason: "create and switch", GitRemoteOperation.checkout, branchName: "topic", createBranch: true);
         Assert.That(!created.IsError, Is.True, created.ErrorData?.Message);
         var createdResult = (GitCheckoutResult)created.SuccessData!;
         Assert.That(createdResult.CreatedNewBranch, Is.True);
@@ -1345,7 +1317,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "checkout", baseBranch);
 
         // Existing branch: plain checkout, not an error, and CreatedNewBranch is false.
-        var existing = await _gitTools.GitTool(reason: "create-or-switch existing", GitOperation.checkout, branchName: "topic", createBranch: true);
+        var existing = await _gitRemote.GitRemoteTool(reason: "create-or-switch existing", GitRemoteOperation.checkout, branchName: "topic", createBranch: true);
         Assert.That(!existing.IsError, Is.True, existing.ErrorData?.Message);
         var existingResult = (GitCheckoutResult)existing.SuccessData!;
         Assert.That(existingResult.CreatedNewBranch, Is.False, "the branch already existed, so nothing was created");
@@ -1355,7 +1327,7 @@ public class GitToolsSmokeTests
 
         // A startPoint cannot apply to an existing branch: still a plain checkout, but say so.
         RunGit(_repoDir, "checkout", baseBranch);
-        var withStart = await _gitTools.GitTool(reason: "existing with startPoint", GitOperation.checkout, branchName: "topic", createBranch: true, startPoint: "HEAD");
+        var withStart = await _gitRemote.GitRemoteTool(reason: "existing with startPoint", GitRemoteOperation.checkout, branchName: "topic", createBranch: true, startPoint: "HEAD");
         Assert.That(!withStart.IsError, Is.True, withStart.ErrorData?.Message);
         var withStartResult = (GitCheckoutResult)withStart.SuccessData!;
         Assert.That(withStartResult.CreatedNewBranch, Is.False);
@@ -1369,7 +1341,7 @@ public class GitToolsSmokeTests
         var baseBranch = RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim();
         RunGit(_repoDir, "branch", "other");
 
-        var result = await _gitTools.GitTool(reason: "startPoint alone", GitOperation.checkout, branchName: "other", startPoint: "HEAD");
+        var result = await _gitRemote.GitRemoteTool(reason: "startPoint alone", GitRemoteOperation.checkout, branchName: "other", startPoint: "HEAD");
 
         Assert.That(!result.IsError, Is.False, "a startPoint that would be silently ignored must be refused");
         Assert.That(result.ErrorData?.Message, Does.Contain("startPoint").And.Contain("createBranch"));
@@ -1403,7 +1375,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "commit", "-m", "add file named feat");
         Assert.That(RunGitRaw("checkout", "feat").ExitCode, Is.Not.EqualTo(0), "fixture sanity: bare checkout of the name is ambiguous");
 
-        var result = await _gitTools.GitTool(reason: "checkout ambiguous name", GitOperation.checkout, branchName: "feat");
+        var result = await _gitRemote.GitRemoteTool(reason: "checkout ambiguous name", GitRemoteOperation.checkout, branchName: "feat");
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-parse", "--abbrev-ref", "HEAD").Trim(), Is.EqualTo("feat"));
@@ -1447,7 +1419,7 @@ public class GitToolsSmokeTests
             var bare = RunGitRaw("pull", "origin");
             Assert.That(bare.ExitCode, Is.Not.EqualTo(0), "fixture sanity: a bare pull must fail here: " + bare.Stderr);
 
-            var result = await _gitTools.GitTool(reason: "pull divergent", GitOperation.pull);
+            var result = await _gitRemote.GitRemoteTool(reason: "pull divergent", GitRemoteOperation.pull);
 
             Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
             Assert.That(File.Exists(Path.Combine(_repoDir, "remote.txt")), Is.True, "the remote commit must be merged in");
@@ -1466,7 +1438,7 @@ public class GitToolsSmokeTests
         var branch = AddBareRemoteAndPush();
         DivergeFromRemote(branch);
 
-        var result = await _gitTools.GitTool(reason: "pull with rebase", GitOperation.pull, rebase: true);
+        var result = await _gitRemote.GitRemoteTool(reason: "pull with rebase", GitRemoteOperation.pull, rebase: true);
 
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
         Assert.That(RunGitCapture("rev-list", "--merges", "--count", "HEAD").Trim(), Is.EqualTo("0"), "rebase=true must not create a merge commit");
@@ -1586,7 +1558,7 @@ public class GitToolsSmokeTests
         var branch = AddBareRemoteAndPush();
         var localHead = DivergeConflictingFromRemote(branch);
 
-        var pull = await _gitTools.GitTool(reason: "conflicting pull", GitOperation.pull, rebase: rebase);
+        var pull = await _gitRemote.GitRemoteTool(reason: "conflicting pull", GitRemoteOperation.pull, rebase: rebase);
 
         Assert.That(!pull.IsError, Is.False, "fixture must produce a conflict");
         Assert.That(pull.ErrorData?.Message, Does.Contain("mid-" + expectedState).And.Contain("operation: abort"));
@@ -1727,7 +1699,7 @@ public class GitToolsSmokeTests
             RunGit(_repoDir, "config", "credential.helper", "");
             RunGit(_repoDir, "remote", "add", "origin", $"http://127.0.0.1:{port}/repo.git");
 
-            var task = _gitTools.GitTool(reason: "fetch with auth challenge", GitOperation.fetch);
+            var task = _gitRemote.GitRemoteTool(reason: "fetch with auth challenge", GitRemoteOperation.fetch);
             var finished = await Task.WhenAny(task, Task.Delay(TimeSpan.FromSeconds(60)));
 
             Assert.That(finished, Is.SameAs(task), "git fetch blocked instead of failing fast - credential prompting is not disabled");
@@ -1849,7 +1821,7 @@ public class GitToolsSmokeTests
         var branch = AddBareRemoteAndPush();
         DivergeConflictingFromRemote(branch);
 
-        var result = await _gitTools.GitTool(reason: "conflicting pull", GitOperation.pull);
+        var result = await _gitRemote.GitRemoteTool(reason: "conflicting pull", GitRemoteOperation.pull);
 
         AssertCoded(result, "GitOperationInProgress");
     }
@@ -1859,7 +1831,7 @@ public class GitToolsSmokeTests
     {
         var reset = await _gitTools.GitTool(reason: "reset without ref", GitOperation.reset);
         var revert = await _gitTools.GitTool(reason: "revert without commitHash", GitOperation.revert);
-        var checkout = await _gitTools.GitTool(reason: "checkout without branchName", GitOperation.checkout);
+        var checkout = await _gitRemote.GitRemoteTool(reason: "checkout without branchName", GitRemoteOperation.checkout);
 
         AssertCoded(reset, "GitRefRequired");
         AssertCoded(revert, "GitRefRequired");
@@ -1951,7 +1923,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_List_OnRepoWithoutTags_ReturnsEmptyListAsync()
     {
-        var result = await _gitTools.GitTool(reason: "list tags in empty repo", GitOperation.tag, action: GitAction.list);
+        var result = await _gitRemote.GitRemoteTool(reason: "list tags in empty repo", GitRemoteOperation.tag, action: GitAction.list);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var tags = (GitTagResult)result.SuccessData!;
@@ -1963,7 +1935,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_Create_Lightweight_ThenListShowsItAsync()
     {
-        var create = await _gitTools.GitTool(reason: "create lightweight tag", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0");
+        var create = await _gitRemote.GitRemoteTool(reason: "create lightweight tag", GitRemoteOperation.tag, action: GitAction.create, tagName: "v1.0.0");
 
         Assert.That(create.IsError, Is.False, create.ErrorData?.Message);
         var created = (GitTagResult)create.SuccessData!;
@@ -1972,7 +1944,7 @@ public class GitToolsSmokeTests
         Assert.That(created.TargetHash, Is.EqualTo(ShortHead()));
         Assert.That(TagNames(), Is.EqualTo("v1.0.0"));
 
-        var list = await _gitTools.GitTool(reason: "list tags", GitOperation.tag, action: GitAction.list);
+        var list = await _gitRemote.GitRemoteTool(reason: "list tags", GitRemoteOperation.tag, action: GitAction.list);
 
         Assert.That(list.IsError, Is.False, list.ErrorData?.Message);
         var tags = (GitTagResult)list.SuccessData!;
@@ -1986,13 +1958,13 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_Create_WithMessage_IsAnnotatedAsync()
     {
-        var create = await _gitTools.GitTool(reason: "create annotated tag", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0", message: "release one");
+        var create = await _gitRemote.GitRemoteTool(reason: "create annotated tag", GitRemoteOperation.tag, action: GitAction.create, tagName: "v1.0.0", message: "release one");
 
         Assert.That(create.IsError, Is.False, create.ErrorData?.Message);
         Assert.That(((GitTagResult)create.SuccessData!).Annotated, Is.True);
         Assert.That(RunGitCapture("cat-file", "-t", "refs/tags/v1.0.0").Trim(), Is.EqualTo("tag"));
 
-        var list = await _gitTools.GitTool(reason: "list tags", GitOperation.tag, action: GitAction.list);
+        var list = await _gitRemote.GitRemoteTool(reason: "list tags", GitRemoteOperation.tag, action: GitAction.list);
 
         var entry = ((GitTagResult)list.SuccessData!).Tags.Single();
         Assert.That(entry.Kind, Is.EqualTo("annotated"));
@@ -2006,7 +1978,7 @@ public class GitToolsSmokeTests
         var firstHash = ShortHead();
         CommitSecondChange();
 
-        var create = await _gitTools.GitTool(reason: "tag the previous commit", GitOperation.tag, action: GitAction.create, tagName: "old", @ref: "HEAD~1");
+        var create = await _gitRemote.GitRemoteTool(reason: "tag the previous commit", GitRemoteOperation.tag, action: GitAction.create, tagName: "old", @ref: "HEAD~1");
 
         Assert.That(create.IsError, Is.False, create.ErrorData?.Message);
         var created = (GitTagResult)create.SuccessData!;
@@ -2019,11 +1991,11 @@ public class GitToolsSmokeTests
     public async Task Git_Tag_Create_ExistingName_ReportsGitAlreadyExistsAndDoesNotMoveTagAsync()
     {
         var firstHash = ShortHead();
-        var first = await _gitTools.GitTool(reason: "create tag", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0");
+        var first = await _gitRemote.GitRemoteTool(reason: "create tag", GitRemoteOperation.tag, action: GitAction.create, tagName: "v1.0.0");
         Assert.That(first.IsError, Is.False, first.ErrorData?.Message);
         CommitSecondChange();
 
-        var again = await _gitTools.GitTool(reason: "create same tag again", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0");
+        var again = await _gitRemote.GitRemoteTool(reason: "create same tag again", GitRemoteOperation.tag, action: GitAction.create, tagName: "v1.0.0");
 
         AssertCoded(again, "GitAlreadyExists");
         Assert.That(again.ErrorData?.Message, Does.Contain("never overwrites"));
@@ -2033,7 +2005,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_Create_InvalidName_ReportsGitInvalidNameAsync()
     {
-        var result = await _gitTools.GitTool(reason: "create tag with invalid name", GitOperation.tag, action: GitAction.create, tagName: "bad name");
+        var result = await _gitRemote.GitRemoteTool(reason: "create tag with invalid name", GitRemoteOperation.tag, action: GitAction.create, tagName: "bad name");
 
         AssertCoded(result, "GitInvalidName");
         Assert.That(result.ErrorData?.Message, Does.Contain("bad name"));
@@ -2043,7 +2015,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_Create_WithoutTagName_ReportsGitRefRequiredAsync()
     {
-        var result = await _gitTools.GitTool(reason: "create tag without a name", GitOperation.tag, action: GitAction.create);
+        var result = await _gitRemote.GitRemoteTool(reason: "create tag without a name", GitRemoteOperation.tag, action: GitAction.create);
 
         AssertCoded(result, "GitRefRequired");
         Assert.That(result.ErrorData?.Message, Does.Contain("tagName"));
@@ -2053,7 +2025,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_Create_UnknownRef_ReportsGitTargetNotFoundAsync()
     {
-        var result = await _gitTools.GitTool(reason: "create tag at unknown ref", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0", @ref: "no-such-ref-anywhere");
+        var result = await _gitRemote.GitRemoteTool(reason: "create tag at unknown ref", GitRemoteOperation.tag, action: GitAction.create, tagName: "v1.0.0", @ref: "no-such-ref-anywhere");
 
         AssertCoded(result, "GitTargetNotFound");
         Assert.That(result.ErrorData?.Message, Does.Contain("no-such-ref-anywhere"));
@@ -2066,7 +2038,7 @@ public class GitToolsSmokeTests
         var headHash = ShortHead();
         RunGit(_repoDir, "tag", "v1.0.0");
 
-        var result = await _gitTools.GitTool(reason: "delete tag", GitOperation.tag, action: GitAction.delete, tagName: "v1.0.0");
+        var result = await _gitRemote.GitRemoteTool(reason: "delete tag", GitRemoteOperation.tag, action: GitAction.delete, tagName: "v1.0.0");
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var deleted = (GitTagResult)result.SuccessData!;
@@ -2081,7 +2053,7 @@ public class GitToolsSmokeTests
     {
         RunGit(_repoDir, "tag", "keep-me");
 
-        var result = await _gitTools.GitTool(reason: "delete missing tag", GitOperation.tag, action: GitAction.delete, tagName: "nope");
+        var result = await _gitRemote.GitRemoteTool(reason: "delete missing tag", GitRemoteOperation.tag, action: GitAction.delete, tagName: "nope");
 
         AssertCoded(result, "GitTargetNotFound");
         Assert.That(result.ErrorData?.Message, Does.Contain("keep-me"));
@@ -2091,7 +2063,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_WithoutAction_ReportsGitActionRequiredNamingValidValuesAsync()
     {
-        var result = await _gitTools.GitTool(reason: "tag without action", GitOperation.tag);
+        var result = await _gitRemote.GitRemoteTool(reason: "tag without action", GitRemoteOperation.tag);
 
         AssertCoded(result, "GitActionRequired");
         Assert.That(result.ErrorData?.Message, Does.Contain("list, create, delete"));
@@ -2113,7 +2085,7 @@ public class GitToolsSmokeTests
             RunGit(otherRepoDir, "tag", "other-tag");
 
             // The loaded solution's repo (_repoDir) has no tags; if repoPath were ignored this would be empty.
-            var result = await _gitTools.GitTool(reason: "list tags in other repo", GitOperation.tag, action: GitAction.list, repoPath: otherRepoDir);
+            var result = await _gitRemote.GitRemoteTool(reason: "list tags in other repo", GitRemoteOperation.tag, action: GitAction.list, repoPath: otherRepoDir);
 
             Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
             var tags = (GitTagResult)result.SuccessData!;
@@ -2128,7 +2100,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Tag_Create_WithRepoPath_IsRefusedAsync()
     {
-        var result = await _gitTools.GitTool(reason: "create tag with repoPath", GitOperation.tag, action: GitAction.create, tagName: "v1.0.0", repoPath: _repoDir);
+        var result = await _gitRemote.GitRemoteTool(reason: "create tag with repoPath", GitRemoteOperation.tag, action: GitAction.create, tagName: "v1.0.0", repoPath: _repoDir);
 
         Assert.That(result.IsError, Is.True, "repoPath is only accepted for read-only operations and list actions.");
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
@@ -2139,7 +2111,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Stash_List_Empty_ReturnsEmptyListAsync()
     {
-        var result = await _gitTools.GitTool(reason: "list stash without entries", GitOperation.stash, action: GitAction.list);
+        var result = await _gitRemote.GitRemoteTool(reason: "list stash without entries", GitRemoteOperation.stash, action: GitAction.list);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var stash = (GitStashResult)result.SuccessData!;
@@ -2151,7 +2123,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Stash_Push_NoChanges_ReportsGitNoChangesAndCreatesNoEntryAsync()
     {
-        var result = await _gitTools.GitTool(reason: "stash a clean tree", GitOperation.stash, action: GitAction.push);
+        var result = await _gitRemote.GitRemoteTool(reason: "stash a clean tree", GitRemoteOperation.stash, action: GitAction.push);
 
         AssertCoded(result, "GitNoChanges");
         Assert.That(result.ErrorData?.Message, Does.Contain("Nothing to stash"));
@@ -2164,7 +2136,7 @@ public class GitToolsSmokeTests
         WriteFile("README.md", "changed");
         WriteFile("untracked.txt", "keep me");
 
-        var result = await _gitTools.GitTool(reason: "stash tracked change", GitOperation.stash, action: GitAction.push);
+        var result = await _gitRemote.GitRemoteTool(reason: "stash tracked change", GitRemoteOperation.stash, action: GitAction.push);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var stash = (GitStashResult)result.SuccessData!;
@@ -2179,11 +2151,11 @@ public class GitToolsSmokeTests
     {
         WriteFile("untracked.txt", "stash me");
 
-        var withoutFlag = await _gitTools.GitTool(reason: "stash only an untracked file without the flag", GitOperation.stash, action: GitAction.push);
+        var withoutFlag = await _gitRemote.GitRemoteTool(reason: "stash only an untracked file without the flag", GitRemoteOperation.stash, action: GitAction.push);
         AssertCoded(withoutFlag, "GitNoChanges");
         Assert.That(RepoFileExists("untracked.txt"), Is.True);
 
-        var result = await _gitTools.GitTool(reason: "stash untracked file", GitOperation.stash, action: GitAction.push, includeUntracked: true);
+        var result = await _gitRemote.GitRemoteTool(reason: "stash untracked file", GitRemoteOperation.stash, action: GitAction.push, includeUntracked: true);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(((GitStashResult)result.SuccessData!).Created, Is.True);
@@ -2200,7 +2172,7 @@ public class GitToolsSmokeTests
         WriteFile("README.md", "readme changed");
         WriteFile("other.txt", "other changed");
 
-        var result = await _gitTools.GitTool(reason: "stash one path with a label", GitOperation.stash, action: GitAction.push, message: "only readme", paths: "README.md");
+        var result = await _gitRemote.GitRemoteTool(reason: "stash one path with a label", GitRemoteOperation.stash, action: GitAction.push, message: "only readme", paths: "README.md");
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var stash = (GitStashResult)result.SuccessData!;
@@ -2215,13 +2187,13 @@ public class GitToolsSmokeTests
     public async Task Git_Stash_List_ReportsIndexMessageAndHashAsync()
     {
         WriteFile("README.md", "first change");
-        var first = await _gitTools.GitTool(reason: "stash first", GitOperation.stash, action: GitAction.push, message: "label one");
+        var first = await _gitRemote.GitRemoteTool(reason: "stash first", GitRemoteOperation.stash, action: GitAction.push, message: "label one");
         Assert.That(first.IsError, Is.False, first.ErrorData?.Message);
         WriteFile("README.md", "second change");
-        var second = await _gitTools.GitTool(reason: "stash second", GitOperation.stash, action: GitAction.push, message: "label two");
+        var second = await _gitRemote.GitRemoteTool(reason: "stash second", GitRemoteOperation.stash, action: GitAction.push, message: "label two");
         Assert.That(second.IsError, Is.False, second.ErrorData?.Message);
 
-        var list = await _gitTools.GitTool(reason: "list stash", GitOperation.stash, action: GitAction.list);
+        var list = await _gitRemote.GitRemoteTool(reason: "list stash", GitRemoteOperation.stash, action: GitAction.list);
 
         Assert.That(list.IsError, Is.False, list.ErrorData?.Message);
         var stash = (GitStashResult)list.SuccessData!;
@@ -2239,7 +2211,7 @@ public class GitToolsSmokeTests
     {
         MakeOneStashEntry();
 
-        var result = await _gitTools.GitTool(reason: "pop without an index", GitOperation.stash, action: GitAction.pop);
+        var result = await _gitRemote.GitRemoteTool(reason: "pop without an index", GitRemoteOperation.stash, action: GitAction.pop);
 
         AssertCoded(result, "GitRefRequired");
         Assert.That(result.ErrorData?.Message, Does.Contain("stashIndex"));
@@ -2252,7 +2224,7 @@ public class GitToolsSmokeTests
     {
         MakeOneStashEntry();
 
-        var result = await _gitTools.GitTool(reason: "pop an index that does not exist", GitOperation.stash, action: GitAction.pop, stashIndex: 5);
+        var result = await _gitRemote.GitRemoteTool(reason: "pop an index that does not exist", GitRemoteOperation.stash, action: GitAction.pop, stashIndex: 5);
 
         AssertCoded(result, "GitTargetNotFound");
         Assert.That(result.ErrorData?.Message, Does.Contain("stash@{5}"));
@@ -2265,7 +2237,7 @@ public class GitToolsSmokeTests
         MakeOneStashEntry();
         WriteFile("README.md", "dirty again");
 
-        var result = await _gitTools.GitTool(reason: "pop onto a dirty tree", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
+        var result = await _gitRemote.GitRemoteTool(reason: "pop onto a dirty tree", GitRemoteOperation.stash, action: GitAction.pop, stashIndex: 0);
 
         AssertCoded(result, "GitWorkingTreeDirty");
         Assert.That(result.ErrorData?.Message, Does.Contain("README.md"));
@@ -2278,7 +2250,7 @@ public class GitToolsSmokeTests
     {
         MakeOneStashEntry();
 
-        var result = await _gitTools.GitTool(reason: "pop the newest entry", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
+        var result = await _gitRemote.GitRemoteTool(reason: "pop the newest entry", GitRemoteOperation.stash, action: GitAction.pop, stashIndex: 0);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(((GitStashResult)result.SuccessData!).AppliedIndex, Is.EqualTo(0));
@@ -2291,7 +2263,7 @@ public class GitToolsSmokeTests
     {
         MakeOneStashEntry();
 
-        var result = await _gitTools.GitTool(reason: "apply the newest entry", GitOperation.stash, action: GitAction.apply, stashIndex: 0);
+        var result = await _gitRemote.GitRemoteTool(reason: "apply the newest entry", GitRemoteOperation.stash, action: GitAction.apply, stashIndex: 0);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(((GitStashResult)result.SuccessData!).AppliedIndex, Is.EqualTo(0));
@@ -2304,7 +2276,7 @@ public class GitToolsSmokeTests
     {
         WriteFile("README.md", "changed");
 
-        var result = await _gitTools.GitTool(reason: "stash and read the note", GitOperation.stash, action: GitAction.push);
+        var result = await _gitRemote.GitRemoteTool(reason: "stash and read the note", GitRemoteOperation.stash, action: GitAction.push);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(((GitStashResult)result.SuccessData!).Note, Does.Contain("LoadSolution(forceReload: true)"));
@@ -2315,7 +2287,7 @@ public class GitToolsSmokeTests
     {
         WriteFile("README.md", "changed");
 
-        var result = await _gitTools.GitTool(reason: "stash with repoPath", GitOperation.stash, action: GitAction.push, repoPath: _repoDir);
+        var result = await _gitRemote.GitRemoteTool(reason: "stash with repoPath", GitRemoteOperation.stash, action: GitAction.push, repoPath: _repoDir);
 
         Assert.That(result.IsError, Is.True, "repoPath is only accepted for read-only operations and list actions.");
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
@@ -2327,8 +2299,8 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_StashIndexAndIncludeUntracked_OnOtherOperation_AreRefusedAsync()
     {
-        var withIndex = await _gitTools.GitTool(reason: "stashIndex on status", GitOperation.status, stashIndex: 0);
-        var withUntracked = await _gitTools.GitTool(reason: "includeUntracked on status", GitOperation.status, includeUntracked: true);
+        var withIndex = await _gitRemote.GitRemoteTool(reason: "stashIndex on branch", GitRemoteOperation.branch, stashIndex: 0);
+        var withUntracked = await _gitRemote.GitRemoteTool(reason: "includeUntracked on branch", GitRemoteOperation.branch, includeUntracked: true);
 
         Assert.That(withIndex.IsError, Is.True);
         Assert.That(withIndex.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
@@ -2345,7 +2317,7 @@ public class GitToolsSmokeTests
         RunGit(_repoDir, "stash", "push", "--include-untracked");
         WriteFile("untracked.txt", "new file in the way");
 
-        var result = await _gitTools.GitTool(reason: "pop over a colliding untracked file", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
+        var result = await _gitRemote.GitRemoteTool(reason: "pop over a colliding untracked file", GitRemoteOperation.stash, action: GitAction.pop, stashIndex: 0);
 
         Assert.That(result.IsError, Is.True);
         Assert.That(StashEntryCount(), Is.EqualTo(1), "a failed pop must keep the entry.");
@@ -2358,7 +2330,7 @@ public class GitToolsSmokeTests
     {
         await MakeStashConflictAsync();
 
-        var result = await _gitTools.GitTool(reason: "pop a stash that conflicts", GitOperation.stash, action: GitAction.pop, stashIndex: 0);
+        var result = await _gitRemote.GitRemoteTool(reason: "pop a stash that conflicts", GitRemoteOperation.stash, action: GitAction.pop, stashIndex: 0);
 
         AssertStashConflictRolledBack(result);
     }
@@ -2368,7 +2340,7 @@ public class GitToolsSmokeTests
     {
         await MakeStashConflictAsync();
 
-        var result = await _gitTools.GitTool(reason: "apply a stash that conflicts", GitOperation.stash, action: GitAction.apply, stashIndex: 0);
+        var result = await _gitRemote.GitRemoteTool(reason: "apply a stash that conflicts", GitRemoteOperation.stash, action: GitAction.apply, stashIndex: 0);
 
         AssertStashConflictRolledBack(result);
     }
@@ -2378,7 +2350,7 @@ public class GitToolsSmokeTests
     private async Task MakeStashConflictAsync()
     {
         WriteFile("README.md", "from stash");
-        var push = await _gitTools.GitTool(reason: "stash the first edit", GitOperation.stash, action: GitAction.push);
+        var push = await _gitRemote.GitRemoteTool(reason: "stash the first edit", GitRemoteOperation.stash, action: GitAction.push);
         Assert.That(push.IsError, Is.False, push.ErrorData?.Message);
         WriteFile("README.md", "from commit");
         RunGit(_repoDir, "commit", "-am", "conflicting change to the same line");
@@ -2401,7 +2373,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Worktree_List_ReportsMainAndCurrentAsync()
     {
-        var result = await _gitTools.GitTool(reason: "list worktrees", GitOperation.worktree, action: GitAction.list);
+        var result = await _gitRemote.GitRemoteTool(reason: "list worktrees", GitRemoteOperation.worktree, action: GitAction.list);
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var worktrees = (GitWorktreeResult)result.SuccessData!;
@@ -2416,10 +2388,10 @@ public class GitToolsSmokeTests
     private string CurrentBranch() => GitOutStrict("branch", "--show-current");
 
     private Task<SentinelCallToolResult<object>> AddWorktreeAsync(string branch, bool createBranch = true, string? path = null)
-        => _gitTools.GitTool(reason: "add a worktree", GitOperation.worktree, action: GitAction.add, worktreePath: path ?? WorktreeDir, branchName: branch, createBranch: createBranch);
+        => _gitRemote.GitRemoteTool(reason: "add a worktree", GitRemoteOperation.worktree, action: GitAction.add, worktreePath: path ?? WorktreeDir, branchName: branch, createBranch: createBranch);
 
     private Task<SentinelCallToolResult<object>> RemoveWorktreeAsync(bool discard = false, string? path = null)
-        => _gitTools.GitTool(reason: "remove a worktree", GitOperation.worktree, action: GitAction.remove, worktreePath: path ?? WorktreeDir, discardUncommittedChanges: discard);
+        => _gitRemote.GitRemoteTool(reason: "remove a worktree", GitRemoteOperation.worktree, action: GitAction.remove, worktreePath: path ?? WorktreeDir, discardUncommittedChanges: discard);
 
     // Adds WorktreeDir on a new branch, then leaves one modified tracked file and one untracked file inside it.
     private async Task MakeDirtyWorktreeAsync()
@@ -2443,7 +2415,7 @@ public class GitToolsSmokeTests
         Assert.That(File.Exists(Path.Combine(WorktreeDir, "README.md")), Is.True, "the worktree must be checked out on disk.");
         Assert.That(GitOutStrict("branch", "--list", "wt-feature"), Does.Contain("wt-feature"));
 
-        var list = await _gitTools.GitTool(reason: "list worktrees", GitOperation.worktree, action: GitAction.list);
+        var list = await _gitRemote.GitRemoteTool(reason: "list worktrees", GitRemoteOperation.worktree, action: GitAction.list);
         var worktrees = ((GitWorktreeResult)list.SuccessData!).Worktrees;
         Assert.That(worktrees, Has.Count.EqualTo(2));
         Assert.That(worktrees.Count(w => w.IsMain), Is.EqualTo(1));
@@ -2555,7 +2527,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_Worktree_WithoutAction_ReportsGitActionRequiredAsync()
     {
-        var result = await _gitTools.GitTool(reason: "worktree without action", GitOperation.worktree);
+        var result = await _gitRemote.GitRemoteTool(reason: "worktree without action", GitRemoteOperation.worktree);
 
         AssertCoded(result, "GitActionRequired");
         Assert.That(result.ErrorData?.Message, Does.Contain("list, add, remove"));
@@ -2624,8 +2596,8 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_DiscardUncommittedChanges_OnOtherOperationOrAction_IsRefusedAsync()
     {
-        var onStatus = await _gitTools.GitTool(reason: "discard flag on status", GitOperation.status, discardUncommittedChanges: true);
-        var onWorktreeList = await _gitTools.GitTool(reason: "discard flag on worktree list", GitOperation.worktree, action: GitAction.list, discardUncommittedChanges: true);
+        var onStatus = await _gitRemote.GitRemoteTool(reason: "discard flag on branch", GitRemoteOperation.branch, discardUncommittedChanges: true);
+        var onWorktreeList = await _gitRemote.GitRemoteTool(reason: "discard flag on worktree list", GitRemoteOperation.worktree, action: GitAction.list, discardUncommittedChanges: true);
 
         foreach (var result in new[] { onStatus, onWorktreeList })
         {
@@ -2638,7 +2610,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_WorktreePath_OnOtherOperation_IsRefusedAsync()
     {
-        var result = await _gitTools.GitTool(reason: "worktreePath on status", GitOperation.status, worktreePath: WorktreeDir);
+        var result = await _gitRemote.GitRemoteTool(reason: "worktreePath on branch", GitRemoteOperation.branch, worktreePath: WorktreeDir);
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));
@@ -2648,7 +2620,7 @@ public class GitToolsSmokeTests
     [Test]
     public async Task Git_ActionOnOtherOperation_IsRefusedAsync()
     {
-        var result = await _gitTools.GitTool(reason: "action on status", GitOperation.status, action: GitAction.list);
+        var result = await _gitRemote.GitRemoteTool(reason: "action on branch", GitRemoteOperation.branch, action: GitAction.list);
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo("InvalidArguments"));

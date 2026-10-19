@@ -17,6 +17,7 @@ public enum ToolSetName
     projectAdmin,
     testCategories,
     modelEval,
+    git,
 }
 
 /// <summary>
@@ -62,6 +63,10 @@ public static class ToolsetCatalog
                 // SubAgentTools lives in Tools.Advanced: on a Basic server the name is reported unavailable.
                 "SubAgent",
             ],
+            [ToolSetName.git] =
+            [
+                "GitRemote",
+            ],
         };
 
     private static readonly IReadOnlyDictionary<ToolSetName, string> Summaries =
@@ -72,6 +77,7 @@ public static class ToolsetCatalog
             [ToolSetName.projectAdmin] = "projects and workspace: create/split projects, solution and framework listings, Features, ProjectDoc, workspace health, operation details, retry, type info, symbol relationships, GetDiagnostics, InspectSymbol",
             [ToolSetName.testCategories] = "plan test-category attributes (NUnit/xUnit/MSTest) from the production types each test references (TagTestCategories, dry run by default, dryRun: false applies)",
             [ToolSetName.modelEval] = "dispatch a task to a local model in a child server (SubAgent, Advanced only)",
+            [ToolSetName.git] = "git branch, checkout, push, fetch, pull, tag, stash and worktree (GitRemote)",
         };
 
     /// <summary>Every on-demand tool name across all sets.</summary>

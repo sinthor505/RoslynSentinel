@@ -131,6 +131,19 @@ public class McpServerStatusToolListingTests
     }
 
     [Test]
+    [Category("ServerStatusTools")]
+    public void GitRemote_IsDeclaredByItsOwnClass_AndExplainsHowToEnableIt()
+    {
+        var modes = new Dictionary<string, IReadOnlyList<string>> { ["GitRemoteTools"] = ["Workspace", "Claude"] };
+        var status = Call(["GitTools"], McpServerStatusToolListing.inactive, filter: "GitRemote", classModes: modes);
+
+        var gitRemote = status.AllDeclaredTools.Single(t => t.Name == "GitRemote");
+        Assert.That(gitRemote.ClassName, Is.EqualTo("GitRemoteTools"));
+        Assert.That(gitRemote.ActiveForThisMode, Is.False);
+        Assert.That(gitRemote.EnabledBy, Is.EqualTo("--mode Workspace or Claude, or --include-tools GitRemoteTools"));
+    }
+
+    [Test]
     public void ToolNameFilter_MatchesToolOrClassName_CaseInsensitively()
     {
         var status = Call([], McpServerStatusToolListing.all, filter: "gittools");

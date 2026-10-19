@@ -67,6 +67,7 @@
 | AdminTools | McpServerControl | Admin, Claude, claude-lean | - | Operator-only control of this server process. operation=GetServerStatus reports the running process.... |
 | DeclarationTools | Declaration | claude-lean (on demand) | - | Changes a declaration's modifier, accessibility, attribute or base type. |
 | DocumentationTools | ProjectDoc | Claude, claude-lean (on demand), Workspace | - | Reads, writes, appends, or lists project doc files under docs/. |
+| GitRemoteTools | GitRemote | Claude, claude-lean (on demand), Workspace | - | Git branch, checkout, push, fetch, pull, tag, stash and worktree. status, log, diff, commit, stage and the rest are... |
 | GitTools | Git | Claude, claude-lean, Workspace | Allowed | Unified git tool. |
 | NamedArgumentsTools | NamedArguments | claude-lean (on demand), NamedArguments | - | Convert positional call arguments to named arguments (M(1, 2) -> M(a: 1, b: 2)) using the compiler's binding, for... |
 | ParameterEditTools | ParameterEdit | claude-lean (on demand) | - | Add, remove, or view parameters of a method (operation method, any method) or of a class's DI constructor (operation... |
