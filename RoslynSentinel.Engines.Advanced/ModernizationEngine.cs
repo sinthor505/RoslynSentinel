@@ -15,6 +15,17 @@ public class SyntaxModernizationEngine
         _config = config;
     }
 
+    /// <summary>
+    /// Formats only the nodes of <paramref name="newRoot"/> that the rewrite annotated with <see cref="Formatter.Annotation"/>
+    /// (through <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/>) and returns the full text: lines the rewrite
+    /// did not touch keep their text and terminator, and every changed line takes the document's dominant line ending.
+    /// </summary>
+    private static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode newRoot, CancellationToken cancellationToken)
+    {
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+    }
+
     public async Task<DocumentEditResult> ClassToRecordAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ClassToRecord"))
@@ -62,7 +73,7 @@ public class SyntaxModernizationEngine
         {
             // Positional record: `record Foo(T Prop1, T Prop2);`
             var parameters = properties.Select(prop => SyntaxFactory.Parameter(prop.Identifier).WithType(prop.Type)).ToList();
-            var positional = SyntaxFactory.RecordDeclaration(SyntaxFactory.Token(SyntaxKind.RecordKeyword), classNode.Identifier).WithModifiers(classNode.Modifiers).WithParameterList(parameters.Count != 0 ? SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters)) : SyntaxFactory.ParameterList());
+            var positional = SyntaxFactory.RecordDeclaration(SyntaxFactory.Token(SyntaxKind.RecordKeyword), classNode.Identifier.WithoutTrivia()).WithModifiers(classNode.Modifiers).WithParameterList(parameters.Count != 0 ? SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters)) : SyntaxFactory.ParameterList());
             // Only include non-property members (positional params auto-generate the properties)
             var nonPropMembers = classNode.Members.Where(m => m is not PropertyDeclarationSyntax).ToList();
             if (nonPropMembers.Count > 0)
@@ -99,16 +110,16 @@ public class SyntaxModernizationEngine
                 return (MemberDeclarationSyntax)prop.WithAccessorList(prop.AccessorList.WithAccessors(SyntaxFactory.List(newAccessors)));
             });
             var allMembers = convertedProperties.Concat(classNode.Members.Where(m => m is not PropertyDeclarationSyntax)).ToList();
-            recordNode = SyntaxFactory.RecordDeclaration(SyntaxFactory.Token(SyntaxKind.RecordKeyword), classNode.Identifier).WithModifiers(classNode.Modifiers).WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken)).WithMembers(SyntaxFactory.List(allMembers)).WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken));
+            recordNode = SyntaxFactory.RecordDeclaration(SyntaxFactory.Token(SyntaxKind.RecordKeyword), classNode.Identifier.WithoutTrivia()).WithModifiers(classNode.Modifiers).WithOpenBraceToken(SyntaxFactory.Token(SyntaxKind.OpenBraceToken)).WithMembers(SyntaxFactory.List(allMembers)).WithCloseBraceToken(SyntaxFactory.Token(SyntaxKind.CloseBraceToken));
         }
 
-        var newRoot = root!.ReplaceNode(classNode, recordNode);
+        var newRoot = root!.ReplaceNode(classNode, recordNode.WithTriviaFrom(classNode).WithAdditionalAnnotations(Formatter.Annotation));
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Record converted to class.",
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -147,7 +158,7 @@ public class SyntaxModernizationEngine
                 Message = $"// Record '{recordName}' not found."};
         }
 
-        var classNode = SyntaxFactory.ClassDeclaration(recordNode.Identifier).WithModifiers(recordNode.Modifiers);
+        var classNode = SyntaxFactory.ClassDeclaration(recordNode.Identifier.WithoutTrivia()).WithModifiers(recordNode.Modifiers);
         // Preserve base types (interfaces, base classes)
         if (recordNode.BaseList != null)
         {
@@ -166,13 +177,13 @@ public class SyntaxModernizationEngine
 
         properties.AddRange(recordNode.Members);
         classNode = classNode.WithMembers(SyntaxFactory.List(properties));
-        var newRoot = root!.ReplaceNode(recordNode, classNode);
+        var newRoot = root!.ReplaceNode(recordNode, classNode.WithTriviaFrom(recordNode).WithAdditionalAnnotations(Formatter.Annotation));
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Record converted to class.",
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -207,14 +218,16 @@ public class SyntaxModernizationEngine
 
             if (expr != null)
             {
-                var newMethod = method.WithBody(null).WithExpressionBody(SyntaxFactory.ArrowExpressionClause(expr)).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+                // The header loses its trailing line break so the arrow follows it; the new semicolon takes the body's.
+                var headerEnd = method.Body.OpenBraceToken.GetPreviousToken();
+                var newMethod = method.ReplaceToken(headerEnd, headerEnd.WithTrailingTrivia()).WithBody(null).WithExpressionBody(SyntaxFactory.ArrowExpressionClause(expr).WithAdditionalAnnotations(Formatter.Annotation)).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken).WithTrailingTrivia(method.Body.CloseBraceToken.TrailingTrivia));
                 var newRoot = root!.ReplaceNode(method, newMethod);
                 return new DocumentEditResult
                 {
                     Outcome = EditOutcome.Modified,
                     FilePath = filePath,
                     Message = "// Method converted to expression-bodied.",
-                    UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+                    UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
                 };
             }
         }
@@ -269,7 +282,7 @@ public class SyntaxModernizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Patterns modernized.",
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -282,7 +295,7 @@ public class SyntaxModernizationEngine
             // Try to convert conditions to patterns
             if (TryConvertToPattern(visitedNode.Condition, out var newCondition) && newCondition != null)
             {
-                visitedNode = visitedNode.WithCondition(newCondition);
+                visitedNode = visitedNode.WithCondition(newCondition.WithTriviaFrom(visitedNode.Condition).WithAdditionalAnnotations(Formatter.Annotation));
             }
 
             return visitedNode;
@@ -296,7 +309,7 @@ public class SyntaxModernizationEngine
             {
                 if (TryConvertOrChainToPattern(visited, out var patternExpr) && patternExpr != null)
                 {
-                    return patternExpr;
+                    return patternExpr.WithTriviaFrom(visited).WithAdditionalAnnotations(Formatter.Annotation);
                 }
             }
 
@@ -556,7 +569,7 @@ public class SyntaxModernizationEngine
 
                 // Build: var x = initValue ?? throw new ...;
                 var throwExpr = SyntaxFactory.ThrowExpression(SyntaxFactory.Token(SyntaxKind.ThrowKeyword).WithTrailingTrivia(SyntaxFactory.Space), throwStmt.Expression);
-                var coalescedInit = SyntaxFactory.BinaryExpression(SyntaxKind.CoalesceExpression, initValue, throwExpr);
+                var coalescedInit = SyntaxFactory.BinaryExpression(SyntaxKind.CoalesceExpression, initValue, throwExpr).WithAdditionalAnnotations(Formatter.Annotation);
                 var newVarDecl = variable.WithInitializer(variable.Initializer!.WithValue(coalescedInit));
                 var newDecl = localDecl.WithDeclaration(localDecl.Declaration.WithVariables(SyntaxFactory.SingletonSeparatedList(newVarDecl)));
                 replacements[i] = (skipNext: true, newStmt: newDecl);
@@ -650,7 +663,8 @@ public class SyntaxModernizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// String parsing upgraded to use Span<char>.",
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            // No annotation: the rewrite needs no whitespace (it carries the replaced call's trivia).
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -693,7 +707,7 @@ public class SyntaxModernizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Null coalescing throw expressions applied.",
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -755,7 +769,7 @@ public class SyntaxModernizationEngine
                 }
 
                 var genMethod = SyntaxFactory.MethodDeclaration(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.VoidKeyword)), methodName).AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword), SyntaxFactory.Token(SyntaxKind.PartialKeyword)).WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(parameters))).AddAttributeLists(attrList).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
-                generatedMethods.Add(genMethod);
+                generatedMethods.Add(genMethod.WithLeadingTrivia(SyntaxFactory.CarriageReturnLineFeed).WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed).WithAdditionalAnnotations(Formatter.Annotation));
                 // Build replacement invocation
                 var newArgs = new List<ArgumentSyntax>
                 {
@@ -763,7 +777,7 @@ public class SyntaxModernizationEngine
                 }; // pass the logger instance
                 newArgs.AddRange(args.Skip(1)); // pass the rest of the args
                 var newInv = SyntaxFactory.InvocationExpression(SyntaxFactory.IdentifierName(methodName)).WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(newArgs)));
-                replaceMap[inv] = newInv;
+                replaceMap[inv] = newInv.WithTriviaFrom(inv).WithAdditionalAnnotations(Formatter.Annotation);
                 eventId++;
             }
         }
@@ -774,7 +788,11 @@ public class SyntaxModernizationEngine
         // Now safe to AddModifiers (re-found tree is already correct after ReplaceNodes)
         if (!newClassNode.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
         {
-            newClassNode = newClassNode.AddModifiers(SyntaxFactory.Token(SyntaxKind.PartialKeyword));
+            // The new token gets an explicit space instead of an annotation: annotating the class would re-space
+            // every member. With no modifiers, the keyword's leading trivia (indentation, doc comment) moves onto it.
+            newClassNode = newClassNode.Modifiers.Count == 0
+                ? newClassNode.WithKeyword(newClassNode.Keyword.WithLeadingTrivia()).WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(newClassNode.Keyword.LeadingTrivia, SyntaxKind.PartialKeyword, SyntaxFactory.TriviaList(SyntaxFactory.Space))))
+                : newClassNode.AddModifiers(SyntaxFactory.Token(SyntaxKind.PartialKeyword).WithTrailingTrivia(SyntaxFactory.Space));
         }
 
         newClassNode = newClassNode.AddMembers(generatedMethods.ToArray());
@@ -784,7 +802,7 @@ public class SyntaxModernizationEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = "// Logging methods generated.",
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -915,7 +933,8 @@ public class SyntaxModernizationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            // No annotation: the interpolated string needs no whitespace and carries the replaced chain's trivia.
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
             FilePath = filePath
         };
     }

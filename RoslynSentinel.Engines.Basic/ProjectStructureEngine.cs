@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
 using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Basic;
@@ -12,6 +13,17 @@ public class SolutionStructureEngine
     {
         _workspaceManager = workspaceManager;
         _config = config;
+    }
+
+    /// <summary>
+    /// Formats only the nodes of <paramref name="newRoot"/> that the rewrite annotated with <see cref="Formatter.Annotation"/>
+    /// (through <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/>) and returns the full text: lines the rewrite
+    /// did not touch keep their text and terminator, and every changed line takes the document's dominant line ending.
+    /// </summary>
+    private static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode newRoot, CancellationToken cancellationToken)
+    {
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
     public async Task<DocumentEditResult> FixMismatchedNamespacesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
@@ -552,22 +564,34 @@ public class SolutionStructureEngine
         // 1. Add using
         if (!root.Usings.Any(u => u.Name?.ToString() == "Microsoft.Extensions.Hosting"))
         {
-            root = root.AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("Microsoft.Extensions.Hosting")));
+            root = root.AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("Microsoft.Extensions.Hosting")).WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed).WithAdditionalAnnotations(Formatter.Annotation));
             // Re-find class node after root modification (stale reference otherwise)
             classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className) ?? throw new InvalidOperationException("Class not found after root modification.");
         }
 
         // 2. Change base class
         var baseType = SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName("BackgroundService"));
-        var newClass = classNode.WithBaseList(SyntaxFactory.BaseList(SyntaxFactory.SingletonSeparatedList<BaseTypeSyntax>(baseType)));
+        // The base list takes over the line break that ended the class header, so the brace stays on its own line.
+        var baseList = SyntaxFactory.BaseList(SyntaxFactory.SingletonSeparatedList<BaseTypeSyntax>(baseType));
+        ClassDeclarationSyntax newClass;
+        if (classNode.BaseList != null)
+        {
+            newClass = classNode.WithBaseList(baseList.WithTriviaFrom(classNode.BaseList).WithAdditionalAnnotations(Formatter.Annotation));
+        }
+        else
+        {
+            var headerEnd = classNode.TypeParameterList?.GreaterThanToken ?? classNode.Identifier;
+            newClass = classNode.ReplaceToken(headerEnd, headerEnd.WithTrailingTrivia()).WithBaseList(baseList.WithTrailingTrivia(headerEnd.TrailingTrivia).WithAdditionalAnnotations(Formatter.Annotation));
+        }
+
         // 3. Add ExecuteAsync override
         var executeAsync = SyntaxFactory.MethodDeclaration(SyntaxFactory.ParseTypeName("Task"), "ExecuteAsync").AddModifiers(SyntaxFactory.Token(SyntaxKind.ProtectedKeyword), SyntaxFactory.Token(SyntaxKind.OverrideKeyword), SyntaxFactory.Token(SyntaxKind.AsyncKeyword)).AddParameterListParameters(SyntaxFactory.Parameter(SyntaxFactory.Identifier("stoppingToken")).WithType(SyntaxFactory.ParseTypeName("CancellationToken"))).WithBody(SyntaxFactory.Block(SyntaxFactory.WhileStatement(SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("stoppingToken"), SyntaxFactory.IdentifierName("IsCancellationRequested"))), SyntaxFactory.Block(SyntaxFactory.ExpressionStatement(SyntaxFactory.ParseExpression("await Task.Delay(1000, stoppingToken)"))))));
-        newClass = newClass.AddMembers(executeAsync);
+        newClass = newClass.AddMembers(executeAsync.WithLeadingTrivia(SyntaxFactory.CarriageReturnLineFeed).WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed).WithAdditionalAnnotations(Formatter.Annotation));
         var newRoot = root.ReplaceNode(classNode, newClass);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
             FilePath = filePath
         };
     }
