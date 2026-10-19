@@ -29,25 +29,32 @@ public class FlagMigrationCandidateTests
     private IWorkspaceManager _workspaceManager;
     private AsyncOptimizationEngine _engine;
 
+    // Absolute root for the fixture's in-memory documents. It is never created on disk: the engine works on the
+    // loaded solution, and this keeps every document path (and every path the tests pass) absolute.
+    private string _tempDir;
+
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AsyncOptimizationEngine(_workspaceManager);
+        _tempDir = Path.Combine(Path.GetTempPath(), "FlagMigrationCandidateTests_" + Guid.NewGuid().ToString("N"));
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager.Dispose();
 
-    private void SetSource(string source, string fileName = "Service.cs")
-    {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-        _workspaceManager.SetTestSolution(solution);
-    }
+    /// <summary>Absolute path of a fixture file under this test's own root.</summary>
+    private string PathOf(string fileName) => Path.Combine(_tempDir, fileName);
+
+    private void SetSource(string source, string fileName = "Service.cs") => SetSources((fileName, source));
 
     private void SetSources(params (string fileName, string source)[] files)
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", files);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(_tempDir, "TestProj.csproj"),
+            files.Select(f => (f.fileName, f.source, PathOf(f.fileName))).ToArray());
         _workspaceManager.SetTestSolution(solution);
     }
 
@@ -68,7 +75,7 @@ namespace Avaal.Service
 }", "TripService.cs");
 
         var result = await _engine.FlagMigrationCandidateAsync(
-            "TripService.cs", "GetTrips", "AsyncBridge");
+            PathOf("TripService.cs"), "GetTrips", "AsyncBridge");
         var changes = result.Changes;
 
         Assert.That(result.AttributeClassInjected, Is.True,
@@ -99,7 +106,7 @@ namespace Avaal.Service
 }", "TripService.cs");
 
         var result = await _engine.FlagMigrationCandidateAsync(
-            "TripService.cs", "GetCount", "AsyncBridge");
+            PathOf("TripService.cs"), "GetCount", "AsyncBridge");
         var changes = result.Changes;
 
         var attrKey = changes.Keys.FirstOrDefault(fp => fp.Absolute.EndsWith("MigrationCandidateAttribute.cs", StringComparison.OrdinalIgnoreCase));
@@ -140,7 +147,7 @@ namespace Avaal.Service
 }"));
 
         var result = await _engine.FlagMigrationCandidateAsync(
-            "TripService.cs", "GetCount", "AsyncBridge");
+            PathOf("TripService.cs"), "GetCount", "AsyncBridge");
         var changes = result.Changes;
 
         Assert.That(result.AttributeClassInjected, Is.False,
@@ -162,11 +169,11 @@ public class Svc
     public int Search(string q) => 0;
 }", "Svc.cs");
 
-        var result = await _engine.FlagMigrationCandidateAsync("Svc.cs", "Search", "AsyncBridge");
+        var result = await _engine.FlagMigrationCandidateAsync(PathOf("Svc.cs"), "Search", "AsyncBridge");
         var changes = result.Changes;
 
         Assert.That(result.WasAlreadyFlagged, Is.False, "Fresh flag should not report WasAlreadyFlagged.");
-        var targetSrc = changes["Svc.cs"];
+        var targetSrc = changes[PathOf("Svc.cs")];
         Assert.That(targetSrc, Does.Contain("[MigrationCandidate(\"AsyncBridge\""),
             "Target file should have [MigrationCandidate(\"AsyncBridge\"...)] on the method.");
     }
@@ -178,10 +185,10 @@ public class Svc
 public class Svc { public int Search(string q) => 0; }", "Svc.cs");
 
         var result = await _engine.FlagMigrationCandidateAsync(
-            "Svc.cs", "Search", "AsyncBridge", score: 18);
+            PathOf("Svc.cs"), "Search", "AsyncBridge", score: 18);
         var changes = result.Changes;
 
-        Assert.That(changes["Svc.cs"], Does.Contain("Score = 18"),
+        Assert.That(changes[PathOf("Svc.cs")], Does.Contain("Score = 18"),
             "Score named argument should appear when score != 0.");
     }
 
@@ -192,10 +199,10 @@ public class Svc { public int Search(string q) => 0; }", "Svc.cs");
 public class Svc { public int Search(string q) => 0; }", "Svc.cs");
 
         var result = await _engine.FlagMigrationCandidateAsync(
-            "Svc.cs", "Search", "HandlerExtract", reason: "3 non-thin handlers");
+            PathOf("Svc.cs"), "Search", "HandlerExtract", reason: "3 non-thin handlers");
         var changes = result.Changes;
 
-        Assert.That(changes["Svc.cs"], Does.Contain("Reason = \"3 non-thin handlers\""),
+        Assert.That(changes[PathOf("Svc.cs")], Does.Contain("Reason = \"3 non-thin handlers\""),
             "Reason named argument should appear when reason is provided.");
     }
 
@@ -206,10 +213,10 @@ public class Svc { public int Search(string q) => 0; }", "Svc.cs");
 public class Svc { public int Search(string q) => 0; }", "Svc.cs");
 
         var result = await _engine.FlagMigrationCandidateAsync(
-            "Svc.cs", "Search", "AsyncBridge", score: 0);
+            PathOf("Svc.cs"), "Search", "AsyncBridge", score: 0);
         var changes = result.Changes;
 
-        Assert.That(changes["Svc.cs"], Does.Not.Contain("Score"),
+        Assert.That(changes[PathOf("Svc.cs")], Does.Not.Contain("Score"),
             "Score named argument should be omitted when score is 0.");
     }
 
@@ -219,10 +226,10 @@ public class Svc { public int Search(string q) => 0; }", "Svc.cs");
         SetSource(@"
 public class Svc { public int Search(string q) => 0; }", "Svc.cs");
 
-        var result = await _engine.FlagMigrationCandidateAsync("Svc.cs", "Search", "AsyncBridge");
+        var result = await _engine.FlagMigrationCandidateAsync(PathOf("Svc.cs"), "Search", "AsyncBridge");
         var changes = result.Changes;
 
-        Assert.That(changes["Svc.cs"], Does.Contain("FlaggedDate = \""),
+        Assert.That(changes[PathOf("Svc.cs")], Does.Contain("FlaggedDate = \""),
             "FlaggedDate named argument should always be included.");
     }
 
@@ -250,7 +257,7 @@ internal sealed class MigrationCandidateAttribute : System.Attribute
         SetSource(preFlagged, "Svc.cs");
 
         var result = await _engine.FlagMigrationCandidateAsync(
-            "Svc.cs", "Search", "AsyncBridge", score: 20);
+            PathOf("Svc.cs"), "Search", "AsyncBridge", score: 20);
         var changes = result.Changes;
 
         Assert.That(result.WasAlreadyFlagged, Is.True,
@@ -258,7 +265,7 @@ internal sealed class MigrationCandidateAttribute : System.Attribute
         Assert.That(result.PreviousPattern, Is.EqualTo("AsyncBridge"),
             "PreviousPattern should reflect the replaced attribute's pattern.");
         // Count occurrences of [MigrationCandidate in the target source.
-        var src = changes["Svc.cs"];
+        var src = changes[PathOf("Svc.cs")];
         var count = StringCountHelper.CountOccurrences(src, "[MigrationCandidate(");
         Assert.That(count, Is.EqualTo(1),
             "Re-flagging the same pattern should replace, not duplicate, the attribute.");
@@ -285,12 +292,12 @@ internal sealed class MigrationCandidateAttribute : System.Attribute
         SetSource(preFlagged, "Svc.cs");
 
         var result = await _engine.FlagMigrationCandidateAsync(
-            "Svc.cs", "Search", "HandlerExtract");
+            PathOf("Svc.cs"), "Search", "HandlerExtract");
         var changes = result.Changes;
 
         Assert.That(result.WasAlreadyFlagged, Is.False,
             "WasAlreadyFlagged should be false when adding a new (different) pattern.");
-        var src = changes["Svc.cs"];
+        var src = changes[PathOf("Svc.cs")];
         Assert.That(src, Does.Contain("[MigrationCandidate(\"AsyncBridge\""),
             "Original AsyncBridge flag should be preserved.");
         Assert.That(src, Does.Contain("[MigrationCandidate(\"HandlerExtract\""),
@@ -318,7 +325,7 @@ internal sealed class MigrationCandidateAttribute : System.Attribute
     public string FlaggedDate { get; set; }
 }", "Svc.cs");
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("Svc.cs", "Search");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("Svc.cs"), "Search");
 
         Assert.That(result.UpdatedText, Does.Not.Contain("[MigrationCandidate("),
             "[MigrationCandidate] should be removed from the bridge wrapper after conversion.");
@@ -414,7 +421,7 @@ public class Svc { public int GetCount() => 0; }", "Svc.cs");
         SetSource(@"public class Svc {}", "Svc.cs");
 
         await Assert.ThrowsAsync<System.InvalidOperationException>(async () =>
-            await _engine.FlagMigrationCandidateAsync("Missing.cs", "Foo", "AsyncBridge"),
+            await _engine.FlagMigrationCandidateAsync(PathOf("Missing.cs"), "Foo", "AsyncBridge"),
             "Should throw when the file is not in the loaded solution.");
     }
 
@@ -424,7 +431,7 @@ public class Svc { public int GetCount() => 0; }", "Svc.cs");
         SetSource(@"public class Svc { public int GetCount() => 0; }", "Svc.cs");
 
         await Assert.ThrowsAsync<System.InvalidOperationException>(async () =>
-            await _engine.FlagMigrationCandidateAsync("Svc.cs", "NonExistent", "AsyncBridge"),
+            await _engine.FlagMigrationCandidateAsync(PathOf("Svc.cs"), "NonExistent", "AsyncBridge"),
             "Should throw when the named method does not exist.");
     }
 

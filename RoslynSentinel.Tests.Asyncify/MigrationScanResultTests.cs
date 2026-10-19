@@ -138,9 +138,18 @@ public class MigrationScanResultTests
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
+    // Deliberately NOT under _tempDir: every finding carries the document path, and T3 sits close under the 15 KB
+    // inline threshold, so a long per-machine temp path (user name + guid) pushes it over. A short drive-root folder
+    // keeps the payload size stable. The folder is never created; the scan reads the loaded solution, not the disk.
+    private static readonly string DocumentRoot = Path.Combine(Path.GetPathRoot(Path.GetTempPath())!, "MigrationScanFixture");
+
+    /// <summary>Absolute path of a fixture document (see <see cref="DocumentRoot"/>).</summary>
+    private static string PathOf(string fileName) => Path.Combine(DocumentRoot, fileName);
+
     private void SetSource(string source, string fileName = "Service.cs")
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj", Path.Combine(DocumentRoot, "TestProj.csproj"), [(fileName, source, PathOf(fileName))]);
         _workspaceManager.SetTestSolution(solution);
     }
 
@@ -440,7 +449,7 @@ public class Svc
 {AttrStub}", "RealFile.cs");
 
         var rawResult = await _asyncifyTools.ScanAsyncMigrationCandidatesTool(
-            reason: "test message", scope: ToolScope.file, filePath: "NonExistent.cs");
+            reason: "test message", scope: ToolScope.file, filePath: PathOf("NonExistent.cs"));
 
         var result = Wrap<object>(rawResult);
         Assert.That(result, Is.Not.Null);

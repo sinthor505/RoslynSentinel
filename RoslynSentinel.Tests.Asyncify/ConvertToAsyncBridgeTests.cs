@@ -20,25 +20,32 @@ public class ConvertToAsyncBridgeTests
     private IWorkspaceManager _workspaceManager;
     private AsyncOptimizationEngine _engine;
 
+    // Absolute root for the fixture's in-memory documents. It is never created on disk: the engine works on the
+    // loaded solution, and this keeps every document path (and every path the tests pass) absolute.
+    private string _tempDir;
+
     [SetUp]
     public void Setup()
     {
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _engine = new AsyncOptimizationEngine(_workspaceManager);
+        _tempDir = Path.Combine(Path.GetTempPath(), "ConvertToAsyncBridgeTests_" + Guid.NewGuid().ToString("N"));
     }
 
     [TearDown]
     public void TearDown() => _workspaceManager.Dispose();
 
-    private void SetSource(string source, string fileName = "Test.cs")
-    {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
-        _workspaceManager.SetTestSolution(solution);
-    }
+    /// <summary>Absolute path of a fixture file under this test's own root.</summary>
+    private string PathOf(string fileName) => Path.Combine(_tempDir, fileName);
+
+    private void SetSource(string source, string fileName = "Test.cs") => SetMultipleFiles((fileName, source));
 
     private void SetMultipleFiles(params (string name, string content)[] files)
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", files);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(_tempDir, "TestProj.csproj"),
+            files.Select(f => (f.name, f.content, PathOf(f.name))).ToArray());
         _workspaceManager.SetTestSolution(solution);
     }
 
@@ -59,7 +66,7 @@ public class TripService
     }
 }", "TripService.cs");
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("TripService.cs"), "GetTrips");
 
         // Async overload should exist with the right signature.
         Assert.That(result.UpdatedText, Does.Contain("GetTripsAsync"),
@@ -85,7 +92,7 @@ public class TripService
     }
 }", "TripService.cs");
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("TripService.cs"), "GetTrips");
 
         // Bridge body: return GetTripsAsync(companyId).GetAwaiter().GetResult();
         Assert.That(result.UpdatedText, Does.Contain("GetTripsAsync"),
@@ -112,7 +119,7 @@ public class TripService
     }
 }", "TripService.cs");
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("TripService.cs"), "GetTrips");
 
         Assert.That(result.UpdatedText, Does.Contain("Obsolete"),
             "[Obsolete] attribute must be added to the bridge wrapper.");
@@ -135,7 +142,7 @@ public class TripService
     }
 }", "TripService.cs");
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("TripService.cs"), "GetTrips");
 
         Assert.That(result.UpdatedText, Does.Contain("// Asyncify-bridge: synchronous wrapper over GetTripsAsync."),
             "Bridge body should have the standard inline comment for readability.");
@@ -153,7 +160,7 @@ public class NotificationService
     }
 }", "NotificationService.cs");
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("NotificationService.cs", "Notify");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("NotificationService.cs"), "Notify");
 
         // void bridge: NotifyAsync(message).GetAwaiter().GetResult() -> no 'return' keyword.
         Assert.That(result.UpdatedText, Does.Contain("NotifyAsync"),
@@ -179,7 +186,7 @@ public class DriverService
     }
 }", "DriverService.cs");
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("DriverService.cs", "GetDrivers");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("DriverService.cs"), "GetDrivers");
 
         // Bridge call should forward all three parameter names.
         Assert.That(result.UpdatedText, Does.Contain("GetDriversAsync(companyId, status, limit)"),
@@ -196,7 +203,7 @@ public class TripService
     public DataTable GetTrips(int companyId) => DataHelper.Search(companyId);
 }", "TripService.cs");
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("TripService.cs"), "GetTrips");
 
         // The async overload should have a block body (with braces) for CT-propagation tool compatibility.
         // Verify the original body expression is preserved inside the async method.
@@ -219,7 +226,7 @@ public class TripService
     }
 }", "TripService.cs");
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetAllTrips");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("TripService.cs"), "GetAllTrips");
 
         Assert.That(result.UpdatedText, Does.Contain("GetAllTripsAsync"),
             "Static methods should also be convertible to bridge pattern.");
@@ -240,7 +247,7 @@ public class TripService
     }
 }", "TripService.cs");
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("TripService.cs"), "GetTrips");
 
         // The bridge wrapper (GetTrips) should appear before the async overload (GetTripsAsync).
         var bridgeIdx = result.UpdatedText!.IndexOf("GetAwaiter", StringComparison.Ordinal);
@@ -321,7 +328,7 @@ public class TripService
 
         SetSource(WithStyle(source), "TripService.cs");
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("TripService.cs"), "GetTrips");
 
         var expected = WithStyle(expectedTemplate);
         if (result.UpdatedText != expected)
@@ -350,7 +357,7 @@ public class Service
     }
 }", "Service.cs");
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "GetValue"),
+            () => _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "GetValue"),
             "Should throw when method is already async.");
     }
 
@@ -369,7 +376,7 @@ public class Service
 }", "Service.cs");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "GetTripsAsync"),
+            () => _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "GetTripsAsync"),
             "Should throw when method name already ends with 'Async'.");
     }
 
@@ -384,7 +391,7 @@ public abstract class BaseService
 }", "BaseService.cs");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _engine.ConvertToAsyncBridgeAsync("BaseService.cs", "GetTrips"),
+            () => _engine.ConvertToAsyncBridgeAsync(PathOf("BaseService.cs"), "GetTrips"),
             "Should throw for abstract methods (no body to copy).");
     }
 
@@ -402,7 +409,7 @@ public class Form1
 }", "Form1.cs");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _engine.ConvertToAsyncBridgeAsync("Form1.cs", "Button_Click"),
+            () => _engine.ConvertToAsyncBridgeAsync(PathOf("Form1.cs"), "Button_Click"),
             "Should throw for event handler methods (fixed delegate signature).");
     }
 
@@ -420,7 +427,7 @@ public class Service
 }", "Service.cs");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "ComputeRef"),
+            () => _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "ComputeRef"),
             "Should throw when method has ref parameters.");
     }
 
@@ -438,7 +445,7 @@ public class Service
 }", "Service.cs");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "TryGet"),
+            () => _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "TryGet"),
             "Should throw when method has out parameters.");
     }
 
@@ -463,7 +470,7 @@ public class TripService
 }", "TripService.cs");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips"),
+            () => _engine.ConvertToAsyncBridgeAsync(PathOf("TripService.cs"), "GetTrips"),
             "Should throw when GetTripsAsync already exists in the class.");
     }
 
@@ -477,7 +484,7 @@ public class Service
 }", "Service.cs");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-        () => _engine.ConvertToAsyncBridgeAsync("Service.cs", "NonExistentMethod"),
+        () => _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "NonExistentMethod"),
         "Should throw when the named method does not exist in the file.");
     }
 
@@ -487,7 +494,7 @@ public class Service
         SetSource(@"public class Dummy {}", "Dummy.cs");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            () => _engine.ConvertToAsyncBridgeAsync("DoesNotExist.cs", "SomeMethod"),
+            () => _engine.ConvertToAsyncBridgeAsync(PathOf("DoesNotExist.cs"), "SomeMethod"),
             "Should throw when the file is not found in the loaded solution.");
     }
 
@@ -504,7 +511,7 @@ public class Service
     public void DoWork(string arg) { _ = arg; }
 }", "Service.cs");
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("Service.cs", "DoWork");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "DoWork");
         var text = result.UpdatedText!;
 
         Assert.That(text, Does.Contain("public async Task DoWorkAsync"),
@@ -522,7 +529,7 @@ public class Service
     public static void DoWork(string arg) { _ = arg; }
 }", "Service.cs");
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("Service.cs", "DoWork");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "DoWork");
         var text = result.UpdatedText!;
 
         Assert.That(text, Does.Contain("public static async Task DoWorkAsync"),
@@ -539,7 +546,7 @@ public abstract class Base
 }", "Base.cs");
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await _engine.ConvertToAsyncBridgeAsync("Base.cs", "DoWork"));
+            async () => await _engine.ConvertToAsyncBridgeAsync(PathOf("Base.cs"), "DoWork"));
     }
 
     [Test, CancelAfter(5000)]
@@ -558,7 +565,7 @@ public class Derived : Base
 }")
         );
 
-        var result = await _engine.ConvertToAsyncBridgeAsync("Derived.cs", "DoWork");
+        var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("Derived.cs"), "DoWork");
         var text = result.UpdatedText!;
 
         Assert.That(text, Does.Contain("public async Task DoWorkAsync"),
@@ -597,7 +604,7 @@ public class DispatchForm
     private void BeginInvoke(Action a) { }
 }", "DispatchForm.cs");
 
-        var result = await _engine.ConvertEventHandlerCallerToAsyncVoidAsync("DispatchForm.cs", "Form_Load");
+        var result = await _engine.ConvertEventHandlerCallerToAsyncVoidAsync(PathOf("DispatchForm.cs"), "Form_Load");
         var text = result.UpdatedText!;
 
         Assert.That(text, Does.Contain("async void Form_Load"),
@@ -631,7 +638,7 @@ public class DispatchForm
     private void BeginInvoke(Action a) { }
 }", "DispatchForm.cs");
 
-        var result = await _engine.ConvertEventHandlerCallerToAsyncVoidAsync("DispatchForm.cs", "Form_Load");
+        var result = await _engine.ConvertEventHandlerCallerToAsyncVoidAsync(PathOf("DispatchForm.cs"), "Form_Load");
         var text = result.UpdatedText!;
 
         Assert.That(text, Does.Contain("async void Form_Load"),
