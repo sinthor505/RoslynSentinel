@@ -35,9 +35,9 @@ public class ClaudeLeanModeTests
     internal static readonly string[] CoreTools =
     [
         "LoadSolution", "ReadFile", "GetFileOutline", "GetMethodSource", "GetLargeResult",
-        "Search", "InspectSymbol", "GetDiagnostics",
+        "Search",
         "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
-        "UsingDirective", "RenameSymbol", "WriteFile", "CreateFile", "DeleteFile",
+        "RenameSymbol", "CreateFile", "DeleteFile",
         "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift",
         "McpToolsetControl", "SubAgent",
     ];
@@ -286,7 +286,8 @@ public class ClaudeLeanModeTests
         var classes = ToolClassRegistry.BasicModeToToolClasses["claude-lean"];
         var helper = new WriteToolAdviceHelper(classes, ToolClassRegistry.ClaudeLeanToolNames);
 
-        Assert.That(helper.IsExposed("WriteFile"), Is.True);
+        // WriteFile is an on-demand moveExtract tool, not core, so claude-lean advice must not name it.
+        Assert.That(helper.IsExposed("WriteFile"), Is.False);
         Assert.That(helper.IsExposed("ApplyDiff"), Is.False);
         Assert.That(helper.IsExposed("ApplyUnifiedDiff"), Is.False);
         Assert.That(helper.AdviseForOversizedEdit("ReplaceSnippet").ToolNames, Does.Not.Contain("ApplyDiff"));

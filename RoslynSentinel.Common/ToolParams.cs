@@ -3,10 +3,13 @@ namespace RoslynSentinel.Common;
 public static class ToolParams
 {
     public const string UseScratchDir =
-        "false (default): build in the repo's own bin/obj folders; if another dotnet/msbuild build against this solution " +
-        "is already running, waits up to 30s for it to finish, then fails naming the blocking process. " +
-        "true: build into a private scratch directory (.scratch/roslynsentinel-builds/<server pid>/) so parallel sessions " +
-        "cannot block each other; the repo's own bin/ is NOT updated, so isServerBinaryStale will not react to this build.";
+        "true: build into a private scratch directory so parallel sessions cannot block each other; the repo's bin/ is NOT updated, so isServerBinaryStale will not react. Default false: build in the repo's own bin/obj.";
+
+    public const string BuildDescription =
+        "Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). level=fullBuild: runs `dotnet build` (slower; also catches NuGet restore, resource and post-build failures). Success returns the outcome, projects compiled and error/warning counts. Failure returns error counts by project/file/code, the first maxDetails errors (root-cause project first), SuppressedDownstreamErrorCount and OmittedErrorCount; FullDiagnosticsResultId holds all diagnostics (read with GetLargeResult). Output tails and warnings need includeOutput / includeWarnings.";
+
+    public const string RunTestDescription =
+        "Runs `dotnet test` on the solution or one project. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by shared cause, and a Results list (resultsType, default failed; capped by maxDetails; summary=true omits it). Failed tests carry their captured Output. filter goes to `dotnet test --filter`; an unresolvable filter is a distinct error from zero matches. FullResultsId (read with GetLargeResult) holds untruncated rows; OmittedResultCount counts rows beyond maxDetails.";
 
     public const string ProjectName =
         "Project name returned by Search(mode: symbol) in the projectName field. " +
@@ -39,7 +42,7 @@ public static class ToolParams
     public const string ContextSnippet =
         "Short unique fragment identifying the target when its name alone is ambiguous, copied verbatim from a prior result.";
     */
-    public const string ContextSnippet = "Short verbatim line or fragment, unique in the file, copied exactly from the source (a bare name that appears on several lines is ambiguous - include more of the line, or add lineBefore/lineAfter)";
+    public const string ContextSnippet = "Short verbatim line from the source, unique in the file; add lineBefore/lineAfter if still ambiguous.";
 
     public const string LineBefore =
         "Line before contextSnippet.";
@@ -50,7 +53,7 @@ public static class ToolParams
     // ReplaceSnippet has no contextSnippet parameter: its anchors disambiguate oldContent. Applied to the
     // emitted schema by McpToolSchemaPatcher.ApplyReplaceSnippetLimits (top-level and batchEdits items).
     public const string ReplaceSnippetAnchorLine =
-        "Optional extra filter, applied after matchLine/withinMember: the single line just before the first line (lineBefore) or just after the last line (lineAfter) of oldContent.";
+        "Optional filter: the single line just before (lineBefore) or just after (lineAfter) oldContent.";
 
     // ReplaceSnippet match selectors: values are printed by the ambiguity error.
     public const string ReplaceSnippetWithinMember =
@@ -104,7 +107,7 @@ public static class ToolParams
 
     // Transcript review        
     public const string Reason =
-        "Why you're calling this now (min 10 chars, must contain a space).";
+        "Why you call this (min 10 chars, has a space).";
     /*
     // Testing with empty reason to reduce tool schema token usage. Observing model compliance.
     //public const string Reason = ""; // empty reason description caused models to omit the field or be surprised by the constraints, reverted to original.

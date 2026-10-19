@@ -34,7 +34,7 @@ public class WorkspaceBuildTestTools
 
     [McpServerTool(Name = "Build")]
     [Produces(DataTag.Report)]
-    [Description("Compiles the loaded solution and reports the result. level=quickBuild uses in-memory Roslyn diagnostics (fast, same check GetDiagnostics does). level=fullBuild shells out to `dotnet build` (slower, catches MSBuild-only failures - NuGet restore, resource copy, post-build events - that quickBuild can't see). A green build returns the outcome, the projects compiled and the error/warning counts only. A failed build returns the error counts by project, by file and by diagnostic code, the first maxDetails (default 20) errors with the root-cause project's errors first, and SuppressedDownstreamErrorCount (errors in projects that failed only because a project they depend on failed). OmittedErrorCount says how many errors are not listed; FullDiagnosticsResultId holds every error and warning - read it with GetLargeResult. The stdout/stderr tails and the warnings list are left out unless you pass includeOutput / includeWarnings.")]
+    [Description(ToolParams.BuildDescription)]
     public Task<SentinelCallToolResult<object>> BuildTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         BuildVerifyLevel level = BuildVerifyLevel.fullBuild,
@@ -42,25 +42,25 @@ public class WorkspaceBuildTestTools
         string? scopeName = null,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 20,
         [Description("Only used by level=fullBuild. " + ToolParams.UseScratchDir)] bool useScratchDir = false,
-        [Description("true = also return the stdout/stderr tail of the build, even when it succeeded or its errors were parsed. Default false: counts and errors only.")] bool includeOutput = false,
-        [Description("true = also return the warnings list and warning summary, capped by maxDetails. Default false: only the warning count.")] bool includeWarnings = false,
+        [Description("true = also return the build's stdout/stderr tail. Default false.")] bool includeOutput = false,
+        [Description("true = also return warnings, capped by maxDetails. Default false: count only.")] bool includeWarnings = false,
         CancellationToken cancellationToken = default)
         => _impl.Build(reason, level, scope, scopeName, maxDetails, useScratchDir, includeOutput, includeWarnings, cancellationToken);
 
     [McpServerTool(Name = "RunTest")]
     [Produces(DataTag.Report)]
-    [Description("Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. Returns TotalCount/PassedCount/FailedCount/SkippedCount, a FailureSummary grouping failures by message signature (e.g. \"45 of 50 failures share one cause\") so an agent doesn't have to paginate to notice a pattern, and a capped Results list (filtered by resultsType, then capped by maxDetails). Each failed test entry also carries Output: the test's captured output (for example NUnit TestContext.Out / Console.Out or xUnit ITestOutputHelper), the last 2000 characters, present only for failed tests. resultsType defaults to \"failed\" so a clean run stays a short summary with no per-test list; pass \"all\" to see every test's outcome. Set summary=true to omit the Results list entirely (just counts + FailureSummary), regardless of resultsType. filter is passed through to `dotnet test --filter` - an unresolvable filter expression is a distinct error from a filter that resolves but matches zero tests. With scope=solution a filter still builds and probes every test project (about 1.5 minutes for 13 projects); pass scope=project and scopeName to run one project in seconds. Failed tests are listed inline with truncated messages; FullResultsId (read it with GetLargeResult) holds the untruncated rows for a failing run and OmittedResultCount counts rows beyond maxDetails.")]
+    [Description(ToolParams.RunTestDescription)]
     public Task<SentinelCallToolResult<object>> RunTestTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("solution (default) runs every test project one after another; project runs only the project named in scopeName; file is not supported.")] ToolScope scope = ToolScope.solution,
         [Description("Project name (for example RoslynSentinel.Tests.Basic) when scope=project; not a parameter called projectName.")] string? scopeName = null,
-        [Description("Passed through to `dotnet test --filter`. With scope=solution a filter still builds and probes every test project (about 1.5 minutes for 13 projects); pass scope=project and scopeName to run one project in seconds.")] string? filter = null,
+        [Description("Passed to `dotnet test --filter`. With scope=solution it still builds every test project (about 1.5 minutes); prefer scope=project with scopeName.")] string? filter = null,
         TestResultsFilter resultsType = TestResultsFilter.failed,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
         int timeoutSeconds = 600,
-        [Description("If true, omit the per-test Results list from the response entirely - only counts and FailureSummary are returned, independent of resultsType.")] bool summary = false,
+        [Description("true = counts and FailureSummary only, no Results list.")] bool summary = false,
         [Description(ToolParams.UseScratchDir)] bool useScratchDir = false,
-        [Description("If true, keep each failed test's Output and the stdout/stderr tails on a completed run; default false returns a compact digest (messages and stack traces are truncated; the unprojected result is stored behind FullResultsId).")] bool includeOutput = false,
+        [Description("true = keep failed tests' Output and the stdout/stderr tails. Default false: compact digest, full result behind FullResultsId.")] bool includeOutput = false,
         CancellationToken cancellationToken = default)
         => _impl.RunTest(reason, scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, includeOutput, cancellationToken);
 }

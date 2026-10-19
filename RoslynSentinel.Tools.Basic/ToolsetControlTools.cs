@@ -22,9 +22,9 @@ public class ToolsetControlTools
     [McpServerTool(Name = ToolsetCatalog.ControlToolName)]
     [Produces(DataTag.ResultOnly)]
     [Description("Turns an on-demand toolset on or off; the server then sends tools/list_changed so your tool list updates. Idempotent. " +
-        "declarations = Declaration (modifier, accessibility, attribute, baseType), ParameterEdit (method, constructor), ModifyEnum, ChangeSignature, SyncTypeAndFilename. " +
-        "moveExtract = MoveMember, MoveType, MoveAllTypesToFiles, Extract*, Inline*, Introduce*, WrapRange, InvertAssignments, ConvertAnonymousToNamed, SyncInterface, SummaryComment, DeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments, QualifyCrefs. " +
-        "projectAdmin = CreateProject, SplitProjectByFolder, ListSolutionItems, ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth, GetOperationDetail, RetryFailedChanges, GetTypeInfo, QuerySymbolRelationships, GetBestInsertionPoint. " +
+        "declarations = Declaration (modifier, accessibility, attribute, baseType), ParameterEdit (method, constructor), ModifyEnum, ChangeSignature, SyncTypeAndFilename, UsingDirective. " +
+        "moveExtract = MoveMember, MoveType, MoveAllTypesToFiles, Extract*, Inline*, Introduce*, WrapRange, InvertAssignments, ConvertAnonymousToNamed, SyncInterface, SummaryComment, DeleteUnusedSymbol, PreviewRenameImpact, ApplyDiff, ApplyUnifiedDiff, SemanticFindReplace, NamedArguments, QualifyCrefs, WriteFile. " +
+        "projectAdmin = CreateProject, SplitProjectByFolder, ListSolutionItems, ListWorkspaceSolutions, ListProjectFrameworkTargets, Features, ProjectDoc, GetWorkspaceHealth, GetOperationDetail, RetryFailedChanges, GetTypeInfo, QuerySymbolRelationships, GetBestInsertionPoint, GetDiagnostics, InspectSymbol. " +
         "testCategories = TagTestCategories (plan test-category attributes from the production types each test references; dry run by default, dryRun: false applies).")]
     public SentinelCallToolResult<object> McpToolsetControlTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,

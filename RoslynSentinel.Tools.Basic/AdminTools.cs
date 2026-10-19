@@ -18,12 +18,12 @@ public class AdminTools
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "ExternalFileDrift")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Inspect and resolve external file drift: a tracked file that changed on disk outside this server (an editor, git, a build step). A write that touches such a file is refused and halts the session until the drift is acknowledged; read-only tools keep working meanwhile. operation Status = is the session halted and how many external changes are tracked. operation List = full paths of the tracked changes; review these first. operation Acknowledge = declare changes reviewed and clear the session halt; it needs either files (names or relative paths from List) with acknowledgeScope ConfirmWithListedFiles (the default), or acknowledgeScope ConfirmAll with no files to clear every tracked change. Files you did not name stay flagged and halt the session again if a later write touches them.")]
+    [Description("Inspect and clear external file drift: a tracked file changed on disk outside this server. A write touching such a file is refused and halts the session; read-only tools keep working. operation Status = halted or not, plus the tracked count. List = tracked file paths; review these first. Acknowledge = clear the halt: pass files (from List) with acknowledgeScope ConfirmWithListedFiles (default), or acknowledgeScope ConfirmAll with no files. Files you did not name stay flagged.")]
     public string ExternalFileDriftTool(
     [Description(ToolParams.Reason)] ToolCallReason reason,
-    [Description("Status, List or Acknowledge. After a write was refused with 'Session halted', call List first.")] ExternalFileDriftOperation operation,
-    [Description("Only for operation Acknowledge with acknowledgeScope ConfirmWithListedFiles. File names or relative paths (CSV or JSON array) taken from operation List. Leave empty when acknowledgeScope is ConfirmAll.")] string? files = null,
-    [Description("Only for operation Acknowledge. ConfirmWithListedFiles (default): clear only the files named in files; refused when files is empty. ConfirmAll: clear every tracked external change; pass no files.")] ExternalFileDriftAcknowledgeScope acknowledgeScope = ExternalFileDriftAcknowledgeScope.ConfirmWithListedFiles,
+    [Description("Status, List or Acknowledge. After a 'Session halted' refusal, call List first.")] ExternalFileDriftOperation operation,
+    [Description("Only for Acknowledge with ConfirmWithListedFiles: names or relative paths (CSV or JSON array) from List.")] string? files = null,
+    [Description("Only for Acknowledge. ConfirmWithListedFiles (default): clear only the named files; refused when files is empty. ConfirmAll: clear every tracked change; pass no files.")] ExternalFileDriftAcknowledgeScope acknowledgeScope = ExternalFileDriftAcknowledgeScope.ConfirmWithListedFiles,
     CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;

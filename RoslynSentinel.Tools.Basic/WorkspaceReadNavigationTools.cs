@@ -102,7 +102,7 @@ public class WorkspaceReadNavigationTools
         [Consumes(DataTag.ResultId)] string? resultId = null,
         [Description("Path to a largeresult_*.json file. Required if resultId is omitted.")]
         [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
-        [Description("Max records to return. Ignored for Raw/text results - use charLimit. A page may return fewer rows than limit when the result exceeds the inline size backstop; always continue from nextOffset while hasMoreData is true.")]
+        [Description("Max records per page; a page may return fewer. Continue from nextOffset while hasMoreData is true. For text results use charLimit.")]
         [ToolOption(ToolOptionTag.ResultLimit)] int limit = 50,
         [Description("Records (or characters, for text results) to skip before the next page.")]
         [ToolOption(ToolOptionTag.Offset)] int offset = 0,
@@ -116,17 +116,13 @@ public class WorkspaceReadNavigationTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.ProjectName)]
-    [Description("Unified search. mode selects what's searched: text (free-text/regex scan), symbol (declaration lookup by name), references (callers and/or implementations of a symbol: use mode callers for call sites, implementations for overrides/interface implementers, references for both), attribute (every place an attribute is applied, by name e.g. TestFixture or TestFixtureAttribute; returns decorated symbol, target kind, arguments, file, line), or a declaration-kind listing (all, namespace, class, interface, method, property, struct, record, enum, enum member, constructor, field). query: mode text = pattern matched as both a literal and a regex (use fileGlob, not a path parameter, to restrict files); symbol/references = symbol name; declaration-kind modes = optional case-insensitive name filter (exact name unless exactMatch is false). Declaration-kind listings return at most 30 rows: when more match, totalRecords holds the full match count, hasMoreData is true, listSummary gives per-project (byProject) and top-10 per-file (byFile, truncatedFileCount) match counts over ALL matches, and warningDetails says the list was truncated - narrow with query or projectName, or use mode: symbol. Zero matches is not an error: it returns an empty result (isError false, totalRecords 0) whose statusMessage says what to try next.")]
+    [Description("Unified search; mode selects the target. text: regex/literal scan of .cs files (restrict with fileGlob). symbol: declaration lookup by name. references/callers/implementations: usages of a symbol (callers = call sites, implementations = overrides/implementers). attribute: where an attribute is applied. Declaration-kind modes (all, namespace, class, interface, method, property, struct, record, enum, enum member, constructor, field) list declarations, max 30 rows; totalRecords and hasMoreData show truncation - narrow with query or projectName. Zero matches is not an error.")]
     public Task<SentinelCallToolResult<object>> SearchSolutionTool(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     SearchMode mode,
-    [Description("mode: text = pattern matched as both a literal and a regex; symbol/references/callers/implementations = symbol name; attribute = attribute name; declaration-kind modes = optional case-insensitive name filter (see exactMatch). Omit in declaration-kind modes only if you want up to 30 rows of that kind. Text mode is case-insensitive and per line, .cs files only; use | for alternation. Required for modes text, symbol, references, callers, implementations and attribute.")]
+    [Description("text: pattern matched as literal and regex, case-insensitive, per line (| for alternation). symbol/references/callers/implementations/attribute: the name. Declaration-kind modes: optional name filter (see exactMatch). Required except in declaration-kind modes.")]
         string? query = null,
-    [Description("mode: text only. Glob restricting file paths (omit for all files). " +
-        "Supports '*' (within one path segment), '**' (any depth), '?' (one char), " +
-        "'{a,b,...}' alternation, and '[abc]'/'[!abc]' character classes. A glob " +
-        "containing '/' matches the solution-relative path (e.g. '**/Foo.cs', 'MyProj/*.cs'); a " +
-        "glob with no '/' matches the bare filename only (e.g. '*.cs', 'Foo.cs').")]
+    [Description("mode text only. Glob on file paths: '*', '**', '?', '{a,b}'. With '/' it matches the solution-relative path (e.g. 'MyProj/**/*.cs'); without '/' the bare filename (e.g. 'Foo.cs').")]
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
     [Description("mode: text only. Caps total matches scanned.")]
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,

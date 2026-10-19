@@ -63,7 +63,7 @@
 
 | Class | Tool name | Modes | Breaker | Summary |
 |-------|-----------|-------|---------|---------|
-| AdminTools | ExternalFileDrift | Admin, Claude, claude-lean | Allowed | Inspect and resolve external file drift: a tracked file that changed on disk outside this server (an editor, git, a... |
+| AdminTools | ExternalFileDrift | Admin, Claude, claude-lean | Allowed | Inspect and clear external file drift: a tracked file changed on disk outside this server. |
 | AdminTools | McpServerControl | Admin, Claude, claude-lean | - | Operator-only control of this server process. operation=GetServerStatus reports the running process.... |
 | DeclarationTools | Declaration | claude-lean (on demand) | - | Changes a declaration's modifier, accessibility, attribute or base type. |
 | DocumentationTools | ProjectDoc | Claude, claude-lean (on demand), Workspace | - | Reads, writes, appends, or lists project doc files under docs/. |
@@ -74,7 +74,7 @@
 | RefactoringExtractionDocsTools | ExtractLocalVariable | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Extracts an inline expression into a named local variable declaration. exactExpressionText must be the WHOLE... |
 | RefactoringExtractionDocsTools | ExtractMethod | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Extracts selected statements into a new method with the return type inferred from the selection. |
 | RefactoringExtractionDocsTools | SummaryComment | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Add, remove, or view a /// <summary> XML doc comment on a type or member. |
-| RefactoringExtractionDocsTools | UsingDirective | Claude, claude-lean, Refactor, RefactorExtractionDocs | - | Add, remove, or view using directives in a file. |
+| RefactoringExtractionDocsTools | UsingDirective | Claude, claude-lean (on demand), Refactor, RefactorExtractionDocs | - | Add, remove, or view using directives in a file. |
 | RefactoringSignatureTools | ChangeAccessibility | Claude, Refactor, RefactorSignature | - | Sets the accessibility of a type or member to the given level, replacing whatever is present. |
 | RefactoringSignatureTools | ConstructorParameter | Claude, Refactor, RefactorSignature | - | Add, remove, or view DI constructor parameters on a class. |
 | RefactoringSignatureTools | MethodSignature | Claude, Refactor, RefactorSignature | - | Add, remove, or view a method's parameters (any method; ConstructorParameter handles DI constructor parameters with a... |
@@ -87,7 +87,7 @@
 | RefactoringStructuralTools | SyncTypeAndFilename | Claude, claude-lean (on demand), Refactor, RefactoringStructural | - | Synchronizes the filename to match a type declared in the file. |
 | SemanticFindReplaceTools | SemanticFindReplace | claude-lean (on demand) | - | Semantic (compiler-aware, not text) find-replace with two operations. operation: invertBoolean renames a bool... |
 | SymbolNavigationTools | GetTypeInfo | Claude, claude-lean (on demand), SymbolNavigation, Workspace | - | Returns type information for a type you already know the name of - hierarchy, members, or both. |
-| SymbolNavigationTools | InspectSymbol | Claude, claude-lean, SymbolNavigation, Workspace | - | Inspects a symbol in depth. |
+| SymbolNavigationTools | InspectSymbol | Claude, claude-lean (on demand), SymbolNavigation, Workspace | - | Inspects a symbol in depth. |
 | SymbolNavigationTools | LocateSymbol | Claude, SymbolNavigation, Workspace | - | Locates declaration sites for a symbol by name. |
 | SymbolRelationshipTools | FindReferences | Claude, SymbolRelationship, Workspace | - | Finds call sites and/or implementations for a symbol (single-level, flat lookup). |
 | SymbolRelationshipTools | GetBestInsertionPoint | Claude, claude-lean (on demand), SymbolRelationship, Workspace | - | Returns the best 1-based line number for inserting a new member in a type, following standard C# ordering (fields ->... |
@@ -98,10 +98,10 @@
 | WholeFileWriteTools | ApplyDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a change set as either full file contents (changesetFormat=files) or a unified diff... |
 | WholeFileWriteTools | ApplyUnifiedDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a unified diff against a single file; mismatched hunk lines are re-anchored nearby. |
 | WholeFileWriteTools | DeleteFile | Claude, claude-lean, WholeFileWrite | - | Deletes a file from disk; fails if it doesn't exist. |
-| WholeFileWriteTools | WriteFile | Claude, claude-lean, WholeFileWrite | - | Writes a whole file to disk, creating or overwriting it. |
-| WorkspaceBuildTestTools | Build | WorkspaceBuildTest | - | Compiles the loaded solution and reports the result. level=quickBuild uses in-memory Roslyn diagnostics (fast, same... |
+| WholeFileWriteTools | WriteFile | Claude, claude-lean (on demand), WholeFileWrite | - | Writes a whole file to disk, creating or overwriting it. |
+| WorkspaceBuildTestTools | Build | WorkspaceBuildTest | - | Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). level=fullBuild: runs `dotnet build`... |
 | WorkspaceBuildTestTools | GetDiagnostics | WorkspaceBuildTest | - | Gets compiler diagnostics for a file, project, or the whole solution. |
-| WorkspaceBuildTestTools | RunTest | WorkspaceBuildTest | - | Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. |
+| WorkspaceBuildTestTools | RunTest | WorkspaceBuildTest | - | Runs `dotnet test` on the solution or one project. |
 | WorkspaceFileEditTools | CreateFile | WorkspaceFileContent, WorkspaceFileIO | - | Creates a new file. |
 | WorkspaceFileEditTools | ReadFile | WorkspaceFileContent, WorkspaceFileIO | Allowed | Returns the raw text of a file in the loaded solution, verbatim (no reformatting). |
 | WorkspaceFileEditTools | ReplaceSnippet | WorkspaceFileContent, WorkspaceFileIO | - | Replaces one exact block of text with another in a single file, for localized batchEdits. |
@@ -114,29 +114,29 @@
 | WorkspaceProjectManagementTools | ListProjectFrameworkTargets | WorkspaceProjectManagement | - | Returns each project's TargetFramework value. |
 | WorkspaceProjectManagementTools | ListSolutionItems | WorkspaceProjectManagement | Allowed | Lists projects, files, dependencies, or solution-folder items in the loaded solution. |
 | WorkspaceProjectManagementTools | ListWorkspaceSolutions | WorkspaceProjectManagement | - | Lists all *.sln and *.slnx files under a directory. |
-| WorkspaceProjectManagementTools | LoadSolution | WorkspaceProjectManagement | - | Loads a .NET solution file into memory for persistent analysis. |
+| WorkspaceProjectManagementTools | LoadSolution | WorkspaceProjectManagement | - | Loads a .NET solution into memory; required before any tool that needs a loaded solution. |
 | WorkspaceProjectManagementTools | SplitProjectByFolder | WorkspaceProjectManagement | - | Moves all files under a specific folder from a source project to a new target project, preserving folder structure. |
 | WorkspaceReadNavigationTools | GetFileOutline | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Returns a structural outline of a file's types and members with 1-based line ranges (no bodies). |
 | WorkspaceReadNavigationTools | GetLargeResult | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Pages through a large result written to disk after exceeding the inline size threshold. |
 | WorkspaceReadNavigationTools | GetMethodSource | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Returns a method's or constructor's full source text and attributes. |
 | WorkspaceReadNavigationTools | GetOperationDetail | Claude, claude-lean (on demand), Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Returns a filtered, paged slice of an operation result blob by changeId. |
 | WorkspaceReadNavigationTools | ListAll | Claude, Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Lists every declared symbol in the loaded solution with file, kind, name, container, and line range. |
-| WorkspaceReadNavigationTools | Search | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Unified search. mode selects what's searched: text (free-text/regex scan), symbol (declaration lookup by name),... |
-| WorkspaceTools | Build | Claude, claude-lean, Workspace | - | Compiles the loaded solution and reports the result. level=quickBuild uses in-memory Roslyn diagnostics (fast, same... |
+| WorkspaceReadNavigationTools | Search | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Unified search; mode selects the target. text: regex/literal scan of .cs files (restrict with fileGlob). symbol:... |
+| WorkspaceTools | Build | Claude, claude-lean, Workspace | - | Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). level=fullBuild: runs `dotnet build`... |
 | WorkspaceTools | CreateFile | Claude, claude-lean, Workspace | - | Creates a new file; fails if it already exists. |
 | WorkspaceTools | CreateProject | Claude, claude-lean (on demand), Workspace | - | Creates a new project and adds it to the loaded solution. |
 | WorkspaceTools | DeleteUnusedSymbol | Claude, claude-lean (on demand), Workspace | - | Deletes a symbol only if it has zero usages anywhere in the codebase. |
 | WorkspaceTools | Features | Claude, claude-lean (on demand), Workspace | - | Queries or updates feature flags. |
-| WorkspaceTools | GetDiagnostics | Claude, claude-lean, Workspace | - | Gets compiler diagnostics for a file, project, or the whole solution. |
+| WorkspaceTools | GetDiagnostics | Claude, claude-lean (on demand), Workspace | - | Gets compiler diagnostics for a file, project, or the whole solution. |
 | WorkspaceTools | GetWorkspaceHealth | Claude, claude-lean (on demand), Workspace | Allowed | Reports live workspace/solution health: loaded state, project/document counts, and staleness. |
 | WorkspaceTools | ListProjectFrameworkTargets | Claude, claude-lean (on demand), Workspace | - | Returns each project's TargetFramework value. |
 | WorkspaceTools | ListSolutionItems | Claude, claude-lean (on demand), Workspace | Allowed | Lists projects, files, dependencies, or solution-folder items in the loaded solution. |
 | WorkspaceTools | ListWorkspaceSolutions | Claude, claude-lean (on demand), Workspace | - | Lists .sln/.slnx files under a directory, for use with LoadSolution. |
-| WorkspaceTools | LoadSolution | Claude, claude-lean, Workspace | - | Loads a .NET solution into memory. |
+| WorkspaceTools | LoadSolution | Claude, claude-lean, Workspace | - | Loads a .NET solution into memory; required before any tool that needs a loaded solution. |
 | WorkspaceTools | ReadFile | Claude, claude-lean, Workspace | Allowed | Returns a file's raw text verbatim, or a 1-based line-range slice via startLine/endLine. |
 | WorkspaceTools | ReplaceSnippet | Claude, claude-lean, Workspace | - | Replaces one exact text block with another in a file, for small localized edits. |
 | WorkspaceTools | RetryFailedChanges | Claude, claude-lean (on demand), Workspace | - | Retries failed file writes using server-cached content. |
-| WorkspaceTools | RunTest | Claude, claude-lean, Workspace | - | Runs `dotnet test` against the loaded solution (or a single project) and reports structured results. |
+| WorkspaceTools | RunTest | Claude, claude-lean, Workspace | - | Runs `dotnet test` on the solution or one project. |
 | WorkspaceTools | SplitProjectByFolder | Claude, claude-lean (on demand), Workspace | - | Moves all files under a folder from one project to a new target project, preserving structure. |
 | WorkspaceTools | UndoLastApply | Claude, claude-lean, Workspace | - | Reverts files from a previous apply back to their pre-apply state. |
 

@@ -42,9 +42,9 @@ public static class ToolClassRegistry
     public static readonly IReadOnlySet<string> ClaudeLeanToolNames = new HashSet<string>(
         [
             "LoadSolution", "ReadFile", "GetFileOutline", "GetMethodSource", "GetLargeResult",
-            "Search", "InspectSymbol", "GetDiagnostics",
+            "Search",
             "Build", "RunTest", "Git", "ReplaceSnippet", "Member",
-            "UsingDirective", "RenameSymbol", "WriteFile", "CreateFile", "DeleteFile",
+            "RenameSymbol", "CreateFile", "DeleteFile",
             "UndoLastApply", "McpServerControl", "McpServerStatus", "ExternalFileDrift", "SubAgent",
             ToolsetCatalog.ControlToolName,
         ],
