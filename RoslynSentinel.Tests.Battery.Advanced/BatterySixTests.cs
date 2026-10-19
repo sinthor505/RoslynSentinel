@@ -149,6 +149,26 @@ public class CacheWarmupWorker { public void Initialize() { } }");
     }
 
     [Test]
+    public async Task ConvertToBackgroundService_ExistingInterface_IsKeptAfterBackgroundService()
+    {
+        SetSource(@"
+using System;
+
+public class W : IDisposable
+{
+    public void Dispose() { }
+}");
+        var result = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "W");
+        Assert.That(result.UpdatedText, Does.Match(@"class W\s*:\s*BackgroundService\s*,\s*IDisposable"), "BackgroundService first, existing interface kept");
+        var syntaxErrors = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(result.UpdatedText!)
+            .GetDiagnostics()
+            .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+            .Select(d => d.ToString())
+            .ToList();
+        Assert.That(syntaxErrors, Is.Empty);
+    }
+
+    [Test]
     public async Task ConvertToBackgroundService_ClassNotFound_ThrowsException()
     {
         SetSource("public class Foo { }", "Test.cs");

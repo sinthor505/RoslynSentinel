@@ -550,6 +550,26 @@ public class SolutionStructureEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax ?? throw new InvalidOperationException("Could not parse syntax root.");
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className) ?? throw new ToolNotFoundException("Class not found.");
+        // Existing interfaces must survive the conversion. A base class cannot be told apart from an interface
+        // by syntax alone, so classify through the semantic model of the original (unmodified) tree.
+        var keptInterfaces = new List<BaseTypeSyntax>();
+        var hasNonInterfaceBase = false;
+        if (classNode.BaseList != null)
+        {
+            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+            foreach (var existing in classNode.BaseList.Types)
+            {
+                if (semanticModel?.GetTypeInfo(existing.Type, cancellationToken).Type?.TypeKind == TypeKind.Interface)
+                {
+                    keptInterfaces.Add(existing.WithoutTrivia());
+                }
+                else
+                {
+                    hasNonInterfaceBase = true;
+                }
+            }
+        }
+
         // 1. Add using
         if (!root.Usings.Any(u => u.Name?.ToString() == "Microsoft.Extensions.Hosting"))
         {
@@ -561,7 +581,15 @@ public class SolutionStructureEngine
         // 2. Change base class
         var baseType = SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName("BackgroundService"));
         // The base list takes over the line break that ended the class header, so the brace stays on its own line.
-        var baseList = SyntaxFactory.BaseList(SyntaxFactory.SingletonSeparatedList<BaseTypeSyntax>(baseType));
+        // BackgroundService first, then the kept interfaces. An existing non-interface base class conflicts with
+        // BackgroundService; that case keeps the old behaviour (the whole base list is replaced) pending a design decision.
+        var baseTypes = new List<BaseTypeSyntax> { baseType };
+        if (!hasNonInterfaceBase)
+        {
+            baseTypes.AddRange(keptInterfaces);
+        }
+
+        var baseList = SyntaxFactory.BaseList(SyntaxFactory.SeparatedList(baseTypes));
         ClassDeclarationSyntax newClass;
         if (classNode.BaseList != null)
         {
