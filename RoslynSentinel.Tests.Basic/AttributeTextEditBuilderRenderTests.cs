@@ -12,7 +12,7 @@ namespace RoslynSentinel.Tests.Basic;
 /// Slice C9 characterization tests (docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md):
 /// byte-exact pins for how <see cref="AttributeTextEditBuilder"/> renders caller-supplied attribute text (inner spacing,
 /// the passed end-of-line, eol validation) and rejects comments (boundary, inner, sibling), pinned on the code that still
-/// went through the NormalizeNewChildWhitespace guard so the self-contained rendering must reproduce them exactly.
+/// went through a whole-subtree whitespace guard (since deleted), so the self-contained rendering must reproduce them exactly.
 /// </summary>
 [TestFixture]
 [Category("AttributeTextEditBuilder")]

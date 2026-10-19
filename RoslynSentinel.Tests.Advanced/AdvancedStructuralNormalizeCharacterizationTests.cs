@@ -9,8 +9,8 @@ namespace RoslynSentinel.Tests.Advanced;
 
 /// <summary>
 /// Slice C7a characterization tests (docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
-/// Byte-exact pins for the <c>StructuralRefactoringEngine</c> sites that ended in
-/// <c>RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace</c>: ConvertAbstractClassToInterface,
+/// Byte-exact pins (LF, CRLF and Mixed output) for the <c>StructuralRefactoringEngine</c> edit paths that now end in
+/// the EOL-aware <c>RoslynFormattingHelper</c> helpers (formerly a whole-subtree whitespace pass): ConvertAbstractClassToInterface,
 /// ReplaceConstructorWithFactory, ExtractSuperclass, InlineClass (same file and cross file), UpdateTypeReferences
 /// (through a cross-file InlineClass) and RunMicroRefactoring. Each input has untouched, irregularly spaced code
 /// (<c>UntouchedLine</c>). A line with a trailing "~" ends in a stray CRLF in the "Mixed" (otherwise LF) variant.

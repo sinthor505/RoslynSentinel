@@ -8,8 +8,8 @@ namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
 /// C6-3 characterization tests for <c>MemberRefactoringEngine.ExtractMethodAsync</c>, whose extracted method and
-/// standalone call-site snippet previously went through <c>NormalizeWholeSubtreeWhitespace</c> and
-/// <c>NormalizeNewChildWhitespace</c>. Pins the standalone <c>ExtractedMethodText</c> and
+/// standalone call-site snippet previously went through two whole-subtree whitespace helpers (since replaced by
+/// the EOL-aware <c>RoslynFormattingHelper</c> helpers). Pins the standalone <c>ExtractedMethodText</c> and
 /// <c>CallSiteReplacement</c> snippets and the edited document for LF, CRLF and mixed-ending inputs.
 /// </summary>
 [TestFixture]

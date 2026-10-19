@@ -8,8 +8,8 @@ using RoslynSentinel.Engines.Advanced;
 namespace RoslynSentinel.Tests.Advanced;
 
 /// <summary>
-/// C6-3 characterization tests for <c>MappingEngine.GenerateMappingAsync</c>, which previously ended in
-/// <c>RoslynFormattingHelper.NormalizeNewChildWhitespace</c>. The generated mapping method is a standalone snippet
+/// C6-3 characterization tests for <c>MappingEngine.GenerateMappingAsync</c>, which now formats its snippet with
+/// <c>RoslynFormattingHelper.FormatNewSnippetAsync</c>. The generated mapping method is a standalone snippet
 /// (it is not inserted into the document), so it is a new node with no siblings to protect. These pins are
 /// byte-exact: the snippet is formatted for the line ending of the source document (dominant ending), with no leading
 /// or trailing blank line.
@@ -127,7 +127,7 @@ public class MappingNormalizeCharacterizationTests
     [Test]
     public async Task GenerateMapping_CrOnlyDocument_SnippetTakesTheDocumentsCrEnding()
     {
-        // Accepted change of the C6-3 migration: NormalizeNewChildWhitespace only accepted LF or CRLF, so the snippet of a
+        // Accepted change of the C6-3 migration: the former new-child whitespace helper only accepted LF or CRLF, so the snippet of a
         // legacy CR-only document used to be LF. Every formatted line now takes the document's dominant ending.
         var text = await GenerateAsync(Join(SourceLines, "\r"));
 

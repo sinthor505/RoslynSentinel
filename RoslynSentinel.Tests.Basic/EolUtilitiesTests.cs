@@ -19,7 +19,7 @@ public class EolUtilitiesTests
     [TestCase("a\r\nb\r\nc\r\n", "\r\n", TestName = "DetectNormalizableEol_Crlf_ReturnsCrlf")]
     [TestCase("a\r\nb\r\nc\n", "\r\n", TestName = "DetectNormalizableEol_MixedCrlfDominant_ReturnsCrlf")]
     [TestCase("a\nb\nc\r\n", "\n", TestName = "DetectNormalizableEol_MixedLfDominant_ReturnsLf")]
-    public void DetectNormalizableEol_ReturnsOnlyAStyleNormalizeNewChildAccepts(string content, string expected)
+    public void DetectNormalizableEol_ReturnsOnlyLfOrCrlf(string content, string expected)
     {
         var result = EolUtilities.DetectNormalizableEol(Microsoft.CodeAnalysis.Text.SourceText.From(content));
 

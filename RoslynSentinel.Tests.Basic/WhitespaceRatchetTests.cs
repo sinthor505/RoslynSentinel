@@ -36,7 +36,7 @@ public class WhitespaceRatchetTests
         ["RoslynSentinel.Engines.Basic/MsToolAugmentEngine.cs::FormatDocumentSafeAsync"] = 1,
         // Slice C9 (owner-approved): renders caller-supplied attribute text into a TextEdit string, not a document node,
         // so there is no Document for the annotation formatter; every trivia is checked (comments rejected) and stripped
-        // first, so NormalizeWhitespace discards no user formatting. Replaced the NormalizeNewChildWhitespace site there.
+        // first, so NormalizeWhitespace discards no user formatting. Replaced a deleted whole-subtree whitespace helper site there.
         ["RoslynSentinel.Engines.Basic/AttributeTextEditBuilder.cs::NormalizeAttributeText"] = 1,
     };
 

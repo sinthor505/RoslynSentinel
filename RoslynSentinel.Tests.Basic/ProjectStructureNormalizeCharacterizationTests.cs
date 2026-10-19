@@ -9,8 +9,8 @@ namespace RoslynSentinel.Tests.Basic;
 
 /// <summary>
 /// Slice 5b characterization tests (docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
-/// Byte-exact pin for <c>SolutionStructureEngine.ConvertToBackgroundServiceAsync</c>, which ended in
-/// <c>RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace</c>. The input has an untouched, badly spaced member
+/// Byte-exact pin (LF, CRLF and Mixed output) for <c>SolutionStructureEngine.ConvertToBackgroundServiceAsync</c>, which now ends in
+/// the EOL-aware <c>RoslynFormattingHelper</c> helpers (formerly a whole-subtree whitespace pass). The input has an untouched, badly spaced member
 /// (<c>UntouchedLine</c>) that the rewrite does not change. "Mixed" is LF except the untouched line, which ends in a
 /// stray CRLF. The pin encodes the migrated contract (annotated-span formatting): the untouched line keeps its text,
 /// changed lines take the document's dominant line ending, and a stray CRLF on an untouched line survives. The
