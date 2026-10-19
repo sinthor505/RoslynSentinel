@@ -1,6 +1,6 @@
 # Trim the claude-lean core surface from about 16.4k to about 9k tokens
 
-**Status:** IN PROGRESS 2026-10-18. Slices 1-5 and 6a built (Git aliases `target`/`commitHash` -> `ref`, `files` -> `paths` via validator aliases; Git 7186 -> 6507 chars). Remaining: 6b `GitRemote` class (registered in every mode with Git, on-demand set `git` in claude-lean; not on the breaker allow-list), 7 `TypedMember` holding only `addTypedMember` and its 9 params (registered in every mode with Member, on-demand `declarations` in claude-lean; `addTopLevelType` stays in Member), 8 re-measure. Decisions made by the user 2026-10-18.
+**Status:** IMPLEMENTED 2026-10-18. All 8 slices built (6a c01b1f51, 6b 0b0869c4, 7 7b01ea33, 8 budget constants). Result: claude-lean core 24 tools / 42,221 chars (~16.4k tokens) -> 19 tools / 27,435 chars by `Measure-ToolSchemaCost.ps1` (~10.7k tokens; 27,752 by the in-process `ClaudeLeanSchemaBudgetTests`), largest tool Git 7205 -> 4089. Short of the ~9k target; further cuts need description trims on Git/Search/ReplaceSnippet. User decisions: the Git split applies in every mode (`GitRemote`, on-demand set `git` in claude-lean, not on the breaker allow-list); retired Git params are validator aliases; `TypedMember` holds only `addTypedMember` (on-demand `declarations`), `addTopLevelType` stays in Member. Open: ModelEval before/after for weak models was not run.
 
 ## Motivation
 

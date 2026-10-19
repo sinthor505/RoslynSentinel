@@ -8,6 +8,15 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## claude-lean schema budget over its limit / no headroom - resolved (2026-10-18)
+
+**Evidence (2026-10-18):** proposal_trim_claude_lean_core_surface.md slices 1-8 (last commits c01b1f51, 0b0869c4, 7b01ea33) cut the core surface from 24 tools / ~42.9k chars to 19 tools / 27752 chars (largest tool Git 4157); `ClaudeLeanSchemaBudgetTests` constants lowered to 28000 total / 4500 per tool.
+
+Original TODO.md text (moved verbatim 2026-10-18):
+
+- [OPEN] `ClaudeLeanSchemaBudgetTests.CoreSurface_TotalSchemaSize_IsWithinBudget` fails for both flavours (2026-10-18) - Advanced 42964 of 42500, Basic 40994 of 40500, same +778 chars since the 2026-10-14 measurement in both, so not from the MoveMember work; raise the constants or trim descriptions - [doc](references/reference_changing_claude_lean_tools.md)
+- [OPEN] Schema budget headroom is about 2 chars (2026-10-17) - claude-lean Search/Git schemas sit at the `CoreSurface` limits (~40498/40500); the next parameter must trim wording first - [doc](proposals/proposal_reduce_tool_schema_token_cost.md)
+
 ## `Search(mode: references)` could not resolve a type by name unless `filePath` was pinned - resolved (verified 2026-10-17)
 
 **Evidence (2026-10-17):** the blocker is filed under `blockers/resolved/blocking_error_search_references_by_name_excludes_types.md`; the TODO.md entry was a stale pointer to it.
