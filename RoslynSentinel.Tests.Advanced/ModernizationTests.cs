@@ -50,6 +50,16 @@ public class ModernizationTests
     }
 
     [Test]
+    public async Task ClassToRecord_Message_DescribesClassBecomingRecord()
+    {
+        var source = "public class Person { public string Name { get; set; } }";
+        _workspaceManager.SetTestSolution(CreateSolution(source, "Person.cs"));
+        var result = await _modernEngine.ClassToRecordAsync("Person.cs", "Person");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.Message, Is.EqualTo("// Class converted to record."), "message must describe the actual direction: class to record");
+    }
+
+    [Test]
     [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task UseCollectionExpressions_Should_Modernize_ArrayCreation()
     {

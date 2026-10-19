@@ -110,7 +110,7 @@ public class SyntaxModernizationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = "// Record converted to class.",
+            Message = "// Class converted to record.",
             UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
