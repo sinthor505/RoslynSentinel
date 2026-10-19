@@ -751,7 +751,6 @@ public static class DataHelper
                 return LoadAsync(id).GetAwaiter().GetResult();
             }
 
-            // Loads data.
             public async Task<string> LoadAsync(int id, CancellationToken cancellationToken = default)
             {
                 var raw = await DataHelper.GetDataAsync(id, cancellationToken);

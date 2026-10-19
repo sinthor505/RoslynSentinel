@@ -19,13 +19,20 @@ public class AsyncOptimizationEngine
     }
 
     /// <summary>
-    /// Returns <paramref name="leading"/> with a line break in front, so a member inserted after another member is
-    /// separated from it by a blank line; leading trivia that already starts with a line break is returned unchanged.
+    /// Leading trivia for an async overload generated from <paramref name="original"/>: one blank-line separator and the
+    /// original's indentation only. Comments, doc comments and directives in the original's leading trivia stay on the
+    /// original; copying them would duplicate the comment (and could unbalance a #region/#if).
     /// </summary>
-    private static SyntaxTriviaList WithBlankLineSeparator(SyntaxTriviaList leading) =>
-        leading.Count > 0 && leading[0].IsKind(SyntaxKind.EndOfLineTrivia)
-            ? leading
-            : leading.Insert(0, SyntaxFactory.CarriageReturnLineFeed);
+    private static SyntaxTriviaList OverloadLeadingTrivia(MethodDeclarationSyntax original)
+    {
+        var leading = original.GetLeadingTrivia();
+        var indentation = leading.Reverse().TakeWhile(t => t.IsKind(SyntaxKind.WhitespaceTrivia)).Reverse();
+        var lineBreak = original.GetTrailingTrivia().Concat(leading)
+            .Where(t => t.IsKind(SyntaxKind.EndOfLineTrivia))
+            .DefaultIfEmpty(SyntaxFactory.CarriageReturnLineFeed)
+            .First();
+        return SyntaxFactory.TriviaList(new[] { lineBreak }.Concat(indentation));
+    }
 
     /// <summary>
     /// <see cref="ReplaceOrAddAttribute"/> plus the trivia the appended list needs without a whole-subtree whitespace
@@ -388,7 +395,7 @@ public class AsyncOptimizationEngine
         // The overload is a whole new member: a blank line before it, the original trailing line break after its new
         // body, and the formatter annotation.
         asyncMethod = asyncMethod
-            .WithLeadingTrivia(WithBlankLineSeparator(methodNode.GetLeadingTrivia()))
+            .WithLeadingTrivia(OverloadLeadingTrivia(methodNode))
             .WithTrailingTrivia(methodNode.GetTrailingTrivia())
             .WithAdditionalAnnotations(Formatter.Annotation);
         var newClassNode = classNode.InsertNodesAfter(methodNode, new[] { asyncMethod });
@@ -658,7 +665,7 @@ public class AsyncOptimizationEngine
 
         // The overload gets a blank line before it and the original trailing line break after it.
         asyncMethod = asyncMethod
-            .WithLeadingTrivia(WithBlankLineSeparator(methodNode.GetLeadingTrivia()))
+            .WithLeadingTrivia(OverloadLeadingTrivia(methodNode))
             .WithTrailingTrivia(methodNode.GetTrailingTrivia());
         asyncMethod = asyncMethod
             .WithReturnType(asyncMethod.ReturnType.WithAdditionalAnnotations(Formatter.Annotation))

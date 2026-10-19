@@ -214,6 +214,127 @@ public class AsyncOptimizationNormalizeCharacterizationTests
             "}"));
     }
 
+    // The generated overload takes only a blank line and the indentation from the original method's leading trivia:
+    // the comment (and any directive) stays on the original and is not copied.
+    [TestCase("LF")]
+    [TestCase("CRLF")]
+    [TestCase("Mixed")]
+    public async Task GenerateAsyncOverload_LeadingComment_StaysOnOriginal(string eol)
+    {
+        SetSource(Build(eol,
+            "public class C",
+            "{",
+            "    // Computes x.",
+            "    public int Compute(int x)",
+            "    {",
+            "        return x;",
+            "    }",
+            "",
+            UntouchedLine,
+            "}"));
+
+        var result = await _engine.GenerateAsyncOverloadAsync("Test.cs", "Compute");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        AssertPinned(result.UpdatedText, Build(eol,
+            "public class C",
+            "{",
+            "    // Computes x.",
+            "    public int Compute(int x)",
+            "    {",
+            "        return x;",
+            "    }",
+            "",
+            "    public async Task<int> ComputeAsync(int x, CancellationToken cancellationToken = default)",
+            "    {",
+            "        // TODO: Replace synchronous operations with their async equivalents",
+            "        // e.g., File.ReadAllText -> File.ReadAllTextAsync, DbCommand.ExecuteReader -> ExecuteReaderAsync",
+            "        // placeholder - remove and implement properly",
+            "        await Task.CompletedTask;",
+            "    }",
+            "",
+            UntouchedLine,
+            "}"));
+    }
+
+    [TestCase("LF")]
+    [TestCase("CRLF")]
+    [TestCase("Mixed")]
+    public async Task ConvertToAsyncBridge_LeadingComment_StaysOnOriginal(string eol)
+    {
+        SetSource(Build(eol,
+            "public class C",
+            "{",
+            "    // Computes x.",
+            "    [MigrationCandidate(\"AsyncBridgeCandidate\")]",
+            "    public int Compute(int x)",
+            "    {",
+            "        return x;",
+            "    }",
+            "",
+            UntouchedLine,
+            "}"));
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("Test.cs", "Compute");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        AssertPinned(result.UpdatedText, Build(eol,
+            "public class C",
+            "{",
+            "    // Computes x.",
+            "    [Obsolete(\"Asyncify-bridge: call ComputeAsync instead.\", false)]",
+            "    public int Compute(int x)",
+            "    {",
+            "        // Asyncify-bridge: synchronous wrapper over ComputeAsync.",
+            "        return ComputeAsync(x).GetAwaiter().GetResult();",
+            "    }",
+            "",
+            "    public async Task<int> ComputeAsync(int x, CancellationToken cancellationToken = default)",
+            "    {",
+            "        return x;",
+            "    }",
+            "",
+            UntouchedLine,
+            "}"));
+    }
+
+    [TestCase("LF")]
+    [TestCase("CRLF")]
+    [TestCase("Mixed")]
+    public async Task ConvertToAsyncBridge_ExpressionBodiedWithLeadingComment_StaysOnOriginal(string eol)
+    {
+        SetSource(Build(eol,
+            "public class C",
+            "{",
+            "    // Computes x.",
+            "    public int Compute(int x) => x;",
+            "",
+            UntouchedLine,
+            "}"));
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("Test.cs", "Compute");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        AssertPinned(result.UpdatedText, Build(eol,
+            "public class C",
+            "{",
+            "    // Computes x.",
+            "    [Obsolete(\"Asyncify-bridge: call ComputeAsync instead.\", false)]",
+            "    public int Compute(int x)",
+            "    {",
+            "        // Asyncify-bridge: synchronous wrapper over ComputeAsync.",
+            "        return ComputeAsync(x).GetAwaiter().GetResult();",
+            "    }",
+            "",
+            "    public async Task<int> ComputeAsync(int x, CancellationToken cancellationToken = default)",
+            "    {",
+            "        return x;",
+            "    }",
+            "",
+            UntouchedLine,
+            "}"));
+    }
+
     [TestCase("LF")]
     [TestCase("CRLF")]
     [TestCase("Mixed")]

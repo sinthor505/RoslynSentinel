@@ -254,7 +254,8 @@ public class TripService
 
     // Byte-exact pin per line-ending style: untouched members keep their text and terminator ("mixed" = CRLF
     // file whose one-line Untouched() ends in a stray LF); the bridge and the overload take the dominant EOL and
-    // are separated by exactly one blank line, also when the method carries a leading comment.
+    // are separated by exactly one blank line, also when the method carries a leading comment; that comment stays on the
+    // bridge and is not copied to the overload.
     [TestCase("\n", true, TestName = "ConvertToAsyncBridge_ByteExact_LF")]
     [TestCase("\r\n", true, TestName = "ConvertToAsyncBridge_ByteExact_CRLF")]
     [TestCase("mixed", true, TestName = "ConvertToAsyncBridge_ByteExact_Mixed")]
@@ -295,7 +296,6 @@ public class TripService
                     return GetTripsAsync(companyId).GetAwaiter().GetResult();
                 }
 
-                // Gets trips.
                 public async Task<int> GetTripsAsync(int companyId, CancellationToken cancellationToken = default)
                 {
                     return companyId;
