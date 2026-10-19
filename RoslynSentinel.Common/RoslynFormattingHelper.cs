@@ -379,6 +379,81 @@ public static class RoslynFormattingHelper
     }
 
     /// <summary>
+    /// Formats a NEWLY BUILT <see cref="CompilationUnitSyntax"/> (the root of a file that does not exist yet) that embeds
+    /// EXISTING code, and returns its text. This is the comment-keeping counterpart of
+    /// <see cref="NormalizeNewRootWhitespace"/> for roots like the ones built by ExtractSuperclass,
+    /// ExtractMembersToPartial and ConvertTupleToClass: the using directives, members or types copied from the source file
+    /// carry the user's comments, blank lines and indentation, which <c>NormalizeWhitespace</c> would rewrite and the
+    /// <c>NormalizeNew*</c> guard rejects.
+    /// <para>
+    /// <paramref name="isNewNode"/> classifies the nodes of <paramref name="newRoot"/>: <c>true</c> for structure the
+    /// caller synthesized (namespace, class, name, braces), <c>false</c> for a node copied from existing source. Only the
+    /// DIRECT tokens of new nodes (keywords, identifiers, braces, semicolons) carry <see cref="Formatter.Annotation"/>
+    /// and are formatted, via <see cref="FormatAnnotatedSpansAsync"/>. A node classified as existing is skipped with its
+    /// whole subtree: its tokens and trivia (comments, blank lines, indentation, inner spacing) are left byte-exact. The
+    /// root itself is always treated as new. The formatter still owns the whitespace and line break that sit directly in
+    /// front of a new token, so a new brace between two existing members is placed correctly while the members are not
+    /// re-spaced.
+    /// </para>
+    /// <para>
+    /// Line endings follow <see cref="FormatAnnotatedSpansAsync"/>: <paramref name="document"/> is the SOURCE document the
+    /// existing code came from; a line that survives unchanged keeps its own terminator and every line the formatter added
+    /// or changed takes that document's dominant ending. When the last token of the root is new, the result ends with a
+    /// line break in that dominant ending.
+    /// </para>
+    /// </summary>
+    /// <param name="document">The document the embedded code came from. Supplies the dominant line ending, the pre-image for line matching and the formatting options.</param>
+    /// <param name="newRoot">The newly built root, with the existing nodes already embedded.</param>
+    /// <param name="isNewNode">True for a node the caller synthesized, false for a node copied from existing source (that node's whole subtree is left untouched).</param>
+    public static async Task<string> FormatNewRootKeepingTriviaAsync(Document document, CompilationUnitSyntax newRoot, Func<SyntaxNode, bool> isNewNode, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(newRoot);
+        ArgumentNullException.ThrowIfNull(isNewNode);
+
+        var newTokens = new List<SyntaxToken>();
+        CollectNewStructureTokens(newRoot, isNewNode, newTokens);
+        var annotatedRoot = newRoot.ReplaceTokens(newTokens, static (original, _) => original.WithAdditionalAnnotations(Formatter.Annotation));
+
+        var formattedDoc = await FormatAnnotatedSpansAsync(document, annotatedRoot, cancellationToken);
+        var formattedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+
+        var lastToken = newRoot.GetLastToken();
+        var endsWithNewToken = lastToken != default && newTokens.Contains(lastToken);
+        if (endsWithNewToken && formattedText.Length > 0 && formattedText[^1] != '\n' && formattedText[^1] != '\r')
+        {
+            var dominantEol = EolUtilities.DetectDominantEol(await document.GetTextAsync(cancellationToken));
+            formattedText += dominantEol;
+        }
+
+        return formattedText;
+    }
+
+    /// <summary>
+    /// Collects the direct tokens of every node <paramref name="isNewNode"/> accepts, depth first. A node it rejects is
+    /// skipped with its whole subtree. Zero-width and end-of-file tokens are never collected: they carry no text and the
+    /// end-of-file token's leading trivia belongs to whatever precedes it.
+    /// </summary>
+    private static void CollectNewStructureTokens(SyntaxNode node, Func<SyntaxNode, bool> isNewNode, List<SyntaxToken> collected)
+    {
+        foreach (var child in node.ChildNodesAndTokens())
+        {
+            if (child.IsToken)
+            {
+                var token = child.AsToken();
+                if (!token.IsMissing && token.Span.Length > 0 && !token.IsKind(SyntaxKind.EndOfFileToken))
+                {
+                    collected.Add(token);
+                }
+            }
+            else if (isNewNode(child.AsNode()!))
+            {
+                CollectNewStructureTokens(child.AsNode()!, isNewNode, collected);
+            }
+        }
+    }
+
+    /// <summary>
     /// Pure pass-through to <see cref="SyntaxNodeExtensions.NormalizeWhitespace{TNode}"/> (via
     /// <see cref="SyntaxNode.NormalizeWhitespace"/>) with identical arguments and identical
     /// behavior -> this method exists purely as a single, greppable chokepoint for the whole-subtree
