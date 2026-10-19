@@ -3,6 +3,8 @@ using System.Diagnostics;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Formatting;
+using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
 namespace RoslynSentinel.Engines.Advanced;
@@ -820,8 +822,25 @@ public class AsyncBatchEngine
                 ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken)
                 : null;
 
-            await _workspaceManager.ApplyProposedChangesAsync(
+            var bridgeApply = await _workspaceManager.ApplyProposedChangesAsync(
                 new Dictionary<FilePathWrapper, string> { { candidate.FilePath, sourceToValidate } });
+
+            // The chokepoint can refuse the write (EOL-style change, open ledger entry, I/O failure) without
+            // throwing; recording such a bridge as applied would send the uplift and CT phases after a method
+            // that does not exist in the workspace.
+            if (bridgeApply.IsError)
+            {
+                _logger.LogWarning(
+                    "Bridge write refused for {Method} in {File}: {Summary}",
+                    candidate.MethodName, candidate.FilePath, bridgeApply.Summary);
+                _ledger.Record(candidate.FilePath, candidate.MethodName, "BridgeApplyFail", bridgeApply.Summary);
+                skipped.Add(new BridgeSkippedInfo(
+                    candidate.FilePath, candidate.MethodName,
+                    $"Write refused: {bridgeApply.Summary}",
+                    new List<DiagnosticInfo>(),
+                    AttemptedSource: sourceToValidate));
+                continue;
+            }
 
             applied.Add(new BridgeAppliedInfo(
                 candidate.FilePath, candidate.MethodName, candidate.MethodName + "Async")
@@ -1187,14 +1206,20 @@ public class AsyncBatchEngine
     /// <paramref name="bridgedMethodName"/> inside that method's body as
     /// <c>await bridgedMethodNameAsync(args, cancellationToken)</c>.
     /// Returns the transformed full-file source (or the original if the method is not found).
+    /// <paramref name="baseDocument"/> is the workspace document of the file; <paramref name="source"/> (the
+    /// not-yet-written bridge output) is overlaid on it so the rewritten calls are formatted with the document's
+    /// options and line ending, and every line the rewrite does not touch keeps its text.
     /// </summary>
-    private static string RewriteCallerAsyncBody(
+    private static async Task<string> RewriteCallerAsyncBodyAsync(
+        Document baseDocument,
         string source,
         string callerAsyncMethodName,
-        string bridgedMethodName)
+        string bridgedMethodName,
+        CancellationToken cancellationToken)
     {
-        var tree = CSharpSyntaxTree.ParseText(source);
-        var root = tree.GetRoot();
+        var preImage = baseDocument.WithText(SourceText.From(source));
+        var root = await preImage.GetSyntaxRootAsync(cancellationToken)
+            ?? throw new InvalidOperationException("Could not get a syntax root for the bridged caller source.");
 
         // Locate the callerAsync method to scope the rewrite.
         var callerAsyncMethod = root.DescendantNodes()
@@ -1222,7 +1247,7 @@ public class AsyncBatchEngine
         newMethod = (MethodDeclarationSyntax)new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newMethod)!;
         var newRoot = root.ReplaceNode(callerAsyncMethod, newMethod);
 
-        return RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
+        return await AnnotatedInsertionHelper.FormatAnnotatedTextAsync(preImage, newRoot, cancellationToken);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1392,7 +1417,19 @@ public class AsyncBatchEngine
             var rewriteTarget = callerAsyncNameOverride ?? (callerMethodName + "Async");
             try
             {
-                rewrittenSource = RewriteCallerAsyncBody(bridgedCallerSource, rewriteTarget, bridgedMethodName);
+                var callerSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+                var callerDocument = callerSolution.GetDocumentIdsWithFilePath(callerFilePath)
+                                                   .Select(callerSolution.GetDocument)
+                                                   .FirstOrDefault();
+                if (callerDocument == null)
+                {
+                    return (null, null, new UpliftSkippedInfo(
+                        callerFilePath, callerMethodName,
+                        "Document not found in workspace for body rewrite.", new List<DiagnosticInfo>()));
+                }
+
+                rewrittenSource = await RewriteCallerAsyncBodyAsync(
+                    callerDocument, bridgedCallerSource, rewriteTarget, bridgedMethodName, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -1555,13 +1592,15 @@ public class AsyncBatchEngine
                 return (needsParens
                     ? (ExpressionSyntax)SyntaxFactory.ParenthesizedExpression(awaitExpr)
                     : awaitExpr)
-                    .WithLeadingTrivia(original.GetLeadingTrivia());
+                    .WithLeadingTrivia(original.GetLeadingTrivia())
+                    // The appended CT argument has no trivia: the formatter spaces the argument list.
+                    .WithAdditionalAnnotations(Formatter.Annotation);
             });
 
         var newRoot = (SyntaxNode)annotatedRoot.ReplaceNode(annotatedMethod, rewrittenMethod);
         newRoot = new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newRoot)!;
 
-        return RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
+        return await AnnotatedInsertionHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1669,10 +1708,12 @@ public class AsyncBatchEngine
                                  .WithTrailingTrivia(SyntaxFactory.Space),
                     rewrittenCall);
 
+            // The appended CT argument has no trivia: the formatter annotation lets the caller space the argument list.
             return needsParens
                 ? (SyntaxNode)SyntaxFactory.ParenthesizedExpression(awaitExpr)
                     .WithLeadingTrivia(visited.GetLeadingTrivia())
-                : awaitExpr.WithLeadingTrivia(visited.GetLeadingTrivia());
+                    .WithAdditionalAnnotations(Formatter.Annotation)
+                : awaitExpr.WithLeadingTrivia(visited.GetLeadingTrivia()).WithAdditionalAnnotations(Formatter.Annotation);
         }
     }
 

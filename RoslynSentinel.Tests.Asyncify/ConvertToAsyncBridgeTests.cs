@@ -251,6 +251,88 @@ public class TripService
             "The bridge wrapper should be emitted before the async overload in the file.");
     }
 
+
+    // Byte-exact pin per line-ending style: untouched members keep their text and terminator ("mixed" = CRLF
+    // file whose one-line Untouched() ends in a stray LF); the bridge and the overload take the dominant EOL and
+    // are separated by exactly one blank line, also when the method carries a leading comment.
+    [TestCase("\n", true, TestName = "ConvertToAsyncBridge_ByteExact_LF")]
+    [TestCase("\r\n", true, TestName = "ConvertToAsyncBridge_ByteExact_CRLF")]
+    [TestCase("mixed", true, TestName = "ConvertToAsyncBridge_ByteExact_Mixed")]
+    [TestCase("\n", false, TestName = "ConvertToAsyncBridge_ByteExact_LF_NoComment")]
+    [TestCase("\r\n", false, TestName = "ConvertToAsyncBridge_ByteExact_CRLF_NoComment")]
+    [CancelAfter(5000)]
+    public async Task ConvertToAsyncBridge_ByteExact(string style, bool withComment)
+    {
+        const string source = """
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public class TripService
+            {
+                // Gets trips.
+                public int GetTrips(int companyId)
+                {
+                    return companyId;
+                }
+
+                public void Untouched() { var x = 1; }
+            }
+
+            """;
+        const string expectedTemplate = """
+            using System;
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public class TripService
+            {
+                // Gets trips.
+                [Obsolete("Asyncify-bridge: call GetTripsAsync instead.", false)]
+                public int GetTrips(int companyId)
+                {
+                    // Asyncify-bridge: synchronous wrapper over GetTripsAsync.
+                    return GetTripsAsync(companyId).GetAwaiter().GetResult();
+                }
+
+                // Gets trips.
+                public async Task<int> GetTripsAsync(int companyId, CancellationToken cancellationToken = default)
+                {
+                    return companyId;
+                }
+
+                public void Untouched() { var x = 1; }
+            }
+
+            """;
+
+        string WithStyle(string template)
+        {
+            var lf = template.Replace("\r\n", "\n");
+            if (!withComment)
+            {
+                lf = lf.Replace("    // Gets trips.\n", string.Empty);
+            }
+
+            return style == "mixed"
+                ? lf.Replace("\n", "\r\n").Replace("{ var x = 1; }\r\n", "{ var x = 1; }\n")
+                : lf.Replace("\n", style);
+        }
+
+        SetSource(WithStyle(source), "TripService.cs");
+
+        var result = await _engine.ConvertToAsyncBridgeAsync("TripService.cs", "GetTrips");
+
+        var expected = WithStyle(expectedTemplate);
+        if (result.UpdatedText != expected)
+        {
+            TestContext.Out.WriteLine("ACTUAL:");
+            TestContext.Out.WriteLine(result.UpdatedText?.Replace("\r", "<CR>").Replace("\n", "<LF>\n"));
+        }
+
+        Assert.That(result.UpdatedText, Is.EqualTo(expected).NoClip);
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     // Precondition failures
     // ══════════════════════════════════════════════════════════════════════════

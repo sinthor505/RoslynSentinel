@@ -427,6 +427,81 @@ public class Svc { public int GetCount() => 0; }", "Svc.cs");
             await _engine.FlagMigrationCandidateAsync("Svc.cs", "NonExistent", "AsyncBridge"),
             "Should throw when the named method does not exist.");
     }
+
+
+    // Byte-exact pin per line-ending style for the project-wide flag pass: both flagged methods of one file are
+    // rewritten (the per-file rewrite runs sequentially on one local root), each new [MigrationCandidate] list sits on
+    // its own line after the method's leading trivia, and untouched lines keep their text and terminator ("mixed" =
+    // CRLF file whose one-line Untouched() ends in a stray LF). FlaggedDate is read back from the output so the pin
+    // does not depend on the clock.
+    [TestCase("\n", TestName = "FlagCandidatesInProject_ByteExact_LF")]
+    [TestCase("\r\n", TestName = "FlagCandidatesInProject_ByteExact_CRLF")]
+    [TestCase("mixed", TestName = "FlagCandidatesInProject_ByteExact_Mixed")]
+    [CancelAfter(10000)]
+    public async Task FlagCandidatesInProject_ByteExact(string style)
+    {
+        const string source = """
+            using System.Threading.Tasks;
+
+            public class OrderService
+            {
+                // Loads one.
+                public int LoadOne(Task<int> t) { return t.Result; }
+
+                public int LoadTwo(Task<int> t)
+                {
+                    return t.Result;
+                }
+
+                public void Untouched() { var x = 1; }
+            }
+
+            """;
+        const string expectedTemplate = """
+            using System.Threading.Tasks;
+
+            public class OrderService
+            {
+                // Loads one.
+                [MigrationCandidate("AsyncBridgeCandidate", Score = 55, Reason = "blocking-calls:40 service-class:15", FlaggedDate = "{DATE}")]
+                public int LoadOne(Task<int> t) { return t.Result; }
+
+                [MigrationCandidate("AsyncBridgeCandidate", Score = 55, Reason = "blocking-calls:40 service-class:15", FlaggedDate = "{DATE}")]
+                public int LoadTwo(Task<int> t)
+                {
+                    return t.Result;
+                }
+
+                public void Untouched() { var x = 1; }
+            }
+
+            """;
+
+        string WithStyle(string template)
+        {
+            var lf = template.Replace("\r\n", "\n");
+            return style == "mixed"
+                ? lf.Replace("\n", "\r\n").Replace("{ var x = 1; }\r\n", "{ var x = 1; }\n")
+                : lf.Replace("\n", style);
+        }
+
+        SetSource(WithStyle(source), "OrderService.cs");
+
+        var result = await _engine.FlagCandidatesInProjectAsync("TestProj");
+
+        Assert.That(string.Join(",", result.Flagged.Select(f => f.MethodName).OrderBy(n => n)), Is.EqualTo("LoadOne,LoadTwo"));
+        var actual = result.Changes
+            .Single(kv => kv.Key.Absolute.EndsWith("OrderService.cs", StringComparison.OrdinalIgnoreCase)).Value;
+        var date = System.Text.RegularExpressions.Regex.Match(actual, "FlaggedDate = \"(\\d{4}-\\d{2}-\\d{2})\"").Groups[1].Value;
+        var expected = WithStyle(expectedTemplate).Replace("{DATE}", date);
+        if (actual != expected)
+        {
+            TestContext.Out.WriteLine("ACTUAL:");
+            TestContext.Out.WriteLine(actual.Replace("\r", "<CR>").Replace("\n", "<LF>\n"));
+        }
+
+        Assert.That(actual, Is.EqualTo(expected).NoClip);
+    }
 }
 
 /// <summary>

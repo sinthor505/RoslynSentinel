@@ -16,8 +16,7 @@ namespace RoslynSentinel.Tests.Advanced;
 /// blank lines between members survive, changed lines take the document's dominant line ending, and a stray CRLF on an
 /// untouched line survives. The pre-migration whole-subtree pass emitted LF for every input, split the untouched member
 /// over three lines, dropped the blank line after an expression-bodied member, and put the first scaffold comment of
-/// GenerateAsyncOverload on the brace line. ConvertToAsyncBridge is the exception: it still runs the whole-subtree pass,
-/// so its pin is the pre-migration output.
+/// GenerateAsyncOverload on the brace line.
 /// </summary>
 [TestFixture]
 [Category("AsyncOptimizationEngine")] // sentinel:auto-category
@@ -196,8 +195,7 @@ public class AsyncOptimizationNormalizeCharacterizationTests
         var result = await _engine.ConvertToAsyncBridgeAsync("Test.cs", "Compute");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        // Still the pre-migration pin: this site deliberately keeps the whole-subtree pass (see the engine comment).
-        AssertPinned(result.UpdatedText, Build("LF",
+        AssertPinned(result.UpdatedText, Build(eol,
             "public class C",
             "{",
             "    [Obsolete(\"Asyncify-bridge: call ComputeAsync instead.\", false)]",
@@ -212,9 +210,7 @@ public class AsyncOptimizationNormalizeCharacterizationTests
             "        return x;",
             "    }",
             "",
-            "    public void Untouched()",
-            "    {",
-            "    }",
+            UntouchedLine,
             "}"));
     }
 

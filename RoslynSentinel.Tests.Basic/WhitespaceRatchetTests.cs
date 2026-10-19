@@ -58,9 +58,7 @@ public class WhitespaceRatchetTests
     // FormatAnnotatedSpansAsync / FormatWholeDocumentAsync; never raise it.
     private static readonly Dictionary<string, int> NormalizeHelperBaseline = new(StringComparer.Ordinal)
     {
-        // Sum of this dictionary: 4 call sites in 2 files; none in Common or Tools.
-        ["RoslynSentinel.Engines.Advanced/AsyncBatchEngine.cs"] = 2,
-        ["RoslynSentinel.Engines.Advanced/AsyncOptimizationEngine.cs"] = 2,
+        // Empty: the C6 migration debt is paid (0 call sites outside the helper file). Keep it empty.
     };
 
     [Test]

@@ -624,28 +624,61 @@ public class AsyncOptimizationEngine
                     a.Name.ToString() == MigrationCandidateShortName ||
                     a.Name.ToString() == MigrationCandidateFullName)));
 
+        // The bridge body is new syntax: it keeps the original member's trailing line break and takes the formatter
+        // annotation, so only the body and the appended [Obsolete] list are laid out. The member's leading trivia (blank
+        // line, comments, indentation) is re-applied because it may have lived on the stripped [MigrationCandidate] list.
         var bridgeBase = methodNode
             .WithAttributeLists(bridgeAttributeLists)
-            .WithBody(bridgeBlock)
+            .WithBody(bridgeBlock.WithTrailingTrivia(methodNode.GetTrailingTrivia()).WithAdditionalAnnotations(Formatter.Annotation))
             .WithExpressionBody(null)
-            .WithSemicolonToken(SyntaxFactory.MissingToken(SyntaxKind.SemicolonToken));
+            .WithSemicolonToken(SyntaxFactory.MissingToken(SyntaxKind.SemicolonToken))
+            .WithLeadingTrivia(methodNode.GetLeadingTrivia());
 
-        var (bridgeWrapper, _) = ReplaceOrAddAttribute(
+        var (bridgeWrapper, _) = ReplaceOrAddAttributeOnOwnLine(
             bridgeBase, "Obsolete", "ObsoleteAttribute", null, obsoleteAttr);
 
         var classWithBridge = classNode.ReplaceNode(methodNode, bridgeWrapper);
 
-        // Step 2: insert the async overload immediately after the bridge wrapper.
-        var bridgeInNewClass = classWithBridge.Members
-                                              .OfType<MethodDeclarationSyntax>()
-                                              .First(m => m.Identifier.Text == methodName);
-        var classWithBoth = classWithBridge.InsertNodesAfter(bridgeInNewClass, new[] { asyncMethod });
+        // Two formatting passes. Pass 1 lays out the bridge alone. Pass 2 inserts the async overload into that result
+        // and annotates only the overload's rewritten parts (return type, parameter list, a converted expression body),
+        // not the whole member. A single pass with the bridge body annotated (or an annotated whole overload) hands the
+        // trivia between the bridge's closing brace and the overload to the formatter, which then inserts a second blank
+        // line in front of an overload whose leading trivia holds a comment.
+        var bridgedDocument = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(
+            document, root.ReplaceNode(classNode, classWithBridge), cancellationToken);
+        var bridgedRoot = await bridgedDocument.GetSyntaxRootAsync(cancellationToken)
+            ?? throw new InvalidOperationException($"Could not get syntax root for '{filePath}'.");
+        // Pass 1 returns its own formatted tree when its text needed no line-ending change, and that tree's bridge nodes
+        // still carry Formatter.Annotation; left in place they would hand the trivia in front of the overload to pass 2.
+        bridgedRoot = bridgedRoot.ReplaceNodes(
+            bridgedRoot.GetAnnotatedNodes(Formatter.Annotation),
+            (_, rewritten) => rewritten.WithoutAnnotations(Formatter.Annotation));
+        bridgedDocument = bridgedDocument.WithSyntaxRoot(bridgedRoot);
 
-        // Deliberately still a whole-subtree pass: with annotated-span output the Asyncify bridge batch
-        // (AsyncBatchEngine.RunBridgeBatchAsync plus caller uplift) leaves the file unbridged
-        // (SentinelAsyncifyToolsTests.T20); migrate only after that interaction is understood.
-        var newRoot = root.ReplaceNode(classNode, classWithBoth);
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(), FilePath = filePath };
+        // Step 2: insert the async overload immediately after the bridge wrapper. Same lookup as above; the overload
+        // name does not exist yet, so the first class with the method is still the one that was bridged.
+        var bridgedClass = bridgedRoot.DescendantNodes()
+                                      .OfType<ClassDeclarationSyntax>()
+                                      .First(c => c.Members.OfType<MethodDeclarationSyntax>().Any(m => m.Identifier.Text == methodName));
+        var bridgeInNewClass = bridgedClass.Members
+                                           .OfType<MethodDeclarationSyntax>()
+                                           .First(m => m.Identifier.Text == methodName);
+
+        // The overload gets a blank line before it and the original trailing line break after it.
+        asyncMethod = asyncMethod
+            .WithLeadingTrivia(WithBlankLineSeparator(methodNode.GetLeadingTrivia()))
+            .WithTrailingTrivia(methodNode.GetTrailingTrivia());
+        asyncMethod = asyncMethod
+            .WithReturnType(asyncMethod.ReturnType.WithAdditionalAnnotations(Formatter.Annotation))
+            .WithParameterList(asyncMethod.ParameterList.WithAdditionalAnnotations(Formatter.Annotation));
+        if (methodNode.ExpressionBody != null && methodNode.Body == null && asyncMethod.Body != null)
+        {
+            asyncMethod = asyncMethod.WithBody(asyncMethod.Body.WithAdditionalAnnotations(Formatter.Annotation));
+        }
+
+        var classWithBoth = bridgedClass.InsertNodesAfter(bridgeInNewClass, new[] { asyncMethod });
+        var newRoot = bridgedRoot.ReplaceNode(bridgedClass, classWithBoth);
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await FormatAnnotatedTextAsync(bridgedDocument, newRoot, cancellationToken), FilePath = filePath };
     }
 
     /// <summary>
@@ -2456,6 +2489,9 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var fileChanges = new Dictionary<FilePathWrapper, string>();
         int totalExamined = 0;
         bool attrClassInjected = false;
+        // Documents are scanned in parallel; each one collects into its own lists and rewrites its own root, and only
+        // the merge into the shared results takes this lock.
+        var resultLock = new object();
 
         await Parallel.ForEachAsync(documents, async (document, cancellationToken) =>
         {
@@ -2476,19 +2512,25 @@ internal sealed class MigrationCandidateAttribute : Attribute
             }
 
             bool fileModified = false;
+            var docFlagged = new List<CandidateScoredItem>();
+            var docSkipped = new List<CandidateScoredItem>();
+            var docAlreadyFlagged = new List<CandidateScoredItem>();
+            int docExamined = 0;
 
             // Lazily resolved per-document semantic model used for callee attribute checks.
             SemanticModel? docSemanticModel = null;
             bool docSemanticModelFetched = false;
 
-            await Parallel.ForEachAsync(methods, async (method, cancellationToken) =>
+            // Sequential within a document: the lazily fetched semantic model and the per-document lists are not
+            // thread-safe.
+            foreach (var method in methods)
             {
-                totalExamined++;
+                docExamined++;
 
                 // Skip compiler-generated method names (e.g. <top-level>, state-machine methods).
                 if (method.Identifier.Text.StartsWith('<'))
                 {
-                    return;
+                    continue;
                 }
 
                 var containingClass = method.Ancestors()
@@ -2523,7 +2565,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                     });
                 if (isNeedsManualReview)
                 {
-                    return;
+                    continue;
                 }
 
                 // ── Check if already flagged for this exact pattern ──────────
@@ -2544,9 +2586,9 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         });
                     if (isAlreadyFlagged)
                     {
-                        alreadyFlagged.Add(new CandidateScoredItem(
+                        docAlreadyFlagged.Add(new CandidateScoredItem(
                             document.FilePath!, method.Identifier.Text, className, lineNo, 0, "already-flagged", effectivePattern));
-                        return;
+                        continue;
                     }
                 }
 
@@ -2554,7 +2596,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 var (score, reason) = ScoreMethodForPattern(method, className, pattern);
                 if (score < 0)
                 {
-                    return; // hard disqualifier - don't even record
+                    continue; // hard disqualifier - don't even record
                 }
 
                 // ── Semantic bonus: method calls an [Obsolete]-decorated bridge wrapper ──
@@ -2596,25 +2638,33 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
                 if (score < minScore)
                 {
-                    skipped.Add(new CandidateScoredItem(
+                    docSkipped.Add(new CandidateScoredItem(
                         document.FilePath!, method.Identifier.Text, className, lineNo, score, reason, effectivePattern));
-                    return;
+                    continue;
                 }
 
-                flagged.Add(new CandidateScoredItem(
+                docFlagged.Add(new CandidateScoredItem(
                     document.FilePath!, method.Identifier.Text, className, lineNo, score, reason, effectivePattern));
-            }).ConfigureAwait(false);
+            }
 
-            if (!dryRun && flagged.Any(f => f.FilePath == document.FilePath!))
+            lock (resultLock)
             {
-                // Apply all flagged methods for this file in one rewrite pass.
-                var flaggedInThisFile = flagged.Where(f => f.FilePath == document.FilePath!).ToList();
+                totalExamined += docExamined;
+                flagged.AddRange(docFlagged);
+                skipped.AddRange(docSkipped);
+                alreadyFlagged.AddRange(docAlreadyFlagged);
+            }
+
+            if (!dryRun && docFlagged.Count > 0)
+            {
+                // Apply all flagged methods for this file in one sequential rewrite pass on a local root, bottom-up
+                // (descending line) so a rewrite never shifts the line of a method still to be rewritten.
                 var rewrittenRoot = root;
                 var today = System.DateTime.UtcNow.ToString("yyyy-MM-dd");
 
-                await Parallel.ForEachAsync(flaggedInThisFile, async (item, cancellationToken) =>
+                foreach (var item in docFlagged.OrderByDescending(f => f.Line))
                 {
-                    // Line shifted after earlier rewrites -> fall back to name-only match.
+                    // Match by name and line; fall back to the first method with that name.
                     var methodNode = rewrittenRoot.DescendantNodes()
                     .OfType<MethodDeclarationSyntax>()
                     .FirstOrDefault(m => m.Identifier.Text == item.MethodName &&
@@ -2623,7 +2673,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         .FirstOrDefault(m => m.Identifier.Text == item.MethodName);
                     if (methodNode == null)
                     {
-                        return;
+                        continue;
                     }
 
                     // Find the existing [MigrationCandidate] for this pattern (if any).
@@ -2644,8 +2694,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         ?.Expression as LiteralExpressionSyntax)?.Token.ValueText
                         ?? today;
 
-                    // Skip rewrite when score and reason are unchanged -> prevents NormalizeWhitespace
-                    // from adding blank lines to files that don't actually need modification.
+                    // Skip the rewrite when score and reason are unchanged, so a file that needs no change is not
+                    // reported as changed.
                     if (existingCandidateAttr != null)
                     {
                         int? existingScore = null;
@@ -2663,7 +2713,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
                         if (existingScore == item.Score && existingReason == item.Reason)
                         {
-                            return;
+                            continue;
                         }
                     }
 
@@ -2686,15 +2736,20 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         SyntaxFactory.IdentifierName(MigrationCandidateShortName),
                         SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(args)));
 
-                    var (updatedMethodNode, _) = ReplaceOrAddAttribute(
+                    var (updatedMethodNode, _) = ReplaceOrAddAttributeOnOwnLine(
                         methodNode, MigrationCandidateShortName, MigrationCandidateFullName, item.Pattern, newAttr);
                     rewrittenRoot = rewrittenRoot.ReplaceNode(methodNode, updatedMethodNode);
                     fileModified = true;
-                }).ConfigureAwait(false);
+                }
 
                 if (fileModified)
                 {
-                    fileChanges[document.FilePath!] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(rewrittenRoot).ToFullString();
+                    // Only the appended attribute lists carry Formatter.Annotation; the rest of the file keeps its text.
+                    var updatedText = await FormatAnnotatedTextAsync(document, rewrittenRoot, cancellationToken);
+                    lock (resultLock)
+                    {
+                        fileChanges[document.FilePath!] = updatedText;
+                    }
                 }
             }
         }).ConfigureAwait(false);
@@ -2707,7 +2762,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
         {
             // Build a set of project roots that already have the attribute class defined.
             var projectRootsWithAttr = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            await Parallel.ForEachAsync(solution.Projects, async (proj, cancellationToken) =>
+            // Sequential: the sets and fileChanges are not thread-safe, and nothing in these two loops awaits.
+            foreach (var proj in solution.Projects)
             {
                 bool hasAttr = proj.Documents.Any(d =>
                     d.FilePath != null &&
@@ -2721,40 +2777,40 @@ internal sealed class MigrationCandidateAttribute : Attribute
                         projectRootsWithAttr.Add(dir);
                     }
                 }
-            }).ConfigureAwait(false);
+            }
 
             // Inject the attribute class into every project root that has flagged files
             // but does not yet have MigrationCandidateAttribute.cs.
             var processedProjectRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            await Parallel.ForEachAsync(fileChanges.Keys.ToList(), async (changedFilePath, cancellationToken) =>
+            foreach (var changedFilePath in fileChanges.Keys.ToList())
             {
                 var doc = documents.FirstOrDefault(d =>
                     string.Equals(d.FilePath, changedFilePath, StringComparison.OrdinalIgnoreCase));
                 if (doc?.Project.FilePath == null)
                 {
-                    return;
+                    continue;
                 }
 
                 var projRoot = System.IO.Path.GetDirectoryName(doc.Project.FilePath);
                 if (projRoot == null)
                 {
-                    return;
+                    continue;
                 }
 
                 if (projectRootsWithAttr.Contains(projRoot))
                 {
-                    return;
+                    continue;
                 }
 
                 if (!processedProjectRoots.Add(projRoot))
                 {
-                    return; // already queued for this run
+                    continue; // already queued for this run
                 }
 
                 var attrPath = System.IO.Path.Combine(projRoot, $"{MigrationCandidateFullName}.cs");
                 fileChanges[attrPath] = BuildMigrationCandidateAttributeSource("");
                 attrClassInjected = true;
-            }).ConfigureAwait(false);
+            }
         }
 
         return new FlagCandidatesInProjectEngineResult(

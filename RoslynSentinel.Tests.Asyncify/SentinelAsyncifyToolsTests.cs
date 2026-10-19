@@ -126,9 +126,18 @@ public class AsyncifyToolsTests
         }
     }
 
+    /// <summary>Absolute path of a fixture file inside this test's own temp directory.</summary>
+    private string PathOf(string fileName) => Path.Combine(_tempDir, fileName);
+
+    // The fixture file is written to disk under the per-test temp directory: ApplyProposedChangesAsync reads the
+    // pre-image from disk, so a bare relative name resolved against the test process's working directory (the shared
+    // bin folder) and compared every write against whatever an earlier run had left there.
     private void SetSource(string source, string fileName = "RegionForm.cs")
     {
-        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [(fileName, source)]);
+        var path = PathOf(fileName);
+        File.WriteAllText(path, source);
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj", Path.Combine(_tempDir, "TestProj.csproj"), [(fileName, source, path)]);
         _workspaceManager.SetTestSolution(solution);
     }
 
@@ -298,7 +307,7 @@ public class Svc
             [
                 new FlagCandidateTarget
                 {
-                    FilePath = "RegionForm.cs",
+                    FilePath = PathOf("RegionForm.cs"),
                     MethodName = "loadList",
                     Pattern = "AsyncBridgeCandidate",
                     Score = 50,
@@ -326,7 +335,7 @@ public class Svc
 
         var result = await _asyncifyTools.BridgeAsyncMethodsTool(
             reason: "test message",
-            targets: [new BatchTarget { FilePath = "RegionForm.cs", MethodNames = ["loadList"] }],
+            targets: [new BatchTarget { FilePath = PathOf("RegionForm.cs"), MethodNames = ["loadList"] }],
             dryRun: true);
 
         Assert.That(!result.IsError, Is.True);
@@ -351,7 +360,7 @@ public class Svc
 
         var result = await _asyncifyTools.AddCancellationTokenTool(
             reason: "test message",
-            targets: [new BatchTarget { FilePath = "Svc.cs" }],
+            targets: [new BatchTarget { FilePath = PathOf("Svc.cs") }],
             dryRun: true);
 
         Assert.That(!result.IsError, Is.True);
@@ -395,7 +404,7 @@ public class Svc
             [
                 new HandlerExtractTarget
                 {
-                    FilePath = "RegionForm.cs",
+                    FilePath = PathOf("RegionForm.cs"),
                     NewMethodName = "DoSearch",
                     ContextSnippet = "",   // intentionally empty -> validation failure
                 }
@@ -522,7 +531,7 @@ public static class DataHelper
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         var doc = solution?.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => string.Equals(d.FilePath, "Chained.cs", StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(d => string.Equals(d.FilePath, PathOf("Chained.cs"), StringComparison.OrdinalIgnoreCase));
         Assert.That(doc, Is.Not.Null);
         var text = (await doc!.GetTextAsync()).ToString();
 
@@ -634,7 +643,7 @@ public static class DataHelper
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         var doc = solution?.Projects
             .SelectMany(p => p.Documents)
-            .FirstOrDefault(d => string.Equals(d.FilePath, "RegionForm.cs", StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(d => string.Equals(d.FilePath, PathOf("RegionForm.cs"), StringComparison.OrdinalIgnoreCase));
 
         Assert.That(doc, Is.Not.Null, "RegionForm.cs must be present in the workspace.");
         var updatedSource = (await doc!.GetTextAsync()).ToString();
@@ -666,7 +675,7 @@ public static class DataHelper
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         var doc = solution?.Projects
             .SelectMany(p => p.Documents)
-            .FirstOrDefault(d => string.Equals(d.FilePath, "QualifiedCall.cs", StringComparison.OrdinalIgnoreCase));
+            .FirstOrDefault(d => string.Equals(d.FilePath, PathOf("QualifiedCall.cs"), StringComparison.OrdinalIgnoreCase));
 
         Assert.That(doc, Is.Not.Null, "QualifiedCall.cs document must exist in workspace after uplift.");
         var sourceText = await doc!.GetTextAsync();
@@ -681,5 +690,138 @@ public static class DataHelper
         //  the caller-bridge call, not the rewritten callee call -> so we check the specific pattern.)
         Assert.That(updatedSource, Does.Not.Contain("await SyncMethodAsync("),
             "Unqualified 'await SyncMethodAsync(' must not appear; the qualifier 'Service.' must be kept.");
+    }
+
+    // ----------------------------------------------------------------------------------------------
+    // T21 - UpliftCallers byte-exact output per line-ending style. Covers both body-rewrite sites:
+    //   CallerClass.Load (sync caller -> ConvertToAsyncBridgeAsync + RewriteCallerAsyncBodyAsync) and
+    //   AsyncCaller.RunAsync (already async -> SemanticBridgeCallRewriteAsync).
+    // Untouched members keep their text and line terminator ("mixed": the one-line Untouched()
+    // keeps its LF in a CRLF file); every changed line takes the file's dominant line ending.
+    // ----------------------------------------------------------------------------------------------
+    private const string UpliftPinSource = """
+        using System;
+        using System.Threading;
+        using System.Threading.Tasks;
+
+        public class CallerClass
+        {
+            // Loads data.
+            public string Load(int id)
+            {
+                var raw = DataHelper.GetData(id);
+                return DataHelper.GetData(id).Trim() + raw;
+            }
+
+            public void Untouched() { var x = 1; }
+        }
+
+        public class AsyncCaller
+        {
+            public async Task RunAsync(CancellationToken ct)
+            {
+                await Task.Yield();
+                var s = DataHelper.GetData(1);
+            }
+        }
+
+        public static class DataHelper
+        {
+            [Obsolete("Asyncify-bridge: call GetDataAsync instead.", false)]
+            public static string GetData(int id) { return GetDataAsync(id).GetAwaiter().GetResult(); }
+
+            public static async Task<string> GetDataAsync(int id, CancellationToken cancellationToken = default)
+            { await Task.Delay(1, cancellationToken); return string.Empty; }
+        }
+
+        """;
+
+    private const string UpliftPinExpected = """
+        using System;
+        using System.Threading;
+        using System.Threading.Tasks;
+
+        public class CallerClass
+        {
+            // Loads data.
+            [Obsolete("Asyncify-bridge: call LoadAsync instead.", false)]
+            public string Load(int id)
+            {
+                // Asyncify-bridge: synchronous wrapper over LoadAsync.
+                return LoadAsync(id).GetAwaiter().GetResult();
+            }
+
+            // Loads data.
+            public async Task<string> LoadAsync(int id, CancellationToken cancellationToken = default)
+            {
+                var raw = await DataHelper.GetDataAsync(id, cancellationToken);
+                return (await DataHelper.GetDataAsync(id, cancellationToken)).Trim() + raw;
+            }
+
+            public void Untouched() { var x = 1; }
+        }
+
+        public class AsyncCaller
+        {
+            public async Task RunAsync(CancellationToken ct)
+            {
+                await Task.Yield();
+                var s = await DataHelper.GetDataAsync(1, ct);
+            }
+        }
+
+        public static class DataHelper
+        {
+            [Obsolete("Asyncify-bridge: call GetDataAsync instead.", false)]
+            public static string GetData(int id) { return GetDataAsync(id).GetAwaiter().GetResult(); }
+
+            public static async Task<string> GetDataAsync(int id, CancellationToken cancellationToken = default)
+            { await Task.Delay(1, cancellationToken); return string.Empty; }
+        }
+
+        """;
+
+    // "mixed" = CRLF file whose one-line Untouched() member ends in a stray LF.
+    private static string WithLineEndings(string template, string style)
+    {
+        var lf = template.Replace("\r\n", "\n");
+        if (style == "mixed")
+        {
+            return lf.Replace("\n", "\r\n").Replace("{ var x = 1; }\r\n", "{ var x = 1; }\n");
+        }
+
+        return lf.Replace("\n", style);
+    }
+
+    [TestCase("\n", TestName = "T21_UpliftCallers_ByteExact_LF")]
+    [TestCase("\r\n", TestName = "T21_UpliftCallers_ByteExact_CRLF")]
+    [TestCase("mixed", TestName = "T21_UpliftCallers_ByteExact_Mixed")]
+    [CancelAfter(30000)]
+    public async Task T21_UpliftCallers_ByteExact(string style)
+    {
+        SetSource(WithLineEndings(UpliftPinSource, style), "UpliftPin.cs");
+
+        var result = await _asyncifyTools.UpliftCallersTool(
+            reason: "test message",
+            targets: [new UpliftTarget { BridgedMethodName = "GetData" }],
+            maxCallersPerMethod: 5,
+            dryRun: false,
+            propagateCancellationTokens: true);
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
+        var doc = solution.Projects.SelectMany(p => p.Documents)
+            .First(d => string.Equals(d.FilePath, PathOf("UpliftPin.cs"), StringComparison.OrdinalIgnoreCase));
+        var actual = (await doc.GetTextAsync()).ToString();
+        var expected = WithLineEndings(UpliftPinExpected, style);
+
+        if (actual != expected)
+        {
+            TestContext.Out.WriteLine("ACTUAL:");
+            TestContext.Out.WriteLine(actual.Replace("\r", "<CR>").Replace("\n", "<LF>\n"));
+        }
+
+        Assert.That(actual, Is.EqualTo(expected).NoClip);
+        Assert.That(File.ReadAllText(PathOf("UpliftPin.cs")), Is.EqualTo(expected).NoClip, "disk and workspace must agree");
     }
 }
