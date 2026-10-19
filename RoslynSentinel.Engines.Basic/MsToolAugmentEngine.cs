@@ -1037,6 +1037,22 @@ public class MsToolAugmentEngine
             UpdatedContent: newRoot.ToFullString());
     }
 
+    /// <summary>
+    /// Formats only the nodes of <paramref name="rewrittenRoot"/> that carry <see cref="Formatter.Annotation"/> and returns
+    /// the full text. These tools work on file text (read from disk or the workspace) with no <see cref="Document"/> at hand,
+    /// so the original text is placed in a throwaway <see cref="AdhocWorkspace"/> document purely as the pre-image that
+    /// <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/> needs: lines the rewrite did not touch keep their text
+    /// and terminator, and every line it added or changed takes the original text's dominant line ending.
+    /// </summary>
+    private static async Task<string> FormatAnnotatedRootAsync(SourceText originalText, SyntaxNode rewrittenRoot, CancellationToken cancellationToken)
+    {
+        using var workspace = new AdhocWorkspace();
+        var project = workspace.AddProject("MsToolAugmentFormat", LanguageNames.CSharp);
+        var document = workspace.AddDocument(project.Id, "Source.cs", originalText);
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewrittenRoot, cancellationToken);
+        return (await formatted.GetTextAsync(cancellationToken)).ToString();
+    }
+
     // ── 10. ExtractConstantSafe ───────────────────────────────────────────────
     // MS Bug: roslyn-extract_constant gives a cryptic error like
     // "Column 99 is beyond end of line" when coordinates don't match ExtractConstantSafeAsync,
@@ -1146,15 +1162,15 @@ public class MsToolAugmentEngine
             .WithModifiers(SyntaxFactory.TokenList(
                 SyntaxFactory.Token(SyntaxKind.PrivateKeyword).WithTrailingTrivia(SyntaxFactory.Space),
                 SyntaxFactory.Token(SyntaxKind.ConstKeyword).WithTrailingTrivia(SyntaxFactory.Space)))
-            .WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed))
-            .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
+            .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed))
+            .WithAdditionalAnnotations(Formatter.Annotation);
         //.WithAddedByComment("ExtractConstantSafe");
 
         var updatedType = newContainingType.WithMembers(
             newContainingType.Members.Insert(0, constDecl));
 
         var finalRoot = replacedRoot.ReplaceNode(newContainingType, updatedType);
-        return MsAugmentResult.Ok(RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(finalRoot).ToFullString());
+        return MsAugmentResult.Ok(await FormatAnnotatedRootAsync(sourceText, finalRoot, cancellationToken));
     }
 
     private static string DetermineNumericType(SyntaxToken token)
@@ -1287,24 +1303,26 @@ public class MsToolAugmentEngine
         // Using {{ and }} to produce literal braces in C# interpolated strings (no CS8086).
         // NOTE: do NOT use a C# interpolated string here -> $"{typeName} {{ " would evaluate
         // {{ to a single { at runtime, defeating the escape. Use concatenation instead.
-        var contents = new List<InterpolatedStringContentSyntax>
-        {
-            MakeText(typeName + " {{ ")
-        };
+        // Adjacent literal text is coalesced into ONE text node (as the parser would produce): the formatter
+        // puts a space between two adjacent text nodes, which would change the string's content.
+        var contents = new List<InterpolatedStringContentSyntax>();
+        var pendingText = typeName + " {{ ";
 
         for (int i = 0; i < SelectedMembers.Count; i++)
         {
             if (i > 0)
             {
-                contents.Add(MakeText(", "));
+                pendingText += ", ";
             }
 
-            contents.Add(MakeText($"{SelectedMembers[i]} = "));
+            pendingText += $"{SelectedMembers[i]} = ";
+            contents.Add(MakeText(pendingText));
             contents.Add(SyntaxFactory.Interpolation(
                 SyntaxFactory.IdentifierName(SelectedMembers[i])));
+            pendingText = string.Empty;
         }
 
-        contents.Add(MakeText(" }}"));
+        contents.Add(MakeText(pendingText + " }}"));
 
         var interpolated = SyntaxFactory.InterpolatedStringExpression(
             SyntaxFactory.Token(SyntaxKind.InterpolatedStringStartToken),
@@ -1321,12 +1339,13 @@ public class MsToolAugmentEngine
                     .WithTrailingTrivia(SyntaxFactory.Space)))
             .WithParameterList(SyntaxFactory.ParameterList())
             .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(interpolated))
-            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+            .WithAdditionalAnnotations(Formatter.Annotation);
         //.WithAddedByComment("Generate(kind: generate_to_string_safe)");
 
         var newTypeDecl = typeDecl.AddMembers(method);
         var newRoot = root.ReplaceNode(typeDecl, newTypeDecl);
-        return MsAugmentResult.Ok(RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString());
+        return MsAugmentResult.Ok(await FormatAnnotatedRootAsync(SourceText.From(source), newRoot, cancellationToken));
     }
 
     // ── 12. ExtractMethod ─────────────────────────────────────────────────
