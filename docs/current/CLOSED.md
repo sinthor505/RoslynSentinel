@@ -8,6 +8,11 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## C6 whole-subtree whitespace enforcement and the old NormalizeWhitespace sweep list - resolved (2026-10-19)
+
+Moved from TODO.md (items "C6 whole-subtree whitespace enforcement", opened 2026-10-15, and "Old Advanced-side NormalizeWhitespace sweep list", opened 2026-08-24, superseded by C0-C6).
+Evidence: read-only review of 9402e8d3..297fb1b1 found no production caller of the deleted family; the three sites left unfixed on 2026-08-27 (`RunMicroRefactoringAsync`, `ExtractConstantSafeAsync`, `GenerateToStringSafeAsync`) now call `FormatAnnotatedTextAsync`; the last parked raw-formatter copies were merged into `RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync` in 31ecb16e, and `WhitespaceRatchetTests` now matches sync `Formatter.Format` and counts raw calls per allowlisted member. Remaining `NormalizeWhitespace` calls are non-persisted hashing (`ContentHasher`, `PersistentWorkspaceManager`) and the C9-allowlisted `AttributeTextEditBuilder`. History: [proposal](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md).
+
 ## Whitespace initiative: retire the `NormalizeWholeSubtreeWhitespace` family - resolved (2026-10-19)
 
 **Evidence (2026-10-19):** slices C1-C11 (last commits 40c6cc58 C10, a8f581f2 C11); production has 0 callers, `WhitespaceRatchetTests` baseline is empty and `CountedWhitespaceHelpers_AreObsolete` keeps the four helpers `[Obsolete]`. Also fixed on the way: Asyncify T20 (relative-path fixture + `RunBridgeBatchAsync` step D ignoring `EolChangeRefused`) and the `FlagCandidatesInProjectAsync` shared-state race in `Parallel.ForEachAsync`. Proposal: proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md.
