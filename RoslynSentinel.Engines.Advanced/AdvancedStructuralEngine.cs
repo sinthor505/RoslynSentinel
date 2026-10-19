@@ -19,6 +19,26 @@ public class StructuralRefactoringEngine
         _validationEngine = validationEngine;
     }
 
+    /// <summary>
+    /// Formats only the nodes of <paramref name="newRoot"/> that the rewrite annotated with <see cref="Formatter.Annotation"/>
+    /// (through <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/>) and returns the full text: lines the rewrite
+    /// did not touch keep their text and terminator, and every changed line takes the document's dominant line ending.
+    /// </summary>
+    private static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode newRoot, CancellationToken cancellationToken)
+    {
+        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+    }
+
+    /// <summary>
+    /// Returns <paramref name="leading"/> with a line break in front, so a member that follows another member is separated
+    /// from it by a blank line; leading trivia that already starts with a line break is returned unchanged.
+    /// </summary>
+    private static SyntaxTriviaList WithBlankLineSeparator(SyntaxTriviaList leading) =>
+        leading.Count > 0 && leading[0].IsKind(SyntaxKind.EndOfLineTrivia)
+            ? leading
+            : leading.Insert(0, SyntaxFactory.CarriageReturnLineFeed);
+
     public async Task<DocumentEditResult> ConvertAbstractClassToInterfaceAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -36,13 +56,18 @@ public class StructuralRefactoringEngine
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode != null && classNode.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword)))
         {
-            var interfaceMembers = classNode.Members.OfType<MethodDeclarationSyntax>().Select(m => m.WithBody(null).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()));
-            var interfaceNode = SyntaxFactory.InterfaceDeclaration($"I{className}").WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword))).WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(interfaceMembers));
+            // Each member keeps its own outer trivia (blank lines, comments, line break), which dropping the modifiers
+            // would otherwise take with it. The interface is a new node: it takes the class's outer trivia and is
+            // formatted whole.
+            var interfaceMembers = classNode.Members.OfType<MethodDeclarationSyntax>().Select(m => m.WithBody(null).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()).WithTriviaFrom(m));
+            var interfaceNode = SyntaxFactory.InterfaceDeclaration($"I{className}").WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword))).WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(interfaceMembers))
+                .WithTriviaFrom(classNode)
+                .WithAdditionalAnnotations(Formatter.Annotation);
             var newRoot = root!.ReplaceNode(classNode, interfaceNode);
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
-                UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+                UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
                 FilePath = filePath
             };
         }
@@ -73,13 +98,23 @@ public class StructuralRefactoringEngine
         if (classNode != null && constructor != null)
         {
             var factoryMethod = SyntaxFactory.MethodDeclaration(SyntaxFactory.ParseTypeName(className), "Create").AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword)).WithParameterList(constructor.ParameterList).WithBody(SyntaxFactory.Block(SyntaxFactory.ReturnStatement(SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName(className)).WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(constructor.ParameterList.Parameters.Select(p => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(p.Identifier)))))))));
-            var privateCtor = constructor.WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PrivateKeyword)));
-            var newClass = classNode.ReplaceNode(constructor, privateCtor).AddMembers(factoryMethod);
+            // The new modifier takes over the leading trivia of the first modifier it replaces (or of the identifier when
+            // there was none), so the constructor's indentation and comments stay in place.
+            var ctorFirstToken = constructor.Modifiers.Count > 0 ? constructor.Modifiers[0] : constructor.Identifier;
+            var privateToken = SyntaxFactory.Token(ctorFirstToken.LeadingTrivia, SyntaxKind.PrivateKeyword, SyntaxFactory.TriviaList(SyntaxFactory.Space));
+            var ctorWithoutLeadingTrivia = constructor.Modifiers.Count > 0 ? constructor : constructor.WithIdentifier(constructor.Identifier.WithLeadingTrivia());
+            var privateCtor = ctorWithoutLeadingTrivia.WithModifiers(SyntaxFactory.TokenList(privateToken));
+            // The factory is a whole new member: a blank line before it, a line break after it, and the formatter annotation.
+            var annotatedFactory = factoryMethod
+                .WithLeadingTrivia(SyntaxFactory.CarriageReturnLineFeed)
+                .WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed)
+                .WithAdditionalAnnotations(Formatter.Annotation);
+            var newClass = classNode.ReplaceNode(constructor, privateCtor).AddMembers(annotatedFactory);
             var newRoot = root!.ReplaceNode(classNode, newClass);
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Modified,
-                UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+                UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
                 FilePath = filePath
             };
         }
@@ -123,9 +158,30 @@ public class StructuralRefactoringEngine
             baseUnit = baseUnit.AddMembers(baseClassNode);
         }
 
-        changes[Path.Combine(Path.GetDirectoryName(firstFile)!, $"{newBaseClassName}.cs")] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(baseUnit).ToFullString();
+        // A new file that embeds existing code: only the synthesized structure is formatted; the usings and the copied
+        // properties keep their comments, blank lines and spacing.
+        changes[Path.Combine(Path.GetDirectoryName(firstFile)!, $"{newBaseClassName}.cs")] = await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, baseUnit, n => n is not (UsingDirectiveSyntax or PropertyDeclarationSyntax), cancellationToken);
         return changes;
     }
+
+    /// <summary>
+    /// The members of an inlined class, ready to append to <paramref name="targetClass"/>: each is new in the target and
+    /// carries <see cref="Formatter.Annotation"/> (it may sit at another nesting depth there), and the first one is
+    /// separated from the target's existing members by a blank line.
+    /// </summary>
+    private static MemberDeclarationSyntax[] PrepareInlinedMembers(ClassDeclarationSyntax targetClass, SyntaxList<MemberDeclarationSyntax> members) =>
+        members.Select((m, i) => (i == 0 && targetClass.Members.Count > 0 ? m.WithLeadingTrivia(WithBlankLineSeparator(m.GetLeadingTrivia())) : m)
+            .WithAdditionalAnnotations(Formatter.Annotation)).ToArray();
+
+    /// <summary>
+    /// Removal options for a whole declaration: when its outer trivia is only whitespace and line breaks it is removed with
+    /// that trivia (so the blank line in front of it does not pile up on its neighbours); when it carries comments or
+    /// directives they are kept, as before.
+    /// </summary>
+    private static SyntaxRemoveOptions RemoveOptionsKeepingComments(SyntaxNode node) =>
+        node.GetLeadingTrivia().Concat(node.GetTrailingTrivia()).All(t => t.IsKind(SyntaxKind.WhitespaceTrivia) || t.IsKind(SyntaxKind.EndOfLineTrivia))
+            ? SyntaxRemoveOptions.KeepNoTrivia
+            : SyntaxRemoveOptions.KeepExteriorTrivia;
 
     /// <summary>
     /// Inlines a class by moving all its members into the first class of the target file,
@@ -186,11 +242,11 @@ public class StructuralRefactoringEngine
             }
 
             targetClassName = targetClass.Identifier.Text;
-            var expandedTarget = targetClass.AddMembers(membersToInline.ToArray());
+            var expandedTarget = targetClass.AddMembers(PrepareInlinedMembers(targetClass, membersToInline));
             var intermediate = (CompilationUnitSyntax)sourceRoot.ReplaceNode(targetClass, expandedTarget);
             var classToRemove = intermediate.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-            var newRoot = classToRemove != null ? (CompilationUnitSyntax)intermediate.RemoveNode(classToRemove, SyntaxRemoveOptions.KeepExteriorTrivia)! : intermediate;
-            result[sourceFilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString();
+            var newRoot = classToRemove != null ? (CompilationUnitSyntax)intermediate.RemoveNode(classToRemove, RemoveOptionsKeepingComments(classToRemove))! : intermediate;
+            result[sourceFilePath] = await FormatAnnotatedTextAsync(sourceDoc, newRoot, cancellationToken);
             // Update type references in all other files
             if (classSymbol != null)
             {
@@ -223,11 +279,11 @@ public class StructuralRefactoringEngine
             }
 
             targetClassName = targetClass.Identifier.Text;
-            var expandedTarget = targetClass.AddMembers(membersToInline.ToArray());
+            var expandedTarget = targetClass.AddMembers(PrepareInlinedMembers(targetClass, membersToInline));
             var newTargetRoot = (CompilationUnitSyntax)targetRoot!.ReplaceNode(targetClass, expandedTarget);
-            var newSourceRoot = (CompilationUnitSyntax)sourceRoot.RemoveNode(sourceClass, SyntaxRemoveOptions.KeepExteriorTrivia)!;
-            result[targetFilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newTargetRoot).ToFullString();
-            result[sourceFilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newSourceRoot).ToFullString();
+            var newSourceRoot = (CompilationUnitSyntax)sourceRoot.RemoveNode(sourceClass, RemoveOptionsKeepingComments(sourceClass))!;
+            result[targetFilePath] = await FormatAnnotatedTextAsync(targetDoc, newTargetRoot, cancellationToken);
+            result[sourceFilePath] = await FormatAnnotatedTextAsync(sourceDoc, newSourceRoot, cancellationToken);
             // Update type references in all other files
             if (classSymbol != null)
             {
@@ -272,12 +328,13 @@ public class StructuralRefactoringEngine
 
                 if (original is GenericNameSyntax gen && gen.Identifier.Text == oldName)
                 {
-                    return gen.WithIdentifier(SyntaxFactory.Identifier(newName));
+                    return gen.WithIdentifier(SyntaxFactory.Identifier(newName).WithTriviaFrom(gen.Identifier));
                 }
 
                 return original;
             });
-            result[doc.FilePath] = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(updatedRoot).ToFullString();
+            // A token-for-token rename in which every new token keeps the old one's trivia: the text needs no formatting.
+            result[doc.FilePath] = updatedRoot.ToFullString();
         }
     }
 
@@ -346,7 +403,8 @@ public class StructuralRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (newRoot is null ? null : RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString()) ?? RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(root).ToFullString()
+            // The Apply* helpers annotate only the nodes they create; a refactoring that finds nothing returns the text as is.
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot ?? root, cancellationToken)
         };
     }
 
@@ -368,6 +426,15 @@ public class StructuralRefactoringEngine
         return target == null ? root : (root.RemoveNode(target, SyntaxRemoveOptions.KeepNoTrivia) ?? root);
     }
 
+    /// <summary>
+    /// Wraps a braceless body in a block annotated with <see cref="Formatter.Annotation"/>, which places the braces. The
+    /// body's trailing trivia (normally the line break) moves to the closing brace, so the next statement keeps its line.
+    /// </summary>
+    private static BlockSyntax BlockAround(StatementSyntax body) =>
+        SyntaxFactory.Block(body.WithoutTrailingTrivia())
+            .WithTrailingTrivia(body.GetTrailingTrivia())
+            .WithAdditionalAnnotations(Formatter.Annotation);
+
     private static SyntaxNode ApplyAddBraces(SyntaxNode root, int line)
     {
         // Find an if/while/for at the target line that has a braceless body
@@ -379,14 +446,24 @@ public class StructuralRefactoringEngine
 
         SyntaxNode replacement = target switch
         {
-            IfStatementSyntax ifs when ifs.Statement is not BlockSyntax => ifs.WithStatement(SyntaxFactory.Block(ifs.Statement)),
-            WhileStatementSyntax ws when ws.Statement is not BlockSyntax => ws.WithStatement(SyntaxFactory.Block(ws.Statement)),
-            ForStatementSyntax fs when fs.Statement is not BlockSyntax => fs.WithStatement(SyntaxFactory.Block(fs.Statement)),
-            ForEachStatementSyntax fes when fes.Statement is not BlockSyntax => fes.WithStatement(SyntaxFactory.Block(fes.Statement)),
+            IfStatementSyntax ifs when ifs.Statement is not BlockSyntax => ifs.WithStatement(BlockAround(ifs.Statement)),
+            WhileStatementSyntax ws when ws.Statement is not BlockSyntax => ws.WithStatement(BlockAround(ws.Statement)),
+            ForStatementSyntax fs when fs.Statement is not BlockSyntax => fs.WithStatement(BlockAround(fs.Statement)),
+            ForEachStatementSyntax fes when fes.Statement is not BlockSyntax => fes.WithStatement(BlockAround(fes.Statement)),
             _ => target
         };
         return root.ReplaceNode(target, replacement);
     }
+
+    /// <summary>
+    /// The single statement of <paramref name="block"/>, standing in for the block: it takes the closing brace's trailing
+    /// trivia (normally the line break) so the next statement keeps its line, and carries <see cref="Formatter.Annotation"/>
+    /// so it is indented as an embedded statement.
+    /// </summary>
+    private static StatementSyntax UnwrapBlock(BlockSyntax block) =>
+        block.Statements[0]
+            .WithTrailingTrivia(block.GetTrailingTrivia())
+            .WithAdditionalAnnotations(Formatter.Annotation);
 
     private static SyntaxNode ApplyRemoveBraces(SyntaxNode root, int line)
     {
@@ -399,10 +476,10 @@ public class StructuralRefactoringEngine
 
         SyntaxNode replacement = target switch
         {
-            IfStatementSyntax ifs when ifs.Statement is BlockSyntax blk && blk.Statements.Count == 1 => ifs.WithStatement(blk.Statements[0]),
-            WhileStatementSyntax ws when ws.Statement is BlockSyntax blk && blk.Statements.Count == 1 => ws.WithStatement(blk.Statements[0]),
-            ForStatementSyntax fs when fs.Statement is BlockSyntax blk && blk.Statements.Count == 1 => fs.WithStatement(blk.Statements[0]),
-            ForEachStatementSyntax fes when fes.Statement is BlockSyntax blk && blk.Statements.Count == 1 => fes.WithStatement(blk.Statements[0]),
+            IfStatementSyntax ifs when ifs.Statement is BlockSyntax blk && blk.Statements.Count == 1 => ifs.WithStatement(UnwrapBlock(blk)),
+            WhileStatementSyntax ws when ws.Statement is BlockSyntax blk && blk.Statements.Count == 1 => ws.WithStatement(UnwrapBlock(blk)),
+            ForStatementSyntax fs when fs.Statement is BlockSyntax blk && blk.Statements.Count == 1 => fs.WithStatement(UnwrapBlock(blk)),
+            ForEachStatementSyntax fes when fes.Statement is BlockSyntax blk && blk.Statements.Count == 1 => fes.WithStatement(UnwrapBlock(blk)),
             _ => target
         };
         return root.ReplaceNode(target, replacement);
@@ -426,14 +503,23 @@ public class StructuralRefactoringEngine
         var typeName = literal.IsKind(SyntaxKind.StringLiteralExpression) ? "string" : "int";
         const string constName = "ExtractedConstant";
         var constDecl = SyntaxFactory.FieldDeclaration(SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName(typeName), SyntaxFactory.SingletonSeparatedList(SyntaxFactory.VariableDeclarator(constName).WithInitializer(SyntaxFactory.EqualsValueClause(literal))))).WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ConstKeyword)));
-        var newRoot = root.ReplaceNode(literal, SyntaxFactory.IdentifierName(constName));
+        var newRoot = root.ReplaceNode(literal, SyntaxFactory.IdentifierName(constName).WithTriviaFrom(literal));
         var newType = newRoot.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.Text == enclosingType.Identifier.Text);
         if (newType == null)
         {
             return newRoot;
         }
 
-        var updatedType = newType.WithMembers(newType.Members.Insert(0, constDecl));
+        // The constant is a new first member: a line break after it, the formatter annotation, and a blank line between it
+        // and the member that used to come first.
+        var members = newType.Members;
+        if (members.Count > 0)
+        {
+            members = members.Replace(members[0], members[0].WithLeadingTrivia(WithBlankLineSeparator(members[0].GetLeadingTrivia())));
+        }
+
+        var annotatedConst = constDecl.WithTrailingTrivia(SyntaxFactory.CarriageReturnLineFeed).WithAdditionalAnnotations(Formatter.Annotation);
+        var updatedType = newType.WithMembers(members.Insert(0, annotatedConst));
         return newRoot.ReplaceNode(newType, updatedType);
     }
 
