@@ -564,10 +564,28 @@ public class CommentingEngine
         // Give the new attribute list the member's own indentation and a trailing newline explicitly
         // -> callers of this helper render the result via ToFullString() with no NormalizeWhitespace()
         // pass to fix it up after the fact (see CommentFileAsync), so the trivia has to be right here.
-        var indentTrivia = member.GetLeadingTrivia().LastOrDefault(t => t.IsKind(SyntaxKind.WhitespaceTrivia));
+        var leadingTrivia = member.GetLeadingTrivia();
+        // Only the whitespace directly before the declaration is indentation; a whitespace trivia earlier in the
+        // list belongs to a comment line and must not be reused for the attribute line.
+        var indentTrivia = leadingTrivia.Count > 0 && leadingTrivia.Last().IsKind(SyntaxKind.WhitespaceTrivia)
+            ? SyntaxFactory.TriviaList(leadingTrivia.Last())
+            : default;
+        var eol = SyntaxFactory.EndOfLine(DetectMemberEol(member));
+
+        if (member.AttributeLists.Count == 0)
+        {
+            // With no attribute list yet, the member's leading trivia (doc comment, comment, indentation) sits on its
+            // first modifier/keyword token, so AddAttributeLists would put the new list physically above that comment.
+            // Move all of it onto the new list (comment first, then the attribute) and leave the declaration only its indentation.
+            var firstList = SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(newAttribute))
+                .WithLeadingTrivia(leadingTrivia)
+                .WithTrailingTrivia(eol);
+            return member.WithLeadingTrivia(indentTrivia).AddAttributeLists(firstList);
+        }
+
         var newAttrList = SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(newAttribute))
             .WithLeadingTrivia(indentTrivia)
-            .WithTrailingTrivia(SyntaxFactory.EndOfLine(DetectMemberEol(member)));
+            .WithTrailingTrivia(eol);
         return member.AddAttributeLists(newAttrList);
     }
 
