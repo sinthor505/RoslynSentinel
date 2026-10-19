@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Whitespace initiative: retire the `NormalizeWholeSubtreeWhitespace` family - resolved (2026-10-19)
+
+**Evidence (2026-10-19):** slices C1-C11 (last commits 40c6cc58 C10, a8f581f2 C11); production has 0 callers, `WhitespaceRatchetTests` baseline is empty and `CountedWhitespaceHelpers_AreObsolete` keeps the four helpers `[Obsolete]`. Also fixed on the way: Asyncify T20 (relative-path fixture + `RunBridgeBatchAsync` step D ignoring `EolChangeRefused`) and the `FlagCandidatesInProjectAsync` shared-state race in `Parallel.ForEachAsync`. Proposal: proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md.
+
 ## claude-lean schema budget over its limit / no headroom - resolved (2026-10-18)
 
 **Evidence (2026-10-18):** proposal_trim_claude_lean_core_surface.md slices 1-8 (last commits c01b1f51, 0b0869c4, 7b01ea33) cut the core surface from 24 tools / ~42.9k chars to 19 tools / 27752 chars (largest tool Git 4157); `ClaudeLeanSchemaBudgetTests` constants lowered to 28000 total / 4500 per tool.
