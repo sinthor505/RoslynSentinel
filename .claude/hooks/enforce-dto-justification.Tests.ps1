@@ -116,8 +116,8 @@ $cases = @(
        p = (New-CreatePayload 'interface' 'IFoo' $gen) }
 
     # --- ALLOW: Member operations that never trigger ---
-    @{ n = 'Member addTypedMember with record source'; want = 'allow'; fx = 'dto'
-       p = (New-MemberPayload 'addTypedMember' 'public record FooResult(int A);' $gen) }
+    @{ n = 'TypedMember property typed as a record'; want = 'allow'; fx = 'dto'
+       p = @{ tool_name = 'mcp__x__TypedMember'; tool_input = @{ filePath = $inFile; typedKind = 'property'; typedName = 'Result'; typedType = 'FooResult'; reason = $gen } } }
     @{ n = 'Member remove'; want = 'allow'; fx = 'dto'
        p = (New-MemberPayload 'remove' 'public record FooResult(int A);' $gen) }
     @{ n = 'Member replace'; want = 'allow'; fx = 'dto'
