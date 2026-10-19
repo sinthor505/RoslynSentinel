@@ -1,7 +1,11 @@
 # MoveMember fold blocked: no MCP tool can retype an existing constructor parameter in place, so DI-chain-only call sites cannot be resolved
 
-Status: OPEN (new, found 2026-09-28/29 during engine reorg group 6, "Solution/project structure
-merge", `.claude/plans/enumerated-jumping-babbage.md` section 6).
+Status: PARTIALLY RESOLVED 2026-10-19. The fix this doc asked for, `ConstructorParameter(add, callSiteFixups)`,
+shipped in 1f95a8cb (`Tools.Basic/ParameterEditTools.cs`, `Tools.Basic/RefactoringSignatureImpl.cs:338-396`,
+`Engines.Basic/ConstructorCallSiteFinder.cs`), so the group-6 folds can be retried. Retyping an existing
+constructor parameter in place is still not covered. Not yet re-tried against the original fold, so the
+doc stays in `blockers/` until one fold succeeds. (Originally found 2026-09-28/29 during engine reorg
+group 6, "Solution/project structure merge", `.claude/plans/enumerated-jumping-babbage.md` section 6.)
 
 **STOPPED SHORT (2026-09-29, follow-up trace session):** re-confirmed this doc's own conclusion by
 reading both tools' current schemas directly (not from memory): `ConstructorParameter`'s `add`

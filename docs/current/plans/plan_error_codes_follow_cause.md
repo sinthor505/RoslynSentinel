@@ -2,7 +2,7 @@
 
 **Note 2026-10-11:** the result-type decision this plan waited on is made and built (`plans/plan_shared_result_status_interface.md`: `IResultStatus` on all status-carrying types, one `EditOutcome` -> `ResultStatus` mapping, `Cancelled`/`TimedOut` codes). Re-check the remaining steps against that code before starting them.
 
-**Status:** DRAFT 2026-10-01. Follows `finding_batch_edit_errors_lose_tool_exception_code.md`; steps 0-1 of that finding are done (commits 72bae67, 8688c75). Nothing below is built.
+**Status:** IN-PROGRESS 2026-10-19. Follows `finding_batch_edit_errors_lose_tool_exception_code.md`; steps 0-1 of that finding are done (commits 72bae67, 8688c75). Typed throws, `DocumentEditResult.ErrorCode` and slices 1, 2-engine, B and A (`Member`/`UsingDirective`, a63d48f5, a77c9d62) are built; the `CodeTransformTools` conversion is parked and the numeric taxonomy and telemetry are out of scope. Open items: TODO.md "Error codes follow cause, remaining".
 
 ## Problem
 A model branches on `errorData.errorCode` to tell "fix the name" (`NotFound`) from "disambiguate"
