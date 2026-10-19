@@ -484,6 +484,7 @@ public static class RoslynFormattingHelper
     /// audit work -> auditing/fixing individual call sites' scope is deliberately out of scope here.
     /// </para>
     /// </summary>
+    [Obsolete("Use RoslynFormattingHelper.FormatAnnotatedSpansAsync / FormatNewRootKeepingTriviaAsync: annotate only changed nodes")]
     public static SyntaxNode NormalizeWholeSubtreeWhitespace(SyntaxNode node, string indentation = "    ", string eol = "\n", bool elasticTrivia = true)
     {
         return node.NormalizeWhitespace(indentation, eol, elasticTrivia);
@@ -503,6 +504,7 @@ public static class RoslynFormattingHelper
     /// longer whitespace (indentation) trivia that is not elastic are still rejected.
     /// </para>
     /// </summary>
+    [Obsolete("Use RoslynFormattingHelper.FormatAnnotatedSpansAsync / FormatNewRootKeepingTriviaAsync: annotate only changed nodes")]
     public static T NormalizeNewChildWhitespace<T>(T node, string eol, string indentation = "    ", bool elasticTrivia = true)
         where T : SyntaxNode
     {
@@ -528,6 +530,7 @@ public static class RoslynFormattingHelper
     /// project's line ending. The content check exempts single-space whitespace trivia, exactly as
     /// described on <see cref="NormalizeNewChildWhitespace{T}"/>.
     /// </summary>
+    [Obsolete("Use RoslynFormattingHelper.FormatAnnotatedSpansAsync / FormatNewRootKeepingTriviaAsync: annotate only changed nodes")]
     public static CompilationUnitSyntax NormalizeNewRootWhitespace(CompilationUnitSyntax root, string eol, string indentation = "    ", bool elasticTrivia = true)
     {
         ValidateEol(eol);
@@ -555,6 +558,7 @@ public static class RoslynFormattingHelper
     /// usings is not carried at all, because it lives on the first member's token.
     /// </para>
     /// </summary>
+    [Obsolete("Use RoslynFormattingHelper.FormatAnnotatedSpansAsync / FormatNewRootKeepingTriviaAsync: annotate only changed nodes")]
     public static CompilationUnitSyntax NormalizeNewRootWhitespaceKeepingUsingHeaders(CompilationUnitSyntax root, string eol, string indentation = "    ", bool elasticTrivia = true)
     {
         ValidateEol(eol);

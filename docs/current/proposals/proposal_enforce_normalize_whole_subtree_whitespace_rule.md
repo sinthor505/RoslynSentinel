@@ -1,8 +1,11 @@
 # Enforcing the NormalizeWholeSubtreeWhitespace risk rule (item C)
 
-**Status:** DESIGN AGREED 2026-10-15. Naming is final; the structure (two guarded new-node methods,
-operation-named existing-node helpers, consolidation first, ratchet test) is agreed. Slices not started. Remaining open questions are
-listed below and are scoped to individual slices, not to the design.
+**Status:** IMPLEMENTED 2026-10-19 (slices C1-C11). Production has no callers of the NormalizeWhitespace helper
+family; `NormalizeWholeSubtreeWhitespace`, `NormalizeNewChildWhitespace`, `NormalizeNewRootWhitespace` and
+`NormalizeNewRootWhitespaceKeepingUsingHeaders` are `[Obsolete]` (slice C11), and `Tests.Basic/WhitespaceRatchetTests.cs`
+guards both the empty caller baseline and the attribute. The helpers are kept, not deleted; removing them (and the
+then caller-free strip helpers) is a separate decision. Design agreed 2026-10-15; the sections below are the original
+design and were not rewritten.
 
 > **Reading guide.** Facts were traced by exploration agents on 2026-10-13 and 2026-10-15 and were
 > NOT re-verified when this doc was written. Line numbers may have drifted by a few lines; re-anchor

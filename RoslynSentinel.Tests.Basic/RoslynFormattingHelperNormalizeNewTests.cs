@@ -8,6 +8,10 @@ using static Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace RoslynSentinel.Tests.Basic;
 
+// This fixture exists to exercise the [Obsolete] NormalizeWhitespace helper family (guards, parameters, known
+// limitations), so CS0618 is suppressed for this file only; production code has no callers (WhitespaceRatchetTests).
+#pragma warning disable CS0618
+
 /// <summary>
 /// Slice C2 of docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md:
 /// <see cref="RoslynFormattingHelper.NormalizeNewChildWhitespace{T}"/> and
@@ -393,8 +397,7 @@ public class RoslynFormattingHelperNormalizeNewTests
         // statements, which can carry comments and multi-line formatting nested inside child blocks (the engine
         // already strips the top-level leading/trailing trivia of each statement, so only nested trivia remains).
         // This pin and the multi-line one below pin the GUARD's rejection of such nested trivia; they do not
-        // describe engine behaviour. The engine keeps the raw NormalizeWholeSubtreeWhitespace call until a helper
-        // exists that formats a new shell around existing statements; flip these pins when that helper lands.
+        // describe engine behaviour; the engine no longer calls the (now [Obsolete]) helper family.
         var statement = ParseStatement("if (a > b)\n{\n    total = a; // pick the larger\n}\n");
         var node = MethodDeclaration(ParseTypeName("int"), "ExtractedSum")
             .WithBody(Block(statement.WithoutLeadingTrivia(), ReturnStatement(IdentifierName("total"))));

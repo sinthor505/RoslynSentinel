@@ -138,6 +138,26 @@ public class WhitespaceRatchetTests
             + Environment.NewLine + string.Join(Environment.NewLine, problems));
     }
 
+
+    // Slice C11: the family is [Obsolete], so a new caller is flagged at compile time (CS0618) as well as by the
+    // baseline-0 scan above. Every counted name that RoslynFormattingHelper still declares must keep the attribute.
+    [Test]
+    public void CountedWhitespaceHelpers_AreObsolete()
+    {
+        var declared = typeof(RoslynSentinel.Common.RoslynFormattingHelper)
+            .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .Where(method => CountedWhitespaceHelpers.Contains(method.Name))
+            .ToList();
+
+        Assert.That(declared, Is.Not.Empty, "No counted helper is declared on RoslynFormattingHelper; the name list is stale.");
+        var notObsolete = declared
+            .Where(method => !method.IsDefined(typeof(ObsoleteAttribute), inherit: false))
+            .Select(method => method.Name)
+            .ToList();
+        Assert.That(notObsolete, Is.Empty,
+            "Counted NormalizeWhitespace helpers must stay [Obsolete]: " + string.Join(", ", notObsolete));
+    }
+
     private static string RepoRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
