@@ -53,7 +53,7 @@ public class OrderService
         Assert.That(result.UpdatedText, Does.Contain("/// <summary>"), "Should add XML summary tags");
         Assert.That(result.UpdatedText, Does.Contain("GetOrderCount"), "Public method name should appear in TODO comment");
         Assert.That(result.UpdatedText, Does.Contain("DeleteOrder"), "Second public method should also get docs");
-        Assert.That(result.UpdatedText, Does.Contain("<param name = \"userId\">"), "Should add <param> for each parameter");
+        Assert.That(result.UpdatedText, Does.Contain("<param name=\"userId\">"), "Should add <param> for each parameter");
         Assert.That(result.UpdatedText, Does.Contain("<returns>"), "Non-void return should get <returns> tag");
     }
 

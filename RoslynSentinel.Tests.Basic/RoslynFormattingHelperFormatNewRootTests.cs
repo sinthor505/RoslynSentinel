@@ -11,9 +11,8 @@ namespace RoslynSentinel.Tests.Basic;
 /// Slice C6 of docs/current/proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md:
 /// <see cref="RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync"/>, the comment-keeping way to format a newly built
 /// file root that embeds existing code. The three fixtures mirror how AdvancedStructuralEngine builds its roots
-/// (ExtractSuperclass :126, ExtractMembersToPartial :1101, ConvertTupleToClass :1625); the old raw
-/// NormalizeWholeSubtreeWhitespace call at those sites is pinned as rejected by the NormalizeNew* guard in
-/// <see cref="RoslynFormattingHelperNormalizeNewTests"/> (PinnedC6_*). Every test compares the whole result byte for byte
+/// (ExtractSuperclass, ExtractMembersToPartial, ConvertTupleToClass), which use this helper since slices C7a/C7b
+/// (engine pins: AdvancedStructuralNormalizeCharacterizationTests). Every test compares the whole result byte for byte
 /// for LF, CRLF and mixed documents, and pins the formatter's own NewLine option to the OPPOSITE ending so a leak shows.
 /// A fixture line with a trailing "~" takes the odd ending of a mixed document.
 /// </summary>

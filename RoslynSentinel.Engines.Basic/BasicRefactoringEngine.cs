@@ -763,10 +763,11 @@ public class BasicRefactoringEngine
         var methods = classNode.Members.OfType<MethodDeclarationSyntax>().Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)) && !m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)));
         // Extract public non-static properties with at least a getter
         var properties = classNode.Members.OfType<PropertyDeclarationSyntax>().Where(p => p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)) && !p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.StaticKeyword)) && p.AccessorList != null);
-        // The interface file root is built from scratch and normalized with the source document's own line ending. Signature parts
-        // reused from the source (types, names, parameter and constraint lists) are stripped of ALL trivia first so the new-root guard
-        // accepts them; a comment inside a signature is therefore not carried to the interface (as SyncInterfaceToImplementation does).
-        var eol = EolUtilities.DetectNormalizableEol(await document.GetTextAsync(cancellationToken));
+        // The interface file root is built from scratch and formatted by FormatNewRootKeepingTriviaAsync: the source's using
+        // directives are embedded as existing nodes (header comment, trailing comments and line endings kept byte-exact) and
+        // everything else is new structure the formatter lays out. Signature parts reused from the source (types, names,
+        // parameter and constraint lists) are stripped of ALL trivia first, so a comment inside a signature is not carried to
+        // the interface (as SyncInterfaceToImplementation does).
         static T Strip<T>(T node) where T : SyntaxNode => RoslynFormattingHelper.StripAllTriviaForNormalize(node);
         static T? StripOrNull<T>(T? node) where T : SyntaxNode => node is null ? null : Strip(node);
         var ifaceMethods = methods.Select(m => (MemberDeclarationSyntax)SyntaxFactory.MethodDeclaration(Strip(m.ReturnType), m.Identifier.WithoutTrivia()).WithTypeParameterList(StripOrNull(m.TypeParameterList)).WithParameterList(Strip(m.ParameterList)).WithConstraintClauses(SyntaxFactory.List(m.ConstraintClauses.Select(c => Strip(c)))).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
@@ -780,16 +781,16 @@ public class BasicRefactoringEngine
         var ifaceNode = SyntaxFactory.InterfaceDeclaration(interfaceName).AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)).AddMembers(ifaceMembers);
         // Wrap in namespace + usings to produce a compilable file
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
-        var cleanUsings = SyntaxFactory.List(root!.Usings.Select(RoslynFormattingHelper.StripUsingKeepingLeadingTrivia));
+        var sourceUsings = root!.Usings;
         CompilationUnitSyntax ifaceCompUnit;
         if (ns != null)
         {
             BaseNamespaceDeclarationSyntax newNs = ns is FileScopedNamespaceDeclarationSyntax ? (BaseNamespaceDeclarationSyntax)SyntaxFactory.FileScopedNamespaceDeclaration(Strip(ns.Name)).AddMembers(ifaceNode) : SyntaxFactory.NamespaceDeclaration(Strip(ns.Name)).AddMembers(ifaceNode);
-            ifaceCompUnit = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(newNs);
+            ifaceCompUnit = SyntaxFactory.CompilationUnit().WithUsings(sourceUsings).AddMembers(newNs);
         }
         else
         {
-            ifaceCompUnit = SyntaxFactory.CompilationUnit().WithUsings(cleanUsings).AddMembers(ifaceNode);
+            ifaceCompUnit = SyntaxFactory.CompilationUnit().WithUsings(sourceUsings).AddMembers(ifaceNode);
         }
 
         // Add interface to class's base list (only if not already present)
@@ -797,9 +798,8 @@ public class BasicRefactoringEngine
         var newClass = alreadyImplements ? classNode : classNode.AddBaseListTypes(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(interfaceName)));
         var updatedOrig = root.ReplaceNode(classNode, newClass);
         var ifacePath = Path.Combine(Path.GetDirectoryName(filePath) ?? "", $"{interfaceName}.cs");
-        // Format the interface file using NormalizeWhitespace for reliable member separation.
-        // Formatter.FormatAsync with null workspace options can flatten all members onto one line.
-        var ifaceContent = RoslynFormattingHelper.NormalizeNewRootWhitespaceKeepingUsingHeaders(ifaceCompUnit, eol, elasticTrivia: false).ToFullString();
+        // Only the synthesized interface structure is formatted; the embedded using directives stay byte-exact.
+        var ifaceContent = await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, ifaceCompUnit, static n => n is not UsingDirectiveSyntax, cancellationToken);
         // Format the original file
         var origDoc = document.WithSyntaxRoot(updatedOrig);
         var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(origDoc, await document.GetTextAsync(cancellationToken), cancellationToken);

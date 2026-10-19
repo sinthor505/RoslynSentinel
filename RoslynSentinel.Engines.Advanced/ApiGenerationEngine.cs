@@ -130,7 +130,7 @@ public class ApiGenerationEngine
         // First add the using directive if not present
         if (!root.Usings.Any(u => u.Name?.ToString() == "System.ComponentModel.DataAnnotations"))
         {
-            root = root.AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("System.ComponentModel.DataAnnotations")));
+            root = AnnotatedInsertionHelper.AddUsingDirective(root, "System.ComponentModel.DataAnnotations");
         }
 
         // Now get the classNode from the updated root
@@ -174,13 +174,13 @@ public class ApiGenerationEngine
                 attributes.Add(SyntaxFactory.AttributeList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Attribute(SyntaxFactory.ParseName("Range")).WithArgumentList(SyntaxFactory.AttributeArgumentList(SyntaxFactory.SeparatedList(new[] { SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(0))), SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(int.MaxValue))) }))))));
             }
 
-            return attributes.Count == 0 ? newProp : newProp.WithAttributeLists(newProp.AttributeLists.AddRange(attributes));
+            return AnnotatedInsertionHelper.AppendAttributeLists(newProp, attributes);
         });
         var newRoot = root.ReplaceNode(classNode, newClassNode);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = RoslynFormattingHelper.NormalizeWholeSubtreeWhitespace(newRoot).ToFullString(),
+            UpdatedText = await AnnotatedInsertionHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
             FilePath = filePath
         };
     }
