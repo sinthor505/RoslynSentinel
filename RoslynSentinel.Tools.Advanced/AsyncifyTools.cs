@@ -1507,6 +1507,21 @@ public class AsyncifyTools
 
                     var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
                         new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } }, validateChanges: true);
+                    if (applyResult.IsError)
+                    {
+                        var refusedReason = $"Write refused: {applyResult.Summary}";
+                        items.Add(new OperationItemRecord
+                        {
+                            FilePath = target.FilePath,
+                            MethodName = methodName,
+                            Outcome = ItemRecordOutcome.Failed,
+                            Reason = refusedReason,
+                            CompilerDiagnostics = applyResult.ValidationResult?.Diagnostics,
+                        });
+                        failures.Add(new FailureDetail { FilePath = target.FilePath, MethodName = methodName, Reason = refusedReason, Outcome = ItemRecordOutcome.Failed, CompilerDiagnostics = applyResult.ValidationResult?.Diagnostics });
+                        failed++;
+                        continue;
+                    }
 
                     string? beforeSource782 = null;
                     applyResult.PreImages?.TryGetValue(target.FilePath, out beforeSource782);
@@ -1558,6 +1573,10 @@ public class AsyncifyTools
                                     var diagMsg = string.Join("; ", ctApplyResult.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
                                     reason = $"Validation: {ctApplyResult.ValidationResult.Diagnostics.Count} error(s) - {diagMsg}";
                                     compilerDiagnostics = ctApplyResult.ValidationResult.Diagnostics;
+                                }
+                                else
+                                {
+                                    reason = $"Write refused while adding CancellationToken to '{asyncMethodName}': {ctApplyResult.Summary}";
                                 }
                             }
                             else if (ctResult.Outcome == EditOutcome.AlreadyInTargetState)

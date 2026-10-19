@@ -563,8 +563,20 @@ public class AsyncBatchEngine
                         {
                             string? beforeSource = File.Exists(candidate.FilePath)
                                 ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken) : null;
-                            await _workspaceManager.ApplyProposedChangesAsync(
+                            var ctApply = await _workspaceManager.ApplyProposedChangesAsync(
                                 new Dictionary<FilePathWrapper, string> { { candidate.FilePath, ctResult.UpdatedText } });
+                            if (ctApply.IsError)
+                            {
+                                _logger.LogWarning("CT-add write refused for '{AsyncMethod}' in {File}: {Summary}",
+                                    asyncMethodName, candidate.FilePath, ctApply.Summary);
+                                _ledger.Record(candidate.FilePath, candidate.MethodName, "BridgeApplyFail", ctApply.Summary);
+                                skipped.Add(new BridgeSkippedInfo(
+                                    candidate.FilePath, candidate.MethodName,
+                                    $"Write refused while adding CancellationToken to '{asyncMethodName}': {ctApply.Summary}",
+                                    new List<DiagnosticInfo>(), AttemptedSource: ctResult.UpdatedText));
+                                fallbackHandled = true;
+                                continue;
+                            }
                             applied.Add(new BridgeAppliedInfo(candidate.FilePath, candidate.MethodName, asyncMethodName)
                             {
                                 BeforeSource = beforeSource,
@@ -605,8 +617,20 @@ public class AsyncBatchEngine
                             {
                                 string? beforeSource = File.Exists(candidate.FilePath)
                                     ? await File.ReadAllTextAsync(candidate.FilePath, cancellationToken) : null;
-                                await _workspaceManager.ApplyProposedChangesAsync(
+                                var bodyApply = await _workspaceManager.ApplyProposedChangesAsync(
                                     new Dictionary<FilePathWrapper, string> { { candidate.FilePath, bodyRewrite.UpdatedText } });
+                                if (bodyApply.IsError)
+                                {
+                                    _logger.LogWarning("Body-rewrite write refused for '{AsyncMethod}' in {File}: {Summary}",
+                                        asyncMethodName, candidate.FilePath, bodyApply.Summary);
+                                    _ledger.Record(candidate.FilePath, candidate.MethodName, "BridgeApplyFail", bodyApply.Summary);
+                                    skipped.Add(new BridgeSkippedInfo(
+                                        candidate.FilePath, candidate.MethodName,
+                                        $"Write refused while rewriting bridge calls in '{asyncMethodName}': {bodyApply.Summary}",
+                                        new List<DiagnosticInfo>(), AttemptedSource: bodyRewrite.UpdatedText));
+                                    fallbackHandled = true;
+                                    continue;
+                                }
                                 applied.Add(new BridgeAppliedInfo(candidate.FilePath, candidate.MethodName, asyncMethodName)
                                 {
                                     BeforeSource = beforeSource,
@@ -646,7 +670,12 @@ public class AsyncBatchEngine
                                     cancellationToken: cancellationToken);
                                 if (stripResult.Changes.Count > 0)
                                 {
-                                    await _workspaceManager.ApplyProposedChangesAsync(stripResult.Changes);
+                                    var stripApply = await _workspaceManager.ApplyProposedChangesAsync(stripResult.Changes);
+                                    if (stripApply.IsError)
+                                    {
+                                        _logger.LogWarning("Stale AsyncBridgeCandidate strip refused for '{Method}' in {File}: {Summary}",
+                                            candidate.MethodName, candidate.FilePath, stripApply.Summary);
+                                    }
                                 }
                             }
                             catch (Exception stripEx)
@@ -690,7 +719,12 @@ public class AsyncBatchEngine
                         reason: $"Bridge pre-condition: {ex.Message}",
                         progress: progress,
                         cancellationToken: cancellationToken);
-                    await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    if (flagApply.IsError)
+                    {
+                        _logger.LogWarning("NeedsManualReview flag write refused for {Method} in {File}: {Summary}",
+                            candidate.MethodName, candidate.FilePath, flagApply.Summary);
+                    }
                 }
                 catch (Exception flagEx)
                 {
@@ -716,7 +750,12 @@ public class AsyncBatchEngine
                         reason: $"Unexpected bridge error: {ex.Message}",
                         progress: progress,
                         cancellationToken: cancellationToken);
-                    await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    if (flagApply.IsError)
+                    {
+                        _logger.LogWarning("NeedsManualReview flag write refused for {Method} in {File}: {Summary}",
+                            candidate.MethodName, candidate.FilePath, flagApply.Summary);
+                    }
                 }
                 catch (Exception flagEx)
                 {
@@ -798,7 +837,12 @@ public class AsyncBatchEngine
                         reason: $"Bridge produced {validation.Diagnostics.Count} compiler error(s){DiagSummary(validation.Diagnostics)}",
                         progress: progress,
                         cancellationToken: cancellationToken);
-                    await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    if (flagApply.IsError)
+                    {
+                        _logger.LogWarning("NeedsManualReview flag write refused for {Method} in {File}: {Summary}",
+                            candidate.MethodName, candidate.FilePath, flagApply.Summary);
+                    }
                 }
                 catch (Exception flagEx)
                 {

@@ -2485,7 +2485,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         // the merge into the shared results takes this lock.
         var resultLock = new object();
 
-        await Parallel.ForEachAsync(documents, async (document, cancellationToken) =>
+        await Parallel.ForEachAsync(documents, cancellationToken, async (document, cancellationToken) =>
         {
             cancellationToken.ThrowIfCancellationRequested();
 
