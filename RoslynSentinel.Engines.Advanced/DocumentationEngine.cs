@@ -93,7 +93,7 @@ public class DocumentationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await AnnotatedInsertionHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 
@@ -154,7 +154,7 @@ public class DocumentationEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = await AnnotatedInsertionHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken)
         };
     }
 }

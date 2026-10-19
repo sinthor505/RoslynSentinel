@@ -1037,22 +1037,6 @@ public class MsToolAugmentEngine
             UpdatedContent: newRoot.ToFullString());
     }
 
-    /// <summary>
-    /// Formats only the nodes of <paramref name="rewrittenRoot"/> that carry <see cref="Formatter.Annotation"/> and returns
-    /// the full text. These tools work on file text (read from disk or the workspace) with no <see cref="Document"/> at hand,
-    /// so the original text is placed in a throwaway <see cref="AdhocWorkspace"/> document purely as the pre-image that
-    /// <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/> needs: lines the rewrite did not touch keep their text
-    /// and terminator, and every line it added or changed takes the original text's dominant line ending.
-    /// </summary>
-    private static async Task<string> FormatAnnotatedRootAsync(SourceText originalText, SyntaxNode rewrittenRoot, CancellationToken cancellationToken)
-    {
-        using var workspace = new AdhocWorkspace();
-        var project = workspace.AddProject("MsToolAugmentFormat", LanguageNames.CSharp);
-        var document = workspace.AddDocument(project.Id, "Source.cs", originalText);
-        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, rewrittenRoot, cancellationToken);
-        return (await formatted.GetTextAsync(cancellationToken)).ToString();
-    }
-
     // ── 10. ExtractConstantSafe ───────────────────────────────────────────────
     // MS Bug: roslyn-extract_constant gives a cryptic error like
     // "Column 99 is beyond end of line" when coordinates don't match ExtractConstantSafeAsync,
@@ -1170,7 +1154,7 @@ public class MsToolAugmentEngine
             newContainingType.Members.Insert(0, constDecl));
 
         var finalRoot = replacedRoot.ReplaceNode(newContainingType, updatedType);
-        return MsAugmentResult.Ok(await FormatAnnotatedRootAsync(sourceText, finalRoot, cancellationToken));
+        return MsAugmentResult.Ok(await RoslynFormattingHelper.FormatAnnotatedTextAsync(sourceText, finalRoot, cancellationToken));
     }
 
     private static string DetermineNumericType(SyntaxToken token)
@@ -1345,7 +1329,7 @@ public class MsToolAugmentEngine
 
         var newTypeDecl = typeDecl.AddMembers(method);
         var newRoot = root.ReplaceNode(typeDecl, newTypeDecl);
-        return MsAugmentResult.Ok(await FormatAnnotatedRootAsync(SourceText.From(source), newRoot, cancellationToken));
+        return MsAugmentResult.Ok(await RoslynFormattingHelper.FormatAnnotatedTextAsync(SourceText.From(source), newRoot, cancellationToken));
     }
 
     // ── 12. ExtractMethod ─────────────────────────────────────────────────

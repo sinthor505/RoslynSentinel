@@ -325,6 +325,54 @@ public static class RoslynFormattingHelper
     }
 
     /// <summary>
+    /// <see cref="FormatAnnotatedSpansAsync"/> followed by <c>GetTextAsync</c>: formats only the nodes of
+    /// <paramref name="rewrittenRoot"/> annotated with <see cref="Formatter.Annotation"/> and returns the full text. Lines the
+    /// rewrite did not touch keep their text and terminator, and every changed line takes the dominant line ending of
+    /// <paramref name="document"/> (the document before the rewrite).
+    /// </summary>
+    /// <param name="document">The document before the rewrite.</param>
+    /// <param name="rewrittenRoot">The root after the rewrite, with <see cref="Formatter.Annotation"/> on the changed nodes.</param>
+    public static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode rewrittenRoot, CancellationToken cancellationToken = default)
+    {
+        var formattedDoc = await FormatAnnotatedSpansAsync(document, rewrittenRoot, cancellationToken);
+        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+    }
+
+    /// <summary>
+    /// The <see cref="Document"/> overload of this method for callers that hold only file text: <paramref name="originalText"/>
+    /// is placed in a throwaway <see cref="AdhocWorkspace"/> document purely as the pre-image that
+    /// <see cref="FormatAnnotatedSpansAsync"/> needs. That document has no project options and no .editorconfig, so the
+    /// formatter uses the workspace defaults. Lines the rewrite did not touch keep their text and terminator, and every
+    /// line it added or changed takes the original text's dominant line ending.
+    /// </summary>
+    /// <param name="originalText">The file text before the rewrite.</param>
+    /// <param name="rewrittenRoot">The root after the rewrite, with <see cref="Formatter.Annotation"/> on the changed nodes.</param>
+    public static async Task<string> FormatAnnotatedTextAsync(Microsoft.CodeAnalysis.Text.SourceText originalText, SyntaxNode rewrittenRoot, CancellationToken cancellationToken = default)
+    {
+        using var workspace = new AdhocWorkspace();
+        var project = workspace.AddProject("AnnotatedTextFormat", LanguageNames.CSharp);
+        var document = workspace.AddDocument(project.Id, "Source.cs", originalText);
+        return await FormatAnnotatedTextAsync(document, rewrittenRoot, cancellationToken);
+    }
+
+    /// <summary>
+    /// Formats a newly built member (or global statement) that is returned as a standalone snippet, not inserted into
+    /// <paramref name="document"/>, and returns its text without surrounding blank lines. The node is annotated with
+    /// <see cref="Formatter.Annotation"/> and formatted through <see cref="FormatAnnotatedSpansAsync"/> inside a throwaway
+    /// compilation unit. The pre-image handed to it carries only the document's dominant line ending, so every line of
+    /// the snippet takes that ending and none can inherit a stray terminator by text-matching a line of the document.
+    /// </summary>
+    /// <param name="document">The document the snippet is meant for. Supplies the dominant line ending, the encoding and the formatting options.</param>
+    /// <param name="member">The newly built member or global statement.</param>
+    public static async Task<string> FormatNewSnippetAsync(Document document, MemberDeclarationSyntax member, CancellationToken cancellationToken = default)
+    {
+        var documentText = await document.GetTextAsync(cancellationToken);
+        var snippetPreImage = document.WithText(Microsoft.CodeAnalysis.Text.SourceText.From(EolUtilities.DetectDominantEol(documentText), documentText.Encoding, documentText.ChecksumAlgorithm));
+        var snippetRoot = SyntaxFactory.CompilationUnit().AddMembers(member.WithAdditionalAnnotations(Formatter.Annotation));
+        return (await FormatAnnotatedTextAsync(snippetPreImage, snippetRoot, cancellationToken)).Trim();
+    }
+
+    /// <summary>
     /// Formats the WHOLE of <paramref name="document"/>: every token's spacing, indentation and line breaks, not just
     /// what an edit touched. "Whole" is in the name because it is the risky scope: it re-spaces unrelated code and can
     /// shift every line number below the first change. Call it only when the whole document really is being

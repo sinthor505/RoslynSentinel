@@ -5141,26 +5141,9 @@ public class MemberRefactoringEngine
         // callStatement carries the original statement's leading trivia (the user's indentation, and any comment
         // above it) for the in-place edit above. The standalone snippet is a new node, so drop that copied trivia
         // before formatting it, so the snippet is only the statement.
-        var callSiteText = await FormatNewSnippetAsync(document, SyntaxFactory.GlobalStatement(callStatement.WithoutLeadingTrivia()), cancellationToken);
-        var extractedMethodText = await FormatNewSnippetAsync(document, extractedMethod, cancellationToken);
+        var callSiteText = await RoslynFormattingHelper.FormatNewSnippetAsync(document, SyntaxFactory.GlobalStatement(callStatement.WithoutLeadingTrivia()), cancellationToken);
+        var extractedMethodText = await RoslynFormattingHelper.FormatNewSnippetAsync(document, extractedMethod, cancellationToken);
         return new ExtractMethodResult(false, null, beforeSnippet, callSiteText, extractedMethodText, updatedContent);
-    }
-
-    /// <summary>
-    /// Formats a newly built member (or global statement) that is returned as a standalone snippet, not inserted into
-    /// <paramref name="document"/>, and returns its text without surrounding blank lines. The node is annotated with
-    /// <see cref="Formatter.Annotation"/> and formatted through <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/>
-    /// inside a throwaway compilation unit. The pre-image handed to the helper carries only the document's dominant line
-    /// ending, so every line of the snippet takes that ending and none can inherit a stray terminator by text-matching a
-    /// line of the document.
-    /// </summary>
-    private static async Task<string> FormatNewSnippetAsync(Document document, MemberDeclarationSyntax member, CancellationToken cancellationToken)
-    {
-        var documentText = await document.GetTextAsync(cancellationToken);
-        var snippetPreImage = document.WithText(SourceText.From(EolUtilities.DetectDominantEol(documentText), documentText.Encoding, documentText.ChecksumAlgorithm));
-        var snippetRoot = SyntaxFactory.CompilationUnit().AddMembers(member.WithAdditionalAnnotations(Formatter.Annotation));
-        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(snippetPreImage, snippetRoot, cancellationToken);
-        return (await formatted.GetTextAsync(cancellationToken)).ToString().Trim();
     }
 
     /// <summary>

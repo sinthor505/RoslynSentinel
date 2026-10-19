@@ -1247,7 +1247,7 @@ public class AsyncBatchEngine
         newMethod = (MethodDeclarationSyntax)new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newMethod)!;
         var newRoot = root.ReplaceNode(callerAsyncMethod, newMethod);
 
-        return await AnnotatedInsertionHelper.FormatAnnotatedTextAsync(preImage, newRoot, cancellationToken);
+        return await RoslynFormattingHelper.FormatAnnotatedTextAsync(preImage, newRoot, cancellationToken);
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -1600,7 +1600,7 @@ public class AsyncBatchEngine
         var newRoot = (SyntaxNode)annotatedRoot.ReplaceNode(annotatedMethod, rewrittenMethod);
         newRoot = new AsyncOptimizationEngine.AsyncifyAnonymousFunctionsRewriter().Visit(newRoot)!;
 
-        return await AnnotatedInsertionHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken);
+        return await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken);
     }
 
     // ──────────────────────────────────────────────────────────────────────────

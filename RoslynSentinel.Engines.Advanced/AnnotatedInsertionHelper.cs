@@ -9,7 +9,7 @@ namespace RoslynSentinel.Engines.Advanced;
 
 /// <summary>
 /// Inserts using directives and attribute lists with explicit trivia plus <see cref="Formatter.Annotation"/>, so that
-/// <see cref="FormatAnnotatedTextAsync"/> lays out only the inserted syntax and every untouched line stays byte-exact.
+/// <see cref="RoslynFormattingHelper.FormatAnnotatedTextAsync(Document, SyntaxNode, CancellationToken)"/> lays out only the inserted syntax and every untouched line stays byte-exact.
 /// </summary>
 internal static class AnnotatedInsertionHelper
 {
@@ -54,16 +54,5 @@ internal static class AnnotatedInsertionHelper
         }
 
         return property.WithAttributeLists(property.AttributeLists.AddRange(lists));
-    }
-
-    /// <summary>
-    /// Formats only the nodes of <paramref name="newRoot"/> annotated with <see cref="Formatter.Annotation"/> (through
-    /// <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/>) and returns the full text: untouched lines keep their
-    /// text and terminator, and every changed line takes the document's dominant line ending.
-    /// </summary>
-    internal static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode newRoot, CancellationToken cancellationToken)
-    {
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
-        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 }

@@ -180,7 +180,7 @@ public class ApiGenerationEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = await AnnotatedInsertionHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
             FilePath = filePath
         };
     }

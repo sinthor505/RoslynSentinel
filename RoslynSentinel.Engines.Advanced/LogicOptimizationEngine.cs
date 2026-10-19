@@ -5,6 +5,9 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
+// Deliberate exception to the explicit RoslynFormattingHelper.X call style: the shared FormatAnnotatedTextAsync
+// (whitespace slice D2) replaced a private copy this file calls many times; the static import keeps those call sites.
+using static RoslynSentinel.Common.RoslynFormattingHelper;
 
 namespace RoslynSentinel.Engines.Advanced;
 
@@ -14,17 +17,6 @@ public class LogicSimplificationEngine
     public LogicSimplificationEngine(IWorkspaceManager workspaceManager)
     {
         _workspaceManager = workspaceManager;
-    }
-
-    /// <summary>
-    /// Formats only the nodes of <paramref name="newRoot"/> that the rewrite annotated with <see cref="Formatter.Annotation"/>
-    /// (through <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/>) and returns the full text: lines the rewrite
-    /// did not touch keep their text and terminator, and every changed line takes the document's dominant line ending.
-    /// </summary>
-    private static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode newRoot, CancellationToken cancellationToken)
-    {
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
-        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
     }
 
     /// <summary>

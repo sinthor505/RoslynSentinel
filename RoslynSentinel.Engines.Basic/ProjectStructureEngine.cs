@@ -15,17 +15,6 @@ public class SolutionStructureEngine
         _config = config;
     }
 
-    /// <summary>
-    /// Formats only the nodes of <paramref name="newRoot"/> that the rewrite annotated with <see cref="Formatter.Annotation"/>
-    /// (through <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/>) and returns the full text: lines the rewrite
-    /// did not touch keep their text and terminator, and every changed line takes the document's dominant line ending.
-    /// </summary>
-    private static async Task<string> FormatAnnotatedTextAsync(Document document, SyntaxNode newRoot, CancellationToken cancellationToken)
-    {
-        var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
-        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
-    }
-
     public async Task<DocumentEditResult> FixMismatchedNamespacesAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -591,7 +580,7 @@ public class SolutionStructureEngine
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
+            UpdatedText = await RoslynFormattingHelper.FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
             FilePath = filePath
         };
     }

@@ -88,25 +88,8 @@ public class MappingEngine
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
             Message = $"// Mapping method generated for {fromSymbol.Name} to {toSymbol.Name}",
-            UpdatedText = await FormatNewSnippetAsync(document, mappingMethod, cancellationToken)
+            UpdatedText = await RoslynFormattingHelper.FormatNewSnippetAsync(document, mappingMethod, cancellationToken)
         };
-    }
-
-    /// <summary>
-    /// Formats a newly built member that is returned as a standalone snippet (it is not inserted into
-    /// <paramref name="document"/>) and returns its text without surrounding blank lines. The member is annotated with
-    /// <see cref="Formatter.Annotation"/> and formatted through <see cref="RoslynFormattingHelper.FormatAnnotatedSpansAsync"/>
-    /// inside a throwaway compilation unit. The pre-image handed to the helper carries only the document's dominant line
-    /// ending, so every line of the snippet takes that ending and none can inherit a stray terminator by text-matching a
-    /// line of the document.
-    /// </summary>
-    private static async Task<string> FormatNewSnippetAsync(Document document, MemberDeclarationSyntax member, CancellationToken cancellationToken)
-    {
-        var documentText = await document.GetTextAsync(cancellationToken);
-        var snippetPreImage = document.WithText(Microsoft.CodeAnalysis.Text.SourceText.From(EolUtilities.DetectDominantEol(documentText), documentText.Encoding, documentText.ChecksumAlgorithm));
-        var snippetRoot = SyntaxFactory.CompilationUnit().AddMembers(member.WithAdditionalAnnotations(Formatter.Annotation));
-        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(snippetPreImage, snippetRoot, cancellationToken);
-        return (await formatted.GetTextAsync(cancellationToken)).ToString().Trim();
     }
 
     /// <summary>

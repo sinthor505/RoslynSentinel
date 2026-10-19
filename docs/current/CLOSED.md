@@ -14,6 +14,8 @@ Entries moved here from TODO.md on 2026-10-17 carry their original text plus an 
 
 **Evidence (2026-10-19, slice D1):** the caller-free helpers were deleted (the four `NormalizeNew*`/`NormalizeWholeSubtreeWhitespace` methods, `StripFormattingTriviaForNormalize`, `StripUsingKeepingLeadingTrivia`, private `DetachForNormalize`/`EnsureNodeIsNew`/`ValidateEol`) together with `RoslynFormattingHelperNormalizeNewTests.cs` (73 tests, including the stale `SafeSite_*` ones); `StripAllTriviaForNormalize` stays. `WhitespaceRatchetTests.DeletedWhitespaceHelpers_NeverReappear` replaces the caller baseline and the `[Obsolete]` check. This also closes the TODO entry below.
 
+**Evidence (2026-10-19, slice D2):** the 10 duplicated private format helpers (7 x `FormatAnnotatedTextAsync`, 2 x `FormatNewSnippetAsync`, `MsToolAugmentEngine.FormatAnnotatedRootAsync`) were consolidated into `RoslynFormattingHelper.FormatAnnotatedTextAsync` (Document and SourceText overloads) and `FormatNewSnippetAsync`; all copies had identical behaviour; pins unchanged; `RoslynFormattingHelperFormatAnnotatedTextTests` covers LF/CRLF/mixed.
+
 Original TODO.md text (moved verbatim 2026-10-19):
 
 - [OPEN] `NormalizeNewRootWhitespaceKeepingUsingHeaders` limitations (2026-10-16) - directive spanning usings gives CS1027 and a header on a usings-less file is not carried; fix only if the C6 variant does not subsume it - [doc](proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md)
