@@ -63,7 +63,7 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
                 var testText = await TryCallAsync(child.McpClient, "RunTest", new Dictionary<string, object?>
                 {
                     ["reason"] = "SubAgentEval: post-run test snapshot.",
-                    ["summary"] = true,
+                    ["summary"] = false, // Must stay false: SubAgentEvalResult.Build reads results[0] for FirstFailedTestName, which summary=true omits.
                     ["maxDetails"] = 1,
                 }, cancellationToken);
                 testText = SubAgentEvalResult.ResolveOffloadedResult(testText, child.WorktreePath);

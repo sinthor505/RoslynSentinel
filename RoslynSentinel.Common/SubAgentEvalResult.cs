@@ -30,6 +30,9 @@ public sealed record SubAgentEvalResult : IResultStatus
 
     public required int TestFailedCount { get; init; }
 
+    /// <summary>Name of the first failed test from the post-run RunTest result; null when no test failed or the name could not be read.</summary>
+    public string? FirstFailedTestName { get; init; }
+
     /// <summary>Every repo-relative path the model modified, deleted or added in its worktree.</summary>
     public required IReadOnlyList<string> TouchedPaths { get; init; }
 
@@ -104,6 +107,7 @@ public sealed record SubAgentEvalResult : IResultStatus
 
         var testsPassed = 0;
         var testsFailed = 0;
+        string? firstFailedTestName = null;
         if (testResultJson is null)
         {
             notes.Add("Tests were not run" + (buildSucceeded ? "." : " because the build did not succeed."));
@@ -112,6 +116,7 @@ public sealed record SubAgentEvalResult : IResultStatus
         {
             testsPassed = ReadInt(testData, "passedCount") ?? 0;
             testsFailed = ReadInt(testData, "failedCount") ?? 0;
+            firstFailedTestName = testsFailed > 0 ? ReadFirstFailedTestName(testData) : null;
         }
         else
         {
@@ -138,6 +143,7 @@ public sealed record SubAgentEvalResult : IResultStatus
             BuildErrorCount = buildErrorCount,
             TestPassedCount = testsPassed,
             TestFailedCount = testsFailed,
+            FirstFailedTestName = firstFailedTestName,
             TouchedPaths = touchedPaths,
             FailureExcerpt = failureExcerpt,
             TranscriptPath = run.TranscriptPath,
@@ -247,6 +253,23 @@ public sealed record SubAgentEvalResult : IResultStatus
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Reads <c>results[0].testName</c> from a RunTest success payload. Null when <c>results</c> is absent,
+    /// empty, or its first row has no string <c>testName</c>.
+    /// </summary>
+    private static string? ReadFirstFailedTestName(JsonElement testData)
+    {
+        if (!TryGetPropertyIgnoreCase(testData, "results", out var results)
+            || results.ValueKind != JsonValueKind.Array
+            || results.GetArrayLength() == 0)
+        {
+            return null;
+        }
+
+        var first = results[0];
+        return first.ValueKind == JsonValueKind.Object ? ReadString(first, "testName") : null;
     }
 
     private static string? ReadString(JsonElement element, string name) =>

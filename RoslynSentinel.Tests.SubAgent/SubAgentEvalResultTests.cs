@@ -18,6 +18,12 @@ public class SubAgentEvalResultTests
     private const string TestsJson =
         """{"isError":false,"successData":{"runCompleted":true,"totalCount":12,"passedCount":10,"failedCount":2,"skippedCount":0}}""";
 
+    private const string TestsWithFailureJson =
+        """{"isError":false,"successData":{"runCompleted":true,"totalCount":12,"passedCount":11,"failedCount":1,"skippedCount":0,"results":[{"testName":"Ns.Suite.Adds_Fails","outcome":"Failed","duration":"00:00:00.1","errorMessage":"boom"}]}}""";
+
+    private const string CleanTestsJson =
+        """{"isError":false,"successData":{"runCompleted":true,"totalCount":12,"passedCount":12,"failedCount":0,"skippedCount":0,"results":[]}}""";
+
     private static AgentRunResult Run(
         AgentStopReason stopReason = AgentStopReason.ModelFinished,
         string? lastContent = "All done.",
@@ -161,5 +167,21 @@ public class SubAgentEvalResultTests
     {
         Assert.DoesNotThrow(() =>
             SubAgentEvalResult.Build(Run(), "not json at all", "also not json", []));
+    }
+
+    [Test]
+    public void FailedTests_ReportFirstFailedTestName()
+    {
+        var result = SubAgentEvalResult.Build(Run(), BuildSucceededJson, TestsWithFailureJson, []);
+
+        Assert.That(result.FirstFailedTestName, Is.EqualTo("Ns.Suite.Adds_Fails"));
+    }
+
+    [Test]
+    public void CleanRun_HasNoFirstFailedTestName()
+    {
+        var result = SubAgentEvalResult.Build(Run(), BuildSucceededJson, CleanTestsJson, []);
+
+        Assert.That(result.FirstFailedTestName, Is.Null);
     }
 }
