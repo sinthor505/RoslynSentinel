@@ -175,6 +175,9 @@ public class WriteChokepointGuardrailTests
     [TestCase("a\r\nb\r\n", "a\r\nb\r\nc\r\n", "\r\n", "a\r\nb\r\nc\r\n", Description = "pure CRLF behaves as before")]
     [TestCase("a\nb", "a\nb\nc", "\n", "a\nb\nc", Description = "final line gaining a successor gets the dominant EOL; new final line stays unterminated")]
     [TestCase("a\nb\n", "a\nb", "\n", "a\nb", Description = "lost final newline is not re-added")]
+    // Accepted limitation, pinned on purpose (decision: accept, no signature change): lines are matched by text,
+    // so deleting one of two identical lines leaves the survivor with the deleted line's terminator.
+    [TestCase("x\r\nx\n", "x\n", "\n", "x\r\n", Description = "KNOWN LIMITATION: lines are matched by text, so deleting the first of two identical lines leaves the survivor with the deleted line's terminator")]
     public void NormalizeEolOfChangedLines_ChangesOnlyTheTouchedLines(string before, string after, string dominant, string expected)
     {
         Assert.That(EolUtilities.NormalizeEolOfChangedLines(before, after, dominant), Is.EqualTo(expected));
