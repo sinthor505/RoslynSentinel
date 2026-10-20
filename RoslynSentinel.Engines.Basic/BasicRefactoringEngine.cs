@@ -775,7 +775,7 @@ public class BasicRefactoringEngine
         // everything else is new structure the formatter lays out. Signature parts reused from the source (types, names,
         // parameter and constraint lists) are stripped of ALL trivia first, so a comment inside a signature is not carried to
         // the interface (as SyncInterfaceToImplementation does).
-        static T Strip<T>(T node) where T : SyntaxNode => RoslynFormattingHelper.StripAllTriviaForNormalize(node);
+        static T Strip<T>(T node) where T : SyntaxNode => RoslynFormattingHelper.StripAllTrivia(node);
         static T? StripOrNull<T>(T? node) where T : SyntaxNode => node is null ? null : Strip(node);
         var ifaceMethods = methods.Select(m => (MemberDeclarationSyntax)SyntaxFactory.MethodDeclaration(Strip(m.ReturnType), m.Identifier.WithoutTrivia()).WithTypeParameterList(StripOrNull(m.TypeParameterList)).WithParameterList(Strip(m.ParameterList)).WithConstraintClauses(SyntaxFactory.List(m.ConstraintClauses.Select(c => Strip(c)))).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
         var ifaceProperties = properties.Select(p =>

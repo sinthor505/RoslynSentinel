@@ -334,7 +334,7 @@ public class AdvancedRefactoringEngine
             // Build interface method: return type + name + params, no body. The parts reused from the class method are
             // stripped of ALL trivia (comments and newlines included) so the new member starts with no existing formatting,
             // the doc comment or an inline comment on the class method is dropped on purpose.
-            var ifaceMethod = SyntaxFactory.MethodDeclaration(RoslynFormattingHelper.StripAllTriviaForNormalize(method.ReturnType), method.Identifier.WithoutTrivia()).WithParameterList(RoslynFormattingHelper.StripAllTriviaForNormalize(method.ParameterList)).WithTypeParameterList(method.TypeParameterList is null ? null : RoslynFormattingHelper.StripAllTriviaForNormalize(method.TypeParameterList)).WithConstraintClauses(SyntaxFactory.List(method.ConstraintClauses.Select(c => RoslynFormattingHelper.StripAllTriviaForNormalize(c)))).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()).WithAdditionalAnnotations(Formatter.Annotation);
+            var ifaceMethod = SyntaxFactory.MethodDeclaration(RoslynFormattingHelper.StripAllTrivia(method.ReturnType), method.Identifier.WithoutTrivia()).WithParameterList(RoslynFormattingHelper.StripAllTrivia(method.ParameterList)).WithTypeParameterList(method.TypeParameterList is null ? null : RoslynFormattingHelper.StripAllTrivia(method.TypeParameterList)).WithConstraintClauses(SyntaxFactory.List(method.ConstraintClauses.Select(c => RoslynFormattingHelper.StripAllTrivia(c)))).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithModifiers(SyntaxFactory.TokenList()).WithAdditionalAnnotations(Formatter.Annotation);
             newMembers.Add(ifaceMethod);
         }
 
@@ -365,7 +365,7 @@ public class AdvancedRefactoringEngine
                 accessors.Add(SyntaxFactory.AccessorDeclaration(SyntaxKind.InitAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
             }
 
-            var ifaceProp = SyntaxFactory.PropertyDeclaration(RoslynFormattingHelper.StripAllTriviaForNormalize(prop.Type), prop.Identifier.WithoutTrivia()).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))).WithModifiers(SyntaxFactory.TokenList()).WithAdditionalAnnotations(Formatter.Annotation);
+            var ifaceProp = SyntaxFactory.PropertyDeclaration(RoslynFormattingHelper.StripAllTrivia(prop.Type), prop.Identifier.WithoutTrivia()).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))).WithModifiers(SyntaxFactory.TokenList()).WithAdditionalAnnotations(Formatter.Annotation);
             newMembers.Add(ifaceProp);
         }
 

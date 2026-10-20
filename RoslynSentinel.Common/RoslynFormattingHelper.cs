@@ -551,7 +551,7 @@ public static class RoslynFormattingHelper
     /// Comments are dropped silently, so call this only where losing them is acceptable (for example signature parts
     /// reused in a generated interface member).
     /// </summary>
-    public static T StripAllTriviaForNormalize<T>(T node)
+    public static T StripAllTrivia<T>(T node)
         where T : SyntaxNode
     {
         ArgumentNullException.ThrowIfNull(node);
