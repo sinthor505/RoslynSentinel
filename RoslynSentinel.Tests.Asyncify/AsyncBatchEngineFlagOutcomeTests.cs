@@ -379,4 +379,137 @@ public class AsyncBatchEngineFlagOutcomeTests
             File.SetAttributes(path, FileAttributes.Normal);
         }
     }
+
+    // RunUpliftBatchAsync: the uplifted caller validates in memory, but the write to disk is refused because the
+    // file is read-only. The caller must be reported as skipped with the write-refused reason, never as uplifted.
+    [Test, CancelAfter(60000)]
+    public async Task RunUpliftBatch_WriteRefused_CallerSkippedNotUplifted()
+    {
+        var source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public class TripService
+            {
+                [System.Obsolete("Asyncify-bridge: call LoadTripsAsync instead.")]
+                public int LoadTrips(int companyId)
+                {
+                    return companyId;
+                }
+
+                public Task<int> LoadTripsAsync(int companyId, CancellationToken cancellationToken)
+                {
+                    return Task.FromResult(companyId);
+                }
+
+                public async Task<int> CallerAsync(CancellationToken cancellationToken)
+                {
+                    return LoadTrips(1);
+                }
+            }
+            """.Replace("\r\n", "\n");
+
+        SetSource(workspaceText: source, diskText: source);
+        var path = Path.Combine(_tempDir, "TripService.cs");
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+
+        try
+        {
+            var result = await _batchEngine.RunUpliftBatchAsync("LoadTrips", maxCallers: 1);
+
+            Assert.That(result.Uplifted, Is.Empty, "A refused write must not be reported as uplifted.");
+            Assert.That(result.Skipped, Has.Count.EqualTo(1));
+            Assert.That(result.Skipped[0].Reason, Does.StartWith("skipped; the uplifted caller could not be written"),
+                "Only the write-refused branch produces this reason; anything else means the branch was not reached.");
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+        }
+    }
+
+    // Records formatted warning messages so a test can prove a specific log-and-continue branch ran.
+    private sealed class WarningCapturingLogger : Microsoft.Extensions.Logging.ILogger<AsyncBatchEngine>
+    {
+        public List<string> Warnings { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            Microsoft.Extensions.Logging.LogLevel logLevel,
+            Microsoft.Extensions.Logging.EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning)
+            {
+                Warnings.Add(formatter(state, exception));
+            }
+        }
+    }
+
+    // PropagateCancellationTokenBatchAsync with FlagFailures: the forwarded source fails validation (the file has a
+    // pre-existing compile error), so the NeedsManualReview flag path runs; the flag write is refused because the
+    // file is read-only. The method must not be listed in FlaggedMethods and a warning must be logged.
+    [Test, CancelAfter(60000)]
+    public async Task PropagateCtBatch_ValidationFails_FlagWriteRefused_MethodNotListedAsFlagged()
+    {
+        var source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public class TripService
+            {
+                public async Task RunAsync(CancellationToken cancellationToken)
+                {
+                    var value = await WorkAsync();
+                }
+
+                public Task<int> WorkAsync() => Task.FromResult(1);
+
+                public Task WorkAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+            }
+            """.Replace("\r\n", "\n");
+
+        SetSource(workspaceText: source, diskText: source);
+        var path = Path.Combine(_tempDir, "TripService.cs");
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+
+        var logger = new WarningCapturingLogger();
+        var validationEngine = new ValidationEngine(
+            _workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var batchEngine = new AsyncBatchEngine(
+            _workspaceManager,
+            new AsyncOptimizationEngine(_workspaceManager),
+            validationEngine,
+            new AntiPatternEngine(_workspaceManager),
+            new MigrationLedger(),
+            logger);
+
+        try
+        {
+            var input = new PropagateCtBatchInput
+            {
+                Targets = [new PropagateCtFileTarget { FilePath = path }],
+                FlagFailures = true,
+            };
+
+            var result = await batchEngine.PropagateCancellationTokenBatchAsync(input);
+
+            Assert.That(result.Applied, Is.Empty, "A forwarded source that fails validation must not be applied.");
+            Assert.That(result.Failed, Has.Count.EqualTo(1));
+            Assert.That(result.Failed[0].Reason, Does.StartWith("Validation produced"));
+            Assert.That(logger.Warnings, Has.Some.Contains("NeedsManualReview flag write refused"),
+                "The flag path must have run and logged the refused write.");
+            Assert.That(result.Failed[0].FlaggedMethods, Is.Empty,
+                "The flag write was refused, so the method must not be listed as flagged.");
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+        }
+    }
 }
