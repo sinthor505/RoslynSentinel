@@ -1648,10 +1648,10 @@ public class MemberRefactoringEngine
             var fileDocument = documentByPath[path];
             var newRoot = rootByPath[path].ReplaceNodes(nodes, (original, rewritten) => (rewritten switch
             {
-                MethodDeclarationSyntax m => (SyntaxNode)m.WithParameterList(m.ParameterList.WithParameters(SyntaxFactory.SeparatedList(m.ParameterList.Parameters.Take(targetParamCount - 1)))),
-                InvocationExpressionSyntax i => i.WithArgumentList(i.ArgumentList.WithArguments(SyntaxFactory.SeparatedList(i.ArgumentList.Arguments.Take(targetParamCount - 1)))),
+                MethodDeclarationSyntax m => (SyntaxNode)m.WithParameterList(m.ParameterList.WithParameters(SyntaxFactory.SeparatedList(m.ParameterList.Parameters.Take(targetParamCount - 1))).WithAdditionalAnnotations(Formatter.Annotation)),
+                InvocationExpressionSyntax i => i.WithArgumentList(i.ArgumentList.WithArguments(SyntaxFactory.SeparatedList(i.ArgumentList.Arguments.Take(targetParamCount - 1))).WithAdditionalAnnotations(Formatter.Annotation)),
                 _ => rewritten
-            }).WithAdditionalAnnotations(Formatter.Annotation));
+            }));
             // Span-scoped format + line-level EOL restore: untouched lines keep their own terminator, changed lines take the dominant EOL.
             var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(fileDocument, newRoot, cancellationToken);
             var updatedText = (await formatted.GetTextAsync(cancellationToken)).ToString();

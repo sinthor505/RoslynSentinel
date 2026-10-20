@@ -227,7 +227,7 @@ public class RefactoringEngineFormatCharacterizationTests
         "    private   int _count;",
         "",
         "",
-        "    public int Compute(int a) { return a + _count; }",
+        "    public int Compute(int a) { return  a +  _count ; }",
         "",
         "    public int Run()",
         "    {",
@@ -290,7 +290,7 @@ public class RefactoringEngineFormatCharacterizationTests
     // right after the rewritten method, or a line far from any edit), so it must survive byte-for-byte while the
     // rewritten line takes the dominant CRLF. This is the shape MethodSignature(remove) produces from a fixture that
     // splices "\n\n" into a CRLF file; the result is legitimately mixed, with the same dominant EOL as before.
-    [TestCase("    public int Compute( int  a, int  b ) { return  a +  _count ; }\r\n\r\n", "    public int Compute(int a) { return a + _count; }\r\n\r\n")]
+    [TestCase("    public int Compute( int  a, int  b ) { return  a +  _count ; }\r\n\r\n", "    public int Compute(int a) { return  a +  _count ; }\r\n\r\n")]
     [TestCase("    private int   Helper( ) { return  1; }\r\n", "    private int   Helper( ) { return  1; }\r\n")]
     public async Task RemoveMethodParameter_CrlfDocument_StrayBareLfOnUnchangedLineIsKept(string inputAnchor, string expectedAnchor)
     {
