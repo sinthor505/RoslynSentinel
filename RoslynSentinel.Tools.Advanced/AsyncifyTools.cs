@@ -512,6 +512,7 @@ public class AsyncifyTools
                 cancellationToken: cancellationToken);
 
             if (!dryRun && engineResult.Changes.Count > 0)
+                // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
                 await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes, validateChanges: true);
 
             var items = engineResult.Removed.Select(r => new OperationItemRecord
@@ -2526,6 +2527,7 @@ public class AsyncifyTools
                     continue;
                 }
 
+                // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
                 await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
                     validateChanges: true);
@@ -3166,6 +3168,7 @@ public class AsyncifyTools
                         pattern: "AsyncHandlerCandidate",
                         cancellationToken: state.InnerToken);
                     if (removeResult.Changes.Count > 0)
+                        // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
                         await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
                 }
                 catch (Exception removeEx)
@@ -3196,6 +3199,7 @@ public class AsyncifyTools
                         pattern: "AsyncHandlerCandidate",
                         cancellationToken: state.InnerToken);
                     if (removeResult.Changes.Count > 0)
+                        // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
                         await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
 
                     var neeReviewResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
@@ -3203,6 +3207,7 @@ public class AsyncifyTools
                         score: 0,
                         reason: "Handler has blocking calls but no Asyncify-bridge wrappers - manual async conversion required",
                         cancellationToken: state.InnerToken);
+                    // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
                     await _workspaceManager.ApplyProposedChangesAsync(neeReviewResult.Changes);
                 }
                 catch (Exception removeEx)
@@ -3232,6 +3237,7 @@ public class AsyncifyTools
                         pattern: "AsyncHandlerCandidate",
                         cancellationToken: state.InnerToken);
                     if (removeResult.Changes.Count > 0)
+                        // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
                         await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
 
                     var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
@@ -3239,6 +3245,7 @@ public class AsyncifyTools
                         score: 0,
                         reason: $"Handler in-place: {ex.Message}",
                         cancellationToken: state.InnerToken);
+                    // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
                     await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
                 }
                 catch (Exception flagEx)
