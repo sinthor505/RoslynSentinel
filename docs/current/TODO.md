@@ -54,7 +54,6 @@ Ideas and low priority.
 
 Could not be verified or refuted from source on 2026-10-17; an owner decides to close, shrink or re-scope. Full text lives in the linked doc.
 
-- [OPEN] `SubAgentEval` child full `RunTest` reported 1 failed test (2657 passed), unexplained (2026-10-01) - failing test name not captured - [doc](issues/issue_tool_hygiene_open_items.md)
 - [OPEN] `Member(replace)` sub-findings: silent no-op on a constructor replace, and CS0542 when a top-level type is addressed by namespace (2026-09-18) - [doc](member_replace_drops_leading_blank_line_and_verify_gap.md)
 - [OPEN] `docCommentId` parameter audit across all tools (2026-09-06) - not started; `ToolParams.cs:18-21` now says to obtain the value with `Search(mode: symbol)` (LocateSymbol is gone); audit each tool description for that wording and flag tools that also require `filePath` - [doc](docCommentId_description_gap.md)
 

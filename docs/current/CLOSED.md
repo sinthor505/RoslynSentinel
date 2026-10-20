@@ -16,6 +16,12 @@ Original TODO.md text (moved 2026-10-20, shortened to the titles):
 
 - ReplaceSnippet schema invites anchor-only edits; SubAgent bare InvalidOperationException and no findable run log; `InlineVariableAsync` fallback uses `FormatWholeDocumentAsync`; `MappingEngine.InvertAssignments` leading trivia leak; `IDEStyleEngine.SimplifyMemberAccess` drops `this` trivia; `AddUsingDirective` simplifyExisting no-op; `GitImpl` generic catch blocks put `ex.Message` into `Error`; `NormalizeEolOfChangedLines` repeated identical lines; `MoveMember` ledger `TryOpen` path not exercised at the tool layer.
 
+## `SubAgentEval` unexplained failed test - resolved (2026-10-20)
+
+**Evidence (2026-10-20):** the original failing test (2026-10-01, 1 failed of 2658) could not be recovered from stored artifacts. A full solution `RunTest` on 2026-10-20 had 0 failures (5535 tests, 28 skipped), so it is not reproducible. `SubAgentEvalResult.FirstFailedTestName` now names the first failed test; the post-run `RunTest` call no longer sends `summary=true`, which had omitted the results array (818390f3). Doc: [issues/issue_tool_hygiene_open_items.md](issues/issue_tool_hygiene_open_items.md).
+
+Original TODO.md text (moved 2026-10-20): `SubAgentEval` child full `RunTest` reported 1 failed test (2657 passed), unexplained - failing test name not captured.
+
 ## C5c formatting leftovers and whitespace follow-ups - resolved (2026-10-20)
 
 **Evidence (2026-10-20):** `ExtractInterfaceAsync` keeps the new base-list colon on the class line (7517b6d1); files scaffolded by `MoveTypeToFileAsync` / `MoveAllTypesToFilesForDocumentAsync` end with one EOL in the source's dominant EOL (1aab6edf); `RemoveMethodParameterAsync` annotates only the parameter and argument lists, so the method body is no longer reformatted (7912b15e); `StripAllTriviaForNormalize` renamed `StripAllTrivia` (fb33a7bb); `AsyncBatchEngine` checks `IsError` on the uplift and propagate-CT writes (f0ca99c7). Also pinned: `IntroduceParameterObject` empty-body TODO comment (945f13ee) and the bridge body-rewrite skip flag tests (9aac88fd). Remaining pieces stay in TODO.md (7 tagged `AsyncifyTools` sites, `SessionHalted` unmaterialized-document case).
