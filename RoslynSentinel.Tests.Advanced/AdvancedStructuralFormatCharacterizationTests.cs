@@ -153,6 +153,52 @@ public class AdvancedStructuralFormatCharacterizationTests
         Assert.That(result.UpdatedText, Is.EqualTo(WithStrayCrlf(Src(false, MainExpected()), anchor)));
     }
 
+    // ---- empty body: the engine puts the TODO comment on the method's closing brace trivia ----
+
+    private static string[] EmptyBodyInput() =>
+    [
+        "using System;",
+        "",
+        "public class Worker",
+        "{",
+        "    private   int _count;",
+        "",
+        "    public void  Run( int  a, string b )",
+        "    {",
+        "    }",
+        "}",
+    ];
+
+    private static string[] EmptyBodyExpected() =>
+    [
+        "using System;",
+        "",
+        "public class Worker",
+        "{",
+        "    private   int _count;",
+        "",
+        "    public void Run(RunParameters request)",
+        "    {",
+        "        // TODO: Update call sites to use RunParameters",
+        "    }",
+        "}",
+        "",
+        "public record RunParameters(int A, string B);",
+        "",
+    ];
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task IntroduceParameterObject_EmptyBody_ByteExact(bool crlf)
+    {
+        SetSource(Src(crlf, EmptyBodyInput()));
+
+        var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Is.EqualTo(Src(crlf, EmptyBodyExpected())));
+    }
+
     // ---- warning path: the method implements an interface, so only the method is rewritten ----
     // The interface is declared after the class so that the by-name lookup finds the class method first.
 
