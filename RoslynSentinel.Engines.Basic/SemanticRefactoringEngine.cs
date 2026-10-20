@@ -143,9 +143,16 @@ public class SemanticRefactoringEngine
             return (await scopedFormattedDoc.GetTextAsync(cancellationToken)).ToString();
         }
 
-        var originalText = await document.GetTextAsync(cancellationToken);
-        var formattedDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(document.WithSyntaxRoot(modifiedRoot), originalText, cancellationToken);
-        return (await formattedDoc.GetTextAsync(cancellationToken)).ToString();
+        // This fallback is reached only when no usage was replaced, so it removes just the declaration
+        // with container-scoped formatting instead of reflowing the whole file.
+        try
+        {
+            return await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, declarationStatement, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken);
+        }
+        catch
+        {
+            return root.ToFullString();
+        }
     }
 
     /// <summary>
