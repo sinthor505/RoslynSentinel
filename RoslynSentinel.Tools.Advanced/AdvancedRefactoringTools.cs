@@ -700,7 +700,7 @@ public class AdvancedRefactoringTools
             return new SentinelCallToolResult<object>()
             {
                 IsError = false,
-                SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Introduced parameter object for '{methodName}' in {Path.GetFileName(resolvedFilePath)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId)
+                SuccessData = new AppliedChangeSummary(apply.ChangeId, [resolvedFilePath], $"Introduced parameter object for '{methodName}' in {Path.GetFileName(resolvedFilePath)}." + (result.Message?.Contains("WARNING") == true ? " " + result.Message : string.Empty), apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId)
             };
         }
         catch (Exception ex)

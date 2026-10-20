@@ -1257,7 +1257,7 @@ public class StructuralRefactoringEngine
             };
         }
 
-        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).OrderBy(m => m.Parent is InterfaceDeclarationSyntax ? 1 : 0).FirstOrDefault();
         if (methodNode == null)
         {
             return new DocumentEditResult
@@ -1369,6 +1369,7 @@ public class StructuralRefactoringEngine
         // reflowing the whole file, in the document's own line ending.
         var editAnnotation = Formatter.Annotation;
         var annotatedNewMethodNode = newMethodNode.WithAdditionalAnnotations(editAnnotation);
+        string? warning = null;
         SyntaxNode newRoot = root;
         if (interfaceNode != null && methodSymbol?.ExplicitInterfaceImplementations.Length == 0)
         {
@@ -1381,23 +1382,11 @@ public class StructuralRefactoringEngine
             // Check if method implements an interface
             if (methodSymbol?.ContainingType?.Interfaces.Length > 0)
             {
-                // Method implements interface -> add warning but update the implementation
-                newRoot = root.ReplaceNode(methodNode, annotatedNewMethodNode);
-                // Append warning comment
-                var warning = $"// WARNING: This method implements an interface. Update the interface signature in the corresponding interface file.\n";
-                var warningFormattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.Modified,
-                    FilePath = filePath,
-                    Message = warning,
-                    UpdatedText = (await warningFormattedDoc.GetTextAsync(cancellationToken)).ToString()
-                };
+                // Method implements interface -> warn, but still update the implementation and fall through to
+                // the record append below (returning early left the rewritten method referencing an undeclared record).
+                warning = "WARNING: This method implements an interface. Update the interface signature in the corresponding interface file.";
             }
-            else
-            {
-                newRoot = root.ReplaceNode(methodNode, annotatedNewMethodNode);
-            }
+            newRoot = root.ReplaceNode(methodNode, annotatedNewMethodNode);
         }
         else
         {
@@ -1434,7 +1423,7 @@ public class StructuralRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = $"Introduced parameter object '{recordName}'.",
+            Message = warning is null ? $"Introduced parameter object '{recordName}'." : $"Introduced parameter object '{recordName}'. {warning}",
             UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }

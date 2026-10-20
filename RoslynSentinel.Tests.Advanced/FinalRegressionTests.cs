@@ -87,6 +87,33 @@ public class FinalRegressionTests
         Assert.That(result.UpdatedText, Does.Contain("ProcessParameters") | Does.Contain("WARNING"), "Should introduce parameter object or warn about interface");
     }
 
+    [Test]
+    [Category("StructuralRefactoringEngine")]
+    public async Task IntroduceParameterObject_ClassAndInterface_UpdatesImplementationAndAppendsRecord()
+    {
+        const string code = @"
+            public interface IProcessor
+            {
+                void Process(string name, int age, bool active);
+            }
+
+            public class Processor : IProcessor
+            {
+                public void Process(string name, int age, bool active) { }
+            }";
+        SetSource(code);
+        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
+        var filePath = doc.FilePath ?? "Test.cs";
+        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync(filePath, "Process");
+        Assert.That(result.UpdatedText, Is.Not.Null);
+        var classStart = result.UpdatedText!.IndexOf("class Processor", StringComparison.Ordinal);
+        Assert.That(classStart, Is.GreaterThanOrEqualTo(0), "Class Processor should still be present");
+        Assert.That(result.UpdatedText.Substring(classStart), Does.Contain("Process(ProcessParameters request"), "Class implementation should take the parameter object");
+        Assert.That(result.UpdatedText, Does.Contain("public record ProcessParameters"), "Record declaration should be appended");
+        Assert.That(result.UpdatedText, Does.Contain("void Process(string name, int age, bool active);"), "Interface signature should be unchanged");
+        Assert.That(result.Message, Does.Contain("WARNING"), "Interface implementation should produce a warning");
+    }
+
     // ────────────────────────────────────────────────────────────────────────────
     // BUG-55: OptimizeToValueTask -> Warns About Interface Signature Changes
     // ────────────────────────────────────────────────────────────────────────────

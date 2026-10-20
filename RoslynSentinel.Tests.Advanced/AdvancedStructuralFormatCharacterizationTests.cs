@@ -209,6 +209,9 @@ public class AdvancedStructuralFormatCharacterizationTests
         "{",
         "    void Run(int a, string b);",
         "}",
+        "",
+        "public record RunParameters(int A, string B);",
+        "",
     ];
 
     [TestCase(false)]
@@ -220,7 +223,7 @@ public class AdvancedStructuralFormatCharacterizationTests
         var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        Assert.That(result.Message, Does.StartWith("// WARNING: This method implements an interface."));
+        Assert.That(result.Message, Does.Contain("WARNING: This method implements an interface."));
         Assert.That(result.UpdatedText, Is.EqualTo(Src(crlf, WarnExpected())));
     }
 
@@ -231,7 +234,7 @@ public class AdvancedStructuralFormatCharacterizationTests
 
         var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");
 
-        Assert.That(result.Message, Does.StartWith("// WARNING"));
+        Assert.That(result.Message, Does.Contain("WARNING: This method implements an interface."));
         Assert.That(result.UpdatedText, Does.Not.Contain("\r"));
     }
 
@@ -242,7 +245,7 @@ public class AdvancedStructuralFormatCharacterizationTests
 
         var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");
 
-        Assert.That(result.Message, Does.StartWith("// WARNING"));
+        Assert.That(result.Message, Does.Contain("WARNING: This method implements an interface."));
         Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
@@ -254,7 +257,7 @@ public class AdvancedStructuralFormatCharacterizationTests
 
         var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");
 
-        Assert.That(result.Message, Does.StartWith("// WARNING"));
+        Assert.That(result.Message, Does.Contain("WARNING: This method implements an interface."));
         Assert.That(result.UpdatedText, Is.EqualTo(WithStrayCrlf(Src(false, WarnExpected()), anchor)));
     }
 }
