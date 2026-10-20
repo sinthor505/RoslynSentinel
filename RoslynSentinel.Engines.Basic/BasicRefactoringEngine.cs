@@ -1490,6 +1490,39 @@ public class BasicRefactoringEngine
         return new DataFlowSummary(methodName, flow.ReadOutside.Select(s => s.Name).ToList(), flow.WrittenInside.Select(s => s.Name).ToList(), flow.ReadInside.Select(s => s.Name).ToList(), flow.WrittenOutside.Select(s => s.Name).ToList(), flow.Captured.Select(s => s.Name).ToList(), warnings);
     }
 
+    /// <summary>
+    /// Annotates the outermost qualified names and member accesses whose symbol lives in <paramref name="namespaceName"/>,
+    /// so the Simplifier pass that follows has something to shorten. Names inside using directives are skipped.
+    /// </summary>
+    private static async Task<Document> AnnotateNamesInAddedNamespaceAsync(Document document, string namespaceName, CancellationToken cancellationToken)
+    {
+        if (namespaceName.StartsWith("static "))
+        {
+            return document;
+        }
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        var model = await document.GetSemanticModelAsync(cancellationToken);
+        if (root == null || model == null)
+        {
+            return document;
+        }
+
+        var names = root.DescendantNodes()
+            .Where(n => n is QualifiedNameSyntax or MemberAccessExpressionSyntax)
+            .Where(n => n.Parent is not (QualifiedNameSyntax or MemberAccessExpressionSyntax))
+            .Where(n => !n.Ancestors().OfType<UsingDirectiveSyntax>().Any())
+            .Where(n => model.GetSymbolInfo(n, cancellationToken).Symbol?.ContainingNamespace?.ToDisplayString() == namespaceName)
+            .ToList();
+        if (names.Count == 0)
+        {
+            return document;
+        }
+
+        var annotatedRoot = root.ReplaceNodes(names, (original, _) => original.WithAdditionalAnnotations(Simplifier.Annotation));
+        return document.WithSyntaxRoot(annotatedRoot);
+    }
+
     public async Task<DocumentEditResult> AddUsingDirectiveAsync(FilePathWrapper filePath, string namespaceName, bool simplifyExisting = false, CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -1547,9 +1580,11 @@ public class BasicRefactoringEngine
         var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         if (simplifyExisting)
         {
-            // Semantic-safe shortening of now-redundant fully-qualified names, via Roslyn's own
-            // Simplifier (not text find/replace) -> it consults the semantic model per-node, so it
-            // only reduces a qualified name when doing so introduces no ambiguity in this file.
+            // Semantic-safe shortening of now-redundant fully-qualified names. Names resolving into the added
+            // namespace are annotated first, because Simplifier.ReduceAsync only touches annotated nodes. It then
+            // consults the semantic model per-node, so it only reduces a qualified name when doing so introduces no
+            // ambiguity in this file.
+            formattedDoc = await AnnotateNamesInAddedNamespaceAsync(formattedDoc, namespaceName, cancellationToken);
             formattedDoc = await Simplifier.ReduceAsync(formattedDoc, Simplifier.Annotation, cancellationToken: cancellationToken);
             var simplifiedRoot = await formattedDoc.GetSyntaxRootAsync(cancellationToken);
             formattedDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(formattedDoc.WithSyntaxRoot(simplifiedRoot!.WithAdditionalAnnotations(Simplifier.Annotation)), originalText, cancellationToken);

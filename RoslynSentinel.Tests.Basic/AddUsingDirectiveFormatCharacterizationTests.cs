@@ -204,4 +204,34 @@ public class AddUsingDirectiveFormatCharacterizationTests
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(result.UpdatedText, Is.EqualTo(Src(crlf, SimplifyExpected())));
     }
+
+    [Test]
+    public async Task AddUsingDirective_SimplifyExisting_ShortensQualifiedNameIntoAddedNamespace()
+    {
+        SetSource(Src(false,
+            "using System;",
+            "",
+            "namespace Demo",
+            "{",
+            "    public class Foo",
+            "    {",
+            "        System.Collections.Generic.List<int> _items;",
+            "    }",
+            "}"));
+
+        var result = await _engine.AddUsingDirectiveAsync("Test.cs", "System.Collections.Generic", simplifyExisting: true);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Is.EqualTo(Src(false,
+            "using System;",
+            "using System.Collections.Generic;",
+            "",
+            "namespace Demo",
+            "{",
+            "    public class Foo",
+            "    {",
+            "        List<int> _items;",
+            "    }",
+            "}")));
+    }
 }
