@@ -19,6 +19,11 @@
 #   WriteFile   operation CreateFile|Create|ReplaceFile; types are parsed from content. For ReplaceFile,
 #               or Create when the file exists, types already declared in the on-disk file are subtracted
 #               (they are not new). A non-existent file means every parsed type is new.
+#   Member replace, ReplaceSnippet (single edit or batchEdits[], each with its own filePath/oldContent/
+#               newContent) and ApplyDiff (changes map, or filePath + unifiedDiff): a declared type is new only
+#               if its name is not declared in the on-disk file and not in the same edit's removed text (oldContent
+#               or '-' diff lines). A type moved into another file counts as new there. Text with no
+#               record|class|struct token exits early.
 #
 # Scope: production .cs paths inside the repo only. Skipped: non-.cs paths; paths outside the repo
 # (Test-PathOutsideRepo); any path with a \Worktree\ segment (harness clone); a bin or obj segment;
@@ -131,6 +136,27 @@ function Test-DtoTrigger([string]$kind, [string]$name, [string]$mods) {
     return $true
 }
 
+# Adds the types that $newText declares to $candidates, minus the names that are not new: those declared in
+# $removedText (text this same call removes) or already declared in the file on disk. A read failure subtracts
+# nothing (more denials, not fewer). Out-of-scope paths and text with no record/class/struct token add nothing.
+function Add-NewDeclarations([string]$path, [string]$newText, [string]$removedText) {
+    if (-not (Test-InScope $path)) { return }
+    if ($newText -notmatch '\b(record|class|struct)\b') { return }
+    $declared = @(Get-TypeDeclarations $newText)
+    if ($declared.Count -eq 0) { return }
+    $known = New-Object System.Collections.Generic.HashSet[string] ([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($s in @(Get-TypeDeclarations $removedText)) { [void]$known.Add($s.Name) }
+    $full = Get-FullPathOrNull $path
+    if ($full -and (Test-Path -LiteralPath $full -PathType Leaf)) {
+        try { foreach ($s in @(Get-TypeDeclarations (Get-Content -LiteralPath $full -Raw))) { [void]$known.Add($s.Name) } }
+        catch { }
+    }
+    if (-not $script:filePath) { $script:filePath = $path }
+    foreach ($d in $declared) {
+        if (-not $known.Contains($d.Name)) { $script:candidates.Add($d) }
+    }
+}
+
 function Write-DtoLog([string]$outcome, [string]$filePath, [string[]]$types, [string]$reason) {
     try {
         $dir = Join-Path $repoRoot '.claude\journal'
@@ -169,6 +195,28 @@ try {
             $filePath = [string]$toolInput.filePath
             if (-not (Test-InScope $filePath)) { exit 0 }
             foreach ($d in @(Get-TypeDeclarations ([string]$toolInput.newMemberSource))) { $candidates.Add($d) }
+        }
+        elseif ([string]$toolInput.operation -eq 'replace') {
+            # A replace only counts for types the file does not already declare.
+            Add-NewDeclarations ([string]$toolInput.filePath) ([string]$toolInput.newMemberSource) ''
+        }
+    }
+    elseif (Test-ToolName 'ReplaceSnippet') {
+        # Single edit (top-level filePath/oldContent/newContent) or batchEdits[], each with its own filePath.
+        $edits = if ($toolInput.batchEdits) { @($toolInput.batchEdits) } else { @($toolInput) }
+        foreach ($e in $edits) { Add-NewDeclarations ([string]$e.filePath) ([string]$e.newContent) ([string]$e.oldContent) }
+    }
+    elseif (Test-ToolName 'ApplyDiff') {
+        # files format: changes is a filePath -> full new content map.
+        if ($toolInput.changes) {
+            foreach ($p in $toolInput.changes.PSObject.Properties) { Add-NewDeclarations ([string]$p.Name) ([string]$p.Value) '' }
+        }
+        # diff format: filePath + unifiedDiff; added lines are the new text, removed lines the removed text.
+        if ($toolInput.unifiedDiff) {
+            $diffLines = ([string]$toolInput.unifiedDiff) -split "`r?`n"
+            $added   = (@($diffLines | Where-Object { $_.StartsWith('+') -and -not $_.StartsWith('+++') } | ForEach-Object { $_.Substring(1) })) -join "`n"
+            $removed = (@($diffLines | Where-Object { $_.StartsWith('-') -and -not $_.StartsWith('---') } | ForEach-Object { $_.Substring(1) })) -join "`n"
+            Add-NewDeclarations ([string]$toolInput.filePath) $added $removed
         }
     }
     elseif (Test-ToolName 'CreateFile') {

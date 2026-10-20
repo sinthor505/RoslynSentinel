@@ -16,6 +16,10 @@ Original TODO.md text (moved 2026-10-20, shortened to the titles):
 
 - ReplaceSnippet schema invites anchor-only edits; SubAgent bare InvalidOperationException and no findable run log; `InlineVariableAsync` fallback uses `FormatWholeDocumentAsync`; `MappingEngine.InvertAssignments` leading trivia leak; `IDEStyleEngine.SimplifyMemberAccess` drops `this` trivia; `AddUsingDirective` simplifyExisting no-op; `GitImpl` generic catch blocks put `ex.Message` into `Error`; `NormalizeEolOfChangedLines` repeated identical lines; `MoveMember` ledger `TryOpen` path not exercised at the tool layer.
 
+## DTO hook did not inspect `Member replace`, `ReplaceSnippet` or `ApplyDiff` - resolved (2026-10-20)
+
+**Evidence (2026-10-20):** `enforce-dto-justification.ps1` now covers `Member replace`, `ReplaceSnippet` (single edit and each `batchEdits[]` entry) and `ApplyDiff` (`changes` map and `filePath` + `unifiedDiff`) through `Add-NewDeclarations`: a type is new only if its name is not on disk in that file and not in the same edit's removed text; text with no `record|class|struct` token exits early. `settings.json` matcher extended, `dto-conventions` section 7 updated, 11 cases added to `enforce-dto-justification.Tests.ps1` (54 pass, 0 fail).
+
 ## `MoveTypeToOuterScopeAsync` did not adjust accessibility - resolved (2026-10-20)
 
 **Evidence (2026-10-20):** a nested `private`/`protected`/`private protected`/`protected internal` type is now refused with `EditOutcome.CannotMove` (`ToolErrorCode.TargetIneligible`, message names the modifier and `allowWidenToInternal`); `MoveType(destination: outerScope, allowWidenToInternal: true)` widens it to `internal` and says so. `MoveTypeTool` forwards the refusal instead of "not found". Tests: `MoveTypeToOuterScope_PrivateNestedType_IsRefusedByDefault` and `..._WidenedToInternalWhenAllowed`. The unreachable `_ => currentContainer` arm was replaced earlier.

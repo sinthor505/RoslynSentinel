@@ -58,6 +58,10 @@ function New-WritePayload([string]$op, [string]$file, [string]$content, [string]
     @{ tool_name = 'mcp__x__WriteFile'; tool_input = @{ operation = $op; filePath = $file; content = $content; reason = $reason } }
 }
 
+function New-SnippetPayload([string]$file, [string]$old, [string]$new, [string]$reason) {
+    @{ tool_name = 'mcp__x__ReplaceSnippet'; tool_input = @{ filePath = $file; oldContent = $old; newContent = $new; reason = $reason } }
+}
+
 $cases = @(
     # --- DENY: triggering types with no justification ---
     @{ n = 'Member addTopLevelType record, generic reason'; want = 'DENY'; fx = 'dto'
@@ -120,7 +124,9 @@ $cases = @(
        p = @{ tool_name = 'mcp__x__TypedMember'; tool_input = @{ filePath = $inFile; typedKind = 'property'; typedName = 'Result'; typedType = 'FooResult'; reason = $gen } } }
     @{ n = 'Member remove'; want = 'allow'; fx = 'dto'
        p = (New-MemberPayload 'remove' 'public record FooResult(int A);' $gen) }
-    @{ n = 'Member replace'; want = 'allow'; fx = 'dto'
+    @{ n = 'Member replace of a type already on disk'; want = 'allow'; fx = 'dto'
+       p = (New-MemberPayload 'replace' 'public record OldResult(int A, int B);' $gen '{ROOT}\RoslynSentinel.Common\Existing.cs') }
+    @{ n = 'Member replace introducing a new record'; want = 'DENY'; fx = 'dto'
        p = (New-MemberPayload 'replace' 'public record FooResult(int A);' $gen) }
     @{ n = 'Member view'; want = 'allow'; fx = 'dto'
        p = (New-MemberPayload 'view' 'public record FooResult(int A);' $gen) }
@@ -142,6 +148,26 @@ $cases = @(
        p = (New-MemberPayload 'addTopLevelType' 'public record FooResult(int A);' $gen 'C:\tmp\Foo.cs') }
     @{ n = 'non-.cs path'; want = 'allow'; fx = 'dto'
        p = (New-MemberPayload 'addTopLevelType' 'public record FooResult(int A);' $gen '{ROOT}\RoslynSentinel.Common\Foo.md') }
+
+    # --- ReplaceSnippet / ApplyDiff ---
+    @{ n = 'ReplaceSnippet adds a new record'; want = 'DENY'; fx = 'dto'
+       p = (New-SnippetPayload '{ROOT}\RoslynSentinel.Common\Existing.cs' 'public record OldResult(int A);' "public record OldResult(int A);`npublic record NewResult(int B);" $gen) }
+    @{ n = 'ReplaceSnippet edits a type already on disk'; want = 'allow'; fx = 'dto'
+       p = (New-SnippetPayload '{ROOT}\RoslynSentinel.Common\Existing.cs' 'record OldResult(int A)' 'record OldResult(int A, int B)' $gen) }
+    @{ n = 'ReplaceSnippet batchEdits adds a new record'; want = 'DENY'; fx = 'dto'
+       p = @{ tool_name = 'mcp__x__ReplaceSnippet'; tool_input = @{ reason = $gen; batchEdits = @(
+            @{ filePath = '{ROOT}\RoslynSentinel.Common\Existing.cs'; oldContent = 'int A'; newContent = 'int A, int C' },
+            @{ filePath = '{ROOT}\RoslynSentinel.Common\Other.cs'; oldContent = ''; newContent = 'public record MovedResult(int A);' }) } } }
+    @{ n = 'ReplaceSnippet with no type token'; want = 'allow'; fx = 'dto'
+       p = (New-SnippetPayload '{ROOT}\RoslynSentinel.Common\Existing.cs' 'int A' 'int B' $gen) }
+    @{ n = 'ApplyDiff files format adds a new record'; want = 'DENY'; fx = 'dto'
+       p = @{ tool_name = 'mcp__x__ApplyDiff'; tool_input = @{ changesetFormat = 'files'; reason = $gen; changes = @{ '{ROOT}\RoslynSentinel.Common\New.cs' = 'public record FooResult(int A);' } } } }
+    @{ n = 'ApplyDiff files format, type already on disk'; want = 'allow'; fx = 'dto'
+       p = @{ tool_name = 'mcp__x__ApplyDiff'; tool_input = @{ changesetFormat = 'files'; reason = $gen; changes = @{ '{ROOT}\RoslynSentinel.Common\Existing.cs' = 'public record OldResult(int A, int B);' } } } }
+    @{ n = 'ApplyDiff diff format adds a new record'; want = 'DENY'; fx = 'dto'
+       p = @{ tool_name = 'mcp__x__ApplyDiff'; tool_input = @{ changesetFormat = 'diff'; reason = $gen; filePath = '{ROOT}\RoslynSentinel.Common\Existing.cs'; unifiedDiff = "--- a/Existing.cs`n+++ b/Existing.cs`n@@ -1 +1,2 @@`n public record OldResult(int A);`n+public record NewResult(int B);" } } }
+    @{ n = 'ApplyDiff diff format, record renamed within the diff'; want = 'allow'; fx = 'dto'
+       p = @{ tool_name = 'mcp__x__ApplyDiff'; tool_input = @{ changesetFormat = 'diff'; reason = $gen; filePath = '{ROOT}\RoslynSentinel.Common\Existing.cs'; unifiedDiff = "--- a/Existing.cs`n+++ b/Existing.cs`n@@ -1 +1 @@`n-public record OldResult(int A);`n+public record OldResult(int A, int B);" } } }
 
     # --- ALLOW: other tools never checked ---
     @{ n = 'Edit payload with record text'; want = 'allow'; fx = 'dto'
@@ -204,7 +230,7 @@ try {
         $runs = @($entry.hooks | Where-Object { (@($_.args) -join ' ') -match 'enforce-dto-justification\.ps1' })
         if ($runs.Count -eq 0) { continue }
         $matcher = [string]$entry.matcher
-        $names = @('mcp__srv__Member', 'mcp__srv__CreateFile', 'mcp__srv__WriteFile')
+        $names = @('mcp__srv__Member', 'mcp__srv__CreateFile', 'mcp__srv__WriteFile', 'mcp__srv__ReplaceSnippet', 'mcp__srv__ApplyDiff')
         $missing = @($names | Where-Object { -not [regex]::IsMatch($_, "^(?:$matcher)$") })
         if ($missing.Count -eq 0) { $regOk = $true; $regDetail = "matcher '$matcher'" }
         else { $regDetail = "matcher '$matcher' does not match: $($missing -join ', ')" }

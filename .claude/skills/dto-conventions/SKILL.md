@@ -84,8 +84,10 @@ does not exist yet, add the factory and use it.
 ## 7. The dto-justification hook
 
 A `PreToolUse` hook (`.claude/hooks/enforce-dto-justification.ps1`) inspects type-creating MCP calls
-(`Member` addTopLevelType/addMember, `CreateFile`, `WriteFile`) on production `.cs` files. When the call
-declares a new record, or a non-static class/struct whose name does not look like a service (Engine,
+(`Member` addTopLevelType/addMember/replace, `CreateFile`, `WriteFile`, `ReplaceSnippet` including each
+`batchEdits[]` entry, `ApplyDiff` in both formats) on production `.cs` files. A type counts as new only if
+its name is not already declared in that file on disk and not in the same edit's removed text; a type moved
+into another file is new there. When the call declares a new record, or a non-static class/struct whose name does not look like a service (Engine,
 Tools, Impl, Helper, Extensions, ...), it requires the call's `reason` to contain either a `NEW-DTO:` block
 or `DTO-EXEMPT: <one-line why>`.
 
@@ -98,6 +100,5 @@ If it blocks you:
    `DTO-EXEMPT: hook false positive - <what it got wrong>`, append a journal line
    (`- HH:mm - dto-hook: <what it got wrong>`), and put a `HOOK-FALSE-POSITIVE:` line in your report.
 
-Never work around the hook: do not switch tools, split the declaration across edits, add the type through
-`ReplaceSnippet`/`ApplyDiff` instead, or rename it to dodge the suffix check. Every trigger is logged to
+Never work around the hook: do not switch tools, split the declaration across edits, or rename it to dodge the suffix check. Every trigger is logged to
 `.claude/journal/dto-hook.jsonl`, so misfires get fixed from the log.

@@ -40,7 +40,7 @@
         ]
       },
       {
-        "matcher": ".*__Member|.*__CreateFile|.*__WriteFile",
+        "matcher": ".*__Member|.*__CreateFile|.*__WriteFile|.*__ReplaceSnippet|.*__ApplyDiff",
         "hooks": [
           {
             "type": "command",
