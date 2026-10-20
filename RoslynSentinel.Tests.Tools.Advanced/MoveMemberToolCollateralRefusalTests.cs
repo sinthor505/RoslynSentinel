@@ -304,6 +304,76 @@ public class MoveMemberToolCollateralRefusalTests
         Assert.That(await ReadCommittedText(FileName), Is.EqualTo(InstanceSourceText), "A refused move must not change the committed source text");
     }
 
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_PendingLedgerRealApply_OpensLedgerThatBlocksOnlyUnrelatedFiles()
+    {
+        SetRefactorSource();
+        var tools = CreateLedgerSeamTools();
+
+        var result = await tools.MoveMemberTool(reason: "test message", FileName, "Src", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message} | Detail: {result.ErrorData?.Detail}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.Description, Does.Contain("Opened a scoped operation ledger with 1 unresolved call site(s)"));
+
+        var ledger = (IScopedOperationLedger)_workspaceManager;
+        Assert.That(ledger.GetOpenEntries(), Has.Count.EqualTo(1), "The opened ledger must hold the one pending entry");
+        Assert.That(ledger.IsBlocked(FileName, out _), Is.False, "The moved member's own file must stay writable");
+        Assert.That(ledger.IsBlocked(CallerFileName, out var reason), Is.True, "An unrelated file must be refused while the ledger is open");
+        Assert.That(reason, Is.Not.Null);
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_PendingLedgerDryRun_OpensNoLedger()
+    {
+        SetRefactorSource();
+        var tools = CreateLedgerSeamTools();
+
+        var result = await tools.MoveMemberTool(reason: "test message", FileName, "Src", ["Foo"], "Target", dryRun: true, oldMember: MoveMemberOldMember.keepDelegator);
+
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message} | Detail: {result.ErrorData?.Detail}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.Description, Does.Not.Contain("scoped operation ledger"), "A dry run must not mention opening a ledger");
+        Assert.That(((IScopedOperationLedger)_workspaceManager).GetOpenEntries(), Is.Empty, "A dry run must not open a ledger");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_PendingLedgerWhileLedgerAlreadyOpen_TakesTheWarningBranch()
+    {
+        SetRefactorSource();
+        var ledger = (IScopedOperationLedger)_workspaceManager;
+        Assert.That(ledger.TryOpen("Preexisting", [SeamEntry(FileName)], out _), Is.True, "Precondition: a ledger is already open");
+        var tools = CreateLedgerSeamTools();
+
+        var result = await tools.MoveMemberTool(reason: "test message", FileName, "Src", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message} | Detail: {result.ErrorData?.Detail}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.Description, Does.Contain("WARNING:").And.Contain("a ledger could not be opened"));
+        Assert.That(ledger.GetOpenEntries().Single().FilePath, Is.EqualTo(FileName), "The pre-existing ledger must stay the open one");
+    }
+
+    private AdvancedRefactoringTools CreateLedgerSeamTools()
+    {
+        var symbolNav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var engine = new PendingLedgerRefactoringEngine(_workspaceManager, symbolNav, validation);
+        return CreateTools(engine, symbolNav, validation);
+    }
+
+    private static CallSiteLedgerEntry SeamEntry(string filePath) => new CallSiteLedgerEntry
+    {
+        EntryId = "seam0001",
+        FilePath = filePath,
+        Line = 1,
+        BrokenExpression = "Foo",
+        OldStaticType = "Src",
+        Status = CallSiteStatus.NoCandidateIntroducible,
+    };
+
     /// <summary>
     /// Test-only seam: the real move runs, then the source file's text is normalized (the blank line after the
     /// namespace line is removed), an effect the move did not make. AppliedEdits is passed through untouched.
@@ -343,6 +413,24 @@ public class MoveMemberToolCollateralRefusalTests
             }
 
             return text.Substring(0, index) + "namespace Example;" + Eol + text.Substring(index + Marker.Length);
+        }
+    }
+
+    /// <summary>
+    /// Test-only seam: simulates a move that succeeds but leaves one unresolved call site, so the tool's ledger-open
+    /// branch runs. The real move is untouched; only PendingLedgerEntries is added to its result.
+    /// </summary>
+    private sealed class PendingLedgerRefactoringEngine : MemberRefactoringEngine
+    {
+        public PendingLedgerRefactoringEngine(IWorkspaceManager workspaceManager, SymbolNavigationEngine symbolNavigationEngine, ValidationEngine validationEngine)
+            : base(workspaceManager, symbolNavigationEngine, validationEngine)
+        {
+        }
+
+        public override async Task<MoveMemberResult> MoveMemberAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default, bool autoResolveCallSites = true, Dictionary<string, string>? callSiteFixups = null, IReadOnlyDictionary<string, string>? fieldMap = null, MoveMemberOldMember oldMember = MoveMemberOldMember.remove, string? forwarderReceiver = null)
+        {
+            var result = await base.MoveMemberAsync(filePath, className, memberNames, targetClassName, targetFilePath, cancellationToken, autoResolveCallSites, callSiteFixups, fieldMap, oldMember, forwarderReceiver);
+            return result with { PendingLedgerEntries = [SeamEntry(FileName)] };
         }
     }
 }
