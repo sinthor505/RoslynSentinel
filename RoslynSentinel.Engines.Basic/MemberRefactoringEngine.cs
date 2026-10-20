@@ -3482,7 +3482,7 @@ public class MemberRefactoringEngine
     ///  - No existing class named targetClassName: synthesizes a new class (same behavior as the
     ///    former ExtractMembers as=class). STATIC MEMBERS ONLY, same reasoning as above.
     /// </summary>
-    /// // Virtual only so a test can subclass the engine and alter the returned Changes after the real edits are
+    // Virtual only so a test can subclass the engine and alter the returned Changes after the real edits are
     // computed, to prove the MoveMember tool surfaces CollateralChangeRefused unmasked (the guard compares Changes
     // with the pre-image plus AppliedEdits, and both come from this method). Deliberate deviation: the other
     // engine methods are not virtual. Do not override it in production code.
