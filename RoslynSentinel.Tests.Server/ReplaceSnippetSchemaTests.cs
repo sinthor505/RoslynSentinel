@@ -89,4 +89,17 @@ public class ReplaceSnippetSchemaTests
             Assert.That(required, Does.Not.Contain("matchLine"));
         }
     }
+
+    [Test]
+    public void SplitClassReplaceSnippet_FilePathDescriptionMentionsBatchEdits_AndToolDescriptionNamesMember()
+    {
+        var services = new ServiceCollection().BuildServiceProvider();
+        var method = typeof(WorkspaceFileEditTools).GetMethod(nameof(WorkspaceFileEditTools.ReplaceSnippetTool))!;
+        var tool = McpToolSchemaPatcher.CreateSentinelTool(method, typeof(WorkspaceFileEditTools), services);
+        var schema = (JsonObject)JsonNode.Parse(tool.ProtocolTool.InputSchema.GetRawText())!;
+
+        var filePathDescription = schema["properties"]!["filePath"]!["description"]!.GetValue<string>();
+        Assert.That(filePathDescription, Does.Contain("batchEdits"));
+        Assert.That(tool.ProtocolTool.Description, Does.Contain("Member"));
+    }
 }

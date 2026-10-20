@@ -60,13 +60,13 @@ public class WorkspaceFileEditTools
     // over-cap error can (see WriteToolAdviceHelper) -> and a hardcoded name here would be shown to
     // the model on every single call even when that tool is gated off, which is the run-398 failure
     // in its most persistent form. The error path is where the redirect is actually needed.
-    [Description("Replaces one exact block of text with another in a single file, for localized batchEdits. For a structural change, prefer the matching Roslyn tool (RenameSymbol, ChangeSignature, ExtractMethod, Member, etc.) instead. For multiple small batchEdits - in the same file or across files - pass 'batchEdits' instead of the singular filePath/oldContent/newContent params. By default this also delta-compiles the edited project(s) plus every project that transitively references them BEFORE writing, and REJECTS the change if it introduces any new compiler error.")]
+    [Description("Replaces one exact text block with another in a file, for small localized edits. Prefer a structural Roslyn tool for structural changes. By default the edited project(s) and their dependents are delta-compiled BEFORE writing, and the change is rejected if it introduces a new compiler error. For edits larger than the size limit or whole-member rewrites, use Member(operation: replace) instead.")]
     public Task<SentinelCallToolResult<ReplaceSnippetResult>> ReplaceSnippetTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("apply: writes the change. validate: checks it would apply cleanly without writing.")]
         [ExternalInputRequired(DataTag.Action)] ProposedChangeAction action,
         // CONDITIONAL-PARAM-REVIEW-REQUIRED: required only when 'batchEdits' is omitted -> see the either/or check below.
-        [Consumes(DataTag.SourceFilepath, required: false)] string? filePath = null,
+        [Consumes(DataTag.SourceFilepath, required: false)][Description("File to edit. Do not combine with batchEdits; each batch edit carries its own filePath.")] string? filePath = null,
         [ToolOption(ToolOptionTag.OldContent, required: false)][Description(ToolParams.OldContent)] string? oldContent = null,
         [ToolOption(ToolOptionTag.NewContent, required: false)][Description(ToolParams.NewContent)] string? newContent = null,
         [Description(ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore, required: false)] string? lineBefore = null,
