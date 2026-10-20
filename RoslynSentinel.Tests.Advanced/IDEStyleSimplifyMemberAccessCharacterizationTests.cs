@@ -100,6 +100,51 @@ public class IDEStyleSimplifyMemberAccessCharacterizationTests
         Assert.That(result.UpdatedText, Is.EqualTo(expected));
     }
 
+    private static string[] CommentedInput() =>
+    [
+        "public class Counter",
+        "{",
+        "    private int _count;",
+        "",
+        "    public void Reset()",
+        "    {",
+        "        var y = 1;",
+        "        // reset the counter",
+        "",
+        "        this._count = 0;",
+        "    }",
+        "}",
+    ];
+
+    private static string[] CommentedExpected() =>
+    [
+        "public class Counter",
+        "{",
+        "    private int _count;",
+        "",
+        "    public void Reset()",
+        "    {",
+        "        var y = 1;",
+        "        // reset the counter",
+        "",
+        "        _count = 0;",
+        "    }",
+        "}",
+    ];
+
+    // Regression pin: the replacement must keep the trivia that precedes 'this' (a comment and a blank line).
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task SimplifyMemberAccess_CommentAndBlankLineBeforeThis_ArePreservedByteExact(bool crlf)
+    {
+        SetSource(Src(crlf, CommentedInput()));
+
+        var result = await _engine.SimplifyMemberAccessAsync("Test.cs");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Is.EqualTo(Src(crlf, CommentedExpected())));
+    }
+
     [Test]
     public async Task SimplifyMemberAccess_LfDocument_ResultHasNoCarriageReturn()
     {

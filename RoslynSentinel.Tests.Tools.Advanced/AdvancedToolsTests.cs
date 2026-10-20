@@ -343,5 +343,6 @@ public class C {
         Assert.That(result.UpdatedText, Does.Contain("record ProcessParameters"));
         Assert.That(result.UpdatedText, Does.Contain("ProcessParameters request"));
         Assert.That(result.UpdatedText, Does.Contain("request.Input") | Does.Contain("request.Count"));
+        Assert.That(result.UpdatedText, Does.Contain("TODO: Update call sites"));
     }
 }

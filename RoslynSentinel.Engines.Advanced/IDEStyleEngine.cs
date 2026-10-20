@@ -46,7 +46,10 @@ public class IDEStyleEngine
             };
         }
 
-        var newRoot = root!.ReplaceNodes(thisAccesses, (oldNode, _) => oldNode.Name.WithAdditionalAnnotations(Formatter.Annotation));
+        // The replacement name takes over the trivia of the removed 'this.' (comments, #region, blank lines).
+        var newRoot = root!.ReplaceNodes(thisAccesses, (oldNode, _) => oldNode.Name
+            .WithLeadingTrivia(oldNode.GetLeadingTrivia().AddRange(oldNode.Name.GetLeadingTrivia()))
+            .WithAdditionalAnnotations(Formatter.Annotation));
         var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
         {

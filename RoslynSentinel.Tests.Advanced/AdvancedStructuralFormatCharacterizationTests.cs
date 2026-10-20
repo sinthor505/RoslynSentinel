@@ -14,11 +14,6 @@ namespace RoslynSentinel.Tests.Advanced;
 /// the whole document shows up as a diff. Written against the unmodified call (plain
 /// <c>Formatter.FormatAsync(doc, annotation)</c>). The CRLF tests are byte-identical to the pre-routing behaviour; the
 /// LF and mixed-EOL tests encode the corrected output (the old code leaked formatter-inserted CRLF).
-/// <para>
-/// Pre-existing quirk pinned as-is (not part of this slice): the "// TODO: Update call sites" comment the engine
-/// builds on a missing-semicolon empty statement does not survive to the text; only a blank line is left after the
-/// method's opening brace.
-/// </para>
 /// </summary>
 [TestFixture]
 [Category("StructuralRefactoringEngine")] // sentinel:auto-category
@@ -101,7 +96,7 @@ public class AdvancedStructuralFormatCharacterizationTests
         "",
         "    public void Run(RunParameters request)",
         "    {",
-        "",
+        "        // TODO: Update call sites to use RunParameters",
         "        // inner comment",
         "        _count += request.A;",
         "",
@@ -200,7 +195,7 @@ public class AdvancedStructuralFormatCharacterizationTests
         "",
         "    public void Run(RunParameters request)",
         "    {",
-        "",
+        "        // TODO: Update call sites to use RunParameters",
         "        // inner comment",
         "        _count += request.A;",
         "",

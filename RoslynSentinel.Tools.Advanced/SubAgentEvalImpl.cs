@@ -30,12 +30,14 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
         }
 
         var runId = SubAgentRunNaming.NewRunId();
+        string? logDirectory = null;
         logger.LogInformation("SubAgentEval {RunId}: starting for model {Model}. Reason: {Reason}", runId, model, reason);
 
         try
         {
             await using var child = await new SubAgentChildServerLauncher(logger)
                 .LaunchAsync(solutionPath, runId, string.IsNullOrWhiteSpace(baseBranch) ? "HEAD" : baseBranch, model, disposeWorktree, replaceSnippetMaxOldLines: 200, replaceSnippetMaxNewLines: 200, replaceSnippetMaxOldChars: 4000, replaceSnippetMaxNewChars: 4000, cancellationToken);
+            logDirectory = child.LogDirectory;
 
             var run = await SubAgentModelRun.RunAsync(
                 child, AgentSystemPrompts.CodingAgent, prompt, model, maxTokensPerTurn, turnCap, wallClockCapMinutes, cancellationToken);
@@ -89,7 +91,7 @@ public sealed class SubAgentEvalImpl(IWorkspaceManager workspaceManager, ILogger
             // debugger (e.g. LM Studio's "No models loaded" arrives as an InvalidOperationException).
             logger.LogError(ex, "SubAgentEval {RunId}: failed unexpectedly.", runId);
             return Failure(new ResultError(ToolErrorCode.Exception,
-                $"SubAgentEval failed unexpectedly ({ex.GetType().Name}). Run id {runId}; see the server log and the run's agent.log for detail.",
+                $"SubAgentEval failed unexpectedly ({ex.GetType().Name}). Run id {runId}; see the server log and the run's agent.log for detail." + (logDirectory is null ? "" : $" Logs: {logDirectory}"),
                 Detail: ex.Message.Length > 400 ? ex.Message[..400] : ex.Message));
         }
     }

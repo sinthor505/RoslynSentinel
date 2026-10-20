@@ -127,7 +127,7 @@ public class MappingEngine
 
         var annotation = Formatter.Annotation;
         var newRoot = root!.ReplaceNodes(nodes, (oldNode, newNode) =>
-            newNode.WithLeft(oldNode.Right).WithRight(oldNode.Left).WithAdditionalAnnotations(annotation));
+            SwapAssignmentOperands(oldNode, newNode, annotation));
 
         var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
         return new DocumentEditResult
@@ -208,7 +208,7 @@ public class MappingEngine
 
             var annotation = Formatter.Annotation;
             var newRoot = root.ReplaceNodes(nodes, (oldNode, newNode) =>
-                newNode.WithLeft(oldNode.Right).WithRight(oldNode.Left).WithAdditionalAnnotations(annotation));
+                SwapAssignmentOperands(oldNode, newNode, annotation));
 
             var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
             return new DocumentEditResult
@@ -230,5 +230,15 @@ public class MappingEngine
                 UpdatedText = root.ToFullString() ?? string.Empty
             };
         }
+    }
+
+    /// <summary>
+    /// Swaps the operands of an assignment while keeping each operand's leading trivia (comments, blank lines, indentation) in its original position.
+    /// </summary>
+    private static AssignmentExpressionSyntax SwapAssignmentOperands(AssignmentExpressionSyntax oldNode, AssignmentExpressionSyntax newNode, SyntaxAnnotation annotation)
+    {
+        var newLeft = oldNode.Right.WithLeadingTrivia(oldNode.Left.GetLeadingTrivia());
+        var newRight = oldNode.Left.WithLeadingTrivia(oldNode.Right.GetLeadingTrivia());
+        return newNode.WithLeft(newLeft).WithRight(newRight).WithAdditionalAnnotations(annotation);
     }
 }

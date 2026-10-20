@@ -45,10 +45,8 @@ public class MappingEngineInvertAssignmentsCharacterizationTests
     }
 
     // Lines 15-16 hold the assignments the tests invert; everything else is untouched. The comment and the blank
-    // lines sit before a non-assignment statement on purpose: the engine swaps whole operands including their
-    // leading trivia, so a comment or blank line directly in front of an inverted assignment travels to its right-hand
-    // side (a defect of the swap, not of the format step; see the docs/current/TODO.md entry on InvertAssignmentsTool
-    // leading trivia).
+    // lines sit before a non-assignment statement on purpose, so they stay in place in this fixture. Preservation of
+    // leading trivia in front of an inverted assignment is covered by the CommentedInput()/CommentedExpected() tests.
     private static string[] Input() =>
     [
         "using System;",
@@ -203,5 +201,69 @@ public class MappingEngineInvertAssignmentsCharacterizationTests
         var result = await _engine.InvertAssignmentsAsync("Test.cs", "a  =  x;", null, null);
 
         Assert.That(result.UpdatedText, Is.EqualTo(WithStrayCrlf(Src(false, SnippetExpected()))));
+    }
+
+    // Line 12 (`a = x;`) is the first inverted assignment, with a comment and a blank line directly above it. Both
+    // overloads invert only that line; the comment and blank line must stay on their own lines above the statement.
+    private static string[] CommentedInput() =>
+    [
+        "using System;",
+        "",
+        "public class Mapper",
+        "{",
+        "    private int a;",
+        "",
+        "    public void Sync( int x )",
+        "    {",
+        "        Console.WriteLine( x );",
+        "",
+        "        // keep the swap in place",
+        "        a = x;",
+        "        Console.WriteLine( a );",
+        "    }",
+        "}",
+    ];
+
+    private static string[] CommentedExpected() =>
+[
+    "using System;",
+        "",
+        "public class Mapper",
+        "{",
+        "    private int a;",
+        "",
+        "    public void Sync( int x )",
+        "    {",
+        "        Console.WriteLine( x );",
+        "",
+        "        // keep the swap in place",
+        "        x = a;",
+        "        Console.WriteLine( a );",
+        "    }",
+        "}",
+    ];
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task InvertAssignments_CommentAndBlankLinesBeforeInvertedAssignment_StayInPlace(bool crlf)
+    {
+        SetSource(Src(crlf, CommentedInput()));
+
+        var result = await _engine.InvertAssignmentsAsync("Test.cs", 12, 12);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Is.EqualTo(Src(crlf, CommentedExpected())));
+    }
+
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task InvertAssignmentsBySnippet_CommentAndBlankLinesBeforeInvertedAssignment_StayInPlace(bool crlf)
+    {
+        SetSource(Src(crlf, CommentedInput()));
+
+        var result = await _engine.InvertAssignmentsAsync("Test.cs", "a = x;", null, null);
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Is.EqualTo(Src(crlf, CommentedExpected())));
     }
 }

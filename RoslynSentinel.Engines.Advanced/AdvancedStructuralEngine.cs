@@ -1118,17 +1118,9 @@ public class StructuralRefactoringEngine
         {
             BaseNamespaceDeclarationSyntax baseNs => baseNs.AddMembers(annotatedNestedType),
             CompilationUnitSyntax unit => unit.AddMembers(annotatedNestedType),
-            _ => currentContainer,
+            // Intentional deviation: the container is always a namespace or the compilation unit (see above), so this arm is unreachable.
+            _ => throw new InvalidOperationException("Unexpected container kind: " + currentContainer.Kind()),
         };
-        if (ReferenceEquals(newContainer, currentContainer))
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Cannot move '{nestedTypeName}': unsupported outer scope."
-            };
-        }
 
         newRoot = newRoot.ReplaceNode(currentContainer, newContainer);
 
@@ -1289,8 +1281,6 @@ public class StructuralRefactoringEngine
         var newParamList = methodNode.ParameterList.WithParameters(SyntaxFactory.SeparatedList(newParams));
         // Build param->property rewrite map: paramName -> request.ParamName
         var rewriteMap = groupedParams.ToDictionary(p => p.Identifier.Text, p => $"request.{Capitalize(p.Identifier.Text)}");
-        // Add TODO comment to method
-        var todoComment = SyntaxFactory.Comment($"// TODO: Update call sites to use {recordName}\r\n        ");
         // Rewrite references in method body
         SyntaxNode? newBody = null;
         if (methodNode.Body != null)
@@ -1302,10 +1292,33 @@ public class StructuralRefactoringEngine
         var newMethodNode = methodNode.WithParameterList(newParamList);
         if (newBody is BlockSyntax block)
         {
-            var firstStmt = block.Statements.FirstOrDefault();
-            StatementSyntax todoStmt = SyntaxFactory.EmptyStatement().WithLeadingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.Comment($"// TODO: Update call sites to use {recordName}"))).WithSemicolonToken(SyntaxFactory.MissingToken(SyntaxKind.SemicolonToken));
-            var newStmts = block.Statements.Insert(0, todoStmt);
-            newMethodNode = newMethodNode.WithBody(block.WithStatements(newStmts));
+            // The TODO rides as leading trivia of the first statement (or of the closing brace when the body is
+            // empty): replacing a statement or token would discard the comment trivia.
+            var todoLine = SyntaxFactory.Comment($"// TODO: Update call sites to use {recordName}");
+            var todoEol = methodNode.DescendantTrivia().FirstOrDefault(t => t.IsKind(SyntaxKind.EndOfLineTrivia));
+            var todoNewLine = todoEol.IsKind(SyntaxKind.EndOfLineTrivia) ? todoEol : SyntaxFactory.EndOfLine(Environment.NewLine);
+            if (block.Statements.Count > 0)
+            {
+                var firstStmt = block.Statements[0];
+                var stmtLead = firstStmt.GetLeadingTrivia();
+                var todoLead = new List<SyntaxTrivia>();
+                if (stmtLead.Count > 0 && stmtLead.Last().IsKind(SyntaxKind.WhitespaceTrivia))
+                {
+                    todoLead.Add(stmtLead.Last());
+                }
+                todoLead.Add(todoLine);
+                todoLead.Add(todoNewLine);
+                var newFirst = firstStmt.WithLeadingTrivia(SyntaxFactory.TriviaList(todoLead).AddRange(stmtLead));
+                block = block.WithStatements(block.Statements.Replace(firstStmt, newFirst));
+            }
+            else
+            {
+                var closeLead = block.CloseBraceToken.LeadingTrivia;
+                var closeIndent = closeLead.Count > 0 && closeLead.Last().IsKind(SyntaxKind.WhitespaceTrivia) ? closeLead.Last().ToString() : string.Empty;
+                var closeTodoLead = SyntaxFactory.TriviaList(SyntaxFactory.Whitespace(closeIndent + "    "), todoLine, todoNewLine);
+                block = block.WithCloseBraceToken(block.CloseBraceToken.WithLeadingTrivia(closeTodoLead.AddRange(closeLead)));
+            }
+            newMethodNode = newMethodNode.WithBody(block);
         }
 
         // If method is on an interface, also update interface definition
@@ -1382,7 +1395,7 @@ public class StructuralRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = "// Local variable introduced.",
+            Message = $"Introduced parameter object '{recordName}'.",
             UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }

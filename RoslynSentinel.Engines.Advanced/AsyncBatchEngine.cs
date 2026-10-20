@@ -574,7 +574,6 @@ public class AsyncBatchEngine
                                     candidate.FilePath, candidate.MethodName,
                                     $"Write refused while adding CancellationToken to '{asyncMethodName}': {ctApply.Summary}",
                                     new List<DiagnosticInfo>(), AttemptedSource: ctResult.UpdatedText));
-                                fallbackHandled = true;
                                 continue;
                             }
                             applied.Add(new BridgeAppliedInfo(candidate.FilePath, candidate.MethodName, asyncMethodName)
@@ -586,9 +585,11 @@ public class AsyncBatchEngine
                         }
                         else
                         {
+                            var ctFlagOutcome = await FlagBridgeCandidateForReviewAsync(
+                                candidate.FilePath, candidate.MethodName, ctValidation.Diagnostics, "Bridge", progress, cancellationToken);
                             skipped.Add(new BridgeSkippedInfo(
                                 candidate.FilePath, candidate.MethodName,
-                                $"CT-add validation failed for '{asyncMethodName}': {ctValidation.Diagnostics.Count} error(s){DiagSummary(ctValidation.Diagnostics)}; flagged NeedsManualReview",
+                                $"CT-add validation failed for '{asyncMethodName}': {ctValidation.Diagnostics.Count} error(s){DiagSummary(ctValidation.Diagnostics)}; {ctFlagOutcome}",
                                 ctValidation.Diagnostics));
                             fallbackHandled = true;
                         }
@@ -628,7 +629,6 @@ public class AsyncBatchEngine
                                         candidate.FilePath, candidate.MethodName,
                                         $"Write refused while rewriting bridge calls in '{asyncMethodName}': {bodyApply.Summary}",
                                         new List<DiagnosticInfo>(), AttemptedSource: bodyRewrite.UpdatedText));
-                                    fallbackHandled = true;
                                     continue;
                                 }
                                 applied.Add(new BridgeAppliedInfo(candidate.FilePath, candidate.MethodName, asyncMethodName)
@@ -645,9 +645,11 @@ public class AsyncBatchEngine
                                     asyncMethodName, bodyValidation.Diagnostics.Count,
                                     bodyValidation.Diagnostics.Count > 0
                                         ? $"[{bodyValidation.Diagnostics[0].Id}] {bodyValidation.Diagnostics[0].Message}" : "");
+                                var bodyFlagOutcome = await FlagBridgeCandidateForReviewAsync(
+                                    candidate.FilePath, candidate.MethodName, bodyValidation.Diagnostics, "Bridge", progress, cancellationToken);
                                 skipped.Add(new BridgeSkippedInfo(
                                     candidate.FilePath, candidate.MethodName,
-                                    $"Body-rewrite validation failed for '{asyncMethodName}': {bodyValidation.Diagnostics.Count} error(s){DiagSummary(bodyValidation.Diagnostics)}; flagged NeedsManualReview",
+                                    $"Body-rewrite validation failed for '{asyncMethodName}': {bodyValidation.Diagnostics.Count} error(s){DiagSummary(bodyValidation.Diagnostics)}; {bodyFlagOutcome}",
                                     bodyValidation.Diagnostics));
                                 fallbackHandled = true;
                             }
@@ -1197,26 +1199,13 @@ public class AsyncBatchEngine
                             ? $"[{validation.Diagnostics[0].Id}] {validation.Diagnostics[0].Message}"
                             : "");
 
-                    try
-                    {
-                        var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
-                            callerFilePath, callerMethodName, "NeedsManualReview",
-                            score: 0,
-                            reason: $"Uplift produced {validation.Diagnostics.Count} compiler error(s){DiagSummary(validation.Diagnostics)}",
-                            progress: progress, cancellationToken: cancellationToken);
-                        await _workspaceManager.ApplyProposedChangesAsync(
-                            flagResult.Changes, cancellationToken: cancellationToken);
-                    }
-                    catch (Exception flagEx)
-                    {
-                        _logger.LogWarning(flagEx,
-                            "Could not flag {Method} as NeedsManualReview", callerMethodName);
-                    }
+                    var upliftFlagOutcome = await FlagBridgeCandidateForReviewAsync(
+                        callerFilePath, callerMethodName, validation.Diagnostics, "Uplift", progress, cancellationToken);
 
                     _ledger.Record(callerFilePath, callerMethodName, "UpliftValidationFail",
                         validation.Diagnostics.Count > 0 ? $"[{validation.Diagnostics[0].Id}] {validation.Diagnostics[0].Message}" : null);
                     skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
-                        $"Validation produced {validation.Diagnostics.Count} compiler error(s){DiagSummary(validation.Diagnostics)}; flagged NeedsManualReview",
+                        $"Validation produced {validation.Diagnostics.Count} compiler error(s){DiagSummary(validation.Diagnostics)}; {upliftFlagOutcome}",
                         validation.Diagnostics,
                         AttemptedSource: transformed));
                     continue;
@@ -2042,6 +2031,51 @@ public class AsyncBatchEngine
 
         var top = string.Join("; ", diags.Take(n).Select(d => $"[{d.Id}] {d.Message}"));
         return diags.Count > n ? $" - {top} (+{diags.Count - n} more)" : $" - {top}";
+    }
+
+    /// <summary>
+    /// Best-effort NeedsManualReview flag write for a bridge or uplift candidate whose validation failed.
+    /// The producer label ("Bridge" or "Uplift") prefixes the flag reason.
+    /// Returns the outcome phrase for the skip message: "flagged NeedsManualReview" only when the flag
+    /// write was applied, otherwise a "skipped; ..." phrase. Never throws; the batch continues either way.
+    /// </summary>
+    private async Task<string> FlagBridgeCandidateForReviewAsync(
+        FilePathWrapper filePath,
+        string methodName,
+        List<DiagnosticInfo> diagnostics,
+        string producer,
+        IProgress<EngineProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var flagOutcome = "skipped; the manual-review flag could not be written";
+        try
+        {
+            var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
+                filePath, methodName, "NeedsManualReview",
+                score: 0,
+                reason: $"{producer} produced {diagnostics.Count} compiler error(s){DiagSummary(diagnostics)}",
+                progress: progress,
+                cancellationToken: cancellationToken);
+            var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+            if (flagApply.IsError)
+            {
+                _logger.LogWarning("NeedsManualReview flag write refused for {Method} in {File}: {Summary}",
+                    methodName, filePath, flagApply.Summary);
+                flagOutcome = string.IsNullOrEmpty(flagApply.RefusalCode)
+                    ? "skipped; the manual-review flag could not be written"
+                    : $"skipped; the manual-review flag could not be written ({flagApply.RefusalCode})";
+            }
+            else
+            {
+                flagOutcome = "flagged NeedsManualReview";
+            }
+        }
+        catch (Exception flagEx)
+        {
+            _logger.LogWarning(flagEx, "Could not flag {Method} as NeedsManualReview - continuing", methodName);
+        }
+
+        return flagOutcome;
     }
 }
 

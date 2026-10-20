@@ -2428,8 +2428,7 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git status failed");
-            return new GitStatusResult { IsError = true, Error = $"Git status failed: {ex.Message}" };
+            return UnexpectedFailure<GitStatusResult>(ex, "status");
         }
     }
 
@@ -2497,8 +2496,7 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git log failed");
-            return new GitLogResult { IsError = true, Error = $"Git log failed: {ex.Message}" };
+            return UnexpectedFailure<GitLogResult>(ex, "log");
         }
     }
 
@@ -2637,8 +2635,7 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git diff failed (target={Target})", target);
-            return new GitDiffResult { IsError = true, Error = $"Git diff failed: {ex.Message}" };
+            return UnexpectedFailure<GitDiffResult>(ex, "diff");
         }
     }
 
@@ -2709,8 +2706,7 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git show failed (target={Target})", target);
-            return new GitShowResult { IsError = true, Error = $"Git show failed: {ex.Message}" };
+            return UnexpectedFailure<GitShowResult>(ex, "show");
         }
     }
 
@@ -3141,8 +3137,7 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git stage failed");
-            return new GitStatusResult { IsError = true, Error = $"Git stage failed: {ex.Message}" };
+            return UnexpectedFailure<GitStatusResult>(ex, "stage");
         }
     }
     /// <summary>
@@ -3185,8 +3180,7 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git unstage failed");
-            return new GitStatusResult { IsError = true, Error = $"Git unstage failed: {ex.Message}" };
+            return UnexpectedFailure<GitStatusResult>(ex, "unstage");
         }
     }
     public async Task<GitCommitResult> CommitAsync(
@@ -3434,8 +3428,7 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git commit failed");
-            return new GitCommitResult { IsError = true, Error = $"Git commit failed: {ex.Message}" };
+            return UnexpectedFailure<GitCommitResult>(ex, "commit");
         }
     }
 
@@ -3472,8 +3465,7 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git abort failed");
-            return new GitStatusResult { IsError = true, Error = $"Git abort failed: {ex.Message}" };
+            return UnexpectedFailure<GitStatusResult>(ex, "abort");
         }
     }
 
@@ -3537,8 +3529,7 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git revert failed (hash={Hash})", commitHash);
-            return new GitRevertResult { IsError = true, Error = $"Git revert failed: {ex.Message}" };
+            return UnexpectedFailure<GitRevertResult>(ex, "revert");
         }
     }
 
@@ -3578,8 +3569,7 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git reset failed (ref={Ref}, mode={Mode})", target, mode);
-            return new GitStatusResult { IsError = true, Error = $"Git reset failed: {ex.Message}" };
+            return UnexpectedFailure<GitStatusResult>(ex, "reset");
         }
     }
 
@@ -3647,8 +3637,7 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git branch failed");
-            return new GitBranchResult { IsError = true, Error = $"Git branch failed: {ex.Message}" };
+            return UnexpectedFailure<GitBranchResult>(ex, "branch");
         }
     }
 
@@ -3722,8 +3711,9 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git checkout failed (branch={Branch})", branchName);
-            return new GitCheckoutResult { IsError = true, Branch = branchName, Error = $"Git checkout failed: {ex.Message}" };
+            var failed = UnexpectedFailure<GitCheckoutResult>(ex, "checkout");
+            failed.Branch = branchName;
+            return failed;
         }
     }
 
@@ -3757,8 +3747,9 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git push failed (remote={Remote})", remoteName);
-            return new GitRemoteResult { IsError = true, Operation = "push", Error = $"Git push failed: {ex.Message}" };
+            var failed = UnexpectedFailure<GitRemoteResult>(ex, "push");
+            failed.Operation = "push";
+            return failed;
         }
     }
 
@@ -3776,8 +3767,9 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git fetch failed (remote={Remote})", remoteName);
-            return new GitRemoteResult { IsError = true, Operation = "fetch", Error = $"Git fetch failed: {ex.Message}" };
+            var failed = UnexpectedFailure<GitRemoteResult>(ex, "fetch");
+            failed.Operation = "fetch";
+            return failed;
         }
     }
 
@@ -3804,8 +3796,9 @@ public class GitImpl : IGitOperations
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Git pull failed (remote={Remote})", remoteName);
-            return new GitRemoteResult { IsError = true, Operation = "pull", Error = $"Git pull failed: {ex.Message}" };
+            var failed = UnexpectedFailure<GitRemoteResult>(ex, "pull");
+            failed.Operation = "pull";
+            return failed;
         }
     }
 }
