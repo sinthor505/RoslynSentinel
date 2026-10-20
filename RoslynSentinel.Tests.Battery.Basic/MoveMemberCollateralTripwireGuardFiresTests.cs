@@ -69,6 +69,48 @@ public class MoveMemberCollateralTripwireGuardFiresTests
         await AssertGuardFiresOnNormalizedSourceAsync(workspace, validation, result, files);
     }
 
+    [Test]
+    public async Task MethodToBaseType_NormalizedSourceIsRefusedAndNothingIsWrittenAsync()
+    {
+        var files = new (string Name, string Content)[]
+        {
+            ("Source.cs", Lines("namespace Example;", "", "public class Derived : Base", "{",
+                "    public string Normalize(string input) => input.Trim();", "",
+                "    public int Process(string x) => x.Length;", "}")),
+            ("Base.cs", Lines("namespace Example;", "", "public class Base", "{",
+                "    public int Count() => 0;", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var (engine, validation) = CreateEngine(workspace);
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("Source.cs"), "Derived", new[] { "Normalize" }, "Base", workspace.PathOf("Base.cs"), CancellationToken.None);
+
+        await AssertGuardFiresOnNormalizedSourceAsync(workspace, validation, result, files);
+    }
+
+    [Test]
+    public async Task StaticMethodToNewClass_NormalizedSourceIsRefusedByAnExistingFileAsync()
+    {
+        // The new class file (NewHelper.cs) has no pre-image and is unchecked by design, so the refusal must come from
+        // Source.cs, which does have one.
+        var files = new (string Name, string Content)[]
+        {
+            ("Source.cs", Lines("namespace Example;", "", "public static class A", "{",
+                "    public static string Norm(string input) => input.Trim();", "",
+                "    public static int Process(string x) => x.Length;", "}")),
+            ("Caller.cs", Lines("using Example;", "", "class Caller", "{",
+                "    void Run() => A.Norm(\"x\");", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var (engine, validation) = CreateEngine(workspace);
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("Source.cs"), "A", new[] { "Norm" }, "NewHelper", null, CancellationToken.None);
+
+        await AssertGuardFiresOnNormalizedSourceAsync(workspace, validation, result, files);
+    }
+
     /// <summary>
     /// Refusal first (nothing on disk changes), then the mutation check (the same altered text is not refused once
     /// expectedEdits is omitted, so the refusal is the guard's doing), then the control (the engine's own text passes

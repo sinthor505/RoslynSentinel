@@ -70,6 +70,33 @@ public class MoveMemberCollateralTripwireRouteTests
     }
 
     [Test]
+    public async Task InstanceMethodWithNoExternalCallersToNewClass_RealApplyPassesTheCollateralGuardAndLeavesTheNewFileUncheckedAsync()
+    {
+        // With a caller that holds the instance in a local, the engine cannot resolve the receiver to the new class,
+        // leaves the call site skipped, and the compile gate refuses the stale a.Count call. This fixture has no external
+        // callers, so only the moved-from file is edited.
+        var files = new (string Name, string Content)[]
+        {
+            ("Source.cs", Lines("namespace Example;", "", "public class A", "{",
+                "    public int Count(string input, bool trim = false)", "    {",
+                "        var text = trim ? input.Trim() : input;", "        return text.Length;", "    }", "",
+                "    /// <summary>Other, see <see cref=\"A.Count\"/>.</summary>",
+                "    public int Process(string x) => x.Length;", "}")),
+        };
+        using var workspace = InMemoryWorkspace.Create(files);
+        var (engine, validation) = CreateEngine(workspace);
+
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("Source.cs"), "A", new[] { "Count" }, "NewHelper", null, CancellationToken.None);
+
+        Assert.That(result.Changes.Keys.Select(FileName), Does.Contain("NewHelper.cs"), "The new class file is part of the change set");
+        // The new file has no pre-image, so it carries no edits and the chokepoint leaves it unchecked by design.
+        Assert.That(EditedFileNames(result), Is.EquivalentTo(new[] { "Source.cs" }));
+        await AssertRealApplyPassesGuardAsync(workspace, validation, files, result);
+        Assert.That(workspace.ReadText("NewHelper.cs"), Is.EqualTo(result.Changes.Single(c => FileName(c.Key) == "NewHelper.cs").Value));
+    }
+
+    [Test]
     public async Task MethodToBaseType_RealApplyPassesTheCollateralGuardAsync()
     {
         var files = new (string Name, string Content)[]

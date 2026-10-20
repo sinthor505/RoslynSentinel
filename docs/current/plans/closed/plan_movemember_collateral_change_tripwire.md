@@ -1,6 +1,6 @@
 # Plan: collateral-change tripwire for MoveMember (item B)
 
-**Status:** IMPLEMENTED 2026-10-15 (status corrected 2026-10-17). Design decided with the user (tripwire, MoveMember only); B1 c27896cc (CollateralChangeGuard, CollateralChangeRefused), B2 74895c51 (expectedEdits in ValidateAndApplyAsync), B3 7e2d04fd (MoveMemberResult.AppliedEdits forwarded by the tool), B1t 83df2fdf (guard-fires battery test). Facts below were traced by exploration agents earlier in this session and not all were re-read when this was written; re-anchor with `Search` before dispatching.
+**Status:** CLOSED 2026-10-19 (implemented 2026-10-15; risk outcomes recorded below; only dry-run edits remain, tracked in the issue). Design decided with the user (tripwire, MoveMember only); B1 c27896cc (CollateralChangeGuard, CollateralChangeRefused), B2 74895c51 (expectedEdits in ValidateAndApplyAsync), B3 7e2d04fd (MoveMemberResult.AppliedEdits forwarded by the tool), B1t 83df2fdf (guard-fires battery test). Facts below were traced by exploration agents earlier in this session and not all were re-read when this was written; re-anchor with `Search` before dispatching.
 
 ## Problem
 
@@ -87,14 +87,20 @@ edits come from the same source. It is partly circular by design.
 - Adopting `LineChanges` at the remaining `AppliedChangeSummary` sites (separate TODO item).
 - Catching a wrong edit set. That needs the byte-exact tests in `MoveMemberPreservesUntouchedTextTests`.
 
-## Risks and open decisions
+## Risks and open decisions - outcomes (verified against source 2026-10-19)
 
-- **New-class route:** the target file has no pre-image. Decide whether to skip it, or to treat the engine's new-file
-  text as the expected text. Unverified: how the route hands the new file to the helper.
-- **Edit positions:** `TextChange`s are positions in the original text. The guard must apply them the same way
-  `ApplyChanges` does (sorted, merged spans); reuse that code, do not reimplement it, or the guard will disagree with the
-  engine on overlapping edits.
-- **Caller-file rewrites:** call-site edits in other documents must be captured too, or those files are unchecked.
-- **Signature:** the `ValidateAndApplyAsync` parameter order and its call-site count are unmeasured.
-- **Error code taxonomy:** a new `ToolErrorCode` member may need handling in switch tables or docs; check consumers.
-- **Open:** whether a dry run should return the edits, and in what shape, in B3 or a later slice.
+- **New-class route:** decided to skip. The new file is in `result.Changes` with its full text but not in `AppliedEdits`
+  (`MemberRefactoringEngine.cs` ~4248-4257, record doc); the helper only checks files that have an entry and a pre-image.
+  Covered by `StaticMethodToNewClass_RealApplyPassesTheCollateralGuardAndLeavesTheNewFileUncheckedAsync`.
+- **Edit positions:** resolved. `MoveMemberTextEdits.ApplyChanges` delegates to `CollateralChangeGuard.ApplyEdits`, so the
+  engine and the guard share one implementation.
+- **Caller-file rewrites:** resolved. Every route records edits per touched document (callers included), keyed by file path;
+  the instance route maps `DocumentId` to path in `MaterializeDocumentEditsWithAppliedEditsAsync`.
+- **Signature:** resolved (optional `expectedEdits` on `ValidateAndApplyAsync`).
+- **Error code taxonomy:** resolved. `ToolErrorCode` is a class of string constants (no exhaustive switches); the
+  `FromErrorCode` default maps to `Failed`, and `IsRefusalThatMustNotBeMasked` includes the code.
+- **Dry run edits:** NOT done and not planned here. The guard runs on dry runs, but the result still returns full text
+  (`ChangedContent`). Tracked in `issues/issue_movemember_open_followups.md` (collateral-change item).
+- **Extending to other tools:** still out of scope; revisit once the MoveMember tripwire has run for a while.
+
+Line references in the Steps above are historical (the tool call is now near `AdvancedRefactoringTools.cs:489`).

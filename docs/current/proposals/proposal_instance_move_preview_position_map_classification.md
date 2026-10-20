@@ -95,7 +95,7 @@ file, line, and reason). They are not silently classified `Valid`.
 4. Is `MoveOrderDependent` reachable? Remove it or give it a defined meaning.
 5. The `a\n    .Count(x)` receiver-rewrite edge: reproduce it first; if real, fix it in the same slice.
 6. Whether Q3 of `plans/plan_cref_qualifier_helper_and_tool.md` and the B3 slice of
-   `plans/plan_movemember_collateral_change_tripwire.md` can share this map (both need the applied edits).
+   `plans/closed/plan_movemember_collateral_change_tripwire.md` can share this map (both need the applied edits).
 
 ## Slices (sequential, after B3; senior unless noted)
 
@@ -121,6 +121,6 @@ file, line, and reason). They are not silently classified `Valid`.
 ## Related
 
 - `docs/current/plans/plan_cref_qualifier_helper_and_tool.md` (D1, Q3 shares the instance route)
-- `docs/current/plans/plan_movemember_collateral_change_tripwire.md` (B3 touches the same file and edits)
+- `docs/current/plans/closed/plan_movemember_collateral_change_tripwire.md` (B3 touches the same file and edits)
 - `docs/current/TODO.md`, "`MoveMember` follow-ups" section (wrapped call sites; qualify receivers)
 - `docs/current/blockers/resolved/blocking_error_movemember_reformats_entire_source_and_caller_files.md`
