@@ -561,6 +561,11 @@ public class BasicRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         var formattedNewDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(newDoc, sourceText, cancellationToken);
         var newContent = (await formattedNewDoc.GetTextAsync(cancellationToken)).ToString();
+        // The scaffolded file must end with exactly one EOL, in the source document's EOL kind (the formatter drops it).
+        if (!newContent.EndsWith('\n'))
+        {
+            newContent += EolUtilities.DetectNormalizableEol(sourceText);
+        }
         var updatedOrigDoc = document.WithSyntaxRoot(updatedOrig);
         var formattedOrigDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(updatedOrigDoc, sourceText, cancellationToken);
         var updatedOrigContent = (await formattedOrigDoc.GetTextAsync(cancellationToken)).ToString();
@@ -621,7 +626,9 @@ public class BasicRefactoringEngine
             var newPath = string.IsNullOrEmpty(sourceDirectory) ? $"{typeName}.cs" : Path.Combine(sourceDirectory, $"{typeName}.cs");
             var newDoc = document.Project.AddDocument($"{typeName}.cs", newRoot);
             var formattedNewDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(newDoc, sourceText, cancellationToken);
-            changes[newPath] = (await formattedNewDoc.GetTextAsync(cancellationToken)).ToString();
+            var newText = (await formattedNewDoc.GetTextAsync(cancellationToken)).ToString();
+            // The scaffolded file must end with exactly one EOL, in the source document's EOL kind (the formatter drops it).
+            changes[newPath] = newText.EndsWith('\n') ? newText : newText + EolUtilities.DetectNormalizableEol(sourceText);
         }
 
         var updatedRoot = RemoveOrphanedRegionDirectives(root.RemoveNodes(typesToMove, SyntaxRemoveOptions.KeepNoTrivia)!);

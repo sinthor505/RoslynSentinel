@@ -194,7 +194,8 @@ public class BasicRefactoringEngineFormatCharacterizationTests
         "        public int Value;",
         "    }",
         "}",
-    ]; // no trailing newline: the scaffolded file ends at the closing brace, as it did before the routing
+        "",
+    ]; // trailing "" element: the scaffolded file ends with exactly one EOL after the closing brace
 
     [TestCase(false)]
     [TestCase(true)]
