@@ -17,7 +17,8 @@ public record AppliedChangeSummary(
     Dictionary<FilePathWrapper, string>? ChangedContent = null,
     bool Validated = false,
     List<FileLineChange>? LineChanges = null,
-    string? ChangedContentResultId = null
+    string? ChangedContentResultId = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<AppliedEditSpan>? EditSpans = null
 ) : IResultStatus
 {
     /// <summary>

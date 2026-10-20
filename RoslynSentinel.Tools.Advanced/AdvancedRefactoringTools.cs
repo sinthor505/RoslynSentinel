@@ -566,7 +566,7 @@ public class AdvancedRefactoringTools
             {
                 IsError = false,
                 Findings = conversionFindings,
-                SuccessData = new AppliedChangeSummary(apply.ChangeId, result.Changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff, ChangedContent: result.Changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId)
+                SuccessData = new AppliedChangeSummary(apply.ChangeId, result.Changes.Keys.ToList(), summaryNote, apply.DryRun, apply.Diff, ChangedContent: result.Changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId, EditSpans: apply.DryRun ? AppliedEditSpan.FromEdits(result.AppliedEdits) : null)
             };
         }
         catch (Exception ex)

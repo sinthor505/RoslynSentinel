@@ -1,6 +1,6 @@
 # Plan: collateral-change tripwire for MoveMember (item B)
 
-**Status:** CLOSED 2026-10-19 (implemented 2026-10-15; risk outcomes recorded below; only dry-run edits remain, tracked in the issue). Design decided with the user (tripwire, MoveMember only); B1 c27896cc (CollateralChangeGuard, CollateralChangeRefused), B2 74895c51 (expectedEdits in ValidateAndApplyAsync), B3 7e2d04fd (MoveMemberResult.AppliedEdits forwarded by the tool), B1t 83df2fdf (guard-fires battery test). Facts below were traced by exploration agents earlier in this session and not all were re-read when this was written; re-anchor with `Search` before dispatching.
+**Status:** CLOSED 2026-10-19 (implemented 2026-10-15; risk outcomes recorded below; dry-run edit spans added the same day). Design decided with the user (tripwire, MoveMember only); B1 c27896cc (CollateralChangeGuard, CollateralChangeRefused), B2 74895c51 (expectedEdits in ValidateAndApplyAsync), B3 7e2d04fd (MoveMemberResult.AppliedEdits forwarded by the tool), B1t 83df2fdf (guard-fires battery test). Facts below were traced by exploration agents earlier in this session and not all were re-read when this was written; re-anchor with `Search` before dispatching.
 
 ## Problem
 
@@ -99,8 +99,8 @@ edits come from the same source. It is partly circular by design.
 - **Signature:** resolved (optional `expectedEdits` on `ValidateAndApplyAsync`).
 - **Error code taxonomy:** resolved. `ToolErrorCode` is a class of string constants (no exhaustive switches); the
   `FromErrorCode` default maps to `Failed`, and `IsRefusalThatMustNotBeMasked` includes the code.
-- **Dry run edits:** NOT done and not planned here. The guard runs on dry runs, but the result still returns full text
-  (`ChangedContent`). Tracked in `issues/issue_movemember_open_followups.md` (collateral-change item).
+- **Dry run edits:** done 2026-10-19. The dry run returns `editSpans` (`AppliedEditSpan`, capped) next to the full text
+  (`ChangedContent`).
 - **Extending to other tools:** still out of scope; revisit once the MoveMember tripwire has run for a while.
 
 Line references in the Steps above are historical (the tool call is now near `AdvancedRefactoringTools.cs:489`).

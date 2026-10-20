@@ -181,6 +181,68 @@ public class MoveMemberToolCollateralRefusalTests
 
     [Test]
     [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_DryRun_ReturnsEditSpansForTheTouchedFilesAndWritesNothing()
+    {
+        SetRefactorSource();
+        var symbolNav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var engine = new MemberRefactoringEngine(_workspaceManager, symbolNav, validation);
+        var tools = CreateTools(engine, symbolNav, validation);
+
+        var result = await tools.MoveMemberTool(reason: "test message", FileName, "Src", ["Foo"], "Target", dryRun: true, oldMember: MoveMemberOldMember.keepDelegator);
+
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message} | Detail: {result.ErrorData?.Detail}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.DryRun, Is.True);
+        Assert.That(summary.EditSpans, Is.Not.Null.And.Not.Empty, "A dry run must report the edit spans it validated");
+        Assert.That(summary.ChangedContent, Is.Not.Null, "A dry run must report the proposed file contents");
+
+        var touchedFiles = summary.ChangedContent!.Keys.Select(f => f.ToString()).ToList();
+        foreach (var span in summary.EditSpans!)
+        {
+            Assert.That(touchedFiles, Does.Contain(span.FilePath), "Every span must belong to a touched file");
+            Assert.That(span.Start, Is.GreaterThanOrEqualTo(0));
+            Assert.That(span.Length, Is.GreaterThanOrEqualTo(0));
+            Assert.That(span.Start + span.Length, Is.LessThanOrEqualTo(OriginalText.Length), "A span must lie inside the original text");
+            Assert.That(span.NewTextTruncated, Is.False, "The forwarder text is short, so it must not be truncated");
+        }
+
+        // The move touches only Refactor.cs. Replaying the spans against the ORIGINAL text, last span first,
+        // must reproduce the proposed content.
+        Assert.That(summary.EditSpans!.All(s => s.FilePath == FileName), Is.True, "This single-file move must only report spans for Refactor.cs");
+        var proposed = summary.ChangedContent!.Single(kv => System.IO.Path.GetFileName(kv.Key.ToString()) == FileName).Value;
+        var replayed = OriginalText;
+        foreach (var span in summary.EditSpans!.OrderByDescending(s => s.Start))
+        {
+            replayed = replayed.Remove(span.Start, span.Length).Insert(span.Start, span.NewText);
+        }
+        Assert.That(replayed, Is.EqualTo(proposed), "Applying the spans to the original text must reproduce the proposed content");
+
+        Assert.That(System.IO.File.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), FileName)), Is.False,
+            "A dry run must not write Refactor.cs to disk");
+        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(OriginalText), "A dry run must not change the committed text");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task MoveMember_RealApply_ReturnsNoEditSpans()
+    {
+        SetRefactorSource();
+        var symbolNav = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var validation = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
+        var engine = new MemberRefactoringEngine(_workspaceManager, symbolNav, validation);
+        var tools = CreateTools(engine, symbolNav, validation);
+
+        var result = await tools.MoveMemberTool(reason: "test message", FileName, "Src", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
+
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message} | Detail: {result.ErrorData?.Detail}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.DryRun, Is.False);
+        Assert.That(summary.EditSpans, Is.Null, "A real apply must not report edit spans");
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
     public async Task MoveMember_InstanceToNewClass_LocalReceiverCaller_IsRefusedWithUnresolvedCallSitesAndWritesNothing()
     {
         SetInstanceSolution();
