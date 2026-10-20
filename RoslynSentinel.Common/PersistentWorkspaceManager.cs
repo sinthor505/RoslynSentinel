@@ -418,6 +418,41 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         return Convert.ToHexStringLower(bytes);
     }
 
+    // The single definition of "this document's in-memory text equals what is on disk", shared by
+    // GetContentExternalFileChangesAsync (full scan) and IsTrackedDocumentUnchangedOnDisk (watcher).
+    private static bool DocumentTextMatchesDisk(string inMemoryText, string onDiskText)
+        => string.Equals(inMemoryText, onDiskText, StringComparison.Ordinal);
+
+    // Watcher-side check for a Changed event on a path with NO recorded baseline hash: true only when
+    // the path is a CurrentSolution document whose ALREADY-MATERIALIZED text equals the file on disk,
+    // i.e. a timestamp-only touch (nothing to reload, nothing to refuse a write over). Every doubt
+    // returns false so the caller falls back to flagging: not a document (.csproj/.slnx), text not
+    // materialized (an unloaded FileTextLoader would just re-read disk and always look equal), file
+    // locked/missing/unreadable.
+    private bool IsTrackedDocumentUnchangedOnDisk(string fullPath)
+    {
+        try
+        {
+            var solution = CurrentSolution;
+            if (solution is null || FilePathLock.IsLocked(fullPath) || !File.Exists(fullPath))
+            {
+                return false;
+            }
+
+            var documentId = solution.GetDocumentIdsWithFilePath(fullPath).FirstOrDefault();
+            if (documentId is null || solution.GetDocument(documentId) is not { } document || !document.TryGetText(out var inMemoryText))
+            {
+                return false;
+            }
+
+            return DocumentTextMatchesDisk(inMemoryText.ToString(), File.ReadAllText(fullPath));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
     // Rebuilds _knownFileHashes wholesale from CurrentSolution's just-loaded documents. Must fully
     // reset (clear then repopulate), not merge, so a hash left over from a previous load can never
     // survive a reload and be compared against unrelated new content -> the same "stale state
@@ -511,7 +546,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             }
 
             var inMemoryText = (await document.GetTextAsync(cancellationToken)).ToString();
-            if (!string.Equals(inMemoryText, onDiskText, StringComparison.Ordinal))
+            if (!DocumentTextMatchesDisk(inMemoryText, onDiskText))
             {
                 driftedFiles.Add(document.FilePath);
             }
@@ -922,6 +957,14 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     // check's identical fallback below.
                     return;
                 }
+            }
+            else if (e.ChangeType is WatcherChangeTypes.Changed && IsTrackedDocumentUnchangedOnDisk(e.FullPath))
+            {
+                // No baseline hash (so the gate above could not run), but the file is a workspace
+                // document whose in-memory text already equals the disk -> a timestamp-only touch, not
+                // drift. Deliberately NOT recording a baseline here: a first event cannot tell a real
+                // edit from a touch. Created/Deleted/Renamed and non-document files keep flagging.
+                return;
             }
         }
 

@@ -332,6 +332,49 @@ public class CreateFileDeleteFileTests
         Assert.That(File.Exists(targetFile), Is.True);
     }
 
+    // Timestamp-only touch of a workspace document that has NO recorded baseline hash must not be
+    // flagged as external drift (the flag would later latch SessionHalted on a write/delete of it).
+    // The fixture cannot produce a baseline-less document naturally (PopulateKnownFileHashes hashes
+    // every loaded document), so the baseline map is cleared via reflection to simulate one; the
+    // production path under test (OnFileSystemChanged's no-baseline branch) is otherwise real.
+    // A real content change afterwards must still be flagged, proving the watcher is live and the
+    // fix does not suppress genuine drift.
+    [Test]
+    public async Task ExternalTouch_BaselinelessDocumentWithIdenticalContent_IsNotFlaggedAsDriftAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var document = workspaceManager.CurrentSolution!.Projects
+            .SelectMany(p => p.Documents)
+            .First(d => d.FilePath is not null && File.Exists(d.FilePath) && d.FilePath.StartsWith(fixture.SolutionDirectory, StringComparison.OrdinalIgnoreCase));
+        var targetFile = document.FilePath!;
+        // Materialize the document text so the production check (TryGetText) can compare it.
+        await document.GetTextAsync();
+
+        var hashes = (System.Collections.IDictionary)typeof(PersistentWorkspaceManager)
+            .GetField("_knownFileHashes", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(workspaceManager)!;
+        hashes.Clear();
+
+        File.SetLastWriteTimeUtc(targetFile, DateTime.UtcNow.AddMinutes(-5));
+
+        // Longer than the 500 ms debounce, so a flagged touch would certainly be recorded by now.
+        await Task.Delay(2000);
+        Assert.That(workspaceManager.GetExternalFileChanges(), Does.Not.Contain(targetFile).IgnoreCase);
+
+        // Control: a real content change on the same baseline-less document is still flagged.
+        await File.WriteAllTextAsync(targetFile, await File.ReadAllTextAsync(targetFile) + "\n// drift\n");
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!workspaceManager.GetExternalFileChanges().Contains(targetFile, StringComparer.OrdinalIgnoreCase) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25);
+        }
+
+        Assert.That(workspaceManager.GetExternalFileChanges(), Does.Contain(targetFile).IgnoreCase);
+    }
+
     // CreateFileTool (the MCP tool, WorkspaceTools.CreateFileTool) -> distinct from
     // WriteFileTool(operation=CreateFileTool) exercised above; the two share a name coincidentally (tool
     // name vs WriteFileOperation enum member). This tool never accepts free-form content: for .cs
