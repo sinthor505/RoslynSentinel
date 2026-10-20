@@ -3446,7 +3446,6 @@ public class MemberRefactoringEngine
         {
             throw new ToolInvalidArgumentException("forwarderReceiver applies only to instance moves, and the moved members are static. Omit forwarderReceiver for a static move.");
         }
-
     }
 
     private static bool IsStaticMember(MemberDeclarationSyntax member)
@@ -3483,7 +3482,12 @@ public class MemberRefactoringEngine
     ///  - No existing class named targetClassName: synthesizes a new class (same behavior as the
     ///    former ExtractMembers as=class). STATIC MEMBERS ONLY, same reasoning as above.
     /// </summary>
-    public async Task<MoveMemberResult> MoveMemberAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default, bool autoResolveCallSites = true, Dictionary<string, string>? callSiteFixups = null, IReadOnlyDictionary<string, string>? fieldMap = null, MoveMemberOldMember oldMember = MoveMemberOldMember.remove, string? forwarderReceiver = null)
+    /// // Virtual only so a test can subclass the engine and alter the returned Changes after the real edits are
+    // computed, to prove the MoveMember tool surfaces CollateralChangeRefused unmasked (the guard compares Changes
+    // with the pre-image plus AppliedEdits, and both come from this method). Deliberate deviation: the other
+    // engine methods are not virtual. Do not override it in production code.
+
+    public virtual async Task<MoveMemberResult> MoveMemberAsync(FilePathWrapper filePath, string className, string[] memberNames, string targetClassName, FilePathWrapper? targetFilePath = null, CancellationToken cancellationToken = default, bool autoResolveCallSites = true, Dictionary<string, string>? callSiteFixups = null, IReadOnlyDictionary<string, string>? fieldMap = null, MoveMemberOldMember oldMember = MoveMemberOldMember.remove, string? forwarderReceiver = null)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
