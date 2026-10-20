@@ -1214,9 +1214,21 @@ public class AsyncBatchEngine
                 string? beforeSource = File.Exists(callerFilePath)
                     ? await File.ReadAllTextAsync(callerFilePath, cancellationToken) : null;
 
-                await _workspaceManager.ApplyProposedChangesAsync(
+                var upliftApply = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { callerFilePath, transformed! } },
                     cancellationToken: cancellationToken);
+
+                if (upliftApply.IsError)
+                {
+                    _logger.LogWarning("Uplift write refused for {Method} in {File}: {Summary}",
+                        callerMethodName, callerFilePath, upliftApply.Summary);
+                    skipped.Add(new UpliftSkippedInfo(callerFilePath, callerMethodName,
+                        string.IsNullOrEmpty(upliftApply.RefusalCode)
+                            ? "skipped; the uplifted caller could not be written"
+                            : $"skipped; the uplifted caller could not be written ({upliftApply.RefusalCode})",
+                        new List<DiagnosticInfo>()));
+                    continue;
+                }
 
                 uplifted.Add(new UpliftCallerInfo(callerFilePath, callerMethodName, asyncName!)
                 {
@@ -1905,7 +1917,14 @@ public class AsyncBatchEngine
                                 score: 90,
                                 reason: $"PropagateCtBatch produced {validation.Diagnostics.Count} compiler error(s)",
                                 cancellationToken: cancellationToken);
-                            await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                            var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                            if (flagApply.IsError)
+                            {
+                                _logger.LogWarning("NeedsManualReview flag write refused for {Method} in {File}: {Summary}",
+                                    perMethod.MethodName, target.FilePath, flagApply.Summary);
+                                continue;
+                            }
+
                             failure.FlaggedMethods.Add(perMethod.MethodName);
                         }
                         catch (Exception flagEx)
@@ -1926,9 +1945,24 @@ public class AsyncBatchEngine
                 ? await File.ReadAllTextAsync(target.FilePath, cancellationToken)
                 : null;
 
-            await _workspaceManager.ApplyProposedChangesAsync(
+            var ctApply = await _workspaceManager.ApplyProposedChangesAsync(
                 new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } },
                 cancellationToken: cancellationToken);
+
+            if (ctApply.IsError)
+            {
+                _logger.LogWarning("PropagateCtBatch write refused for '{File}': {Summary}",
+                    target.FilePath, ctApply.Summary);
+                batchResult.Failed.Add(new PropagateCtFileFailure
+                {
+                    FilePath = target.FilePath,
+                    Reason = string.IsNullOrEmpty(ctApply.RefusalCode)
+                        ? "The updated file could not be written"
+                        : $"The updated file could not be written ({ctApply.RefusalCode})"
+                });
+                filesProcessed++;
+                continue;
+            }
 
             fileResult.BeforeSource = ctBeforeSource;
             batchResult.Applied.Add(fileResult);

@@ -332,4 +332,51 @@ public class AsyncBatchEngineFlagOutcomeTests
             File.SetAttributes(path, FileAttributes.Normal);
         }
     }
+
+    // PropagateCancellationTokenBatchAsync: the forwarded source validates in memory, but the write to disk is
+    // refused because the file is read-only. The file must be reported as Failed, never as Applied.
+    [Test, CancelAfter(60000)]
+    public async Task PropagateCtBatch_WriteRefused_FileReportedFailedNotApplied()
+    {
+        var source = """
+            using System.Threading;
+            using System.Threading.Tasks;
+
+            public class TripService
+            {
+                public async Task RunAsync(CancellationToken cancellationToken)
+                {
+                    await WorkAsync();
+                }
+
+                public Task WorkAsync() => Task.CompletedTask;
+
+                public Task WorkAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+            }
+            """.Replace("\r\n", "\n");
+
+        SetSource(workspaceText: source, diskText: source);
+        var path = Path.Combine(_tempDir, "TripService.cs");
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+
+        try
+        {
+            var input = new PropagateCtBatchInput
+            {
+                Targets = [new PropagateCtFileTarget { FilePath = path }],
+                FlagFailures = false,
+            };
+
+            var result = await _batchEngine.PropagateCancellationTokenBatchAsync(input);
+
+            Assert.That(result.Applied, Is.Empty, "A refused write must not be reported as applied.");
+            Assert.That(result.TotalForwarded, Is.EqualTo(0), "A refused write must not count its forwarded call sites.");
+            Assert.That(result.Failed, Has.Count.EqualTo(1));
+            Assert.That(result.Failed[0].Reason, Does.StartWith("The updated file could not be written"));
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+        }
+    }
 }
