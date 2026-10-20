@@ -272,10 +272,7 @@ public class BasicRefactoringEngineFormatCharacterizationTests
         "",
         "namespace Demo",
         "{",
-        // Pinned as-is: AddBaseListTypes leaves the colon on its own line at column 0 (a separate, pre-existing
-        // layout defect, reported in the C5c-3 slice notes); the routing must not change it.
-        "    public class Svc",
-        ": ISvc",
+        "    public class Svc : ISvc",
         "    {",
         other,
         "",

@@ -795,7 +795,20 @@ public class BasicRefactoringEngine
 
         // Add interface to class's base list (only if not already present)
         var alreadyImplements = classNode.BaseList?.Types.Any(t => t.Type.ToString() == interfaceName) == true;
-        var newClass = alreadyImplements ? classNode : classNode.AddBaseListTypes(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(interfaceName)));
+        var newClass = classNode;
+        if (!alreadyImplements)
+        {
+            var baseType = SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName(interfaceName));
+            if (classNode.BaseList == null && classNode.Identifier.TrailingTrivia.Any(t => t.IsKind(SyntaxKind.EndOfLineTrivia)))
+            {
+                // The line break after the class name moves onto the new base list so the colon stays on the class line.
+                newClass = classNode.WithIdentifier(classNode.Identifier.WithTrailingTrivia(SyntaxFactory.TriviaList())).AddBaseListTypes(baseType.WithTrailingTrivia(classNode.Identifier.TrailingTrivia));
+            }
+            else
+            {
+                newClass = classNode.AddBaseListTypes(baseType);
+            }
+        }
         var updatedOrig = root.ReplaceNode(classNode, newClass);
         var ifacePath = Path.Combine(Path.GetDirectoryName(filePath) ?? "", $"{interfaceName}.cs");
         // Only the synthesized interface structure is formatted; the embedded using directives stay byte-exact.
