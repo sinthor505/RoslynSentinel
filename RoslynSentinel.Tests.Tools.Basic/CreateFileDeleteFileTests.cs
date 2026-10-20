@@ -375,6 +375,64 @@ public class CreateFileDeleteFileTests
         Assert.That(workspaceManager.GetExternalFileChanges(), Does.Contain(targetFile).IgnoreCase);
     }
 
+    // Project/solution files are watched (.csproj/.sln/.slnx) but are not documents; they used to have
+    // no baseline hash, so a timestamp-only touch (identical content) was flagged as external drift.
+    // PopulateKnownFileHashes now baselines them, so the touch must be suppressed. Real watcher, real
+    // fixture files, no reflection: this covers the load-time baseline for BOTH the project file and the
+    // solution file; it does not cover .slnx specifically (the fixture solution is a .sln).
+    [Test]
+    public async Task ExternalTouch_ProjectAndSolutionFileWithIdenticalContent_IsNotFlaggedAsDriftAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var projectFile = workspaceManager.CurrentSolution!.Projects
+            .Select(p => p.FilePath)
+            .First(f => f is not null && File.Exists(f) && f.StartsWith(fixture.SolutionDirectory, StringComparison.OrdinalIgnoreCase))!;
+
+        File.SetLastWriteTimeUtc(projectFile, DateTime.UtcNow.AddMinutes(-5));
+        File.SetLastWriteTimeUtc(fixture.SolutionPath, DateTime.UtcNow.AddMinutes(-5));
+
+        // Longer than the 500 ms debounce, so a flagged touch would certainly be recorded by now.
+        await Task.Delay(2000);
+        Assert.That(workspaceManager.GetExternalFileChanges(), Does.Not.Contain(projectFile).IgnoreCase);
+        Assert.That(workspaceManager.GetExternalFileChanges(), Does.Not.Contain(fixture.SolutionPath).IgnoreCase);
+    }
+
+    // Control for the test above: a REAL content change to the .csproj must still be flagged, proving the
+    // watcher is live and the new baseline does not suppress genuine project-file drift. The file is
+    // restored afterwards (the fixture is a throwaway copy, but the restore keeps the test self-contained).
+    [Test]
+    public async Task ExternalEdit_ProjectFileWithChangedContent_IsFlaggedAsDriftAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var projectFile = workspaceManager.CurrentSolution!.Projects
+            .Select(p => p.FilePath)
+            .First(f => f is not null && File.Exists(f) && f.StartsWith(fixture.SolutionDirectory, StringComparison.OrdinalIgnoreCase))!;
+        var originalContent = await File.ReadAllTextAsync(projectFile);
+
+        try
+        {
+            // A trailing XML comment after the root element keeps the project file well-formed.
+            await File.WriteAllTextAsync(projectFile, originalContent + "\n<!-- drift -->\n");
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (!workspaceManager.GetExternalFileChanges().Contains(projectFile, StringComparer.OrdinalIgnoreCase) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(25);
+            }
+
+            Assert.That(workspaceManager.GetExternalFileChanges(), Does.Contain(projectFile).IgnoreCase);
+        }
+        finally
+        {
+            await File.WriteAllTextAsync(projectFile, originalContent);
+        }
+    }
+
     // CreateFileTool (the MCP tool, WorkspaceTools.CreateFileTool) -> distinct from
     // WriteFileTool(operation=CreateFileTool) exercised above; the two share a name coincidentally (tool
     // name vs WriteFileOperation enum member). This tool never accepts free-form content: for .cs

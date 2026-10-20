@@ -491,6 +491,31 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 // that touches this path will populate it then.
             }
         }
+
+        // The watcher also reports .csproj/.sln/.slnx, which are not documents and so were never
+        // baselined above: a timestamp-only touch of them was flagged as external drift. Hash each
+        // loaded project file and the solution file so the same hash gate suppresses touch-only
+        // events; a real content change still mismatches and is flagged. Hash only (no BOM/EOL):
+        // nothing writes these through the document path.
+        var structuralFilePaths = CurrentSolution.Projects.Select(p => p.FilePath)
+            .Append(SolutionPath)
+            .Append(CurrentSolution.FilePath);
+        foreach (var structuralFilePath in structuralFilePaths)
+        {
+            if (string.IsNullOrEmpty(structuralFilePath) || !File.Exists(structuralFilePath))
+            {
+                continue;
+            }
+
+            try
+            {
+                _knownFileHashes[new FilePathWrapper(structuralFilePath)] = ComputeContentHash(File.ReadAllText(structuralFilePath));
+            }
+            catch (IOException)
+            {
+                // Locked/mid-write during load -> leave unhashed (keeps flagging, the old behavior).
+            }
+        }
     }
 
     /// <summary>
