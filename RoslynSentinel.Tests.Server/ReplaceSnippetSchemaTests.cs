@@ -5,7 +5,6 @@ using System.Text.Json.Nodes;
 
 using Microsoft.Extensions.DependencyInjection;
 
-using RoslynSentinel.Common;
 using RoslynSentinel.Tools.Basic;
 
 namespace RoslynSentinel.Tests.Server;
@@ -62,8 +61,8 @@ public class ReplaceSnippetSchemaTests
 
         foreach (var props in new[] { (JsonObject)schema["properties"]!, (JsonObject)item["properties"]! })
         {
-            Assert.That(props["lineBefore"]!["description"]!.GetValue<string>(), Is.EqualTo(ExpectedAnchorText));
-            Assert.That(props["lineAfter"]!["description"]!.GetValue<string>(), Is.EqualTo(ExpectedAnchorText));
+            Assert.That(props["lineBefore"]!["description"]!.GetValue<string>(), Is.EqualTo(ToolParams.ReplaceSnippetAnchorLine));
+            Assert.That(props["lineAfter"]!["description"]!.GetValue<string>(), Is.EqualTo(ToolParams.ReplaceSnippetAnchorLine));
         }
     }
 

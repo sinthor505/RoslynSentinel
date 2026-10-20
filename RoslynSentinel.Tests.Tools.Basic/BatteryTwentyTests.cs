@@ -469,7 +469,7 @@ public class BatteryTwentyTests
 
         var capValue = WorkspaceReadNavigationTools.KindListingMaxItems.ToString();
         Assert.That(methodDesc.Description, Does.Contain(capValue), "Method [Description] must contain the cap value");
-        Assert.That(methodDesc.Description, Does.Contain("name filter"), "Method [Description] must mention 'name filter'");
+        Assert.That(methodDesc.Description, Does.Contain("narrow with query"), "Method [Description] must mention 'name filter'");
 
         // Get the 'query' parameter's [Description] attribute
         var queryParam = searchMethod.GetParameters().First(p => p.Name == "query");
