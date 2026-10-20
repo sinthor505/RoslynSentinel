@@ -43,10 +43,27 @@ sophisticated they seemed, not by whether they are used. Measured on 2026-10-19:
   - 31ecb16e: merging the RemoveNodeFormattedAsync copies touched `AdvancedStructuralEngine.cs`.
   - 96fecdb2: snippet-path ambiguity touched `AdvancedStructuralEngine.cs`.
   - 5fcf1230: Whitespace C5a touched `IDEStyleEngine.cs`.
-- The coupling comes from shared core types. These are text-match counts, not symbol references:
-  - `DocumentEditResult`: 403 matches in 17 Advanced files.
-  - `ToolException`/`ResultError`/`ToolErrorMapper`: 202 matches in 14 files.
-  - `RoslynFormattingHelper`: 57 matches in 16 files.
+- Causes of the Advanced-side edits in those 35 commits. Counts are stat-based and approximate.
+  About 15 commits were read at hunk level.
+
+  | Cause | Advanced lines | Fixup |
+  | --- | --- | --- |
+  | New tests for Basic engines written into Advanced test projects (e.g. 27a02182, 82404802) | ~3,500 | Not forced; misplaced |
+  | Rename sweeps (ca632e11 `*Tool` suffix, 2db3c5ac `ReplaceNodeFormattedAsync`) | ~830 | Mechanical |
+  | Formatting-policy migration: 41 of 44 ratchet call sites were in Advanced engines (ccfc44c7) | ~500 | Swaps mechanical, trivia handling judgement |
+  | Duplicate private format helpers collapsed into `Common` (42e57d2d, 31ecb16e, bad7a67e) | ~210 | Mechanical |
+  | Exact-string test assertions updated after output changes (680a64bc, 92f4275d) | ~100 | Mixed |
+  | MoveMember tool wrapper in `Tools.Advanced/AdvancedRefactoringTools.cs:459` over its engine in `Engines.Basic/MemberRefactoringEngine.cs:3490`; each new parameter edits both (43f20fe1, 8895fd7f, 219b3e21) | ~46 | Mechanical |
+
+- Shared result types caused no collateral in this window. `Common/DocumentEditResult.cs` and
+  `ToolErrorMapper` were unchanged. `EngineResultBase` and `ToolException` gained only optional
+  members (96fecdb2, 7f20588f).
+- The same causes create churn inside core.
+  - In ca632e11, Advanced took about 23% of the lines.
+  - Two of the three `RemoveNodeFormattedAsync` copies were in Basic.
+  - Nearly every Whitespace commit also changed Tests.Basic.
+  - So the split removes Advanced's share of the churn, not its cause. See "Reduce fixup cost in core"
+    below.
 
 **Why Advanced cannot be unlinked as-is.**
 - Some core tools live in Advanced:
@@ -83,7 +100,12 @@ and stays in `RoslynSentinel.slnx`. Everything else is frozen, not deleted.
 2. **Promote the used Advanced tools into Basic.**
    - Move MoveMember, MoveType and ChangeSignature, plus the engine code they need, into
      Tools.Basic and Engines.Basic. Add SubAgent if model-eval stays in core.
-   - Their tests go to Tests.Tools.Basic and Tests.Basic.
+   - Their tests go to Tests.Tools.Basic and Tests.Basic. That includes the MoveMember slice tests
+     now in `Tests.Tools.Advanced/BatteryTwentyFourTests.cs`.
+   - Add a test-placement guardrail: a source-scan test that fails when an Advanced test project
+     tests an `Engines.Basic` or `Tools.Basic` type.
+     - Today nothing stops this, because Tests.Advanced references Engines.Basic.
+     - About 3,500 lines of Basic-engine tests landed in Advanced projects this way.
    - Follow the migration-first route in CLAUDE.md: the new member goes beside the old one, the old
      one gets `[Obsolete]`, and it is removed last.
    - Open bug: cross-project MoveType (engine reorg leftovers, bug 2) travels with it.
@@ -112,15 +134,36 @@ and stays in `RoslynSentinel.slnx`. Everything else is frozen, not deleted.
    - Tools a weak model needs but Claude does not call stay, for example ExtractMethod and
      ExtractLocalVariable. The report has to show their model-eval usage.
 
-### Narrow the seam (alongside the slices, lower priority)
+### Reduce fixup cost in core (independent of the split)
 
-Core-change ripples spread because tools and engines use `DocumentEditResult`,
-`RoslynFormattingHelper` and the error types directly.
-- Put a small, stable edit/result layer in `Common` that tools go through, so internal changes (whitespace,
-  anchor resolution) stop reaching tool classes.
-- Move test weight towards contract tests at the tool boundary (schema plus result shape) and away
-  from tests on engine internals. Today the Advanced side has more test code than the Basic side.
-- This needs its own design doc before it is built.
+These address the causes in the Motivation table. They apply after the split as well.
+
+1. **One layer per feature.** A tool wrapper and its engine live in the same layer. Slice 2
+   does this for MoveMember. The test-placement guardrail in slice 2 keeps tests next to their engine.
+2. **Pass parameters as an options record.**
+   - Tool-to-engine pass-through should use one request record per operation, not a growing
+     positional parameter list.
+   - Then a new parameter is one property, not a change to the wrapper, the engine signature and the tests.
+   - Start with `MoveMemberAsync`, which gained `fieldMap`, `oldMember` and `forwarderReceiver` one at a time.
+3. **Ratchet the single formatting entry point.**
+   - The helpers now live in `Common` (`RoslynFormattingHelper`, 42e57d2d, bad7a67e).
+   - `Tests.Basic/WhitespaceRatchetTests.cs` only stops the deleted helpers from coming back. Extend it
+     to fail on any engine-local formatting or trivia-normalizing helper.
+4. **Shared test source and assertion helpers.**
+   - The `Src(bool crlf, params string[] lines)` helper is copy-pasted in 15 test files, for example
+     `Tests.Advanced/RemoveNodeCharacterizationTests.cs:45`. Replace the copies with one helper in the
+     shared Tests project.
+   - It offers two assertions: byte-exact, for tests whose subject is formatting, and
+     whitespace-insensitive, for everything else.
+   - Result: a formatting-policy change only breaks the tests that are about formatting.
+
+Rename sweeps (ca632e11, 2db3c5ac) are accepted. They are mechanical through `RenameSymbol`, and the
+split reduces how many projects they touch.
+
+Latent, not urgent: `new DocumentEditResult` appears about 320 times in Engines.Advanced and 358 times
+in Engines.Basic, all with object initializers (`Common/DocumentEditResult.cs:22`). Its three static
+factories are used twice (`StructuralRefinementEngine.cs:104,295`). Before any shape change to that
+type, move construction behind factories first.
 
 ## Alternatives considered, not pursued
 
@@ -160,6 +203,8 @@ Core-change ripples spread because tools and engines use `DocumentEditResult`,
 - When slice 5 lands, the build and test baselines and `scripts/build.ps1` flavours change together.
 - Gain: about 85K lines (40K production, 45K tests) leave the main solution. Based on the 150-commit
   window, about 35 of every 150 commits stop pulling in Advanced edits.
+- The split does not remove the causes. The same commits still churn core projects unless the
+  "Reduce fixup cost in core" items land.
 
 ## Related
 
