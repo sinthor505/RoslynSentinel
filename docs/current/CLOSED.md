@@ -8,6 +8,18 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## TODO punchlist small items 1-8, 11, 12 - resolved (2026-10-20)
+
+**Evidence (2026-10-20):** ReplaceSnippet split-class schema wording (832b2ddc); SubAgent failure message now ends with the absolute run-log path (05001466); async batch bridge/uplift skips write the NeedsManualReview flag via `FlagBridgeCandidateForReviewAsync` and say "flagged" only on a successful write, dead `fallbackHandled` stores removed (05001466); `InlineVariableAsync` fallback routed through container-scoped removal (d77a039f); `InvertAssignments` trivia leak (`SwapAssignmentOperands`) and `SimplifyMemberAccess` `this` trivia fixed with byte-exact tests (05001466); `AddUsingDirective` simplifyExisting annotates qualified names so the Simplifier shortens them (6eaace53); all 15 `GitImpl` `ex.Message` sites use `UnexpectedFailure<T>` (05001466); MoveMember ledger `TryOpen`/already-open tool-layer paths pinned (5470d393); `NormalizeEolOfChangedLines` repeated-line limitation accepted and pinned as a test case (c1a4bbd7). Still open from this batch: the bridge CT-add/body-rewrite skip flag-on-disk test (TODO.md), `IntroduceParameterObject` defect 2.
+
+Original TODO.md text (moved 2026-10-20, shortened to the titles):
+
+- ReplaceSnippet schema invites anchor-only edits; SubAgent bare InvalidOperationException and no findable run log; `InlineVariableAsync` fallback uses `FormatWholeDocumentAsync`; `MappingEngine.InvertAssignments` leading trivia leak; `IDEStyleEngine.SimplifyMemberAccess` drops `this` trivia; `AddUsingDirective` simplifyExisting no-op; `GitImpl` generic catch blocks put `ex.Message` into `Error`; `NormalizeEolOfChangedLines` repeated identical lines; `MoveMember` ledger `TryOpen` path not exercised at the tool layer.
+
+## `MoveTypeToOuterScopeAsync` did not adjust accessibility - resolved (2026-10-20)
+
+**Evidence (2026-10-20):** a nested `private`/`protected`/`private protected`/`protected internal` type is now refused with `EditOutcome.CannotMove` (`ToolErrorCode.TargetIneligible`, message names the modifier and `allowWidenToInternal`); `MoveType(destination: outerScope, allowWidenToInternal: true)` widens it to `internal` and says so. `MoveTypeTool` forwards the refusal instead of "not found". Tests: `MoveTypeToOuterScope_PrivateNestedType_IsRefusedByDefault` and `..._WidenedToInternalWhenAllowed`. The unreachable `_ => currentContainer` arm was replaced earlier.
+
 ## C6 whole-subtree whitespace enforcement and the old NormalizeWhitespace sweep list - resolved (2026-10-19)
 
 Moved from TODO.md (items "C6 whole-subtree whitespace enforcement", opened 2026-10-15, and "Old Advanced-side NormalizeWhitespace sweep list", opened 2026-08-24, superseded by C0-C6).

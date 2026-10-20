@@ -1565,6 +1565,7 @@ public class AdvancedRefactoringTools
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> MoveTypeTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.SymbolName, required: true)] string typeName, [Description("ownFile: into its own new file. outerScope: nested type out to containing namespace.")] string destination, // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
                                                                                                                                                                                                                                                                                                                                                                                                        // [Description(ToolParams.AutoStage)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, // RequestContext<CallToolRequestParams> requestParams = null,
+        [Description("outerScope only: when true, a nested type declared private/protected is widened to internal instead of refused. Default false.")] bool allowWidenToInternal = false,
  CancellationToken cancellationToken = default)
     {
         // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
@@ -1601,7 +1602,13 @@ public class AdvancedRefactoringTools
 
             if (destination == "outerScope")
             {
-                var outerResult = await _advancedStructuralEngine.MoveTypeToOuterScopeAsync(resolvedFilePath, typeName, cancellationToken: cancellationToken);
+                var outerResult = await _advancedStructuralEngine.MoveTypeToOuterScopeAsync(resolvedFilePath, typeName, allowWidenToInternal, cancellationToken: cancellationToken);
+                if (outerResult.Outcome == EditOutcome.CannotMove)
+                    return new SentinelCallToolResult<AppliedChangeSummary>
+                    {
+                        IsError = true,
+                        ErrorData = new ResultError(outerResult.ErrorCode ?? ToolErrorCode.TargetIneligible, outerResult.Message)
+                    };
                 if (!autoStage)
                 {
                     var noStageOuterChanges = string.IsNullOrEmpty(outerResult.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
@@ -1635,7 +1642,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<AppliedChangeSummary>
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(outerApply.ChangeId, [resolvedFilePath], $"Moved '{typeName}' to outer namespace scope in {Path.GetFileName(resolvedFilePath)}.", outerApply.DryRun, outerApply.Diff, ChangedContent: outerChanges, Validated: true, LineChanges: outerApply.LineChanges, ChangedContentResultId: outerApply.ChangedContentResultId)
+                    SuccessData = new AppliedChangeSummary(outerApply.ChangeId, [resolvedFilePath], $"Moved '{typeName}' to outer namespace scope in {Path.GetFileName(resolvedFilePath)}." + (outerResult.Message?.Contains("widened") == true ? " " + outerResult.Message.TrimStart('/', ' ') : string.Empty), outerApply.DryRun, outerApply.Diff, ChangedContent: outerChanges, Validated: true, LineChanges: outerApply.LineChanges, ChangedContentResultId: outerApply.ChangedContentResultId)
                 };
             }
 

@@ -1042,7 +1042,7 @@ public class StructuralRefactoringEngine
         };
     }
 
-    public async Task<DocumentEditResult> MoveTypeToOuterScopeAsync(FilePathWrapper filePath, string nestedTypeName, CancellationToken cancellationToken = default)
+    public async Task<DocumentEditResult> MoveTypeToOuterScopeAsync(FilePathWrapper filePath, string nestedTypeName, bool allowWidenToInternal = false, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
@@ -1091,6 +1091,45 @@ public class StructuralRefactoringEngine
             };
         }
 
+        // A private or protected nested type cannot be declared at namespace level (CS1527). It is refused by default;
+        // with allowWidenToInternal it is widened to internal. A type with no explicit accessibility is left as it is.
+        var accessModifiers = nestedType.Modifiers.Where(m => m.IsKind(SyntaxKind.PrivateKeyword) || m.IsKind(SyntaxKind.ProtectedKeyword)).ToList();
+        var typeToReAdd = nestedType;
+        string? widenedFrom = null;
+        if (accessModifiers.Count > 0)
+        {
+            var originalModifiers = string.Join(" ", accessModifiers.Select(m => m.ValueText));
+            if (!allowWidenToInternal)
+            {
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.CannotMove,
+                    FilePath = filePath,
+                    ErrorCode = ToolErrorCode.TargetIneligible,
+                    Message = $"// ErrorDetails: Nested type '{nestedTypeName}' is declared '{originalModifiers}'; moving it to namespace level would not compile (CS1527). Retry with allowWidenToInternal: true to widen it to 'internal'."
+                };
+            }
+
+            // The first access modifier's trivia is kept so the declaration keeps its indentation; the others are dropped.
+            // protected internal already carries internal, so no second one is added.
+            var needsInternal = !nestedType.Modifiers.Any(m => m.IsKind(SyntaxKind.InternalKeyword));
+            var widenedModifiers = new List<SyntaxToken>();
+            foreach (var modifier in nestedType.Modifiers)
+            {
+                if (!accessModifiers.Contains(modifier))
+                {
+                    widenedModifiers.Add(modifier);
+                }
+                else if (needsInternal)
+                {
+                    widenedModifiers.Add(SyntaxFactory.Token(modifier.LeadingTrivia, SyntaxKind.InternalKeyword, modifier.TrailingTrivia));
+                    needsInternal = false;
+                }
+            }
+            typeToReAdd = nestedType.WithModifiers(SyntaxFactory.TokenList(widenedModifiers));
+            widenedFrom = originalModifiers;
+        }
+
         // Type is nested, move it out: to the nearest enclosing namespace, or the compilation unit when there is none.
         // The removal and the re-add must act on the same tree. The container and the type are tracked in the ORIGINAL
         // root so the container can be found again after the removal (a node taken from the original root is not in the
@@ -1113,7 +1152,7 @@ public class StructuralRefactoringEngine
         }
 
         // Only the re-added type is annotated for formatting.
-        var annotatedNestedType = nestedType.WithAdditionalAnnotations(Formatter.Annotation);
+        var annotatedNestedType = typeToReAdd.WithAdditionalAnnotations(Formatter.Annotation);
         SyntaxNode newContainer = currentContainer switch
         {
             BaseNamespaceDeclarationSyntax baseNs => baseNs.AddMembers(annotatedNestedType),
@@ -1129,7 +1168,7 @@ public class StructuralRefactoringEngine
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = "// Nested type moved to outer scope.",
+            Message = widenedFrom is null ? "// Nested type moved to outer scope." : $"// Nested type moved to outer scope (widened '{widenedFrom}' to 'internal').",
             UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
         };
     }

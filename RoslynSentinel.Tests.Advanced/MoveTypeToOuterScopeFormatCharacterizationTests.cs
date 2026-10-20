@@ -57,9 +57,9 @@ public class MoveTypeToOuterScopeFormatCharacterizationTests
         return mixed;
     }
 
-    private async Task<string> MoveAsync()
+    private async Task<string> MoveAsync(bool allowWidenToInternal = false)
     {
-        var result = await _engine.MoveTypeToOuterScopeAsync("Test.cs", "Inner");
+        var result = await _engine.MoveTypeToOuterScopeAsync("Test.cs", "Inner", allowWidenToInternal);
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
         return result.UpdatedText!;
     }
@@ -251,6 +251,28 @@ public class MoveTypeToOuterScopeFormatCharacterizationTests
         SetSource(WithStrayCrlf(Src(false, input)));
 
         Assert.That(await MoveAsync(), Is.EqualTo(WithStrayCrlf(Src(false, expected))));
+    }
+
+    [Test]
+    public async Task MoveTypeToOuterScope_PrivateNestedType_IsRefusedByDefault()
+    {
+        SetSource(Src(false, GlobalInput().Select(line => line.Replace("public class Inner", "private class Inner")).ToArray()));
+
+        var result = await _engine.MoveTypeToOuterScopeAsync("Test.cs", "Inner");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotMove));
+        Assert.That(result.Message, Does.Contain("allowWidenToInternal"));
+        Assert.That(result.UpdatedText, Is.Null);
+    }
+
+    [Test]
+    public async Task MoveTypeToOuterScope_PrivateNestedType_WidenedToInternalWhenAllowed()
+    {
+        SetSource(Src(false, GlobalInput().Select(line => line.Replace("public class Inner", "private class Inner")).ToArray()));
+
+        var text = await MoveAsync(allowWidenToInternal: true);
+
+        Assert.That(text, Is.EqualTo(Src(false, GlobalExpected().Select(line => line.Replace("public class Inner", "internal class Inner")).ToArray())));
     }
 
     [Test]
