@@ -66,13 +66,11 @@ public class BatteryTwentyFourTests
         _msToolAugmentEngine = new MsToolAugmentEngine(_workspaceManager);
         _generationTools = new GenerationTools(_workspaceManager, NullLogger<GenerationTools>.Instance);
 
-        var refactoringStructuralImpl = new RefactoringStructuralImpl(_refactoringEngine, _memberRefactoringEngine, _structuralRefinementEngine, _symbolNavigationEngine, _workspaceManager, _validationEngine, NullLogger<RefactoringStructuralImpl>.Instance);
-        var refactoringSignatureImpl = new RefactoringSignatureImpl(_refactoringEngine, _memberRefactoringEngine, _workspaceManager, _validationEngine, _symbolNavigationEngine, NullLogger<RefactoringSignatureImpl>.Instance);
-        _refactoringStructuralTools = new RefactoringStructuralTools(refactoringStructuralImpl);
-        _typedMemberTools = new TypedMemberTools(refactoringStructuralImpl);
-        _refactoringSignatureTools = new RefactoringSignatureTools(refactoringSignatureImpl);
-        _refactoringExtractionDocsTools = new RefactoringExtractionDocsTools(new RefactoringExtractionDocsImpl(_refactoringEngine, _msToolAugmentEngine, _symbolNavigationEngine, _workspaceManager, _validationEngine, NullLogger<RefactoringExtractionDocsImpl>.Instance));
-        _advTools = new AdvancedRefactoringTools(_workspaceManager);
+        _refactoringStructuralTools = BatteryToolFactory.CreateRefactoringStructuralTools(_workspaceManager);
+        _typedMemberTools = BatteryToolFactory.CreateTypedMemberTools(_workspaceManager);
+        _refactoringSignatureTools = BatteryToolFactory.CreateRefactoringSignatureTools(_workspaceManager);
+        _refactoringExtractionDocsTools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(_workspaceManager);
+        _advTools = BatteryToolFactory.CreateAdvancedRefactoringTools(_workspaceManager);
     }
 
     [TearDown]

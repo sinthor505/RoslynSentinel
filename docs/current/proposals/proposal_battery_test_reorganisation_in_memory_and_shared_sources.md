@@ -176,14 +176,14 @@ regrouping by tool is worthwhile but is no longer required by the leak. Decision
 
 **D. Construction via the `TestTools`/`TestEngines` factories** from the factories pilot where they exist, instead of a
 per-class `BuildTools`. Sequencing against that plan is open.
-**Status (2026-10-21): mostly done, scoped to `BatteryToolFactory` in `Tests.Tools.Advanced`.** `TestTools`/`TestEngines`
+**Status (2026-10-21): done, scoped to `BatteryToolFactory` in `Tests.Tools.Advanced`.** `TestTools`/`TestEngines`
 do not exist (the pilot's Steps 2-4 are unstarted), so Part D used the Battery factory only. D1 (9bd0beee): one private
 `BuildEngines` helper replaces four repeated wiring blocks. D2a (9bd0beee): `DeclarationModifierTests`,
 `BatteryThirtyOneTests`, `BlobIntegrityInvariantTests` use the factory. D3a (9b388e71): `CreateModernizationTools`,
 `CreateQualityTools`; D3b (79bba4a1): Intelligence, SymbolRelationship, SymbolNavigation, Scan factories. The migrated
 `Setup` methods keep their engine fields (tests read them), so engines are built twice; tools no longer share engine
-instances with the fields (no test depended on it). **Open:** D2b, `BatteryTwentyFourTests.Setup` (matches the existing
-factories, but the file had another session's uncommitted edits). **Left alone (odd shapes):** `BatteryNineteenTests`,
+instances with the fields (no test depended on it). D2b: `BatteryTwentyFourTests.Setup` migrated
+(full `Tests.Tools.Advanced` run 452/452). **Left alone (odd shapes):** `BatteryNineteenTests`,
 `ComprehensiveToolTests`, `MoveMemberToolCollateralRefusalTests` (14-arg `AdvancedRefactoringTools`), and the
 engine-only setups in `ToolGapsTests`, `AdvancedToolsTests`, `RenameSymbolTests`.
 
