@@ -124,7 +124,7 @@ public class BatteryTwentyTests
         // Tools no longer throw: they return SentinelCallToolResult with IsSuccess=false and a ResultError.
         var result = await _workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.projects);
 
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded)); // TODO engine: message embeds the server start time, so only the code is pinned
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
@@ -160,7 +160,7 @@ public class BatteryTwentyTests
     {
         var result = await _workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.solutionItems);
 
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded)); // TODO engine: message embeds the server start time, so only the code is pinned
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
@@ -803,7 +803,7 @@ public class BatteryTwentyTests
         var diff = "--- Test.cs\n+++ Test.cs\n@@ -1,1 +1,1 @@\n-namespace TestProj; public class Order { public int Id { get; set; } }\n+namespace TestProj; public class Order { public int Id { get; set; } public string Name { get; set; } }";
 
         var result = await _wholeFileWriteTools.ApplyDiffTool(reason: "test message", ChangesetFormat.diff, ProposedChangeAction.validate, filePath: "Test.cs", unifiedDiff: diff);
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument)); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyDiff: 'filePath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")); // TODO engine: reports filePath required although filePath "Test.cs" is supplied
     }
 
     [Test]
@@ -816,7 +816,7 @@ public class BatteryTwentyTests
             ["Test.cs"] = SimpleSource + " // changed"
         };
         var result = await _wholeFileWriteTools.ApplyDiffTool(reason: "test message", ChangesetFormat.files, ProposedChangeAction.validate, changes: changes);
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(result.ErrorData, Is.Null);
     }
 
     [Test]
@@ -826,7 +826,7 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _wholeFileWriteTools.ApplyDiffTool(reason: "test message", ChangesetFormat.diff, ProposedChangeAction.apply, filePath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument)); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyDiff: 'filePath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")); // TODO engine: NonExistent.cs is refused as a missing filePath, not as an unknown file
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
@@ -839,7 +839,7 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var diff = "--- Test.cs\n+++ Test.cs\n@@ -1,1 +1,1 @@\n-namespace TestProj; public class Order { public int Id { get; set; } }\n+namespace TestProj; public class Order { public int Id { get; set; } public string Name { get; set; } }";
         var result = await _wholeFileWriteTools.ApplyUnifiedDiffTool(reason: "test message", ProposedChangeAction.validate, filePath: "Test.cs", unifiedDiff: diff);
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument)); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyUnifiedDiff: 'filePath' is required (it names the single file the unifiedDiff applies to).")); // TODO engine: reports filePath required although filePath "Test.cs" is supplied; a valid diff should validate
     }
 
     [Test]
@@ -849,7 +849,7 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _wholeFileWriteTools.ApplyUnifiedDiffTool(reason: "test message", ProposedChangeAction.apply, filePath: "", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyUnifiedDiff: 'filePath' is required (it names the single file the unifiedDiff applies to)."));
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
@@ -860,7 +860,7 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _wholeFileWriteTools.ApplyUnifiedDiffTool(reason: "test message", ProposedChangeAction.apply, filePath: "Test.cs", unifiedDiff: "");
 
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyUnifiedDiff: 'filePath' is required (it names the single file the unifiedDiff applies to).")); // TODO engine: a missing unifiedDiff is reported as a missing filePath; the message names the wrong field
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
@@ -871,7 +871,7 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _wholeFileWriteTools.ApplyUnifiedDiffTool(reason: "test message", ProposedChangeAction.apply, filePath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument)); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyUnifiedDiff: 'filePath' is required (it names the single file the unifiedDiff applies to).")); // TODO engine: NonExistent.cs is refused as a missing filePath, not as an unknown file
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
@@ -881,7 +881,7 @@ public class BatteryTwentyTests
     {
         SetSource(SimpleSource, "Test.cs");
         var result = await _wholeFileWriteTools.ApplyDiffTool(reason: "test message", ChangesetFormat.files, ProposedChangeAction.apply, changes: new Dictionary<string, string>());
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("\"Summary\":\"Applied changes to 0 file(s) successfully (0 delete(s)). 0 failures.\""));
     }
 
     // --- RetryFailedChangesTool ---
@@ -891,7 +891,7 @@ public class BatteryTwentyTests
     {
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.RetryFailedChangesTool(reason: "test message");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("No matching failed changes found in cache to retry.")); // TODO engine: nothing is retried; this passes on the no-op summary alone
     }
 
     // --- GetDiagnosticsTool (consolidated: file, project, solution) ---
@@ -988,7 +988,7 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.CreateProjectTool(reason: "test message", "NewTestProject");
 
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound)); Assert.That(result.ErrorData!.Message, Is.EqualTo("CreateProject failed: Solution path not found.")); // TODO throw-migration: NotFound outcome for an unloaded solution; migrate to ThrowsAsync when tools throw again
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
@@ -1153,7 +1153,7 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.BuildTool(reason: "test message", BuildVerifyLevel.fullBuild);
 
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.BuildFailed)); // TODO engine: message embeds the server start time, so only the code is pinned
         Assert.That(result.ErrorData, Is.Not.Null);
     }
     // --- SplitProjectByFolderTool ---
@@ -1164,7 +1164,7 @@ public class Order
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.SplitProjectByFolderTool(reason: "test message", "TestProj", "NonExistentFolder", "NewProject");
 
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound)); Assert.That(result.ErrorData!.Message, Is.EqualTo("SplitProjectByFolder failed: Solution path not found.")); // TODO throw-migration: NotFound outcome for a missing folder; migrate to ThrowsAsync when tools throw again
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 }
