@@ -163,10 +163,16 @@ regrouping by tool is worthwhile but is no longer required by the leak. Decision
   **EOL helpers DONE (2026-10-21):** `ToCrlf` x2 (Tests.Basic), `Crlf` x3, `Lf` and `NormalizeEol` are deleted; the files
   use `using static RoslynSentinel.Tests.Support.Sources;` (`Member(remove)` refuses a helper with callers even with
   `skipPrecheck`, so `ReplaceSnippet` removed them). `NormalizeEol` now also folds `\v \f U+0085 U+2028/9`; the corpus has
-  none. `EolOf` is an EOL detector, not a converter, so it stays. Remaining:
-  `AsyncSource` (TwentyOne `Worker` vs TwentyThree `AsyncWorker` differ, so not a copy); the
-  `Source`-with-path `InMemoryWorkspace.Create(params Source[])` overload (undecided); `RefactorSource`; widening
-  `SnippetMatcherTests.Corpus`; then inline the 12+4 aliases to `Sources.*` at their use sites if wanted.
+  none. `EolOf` is an EOL detector, not a converter, so it stays.
+  **`RefactorSource` DONE:** the 3 identical copies (TwentyFour, IntroduceInline, MoveTypeAndExtract) alias
+  `Sources.AnimalHierarchy`. **Corpus widening DONE:** adding tab/BOM/non-ASCII cases to `SnippetMatcherTests.Corpus`
+  broke `SnippetResolverTests` (hand-captured legacy span tables, one entry per Corpus case, and the legacy helper is gone),
+  so the six cases live in a separate `ExtendedCorpus` with the splice invariant extracted to `AssertSpliceInvariant`.
+  **Closed without building:** `AsyncSource` (TwentyOne `Worker` vs TwentyThree `AsyncWorker` differ, so not a copy);
+  the `Source`-with-path `InMemoryWorkspace.Create(params Source[])` overload (about 100 files use `Create`/`PathOf`
+  today, so an overload with no migration is dead code and the migration is a separate sweep with no leak or
+  duplication payoff; revisit only if a path-literal bug appears); inlining the 12+4+3 aliases (they keep each fixture's
+  call sites unchanged and cost nothing). **Part C is complete.**
 
 **D. Construction via the `TestTools`/`TestEngines` factories** from the factories pilot where they exist, instead of a
 per-class `BuildTools`. Sequencing against that plan is open.

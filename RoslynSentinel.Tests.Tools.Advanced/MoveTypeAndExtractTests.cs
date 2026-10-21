@@ -14,37 +14,7 @@ public sealed class MoveTypeAndExtractTests
 {
     private static readonly string SimpleSource = Sources.Order;
 
-    private const string RefactorSource = @"
-using System;
-using System.Collections.Generic;
-
-namespace RefactorNs;
-
-public abstract class Animal
-{
-    public string Name;
-    public abstract string Sound();
-    public virtual void Move() { Console.WriteLine(""moving""); }
-}
-
-public class Dog : Animal
-{
-    public string Breed;
-    public Dog(string name, string breed) { Name = name; Breed = breed; }
-    public override string Sound() => ""woof"";
-    public override void Move() => base.Move();
-    public string GetInfo() { return string.Format(""{0} ({1})"", Name, Breed); }
-    public void Process(int a, int b, int c, int d, int e) { }
-    public int Calculate(int x)
-    {
-        if(x > 0) return 1;
-        if(x < 0) return -1;
-        return 0;
-    }
-}
-
-public class Target {}
-";
+    private static readonly string RefactorSource = Sources.AnimalHierarchy;
 
     // The original fixture was CRLF (verbatim literals inside a CRLF file); the EOL guard compares against the document's endings.
     private static readonly string CrlfSimpleSource = SimpleSource.ReplaceLineEndings("\r\n");

@@ -123,4 +123,39 @@ public class OrderService : IOrderService
 
     /// <summary>The RichSource sample (Order, IOrderService, OrderService) with CRLF line endings.</summary>
     public static readonly string RichOrderService = Crlf(RichOrderServiceText);
+
+    private const string AnimalHierarchyText = @"
+using System;
+using System.Collections.Generic;
+
+namespace RefactorNs;
+
+public abstract class Animal
+{
+    public string Name;
+    public abstract string Sound();
+    public virtual void Move() { Console.WriteLine(""moving""); }
+}
+
+public class Dog : Animal
+{
+    public string Breed;
+    public Dog(string name, string breed) { Name = name; Breed = breed; }
+    public override string Sound() => ""woof"";
+    public override void Move() => base.Move();
+    public string GetInfo() { return string.Format(""{0} ({1})"", Name, Breed); }
+    public void Process(int a, int b, int c, int d, int e) { }
+    public int Calculate(int x)
+    {
+        if(x > 0) return 1;
+        if(x < 0) return -1;
+        return 0;
+    }
+}
+
+public class Target {}
+";
+
+    /// <summary>The Animal/Dog/Target refactoring sample (namespace RefactorNs) with CRLF line endings.</summary>
+    public static readonly string AnimalHierarchy = Crlf(AnimalHierarchyText);
 }

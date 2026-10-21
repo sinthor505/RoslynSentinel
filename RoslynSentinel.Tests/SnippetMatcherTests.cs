@@ -64,6 +64,23 @@ public class SnippetMatcherTests
 
     [TestCaseSource(nameof(Corpus))]
     public void EveryMatcher_ReportsTheTrueSpan_SpliceReproducesTheFile(string text, string snippet)
+        => AssertSpliceInvariant(text, snippet);
+
+    /// <summary>Tab, BOM and non-ASCII cases. Not in Corpus because SnippetResolverTests hand-captures legacy spans for every Corpus entry.</summary>
+    public static IEnumerable<TestCaseData> ExtendedCorpus()
+    {
+        yield return new TestCaseData("\tint x = 1;\n", "int x = 1;").SetName("SingleLine_TabIndentation");
+        yield return new TestCaseData("\ta\n\tb\n", "    a\n    b").SetName("MultiLine_TabVsSpaceIndentation");
+        yield return new TestCaseData("﻿int x = 1;\nint y = 2;\n", "int y = 2;").SetName("Bom_PrefixedFile");
+        yield return new TestCaseData("﻿int x = 1;\n", "int x = 1;").SetName("Bom_SnippetAtFileStart");
+        yield return new TestCaseData("var café = 1;\nvar naïve = 2;\n", "var naïve = 2;").SetName("NonAscii_Identifier");
+        yield return new TestCaseData("var Été = 1;\n", "var éTÉ = 1;").SetName("NonAscii_CaseInsensitive");
+    }
+
+    [TestCaseSource(nameof(ExtendedCorpus))]
+    public void EveryMatcher_ExtendedCorpus_SpliceReproducesTheFile(string text, string snippet) => AssertSpliceInvariant(text, snippet);
+
+    private static void AssertSpliceInvariant(string text, string snippet)
     {
         var sourceText = SourceText.From(text);
 
