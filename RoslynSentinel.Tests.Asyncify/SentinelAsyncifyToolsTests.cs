@@ -661,6 +661,52 @@ public static class DataHelper
             "Phase 3 uplift must produce DoWorkAsync as the async version of DoWork.");
     }
 
+    // Phase 3b: an AsyncHandlerCandidate flag on an already-async handler is stripped, but the strip write is refused
+    // because the file is read-only. The per-item Reason is not on the AsyncifyTool result; it is written to the
+    // operation blob, so the assertion reads the blob JSON.
+    [Test, CancelAfter(60000)]
+    public async Task T22_Asyncify_HandlerConvert_StaleFlagStripWriteRefused_ReasonCarriesCleanupNote()
+    {
+        var source = """
+            using System;
+            using System.Threading.Tasks;
+
+            public class RegionForm
+            {
+                [MigrationCandidate("AsyncHandlerCandidate", Score = 70, Reason = "stale flag on async handler", FlaggedDate = "2026-06-01")]
+                public async void OnClick(object s, EventArgs e)
+                {
+                    await Task.Delay(0);
+                }
+            }
+            """ + "\n" + AttrStub;
+
+        SetSource(source);
+        var path = PathOf("RegionForm.cs");
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+
+        try
+        {
+            var result = await _asyncifyTools.AsyncifyTool(reason: "test message");
+
+            Assert.That(!result.IsError, Is.True, result.ErrorData?.ToString());
+            Assert.That(result.SuccessData, Is.Not.Null);
+            Assert.That(result.SuccessData!.PhaseBreakdown.Handler.Skipped, Is.EqualTo(1),
+                "The handler phase must reach the stale-flag branch for OnClick.");
+
+            var blobPath = OperationBlobWriter.FindBlobPath(result.SuccessData.ChangeId, _tempDir);
+            Assert.That(blobPath, Is.Not.Null.And.Not.Empty, "The operation blob for the run must be written under the temp solution root.");
+
+            var blobText = File.ReadAllText(blobPath!);
+            Assert.That(blobText, Does.Contain("stale-flag: already async - stripped (cleanup write refused: "),
+                "The skipped OnClick item must carry the cleanup-refusal note.");
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+        }
+    }
+
     [Test, CancelAfter(30000)]
     public async Task T17_UpliftCallers_QualifiedStaticCall_PreservesTypeQualifier()
     {

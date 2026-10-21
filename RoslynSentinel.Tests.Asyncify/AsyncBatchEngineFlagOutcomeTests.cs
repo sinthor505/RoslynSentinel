@@ -512,4 +512,83 @@ public class AsyncBatchEngineFlagOutcomeTests
             File.SetAttributes(path, FileAttributes.Normal);
         }
     }
+
+    // RunUpliftBatchAsync: the uplifted caller fails in-memory validation (no usings, so Task and CancellationToken
+    // cannot bind) and the flag write to the read-only file is refused. The skip reason must not claim the flag.
+    [Test, CancelAfter(60000)]
+    public async Task RunUpliftBatch_ValidationFails_FlagWriteRefused_MessageDoesNotClaimFlagged()
+    {
+        var source = """
+            public class TripService
+            {
+                [System.Obsolete("Asyncify-bridge: call LoadTripsAsync instead.")]
+                public int LoadTrips(int companyId)
+                {
+                    return companyId;
+                }
+
+                public async Task<int> CallerAsync(CancellationToken cancellationToken)
+                {
+                    return LoadTrips(1);
+                }
+            }
+
+            """ + "\n" + AttrStub;
+        var lf = source.Replace("\r\n", "\n");
+        SetSource(workspaceText: lf, diskText: lf);
+        var path = Path.Combine(_tempDir, "TripService.cs");
+        File.SetAttributes(path, FileAttributes.ReadOnly);
+
+        try
+        {
+            var result = await _batchEngine.RunUpliftBatchAsync("LoadTrips", maxCallers: 1);
+
+            Assert.That(result.Uplifted, Is.Empty, "A caller that fails validation must not be reported as uplifted.");
+            Assert.That(result.Skipped, Has.Count.EqualTo(1));
+            var message = result.Skipped[0].Reason;
+            Assert.That(message, Does.StartWith("Validation produced"));
+            Assert.That(message, Does.Contain("flag could not be written"));
+            Assert.That(message, Does.Not.Contain("flagged NeedsManualReview"),
+                "The flag write was refused, so the message must not claim the flag was written.");
+        }
+        finally
+        {
+            File.SetAttributes(path, FileAttributes.Normal);
+        }
+    }
+
+    // Same broken uplift as the read-only case, but the file is writable: the NeedsManualReview flag lands on disk
+    // and the skip reason reports it.
+    [Test, CancelAfter(60000)]
+    public async Task RunUpliftBatch_ValidationFails_FlagWriteSucceeds_MessageReportsFlag()
+    {
+        var source = """
+            public class TripService
+            {
+                [System.Obsolete("Asyncify-bridge: call LoadTripsAsync instead.")]
+                public int LoadTrips(int companyId)
+                {
+                    return companyId;
+                }
+
+                public async Task<int> CallerAsync(CancellationToken cancellationToken)
+                {
+                    return LoadTrips(1);
+                }
+            }
+
+            """ + "\n" + AttrStub;
+        var lf = source.Replace("\r\n", "\n");
+        SetSource(workspaceText: lf, diskText: lf);
+
+        var result = await _batchEngine.RunUpliftBatchAsync("LoadTrips", maxCallers: 1);
+
+        Assert.That(result.Uplifted, Is.Empty, "A caller that fails validation must not be reported as uplifted.");
+        Assert.That(result.Skipped, Has.Count.EqualTo(1));
+        var message = result.Skipped[0].Reason;
+        Assert.That(message, Does.StartWith("Validation produced"));
+        Assert.That(message, Does.EndWith("; flagged NeedsManualReview"));
+        Assert.That(File.ReadAllText(Path.Combine(_tempDir, "TripService.cs")), Does.Contain("NeedsManualReview"),
+            "The flag write succeeded, so the file on disk must carry the NeedsManualReview flag.");
+    }
 }
