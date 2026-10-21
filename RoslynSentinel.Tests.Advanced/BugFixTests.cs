@@ -192,6 +192,7 @@ public class Svc { public void Foo() {} }";
         Assert.That(result.Changes.Keys.Select(k => k.ToString()), Has.Some.Contains("Calculator.cs"), "Declaration should be reordered");
         Assert.That(result.SkippedCallSites, Is.Empty, "Named-argument call site should be correctly resolved via the semantic model, not skipped");
         Assert.That(result.Changes.Keys.Select(k => k.ToString()), Has.Some.Contains("Caller.cs"), "Caller.cs should be included in the changes");
+        Assert.That(result.Changes.Single(kv => kv.Key.ToString() == "Caller.cs").Value, Does.Contain("calc.Add(3, 1, 2)"), "Caller.cs should carry the reordered named-argument call");
     }
 
     [Test]
@@ -273,9 +274,11 @@ public class Svc { public void Foo() {} }";
         // be refused.
         var result = await _refactoringEngine.ChangeSignatureAsync("Calculator.cs", "Add", new SignatureParameterSpec[] { new ExistingParameterSpec(1), new ExistingParameterSpec(0) });
         
-        Assert.That(result.Error, Is.Not.Null, "Should return an error because a required argument cannot be materialized");
+        Assert.That(result.Error, Does.Contain("Could not rewrite 1 call site(s)"), "Should refuse with the skipped-call-site error text");
         Assert.That(result.Changes, Is.Empty, "Should return no changes when refusing due to skipped call sites");
-        Assert.That(result.SkippedCallSites, Is.Not.Empty, "Should populate SkippedCallSites with the problem site");
+        Assert.That(result.SkippedCallSites, Has.Count.EqualTo(1), "Should populate SkippedCallSites with the single problem site");
+        Assert.That(result.SkippedCallSites[0].LineNumber, Is.EqualTo(6), "The omitted-argument call is on line 6");
+        Assert.That(result.SkippedCallSites[0].Reason, Does.Contain("Could not resolve the bound overload"), "Skip reason should name the unresolved bound overload");
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -567,8 +570,8 @@ public class Data : IData
         SetSource(code, "Data.cs");
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Data.cs", "Data", "IData");
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return implementation");
-        Assert.That(result.UpdatedText, Does.Contain("Name"), "Should generate Name property stub");
-        Assert.That(result.UpdatedText, Does.Contain("Count"), "Should generate Count property stub");
+        Assert.That(result.UpdatedText, Does.Contain("public string Name"), "Should generate Name property stub");
+        Assert.That(result.UpdatedText, Does.Contain("public int Count"), "Should generate Count property stub");
     }
 
     [Test]
@@ -591,7 +594,7 @@ public class Service : IService
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Service.cs", "Service", "IService");
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return implementation");
         // Should contain at least Method2 and Method3
-        Assert.That(result.UpdatedText, Does.Contain("Method2"), "Should generate missing Method2");
+        Assert.That(result.UpdatedText, Does.Contain("public void Method2"), "Should generate missing Method2");
         Assert.That(result.UpdatedText, Does.Contain("Method3"), "Should generate missing Method3");
     }
 
@@ -660,7 +663,8 @@ public class Service
         Assert.That(result.Changes.Count, Is.GreaterThan(0), "Should return changed files");
         var content = string.Concat(result.Changes.Values);
         // Call sites should be reordered with arguments in new order
-        Assert.That(content, Does.Contain("Process"), "Should update Process calls with reordered arguments");
+        Assert.That(content, Does.Contain("Process(true, \"John\", 30)"), "Should update the John call with reordered arguments");
+        Assert.That(content, Does.Contain("Process(false, \"Jane\", 25)"), "Should update the Jane call with reordered arguments");
     }
 
     [Test]
@@ -2739,7 +2743,7 @@ public class Math
                     var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                     if (document == null)
                     {
-                        Assert.Inconclusive("Document not found");
+                        Assert.Fail("Document not found");
                     }
 
                     await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document.FilePath!, "Add"), "Multi-statement method should fail gracefully via a typed exception, not crash");
@@ -3591,11 +3595,11 @@ namespace MyApp
         public async Task AddGuardClauses_Tool_MethodNotFound_DoesNotThrow()
         {
             // When the engine reports TargetNotFound with no UpdatedText, the tool
-            // returns that content rather than throwing -> only file-not-found triggers IOE.
+            // the tool returns the TargetNotFound outcome rather than throwing -> only file-not-found triggers IOE.
             var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
             // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
             Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-            Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target method is not found - no changes needed");
+            Assert.That(result, Is.Not.Null, "Engine returns TargetNotFound (not an exception) when target method is not found");
         }
     }
 
@@ -3812,14 +3816,12 @@ namespace MyApp
         public async Task SyncInterfaceToImplementationAsync_FileNotInWorkspace_ReturnsContent()
         {
             // SyncInterfaceToImplementationAsync applies interface sync across the whole solution
-            // state. Even for a nonexistent file, the engine locates the interface in the solution
-            // and returns non-empty content (no-op sync rather than a hard error).
+            // state. For a nonexistent file the engine returns DocumentNotFound rather than content.
             var result = await _engine.SyncInterfaceToImplementationAsync("nonexistent.cs", "Ghost", "IGhost");
             // The engine returns DocumentNotFound, so the file-not-found guard fires.
-            // This is correct -> the engine "no-op"s gracefully rather than erroring.
-            // TODO throw-migration: should this be DocumentNotFound/TargetNotFound? engine currently no-ops
+            // TODO throw-migration: assert the typed exception once AdvancedRefactoringEngine throws
             Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound));
-            Assert.That(result, Is.Not.Null, "Engine returns content (not empty) for SyncInterface even when file is not in workspace");
+            Assert.That(result, Is.Not.Null, "Engine returns DocumentNotFound for SyncInterface when file is not in workspace");
         }
 
         [Test]
