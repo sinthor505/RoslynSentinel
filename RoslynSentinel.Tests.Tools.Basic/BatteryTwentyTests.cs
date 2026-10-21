@@ -82,21 +82,21 @@ public class BatteryTwentyTests
     public async Task Features_List_ReturnsList()
     {
         var result = await _workspaceTools.McpServerFeaturesTool(reason: "test message", FeaturesAction.list);
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(result.SuccessData, Is.Not.Null); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("ExtractMethod"));
     }
 
     [Test]
     public async Task Features_UpdateEmpty_ReturnsResult()
     {
         var result = await _workspaceTools.McpServerFeaturesTool(reason: "test message", FeaturesAction.update, enabled: new List<KeyValuePair<string, bool>>());
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Is.EqualTo("\"Updated 0 features.\""));
     }
 
     [Test]
     public async Task Features_GetEmptyList_ReturnsResult()
     {
         var result = await _workspaceTools.McpServerFeaturesTool(reason: "test message", FeaturesAction.get, names: new List<string>());
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("ExtractMethod")); // TODO engine oddity: get with names=[] returns every flag instead of an empty list
     }
 
     [Test]
@@ -105,7 +105,7 @@ public class BatteryTwentyTests
         var result = await _workspaceTools.McpServerFeaturesTool(reason: "test message", FeaturesAction.list);
         var features = result.SuccessData as System.Collections.IEnumerable;
         Assert.That(features, Is.Not.Null);
-        Assert.Pass("Features list retrieved successfully.");
+        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("ExtractMethod"));
     }
 
     // --- List (consolidated: projects, files, dependencies) ---
@@ -115,7 +115,7 @@ public class BatteryTwentyTests
     {
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.projects);
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(result.SuccessData, Is.Not.Null); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("\"Name\":\"TestProj\""));
     }
 
     [Test]
@@ -133,7 +133,7 @@ public class BatteryTwentyTests
     {
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.files, "TestProj");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Is.EqualTo("[\"Test.cs\"]"));
     }
 
     [Test]
@@ -152,7 +152,7 @@ public class BatteryTwentyTests
     {
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.ListSolutionItemsTool(reason: "test message", SolutionItemsKind.dependencies, "TestProj");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Is.EqualTo("{\"ProjectReferences\":[],\"PackageReferences\":[]}"));
     }
 
     [Test]
@@ -901,17 +901,17 @@ public class BatteryTwentyTests
     {
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.GetDiagnosticsTool(reason: "test message", ToolScope.file, "Test.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Is.EqualTo("{\"Errors\":0,\"Warnings\":0,\"Details\":[],\"BuildVerification\":null}"));
     }
 
     // --- SafeDelete ---
 
     [Test]
-    public async Task SafeDelete_ValidPosition_ReturnsString()
+    public async Task SafeDelete_NonSymbolPosition_ReturnsNoChangeError()
     {
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.DeleteUnusedSymbolTool(reason: "test message", "Test.cs", projectName: "", docCommentId: "", line: 1, column: 1);
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.Message, Does.Contain("no change produced"));
     }
 
     private const string DeadMethodSource = @"
@@ -997,7 +997,7 @@ public class Order
     {
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.GetDiagnosticsTool(reason: "test message", ToolScope.project, "TestProj");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Is.EqualTo("{\"Errors\":0,\"Warnings\":0,\"Details\":[],\"BuildVerification\":null}"));
     }
 
     [Test]
@@ -1005,7 +1005,7 @@ public class Order
     {
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.GetDiagnosticsTool(reason: "test message", ToolScope.solution);
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Is.EqualTo("{\"Errors\":0,\"Warnings\":0,\"Details\":[],\"BuildVerification\":null}"));
     }
 
     // --- BuildTool ---
