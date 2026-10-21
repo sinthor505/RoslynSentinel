@@ -307,7 +307,8 @@ public class BatteryTwentyFourTests
         const string src = "namespace TestProj; public static class Helper { public static string Trim(this string s) => s.Trim(); }";
         SetSource(src, "Helper.cs");
         var result = await _logicOptimizationEngine.ExtensionToStaticAsync("Helper.cs", "Trim");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("Trim(string s)"));
     }
 
     // --- ConvertAbstractToInterface ---
@@ -317,7 +318,8 @@ public class BatteryTwentyFourTests
     {
         SetMultiFile(("Refactor.cs", RefactorSource));
         var result = await _advancedStructuralEngine.ConvertAbstractClassToInterfaceAsync("Refactor.cs", "Animal");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("interface IAnimal"));
     }
 
     // --- ConvertPropertyToMethods ---
@@ -327,7 +329,8 @@ public class BatteryTwentyFourTests
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _codeStyleEngine.ConvertPropertyToMethodsAsync("Order.cs", "OrderId");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("GetOrderId"));
     }
 
     // --- ConvertMethodToIndexer ---
@@ -335,9 +338,10 @@ public class BatteryTwentyFourTests
     [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task ConvertMethodToIndexer_ValidMethod_ReturnsString()
     {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("Order.cs", "GetStatus");
-        Assert.That(result, Is.Not.Null);
+        SetSource(@"namespace TestProj; public class C { public string Get(int i) { return ""x"" + i; } }", "Order.cs");
+        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("Order.cs", "Get");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("this["));
     }
 
     // --- ReplaceConstructorWithFactory ---
@@ -355,9 +359,12 @@ public class BatteryTwentyFourTests
     [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task ReduceBlockDepth_ValidMethod_ReturnsString()
     {
-        SetSource(SimpleSource, "Order.cs");
+        const string src = @"namespace TestProj; public class C { public string GetStatus(int a) { if (a > 0) { if (a > 1) { if (a > 2) { return ""x""; } } } return ""y""; } }";
+        SetSource(src, "Order.cs");
         var result = await _logicOptimizationEngine.ReduceBlockDepthAsync("Order.cs", "GetStatus");
-        Assert.That(result, Is.Not.Null);
+        // TODO fixture does not trigger ReduceBlockDepth: nested-if method returns CannotOptimize; replace with a fixture the engine reduces, then assert Modified
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.CannotOptimize));
+        // TODO pin UpdatedText for ReduceBlockDepth once a reducible fixture is found (CannotOptimize leaves no text change to assert)
     }
 
     // --- OptimizeTaskWait ---
@@ -365,9 +372,10 @@ public class BatteryTwentyFourTests
     [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
     public async Task OptimizeTaskWait_ValidFile_ReturnsString()
     {
-        SetSource(SimpleSource, "Order.cs");
+        SetSource(@"namespace TestProj; public class C { public void M() { System.Threading.Tasks.Task.Delay(1).Wait(); } }", "Order.cs");
         var result = await _advancedRefactoringEngine.OptimizeTaskWaitAsync("Order.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("await"));
     }
 
     // --- UpdateXmlDocsFromSignature---
@@ -375,8 +383,10 @@ public class BatteryTwentyFourTests
     [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task UpdateXmlDocsFromSignature_ValidMethod_ReturnsString()
     {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringEngine.UpdateXmlDocsFromSignatureAsync("Order.cs", "GetLabel");
+        SetSource(@"namespace TestProj; public class C { public string Get(int a, string b) { return b + a; } }", "C.cs");
+        var result = await _refactoringEngine.UpdateXmlDocsFromSignatureAsync("C.cs", "Get");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("<param"));
     }
 
     // --- ConvertExpressionBody ---
@@ -384,18 +394,24 @@ public class BatteryTwentyFourTests
     [Category("StructuralRefactoringEngine")] // sentinel:auto-category
     public async Task ConvertExpressionBody_ToBlockBody_ReturnsString()
     {
-        SetMultiFile(("Refactor.cs", RefactorSource));
+        SetSource(@"namespace TestProj; public class C { public string Sound() => ""woof""; }", "Refactor.cs");
         var result = await _advancedStructuralEngine.ConvertExpressionBodyAsync("Refactor.cs", "Sound", "ToBlockBody");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("{"));
     }
 
     // --- ExtractConstant ---
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task ExtractConstant_WithLiteralSnippet_ReturnsString()
+    public async Task ExtractConstant_WithLiteralSnippet_ReturnsSentinelResult()
     {
         const string src = @"namespace TestProj; public class C { public string GetLabel() { return ""hello""; } }";
         SetSource(src, "C.cs");
-        var result = await _advTools.IntroduceSymbolTool(reason: "test message", "C.cs", @"""hello""", "HelloLabel", IntroduceAsType.@constant);
+        var result = await _advTools.IntroduceSymbolTool(reason: "test message", "C.cs", @"""hello""", "HelloLabel", IntroduceAsType.@constant, returnDiff: true);
+        // TODO ExtractConstant via IntroduceSymbolTool fails on an in-memory document - assert the applied change once it works
+        Assert.That(result.Code, Is.EqualTo("Exception"));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Message, Does.StartWith("Could not read file 'C.cs'"));
     }
 
     // --- AnalyzeControlFlow ---
@@ -436,16 +452,20 @@ public class BatteryTwentyFourTests
         const string src = @"namespace TestProj; public class C { public string Get(string s) { if (s == null) s = ""default""; return s; } }";
         SetSource(src, "C.cs");
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("C.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("??="));
     }
 
     [Test]
     [Category("LogicSimplificationEngine")] // sentinel:auto-category
-    public async Task ConvertToNullCoalescing_NonExistentFile_Throws()
+    public async Task ConvertToNullCoalescing_NonExistentFile_ReportsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("NonExistent.cs");
-        Assert.That(result, Is.Not.Null);
+        // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.DocumentNotFound));
+        // TODO message defect: DocumentNotFound message is the comment-style "// Document not found." with no file name; pin the real wording once fixed
+        Assert.That(result.Message, Is.EqualTo("// Document not found."));
     }
 
     // --- ConvertToSwitch ---
@@ -453,18 +473,23 @@ public class BatteryTwentyFourTests
     [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task ConvertToSwitch_FileWithIfElseChain_ReturnsString()
     {
-        SetSource(SimpleSource, "Order.cs");
+        SetSource(@"namespace TestProj; public class C { public string Get(int x) { if (x == 1) return ""a""; else if (x == 2) return ""b""; return ""c""; } }", "Order.cs");
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Order.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        // TODO no-op returns Modified - assert NoChange once the engine distinguishes it (if/else-if chain with returns is not converted to switch)
+        Assert.That(result.UpdatedText, Does.Contain("if (x == 1)"));
     }
 
     [Test]
     [Category("LogicSimplificationEngine")] // sentinel:auto-category
-    public async Task ConvertToSwitch_NonExistentFile_Throws()
+    public async Task ConvertToSwitch_NonExistentFile_ReportsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("NonExistent.cs");
-        Assert.That(result, Is.Not.Null);
+        // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.DocumentNotFound));
+        // TODO message defect: DocumentNotFound message is the comment-style "// Document not found." with no file name; pin the real wording once fixed
+        Assert.That(result.Message, Is.EqualTo("// Document not found."));
     }
 
     // --- ConvertToPattern ---
@@ -472,18 +497,23 @@ public class BatteryTwentyFourTests
     [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ConvertToPattern_ValidFile_ReturnsString()
     {
-        SetSource(SimpleSource, "Order.cs");
+        SetSource(@"namespace TestProj; public class C { public bool Check(object o) { var s = o as string; return s != null && s.Length > 0; } }", "Order.cs");
         var result = await _modernizationEngine.ConvertToPatternAsync("Order.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        // TODO no-op returns Modified - assert NoChange once the engine distinguishes it (as-cast null check is not rewritten to an is-pattern)
+        Assert.That(result.UpdatedText, Does.Contain("o as string"));
     }
 
     [Test]
     [Category("SyntaxModernizationEngine")] // sentinel:auto-category
-    public async Task ConvertToPattern_NonExistentFile_Throws()
+    public async Task ConvertToPattern_NonExistentFile_ReportsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _modernizationEngine.ConvertToPatternAsync("NonExistent.cs");
-        Assert.That(result, Is.Not.Null);
+        // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.DocumentNotFound));
+        // TODO message defect: DocumentNotFound message is the comment-style "// Document not found." with no file name; pin the real wording once fixed
+        Assert.That(result.Message, Is.EqualTo("// Document not found."));
     }
 
     [Test]
