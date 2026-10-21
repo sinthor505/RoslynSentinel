@@ -191,7 +191,7 @@ public class AsyncifyToolsTests
         Assert.That(!result.IsError, Is.True);
         var summary = result.SuccessData as MigrationScanSummary;
         Assert.That(summary, Is.Not.Null, "SuccessDetails should be MigrationScanSummary for summarize=true.");
-        Assert.That(summary!.TotalCandidates, Is.GreaterThanOrEqualTo(1));
+        Assert.That(summary!.TotalCandidates, Is.EqualTo(1));
 
         var expectedBuckets = new[] { "<0", "0-25", "26-50", "51-75", "76plus" };
         foreach (var bucket in expectedBuckets)
@@ -200,7 +200,8 @@ public class AsyncifyToolsTests
         }
 
         Assert.That(summary.ByClass, Is.Not.Null);
-        Assert.That(summary.ByClass.Count, Is.GreaterThanOrEqualTo(1));
+        Assert.That(summary.ByClass.Count, Is.EqualTo(1));
+        Assert.That(summary.ByClass[0].ClassName, Is.EqualTo("RegionForm"));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -256,7 +257,10 @@ public class Svc
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Null);
         Assert.That(result.SuccessData, Is.Not.Null);
-        Assert.That(result.SuccessData!.TotalAsyncMethods, Is.GreaterThanOrEqualTo(0));
+        Assert.That(result.SuccessData!.TotalAsyncMethods, Is.EqualTo(2));
+        Assert.That(result.SuccessData.WithCancellationToken, Is.EqualTo(1));
+        Assert.That(result.SuccessData.WithoutCancellationToken, Is.EqualTo(1));
+        Assert.That(result.SuccessData.CancellationTokenPct, Is.EqualTo(50));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -366,7 +370,10 @@ public class Svc
         Assert.That(!result.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
         Assert.That(result.SuccessData!.BreakerOpen, Is.False);
-        Assert.That(result.SuccessData.Failures, Is.Empty.Or.Null);
+        Assert.That(result.SuccessData.Attempted, Is.EqualTo(1));
+        Assert.That(result.SuccessData.Succeeded, Is.EqualTo(1));
+        Assert.That(result.SuccessData.Failed, Is.EqualTo(0));
+        Assert.That(result.SuccessData.Skipped, Is.EqualTo(0));
     }
 
     // ══════════════════════════════════════════════════════════════════════════

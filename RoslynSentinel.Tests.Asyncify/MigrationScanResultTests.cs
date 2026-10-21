@@ -534,7 +534,8 @@ public class Svc
 
         // TopCandidates: at most 5 items, all with score >= 70.
         Assert.That(summary.TopCandidates, Is.Not.Null, "TopCandidates must be populated when topN is set.");
-        Assert.That(summary.TopCandidates!.Count, Is.LessThanOrEqualTo(5));
+        Assert.That(summary.TopCandidates!.Count, Is.EqualTo(4));
+        Assert.That(summary.TopCandidates.Select(c => c.Score).ToList(), Is.EqualTo(new[] { 100, 90, 80, 70 }));
         Assert.That(summary.TopCandidates.All(c => c.Score >= 70), Is.True,
             "All TopCandidates must satisfy minScore=70.");
         // Results should be in descending score order.
@@ -608,7 +609,10 @@ public class Svc
         Assert.That(!result.IsError, Is.True, "Should succeed with a loaded solution.");
         Assert.That(result.ErrorData, Is.Null);
         Assert.That(result.SuccessData, Is.Not.Null);
-        Assert.That(result.SuccessData!.TotalAsyncMethods, Is.GreaterThanOrEqualTo(0));
+        Assert.That(result.SuccessData!.TotalAsyncMethods, Is.EqualTo(2));
+        Assert.That(result.SuccessData.WithCancellationToken, Is.EqualTo(1));
+        Assert.That(result.SuccessData.WithoutCancellationToken, Is.EqualTo(1));
+        Assert.That(result.SuccessData.CancellationTokenPct, Is.EqualTo(50));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -630,6 +634,9 @@ public class Svc
         Assert.That(!result.IsError, Is.True, "Scoped project query should succeed.");
         Assert.That(result.ErrorData, Is.Null);
         Assert.That(result.SuccessData, Is.Not.Null);
+        Assert.That(result.SuccessData!.TotalAsyncMethods, Is.EqualTo(1));
+        Assert.That(result.SuccessData.WithoutCancellationToken, Is.EqualTo(1));
+        // TODO scope test: add a nonexistent projectName case once the tool's unknown-project behaviour is pinned
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -689,6 +696,8 @@ public class Svc
         Assert.That(result, Is.Not.Null);
         Assert.That(!result!.IsError, Is.True);
         Assert.That(result.SuccessData, Is.Not.Null);
+
+        Assert.That(result.SuccessData!.Count, Is.EqualTo(3));
 
         var tokenPattern = new System.Text.RegularExpressions.Regex(@"^[\w\-]+:[0-9\-]+$");
         foreach (var finding in result.SuccessData!)
@@ -846,7 +855,9 @@ public class Svc
         Assert.That(result.SuccessData, Is.Not.Null);
 
         // All returned candidates must satisfy minScore=85.
-        Assert.That(result.SuccessData!.All(c => c.Score >= 85), Is.True,
+        Assert.That(result.SuccessData!.Count, Is.EqualTo(3));
+        Assert.That(result.SuccessData.Select(c => c.MethodName), Is.EquivalentTo(new[] { "MethodD", "MethodE", "MethodF" }));
+        Assert.That(result.SuccessData.All(c => c.Score >= 85), Is.True,
             "All returned candidates must have Score >= 85.");
 
         // TotalRecords must reflect the filtered count, not the total (6) candidates.
