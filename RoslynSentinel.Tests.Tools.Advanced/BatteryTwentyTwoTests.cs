@@ -450,9 +450,10 @@ public class BatteryTwentyTwoTests
     [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task CheckForUnusedEventSubscriptions_ValidFile_ReturnsList()
     {
-        SetSource(RichSource, "Test.cs");
+        SetSource("public class Publisher\n{\n    public event System.EventHandler Changed;\n}\npublic class Listener\n{\n    public Listener(Publisher p)\n    {\n        p.Changed += OnChanged;\n    }\n    private void OnChanged(object s, System.EventArgs e) { }\n}", "Test.cs");
         var result = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("Test.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result.Single().SymbolName, Is.EqualTo("p.Changed"));
         //Assert.That(result, Is.Not.Null);
     }
 
@@ -580,20 +581,20 @@ public class BatteryTwentyTwoTests
     {
         SetSource(RichSource, "Test.cs");
         var result = await _tools.GetCallGraphTool(reason: "test message", "Test.cs", "NoSuchMethod99", "reverse");
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
     // --- MoveFileToNamespaceFolder ---
     [Test]
     [Category("IntelligenceTools")] // sentinel:auto-category
-    public async Task MoveFileToNamespaceFolder_ValidFile_ReturnsString()
+    public async Task PreviewMoveFileToNamespaceFolder_ValidFile_ReturnsPreview()
     {
         SetSource(RichSource, "Test.cs");
         var result = await _tools.PreviewMoveFileToNamespaceFolderTool(reason: "test message", "Test.cs");
         Assert.That(result, Is.Not.Null);
         Assert.That(result.SuccessData, Is.Not.Null);
-        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.IsError, Is.False);
     }
 
     // --- FindAllThrowSites (via DiscoveryEngine) ---
@@ -612,9 +613,10 @@ public class BatteryTwentyTwoTests
     [Category("SymbolRelationshipTools")] // sentinel:auto-category
     public async Task FindObjectCreationSites_ValidType_ReturnsList()
     {
-        var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "", FindUsagesSearchKind.objectCreations);
+        SetSource(RichSource, "Test.cs");
+        var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "Order", FindUsagesSearchKind.objectCreations);
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.TotalRecords > 0);
+        Assert.That(result.TotalRecords, Is.EqualTo(1));
     }
 
     // --- GetPublicApiSurfaceTool ---
