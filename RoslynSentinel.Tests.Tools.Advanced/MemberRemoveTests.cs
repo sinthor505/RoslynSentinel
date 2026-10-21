@@ -89,6 +89,8 @@ public sealed class MemberRemoveTests
         Assert.That(result.IsError, Is.True, "A member with a real caller must be refused by default.");
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.Message, Does.Contain("caller"));
+        Assert.That(result.Code, Is.EqualTo("InvalidArgument"));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("InvalidArgument"));
         Assert.That(workspace.ReadText("Helper.cs"), Does.Contain("public string GetName()"));
     }
 

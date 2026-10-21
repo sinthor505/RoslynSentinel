@@ -60,6 +60,9 @@ public sealed class UsingDocsTypedMemberTests
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.Message, Does.Contain("NonExistent.cs"));
+        // TODO throw-migration: assert the typed not-found exception once the extract-local engine throws; the missing file is currently reported as the generic "NotFound" code.
+        Assert.That(result.Code, Is.EqualTo("NotFound"));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("NotFound"));
     }
 
     // --- AddProperty (TypedMemberTool) ---
