@@ -700,10 +700,12 @@ public class AsyncAnalysisEngine
                     .ToList();
 
                 var seen = new HashSet<string>();
+                var doubleAwaited = new HashSet<string>();
                 foreach (var name in awaitedIdentifiers)
                 {
                     if (!seen.Add(name))
                     {
+                        doubleAwaited.Add(name);
                         var line = (method.DescendantNodes()
                             .OfType<AwaitExpressionSyntax>()
                             .Where(a => a.Expression is IdentifierNameSyntax id2 && id2.Identifier.Text == name)
@@ -764,6 +766,11 @@ public class AsyncAnalysisEngine
                 // For each ValueTask local, check for deferred await (Pattern B)
                 foreach (var (varName, declIdx) in valueTaskLocals)
                 {
+                    if (doubleAwaited.Contains(varName))
+                    {
+                        continue;
+                    }
+
                     for (int j = declIdx + 1; j < statements.Count; j++)
                     {
                         var stmt = statements[j];

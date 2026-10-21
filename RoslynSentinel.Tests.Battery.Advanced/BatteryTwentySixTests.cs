@@ -535,8 +535,7 @@ public class ValueTaskMisuseGotchaTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("DoubleVT.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var reports = await _engine.DetectValueTaskMisuseAsync("DoubleVT.cs");
-        // TODO the first await of a ValueTask is legal; only the second is the misuse - the engine reports both sites (pinned at 2); decide whether it should report one
-        Assert.That(reports, Has.Count.EqualTo(2), "The ValueTask local vt is awaited twice in Bad; the engine flags both await sites, so two reports are expected.");
+        Assert.That(reports, Has.Count.EqualTo(1), "The ValueTask local vt is awaited twice in Bad; only the second await is the misuse, so exactly one report is expected.");
         Assert.That(reports[0].MethodName, Does.Contain("Bad"));
     }
 
