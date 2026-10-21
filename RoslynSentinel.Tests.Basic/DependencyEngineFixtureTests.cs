@@ -38,8 +38,8 @@ public class DependencyEngineFixtureTests
         // Assert: Verify exact references
         Assert.That(result, Is.Not.Null, "ProjectDependencyReport must not be null.");
         Assert.That(result.ProjectReferences, Is.Not.Null, "ProjectReferences list must not be null.");
-        Assert.That(result.ProjectReferences, Contains.Item("UpstreamLib"), "ProjectReferences must contain UpstreamLib.");
-        Assert.That(result.PackageReferences, Is.Not.Null, "PackageReferences list must not be null.");
+        Assert.That(result.ProjectReferences, Is.EquivalentTo(new[] { "UpstreamLib" }), "ProjectReferences must be exactly UpstreamLib.");
+        Assert.That(result.PackageReferences, Is.Empty, "DownstreamApp declares no PackageReference items.");
     }
 
     [Test]
@@ -64,7 +64,7 @@ public class DependencyEngineFixtureTests
 
         // Assert: Verify UpstreamLib appears in unused list
         Assert.That(unused, Is.Not.Null, "Result list must not be null.");
-        Assert.That(unused, Contains.Item("UpstreamLib"), "Unused references must include UpstreamLib which is not used by any consumer.");
+        Assert.That(unused, Is.EquivalentTo(new[] { "UpstreamLib" }), "Unused references must be exactly UpstreamLib, which no consumer uses.");
     }
 }
 /// <summary>

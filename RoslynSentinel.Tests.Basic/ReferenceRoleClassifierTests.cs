@@ -139,7 +139,7 @@ public class ReferenceRoleClassifierTests
         var role = ReferenceRoleClassifier.Classify(identifier, out var reason);
 
         Assert.That(role, Is.EqualTo(SemanticReplaceRole.Unsupported));
-        Assert.That(reason, Is.Not.Null.And.Not.Empty);
+        Assert.That(reason, Does.Contain("'is' patterns are not supported"));
     }
 
     [TestCase("class C { void M() { (x.IsSuccess, y) = t; } }")]
@@ -151,7 +151,7 @@ public class ReferenceRoleClassifierTests
         var role = ReferenceRoleClassifier.Classify(identifier, out var reason);
 
         Assert.That(role, Is.EqualTo(SemanticReplaceRole.Unsupported));
-        Assert.That(reason, Is.Not.Null.And.Not.Empty);
+        Assert.That(reason, Does.Contain("Deconstruction assignment targets are not supported"));
     }
 
     [Test]
@@ -205,7 +205,7 @@ public class ReferenceRoleClassifierTests
         var role = ReferenceRoleClassifier.Classify(identifier, out var reason);
         
         Assert.That(role, Is.EqualTo(SemanticReplaceRole.Unsupported));
-        Assert.That(reason, Is.Not.Null.And.Not.Empty);
+        Assert.That(reason, Does.Contain("Compound assignment operators are not supported"));
     }
 
     [Test]
@@ -217,7 +217,7 @@ public class ReferenceRoleClassifierTests
         var role = ReferenceRoleClassifier.Classify(identifier, out var reason);
         
         Assert.That(role, Is.EqualTo(SemanticReplaceRole.Unsupported));
-        Assert.That(reason, Is.Not.Null.And.Not.Empty);
+        Assert.That(reason, Does.Contain("Increment/decrement operators are not supported"));
     }
 
     [Test]
@@ -229,7 +229,7 @@ public class ReferenceRoleClassifierTests
         var role = ReferenceRoleClassifier.Classify(identifier, out var reason);
         
         Assert.That(role, Is.EqualTo(SemanticReplaceRole.Unsupported));
-        Assert.That(reason, Is.Not.Null.And.Not.Empty);
+        Assert.That(reason, Does.Contain("Equality comparisons with boolean literals are not supported"));
     }
 
     [Test]
@@ -241,7 +241,7 @@ public class ReferenceRoleClassifierTests
         var role = ReferenceRoleClassifier.Classify(identifier, out var reason);
         
         Assert.That(role, Is.EqualTo(SemanticReplaceRole.Unsupported));
-        Assert.That(reason, Is.Not.Null.And.Not.Empty);
+        Assert.That(reason, Does.Contain("Ref/out arguments are not supported"));
     }
 
     [Test]
@@ -253,7 +253,7 @@ public class ReferenceRoleClassifierTests
         var role = ReferenceRoleClassifier.Classify(identifier, out var reason);
         
         Assert.That(role, Is.EqualTo(SemanticReplaceRole.Unsupported));
-        Assert.That(reason, Is.Not.Null.And.Not.Empty);
+        Assert.That(reason, Does.Contain("Ref/out arguments are not supported"));
     }
 
     [Test]
@@ -265,7 +265,7 @@ public class ReferenceRoleClassifierTests
         var role = ReferenceRoleClassifier.Classify(identifier, out var reason);
         
         Assert.That(role, Is.EqualTo(SemanticReplaceRole.Unsupported));
-        Assert.That(reason, Is.Not.Null.And.Not.Empty);
+        Assert.That(reason, Does.Contain("Property patterns are not supported"));
     }
 
     [Test]
@@ -277,7 +277,7 @@ public class ReferenceRoleClassifierTests
         var role = ReferenceRoleClassifier.Classify(identifier, out var reason);
         
         Assert.That(role, Is.EqualTo(SemanticReplaceRole.Unsupported));
-        Assert.That(reason, Is.Not.Null.And.Not.Empty);
+        Assert.That(reason, Does.Contain("'is' patterns are not supported"));
     }
 
     [Test]
@@ -289,7 +289,7 @@ public class ReferenceRoleClassifierTests
         var role = ReferenceRoleClassifier.Classify(identifier, out var reason);
         
         Assert.That(role, Is.EqualTo(SemanticReplaceRole.Unsupported));
-        Assert.That(reason, Is.Not.Null.And.Not.Empty);
+        Assert.That(reason, Does.Contain("'is' patterns are not supported"));
     }
 
     [Test]
@@ -301,6 +301,6 @@ public class ReferenceRoleClassifierTests
         var role = ReferenceRoleClassifier.Classify(identifier, out var reason);
         
         Assert.That(role, Is.EqualTo(SemanticReplaceRole.Unsupported));
-        Assert.That(reason, Is.Not.Null.And.Not.Empty);
+        Assert.That(reason, Does.Contain("'is' patterns are not supported"));
     }
 }
