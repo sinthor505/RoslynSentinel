@@ -6,6 +6,7 @@ using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
+using RoslynSentinel.Tests.Support;
 
 #pragma warning disable CS8618
 namespace RoslynSentinel.Tests.Tools.Advanced;
@@ -32,78 +33,7 @@ public class BatteryTwentyTwoTests
     private SymbolRelationshipTools _symbolRelationshipTools;
     private SymbolNavigationTools _symbolNavigationTools;
     private ScanTools _scanTools;
-    private const string RichSource = @"
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-
-namespace TestProj;
-
-public class Order
-{
-    public int OrderId;
-    public string CustomerName;
-    private readonly ILogger _logger;
-
-    public Order(int orderId, string customerName, ILogger logger)
-    {
-        OrderId = orderId;
-        CustomerName = customerName;
-        _logger = logger;
-    }
-
-    public async Task<string> ProcessAsync(CancellationToken cancellationToken = default)
-    {
-        _logger.LogInformation(""Processing order {Id}"", OrderId);
-        var result = string.Format(""{0}: {1}"", OrderId, CustomerName);
-        return await Task.FromResult(result);
-    }
-
-    public string GetStatus()
-    {
-        if (OrderId == 1) return ""Active"";
-        if (OrderId == 2) return ""Pending"";
-        return ""Unknown"";
-    }
-
-    public void UpdateStatus(int status)
-    {
-        switch (status)
-        {
-            case 1: Console.WriteLine(""active""); break;
-            case 2: Console.WriteLine(""pending""); break;
-            default: Console.WriteLine(""unknown""); break;
-        }
-    }
-
-    public List<string> GetItems()
-    {
-        var items = new List<string>();
-        foreach (var i in new[] { ""a"", ""b"" })
-        {
-            items.Add(i);
-        }
-        return items;
-    }
-
-    public async Task WaitAsync() => await Task.Delay(1000);
-}
-
-public interface IOrderService
-{
-    Task<Order> GetOrderAsync(int id);
-    Task SaveAsync(Order order);
-}
-
-public class OrderService : IOrderService
-{
-    private readonly ILogger<OrderService> _logger;
-    public OrderService(ILogger<OrderService> logger) { _logger = logger; }
-    public async Task<Order> GetOrderAsync(int id) => await Task.FromResult(new Order(id, ""test"", _logger));
-    public async Task SaveAsync(Order order) => await Task.CompletedTask;
-}";
+    private static readonly string RichSource = Sources.RichOrderService;
     private const string GenericSource = """
         namespace TestProj;
 

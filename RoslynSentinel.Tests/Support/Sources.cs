@@ -120,4 +120,7 @@ public class OrderService : IOrderService
     public async Task<Order> GetOrderAsync(int id) => await Task.FromResult(new Order(id, ""test"", _logger));
     public async Task SaveAsync(Order order) => await Task.CompletedTask;
 }";
+
+    /// <summary>The RichSource sample (Order, IOrderService, OrderService) with CRLF line endings.</summary>
+    public static readonly string RichOrderService = Crlf(RichOrderServiceText);
 }
