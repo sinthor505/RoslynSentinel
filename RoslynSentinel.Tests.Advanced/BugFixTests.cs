@@ -1991,7 +1991,8 @@ public class TargetDto
             const string src = @"public class Foo { public int X { get; set; } }";
             SetSource(src, "Foo.cs");
             var result = await _mappingEngine.GenerateMappingAsync("Foo.cs", "Foo", "NonExistentType");
-            Assert.That(result.Message, Does.Contain("//").Or.Contain("Error").Or.Contain("Could not"), "Should return helpful message when type not found, not throw exception");
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound), "Unknown type should be reported as TargetNotFound, not thrown");
+            Assert.That(result.Message, Does.Contain("Could not resolve symbols"), "Should name the unresolved symbols in the message");
             Assert.That(result.Message, Does.Not.Contain("System.Exception"), "Must not surface a raw exception to the caller");
         }
 
@@ -2009,7 +2010,8 @@ public class TargetDto
 }";
             SetSource(src, "MyService.cs");
             var result = await _asyncEngine.OptimizeIndependentAwaitsAsync("MyService.cs", "NonExistentMethod");
-            Assert.That(result.Message, Does.Contain("//").Or.Contain("Error").Or.Contain("not found"), "Should return a message when method not found, not throw an exception");
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound), "Missing method should be reported as TargetNotFound, not thrown");
+            Assert.That(result.Message, Does.Contain("Method 'NonExistentMethod' not found"), "Should name the missing method in the message");
         }
 
         [Test]
@@ -2042,7 +2044,8 @@ public class TargetDto
 }";
             SetSource(src, "Loader.cs");
             var result = await _asyncEngine.AddCancellationTokenToMethodAsync("Loader.cs", "NonExistentMethod");
-            Assert.That(result.Message, Does.Contain("//").Or.Contain("Error").Or.Contain("not found"), "Should return a message when method not found, not throw an exception");
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound), "Missing method should be reported as TargetNotFound, not thrown");
+            Assert.That(result.Message, Does.Contain("Method 'NonExistentMethod' not found"), "Should name the missing method in the message");
         }
 
         [Test]
@@ -2442,7 +2445,7 @@ public class MyClass
                 var document = solution?.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == "MyClass.cs");
                 if (document?.FilePath == null)
                 {
-                    Assert.Inconclusive("Document not found in test solution");
+                    Assert.Fail("Document not found in test solution");
                 }
 
                 var result = await _codeGenerationEngine.InterpolateStringAsync(document.FilePath, "string.Format(CacheKeyFmt", lineBefore: null, lineAfter: null);
@@ -2558,7 +2561,7 @@ public class Processor
                     var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                     if (document == null)
                     {
-                        Assert.Inconclusive("Document not found");
+                        Assert.Fail("Document not found");
                     }
 
                     var result = await new LogicSimplificationEngine(_workspaceManager).ReduceBlockDepthAsync(document.FilePath!, "Process");
@@ -2609,7 +2612,7 @@ public class Counter
                     var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                     if (document == null)
                     {
-                        Assert.Inconclusive("Document not found");
+                        Assert.Fail("Document not found");
                     }
 
                     var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync(document.FilePath!, "Increment");
@@ -2666,7 +2669,7 @@ public class ItemProvider
                     var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                     if (document == null)
                     {
-                        Assert.Inconclusive("Document not found");
+                        Assert.Fail("Document not found");
                     }
 
                     var result = await _asyncOptEngine.ConvertToAsyncEnumerableAsync(document.FilePath!, "GetItemsAsync");
@@ -2710,12 +2713,13 @@ public class MathUtil
                     var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                     if (document == null)
                     {
-                        Assert.Inconclusive("Document not found");
+                        Assert.Fail("Document not found");
                     }
 
                     var result = await new StructuralRefactoringEngine(_workspaceManager).InlineMethodAsync(document.FilePath!, "Double");
-                    Assert.That(result, Is.Not.Null, "Should return non-null result");
-                    Assert.That(result, Is.Not.Empty, "Should return non-empty result");
+                    Assert.That(result, Has.Count.EqualTo(1), "Only the defining file should be updated when there are no call sites");
+                    Assert.That(result.Values.Single(), Does.Contain("public class MathUtil"), "Defining class should remain after inlining");
+                    Assert.That(result.Values.Single(), Does.Not.Contain("Double("), "Method declaration should be removed");
                 }
 
                 [Test]
@@ -2779,7 +2783,7 @@ public class Calculator
                     var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                     if (document == null)
                     {
-                        Assert.Inconclusive("Document not found");
+                        Assert.Fail("Document not found");
                     }
 
                     var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(document.FilePath!, "x * 2", "multiplier");
@@ -2803,13 +2807,13 @@ public class Processor
                     var document = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None))?.Projects.First()?.Documents.First();
                     if (document == null)
                     {
-                        Assert.Inconclusive("Document not found");
+                        Assert.Fail("Document not found");
                     }
 
                     var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(document.FilePath!, "input", "text");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
-                    Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-                    // Should either succeed or return unchanged code, but not crash
+                    // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
+                    Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound), "Parameter identifier is not an expression, so the engine should report TargetNotFound");
                 }
             }
         }
