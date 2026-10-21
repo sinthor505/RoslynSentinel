@@ -115,7 +115,10 @@ public class CollateralChangeGuardTests
     {
         // Same start, same (zero) length: the sort is stable, so the caller's order decides, as in the engine.
         Assert.That(Check("ab", "a12b", Edit(1, 0, "1"), Edit(1, 0, "2")), Is.Null);
-        Assert.That(Check("ab", "a21b", Edit(1, 0, "1"), Edit(1, 0, "2")), Is.Not.Null);
+        var violation = Check("ab", "a21b", Edit(1, 0, "1"), Edit(1, 0, "2"));
+
+        Assert.That(violation, Is.Not.Null);
+        Assert.That(violation!.Kind, Is.EqualTo(CollateralChangeKind.ContentDiffers));
     }
 
     [Test]

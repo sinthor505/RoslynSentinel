@@ -256,6 +256,9 @@ public class Calculator
             "Test.cs", "Add(5, 3)", "value");
 
         // Should not modify source for method call (has side effects)
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotConvert),
+            "Method calls with side effects must be skipped as CannotConvert, not DocumentNotFound or Modified");
+        Assert.That(result.Message, Does.Contain("potential side effects"));
         Assert.That(result.UpdatedText, Is.Null,
             "Should skip extraction of method calls due to potential side effects");
     }
