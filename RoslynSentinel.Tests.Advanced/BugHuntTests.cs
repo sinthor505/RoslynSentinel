@@ -107,9 +107,12 @@ public class BugHuntTests
 
         var result = await engine.FindBlockingCallsInAsyncAsync("Test.cs");
 
+        var flagged = result.ToList();
+        Assert.That(string.Concat(flagged.Select(r => r.Reason)), Does.Contain(".Result accessed"),
+            "Finding should name the .Result read.");
         Assert.That(
-            result.Where(r => r.Reason.Contains(".Result accessed")),
-            Is.Not.Empty,
+            flagged,
+            Has.Count.EqualTo(1),
             "Genuine .Result read inside an async method should still be flagged.");
     }
 
@@ -210,9 +213,12 @@ public class BugHuntTests
         var result = await engine.DetectAntiPatternsAsync(
             "Test.cs", patternFilter: ["AsyncVoidMethod"]);
 
+        var flagged = result.Where(f => f.Pattern == "AsyncVoidMethod").ToList();
+        Assert.That(string.Concat(flagged.Select(f => f.Description)), Does.Contain("'async void' method 'DoWork'"),
+            "Finding should name the async void method DoWork.");
         Assert.That(
-            result.Where(f => f.Pattern == "AsyncVoidMethod"),
-            Is.Not.Empty,
+            flagged,
+            Has.Count.EqualTo(1),
             "async void without event-handler signature SHOULD be flagged.");
     }
 
@@ -276,9 +282,12 @@ public class BugHuntTests
 
         var result = await engine.FindMutablePublicPropertiesAsync("Test.cs");
 
+        var flagged = result.Where(f => f.Pattern == "MutablePublicApi").ToList();
+        Assert.That(string.Concat(flagged.Select(f => f.Description)), Does.Contain("exposes mutable property 'Name' with a public setter"),
+            "Finding should name the Name property with a public setter.");
         Assert.That(
-            result.Where(f => f.Pattern == "MutablePublicApi"),
-            Is.Not.Empty,
+            flagged,
+            Has.Count.EqualTo(1),
             "A truly public { get; set; } SHOULD be flagged as mutable public API (control).");
     }
 
@@ -348,9 +357,12 @@ public class BugHuntTests
 
         var result = await engine.AnalyzePerformanceAsync("Test.cs");
 
+        var flagged = result.Where(r => r.IssueType == "StringConcatenationInLoop").ToList();
+        Assert.That(string.Concat(flagged.Select(r => r.Description)), Does.Contain("Avoid using '+' for string concatenation inside a loop"),
+            "Finding should be the '+' concatenation advice.");
         Assert.That(
-            result.Where(r => r.IssueType == "StringConcatenationInLoop"),
-            Is.Not.Empty,
+            flagged,
+            Has.Count.EqualTo(1),
             "BUG: string concatenation with '+' inside a do-while loop should be flagged as " +
             "StringConcatenationInLoop. DoStatementSyntax is missing from both ancestor checks " +
             "in AnalyzePerformanceAsync. Fix: add  || a is DoStatementSyntax  to each inLoop check.");
@@ -382,9 +394,12 @@ public class BugHuntTests
 
         var result = await engine.AnalyzePerformanceAsync("Test.cs");
 
+        var flagged = result.Where(r => r.IssueType == "StringConcatenationInLoop").ToList();
+        Assert.That(string.Concat(flagged.Select(r => r.Description)), Does.Contain("Avoid using '+=' for string concatenation inside a loop"),
+            "Finding should be the '+=' concatenation advice.");
         Assert.That(
-            result.Where(r => r.IssueType == "StringConcatenationInLoop"),
-            Is.Not.Empty,
+            flagged,
+            Has.Count.EqualTo(1),
             "BUG: string += inside a do-while loop should be flagged. " +
             "The AddAssignmentExpression path also missing DoStatementSyntax.");
     }
@@ -411,9 +426,12 @@ public class BugHuntTests
 
         var result = await engine.AnalyzePerformanceAsync("Test.cs");
 
+        var flagged = result.Where(r => r.IssueType == "StringConcatenationInLoop").ToList();
+        Assert.That(string.Concat(flagged.Select(r => r.Description)), Does.Contain("Avoid using '+=' for string concatenation inside a loop"),
+            "Finding should be the '+=' concatenation advice.");
         Assert.That(
-            result.Where(r => r.IssueType == "StringConcatenationInLoop"),
-            Is.Not.Empty,
+            flagged,
+            Has.Count.EqualTo(1),
             "string += inside foreach SHOULD be flagged (control).");
     }
 
@@ -462,9 +480,12 @@ public class BugHuntTests
         var result = await engine.DetectAntiPatternsAsync(
             "Test.cs", patternFilter: ["StringConcatInLoop"]);
 
+        var flagged = result.Where(f => f.Pattern == "StringConcatInLoop").ToList();
+        Assert.That(string.Concat(flagged.Select(f => f.Description)), Does.Contain("String '=' with '+' in a loop ('htmlStr = htmlStr + ...')"),
+            "Finding should be the self-assignment concatenation advice.");
         Assert.That(
-            result.Where(f => f.Pattern == "StringConcatInLoop"),
-            Is.Not.Empty,
+            flagged,
+            Has.Count.EqualTo(1),
             "BUG: 'htmlStr = htmlStr + part' inside a foreach loop is O(n²) string " +
             "concatenation and should be flagged as StringConcatInLoop. The current " +
             "detection only matches AddAssignmentExpression (+=), missing the " +
@@ -495,9 +516,12 @@ public class BugHuntTests
         var result = await engine.DetectAntiPatternsAsync(
             "Test.cs", patternFilter: ["StringConcatInLoop"]);
 
+        var flagged = result.Where(f => f.Pattern == "StringConcatInLoop").ToList();
+        Assert.That(string.Concat(flagged.Select(f => f.Description)), Does.Contain("String '+=' in a loop creates many intermediate allocations"),
+            "Finding should be the '+=' concatenation advice.");
         Assert.That(
-            result.Where(f => f.Pattern == "StringConcatInLoop"),
-            Is.Not.Empty,
+            flagged,
+            Has.Count.EqualTo(1),
             "htmlStr += part inside foreach SHOULD be flagged as StringConcatInLoop (control).");
     }
 
@@ -524,9 +548,12 @@ public class BugHuntTests
         var result = await engine.DetectAntiPatternsAsync(
             "Test.cs", patternFilter: ["StringConcatInLoop"]);
 
+        var flagged = result.Where(f => f.Pattern == "StringConcatInLoop").ToList();
+        Assert.That(string.Concat(flagged.Select(f => f.Description)), Does.Contain("String '+=' in a loop creates many intermediate allocations"),
+            "Finding should be the '+=' concatenation advice.");
         Assert.That(
-            result.Where(f => f.Pattern == "StringConcatInLoop"),
-            Is.Not.Empty,
+            flagged,
+            Has.Count.EqualTo(1),
             "htmlStr += 'x' inside while SHOULD be flagged (control).");
     }
 
@@ -556,9 +583,15 @@ public class BugHuntTests
 
         var result = await engine.FindMutablePublicPropertiesAsync("Test.cs");
 
+        var flagged = result.Where(f => f.Pattern == "MutablePublicApi").ToList();
+        var allText = string.Concat(flagged.Select(f => f.Description));
+        Assert.That(allText, Does.Contain("mutable property 'Item' with a public setter"),
+            "Finding should name the Item property.");
+        Assert.That(allText, Does.Contain("mutable property 'Quantity' with a public setter"),
+            "Finding should name the Quantity property.");
         Assert.That(
-            result.Where(f => f.Pattern == "MutablePublicApi"),
-            Is.Not.Empty,
+            flagged,
+            Has.Count.EqualTo(2),
             "BONUS BUG: a 'record class' with { get; set; } has the same mutability risk as " +
             "a regular class and should be flagged. The engine currently only iterates " +
             "ClassDeclarationSyntax, silently skipping RecordDeclarationSyntax nodes. " +
