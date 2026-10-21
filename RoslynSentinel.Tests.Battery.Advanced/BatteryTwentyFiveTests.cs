@@ -48,6 +48,7 @@ public class Calc {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new LogicSimplificationEngine(_workspaceManager).ConvertIfToSwitchStatementAsync("NoSuchFile.cs", "Foo");
+        // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -539,7 +540,7 @@ public class DependencyInjectionEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("MyService.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.AddDependencyAsync("MyService.cs", "MyService", "ILogger", "logger");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("_logger"));
     }
 
     [Test]
@@ -596,6 +597,7 @@ public class GranularRefactoringEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("NoFile.cs", "r1", 1);
+        // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -720,7 +722,7 @@ public class Cache {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Cache.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _basicRefactoringEngine.ConvertIndexerToMethodAsync("Cache.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("Get("));
     }
 
     [Test]
@@ -729,6 +731,7 @@ public class Cache {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _basicRefactoringEngine.ConvertIndexerToMethodAsync("NoFile.cs");
+        // TODO throw-migration: assert the typed exception once BasicRefactoringEngine throws
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -757,6 +760,7 @@ public class Service {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _basicRefactoringEngine.AnalyzeControlFlowAsync("NoFile.cs", "Foo");
+        // TODO throw-migration: assert the typed exception once BasicRefactoringEngine throws
         Assert.That(result, Is.Not.Null, "Should return a ControlFlowSummary even for missing file");
     }
 
@@ -784,6 +788,7 @@ public class Service {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _basicRefactoringEngine.AnalyzeDataFlowAsync("NoFile.cs", "Foo");
+        // TODO throw-migration: assert the typed exception once BasicRefactoringEngine throws
         Assert.That(result, Is.Not.Null, "Should return a DataFlowSummary even for missing file");
     }
 }
@@ -949,7 +954,7 @@ public class Router {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Router.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.ConvertSwitchExpressionToStatementAsync("Router.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit)); Assert.That(result.Message, Does.Contain("Conversion not implemented"));
     }
 
     [Test]
@@ -958,6 +963,7 @@ public class Router {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.ConvertSwitchExpressionToStatementAsync("NoFile.cs");
+        // TODO throw-migration: assert the typed exception once SyntaxUpgradeEngine throws
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -968,7 +974,7 @@ public class Router {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Entity.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.UseFieldBackedPropertiesAsync("Entity.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.NoCandidatesFound));
     }
 
     [Test]
