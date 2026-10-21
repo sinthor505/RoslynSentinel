@@ -126,7 +126,7 @@ public class QualityClass
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
         _threadSafetyEngine = new ThreadSafetyEngine(_workspaceManager);
         _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, new AsyncOptimizationEngine(_workspaceManager), new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
-        _tools = new QualityTools(_testingEngine, _controlFlowEngine, new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), _diagnosticEngine, new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
+        _tools = BatteryToolFactory.CreateQualityTools(_workspaceManager);
     }
 
     [TearDown]

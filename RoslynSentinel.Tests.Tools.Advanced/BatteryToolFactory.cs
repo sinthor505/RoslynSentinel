@@ -54,6 +54,28 @@ internal static class BatteryToolFactory
         return new RefactoringSignatureTools(impl);
     }
 
+    internal static ModernizationTools CreateModernizationTools(IWorkspaceManager workspaceManager)
+    {
+        var config = new SentinelConfiguration();
+        var modernizationEngine = new SyntaxModernizationEngine(workspaceManager, config);
+        var syntaxUpgradeEngine = new SyntaxUpgradeEngine(workspaceManager, config);
+        var logicOptimizationEngine = new LogicSimplificationEngine(workspaceManager);
+        var codeStyleEngine = new CodeStyleEngine(workspaceManager, config);
+        var codeHealingEngine = new CodeHealingEngine(workspaceManager, config);
+        var advancedLogicEngine = new LogicSimplificationEngine(workspaceManager);
+        var ideStyleEngine = new IDEStyleEngine(workspaceManager);
+        var asyncOptimizationEngine = new AsyncOptimizationEngine(workspaceManager);
+        return new ModernizationTools(modernizationEngine, syntaxUpgradeEngine, logicOptimizationEngine, codeStyleEngine, codeHealingEngine, advancedLogicEngine, ideStyleEngine, asyncOptimizationEngine, workspaceManager, config, NullLogger<ModernizationTools>.Instance);
+    }
+
+    internal static QualityTools CreateQualityTools(IWorkspaceManager workspaceManager)
+    {
+        var testingEngine = new TestingEngine(workspaceManager);
+        var controlFlowEngine = new ControlFlowEngine(workspaceManager);
+        var diagnosticEngine = new DiagnosticEngine(workspaceManager);
+        return new QualityTools(testingEngine, controlFlowEngine, new AntiPatternEngine(workspaceManager), new ThreadSafetyEngine(workspaceManager), diagnosticEngine, new CodeStyleAnalysisEngine(workspaceManager), new StackOverflowEngine(workspaceManager), new MsToolAugmentEngine(workspaceManager), workspaceManager, NullLogger<QualityTools>.Instance);
+    }
+
     private static (SentinelConfiguration Config, SymbolNavigationEngine Navigation, ValidationEngine Validation, BasicRefactoringEngine Refactoring, MemberRefactoringEngine Member) BuildEngines(IWorkspaceManager workspaceManager)
     {
         // DiffEngine is built before ValidationEngine, matching the BatteryTwentyFourTests [SetUp] wiring.

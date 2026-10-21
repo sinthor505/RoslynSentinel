@@ -71,7 +71,7 @@ public class Worker
         _advancedLogicEngine = new LogicSimplificationEngine(_workspaceManager);
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
-        _tools = new ModernizationTools(_modernizationEngine, _syntaxUpgradeEngine, _logicOptimizationEngine, _codeStyleEngine, _codeHealingEngine, _advancedLogicEngine, _ideStyleEngine, _asyncOptimizationEngine, _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
+        _tools = BatteryToolFactory.CreateModernizationTools(_workspaceManager);
     }
 
     [TearDown]
