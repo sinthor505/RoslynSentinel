@@ -262,11 +262,11 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(secondSummary.WorkspaceVersion, Is.GreaterThan(firstSummary.WorkspaceVersion!), "A second mutation must stamp a strictly higher version than the first.");
     }
 
-    // Pins that the per-test wipe (DeleteLeakedRelativeFiles, run from Setup) clears a stale bare-name Order.cs
-    // before the pre-image is read; otherwise the EolChangeGuard refuses the write.
+    // Seeds a stale CRLF Order.cs, re-runs Setup (whose wipe removes it), then checks the write succeeds.
+    // This proves the Setup wipe, not that the write path tolerates a stale pre-image; WorkingDirectoryLeakGuardTests covers the guard itself.
     [Test]
     [Category("RefactoringSignatureTools")]
-    public async Task MethodSignature_Remove_LastParameter_StaleCrlfOrderCsOnDisk_StillUpdatesCallSite()
+    public async Task Setup_WipesStaleCrlfOrderCs_ThenMethodSignatureRemoveStillUpdatesCallSite()
     {
         System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "Order.cs"), "namespace Stale;\r\npublic class Old { }\r\n");
         Setup();
