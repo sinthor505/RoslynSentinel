@@ -39,6 +39,8 @@ public class MassiveQualityTests
     {
         SetSource($@"public class C{id} {{ string path = @""C:\Temp\File{id}.txt""; }}", $"C{id}.cs");
         var results = await _securityEngine.FindHardcodedPathsAsync($"C{id}.cs");
-        Assert.That(results.Count, Is.GreaterThan(0));
+        Assert.That(results, Has.Count.EqualTo(1), "One hardcoded path literal must be flagged.");
+        Assert.That(results[0].IssueType, Is.EqualTo("HardcodedPath"));
+        Assert.That(results[0].Line, Is.EqualTo(1));
     }
 }

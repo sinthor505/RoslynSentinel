@@ -112,8 +112,8 @@ public class MassiveIntelligenceTests
     {
         SetSource("public class C { public void M() { } }", "C.cs");
         var metrics = await _metricsEngine.GetSolutionMetricsAsync();
-        Assert.That(metrics.TotalTypes, Is.GreaterThan(0));
-        Assert.That(metrics.TotalMethods, Is.GreaterThan(0));
+        Assert.That(metrics.TotalTypes, Is.EqualTo(1), "Fixture has one class.");
+        Assert.That(metrics.TotalMethods, Is.EqualTo(1), "Fixture has one method.");
     }
 
     [Test]
