@@ -79,17 +79,6 @@ public class FakeWorkspaceManagerAccessTests
     }
 
     [Test]
-    public void ParameterlessConstructor_DefaultsToReadWrite()
-    {
-        // The obsolete parameterless constructor is exercised on purpose until the migration removes it.
-#pragma warning disable CS0618
-        var fake = new FakeWorkspaceManager();
-#pragma warning restore CS0618
-
-        Assert.That(fake.Access, Is.EqualTo(WorkspaceAccess.ReadWrite));
-    }
-
-    [Test]
     public async Task ReadOnly_WithAuditEnvironmentVariable_AppendsTestNameToAuditFile()
     {
         // The audit env var is process-wide, so it is restored in finally. Other parallel tests that refuse

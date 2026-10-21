@@ -91,6 +91,15 @@ Proposed (not decided in detail). Part A fixes the leak; B-D are independent and
   because tools catch the exception at the tool boundary and return an error result. To catch those, count rejected
   write attempts on the fake (and log them in a one-off audit run) so every attempted write is listed before the flip is
   trusted. `SemanticFindReplace(replaceConstruction)` can apply the edit.
+- **Status: DONE 2026-10-20.** Every `FakeWorkspaceManager` site declares its mode (static `ReadOnly()` / `ReadWrite()`
+  factories, or the enum constructor). `Tests.Tools.Basic`: all 15 sites went to `ReadOnly`, 13 tests failed, the 4
+  fixtures that apply edits (`TestCategoryApply`, `TestCategoryApplyProjects`, `TestCategoryTagging`, `QualifyCrefs`)
+  were flipped to `ReadWrite`; the other 11 sites stay `ReadOnly`. Audit run
+  (`ROSLYNSENTINEL_FAKE_WRITE_AUDIT`, `dotnet test` on that project): the audit file was never created, so no
+  `ReadOnly` fake received a write attempt, swallowed or not. The audit run also reported 2 failures in 11 minutes
+  that `RunTest` (82 s, 1072/1072) does not reproduce; the cause is unexplained. The obsolete parameterless
+  constructor and its guard test are removed. Gap: `RunTest` cannot pass an environment variable, so the audit needed a
+  shell `dotnet test`.
 - Limit: covers only tests that already use the fake. The hybrid tier (real manager + `SetTestSolution`, where the 784
   read-only tests sit) is untouched; moving them to a `ReadOnly` fake would turn a silent write into a failure, but the
   engines may need more of `IWorkspaceManager` than the fake implements (unverified).

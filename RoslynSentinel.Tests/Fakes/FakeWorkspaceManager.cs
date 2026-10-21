@@ -20,11 +20,6 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
         Access = access;
     }
 
-    [Obsolete("Pass a WorkspaceAccess: ReadOnly if the test never applies edits, otherwise ReadWrite.")]
-    public FakeWorkspaceManager() : this(WorkspaceAccess.ReadWrite)
-    {
-    }
-
     /// <summary>For a test that never applies edits; a refused apply throws and is counted.</summary>
     public static FakeWorkspaceManager ReadOnly() => new(WorkspaceAccess.ReadOnly);
 

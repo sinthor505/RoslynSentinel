@@ -136,3 +136,7 @@ A suggested slicing if option A is chosen (not decided):
 
 Related: `docs/current/issues/issue_tool_hygiene_open_items.md` (the TODO entry previously pointed
 there). When this closes, move the TODO entry to `CLOSED.md`.
+
+## See also
+
+- [proposal_battery_test_reorganisation_in_memory_and_shared_sources.md](../proposals/proposal_battery_test_reorganisation_in_memory_and_shared_sources.md) - the agreed approach to fix this leak (in-memory tier, WorkspaceAccess on the fake, topic classes).

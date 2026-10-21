@@ -91,3 +91,7 @@ Two tiers:
 - The remaining Battery.Basic cost being per-test workspace setup is a hypothesis; never timed in isolation.
 - Header comment in `InMemoryWorkspace.cs` references `DiskWriteRoundTrip`; that helper now exists in `RoslynSentinel.Tests/DiskWriteRoundTripTests.cs` (verify the comment's wording still fits).
 - The subagent result (Step 0) is unverified at the time of writing.
+
+## See also
+
+- [proposal_battery_test_reorganisation_in_memory_and_shared_sources.md](../proposals/proposal_battery_test_reorganisation_in_memory_and_shared_sources.md) - continues this plan: classifies the Battery fixtures, adds WorkspaceAccess to the fake, plans topic classes and shared sources.
