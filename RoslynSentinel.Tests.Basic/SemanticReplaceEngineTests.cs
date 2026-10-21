@@ -49,6 +49,8 @@ public class SemanticReplaceEngineTests
         var (resolvedSymbol, error) = await engine.ResolveBoolMemberAsync(docCommentId!);
 
         Assert.That(resolvedSymbol, Is.Not.Null);
+        Assert.That(resolvedSymbol!.Name, Is.EqualTo("IsSuccess"));
+        Assert.That(resolvedSymbol.Kind, Is.EqualTo(SymbolKind.Property));
         Assert.That(error, Is.Null);
     }
 
@@ -63,6 +65,8 @@ public class SemanticReplaceEngineTests
         var (resolvedSymbol, error) = await engine.ResolveBoolMemberAsync(docCommentId!);
 
         Assert.That(resolvedSymbol, Is.Not.Null);
+        Assert.That(resolvedSymbol!.Name, Is.EqualTo("isSuccess"));
+        Assert.That(resolvedSymbol.Kind, Is.EqualTo(SymbolKind.Field));
         Assert.That(error, Is.Null);
     }
 
@@ -151,8 +155,9 @@ public class SemanticReplaceEngineTests
         var info = SemanticReplaceEngine.DescribeDeclaration(symbol);
 
         Assert.That(info, Is.Not.Null);
-        Assert.That(info!.FilePath, Is.Not.Null);
-        Assert.That(info.IdentifierSpan.Length, Is.GreaterThan(0));
+        Assert.That(info!.FilePath, Is.EqualTo(symbol.DeclaringSyntaxReferences[0].SyntaxTree.FilePath));
+        var text = symbol.DeclaringSyntaxReferences[0].SyntaxTree.GetText();
+        Assert.That(text.ToString(info.IdentifierSpan), Is.EqualTo("IsSuccess"));
         Assert.That(info.InitializerValueSpan, Is.Null);
         Assert.That(info.InitializerText, Is.Null);
     }
@@ -173,8 +178,9 @@ public class SemanticReplaceEngineTests
         var info = SemanticReplaceEngine.DescribeDeclaration(symbol);
 
         Assert.That(info, Is.Not.Null);
-        Assert.That(info!.FilePath, Is.Not.Null);
-        Assert.That(info.IdentifierSpan.Length, Is.GreaterThan(0));
+        Assert.That(info!.FilePath, Is.EqualTo(symbol.DeclaringSyntaxReferences[0].SyntaxTree.FilePath));
+        var text = symbol.DeclaringSyntaxReferences[0].SyntaxTree.GetText();
+        Assert.That(text.ToString(info.IdentifierSpan), Is.EqualTo("IsSuccess"));
         Assert.That(info.InitializerValueSpan, Is.Not.Null);
         Assert.That(info.InitializerText, Is.EqualTo("true"));
     }
@@ -195,8 +201,9 @@ public class SemanticReplaceEngineTests
         var info = SemanticReplaceEngine.DescribeDeclaration(symbol);
 
         Assert.That(info, Is.Not.Null);
-        Assert.That(info!.FilePath, Is.Not.Null);
-        Assert.That(info.IdentifierSpan.Length, Is.GreaterThan(0));
+        Assert.That(info!.FilePath, Is.EqualTo(symbol.DeclaringSyntaxReferences[0].SyntaxTree.FilePath));
+        var text = symbol.DeclaringSyntaxReferences[0].SyntaxTree.GetText();
+        Assert.That(text.ToString(info.IdentifierSpan), Is.EqualTo("isSuccess"));
         Assert.That(info.InitializerValueSpan, Is.Null);
         Assert.That(info.InitializerText, Is.Null);
     }
@@ -248,8 +255,9 @@ public class SemanticReplaceEngineTests
         var info = SemanticReplaceEngine.DescribeDeclaration(symbol);
 
         Assert.That(info, Is.Not.Null);
-        Assert.That(info!.FilePath, Is.Not.Null);
-        Assert.That(info.IdentifierSpan.Length, Is.GreaterThan(0));
+        Assert.That(info!.FilePath, Is.EqualTo(symbol.DeclaringSyntaxReferences[0].SyntaxTree.FilePath));
+        var text = symbol.DeclaringSyntaxReferences[0].SyntaxTree.GetText();
+        Assert.That(text.ToString(info.IdentifierSpan), Is.EqualTo("isSuccess"));
         Assert.That(info.InitializerValueSpan, Is.Not.Null);
         Assert.That(info.InitializerText, Is.EqualTo("true"));
     }
@@ -952,6 +960,8 @@ public class SemanticReplaceEngineTests
 
         Assert.That(error, Is.Null, error?.Message);
         Assert.That(symbol, Is.Not.Null);
+        Assert.That(symbol!.Name, Is.EqualTo("IsSuccess"));
+        Assert.That(symbol.Kind, Is.EqualTo(SymbolKind.Property));
     }
 
     [TestCase("public bool IsSuccess { get { return !_isError; } set { _isError = !value; } }")]
@@ -968,6 +978,8 @@ public class SemanticReplaceEngineTests
 
         Assert.That(error, Is.Null, error?.Message);
         Assert.That(symbol, Is.Not.Null);
+        Assert.That(symbol!.Name, Is.EqualTo("IsSuccess"));
+        Assert.That(symbol.Kind, Is.EqualTo(SymbolKind.Property));
     }
 
     [Test]
@@ -1158,6 +1170,9 @@ public class SemanticReplaceEngineTests
         Assert.That(edits, Is.Not.Empty);
         Assert.That(sites, Is.Not.Empty);
         Assert.That(sites.All(s => s.UnsupportedReason is null), Is.True);
+        Assert.That(sites.Select(s => s.Role), Is.EqualTo(new[] { SemanticReplaceRole.Read }));
+        Assert.That(sites.Select(s => s.FilePath), Is.EqualTo(new[] { "Test1.cs" }));
+        Assert.That(ApplyEdits(part2, "Test1.cs", edits), Is.EqualTo(part2.Replace("if (IsSuccess)", "if (!_isError)")));
     }
 
     // ---- Record positional parameters -------------------------------------------------------------------------------------
