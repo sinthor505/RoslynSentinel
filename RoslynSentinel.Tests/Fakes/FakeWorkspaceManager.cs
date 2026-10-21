@@ -6,7 +6,7 @@ namespace RoslynSentinel.Tests.Fakes;
 // In-memory IWorkspaceManager test double. Prefer FakeWorkspaceManager.ReadOnly() / ReadWrite(); or pass the WorkspaceAccess explicitly: ReadOnly refuses
 // ApplyProposedChangesAsync (it throws and counts RejectedWriteAttempts) and suits a test that never applies edits;
 // ReadWrite applies edits to the in-memory solution and suits a test that does.
-// Apply, the scoped-operation ledger and pre-apply validation are implemented. Breakers, symbol resolution, load and
+// Apply, the scoped-operation ledger and pre-apply validation are implemented. Breakers, symbol resolution (except ResolveFromWireAsync, which uses SymbolResolver), load and
 // undo throw NotImplementedException - extend as a test actually needs a member. If a test needs a real on-disk
 // solution (actual file I/O, MSBuild load, watcher behavior), use RoslynSentinel.Tests.TestSolutionFixture (backed by
 // PersistentWorkspaceManager) instead of this class.
@@ -257,7 +257,25 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
     bool IUnrecoverableBreaker.IsTripped() => _unrecoverableHaltMessage is not null;
     string? IUnrecoverableBreaker.StateMessage() => _unrecoverableHaltMessage;
     public Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default) => throw new NotImplementedException();
-    public Task<SymbolResolution> ResolveFromWireAsync(string projectName, string docCommentId, CancellationToken cancellationToken) => throw new NotImplementedException();
+    public async Task<SymbolResolution> ResolveFromWireAsync(string projectName, string docCommentId, CancellationToken cancellationToken)
+    {
+        SymbolHandle handle = new SymbolHandle(projectName, docCommentId);
+        ISymbol? symbol = await new SymbolResolver(this).ResolveSymbolAsync(handle, cancellationToken);
+
+        if (symbol is null)
+        {
+            return new SymbolResolution
+            {
+                Handle = handle,
+                Error = new EngineError(
+                    EngineErrorCode.SymbolNotResolved,
+                    $"Symbol '{docCommentId}' no longer resolves - may have been renamed, moved, or removed. Re-run Search(mode: symbol).",
+                    DataTag.SymbolHandle)
+            };
+        }
+
+        return new SymbolResolution { Symbol = symbol, Handle = handle };
+    }
     public Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken) => throw new NotImplementedException();
     public Task<ApplyChangesResult> RetryFailedChangesAsync(List<string>? specificFiles = null, int retryCount = 3, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public string CachePendingChangeset(Dictionary<FilePathWrapper, string> changes, int retryCount, bool validateOnApply) => throw new NotImplementedException();

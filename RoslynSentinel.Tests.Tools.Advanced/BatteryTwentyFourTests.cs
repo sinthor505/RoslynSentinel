@@ -156,36 +156,6 @@ public enum Status { Active = 1, Pending = 2 }
         _workspaceManager.SetTestSolution(solution);
     }
 
-    // --- RenameSymbolTool ---
-    // RenameSymbolTool takes a SymbolHandle (projectName, docCommentId) instead of
-    // (filepath, methodName, contextSnippet) -> resolve the handle via SymbolNavigationEngine
-    // first, matching how an agent would call LocateSymbolTool before RenameSymbolTool.
-    [Test]
-    [Category("RefactoringSignatureTools")] // sentinel:auto-category
-    [Category("SymbolLocation")] // sentinel:auto-category
-    [Category("SymbolNavigationEngine")] // sentinel:auto-category
-    public async Task RenameSymbol_ValidSymbol_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var symbolNavEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        // "GetLabel" is declared on both Order and IService in SimpleSource -> disambiguate.
-        var located = await symbolNavEngine.LocateSymbolAsync("GetLabel", containingType: "Order");
-        var handle = located.Single();
-        var result = await _refactoringSignatureTools.RenameSymbolTool(reason: "test message", projectName: handle.ProjectName, docCommentId: handle.DocCommentId!, newName: "GetDisplayLabel");
-        Assert.That(result, Is.Not.Null);
-        Assert.That(!result.IsError, Is.True);
-    }
-
-    [Test]
-    [Category("RefactoringSignatureTools")] // sentinel:auto-category
-    public async Task RenameSymbol_NonExistentSymbol_ReturnsErrorObject()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringSignatureTools.RenameSymbolTool(reason: "test message", projectName: "TestProj", docCommentId: "M:TestProj.Order.NoSuchSymbol", newName: "NewName");
-        Assert.That(!result.IsError, Is.False);
-        Assert.That(result.ErrorData, Is.Not.Null);
-    }
-
     // --- UsingDirectiveTool ---
     // Stays on the disk-backed tier: the diff pre-image is read from disk, so the in-memory fake reports an empty pre-image (@@ -0,0 +1,1 @@).
     [Test]
