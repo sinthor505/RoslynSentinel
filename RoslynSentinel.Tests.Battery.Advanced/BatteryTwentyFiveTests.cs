@@ -124,6 +124,7 @@ public class AnalysisEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Tiny { public void A() {} public void B() {} public void C() {} }")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _antiPatternEngine.FindInterfaceExtractionCandidatesAsync(minPublicMethods: 2);
+        // TODO assert InterfaceCandidateReport members for 'Tiny' (result is a report object, not a list)
         Assert.That(result, Is.Not.Null);
     }
 
@@ -134,7 +135,8 @@ public class AnalysisEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Used { public void Go() {} }")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new DeadCodeEngine(_workspaceManager, new SentinelConfiguration()).FindUninstantiatedTypesAsync();
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result, Has.Some.Contains("Used"));
     }
 
     [Test]
@@ -150,7 +152,9 @@ public class Guard {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Guard.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _antiPatternEngine.DetectUnreachableCodeAsync("Guard.cs", "Method");
-        Assert.That(result, Is.Not.Null);
+        // TODO engine reports 'Unreachable code detected' without naming the unreachable statement 'int x'
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result, Has.Some.Contains("Unreachable code"));
     }
 
     [Test]
@@ -159,6 +163,7 @@ public class Guard {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _antiPatternEngine.DetectUnreachableCodeAsync("NoFile.cs", "Foo");
+        // TODO throw-migration: assert the typed exception once AntiPatternEngine throws for an unknown file
         Assert.That(result, Is.Not.Null);
     }
 
@@ -168,7 +173,7 @@ public class Guard {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Service { public void Go() {} }")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _antiPatternEngine.AnalyzeSemaphoreUsageAsync("Service.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Is.Empty);
     }
 
     [Test]
@@ -178,7 +183,8 @@ public class Guard {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Outer { internal class Inner {} }")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new DeadCodeEngine(_workspaceManager, new SentinelConfiguration()).FindInternalClassesThatCouldBePrivateAsync();
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result, Has.Some.Contains("Inner"));
     }
 
     [Test]
@@ -221,7 +227,7 @@ public class Router {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Service { public void Go() {} }")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _antiPatternEngine.DetectReflectionUsageAsync(filePath: "Service.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Is.Empty);
     }
 
     [Test]
@@ -235,6 +241,7 @@ public class Bar {}
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("App.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new DeadCodeEngine(_workspaceManager, new SentinelConfiguration()).FindUnusedInterfacesAsync();
+        // TODO engine does not flag unused interface 'IFoo' (returns no findings for this fixture)
         Assert.That(result, Is.Not.Null);
     }
 }
@@ -260,12 +267,13 @@ public class AntiPatternEngineGapTests
     [Test]
     public async Task FindMutablePublicPropertiesAsync_ClassWithMutableProp_ReturnsNonNull()
     {
-        var source = "public class Entity { public string Name { get; set; } = \"\"; }";
+        var source = "public class Account { public string Name { get; set; } = \"\"; }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Entity.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.FindMutablePublicPropertiesAsync(filePath: "Entity.cs");
-        // TODO engine does not flag property 'Name' in class 'Entity': the DtoSuffixes exclusion likely skips it (verify suffix list)
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Pattern, Is.EqualTo("MutablePublicApi"));
+        Assert.That(result[0].Snippet, Does.Contain("Name"));
     }
 
     [Test]
