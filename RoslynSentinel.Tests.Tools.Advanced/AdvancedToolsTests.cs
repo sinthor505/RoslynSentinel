@@ -88,7 +88,7 @@ public class C {
 }", "C.cs");
         var reports = await _asyncSafetyEngine.DetectValueTaskMisuseAsync("C.cs");
         // Immediate await (no stored variable) should not trigger stored-and-deferred or double-await
-        Assert.That(reports.Any(r => r.Reason.Contains("awaited more than once") || r.Reason.Contains("deferred")), Is.False);
+        Assert.That(reports.Any(r => r.Reason.Contains("awaited more than once") || r.Reason.Contains("deferred")), Is.False); SetSource("using System.Threading.Tasks; public class C { public async Task M() { var vt = GetVT(); await vt; await vt; } ValueTask GetVT() => ValueTask.CompletedTask; }", "C.cs"); var positive = await _asyncSafetyEngine.DetectValueTaskMisuseAsync("C.cs"); Assert.That(positive.Any(r => r.Reason.Contains("awaited more than once") || r.Reason.Contains("deferred")), Is.True);
     }
 
     // ===== Tool 2: UpgradeToPrimaryConstructor =====
@@ -213,8 +213,8 @@ public class Service : IService {
     public void DoB() {}
 }", "Service.cs");
         var result = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
-        Assert.That(result.UpdatedText, Does.Contain("void DoB()"));
-        Assert.That(result.UpdatedText, Does.Contain("void DoA()"));
+        Assert.That(result.UpdatedText, Does.Match(@"interface IService\s*\{[^}]*void DoB\(\);"));
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
     }
 
     [Test]
@@ -231,7 +231,7 @@ public class Service : IService {
         // No new members should have been added -> both already present
         // Count occurrences of DoB in interface section
         Assert.That(result.UpdatedText, Does.Not.Contain("// Interface not found"));
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
     }
 
     [Test]
@@ -245,8 +245,8 @@ public class Service : IService {
     public string Name { get; set; }
 }", "Service.cs");
         var result = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
-        Assert.That(result.UpdatedText, Does.Contain("Name"));
-        Assert.That(result.UpdatedText, Does.Contain("get;"));
+        Assert.That(result.UpdatedText, Does.Match(@"interface IService\s*\{[^}]*\bName\b"));
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
     }
 
     [Test]
@@ -306,7 +306,7 @@ public class C {
         var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync("C.cs", "CreateUser");
         Assert.That(result.UpdatedText, Does.Contain("record CreateUserParameters"));
         Assert.That(result.UpdatedText, Does.Contain("request"));
-        Assert.That(result.UpdatedText, Does.Contain("request.Name") | Does.Contain("Name"));
+        Assert.That(result.UpdatedText, Does.Contain("request.Name"));
     }
 
     [Test]
