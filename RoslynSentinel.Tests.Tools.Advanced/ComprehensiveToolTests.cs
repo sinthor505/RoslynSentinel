@@ -69,23 +69,23 @@ public class ComprehensiveToolTests
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
         _advancedStructuralEngine = new StructuralRefactoringEngine(_workspaceManager);
         _apiGenerationEngine = new ApiGenerationEngine(_workspaceManager);
-        _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
         _asyncOptimizationEngine = new AsyncOptimizationEngine(_workspaceManager);
+        _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
         _asyncSafetyEngine = new AsyncAnalysisEngine(_workspaceManager);
         _codeFlowEngine = new LogicSimplificationEngine(_workspaceManager);
         _codeGenerationEngine = new CodeGenerationEngine(_workspaceManager);
+        _config = new SentinelConfiguration();
         _codeHealingEngine = new CodeHealingEngine(_workspaceManager, _config);
         _codeStyleEngine = new CodeStyleEngine(_workspaceManager, _config);
-        _config = new SentinelConfiguration();
         _controlFlowEngine = new ControlFlowEngine(_workspaceManager);
         _deadCodeEngine = new DeadCodeEngine(_workspaceManager);
         _dependencyEngine = new DependencyEngine(_workspaceManager);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
         _diagnosticEngine = new DiagnosticEngine(_workspaceManager);
         _diffEngine = new DiffEngine();
-        _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
+        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _documentationEngine = new DocumentationEngine(_workspaceManager);
-        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _solutionStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
+        _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
         _ideStyleEngine = new IDEStyleEngine(_workspaceManager);
         _impactAnalyzer = new ImpactAnalyzer(_workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
         _inventoryEngine = new InventoryEngine(_workspaceManager);
@@ -94,14 +94,14 @@ public class ComprehensiveToolTests
         _metricsEngine = new MetricsEngine(_workspaceManager);
         _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
         _performanceEngine = new PerformanceEngine(_workspaceManager);
-        _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, _config);
+        _healthOrchestrationEngine = new HealthOrchestrationEngine(_workspaceManager, _solutionStructureEngine, _config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, _config));
         _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         _securityEngine = new SecurityEngine(_workspaceManager);
         _semanticRefactoringEngine = new SemanticRefactoringEngine(_workspaceManager);
         _semanticSearchEngine = new DiscoveryEngine(_workspaceManager);
         _solutionManagementEngine = new SolutionManagementEngine(_workspaceManager);
         _structuralRefinementEngine = new StructuralRefinementEngine(_workspaceManager, _config);
-        _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
         _syntaxUpgradeEngine = new SyntaxUpgradeEngine(_workspaceManager, _config);
         _testingEngine = new TestingEngine(_workspaceManager);
         _validationEngine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
@@ -168,7 +168,7 @@ public class ComprehensiveToolTests
     public async Task LoadSolution_NonExistentFile_ReturnsErrorResult()
     {
         var result = await _workspaceTools.LoadSolutionTool(reason: "test message", "fake.sln");
-        Assert.That(!result.IsError, Is.False, "fake.sln does not exist");
+        Assert.That(result.IsError, Is.True, "fake.sln does not exist");
         Assert.That(result.ErrorData?.Message, Is.Not.Null.And.Not.Empty);
     }
 
@@ -179,7 +179,7 @@ public class ComprehensiveToolTests
         var source = "public class C { public void M() {} }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
         var report = await _impactAnalyzer.AnalyzeImpactAsync("C.cs", "public void M()");
-        Assert.That(report, Is.Not.Null);
+        Assert.That(report.SymbolName, Is.EqualTo("C.M()")); Assert.That(report.TotalCallSites, Is.EqualTo(0));
     }
 
     [Test]
@@ -188,7 +188,7 @@ public class ComprehensiveToolTests
     {
         _workspaceManager.SetTestSolution(CreateSolution("public class C {}"));
         var report = await _intelligenceTools.GetComprehensiveHealthReportTool(reason: "test message");
-        Assert.That(report, Is.Not.Null);
+        Assert.That(report.IsError, Is.False, report.ErrorData?.Message); Assert.That(report.SuccessData, Is.Not.Null);
     }
 
     [Test]
@@ -198,7 +198,7 @@ public class ComprehensiveToolTests
         var source = "public class C { public int Id { get; init; } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
         var result = await _modernizationEngine.ClassToRecordAsync("C.cs", "C");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("record C"));
     }
 
     [Test]
@@ -208,7 +208,7 @@ public class ComprehensiveToolTests
         var source = "public class C { void M() { object o = 1; } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
         var results = await _performanceEngine.FindBoxingAllocationsAsync("C.cs");
-        Assert.That(results, Is.Not.Null);
+        Assert.That(results, Has.Count.EqualTo(1)); Assert.That(results[0].Line, Is.EqualTo(1));
     }
 
     [Test]
@@ -217,7 +217,7 @@ public class ComprehensiveToolTests
     {
         SetSource("public class C { private int _unused; }", "C.cs");
         var deadCode = await _deadCodeEngine.DetectUnusedPrivateFieldsAsync("C.cs");
-        Assert.That(deadCode, Is.Not.Null);
+        Assert.That(deadCode.Any(r => r.SymbolName == "_unused"), Is.True);
     }
 
     [Test]
