@@ -10,12 +10,6 @@ namespace RoslynSentinel.Tests;
 [TestFixture]
 public class FilePathFromWireTests
 {
-    [Test]
-    public void FromWire_NullSolutionRoot_RelativePath_DoesNotThrow()
-    {
-        var result = FilePathWrapper.ResolveFromWire("Test.cs", null);
-        Assert.That(result.Absolute, Is.EqualTo("Test.cs"));
-    }
 
     [Test]
     public void FromWire_NullSolutionRoot_RelativePath_PreservesCallerPath()
