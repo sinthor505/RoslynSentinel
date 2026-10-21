@@ -215,8 +215,8 @@ public class AnalyzeForeachAdvancedTests
 
             Assert.That(result.IsSafeToConvert, Is.False,
                 "Snippet absent from file must not claim safe-to-convert");
-            Assert.That(result.BlockingReason, Is.Not.Null.And.Not.Empty,
-                "BlockingReason must be populated when snippet cannot be located");
+            Assert.That(result.BlockingReason, Does.Contain("contextSnippet was not found"),
+                "BlockingReason must explain the snippet could not be located");
         }
         finally { SafeDelete(tempFile); }
     }
@@ -348,8 +348,8 @@ public class SwitchConversionAdvancedTests
 
         Assert.That(result.IsSafeToConvert, Is.False,
             "Missing snippet must not claim safe-to-convert");
-        Assert.That(result.BlockingReason, Is.Not.Null.And.Not.Empty,
-            "BlockingReason must be populated when snippet is not found");
+        Assert.That(result.BlockingReason, Does.Contain("contextSnippet was not found"),
+            "BlockingReason must explain the snippet is not found");
     }
 
     [Test]
@@ -430,8 +430,8 @@ public class SwitchConversionAdvancedTests
 
         Assert.That(!result.IsError, Is.False,
             "File absent from workspace must cause conversion to fail");
-        Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
-            "ErrorDetails message must explain the failure cause");
+        Assert.That(result.Error, Does.Contain("File not found"),
+            "ErrorDetails message must explain the file is not in the workspace");
     }
 
     [Test]

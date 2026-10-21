@@ -30,6 +30,21 @@ public class ScopedOperationLedgerBlockingTests
 
     private IScopedOperationLedger Ledger => _workspaceManager;
 
+    // Proves an allowed write reached disk and was recorded as a real success (not a no-op or failure).
+    private async Task AssertAppendLandedAsync(ApplyChangesResult result, string targetFile)
+    {
+        var absolute = _workspaceManager.ResolveFromWire(targetFile).Absolute;
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(result.SucceededFiles, Does.Contain(absolute));
+            Assert.That(result.FailedFiles, Is.Empty);
+            Assert.That(result.NoOpFiles ?? new List<string>(), Does.Not.Contain(absolute));
+        });
+        Assert.That(await File.ReadAllTextAsync(targetFile), Does.Contain("// appended by test"),
+            "the proposed append must have reached disk");
+    }
+
     [Test]
     public async Task OpenLedgerEntry_AllowsWriteToItsOwnTrackedFileAsync()
     {
@@ -68,7 +83,7 @@ public class ScopedOperationLedgerBlockingTests
 
         var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: false);
 
-        Assert.That(!result.IsError, Is.True, result.Summary);
+        await AssertAppendLandedAsync(result, targetFile);
     }
 
     [Test]
@@ -92,7 +107,7 @@ public class ScopedOperationLedgerBlockingTests
 
         var result = await _workspaceManager.ApplyProposedChangesAsync(changes, validateChanges: false);
 
-        Assert.That(!result.IsError, Is.True, result.Summary);
+        await AssertAppendLandedAsync(result, targetFile);
     }
 
     [Test]
