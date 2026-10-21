@@ -116,9 +116,9 @@ class EventHandler {
 
         var results = await _antiPatternEngine.DetectAntiPatternsAsync(
             patternFilter: ["AsyncVoidMethod"]);
-        Assert.That(results, Is.Not.Empty,
+        Assert.That(results, Has.Count.EqualTo(1),
             "Production-project findings must still be reported");
-        Assert.That(results.Any(f => f.Pattern == "AsyncVoidMethod"), Is.True);
+        Assert.That(results[0].Pattern, Is.EqualTo("AsyncVoidMethod"));
     }
 
     [Test]
@@ -171,9 +171,9 @@ class MyService {
 }");
 
         var results = await _antiPatternEngine.FindMissingCancellationTokensAsync();
-        Assert.That(results, Is.Not.Empty,
+        Assert.That(results, Has.Count.EqualTo(1),
             "Production-service missing-CT findings must still be reported");
-        Assert.That(results.Any(f => f.MethodName == "DoWork"), Is.True);
+        Assert.That(results[0].MethodName, Is.EqualTo("DoWork"));
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -373,7 +373,8 @@ public class MyTests {
 
         var results = await _structureEngine.FindStructuralSmellsAsync(
             typeFilter: SolutionStructureEngine.StructuralSmellType.NameMismatch);
-        Assert.That(results.Any(r => r.Contains("NAME_MISMATCH")), Is.True,
+        Assert.That(results, Has.Count.EqualTo(1));
+        Assert.That(results[0], Does.Contain("NAME_MISMATCH"),
             "NAME_MISMATCH must still fire for hand-written files where type ≠ filename");
     }
 }

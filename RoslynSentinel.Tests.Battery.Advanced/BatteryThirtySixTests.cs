@@ -93,8 +93,8 @@ class C {
 }", "Fire.cs");
 
         var results = await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync(filePath: null);
-        Assert.That(results, Is.Not.Empty, "Solution-wide scan should find fire-and-forget");
-        Assert.That(results.Any(r => r.MethodName == "M"), Is.True);
+        Assert.That(results, Has.Count.EqualTo(1), "Solution-wide scan should find exactly one fire-and-forget");
+        Assert.That(results[0].MethodName, Is.EqualTo("M"));
     }
 
     [Test]
@@ -111,7 +111,8 @@ class C {
         _workspaceManager.SetTestSolution(solution);
 
         var results = await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync(projectName: "TargetProj");
-        Assert.That(results, Is.Not.Empty, "projectName scope should return findings from that project");
+        Assert.That(results, Has.Count.EqualTo(1), "projectName scope should return exactly one finding from that project");
+        Assert.That(results[0].MethodName, Is.EqualTo("M"));
 
         var empty = await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync(projectName: "NonExistent");
         Assert.That(empty, Is.Empty, "Unknown project should return no findings");
@@ -131,8 +132,9 @@ class C {
 }", "Paths.cs");
 
         var results = await _securityEngine.FindHardcodedPathsAsync();
-        Assert.That(results, Is.Not.Empty, "Solution-wide scan should find hardcoded path");
-        Assert.That(results.All(r => r.filePath.Absolute != null), Is.True, "FilePathWrapper must be set on every finding");
+        Assert.That(results, Has.Count.EqualTo(1), "Solution-wide scan should find exactly one hardcoded path");
+        Assert.That(results[0].IssueType, Is.EqualTo("HardcodedPath"));
+        Assert.That(results[0].filePath.Absolute, Does.EndWith("Paths.cs"), "FilePathWrapper must be set on the finding");
     }
 
     [Test]
@@ -161,7 +163,8 @@ class C { string p = ""C:\\Logs\\app.log""; }")]);
         _workspaceManager.SetTestSolution(solution);
 
         var results = await _securityEngine.FindHardcodedPathsAsync(projectName: "MyService");
-        Assert.That(results, Is.Not.Empty);
+        Assert.That(results, Has.Count.EqualTo(1));
+        Assert.That(results[0].IssueType, Is.EqualTo("HardcodedPath"));
 
         var empty = await _securityEngine.FindHardcodedPathsAsync(projectName: "Ghost");
         Assert.That(empty, Is.Empty);
@@ -201,7 +204,8 @@ class Repo {
         _workspaceManager.SetTestSolution(solution);
 
         var results = await _securityEngine.CheckForSqlInjectionAsync(projectName: "DataProj");
-        Assert.That(results, Is.Not.Empty);
+        Assert.That(results, Has.Count.EqualTo(1));
+        Assert.That(results[0].IssueType, Is.EqualTo("PossibleSqlInjection"));
 
         var empty = await _securityEngine.CheckForSqlInjectionAsync(projectName: "NoSuchProj");
         Assert.That(empty, Is.Empty);
@@ -352,7 +356,8 @@ class C {
         var results = await _solutionStructureEngine.FindStructuralSmellsAsync(
             typeFilter: SolutionStructureEngine.StructuralSmellType.NameMismatch);
 
-        Assert.That(results.Any(r => r.Contains("NAME_MISMATCH")), Is.True,
+        Assert.That(results, Has.Count.EqualTo(1));
+        Assert.That(results[0], Does.Contain("NAME_MISMATCH"),
             "NAME_MISMATCH should still be reported in non-AppHost projects");
     }
 
