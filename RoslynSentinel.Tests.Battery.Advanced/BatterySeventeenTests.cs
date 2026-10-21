@@ -32,6 +32,7 @@ public class LogicOptimizationEngineTests
     [Test]
     public async Task ConvertToNullCoalescing_UnknownFile_ReturnsEmptyString()
     {
+        // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
         var result = await _engine.ConvertToNullCoalescingAsync("NoSuchFile.cs");
         Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
     }
@@ -56,12 +57,14 @@ public class Guard
 
         var result = await _engine.ConvertToNullCoalescingAsync("Guard.cs");
 
-        Assert.That(result.UpdatedText!, Is.Not.EqualTo(""), "result should not be empty for a file with null check");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("??"));
     }
 
     [Test]
     public async Task AddGuardClauses_UnknownFile_ReturnsEmptyString()
     {
+        // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
         var result = await _engine.AddGuardClausesAsync("NoSuchFile.cs", "DoWork");
         Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText for AddGuardClauses");
     }
@@ -69,6 +72,7 @@ public class Guard
     [Test]
     public async Task SimplifyBooleanExpressions_UnknownFile_ReturnsEmptyString()
     {
+        // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
         var result = await _engine.SimplifyBooleanExpressionsAsync("NoSuchFile.cs");
         Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText for SimplifyBooleanExpressions");
     }
@@ -173,7 +177,7 @@ public class ClassB {}
 
         var smells = await _engine.FindStructuralSmellsAsync(filePath: "TwoTypes.cs");
 
-        Assert.That(smells, Is.Not.Empty, "two types in one file should trigger a MultiType structural smell");
+        Assert.That(smells.Select(s => s.ToString()), Has.Some.Contains("MULTI_TYPE"), "two types in one file should trigger a MultiType structural smell");
     }
 }
 

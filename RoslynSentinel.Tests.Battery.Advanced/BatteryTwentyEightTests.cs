@@ -374,6 +374,7 @@ public class Streamer {
         _workspaceManager.SetTestSolution(solution);
         var result = await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Streamer.cs", 4);
         // Without a local declaration as the previous statement, engine returns unchanged
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Even when conversion is not applicable, result must not be null/empty.");
+        Assert.That(result.UpdatedText, Does.Contain("while"), "no-init while loop must stay a while loop");
+        Assert.That(result.UpdatedText, Does.Not.Contain("for ("), "no-init while loop must not be converted to for");
     }
 }

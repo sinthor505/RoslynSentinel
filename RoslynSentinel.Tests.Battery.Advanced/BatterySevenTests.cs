@@ -386,7 +386,10 @@ public class MathHelper
         // Line 3 = "        int sum = a + b;"
         var result = await _memberRefactoringEngine.ExtractMethodAsync("Calc.cs", 3, "int sum = a + b;", 3, "int sum = a + b;", "ComputeSum");
         Assert.That(result, Is.Not.Null);
-        Assert.That(!result.IsError || result.ErrorMessage != null, Is.True, "Should return IsSuccess or a descriptive error");
+        Assert.That(result.IsError, Is.False, result.ErrorMessage);
+        Assert.That(result.ExtractedMethodText, Does.Contain("ComputeSum("));
+        Assert.That(result.CallSiteReplacement, Does.Contain("ComputeSum("));
+        Assert.That(result.UpdatedSourceContent, Does.Contain("ComputeSum("));
     }
 
     [Test]
@@ -407,7 +410,8 @@ public class MathHelper
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _memberRefactoringEngine.AddRemoveParamsAsync("Service.cs", "Go");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("Go("));
     }
 
     [Test]
@@ -415,6 +419,7 @@ public class MathHelper
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
+        // TODO throw-migration: assert the typed exception once MemberRefactoringEngine throws
         var result = await _memberRefactoringEngine.AddRemoveParamsAsync("NoFile.cs", "Foo");
         Assert.That(result.UpdatedText, Is.Null);
     }
@@ -427,7 +432,9 @@ public class MathHelper
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _memberRefactoringEngine.SortMembersAsync("Order.cs", "Order");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        // TODO assert member order in UpdatedText once the sort key for Order.cs members is confirmed
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
     // --- ExtractMethod ---
@@ -435,7 +442,8 @@ public class MathHelper
     public async Task ExtractMethod_ValidLineRange_ReturnsResult()
     {
         SetSource(SimpleSource, "Order.cs");
-        var result = await _memberRefactoringEngine.ExtractMethodAsync("Order.cs", 14, "return string.Format", 14, "return string.Format", "FormatLabel");
-        Assert.That(result, Is.Not.Null);
+        var result = await _memberRefactoringEngine.ExtractMethodAsync("Order.cs", 17, "return string.Format(\"{0}: {1}\", OrderId, CustomerName);", 17, "return string.Format(\"{0}: {1}\", OrderId, CustomerName);", "FormatLabel");
+        Assert.That(result.IsError, Is.False, result.ErrorMessage);
+        Assert.That(result.ExtractedMethodText, Does.Contain("FormatLabel("));
     }
 }
