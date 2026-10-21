@@ -76,6 +76,21 @@ Proposed (not decided in detail). Part A fixes the leak; B-D are independent and
 4. Regression test per the issue: pre-seed a stale CRLF `Order.cs` in the bin dir and assert the disk-bound path
    still passes; a green suite alone says nothing (no current test pre-seeds it).
 
+- **Part A progress (2026-10-20).** The fixture is `RoslynSentinel.Tests.Tools.Advanced/BatteryTwentyFourTests.cs`
+  (137 tests when re-surveyed: 115 convertible, 19 read-only engine-preview tests, 3 real-disk). Slice order and
+  proposed topic classes, from the second survey: (1) `SyncTypeAndFilenameTests` 3 - DONE 4f97c8ee; (2)
+  `WrapRangeAndGenerationTests` 7 - DONE ae61d002 (adds `BatteryToolFactory`); then `UsingDocsTypedMemberTests` 7,
+  `MoveTypeAndExtractTests` 8, `IntroduceInlineTests` 11, `DeclarationModifierTests` 12 (the `WorkspaceVersion`
+  assert in the ChangeAccessibility version test is at risk on the fake), `MemberAddReplaceViewTests` 12,
+  `MemberRemoveTests` 14, `MethodSignatureCallSiteTests` 12, `MoveMemberRefusalTests` 12, `MoveMemberSuccessTests` 17
+  (the CRLF-forwarder and `EolChangeGuard` tests stay on the real manager unless the fake is shown to reproduce the
+  guard). Residual class keeps the 19 read-only tests and the 3 disk tests, with Setup, the wipe and
+  `[NonParallelizable]` (the latter already added by another session, 9e8c8ab2). Lessons: converted sources must be
+  CRLF-normalised (the originals were CRLF literals); old `Is.Not.Null` assertions hid real defects, now left as
+  pinned tests with `// TODO` (WrapRange NullReferenceException on a constructor-header range, WrapInUsing on
+  non-disposable statements, GenerateMapping compile refusal, ConvertAnonymousToNamed silent no-op,
+  SyncTypeAndFilename no-op reported as error). Cost: about 100-130k subagent tokens per slice.
+
 **B. `WorkspaceAccess` on the fake (decided in discussion).**
 - `FakeWorkspaceManager` takes a **required** `WorkspaceAccess` enum (`ReadOnly`, `ReadWrite`) in its constructor, so
   the mode is visible where the fake is created. No default: ~35 `new FakeWorkspaceManager()` sites in 23 files (search
