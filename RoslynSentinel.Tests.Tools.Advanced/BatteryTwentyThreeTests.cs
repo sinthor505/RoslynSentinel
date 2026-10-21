@@ -328,6 +328,9 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
         SetSource("using System.Security.Cryptography; public class H { public byte[] Hash(byte[] d) { return MD5.Create().ComputeHash(d); } }", "Security.cs");
         var result = await _securityEngine.AnalyzeSecurityAsync("Security.cs");
         Assert.That(result, Has.Count.EqualTo(1)); Assert.That(result[0].IssueType, Is.EqualTo("WeakHashAlgorithm")); Assert.That(result[0].Line, Is.EqualTo(1));
+        SetSource("public class C { public int Add(int a, int b) { return a + b; } }", "Clean.cs");
+        var clean = await _securityEngine.AnalyzeSecurityAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- GenerateTestSkeleton ---
@@ -441,9 +444,13 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task CheckForEmptyCatchBlocks_FileWithEmptyCatch_ReturnsList()
     {
-        SetSource(QualitySource, "Quality.cs");
+        SetSource("public class E { public void Run() { try { System.Console.WriteLine(); } catch (System.Exception ex) { System.Console.WriteLine(ex); } } }", "Clean.cs");
+        var clean = await _antiPatternEngine.CheckForEmptyCatchBlocksAsync(filePath: "Clean.cs");
+        Assert.That(clean, Is.Empty);
+        SetSource("public class E { public void Run() { try { System.Console.WriteLine(); } catch (System.Exception) { } } }", "Quality.cs");
         var result = await _antiPatternEngine.CheckForEmptyCatchBlocksAsync(filePath: "Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0], Does.StartWith("Empty catch block in Quality.cs at line 1."));
     }
 
     // --- FindTaskDelayUsage ---
@@ -451,9 +458,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskDelayUsage_FileWithTaskDelay_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
+        SetSource("public class C { public int Add(int a, int b) { return a + b; } }", "Clean.cs");
+        var clean = await _asyncSafetyEngine.FindTaskDelayUsageAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
+        SetSource("using System.Threading.Tasks; public class D { public async Task RunAsync() { await Task.Delay(10); } }", "Async.cs");
         var result = await _asyncSafetyEngine.FindTaskDelayUsageAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Is.EqualTo("RunAsync"));
+        Assert.That(result[0].Reason, Does.StartWith("Line 1: 'Task.Delay(...)' found"));
     }
 
     // --- CheckForRedundantCast ---
@@ -461,9 +473,13 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task CheckForRedundantCast_FileWithRedundantCast_ReturnsList()
     {
-        SetSource(QualitySource, "Quality.cs");
+        SetSource("public class R { public long Widen(int x) { return (long)x; } }", "Clean.cs");
+        var clean = await _antiPatternEngine.CheckForRedundantCastAsync(filePath: "Clean.cs");
+        Assert.That(clean, Is.Empty);
+        SetSource("public class R { public int Id(int x) { return (int)x; } }", "Quality.cs");
         var result = await _antiPatternEngine.CheckForRedundantCastAsync(filePath: "Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0], Does.StartWith("Redundant cast in Quality.cs at line 1. Expression is already of type Int32."));
     }
 
     // --- FindTaskDelayZeroUsage ---
@@ -587,6 +603,9 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
         Assert.That(result[0].IssueType, Is.EqualTo("PossibleSqlInjection"));
         Assert.That(result[0].Line, Is.EqualTo(1));
         Assert.That(result[0].Description, Does.Contain("'ExecuteNonQuery'"));
+        SetSource("public class Clean { public void Run(object cmd) { cmd.ExecuteNonQuery(\"DELETE FROM t\"); } }", "Clean.cs");
+        var clean = await _securityEngine.CheckForSqlInjectionAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- AnalyzeMethodControlFlow ---
