@@ -138,18 +138,17 @@ public class WirePathRelativizeFilterTests
             $"solutionRoot must equal fixture directory. Expected: {expectedRoot}, Got: {actualRoot}");
 
         // Check that all filePaths in successData are relative (not rooted) and use forward slashes.
-        var successData = responseBody["successData"];
-        if (successData is JsonArray successArray)
+        var successArray = responseBody["successData"] as JsonArray;
+        Assert.That(successArray, Is.Not.Null, "Search successData must be an array of symbol hits.");
+        Assert.That(successArray!.Count, Is.GreaterThan(0), "the probe symbol must produce at least one hit");
+        foreach (var item in successArray)
         {
-            foreach (var item in successArray)
-            {
-                if (item is JsonObject itemObj && itemObj.ContainsKey("filePath"))
-                {
-                    var filePath = itemObj["filePath"]!.GetValue<string>();
-                    Assert.That(Path.IsPathRooted(filePath), Is.False, $"filePath must be relative: {filePath}");
-                    Assert.That(filePath, Does.Not.Contain("\\"), $"filePath must use forward slashes: {filePath}");
-                }
-            }
+            var itemObj = item as JsonObject;
+            Assert.That(itemObj, Is.Not.Null, "every hit must be a JSON object");
+            Assert.That(itemObj!.ContainsKey("filePath"), Is.True, "every hit must carry filePath");
+            var filePath = itemObj["filePath"]!.GetValue<string>();
+            Assert.That(Path.IsPathRooted(filePath), Is.False, $"filePath must be relative: {filePath}");
+            Assert.That(filePath, Does.Not.Contain("\\"), $"filePath must use forward slashes: {filePath}");
         }
     }
 
@@ -211,21 +210,9 @@ public class WirePathRelativizeFilterTests
 
         var stub = JsonNode.Parse(text)!.AsObject();
 
-        // Check if it was offloaded.
-        if (stub.ContainsKey("offloaded") && stub["offloaded"]!.GetValue<bool>())
-        {
-            // The stub should have largeResult info.
-            if (stub.ContainsKey("largeResult"))
-            {
-                var largeResult = stub["largeResult"]!.AsObject();
-                if (largeResult.ContainsKey("filePath"))
-                {
-                    var largeResultPath = largeResult["filePath"]!.GetValue<string>();
-                    Assert.That(Path.IsPathRooted(largeResultPath), Is.True,
-                        $"largeResult.filePath must remain absolute: {largeResultPath}");
-                }
-            }
-        }
+        Assert.That(stub.ContainsKey("offloaded") && stub["offloaded"]!.GetValue<bool>(), Is.True,
+            "FindReferences on the offload fixture must be offloaded to a large result.");
+        // TODO offloaded stub has no largeResult object (audit expected largeResult.filePath); assert it is rooted once the stub shape is confirmed
     }
 
     [Test]
@@ -253,18 +240,17 @@ public class WirePathRelativizeFilterTests
                 "When ROSLYNSENTINEL_RELATIVE_PATHS=0, response must not have solutionRoot.");
 
             // Check that filePaths are absolute (rooted).
-            var successData = responseBody["successData"];
-            if (successData is JsonArray successArray)
+            var successArray = responseBody["successData"] as JsonArray;
+            Assert.That(successArray, Is.Not.Null, "Search successData must be an array of symbol hits.");
+            Assert.That(successArray!.Count, Is.GreaterThan(0), "the probe symbol must produce at least one hit");
+            foreach (var item in successArray)
             {
-                foreach (var item in successArray)
-                {
-                    if (item is JsonObject itemObj && itemObj.ContainsKey("filePath"))
-                    {
-                        var filePath = itemObj["filePath"]!.GetValue<string>();
-                        Assert.That(Path.IsPathRooted(filePath), Is.True,
-                            $"When disabled, filePath must be absolute: {filePath}");
-                    }
-                }
+                var itemObj = item as JsonObject;
+                Assert.That(itemObj, Is.Not.Null, "every hit must be a JSON object");
+                Assert.That(itemObj!.ContainsKey("filePath"), Is.True, "every hit must carry filePath");
+                var filePath = itemObj["filePath"]!.GetValue<string>();
+                Assert.That(Path.IsPathRooted(filePath), Is.True,
+                    $"When disabled, filePath must be absolute: {filePath}");
             }
         }
         finally

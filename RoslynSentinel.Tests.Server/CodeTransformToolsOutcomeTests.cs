@@ -166,7 +166,10 @@ public class Counter
         var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Increment", "convert_lock_to_semaphore_slim");
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
-        Assert.That(result.SuccessData, Is.TypeOf<SourceTransformResult>());
+        var transform = (SourceTransformResult)result.SuccessData!;
+        Assert.That(transform.UpdatedSource, Is.EqualTo("public class Counter\n{\n    private int _n;\n    public void Increment() { _n++; }\n}"));
+        Assert.That(transform.WroteToFile, Is.False);
+        Assert.That(transform.WorkspaceUpdated, Is.False);
     }
 
     [Test]
@@ -177,6 +180,11 @@ public class Counter
         var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Twice", "add_guard_clauses");
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(result.SuccessData, Is.TypeOf<SourceTransformResult>());
+        var transform = (SourceTransformResult)result.SuccessData!;
+        Assert.That(transform.WroteToFile, Is.False);
+        Assert.That(transform.WorkspaceUpdated, Is.False);
+        // TODO add_guard_clauses no-op returns a SourceTransformResult, not the 'No parameters eligible' text; assert UpdatedSource equals the input once confirmed
     }
 
     [Test]
@@ -187,6 +195,8 @@ public class Counter
         var result = await _tools.Generate(CodeTransformKind.generate_constructor, "outcome test", path, className: "Empty");
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(result.SuccessData, Is.TypeOf<string>());
+        Assert.That((string)result.SuccessData!, Does.Contain("No fields to initialize in constructor"));
     }
 
     // (c) A genuine engine failure (Error / DocumentNotFound / SourceInvalid ...) is an error with the engine's
@@ -258,7 +268,10 @@ public class EmailService
         var result = await _tools.Generate(CodeTransformKind.generate_constructor, "outcome test", path, className: "EmailService");
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
-        Assert.That(result.SuccessData as string, Does.Not.Contain("already in the requested state"));
+        Assert.That(result.SuccessData, Is.TypeOf<string>());
+        Assert.That((string)result.SuccessData!, Does.Contain("Outcome"));
+        Assert.That((string)result.SuccessData!, Does.Not.Contain("already in the requested state"));
+        // TODO generate_constructor success summary does not show the generated constructor text (Changes is empty); assert the constructor signature once the summary shape is confirmed
     }
 
     [Test]
@@ -281,7 +294,10 @@ public class Counter
         var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Increment", "convert_lock_to_semaphore_slim");
 
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
-        Assert.That(result.SuccessData, Is.TypeOf<SourceTransformResult>());
+        var transform = (SourceTransformResult)result.SuccessData!;
+        Assert.That(transform.UpdatedSource, Does.Contain("SemaphoreSlim"));
+        Assert.That(transform.UpdatedSource, Does.Not.Contain("lock ("));
+        Assert.That(transform.WroteToFile, Is.False);
     }
 
     // The engine THROWS ToolTargetIneligibleException for a non-interface base; the tool has no inner catch for it,

@@ -101,6 +101,9 @@ public class OrientationBreakerFilterTests
             cancellationToken: TestContext.CurrentContext.CancellationToken);
 
         Assert.That(result.IsError, Is.Not.True);
+        var body = System.Text.Json.Nodes.JsonNode.Parse(string.Join(" ", result.Content.OfType<TextContentBlock>().Select(b => b.Text)))!.AsObject();
+        var findings = body["findings"] as System.Text.Json.Nodes.JsonArray;
+        Assert.That(findings == null || findings.Count == 0, Is.True, "a normal session must surface no breaker findings");
     }
 
     [Test]
