@@ -1,6 +1,7 @@
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
+using RoslynSentinel.Tests.Support;
 using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
 
@@ -11,40 +12,7 @@ namespace RoslynSentinel.Tests.Tools.Advanced;
 [Parallelizable(ParallelScope.All)]
 public sealed class MoveTypeAndExtractTests
 {
-    private const string SimpleSource = @"
-namespace TestProj;
-
-public class Order
-{
-    public int OrderId { get; set; }
-    public string CustomerName { get; set; }
-
-    public Order(int orderId, string customerName)
-    {
-        OrderId = orderId;
-        CustomerName = customerName;
-    }
-
-    public string GetLabel()
-    {
-        return string.Format(""{0}: {1}"", OrderId, CustomerName);
-    }
-
-    public string GetStatus()
-    {
-        if (OrderId == 1) return ""Active"";
-        if (OrderId == 2) return ""Pending"";
-        return ""Unknown"";
-    }
-}
-
-public interface IService
-{
-    string GetLabel();
-}
-
-public enum Status { Active = 1, Pending = 2 }
-";
+    private static readonly string SimpleSource = Sources.Order;
 
     private const string RefactorSource = @"
 using System;
