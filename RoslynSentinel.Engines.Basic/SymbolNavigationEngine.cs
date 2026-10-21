@@ -1728,6 +1728,22 @@ public class SymbolNavigationEngine
                     continue;
                 }
 
+                // An object-creation or return-type reference inside an expression-bodied member sits on the type's
+                // declaration line, so GetEnclosingSymbol reports the type; attribute the nearest member instead.
+                if (enclosing is INamedTypeSymbol)
+                {
+                    var refNode = refTree.GetRoot(cancellationToken).FindNode(location.Location.SourceSpan);
+                    var memberSyntax = refNode.AncestorsAndSelf().OfType<MemberDeclarationSyntax>().FirstOrDefault();
+                    var memberSymbol = memberSyntax switch
+                    {
+                        FieldDeclarationSyntax field => refModel.GetDeclaredSymbol(field.Declaration.Variables[0], cancellationToken),
+                        EventFieldDeclarationSyntax evt => refModel.GetDeclaredSymbol(evt.Declaration.Variables[0], cancellationToken),
+                        null => null,
+                        _ => refModel.GetDeclaredSymbol(memberSyntax, cancellationToken),
+                    };
+                    enclosing = memberSymbol ?? enclosing;
+                }
+
                 var lineSpan = location.Location.GetLineSpan();
                 var line = lineSpan.StartLinePosition.Line + 1;
 

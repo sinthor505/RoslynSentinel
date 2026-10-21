@@ -1744,7 +1744,8 @@ public class Consumer
 }";
             SetSource(src, "Point.cs");
             var results = await _navigationEngine.FindCallersAsync(null, "Point", contextSnippet: null);
-            Assert.That(results, Has.Count.EqualTo(1), "Consumer.Make is the only caller of the Point type"); // TODO CallerMethod is "Consumer" for object-creation references (not "Make"); assert it once the engine attributes the enclosing member.
+            Assert.That(results, Has.Count.EqualTo(1), "Consumer.Make is the only caller of the Point type");
+            Assert.That(results[0].CallerMethod, Is.EqualTo("Make"));
         }
 
         // -- Fix B1: a type with only constructors resolves to the type (constructors are not a competing candidate) --
@@ -1762,7 +1763,8 @@ public class Consumer
 }";
             SetSource(src, "Widget.cs");
             var results = await _navigationEngine.FindCallersAsync(null, "Widget", contextSnippet: null);
-            Assert.That(results, Has.Count.EqualTo(1), "Consumer.Make is the only caller of the Widget type"); // TODO CallerMethod is "Consumer" for object-creation references (not "Make"); assert it once the engine attributes the enclosing member.
+            Assert.That(results, Has.Count.EqualTo(1), "Consumer.Make is the only caller of the Widget type");
+            Assert.That(results[0].CallerMethod, Is.EqualTo("Make"));
         }
 
         // -- Fix B1: a type plus an unrelated same-named method is ambiguous, and the error lists both candidates --
