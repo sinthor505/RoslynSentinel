@@ -2,6 +2,7 @@
 // Tests all 45 public methods of IntelligenceTools in-memory via TestSolutionBuilder.
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Advanced;
@@ -102,6 +103,7 @@ public class BatteryTwentyTwoTests
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Is.EqualTo("This detector requires scope=\"project\" with a valid projectName as scopeName. Received scope=\"file\", scopeName=null."));
     }
 
     // --- GetComprehensiveHealthReportTool ---
@@ -113,8 +115,10 @@ public class BatteryTwentyTwoTests
         var result = await _tools.GetComprehensiveHealthReportTool(reason: "test message", timeoutSeconds: 5);
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
-        Assert.That(result.SuccessData, Is.Not.Null);
-        // TODO health report DTO is typed object here; pin its sections/engine names once the shape is read
+        var report = (ComprehensiveHealthReport)result.SuccessData!;
+        Assert.That(report.ProjectSummaries, Has.Count.EqualTo(1));
+        Assert.That(report.HasMoreData, Is.False);
+        Assert.That(report.NextProjectOffset, Is.Null);
     }
 
     // --- GetBlastRadius (via InspectSymbolTool) ---
@@ -210,8 +214,11 @@ public class BatteryTwentyTwoTests
         var result = await _tools.GetSolutionMetricsTool(reason: "test message");
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
-        Assert.That(result.SuccessData, Is.Not.Null);
-        // TODO metrics DTO is typed object here; pin solution-level counts once the shape is read
+        var metrics = (SolutionMetrics)result.SuccessData!;
+        Assert.That(metrics.ProjectCount, Is.EqualTo(1));
+        Assert.That(metrics.TotalFiles, Is.EqualTo(1));
+        Assert.That(metrics.TotalTypes, Is.EqualTo(3));
+        Assert.That(metrics.Projects, Has.Count.EqualTo(1));
     }
 
     [Test]
@@ -222,8 +229,11 @@ public class BatteryTwentyTwoTests
         var result = await _tools.GetSolutionMetricsTool(reason: "test message", "TestProj");
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
-        Assert.That(result.SuccessData, Is.Not.Null);
-        // TODO project-scoped metrics DTO is typed object here; pin TestProj counts once the shape is read
+        var metrics = (SolutionMetrics)result.SuccessData!;
+        Assert.That(metrics.ProjectCount, Is.EqualTo(1));
+        Assert.That(metrics.TotalFiles, Is.EqualTo(1));
+        Assert.That(metrics.TotalTypes, Is.EqualTo(3));
+        Assert.That(metrics.Projects, Has.Count.EqualTo(1));
     }
 
     // --- GetCodeInventoryTool ---
@@ -254,10 +264,10 @@ public class BatteryTwentyTwoTests
     [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task DetectUnusedPrivateFields_ValidFile_ReturnsList()
     {
-        SetSource(RichSource, "Test.cs");
+        SetSource("public class Order\n{\n    private int _unused;\n}", "Test.cs");
         var result = await _deadCodeEngine.DetectUnusedPrivateFieldsAsync("Test.cs");
-        Assert.That(result, Is.Not.Null);
-        //Assert.That(result.Count > 0);
+        Assert.That(result, Has.Count.EqualTo(1));
+        // TODO DeadCodeReport member name not pinned; expect the flagged field _unused
     }
 
     // --- DetectUnusedLocalVariables (via DeadCodeEngine) ---
@@ -265,10 +275,10 @@ public class BatteryTwentyTwoTests
     [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task DetectUnusedLocalVariables_ValidFile_ReturnsList()
     {
-        SetSource(RichSource, "Test.cs");
+        SetSource("public class Order\n{\n    public void M()\n    {\n        var unusedLocal = 1;\n    }\n}", "Test.cs");
         var result = await _deadCodeEngine.DetectUnusedLocalVariablesAsync("Test.cs");
-        Assert.That(result, Is.Not.Null);
-        //Assert.That(result.Count > 0);
+        Assert.That(result, Has.Count.EqualTo(1));
+        // TODO DeadCodeReport local name not pinned; expect unusedLocal
     }
 
     // --- DetectLongParameterLists (via AnalysisEngine) ---
@@ -276,9 +286,9 @@ public class BatteryTwentyTwoTests
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task DetectLongParameterLists_ValidSolution_ReturnsList()
     {
-        SetSource(RichSource, "Test.cs");
+        SetSource("public class Order\n{\n    public void M(int a, int b, int c, int d, int e, int f) { }\n}", "Test.cs");
         var result = await _antiPatternEngine.DetectLongParameterListsAsync();
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
         //Assert.That(result.Count > 0);
     }
 
@@ -289,7 +299,8 @@ public class BatteryTwentyTwoTests
     {
         SetSource(RichSource, "Test.cs");
         var result = await _deadCodeEngine.FindUninstantiatedTypesAsync();
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(2));
+        // TODO pin the two reported type names once the report shape is read
         //Assert.That(result.Count > 0);
     }
 
@@ -300,7 +311,8 @@ public class BatteryTwentyTwoTests
     {
         SetSource(RichSource, "Test.cs");
         var result = await _solutionStructureEngine.FindCircularDependenciesAsync();
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Is.Empty);
+        // TODO positive case needs a multi-project dependency cycle fixture
         //Assert.That(result.Count > 0);
     }
 
@@ -311,7 +323,8 @@ public class BatteryTwentyTwoTests
     {
         SetSource(RichSource, "Test.cs");
         var result = await _tools.GetCallGraphTool(reason: "test message", "Test.cs", "ProcessAsync", "tree");
-        Assert.That(result.SuccessData, Is.Not.Null);
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.SuccessData!.ToString(), Does.Contain("ProcessAsync"));
         //Assert.That(result.TotalRecords > 0);
     }
 
@@ -320,10 +333,12 @@ public class BatteryTwentyTwoTests
     [Category("DocumentationEngine")] // sentinel:auto-category
     public async Task DocumentPocoFields_ValidClass_ReturnsString()
     {
-        SetSource(RichSource, "Test.cs");
+        SetSource("public class Order\n{\n    public int OrderId { get; set; }\n}", "Test.cs");
         var result = await _documentationEngine.DocumentPocoFieldsAsync("Test.cs", "Order");
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.Outcome == EditOutcome.Modified);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("[Description(\"Gets or sets the OrderId.\")]"));
+        // TODO DocumentPocoFieldsAsync annotates only properties; fields are ignored (RichSource Order.OrderId and CustomerName are fields)
     }
 
     // --- GenerateEqualityOverrides (via AnalysisEngine) ---
@@ -334,7 +349,8 @@ public class BatteryTwentyTwoTests
         SetSource(RichSource, "Test.cs");
         var result = await _antiPatternEngine.GenerateEqualityOverridesAsync("Test.cs", "Order");
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.Outcome == EditOutcome.Modified);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("GetHashCode"));
     }
 
     // --- FindUnusedReferences (via DependencyEngine) ---
@@ -344,7 +360,8 @@ public class BatteryTwentyTwoTests
     {
         SetSource(RichSource, "Test.cs");
         var result = await _dependencyEngine.FindUnusedReferencesAsync("TestProj");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Is.Empty);
+        // TODO positive case needs a project with an unreferenced project reference
         //Assert.That(result.Count > 0);
     }
 
@@ -362,7 +379,8 @@ public class BatteryTwentyTwoTests
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var dependencyEngine = new DependencyEngine(workspaceManager);
         var result = await dependencyEngine.CheckPackageInconsistencyAsync();
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Is.Empty);
+        // TODO positive case needs a fixture csproj with mismatched PackageReference versions
         //Assert.That(result.Count > 0);
     }
 
