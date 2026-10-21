@@ -48,7 +48,7 @@ public class ImmutabilityEngineTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("DoesNotExist.cs", "Entity");
-        Assert.That(result.UpdatedText, Is.Null, "Unknown file should return null UpdatedText, not throw");
+        Assert.That(result.UpdatedText, Is.Null, "Unknown file should return null UpdatedText, not throw"); // TODO throw-migration: assert the typed exception once the immutability engine throws
     }
 }
 

@@ -29,7 +29,7 @@ public class AdvancedLogicEngineTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
         var result = await new LogicSimplificationEngine(_mgr).InvertBooleanLogicAsync("NoSuchFile.cs", "myBool");
-        Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.DocumentNotFound), "unknown file should yield DocumentNotFound");
+        Assert.That(result.Outcome, Is.EqualTo(EngineOutcome.DocumentNotFound), "unknown file should yield DocumentNotFound"); // TODO throw-migration: assert the typed exception once the boolean-logic engine throws
     }
 
     [Test]
@@ -38,7 +38,7 @@ public class AdvancedLogicEngineTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
         var result = await new LogicSimplificationEngine(_mgr).ConvertIfToSwitchExpressionAsync("NoSuchFile.cs", "GetValue");
-        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
+        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText"); // TODO throw-migration: assert the typed exception once the syntax-modernization engine throws
     }
 
     [Test]
@@ -127,7 +127,7 @@ public class AdvancedStructuralEngineTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
         var result = await _engine.ConvertAbstractClassToInterfaceAsync("NoSuchFile.cs", "MyBase");
-        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
+        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText"); // TODO throw-migration: assert the typed exception once the abstract-class conversion engine throws
     }
 
     [Test]

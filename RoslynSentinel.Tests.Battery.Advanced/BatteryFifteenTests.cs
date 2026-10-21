@@ -147,7 +147,7 @@ public class CodeHealingEngineTests
     public async Task FixThreadSleep_UnknownFile_ReturnsEmptyString()
     {
         var result = await _engine.FixThreadSleepAsync("NoSuchFile.cs");
-        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
+        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText"); // TODO throw-migration: assert the typed exception once the thread-sleep engine throws
     }
 
     [Test]
