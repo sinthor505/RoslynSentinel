@@ -1330,7 +1330,7 @@ public class Controller
 }";
             SetSource(src, "Validator.cs");
             var result = await _navigationEngine.GetReverseCallGraphAsync("Validator.cs", "ValidateAsync", maxDepth: 2);
-            Assert.That(result, Is.Not.Null, "GetReverseCallGraph must not return null when interface and class share the same method name");
+            Assert.That(result, Is.Not.Null, "GetReverseCallGraph must not return null when interface and class share the same method name"); Assert.That(result!.MethodName, Is.EqualTo("ValidateAsync"), "Root must be the ValidateAsync node"); Assert.That(result.Callers.Select(c => c.MethodName).ToList(), Does.Contain("Handle"), "Controller.Handle must be a reverse caller of ValidateAsync");
         }
 
         // ── 9d: FindCallers -> no contextSnippet should prefer class declaration ───
@@ -1353,7 +1353,7 @@ public class Consumer
             // Without contextSnippet, the tool should pick the class method (not the interface)
             var results = await _navigationEngine.FindCallersAsync("Foo.cs", "GetNameAsync", contextSnippet: null);
             // The call from Consumer.Run should be found; interface has no body to generate callers from
-            Assert.That(results, Is.Not.Null, "FindCallersAsync must not throw when interface and class share same method name");
+            Assert.That(results, Has.Count.EqualTo(1), "Consumer.Run is the only caller of Foo.GetNameAsync"); Assert.That(results[0].CallerMethod, Is.EqualTo("Run")); Assert.That(results[0].CallerType, Is.EqualTo("Consumer"));
         }
 
 
@@ -1391,7 +1391,7 @@ public class Consumer
 }";
             SetSource(src, "Foo.cs");
             var results = await _navigationEngine.FindCallersAsync(null, "GetNameAsync", contextSnippet: null);
-            Assert.That(results, Is.Not.Null, "FindCallersAsync's preferImplementable:false path must keep resolving via the class candidate exactly as before this change");
+            Assert.That(results, Has.Count.EqualTo(1), "Consumer.Run is the only caller when the class candidate is resolved"); Assert.That(results[0].CallerMethod, Is.EqualTo("Run")); Assert.That(results[0].CallerType, Is.EqualTo("Consumer"));
         }
 
 
@@ -1743,7 +1743,7 @@ public class Consumer
 }";
             SetSource(src, "Point.cs");
             var results = await _navigationEngine.FindCallersAsync(null, "Point", contextSnippet: null);
-            Assert.That(results, Is.Not.Null, "A by-name FindCallers on a record type with no same-named member must resolve to the type");
+            Assert.That(results, Has.Count.EqualTo(1), "Consumer.Make is the only caller of the Point type"); // TODO CallerMethod is "Consumer" for object-creation references (not "Make"); assert it once the engine attributes the enclosing member.
         }
 
         // -- Fix B1: a type with only constructors resolves to the type (constructors are not a competing candidate) --
@@ -1761,7 +1761,7 @@ public class Consumer
 }";
             SetSource(src, "Widget.cs");
             var results = await _navigationEngine.FindCallersAsync(null, "Widget", contextSnippet: null);
-            Assert.That(results, Is.Not.Null, "A by-name FindCallers on a type whose only same-named symbols are its constructors must resolve to the type");
+            Assert.That(results, Has.Count.EqualTo(1), "Consumer.Make is the only caller of the Widget type"); // TODO CallerMethod is "Consumer" for object-creation references (not "Make"); assert it once the engine attributes the enclosing member.
         }
 
         // -- Fix B1: a type plus an unrelated same-named method is ambiguous, and the error lists both candidates --
@@ -3590,8 +3590,8 @@ namespace MyApp
         [Test]
         public async Task AddGuardClausesAsync_MethodNotInFile_ReturnsOriginalContent()
         {
-            // When the file exists but the method doesn't, the engine returns the file
-            // unchanged (no changes needed is not an error, unlike file-not-found).
+            // When the file exists but the method doesn't, the engine reports TargetNotFound
+            // with no UpdatedText (not an unchanged file); unlike file-not-found, no IO error.
             var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
             // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
             Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
@@ -3601,7 +3601,7 @@ namespace MyApp
         [Test]
         public async Task AddGuardClauses_Tool_MethodNotFound_DoesNotThrow()
         {
-            // When the engine returns non-empty content (no changes needed), the tool
+            // When the engine reports TargetNotFound with no UpdatedText, the tool
             // returns that content rather than throwing -> only file-not-found triggers IOE.
             var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
             // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
@@ -3826,7 +3826,7 @@ namespace MyApp
             // state. Even for a nonexistent file, the engine locates the interface in the solution
             // and returns non-empty content (no-op sync rather than a hard error).
             var result = await _engine.SyncInterfaceToImplementationAsync("nonexistent.cs", "Ghost", "IGhost");
-            // The engine returns content (not empty), so the file-not-found guard does NOT fire.
+            // The engine returns DocumentNotFound, so the file-not-found guard fires.
             // This is correct -> the engine "no-op"s gracefully rather than erroring.
             // TODO throw-migration: should this be DocumentNotFound/TargetNotFound? engine currently no-ops
             Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound));
