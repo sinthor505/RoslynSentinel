@@ -3443,6 +3443,7 @@ public class Calc
                 const string code = @"public class Calc { public int Add(int a, int b) => a + b; }";
                 SetSource(code, "Calc.cs");
                 var result = await _symbolNavigationEngine.GetCallGraphAsync("Calc.cs", "NonExistent", maxDepth: 2);
+                // TODO throw-migration: assert the typed exception once SymbolNavigationEngine throws
                 Assert.That(result, Is.Null, "Engine should return null for unknown method (tool layer converts to exception)");
             }
 
@@ -3467,6 +3468,7 @@ public class Svc
                 const string code = @"public class Svc { public void Helper() { } }";
                 SetSource(code, "Svc.cs");
                 var result = await _symbolNavigationEngine.GetReverseCallGraphAsync("Svc.cs", "Ghost", maxDepth: 2);
+                // TODO throw-migration: assert the typed exception once SymbolNavigationEngine throws
                 Assert.That(result, Is.Null, "Engine should return null for unknown method (tool layer converts to exception)");
             }
         }
@@ -3504,6 +3506,7 @@ public class Svc
                 const string code = @"public class Foo { }";
                 SetSource(code, "Foo.cs");
                 var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("INonExistent", "Logging", null);
+                // TODO throw-migration: assert the typed exception once CodeGenerationEngine throws
                 Assert.That(result, Is.Null, "Engine should return null for non-existent interface (tool layer converts to exception)");
             }
 
@@ -3513,6 +3516,7 @@ public class Svc
                 const string code = @"public class Foo { }";
                 SetSource(code, "Foo.cs");
                 var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("INonExistent", "Logging", null);
+                // TODO throw-migration: assert the typed exception once CodeGenerationEngine throws
                 Assert.That(result, Is.Null, "Engine should return null for non-existent interface (tool layer converts to exception)");
             }
 
@@ -3571,6 +3575,7 @@ namespace MyApp
         public async Task AddGuardClausesAsync_FileNotInWorkspace_ReturnsEmpty()
         {
             var result = await _engine.AddGuardClausesAsync("nonexistent.cs", "Foo");
+            // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace (tool layer converts to exception)");
         }
 
@@ -3578,6 +3583,7 @@ namespace MyApp
         public async Task AddGuardClauses_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
         {
             var result = await _engine.AddGuardClausesAsync("nonexistent.cs", "Foo");
+            // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
         }
 
@@ -3587,6 +3593,8 @@ namespace MyApp
             // When the file exists but the method doesn't, the engine returns the file
             // unchanged (no changes needed is not an error, unlike file-not-found).
             var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
+            // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
             Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target method is not found - no changes needed");
         }
 
@@ -3596,6 +3604,8 @@ namespace MyApp
             // When the engine returns non-empty content (no changes needed), the tool
             // returns that content rather than throwing -> only file-not-found triggers IOE.
             var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
+            // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
             Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target method is not found - no changes needed");
         }
     }
@@ -3629,6 +3639,7 @@ namespace MyApp
         public async Task AddBenchmarkStubAsync_FileNotInWorkspace_ReturnsEmpty()
         {
             var result = await _engine.AddBenchmarkStubAsync("nonexistent.cs", "MyClass", "MyMethod");
+            // TODO throw-migration: assert the typed exception once TestingEngine throws
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
         }
 
@@ -3636,24 +3647,25 @@ namespace MyApp
         public async Task AddBenchmarkStub_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
         {
             var result = await _engine.AddBenchmarkStubAsync("nonexistent.cs", "MyClass", "MyMethod");
+            // TODO throw-migration: assert the typed exception once TestingEngine throws
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
         }
 
         [Test]
         public async Task AddBenchmarkStubAsync_ClassNotInFile_ReturnsOriginalContent()
         {
-            // When the file exists but the class doesn't, the engine returns the original
-            // file content unchanged -> "no changes needed" is not the same as "file not found".
+            // TODO engine generates a stub without looking up the class - a missing class should likely be TargetNotFound (decide in throw-migration)
             var result = await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
             Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
         }
 
         [Test]
         public async Task AddBenchmarkStub_Tool_ClassNotFound_DoesNotThrow()
         {
-            // When the engine returns non-empty content (no changes needed), the tool
-            // returns that content rather than throwing -> only file-not-found triggers IOE.
+            // TODO engine generates a stub without looking up the class - a missing class should likely be TargetNotFound (decide in throw-migration)
             var result = await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
             Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
         }
     }
@@ -3687,6 +3699,7 @@ namespace MyApp
         public async Task AddBracesAsync_FileNotInWorkspace_ReturnsEmpty()
         {
             var result = await _engine.AddBracesAsync("nonexistent.cs");
+            // TODO throw-migration: assert the typed exception once SyntaxUpgradeEngine throws
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
         }
 
@@ -3694,6 +3707,7 @@ namespace MyApp
         public async Task AddBraces_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
         {
             var result = await _engine.AddBracesAsync("nonexistent.cs");
+            // TODO throw-migration: assert the typed exception once SyntaxUpgradeEngine throws
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
         }
 
@@ -3701,6 +3715,7 @@ namespace MyApp
         public async Task UpgradePatternMatchingAsync_FileNotInWorkspace_ReturnsEmpty()
         {
             var result = await _engine.UpgradePatternMatchingAsync("nonexistent.cs");
+            // TODO throw-migration: assert the typed exception once SyntaxUpgradeEngine throws
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
         }
 
@@ -3708,6 +3723,7 @@ namespace MyApp
         public async Task UpgradePatternMatching_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
         {
             var result = await _engine.UpgradePatternMatchingAsync("nonexistent.cs");
+            // TODO throw-migration: assert the typed exception once SyntaxUpgradeEngine throws
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
         }
     }
@@ -3739,6 +3755,7 @@ namespace MyApp
         public async Task MakeClassImmutableAsync_FileNotInWorkspace_ReturnsEmpty()
         {
             var result = await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("nonexistent.cs", "MyClass");
+            // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
         }
 
@@ -3746,6 +3763,7 @@ namespace MyApp
         public async Task MakeClassImmutable_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
         {
             var result = await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("nonexistent.cs", "MyClass");
+            // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
         }
 
@@ -3755,6 +3773,8 @@ namespace MyApp
             // When the file exists but the class doesn't, the engine returns the original
             // file content unchanged -> "no changes needed" is not the same as "file not found".
             var result = await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
+            // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
             Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
         }
 
@@ -3764,6 +3784,8 @@ namespace MyApp
             // When the engine returns non-empty content (no changes needed), the tool
             // returns that content rather than throwing -> only file-not-found triggers IOE.
             var result = await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
+            // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
             Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
         }
     }
@@ -3806,6 +3828,8 @@ namespace MyApp
             var result = await _engine.SyncInterfaceToImplementationAsync("nonexistent.cs", "Ghost", "IGhost");
             // The engine returns content (not empty), so the file-not-found guard does NOT fire.
             // This is correct -> the engine "no-op"s gracefully rather than erroring.
+            // TODO throw-migration: should this be DocumentNotFound/TargetNotFound? engine currently no-ops
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound));
             Assert.That(result, Is.Not.Null, "Engine returns content (not empty) for SyncInterface even when file is not in workspace");
         }
 
@@ -3818,6 +3842,7 @@ namespace MyApp
             var tools = CreateAdvancedTools();
             object? result = null;
             await Assert.DoesNotThrowAsync(async () => result = await tools.SyncInterfaceTool(reason: "test message", "nonexistent.cs", "IGhost", SyncInterfaceAction.sync, "Ghost"));
+            // TODO throw-migration: should this be DocumentNotFound/TargetNotFound? engine currently no-ops
             Assert.That(result, Is.Not.Null, "Tool returns engine content when engine signals no-changes-needed");
         }
 
@@ -3828,6 +3853,7 @@ namespace MyApp
             // which the tool layer converts to InvalidOperationException (verified by the
             // passing ConvertExpressionBody_Tool test).
             var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
+            // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty string when file is not in the workspace");
         }
 
@@ -3835,6 +3861,7 @@ namespace MyApp
         public async Task ConvertExpressionBody_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
         {
             var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
+            // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
             Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty string when file is not in the workspace");
         }
     }
