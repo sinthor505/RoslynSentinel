@@ -18,7 +18,7 @@ public class SolutionWideFunctionalTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new FakeWorkspaceManager();
+        _workspaceManager = FakeWorkspaceManager.ReadOnly();
         var config = new SentinelConfiguration();
         _solutionStructureEngine = new SolutionStructureEngine(_workspaceManager, config);
 

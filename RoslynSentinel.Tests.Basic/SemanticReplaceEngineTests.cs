@@ -10,7 +10,7 @@ public class SemanticReplaceEngineTests
 {
     private SemanticReplaceEngine CreateEngine(Solution solution)
     {
-        var fakeManager = new FakeWorkspaceManager();
+        var fakeManager = FakeWorkspaceManager.ReadOnly();
         fakeManager.SetTestSolution(solution);
         return new SemanticReplaceEngine(fakeManager);
     }

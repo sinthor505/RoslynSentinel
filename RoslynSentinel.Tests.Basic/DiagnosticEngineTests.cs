@@ -20,7 +20,7 @@ public class DiagnosticEngineTests
             "TestProj",
             [("Test.cs", "public class Foo { public void Bar() { } }")]);
 
-        var fake = new FakeWorkspaceManager();
+        var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
         var engine = new DiagnosticEngine(fake);
 
@@ -37,7 +37,7 @@ public class DiagnosticEngineTests
             "TestProj",
             [("Test.cs", "public class Foo { void Bar() { NoSuchMethod(); } }")]);
 
-        var fake = new FakeWorkspaceManager();
+        var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
         var engine = new DiagnosticEngine(fake);
 
@@ -53,7 +53,7 @@ public class DiagnosticEngineTests
             "TestProj",
             [("Test.cs", "public class Foo { void Bar() { NoSuchMethod(); } }")]);
 
-        var fake = new FakeWorkspaceManager();
+        var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
         var engine = new DiagnosticEngine(fake);
 
@@ -68,7 +68,7 @@ public class DiagnosticEngineTests
     [Test]
     public async Task GetFileDiagnostics_WithNoSolutionLoaded_ThrowsSolutionNotLoaded()
     {
-        var fake = new FakeWorkspaceManager();
+        var fake = FakeWorkspaceManager.ReadOnly();
         var engine = new DiagnosticEngine(fake);
 
         await Assert.ThatAsync(

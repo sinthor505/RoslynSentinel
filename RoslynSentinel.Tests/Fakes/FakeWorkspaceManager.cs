@@ -3,16 +3,37 @@ using Microsoft.CodeAnalysis.Text;
 
 namespace RoslynSentinel.Tests.Fakes;
 
-// Minimal IWorkspaceManager fake for tests that only need CurrentSolution / GetCurrentSolutionAsync,
-// or a GetSolutionRoot()-backed directory without a real Roslyn solution loaded at all (set
-// SolutionPath directly - see GitToolsSmokeTests.cs for an example). Every other member throws
-// NotImplementedException - extend as a test actually needs a member. If a test needs a real
-// on-disk solution instead (actual file I/O, MSBuild load, watcher behavior), use
-// RoslynSentinel.Tests.TestSolutionFixture (backed by PersistentWorkspaceManager) instead of this class.
+// In-memory IWorkspaceManager test double. Prefer FakeWorkspaceManager.ReadOnly() / ReadWrite(); or pass the WorkspaceAccess explicitly: ReadOnly refuses
+// ApplyProposedChangesAsync (it throws and counts RejectedWriteAttempts) and suits a test that never applies edits;
+// ReadWrite applies edits to the in-memory solution and suits a test that does.
+// Apply, the scoped-operation ledger and pre-apply validation are implemented. Breakers, symbol resolution, load and
+// undo throw NotImplementedException - extend as a test actually needs a member. If a test needs a real on-disk
+// solution (actual file I/O, MSBuild load, watcher behavior), use RoslynSentinel.Tests.TestSolutionFixture (backed by
+// PersistentWorkspaceManager) instead of this class.
 public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader
 
 {
     private readonly ScopedOperationLedgerEngine _ledger = new();
+
+    public FakeWorkspaceManager(WorkspaceAccess access)
+    {
+        Access = access;
+    }
+
+    [Obsolete("Pass a WorkspaceAccess: ReadOnly if the test never applies edits, otherwise ReadWrite.")]
+    public FakeWorkspaceManager() : this(WorkspaceAccess.ReadWrite)
+    {
+    }
+
+    /// <summary>For a test that never applies edits; a refused apply throws and is counted.</summary>
+    public static FakeWorkspaceManager ReadOnly() => new(WorkspaceAccess.ReadOnly);
+
+    /// <summary>For a test that applies edits to the in-memory solution.</summary>
+    public static FakeWorkspaceManager ReadWrite() => new(WorkspaceAccess.ReadWrite);
+
+    public WorkspaceAccess Access { get; }
+
+    public int RejectedWriteAttempts { get; private set; }
 
     public Solution? CurrentSolution
     {
@@ -81,6 +102,25 @@ public sealed class FakeWorkspaceManager : IDisposable, IWorkspaceManager, ISolu
         if (ApplyException is not null)
         {
             throw ApplyException;
+        }
+
+        if (Access == WorkspaceAccess.ReadOnly)
+        {
+            RejectedWriteAttempts++;
+            try
+            {
+                var auditPath = Environment.GetEnvironmentVariable("ROSLYNSENTINEL_FAKE_WRITE_AUDIT");
+                if (!string.IsNullOrEmpty(auditPath))
+                {
+                    File.AppendAllText(auditPath, NUnit.Framework.TestContext.CurrentContext.Test.FullName + Environment.NewLine);
+                }
+            }
+            catch
+            {
+                // The audit must never change test behaviour.
+            }
+
+            throw new InvalidOperationException("This FakeWorkspaceManager was created with WorkspaceAccess.ReadOnly, so ApplyProposedChangesAsync was refused. Construct it with WorkspaceAccess.ReadWrite if this test applies edits.");
         }
 
         var solution = CurrentSolution ?? throw new SolutionNotLoadedException("Solution not loaded.");

@@ -28,7 +28,7 @@ public static class TestServiceProviderBuilder
         services.AddLogging();
         services.AddRoslynSentinelEnginesBasic();
 
-        var fake = new FakeWorkspaceManager();
+        var fake = FakeWorkspaceManager.ReadOnly();
         services.AddSingleton(fake);
         services.AddSingleton<IWorkspaceManager>(fake);
         services.AddSingleton<ISolutionProvider>(fake);

@@ -19,7 +19,7 @@ public class OrchestrationTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new FakeWorkspaceManager();
+        _workspaceManager = FakeWorkspaceManager.ReadOnly();
         var config = new SentinelConfiguration();
         _structureEngine = new SolutionStructureEngine(_workspaceManager, config);
         _healthEngine = new HealthOrchestrationEngine(_workspaceManager, _structureEngine, config, new PerformanceEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager, config));

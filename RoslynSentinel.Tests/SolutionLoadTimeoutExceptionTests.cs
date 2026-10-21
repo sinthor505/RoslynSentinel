@@ -9,7 +9,7 @@ public class SolutionLoadTimeoutExceptionTests
     public void ToolErrorMapper_MapsToSolutionLoadTimeoutCodeAndKeepsMessage()
     {
         var ex = new SolutionLoadTimeoutException("x");
-        var fake = new FakeWorkspaceManager();
+        var fake = FakeWorkspaceManager.ReadOnly();
 
         var result = ToolErrorMapper.ToResultError(ex, fake, "ctx");
 

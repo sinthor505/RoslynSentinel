@@ -16,7 +16,7 @@ public class DiffEngineTests
     [SetUp]
     public void Setup()
     {
-        var workspaceManager = new FakeWorkspaceManager();
+        var workspaceManager = FakeWorkspaceManager.ReadOnly();
         _diffEngine = new DiffEngine();
     }
 
@@ -226,7 +226,7 @@ public class DiffEngineTests
     {
         var source = "public class C { public void M() {} }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", new[] { ("C.cs", source) });
-        var workspaceManager = new FakeWorkspaceManager();
+        var workspaceManager = FakeWorkspaceManager.ReadOnly();
         workspaceManager.SetTestSolution(solution);
 
         var diffEngine = new DiffEngine();
@@ -245,7 +245,7 @@ public class DiffEngineTests
     {
         var source = "public class C { public void M() {} }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", new[] { ("C.cs", source) });
-        var workspaceManager = new FakeWorkspaceManager();
+        var workspaceManager = FakeWorkspaceManager.ReadOnly();
         workspaceManager.SetTestSolution(solution);
 
         var diffEngine = new DiffEngine();

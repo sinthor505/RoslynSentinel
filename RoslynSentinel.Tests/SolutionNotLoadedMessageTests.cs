@@ -108,7 +108,7 @@ public class SolutionNotLoadedMessageTests
     [Test]
     public async Task GetCurrentSolutionAsync_WithNoSolution_ThrowsFreshStartMessage()
     {
-        using var manager = new FakeWorkspaceManager();
+        using var manager = FakeWorkspaceManager.ReadOnly();
 
         var ex = await Assert.ThrowsAsync<SolutionNotLoadedException>(async () => await manager.GetCurrentSolutionAsync(CancellationToken.None));
 
@@ -118,7 +118,7 @@ public class SolutionNotLoadedMessageTests
     [Test]
     public async Task GetCurrentSolutionAsync_AfterLoadStateMarkedLoaded_ThrowsPlainMessage()
     {
-        using var manager = new FakeWorkspaceManager
+        using var manager = new FakeWorkspaceManager(WorkspaceAccess.ReadOnly)
         {
             LoadState = new SolutionLoadState(Started, Started.AddMinutes(1)),
         };

@@ -42,7 +42,7 @@ public class GitToolsSmokeTests
         // GitTools only ever calls GetSolutionRoot() to find the git root - it doesn't need a real
         // Roslyn solution loaded, so FakeWorkspaceManager.SolutionPath alone is enough (see its own
         // "Mirrors PersistentWorkspaceManager.GetSolutionRoot()" comment).
-        var workspaceManager = new FakeWorkspaceManager { SolutionPath = Path.Combine(_repoDir, "Fake.sln") };
+        var workspaceManager = new FakeWorkspaceManager(WorkspaceAccess.ReadOnly) { SolutionPath = Path.Combine(_repoDir, "Fake.sln") };
         _gitTools = new GitTools(workspaceManager, NullLogger<GitTools>.Instance);
         _gitRemote = new GitRemoteTools(workspaceManager, NullLogger<GitRemoteTools>.Instance);
     }

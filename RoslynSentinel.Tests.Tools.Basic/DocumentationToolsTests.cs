@@ -29,7 +29,7 @@ public class DocumentationToolsTests
     /// </summary>
     private DocumentationTools BuildTools(OperatingMode operatingMode)
     {
-        var workspaceManager = new FakeWorkspaceManager
+        var workspaceManager = new FakeWorkspaceManager(WorkspaceAccess.ReadOnly)
         {
             SolutionPath = Path.Combine(_solutionRoot, "Fake.slnx")
         };

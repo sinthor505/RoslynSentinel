@@ -25,7 +25,7 @@ public class DependencyEngineFixtureTests
             "DownstreamApp",
             [("Consumer.cs", "public class Consumer { public Helper h; }")]);
 
-        var fake = new FakeWorkspaceManager();
+        var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
         var engine = new DependencyEngine(fake);
 
@@ -52,7 +52,7 @@ public class DependencyEngineFixtureTests
             "DownstreamApp",
             [("Consumer.cs", "public class Consumer { public void Work() { System.Console.WriteLine(\"hello\"); } }")]);
 
-        var fake = new FakeWorkspaceManager();
+        var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
         var engine = new DependencyEngine(fake);
 
@@ -89,7 +89,7 @@ public class SolutionStructureEngineFixtureTests
                 ("D.cs", "public class ClassD { public ClassA A; }")
             ]);
 
-        var fake = new FakeWorkspaceManager();
+        var fake = FakeWorkspaceManager.ReadOnly();
         fake.SetTestSolution(solution);
         var engine = new SolutionStructureEngine(fake, new SentinelConfiguration());
 

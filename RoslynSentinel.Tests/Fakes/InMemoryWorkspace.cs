@@ -14,7 +14,7 @@ public sealed class InMemoryWorkspace : IDisposable
     {
     }
 
-    public FakeWorkspaceManager Manager { get; } = new();
+    public FakeWorkspaceManager Manager { get; } = new(WorkspaceAccess.ReadWrite);
 
     // The real fixture projects are SDK projects with ImplicitUsings enabled, so test sources written against them use
     // [Serializable], Task, etc. without a using. Without this file the compile gate would reject those sources.
