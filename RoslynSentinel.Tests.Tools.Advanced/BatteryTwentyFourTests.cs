@@ -284,15 +284,7 @@ public enum Status { Active = 1, Pending = 2 }
     }
 
     // --- UsingDirectiveTool ---
-    [Test]
-    [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
-    public async Task UsingDirective_AutoStageTrue_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringExtractionDocsTools.UsingDirectiveTool(reason: "test message", "Order.cs", AddRemoveViewAction.add, "System.Linq");
-        Assert.That(result, Is.Not.Null);
-    }
-
+    // Stays on the disk-backed tier: the diff pre-image is read from disk, so the in-memory fake reports an empty pre-image (@@ -0,0 +1,1 @@).
     [Test]
     [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
     public async Task UsingDirective_Add_ChangedContentReflectsActualDiffNotFabricatedString()
@@ -1058,40 +1050,6 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _refactoringStructuralTools.ModifyModifierTool(reason: "test message", "Order.cs", "Order", NonAccessibilityModifier.@sealed, AddRemoveAction.remove);
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // modifier is now NonAccessibilityModifier (an enum that excludes public/private/internal/
-    // protected/etc.), so passing an accessibility keyword can no longer reach this method at all
-    // -> JSON schema/binding rejects it before ModifyModifierTool runs, which is what
-    // ModifyModifier_RejectsAccessibilityKeyword used to test at this layer.
-    // --- SummaryCommentTool ---
-    [Test]
-    [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
-    public async Task SummaryComment_AutoStageTrue_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringExtractionDocsTools.SummaryCommentTool(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "Represents an order.");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- AddProperty ---
-    [Test]
-    [Category("RefactoringStructuralTools")] // sentinel:auto-category
-    public async Task AddProperty_AutoStageTrue_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _typedMemberTools.TypedMemberTool(reason: "test message", "Order.cs", containerName: "Order", typedKind: TypedMemberKind.property, typedName: "Description", typedType: "string");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- AddField ---
-    [Test]
-    [Category("RefactoringStructuralTools")] // sentinel:auto-category
-    public async Task AddField_AutoStageTrue_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _typedMemberTools.TypedMemberTool(reason: "test message", "Order.cs", containerName: "Order", typedKind: TypedMemberKind.field, typedName: "_tag", typedType: "string");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1927,26 +1885,6 @@ public enum Status { Active = 1, Pending = 2 }
         SetSource("public class C {}", "Test.cs");
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("NonExistent.cs");
         Assert.That(result, Is.Not.Null);
-    }
-
-    // --- ExtractLocalVariableTool ---
-    [Test]
-    [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
-    public async Task ExtractLocalVariable_ValidContext_ReturnsString()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringExtractionDocsTools.ExtractLocalVariableTool(reason: "test message", "Order.cs", "GetLabel", "label");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    [Test]
-    [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
-    public async Task ExtractLocalVariable_NonExistentFile_ReturnsStructuredError()
-    {
-        SetSource("public class C {}", "Test.cs");
-        var result = await _refactoringExtractionDocsTools.ExtractLocalVariableTool(reason: "test message", "NonExistent.cs", "GetLabel", "label");
-        Assert.That(!result.IsError, Is.False);
-        Assert.That(result.ErrorData, Is.Not.Null);
     }
 
     // --- ConvertToSwitch ---
