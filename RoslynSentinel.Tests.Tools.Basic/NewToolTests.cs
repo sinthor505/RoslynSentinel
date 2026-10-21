@@ -169,7 +169,7 @@ public class NewToolTests
         var preview = await _refactoringEngine.FormatDocumentPreviewAsync("Test.cs");
 
         // The formatter may or may not consider this already perfect, but at minimum it should not throw
-        Assert.That(preview.Hunks, Is.Not.Null);
+        Assert.That(preview.Hunks.Count(), Is.Zero, "Already-formatted file must produce no hunks");
     }
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -213,7 +213,7 @@ public class NewToolTests
         var summary = await _diagnosticEngine.GetSolutionDiagnosticsAsync();
 
         // We just verify the summary struct is usable and has Data
-        Assert.That(summary, Is.Not.Null);
-        Assert.That(summary.Data.Details, Is.Not.Null);
+        Assert.That(summary.Data.Errors, Is.EqualTo(2));
+        Assert.That(summary.Data.Details.Select(d => d.Id), Is.EqualTo(new[] { "CS0103", "CS0103" }));
     }
 }

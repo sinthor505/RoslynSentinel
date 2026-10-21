@@ -78,7 +78,8 @@ public class Usage
 
         // Assert preview mode returns success with data
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-        Assert.That(result.SuccessData, Is.Not.Null);
+        // TODO pin the site count once the SuccessData sites type is confirmed; for now pin preview mode and a non-empty sites list
+        Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("\"mode\":\"preview\"").And.Contain("\"sites\":[{\"FilePath\":"));
         
         // Verify file is unchanged on disk
         var diskContent = File.ReadAllText(targetFile);
