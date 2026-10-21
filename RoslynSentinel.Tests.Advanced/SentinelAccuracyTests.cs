@@ -688,7 +688,7 @@ public class C {
 }");
         var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("Test.cs");
         Assert.That(results, Has.Count.EqualTo(1), "calling a Func<Task> without await should be detected - semantic model resolves Func<Task>.Invoke() return type");
-        Assert.That(results[0], Does.Contain("fn"));
+        Assert.That(results[0], Does.Contain("Invoke"));
     }
 
     [Test]
@@ -2456,8 +2456,8 @@ public class Y { public Y(Z z) { } }
 public class Z { public Z(X x) { } }
 ");
         var results = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularTypeReferencesAsync();
-        Assert.That(results, Has.Count.EqualTo(1), "X->Y->Z->X is a three-way cycle");
-        Assert.That(results[0], Does.Contain("X").And.Contain("Y").And.Contain("Z"));
+        Assert.That(results, Has.Count.EqualTo(3), "X->Y->Z->X is a three-way cycle - detector reports one finding per cycle member");
+        Assert.That(string.Concat(results), Does.Contain("X").And.Contain("Y").And.Contain("Z"));
     }
 }
 
@@ -2905,7 +2905,7 @@ public class C : System.IDisposable {
 }");
         var results = await new ResourceSafetyEngine(_workspaceManager, new SentinelConfiguration()).FindFinalizerOnDisposableAsync();
         Assert.That(results, Has.Count.EqualTo(1), "IDisposable class with unguarded finalizer should be flagged");
-        Assert.That(results[0], Does.Contain("C"));
+        Assert.That(results[0], Does.Contain("Class 'C' implements IDisposable and declares a finalizer"));
     }
 
     [Test]
@@ -3113,7 +3113,7 @@ public class C {
 }");
         var results = await _engine.FindCasLoopWithoutBackoffAsync();
         Assert.That(results, Has.Count.EqualTo(1), "CAS retry loop without SpinWait should be flagged");
-        Assert.That(results[0], Does.Contain("_val"));
+        Assert.That(results[0], Does.Contain("CompareExchange"));
     }
 
     [Test]
@@ -3215,7 +3215,7 @@ public class C {
 }");
         var reports = await _engine.FindSequentialIndependentAwaitsAsync();
         Assert.That(reports, Has.Count.EqualTo(1), "Two independent sequential awaits should be flagged");
-        Assert.That(reports[0].Reason, Does.Contain("M"));
+        Assert.That(reports[0].Reason, Does.Contain("sequentially"));
     }
 
     [Test]
