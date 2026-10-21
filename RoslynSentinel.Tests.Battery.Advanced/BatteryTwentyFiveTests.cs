@@ -376,6 +376,7 @@ public class Slicer {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.UseIndexFromEndAsync("NoSuchFile.cs");
+        // TODO throw-migration: assert the typed exception once CodeStyleEngine throws
         Assert.That(result.UpdatedText, Is.Null);
     }
 }
@@ -588,6 +589,7 @@ public class GranularRefactoringEngineGapTests
         _workspaceManager.SetTestSolution(solution);
         // Use a real dispatch ID -> 'type-to-var' is safe on any code (converts explicit types)
         var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Service.cs", "type-to-var", 1);
+        // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
         Assert.That(result, Is.Not.Null);
     }
 
@@ -608,6 +610,7 @@ public class GranularRefactoringEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new StructuralRefactoringEngine(_workspaceManager).InlineParameterAsync("Service.cs", "Go", "x");
+        // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
         Assert.That(result, Is.Not.Null);
     }
 
@@ -617,6 +620,7 @@ public class GranularRefactoringEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new StructuralRefactoringEngine(_workspaceManager).InlineParameterAsync("NoFile.cs", "Foo", "bar");
+        // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -627,7 +631,7 @@ public class GranularRefactoringEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Cache.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertMethodToIndexerAsync("Cache.cs", "Get");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("this[int key]"));
     }
 
     [Test]
@@ -636,6 +640,7 @@ public class GranularRefactoringEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertMethodToIndexerAsync("NoFile.cs", "Get");
+        // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -650,7 +655,7 @@ public class Outer {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Outer.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new StructuralRefactoringEngine(_workspaceManager).MoveTypeToOuterScopeAsync("Outer.cs", "Inner");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotMove)); Assert.That(result.Message, Does.Contain("CS1527"));
     }
 
     [Test]
