@@ -21,28 +21,7 @@ public sealed class DeclarationModifierTests
 
     private static RefactoringStructuralTools BuildStructuralTools(IWorkspaceManager workspaceManager)
     {
-        // Mirrors the engine chain in the BatteryTwentyFourTests [SetUp]: DiffEngine before ValidationEngine.
-        var config = new SentinelConfiguration();
-        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var refactoringEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-        var memberRefactoringEngine = new MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
-        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
-        var impl = new RefactoringStructuralImpl(refactoringEngine, memberRefactoringEngine, structuralRefinementEngine, symbolNavigationEngine, workspaceManager, validationEngine, NullLogger<RefactoringStructuralImpl>.Instance);
-        return new RefactoringStructuralTools(impl);
-    }
-
-    private static RefactoringSignatureTools BuildSignatureTools(IWorkspaceManager workspaceManager)
-    {
-        var config = new SentinelConfiguration();
-        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var refactoringEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-        var memberRefactoringEngine = new MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
-        var impl = new RefactoringSignatureImpl(refactoringEngine, memberRefactoringEngine, workspaceManager, validationEngine, symbolNavigationEngine, NullLogger<RefactoringSignatureImpl>.Instance);
-        return new RefactoringSignatureTools(impl);
+        return BatteryToolFactory.CreateRefactoringStructuralTools(workspaceManager);
     }
 
     [Test]
@@ -62,7 +41,7 @@ public sealed class DeclarationModifierTests
     public async Task ChangeSignature_ReversesConstructorParameters()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = new AdvancedRefactoringTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.ChangeSignatureTool(reason: "test message", workspace.PathOf("Order.cs"), "Order", new[] { new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0) });
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("Order(string customerName, int orderId)"));
@@ -84,7 +63,7 @@ public sealed class DeclarationModifierTests
     public async Task ChangeAccessibility_OrderIdBecomesInternal()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildSignatureTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
         var result = await tools.ChangeAccessibilityTool(reason: "test message", workspace.PathOf("Order.cs"), "OrderId", AccessibilityLevel.@internal);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var text = workspace.ReadText("Order.cs");

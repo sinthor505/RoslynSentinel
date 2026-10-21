@@ -47,7 +47,7 @@ public class BatteryThirtyOneTests
         _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
         _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
         _validationEngine = new ValidationEngine(_workspaceManager, new DiffEngine(), NullLogger<ValidationEngine>.Instance);
-        _tools = new AdvancedRefactoringTools(_workspaceManager);
+        _tools = BatteryToolFactory.CreateAdvancedRefactoringTools(_workspaceManager);
     }
 
     [TearDown]

@@ -39,8 +39,7 @@ public class BlobIntegrityInvariantTests
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await _workspaceManager.LoadSolutionAsync(_fixture.SolutionPath);
 
-        var config = new SentinelConfiguration();
-        _advancedRefactoringTools = new AdvancedRefactoringTools(_workspaceManager);
+        _advancedRefactoringTools = BatteryToolFactory.CreateAdvancedRefactoringTools(_workspaceManager);
 
         _targetFile = Directory
             .EnumerateFiles(_fixture.SolutionDirectory, "*.cs", SearchOption.AllDirectories)
