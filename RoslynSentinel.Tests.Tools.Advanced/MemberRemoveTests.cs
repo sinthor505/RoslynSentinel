@@ -4,6 +4,7 @@ using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tests.Support;
+using static RoslynSentinel.Tests.Support.Sources;
 using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
 
@@ -15,8 +16,6 @@ namespace RoslynSentinel.Tests.Tools.Advanced;
 public sealed class MemberRemoveTests
 {
     private static readonly string SimpleSource = Sources.Order;
-
-    private static string Crlf(string source) => source.ReplaceLineEndings("\r\n");
 
     // Concatenates every document's text so a test can assert a declaration is gone from the whole solution.
     private static string AllText(InMemoryWorkspace workspace)

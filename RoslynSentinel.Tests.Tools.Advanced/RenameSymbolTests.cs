@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tests.Support;
+using static RoslynSentinel.Tests.Support.Sources;
 using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
 
@@ -16,8 +17,6 @@ public sealed class RenameSymbolTests
     private static readonly string SimpleSource = Sources.Order;
 
     private static readonly string CrlfSimpleSource = Crlf(SimpleSource);
-
-    private static string Crlf(string source) => source.ReplaceLineEndings("\r\n");
 
     // RenameSymbolTool takes a SymbolHandle (projectName, docCommentId) instead of (filepath, methodName, contextSnippet),
     // so the handle is located via SymbolNavigationEngine first, matching how an agent calls LocateSymbolTool before RenameSymbolTool.

@@ -4,6 +4,7 @@ using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tests.Support;
+using static RoslynSentinel.Tests.Support.Sources;
 using RoslynSentinel.Tools.Advanced;
 using RoslynSentinel.Tools.Basic;
 
@@ -30,8 +31,6 @@ public sealed class MethodSignatureCallSiteTests
     private const string ProcessSource = "namespace RefactorNs;\npublic class Dog\n{\n    public void Process(int a, int b, int c, int d, int e) { }\n}\n";
 
     private static readonly string CrlfSimpleSource = Crlf(SimpleSource);
-
-    private static string Crlf(string source) => source.ReplaceLineEndings("\r\n");
 
     // --- ConstructorParameterTool ---
     [Test]

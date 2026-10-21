@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis.Text;
 using RoslynSentinel.Common.SnippetMatching;
+using static RoslynSentinel.Tests.Support.Sources;
 
 namespace RoslynSentinel.Tests;
 
@@ -47,18 +48,16 @@ public class SnippetMatcherTests
         yield return new TestCaseData("\n  \n    a\n    b\n  \n", "\n\na\nb\n\n").SetName("MultiLine_BlankLeadingAndTrailingSnippetLines");
     }
 
-    private static string NormalizeEol(string s) => s.Replace("\r\n", "\n").Replace("\r", "\n");
-
     private static string Collapse(string s) => Regex.Replace(s.Trim(), @"\s+", " ");
 
     private static int OneBasedLine(string text, int start) => 1 + text.Take(start).Count(c => c == '\n');
 
     /// <summary>Line endings normalised, every line trimmed at both ends.</summary>
-    private static string TrimLines(string s) => string.Join("\n", NormalizeEol(s).Split('\n').Select(l => l.Trim()));
+    private static string TrimLines(string s) => string.Join("\n", Lf(s).Split('\n').Select(l => l.Trim()));
 
     /// <summary>The snippet as the indentation matcher sees it: fully blank leading and trailing lines dropped, then <see cref="TrimLines"/>.</summary>
     private static string SnippetContentTrimmed(string snippet)
-        => TrimLines(string.Join("\n", NormalizeEol(snippet).Split('\n')
+        => TrimLines(string.Join("\n", Lf(snippet).Split('\n')
             .SkipWhile(string.IsNullOrWhiteSpace).Reverse().SkipWhile(string.IsNullOrWhiteSpace).Reverse()));
 
     // ---- (2) splice invariant, per matcher ----
@@ -100,7 +99,7 @@ public class SnippetMatcherTests
                                 Assert.That(matched, Is.EqualTo(snippet), label + " exact text");
                                 break;
                             case WhitespaceTolerance.IgnoreLineEndings:
-                                Assert.That(NormalizeEol(matched), Is.EqualTo(NormalizeEol(snippet)), label + " line-ending text");
+                                Assert.That(Lf(matched), Is.EqualTo(Lf(snippet)), label + " line-ending text");
                                 break;
                             case WhitespaceTolerance.IgnoreIndentation:
                                 Assert.That(TrimLines(matched), Is.EqualTo(SnippetContentTrimmed(snippet)), label + " indentation text");

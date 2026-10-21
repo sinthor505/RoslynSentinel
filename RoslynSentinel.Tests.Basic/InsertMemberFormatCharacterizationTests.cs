@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 using RoslynSentinel.Common;
+using static RoslynSentinel.Tests.Support.Sources;
 
 namespace RoslynSentinel.Tests.Basic;
 
@@ -26,9 +27,7 @@ public class InsertMemberFormatCharacterizationTests
 
     private const string LfText = Head + MethodA + "\n" + MethodB + Tail;
 
-    private static string ToCrlf(string lfText) => lfText.Replace("\n", "\r\n");
-
-    private static string Doc(bool crlf, string lfText) => crlf ? ToCrlf(lfText) : lfText;
+    private static string Doc(bool crlf, string lfText) => crlf ? Crlf(lfText) : lfText;
 
     private static async Task<(Document Document, SyntaxNode Root)> BuildAsync(string text)
     {
@@ -89,7 +88,7 @@ public class InsertMemberFormatCharacterizationTests
     [Test]
     public async Task CrlfDocument_UntouchedStrayLf_InsertInMiddle()
     {
-        var mixed = ToCrlf(LfText).Replace("public class C\r\n", "public class C\n");
+        var mixed = Crlf(LfText).Replace("public class C\r\n", "public class C\n");
         Assert.That(mixed.Count(c => c == '\n') - mixed.Count(c => c == '\r'), Is.EqualTo(1), "Precondition: exactly one stray LF.");
         var (document, root) = await BuildAsync(mixed);
         var container = ClassC(root);
@@ -97,6 +96,6 @@ public class InsertMemberFormatCharacterizationTests
         var result = await RoslynFormattingHelper.InsertMemberDeclarationAndFormatInsertionAsync(
             document, root, container, 1, NewMember(crlf: true));
 
-        Assert.That(result, Is.EqualTo(ToCrlf(Expected(1)).Replace("public class C\r\n", "public class C\n")));
+        Assert.That(result, Is.EqualTo(Crlf(Expected(1)).Replace("public class C\r\n", "public class C\n")));
     }
 }

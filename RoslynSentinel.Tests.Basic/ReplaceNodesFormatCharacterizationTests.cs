@@ -7,6 +7,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 using RoslynSentinel.Common;
+using static RoslynSentinel.Tests.Support.Sources;
 
 namespace RoslynSentinel.Tests.Basic;
 
@@ -20,8 +21,6 @@ namespace RoslynSentinel.Tests.Basic;
 public class ReplaceNodesFormatCharacterizationTests
 {
     private const string LfText = "namespace Scratch;\n\npublic class C\n{\n    public void A()\n    {\n    }\n\n    public void B()\n    {\n    }\n}\n";
-
-    private static string ToCrlf(string lfText) => lfText.Replace("\n", "\r\n");
 
     private static string PrivateA(string lfText) => lfText.Replace("    public void A()", "    private void A()");
 
@@ -49,21 +48,21 @@ public class ReplaceNodesFormatCharacterizationTests
     [Test]
     public async Task SingleReplacement_ByteExact([Values(false, true)] bool crlf)
     {
-        var (document, root) = await BuildAsync(crlf ? ToCrlf(LfText) : LfText);
+        var (document, root) = await BuildAsync(crlf ? Crlf(LfText) : LfText);
         var methodA = Method(root, "A");
         var replacements = new Dictionary<SyntaxNode, SyntaxNode> { [methodA] = Privatized(methodA) };
 
         var result = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(document, root, replacements);
 
         var expected = PrivateA(LfText);
-        Assert.That(result.Text, Is.EqualTo(crlf ? ToCrlf(expected) : expected));
+        Assert.That(result.Text, Is.EqualTo(crlf ? Crlf(expected) : expected));
         Assert.That(result.UnlocatedNodes, Is.Empty);
     }
 
     [Test]
     public async Task MultipleIndependentReplacements_ByteExact([Values(false, true)] bool crlf)
     {
-        var (document, root) = await BuildAsync(crlf ? ToCrlf(LfText) : LfText);
+        var (document, root) = await BuildAsync(crlf ? Crlf(LfText) : LfText);
         var methodA = Method(root, "A");
         var methodB = Method(root, "B");
         var replacements = new Dictionary<SyntaxNode, SyntaxNode>
@@ -75,7 +74,7 @@ public class ReplaceNodesFormatCharacterizationTests
         var result = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(document, root, replacements);
 
         var expected = PrivateB(PrivateA(LfText));
-        Assert.That(result.Text, Is.EqualTo(crlf ? ToCrlf(expected) : expected));
+        Assert.That(result.Text, Is.EqualTo(crlf ? Crlf(expected) : expected));
         Assert.That(result.UnlocatedNodes, Is.Empty);
     }
 

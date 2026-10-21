@@ -159,9 +159,12 @@ regrouping by tool is worthwhile but is no longer required by the leak. Decision
   holds `Sources.Order` (the 34-line `SimpleSource`) and `Sources.RichOrderService` (the ~72-line `RichSource`), both
   CRLF-normalised, plus `Crlf`/`Lf` (`ReplaceLineEndings`, so no `\r\r\n`). All 12 `SimpleSource` copies (11 in Tools.Advanced,
   `BatterySevenTests`) and all 4 `RichSource` copies (Tools.Basic, 2 in Tools.Advanced, Tests.Advanced) are one-line
-  `static readonly` aliases; suites green. Copy identity was a line-by-line read by the agents, not a hash. Remaining:
-  replace the 7 divergent EOL helpers (`ToCrlf` x2 is not LF-first; `Crlf` x3; `Lf`; `NormalizeEol`; `EolOf`) with
-  `Sources.Crlf/Lf`; `AsyncSource` (TwentyOne `Worker` vs TwentyThree `AsyncWorker` differ, so not a copy); the
+  `static readonly` aliases; suites green. Copy identity was a line-by-line read by the agents, not a hash.
+  **EOL helpers DONE (2026-10-21):** `ToCrlf` x2 (Tests.Basic), `Crlf` x3, `Lf` and `NormalizeEol` are deleted; the files
+  use `using static RoslynSentinel.Tests.Support.Sources;` (`Member(remove)` refuses a helper with callers even with
+  `skipPrecheck`, so `ReplaceSnippet` removed them). `NormalizeEol` now also folds `\v \f U+0085 U+2028/9`; the corpus has
+  none. `EolOf` is an EOL detector, not a converter, so it stays. Remaining:
+  `AsyncSource` (TwentyOne `Worker` vs TwentyThree `AsyncWorker` differ, so not a copy); the
   `Source`-with-path `InMemoryWorkspace.Create(params Source[])` overload (undecided); `RefactorSource`; widening
   `SnippetMatcherTests.Corpus`; then inline the 12+4 aliases to `Sources.*` at their use sites if wanted.
 

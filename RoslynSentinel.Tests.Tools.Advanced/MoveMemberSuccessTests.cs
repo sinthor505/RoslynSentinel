@@ -2,6 +2,7 @@ using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Fakes;
 using RoslynSentinel.Tools.Advanced;
+using static RoslynSentinel.Tests.Support.Sources;
 
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
@@ -11,8 +12,6 @@ namespace RoslynSentinel.Tests.Tools.Advanced;
 [Parallelizable(ParallelScope.All)]
 public sealed class MoveMemberSuccessTests
 {
-
-    private static string Lf(string text) => text.ReplaceLineEndings("\n");
 
     private static string Before(string text, string marker) => text.Substring(0, text.IndexOf(marker, StringComparison.Ordinal));
 
