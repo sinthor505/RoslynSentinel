@@ -73,7 +73,7 @@ public class BatteryThirtyThreeTests
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
-        _intelligenceTools = new IntelligenceTools(_impactAnalyzer, _metricsEngine, _inventoryEngine, _deadCodeEngine, _documentationEngine, _dependencyEngine, _solutionStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, new AntiPatternEngine(_workspaceManager), config: _config, logger: NullLogger<IntelligenceTools>.Instance);
+        _intelligenceTools = BatteryToolFactory.CreateIntelligenceTools(_workspaceManager);
         _performanceEngine = new PerformanceEngine(_workspaceManager);
         _securityEngine = new SecurityEngine(_workspaceManager);
         _testingEngine = new TestingEngine(_workspaceManager);
@@ -84,7 +84,7 @@ public class BatteryThirtyThreeTests
         _diffEngine = new DiffEngine();
         _antiPatternEngine = new AntiPatternEngine(_workspaceManager, _config);
         _asyncBatchEngine = new AsyncBatchEngine(_workspaceManager, _asyncOptimizationEngine, new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance), new AntiPatternEngine(_workspaceManager), new MigrationLedger(), NullLogger<AsyncBatchEngine>.Instance);
-        _qualityTools = new QualityTools(_testingEngine, _controlFlowEngine, new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), _diagnosticEngine, new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
+        _qualityTools = BatteryToolFactory.CreateQualityTools(_workspaceManager);
     }
 
     [TearDown]

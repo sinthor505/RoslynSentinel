@@ -76,6 +76,45 @@ internal static class BatteryToolFactory
         return new QualityTools(testingEngine, controlFlowEngine, new AntiPatternEngine(workspaceManager), new ThreadSafetyEngine(workspaceManager), diagnosticEngine, new CodeStyleAnalysisEngine(workspaceManager), new StackOverflowEngine(workspaceManager), new MsToolAugmentEngine(workspaceManager), workspaceManager, NullLogger<QualityTools>.Instance);
     }
 
+    internal static IntelligenceTools CreateIntelligenceTools(IWorkspaceManager workspaceManager)
+    {
+        var config = new SentinelConfiguration();
+        var solutionStructureEngine = new SolutionStructureEngine(workspaceManager, config);
+        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var discoveryEngine = new DiscoveryEngine(workspaceManager, symbolNavigationEngine);
+        var impactAnalyzer = new ImpactAnalyzer(workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
+        var healthOrchestrationEngine = new HealthOrchestrationEngine(workspaceManager, solutionStructureEngine, config, new PerformanceEngine(workspaceManager), new AntiPatternEngine(workspaceManager, config));
+        return new IntelligenceTools(impactAnalyzer, new MetricsEngine(workspaceManager), new InventoryEngine(workspaceManager), new DeadCodeEngine(workspaceManager, config), new DocumentationEngine(workspaceManager), new DependencyEngine(workspaceManager), solutionStructureEngine, new AsyncAnalysisEngine(workspaceManager), healthOrchestrationEngine, symbolNavigationEngine, new DependencyInjectionEngine(workspaceManager), discoveryEngine, new ProjectConsistencyEngine(workspaceManager), workspaceManager, new AntiPatternEngine(workspaceManager), config: config, logger: NullLogger<IntelligenceTools>.Instance);
+    }
+
+    internal static SymbolRelationshipTools CreateSymbolRelationshipTools(IWorkspaceManager workspaceManager)
+    {
+        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var discoveryEngine = new DiscoveryEngine(workspaceManager, symbolNavigationEngine);
+        return new SymbolRelationshipTools(new SymbolRelationshipImpl(discoveryEngine, symbolNavigationEngine, workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance));
+    }
+
+    internal static SymbolNavigationTools CreateSymbolNavigationTools(IWorkspaceManager workspaceManager)
+    {
+        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var impactAnalyzer = new ImpactAnalyzer(workspaceManager, NullLogger<ImpactAnalyzer>.Instance);
+        return new SymbolNavigationTools(new SymbolNavigationImpl(symbolNavigationEngine, impactAnalyzer, workspaceManager, NullLogger<SymbolNavigationImpl>.Instance));
+    }
+
+    internal static ScanTools CreateScanTools(IWorkspaceManager workspaceManager)
+    {
+        var config = new SentinelConfiguration();
+        var asyncSafetyEngine = new AsyncAnalysisEngine(workspaceManager);
+        var deadCodeEngine = new DeadCodeEngine(workspaceManager, config);
+        var dependencyEngine = new DependencyEngine(workspaceManager);
+        var solutionStructureEngine = new SolutionStructureEngine(workspaceManager, config);
+        var dependencyInjectionEngine = new DependencyInjectionEngine(workspaceManager);
+        var metricsEngine = new MetricsEngine(workspaceManager);
+        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        var discoveryEngine = new DiscoveryEngine(workspaceManager, symbolNavigationEngine);
+        return new ScanTools(new SecurityEngine(workspaceManager), new AntiPatternEngine(workspaceManager), asyncSafetyEngine, new ThreadSafetyEngine(workspaceManager), new ControlFlowEngine(workspaceManager), new PerformanceEngine(workspaceManager), deadCodeEngine, dependencyEngine, solutionStructureEngine, dependencyInjectionEngine, new ProjectConsistencyEngine(workspaceManager), metricsEngine, new CloneDetectionEngine(workspaceManager), discoveryEngine, new StackOverflowEngine(workspaceManager), new CodeStyleEngine(workspaceManager, config), new CodeStyleAnalysisEngine(workspaceManager), new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config), symbolNavigationEngine, new BreakingChangeEngine(workspaceManager), workspaceManager, new ResourceSafetyEngine(workspaceManager), NullLogger<ScanTools>.Instance);
+    }
+
     private static (SentinelConfiguration Config, SymbolNavigationEngine Navigation, ValidationEngine Validation, BasicRefactoringEngine Refactoring, MemberRefactoringEngine Member) BuildEngines(IWorkspaceManager workspaceManager)
     {
         // DiffEngine is built before ValidationEngine, matching the BatteryTwentyFourTests [SetUp] wiring.

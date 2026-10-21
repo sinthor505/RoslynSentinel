@@ -73,12 +73,12 @@ public class BatteryTwentyTwoTests
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
         _dependencyInjectionEngine = new DependencyInjectionEngine(_workspaceManager);
         _discoveryEngine = new DiscoveryEngine(_workspaceManager, _symbolNavigationEngine);
-        _tools = new IntelligenceTools(_impactAnalyzer, _metricsEngine, _inventoryEngine, _deadCodeEngine, _documentationEngine, _dependencyEngine, _solutionStructureEngine, _asyncSafetyEngine, _healthOrchestrationEngine, _symbolNavigationEngine, _dependencyInjectionEngine, _discoveryEngine, new ProjectConsistencyEngine(_workspaceManager), _workspaceManager, new AntiPatternEngine(_workspaceManager), config: _config, logger: NullLogger<IntelligenceTools>.Instance);
+        _tools = BatteryToolFactory.CreateIntelligenceTools(_workspaceManager);
         // Symbol-level tools moved to SymbolNavigationTools (Basic) in the server split.
-        _symbolRelationshipTools = new SymbolRelationshipTools(new SymbolRelationshipImpl(_discoveryEngine, _symbolNavigationEngine, _workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance));
-        _symbolNavigationTools = new SymbolNavigationTools(new SymbolNavigationImpl(_symbolNavigationEngine, _impactAnalyzer, _workspaceManager, NullLogger<SymbolNavigationImpl>.Instance));
+        _symbolRelationshipTools = BatteryToolFactory.CreateSymbolRelationshipTools(_workspaceManager);
+        _symbolNavigationTools = BatteryToolFactory.CreateSymbolNavigationTools(_workspaceManager);
         // GetPublicApiSurfaceTool moved to ScanTools (Advanced).
-        _scanTools = new ScanTools(new SecurityEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), _asyncSafetyEngine, new ThreadSafetyEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new PerformanceEngine(_workspaceManager), _deadCodeEngine, _dependencyEngine, _solutionStructureEngine, _dependencyInjectionEngine, new ProjectConsistencyEngine(_workspaceManager), _metricsEngine, new CloneDetectionEngine(_workspaceManager), _discoveryEngine, new StackOverflowEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeStyleAnalysisEngine(_workspaceManager), new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config), _symbolNavigationEngine, new BreakingChangeEngine(_workspaceManager), _workspaceManager, new ResourceSafetyEngine(_workspaceManager), NullLogger<ScanTools>.Instance);
+        _scanTools = BatteryToolFactory.CreateScanTools(_workspaceManager);
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Wrappers.cs", RichSource)]);
         _workspaceManager.SetTestSolution(solution);
