@@ -84,7 +84,9 @@ namespace RoslynSentinel.Tests.Advanced
 
             var findings = await _engine.DetectAntiPatternsAsync("Service.cs", patternFilter: ["MissingCancellationToken"]);
 
-            Assert.That(findings, Is.Not.Empty,
+            Assert.That(string.Concat(findings.Select(f => f.Description)), Does.Contain("Public async method 'DeleteAsync' has 2 parameter(s)"),
+                "Finding should name DeleteAsync.");
+            Assert.That(findings, Has.Count.EqualTo(1),
                 "A public async Task method with 2 parameters and no CancellationToken must be flagged.");
         }
 
@@ -106,7 +108,9 @@ namespace RoslynSentinel.Tests.Advanced
 
             var findings = await _engine.DetectAntiPatternsAsync("Service.cs", patternFilter: ["MissingCancellationToken"]);
 
-            Assert.That(findings, Is.Not.Empty, "3-parameter case must still be flagged.");
+            Assert.That(string.Concat(findings.Select(f => f.Description)), Does.Contain("Public async method 'UpdateAsync' has 3 parameter(s)"),
+                "Finding should name UpdateAsync.");
+            Assert.That(findings, Has.Count.EqualTo(1), "3-parameter case must still be flagged.");
         }
 
         [Test]
@@ -379,7 +383,9 @@ namespace RoslynSentinel.Tests.Advanced
 
             var issues = await _engine.FindUnsafeTypeCastsAsync("Handler.cs");
 
-            Assert.That(issues, Is.Not.Empty, "(IDisposable)object must be flagged as an unsafe cast.");
+            Assert.That(string.Concat(issues.Select(i => i.Description)), Does.Contain("Direct cast to 'IDisposable' detected"),
+                "Finding should name the IDisposable cast.");
+            Assert.That(issues, Has.Count.EqualTo(1), "(IDisposable)object must be flagged as an unsafe cast.");
         }
     }
 
@@ -632,7 +638,9 @@ namespace RoslynSentinel.Tests.Advanced
             var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Blocker.cs", source)]);
             _workspaceManager.SetTestSolution(solution);
             var findings = await _engine.DetectAntiPatternsAsync("Blocker.cs", patternFilter: ["BlockingTaskWait"]);
-            Assert.That(findings, Is.Not.Empty, "t.Result must still be flagged after any engine changes.");
+            Assert.That(string.Concat(findings.Select(f => f.Description)), Does.Contain("Accessing .Result on a Task blocks the current thread"),
+                "Finding should describe the .Result read.");
+            Assert.That(findings, Has.Count.EqualTo(1), "t.Result must still be flagged after any engine changes.");
         }
 
         [Test]
@@ -649,7 +657,9 @@ namespace RoslynSentinel.Tests.Advanced
             var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Handler.cs", source)]);
             _workspaceManager.SetTestSolution(solution);
             var findings = await _engine.DetectAntiPatternsAsync("Handler.cs", patternFilter: ["CatchExceptionSwallow"]);
-            Assert.That(findings, Is.Not.Empty, "Empty catch(Exception) must still be flagged.");
+            Assert.That(string.Concat(findings.Select(f => f.Description)), Does.Contain("Empty catch block silently swallows exceptions"),
+                "Finding should describe the empty catch.");
+            Assert.That(findings, Has.Count.EqualTo(1), "Empty catch(Exception) must still be flagged.");
         }
 
         [Test]
@@ -665,7 +675,9 @@ namespace RoslynSentinel.Tests.Advanced
             var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Config.cs", source)]);
             _workspaceManager.SetTestSolution(solution);
             var findings = await _engine.DetectAntiPatternsAsync("Config.cs", patternFilter: ["MagicNumber"]);
-            Assert.That(findings, Is.Not.Empty, "Magic number 42 must still be flagged.");
+            Assert.That(string.Concat(findings.Select(f => f.Description)), Does.Contain("Magic number '42' used directly in code"),
+                "Finding should name literal 42.");
+            Assert.That(findings, Has.Count.EqualTo(1), "Magic number 42 must still be flagged.");
         }
     }
 }
