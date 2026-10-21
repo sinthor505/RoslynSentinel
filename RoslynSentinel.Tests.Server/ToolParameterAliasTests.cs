@@ -175,6 +175,7 @@ public class ToolParameterAliasTests
     {
         // Slice 6a folded Git's target/commitHash into ref and files into paths. The repo state does not
         // matter here: the rename and its note happen before the tool runs, so even a git failure carries them.
+        // TODO repo state DOES matter for operation 'show': 'show HEAD' returns the HEAD patch, so a HEAD commit whose diff contains the text "Unknown parameter" fails the Not.Contain assert below; use a fixture repo or a ref with a known diff.
         var result = await _client.CallToolAsync(
             "Git",
             new Dictionary<string, object?>
