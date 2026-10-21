@@ -444,10 +444,16 @@ public class Registry {
     public async Task UseFieldBackedPropertiesEngine_WhenFeatureDisabled_ReturnsEmptyString()
     {
         _cfg.SetFeatureStatus("FieldBackedProperties", false);
-        SetSource("public class Test { public string X { get; set; } }", "Test.cs");
-        var result = await _suEngine.UseFieldBackedPropertiesAsync("Test.cs");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.FeatureDisabled), "Disabled feature must return the FeatureDisabled outcome");
-        _cfg.SetFeatureStatus("FieldBackedProperties", true);
+        try
+        {
+            SetSource("public class Test { public string X { get; set; } }", "Test.cs");
+            var result = await _suEngine.UseFieldBackedPropertiesAsync("Test.cs");
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.FeatureDisabled), "Disabled feature must return the FeatureDisabled outcome");
+        }
+        finally
+        {
+            _cfg.SetFeatureStatus("FieldBackedProperties", true);
+        }
     }
 
     // =========================================================================

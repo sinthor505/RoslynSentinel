@@ -124,8 +124,9 @@ public class AnalysisEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Tiny { public void A() {} public void B() {} public void C() {} }")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _antiPatternEngine.FindInterfaceExtractionCandidatesAsync(minPublicMethods: 2);
-        // TODO assert InterfaceCandidateReport members for 'Tiny' (result is a report object, not a list)
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].ClassName, Is.EqualTo("Tiny"));
+        Assert.That(result[0].PublicMethods, Has.Count.EqualTo(3));
     }
 
     [Test]
@@ -473,8 +474,8 @@ public class Calc {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.DetectUnusedLocalVariablesAsync("Calc.cs");
-        // TODO assert DeadCodeReport members naming 'unused' (result is a single report object)
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].SymbolName, Is.EqualTo("unused"));
     }
 
     [Test]
@@ -857,8 +858,8 @@ public class Dog : IAnimal { public void Speak() { } }
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Animals.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.FindAllImplementationsAsync("IAnimal");
-        // TODO assert ImplementationInfo members for 'Dog' (result is a single object)
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].TypeName, Is.EqualTo("Dog"));
     }
 
     [Test]
@@ -883,8 +884,8 @@ public class Person {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Person.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.GetTypeMembersDetailAsync("Person");
-        // TODO assert TypeMemberDetail members for 'Name' and 'Age' (result is a single report object)
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Some.Property("Name").EqualTo("Name"));
+        Assert.That(result, Has.Some.Property("Name").EqualTo("Age"));
     }
 
     [Test]
@@ -933,8 +934,9 @@ public static class StringExtensions {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Extensions.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.FindExtensionMethodsAsync("string");
-        // TODO assert ExtensionMethodInfo members for 'Shout' (result is a single object)
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Is.EqualTo("Shout"));
+        Assert.That(result[0].DefiningClass, Is.EqualTo("StringExtensions"));
     }
 
     [Test]
