@@ -784,23 +784,21 @@ public class Service
 {
     public void ProcessA(int value)
     {
-        if (value > 0)
-        {
-            System.Console.WriteLine(value);
-        }
+        var doubled = value * 2;
+        System.Console.WriteLine(doubled);
     }
 
     public void ProcessB(int value)
     {
-        if (value > 0)
-        {
-            System.Console.WriteLine(value);
-        }
+        var doubled = value * 2;
+        System.Console.WriteLine(doubled);
     }
 }";
         SetSource(code, "Service.cs");
         var duplicates = await _antiPatternEngine.FindDuplicateMethodsAsync(minStatements: 2);
-        Assert.That(duplicates, Is.Not.Null, "Should return duplicate findings"); // TODO FindDuplicateMethodsAsync returns 0 groups for identical ProcessA/ProcessB bodies (minStatements 2) - assert the real group once engine behavior is confirmed
+        Assert.That(duplicates, Has.Count.EqualTo(1), "Identical ProcessA/ProcessB bodies should form exactly one duplicate group");
+        var names = duplicates[0].Locations.Select(l => l.MethodName).ToList();
+        Assert.That(names, Does.Contain("ProcessA").And.Contain("ProcessB"));
     }
 
     /// <summary>
