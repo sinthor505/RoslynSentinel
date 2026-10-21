@@ -44,6 +44,9 @@ public class WorkspaceRefreshTests
                 new Dictionary<FilePathWrapper, string> { [tempFile] = updatedContent });
 
             Assert.That(result.WorkspaceInSync, Is.True);
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(result.FailedFiles, Is.Empty);
+            Assert.That(result.SucceededFiles, Does.Contain(tempFile));
 
             var doc = _manager.CurrentSolution!.Projects
                 .SelectMany(p => p.Documents)
@@ -84,6 +87,9 @@ public class WorkspaceRefreshTests
                 new Dictionary<FilePathWrapper, string> { [newFilePath] = content });
 
             Assert.That(result.WorkspaceInSync, Is.True);
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(result.FailedFiles, Is.Empty);
+            Assert.That(result.SucceededFiles, Does.Contain(newFilePath));
 
             var doc = _manager.CurrentSolution!.Projects
                 .SelectMany(p => p.Documents)
@@ -132,6 +138,9 @@ public class WorkspaceRefreshTests
 
             // Structural change: fast path sets needsFullReload; WorkspaceInSync must be false.
             Assert.That(result.WorkspaceInSync, Is.False, "Structural change should set WorkspaceInSync=false");
+            Assert.That(result.IsError, Is.False, result.Summary);
+            Assert.That(result.FailedFiles, Is.Empty);
+            Assert.That(result.SucceededFiles, Does.Contain(csprojFile));
 
             // After ApplyProposedChangesAsync returns the lock must be free.
             // GetCurrentSolutionAsync should not block.

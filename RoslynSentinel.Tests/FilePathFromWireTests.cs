@@ -13,7 +13,8 @@ public class FilePathFromWireTests
     [Test]
     public void FromWire_NullSolutionRoot_RelativePath_DoesNotThrow()
     {
-        Assert.DoesNotThrow(() => FilePathWrapper.ResolveFromWire("Test.cs", null));
+        var result = FilePathWrapper.ResolveFromWire("Test.cs", null);
+        Assert.That(result.Absolute, Is.EqualTo("Test.cs"));
     }
 
     [Test]

@@ -53,6 +53,7 @@ public class OperationBlobWriterTests
             "WrapRange/region", changeId, OneItem(), _solutionRoot);
 
         Assert.That(result.Written, Is.True, result.Diagnostic);
+        Assert.That(result.FileName, Is.Not.Null.And.Contain(changeId));
         Assert.That(OperationBlobWriter.FindBlobPath(changeId, _solutionRoot), Is.Not.Null,
             "a changeId that was issued must be resolvable by UndoLastApply");
     }
@@ -81,6 +82,7 @@ public class OperationBlobWriterTests
         var result = await OperationBlobWriter.WriteAsync(toolName, changeId, OneItem(), _solutionRoot);
 
         Assert.That(result.Written, Is.True, result.Diagnostic);
+        Assert.That(result.FileName, Is.Not.Null.And.Contain(changeId));
         Assert.That(OperationBlobWriter.FindBlobPath(changeId, _solutionRoot), Is.Not.Null);
     }
 
@@ -98,7 +100,7 @@ public class OperationBlobWriterTests
             Assert.That(result.Written, Is.False);
             Assert.That(result.Required, Is.False);
             Assert.That(result.IsIntegrityFailure, Is.False);
-            Assert.That(result.Diagnostic, Is.Not.Null.And.Not.Empty);
+            Assert.That(result.Diagnostic, Is.EqualTo("no solution root - blob not applicable"));
         });
     }
 
@@ -119,7 +121,7 @@ public class OperationBlobWriterTests
             Assert.That(result.Written, Is.False);
             Assert.That(result.Required, Is.True);
             Assert.That(result.IsIntegrityFailure, Is.True);
-            Assert.That(result.Diagnostic, Is.Not.Null.And.Not.Empty);
+            Assert.That(result.Diagnostic, Does.StartWith("blob write failed: "));
         });
     }
 
