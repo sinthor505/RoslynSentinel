@@ -611,6 +611,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
+        // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
         // Note: Boolean switch is less common, but should still work
         // May or may not convert depending on implementation details

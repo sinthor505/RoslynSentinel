@@ -96,8 +96,9 @@ public class Bug578RegressionTests
         var findings = await antiPatternEngine.DetectAntiPatternsAsync("BlockingService.cs");
 
         var blockingFindings = findings.Where(f => f.Pattern == "BlockingTaskWait").ToList();
-        Assert.That(blockingFindings, Is.Not.Empty,
-            "Task.Wait() on a real Task must still be flagged as a blocking anti-pattern");
+        Assert.That(blockingFindings, Has.Count.EqualTo(1),
+            "Task.Wait() must produce exactly one BlockingTaskWait finding.");
+        Assert.That(blockingFindings[0].Line, Is.EqualTo(8), "Finding must point at the Task.Delay(100).Wait() line.");
     }
 
     [Test]
@@ -122,8 +123,9 @@ public class Bug578RegressionTests
         var findings = await antiPatternEngine.DetectAntiPatternsAsync("ResultService.cs");
 
         var blockingFindings = findings.Where(f => f.Pattern == "BlockingTaskWait").ToList();
-        Assert.That(blockingFindings, Is.Not.Empty,
-            ".Result on a Task must still be flagged as a blocking anti-pattern");
+        Assert.That(blockingFindings, Has.Count.EqualTo(1),
+            ".Result on a Task must produce exactly one BlockingTaskWait finding.");
+        Assert.That(blockingFindings[0].Line, Is.EqualTo(8), "Finding must point at the return Task.FromResult(...).Result line.");
     }
 
     // ──────────────────────────────────────────────────────────────────────────

@@ -378,7 +378,8 @@ public class Spin
     public void Spin1() { for (;;) { System.Threading.Thread.Sleep(1); } }
 }", "Spin.cs");
         var results = await _antiPatternEngine.FindPossibleInfiniteLoopsAsync("Spin.cs");
-        Assert.That(results, Is.Not.Empty, "for(;;) without exit should be flagged as potential infinite loop.");
+        Assert.That(results, Has.Count.EqualTo(1), "Exactly one for(;;) loop must be flagged.");
+        Assert.That(results[0], Does.Contain("Potential infinite loop (for(;;)) in 'Spin1'"), "Finding must name the for(;;) loop and its method.");
     }
 
     [Test]
@@ -867,14 +868,16 @@ public class Greeter
 
     [Test]
     [Category("SyntaxModernizationEngine")] // sentinel:auto-category
-    public async Task ReplaceStringConcat_DoesNotChange_PureLiteralConcat()
+    public async Task ReplaceStringConcat_FoldsPureLiteralConcat()
     {
         // Two string literals concatenated -> Roslyn folds these at compile time; no variable to interpolate
         SetSource(@"
 public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
         var result = await new SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("C.cs");
-        // Still returns content without throwing; may or may not convert (implementation-defined for pure literals)
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        // Engine folds the literal chain into one interpolated string: "Hello" + ", World" -> $"Hello, World"
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("$\"Hello, World\""), "Pure literal concat must become one interpolated string.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("\"Hello\" + \", World\""), "Original concat must be replaced.");
     }
 
     [Test]
@@ -1003,7 +1006,7 @@ public class C
         var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceFieldAsync("C.cs", "var x = 42", "_answer");
         Assert.That(result.UpdatedText, Does.Contain("_answer"), "New field name must appear in output.");
         Assert.That(result.UpdatedText, Does.Contain("private"), "Extracted field must be private.");
-        Assert.That(result.UpdatedText, Does.Contain("readonly").Or.Contain("_answer"), "Field should be readonly.");
+        Assert.That(result.UpdatedText, Does.Contain("private readonly "), "Field must be declared private readonly.");
     }
 
     [Test]
@@ -1015,6 +1018,7 @@ public class C
         // Snippet points to class declaration -> no expression there; graceful fallback returns original
         var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceFieldAsync("C.cs", "public class C", "_f");
         // Should return the original source unchanged (graceful fallback)
+        // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
     }
 
