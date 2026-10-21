@@ -379,7 +379,7 @@ public class CreateFileDeleteFileTests
     // no baseline hash, so a timestamp-only touch (identical content) was flagged as external drift.
     // PopulateKnownFileHashes now baselines them, so the touch must be suppressed. Real watcher, real
     // fixture files, no reflection: this covers the load-time baseline for BOTH the project file and the
-    // solution file; it does not cover .slnx specifically (the fixture solution is a .sln).
+    // solution file (the fixture solution is a .sln); the .slnx case is covered by the two *Slnx* tests below.
     [Test]
     public async Task ExternalTouch_ProjectAndSolutionFileWithIdenticalContent_IsNotFlaggedAsDriftAsync()
     {
