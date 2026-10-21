@@ -487,9 +487,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskDelayZeroUsage_ValidFile_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
+        SetSource("using System.Threading.Tasks; public class Z { public async Task RunAsync() { await Task.Delay(10); } }", "Clean.cs");
+        var clean = await _asyncSafetyEngine.FindTaskDelayZeroUsageAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
+        SetSource("using System.Threading.Tasks; public class Z { public async Task RunAsync() { await Task.Delay(0); } }", "Async.cs");
         var result = await _asyncSafetyEngine.FindTaskDelayZeroUsageAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Is.EqualTo("RunAsync"));
+        Assert.That(result[0].Reason, Does.StartWith("Line 1: 'Task.Delay(0)' found"));
     }
 
     // --- FindTaskWhenAllUsage ---
@@ -497,9 +502,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskWhenAllUsage_ValidFile_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
+        SetSource("public class C { public int Add(int a, int b) { return a + b; } }", "Clean.cs");
+        var clean = await _asyncSafetyEngine.FindTaskWhenAllUsageAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
+        SetSource("using System.Threading.Tasks; public class W { public async Task RunAsync() { await Task.Delay(1); await Task.Delay(2); } }", "Async.cs");
         var result = await _asyncSafetyEngine.FindTaskWhenAllUsageAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Is.EqualTo("RunAsync"));
+        Assert.That(result[0].Reason, Does.StartWith("Line 1: Method has 2 sequential awaits with independent pairs."));
     }
 
     // --- DetectAntiPatterns ---
@@ -517,9 +527,13 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindPossibleInfiniteLoops_ValidFile_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
+        SetSource("public class L { public void Spin() { while (true) { break; } } }", "Clean.cs");
+        var clean = await _antiPatternEngine.FindPossibleInfiniteLoopsAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
+        SetSource("public class L { public void Spin() { while (true) { } } }", "Async.cs");
         var result = await _antiPatternEngine.FindPossibleInfiniteLoopsAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0], Does.Contain("Potential infinite loop (while(true)) in 'Spin'"));
     }
 
     // --- DetectMismatchedAwait ---
@@ -527,9 +541,13 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task DetectMismatchedAwait_FileWithMixedAsync_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
+        SetSource("using System.Threading.Tasks; public class M { public async Task RunAsync() { await Work(); } public Task Work() { return Task.CompletedTask; } }", "Clean.cs");
+        var clean = await _antiPatternEngine.DetectMismatchedAwaitAsync(filePath: "Clean.cs");
+        Assert.That(clean, Is.Empty);
+        SetSource("using System.Threading.Tasks; public class M { public async Task RunAsync() { Work(); } public Task Work() { return Task.CompletedTask; } }", "Async.cs");
         var result = await _antiPatternEngine.DetectMismatchedAwaitAsync(filePath: "Async.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0], Is.EqualTo("Potential mismatched await in Async.cs at line 1. Call to 'Work' is not awaited."));
     }
 
     // --- FindHardcodedPaths ---
@@ -537,9 +555,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("SecurityEngine")] // sentinel:auto-category
     public async Task FindHardcodedPaths_FileWithHardcodedPath_ReturnsList()
     {
-        SetSource(SecuritySource, "Security.cs");
+        SetSource("public class H { public string P() { return \"plain\"; } }", "Clean.cs");
+        var clean = await _securityEngine.FindHardcodedPathsAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
+        SetSource("public class H { public string P() { return \"a/b\"; } }", "Security.cs");
         var result = await _securityEngine.FindHardcodedPathsAsync("Security.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].IssueType, Is.EqualTo("HardcodedPath"));
+        Assert.That(result[0].Line, Is.EqualTo(1));
     }
 
     // --- FindMutablePublicProperties ---
