@@ -2855,6 +2855,7 @@ public class Processor
                 SetSource("var x = new Dictionary<string, int>(); var y = x ?? new();");
                 // Should not throw NullReferenceException
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
+                // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
                 Assert.That(result, Is.Not.Null);
             }
 
@@ -2864,6 +2865,7 @@ public class Processor
                 // BUG-53: Empty project causes IndexOutOfRangeException
                 SetSource("");
                 var result = await _refactoringEngine.FormatDocumentAsync("Empty.cs");
+                // TODO throw-migration: assert the typed exception once BasicRefactoringEngine throws
                 Assert.That(result, Is.Not.Null);
             }
 
@@ -2873,7 +2875,9 @@ public class Processor
                 // BUG-58: Malformed syntax (double semicolon) causes parsing crash
                 SetSource("public class Foo { public void Bar() { Console.WriteLine(\"test\");; } }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-                Assert.That(result, Is.Not.Null);
+                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+                Assert.That(result.UpdatedText, Does.Contain("Console.WriteLine(\"test\");"));
+                Assert.That(result.UpdatedText, Is.Not.EqualTo("public class Foo { public void Bar() { Console.WriteLine(\"test\");; } }"));
             }
 
             [Test]
@@ -2882,7 +2886,8 @@ public class Processor
                 // BUG-69: Unicode characters cause encoding errors
                 SetSource("// Comment with émojis 🎉 and spëcial çharacters\npublic class Tëst { }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-                Assert.That(result, Is.Not.Null);
+                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+                Assert.That(result.UpdatedText, Does.Contain("// Comment with"));
             }
 
             [Test]
@@ -2891,6 +2896,7 @@ public class Processor
                 // BUG-76: Recursive method analysis causes stack overflow
                 SetSource("public class Recursive { public int F(int n) => n <= 0 ? 0 : n + F(n - 1); }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
+                // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
                 Assert.That(result, Is.Not.Null);
             }
 
@@ -2900,6 +2906,7 @@ public class Processor
                 // BUG-77: Complex generic constraints cause type resolution errors
                 SetSource("public class G<T, U> where T : class where U : struct { public void M<V>(V item) where V : T { } }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
+                // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
                 Assert.That(result, Is.Not.Null);
             }
 
@@ -2914,7 +2921,8 @@ public class Processor
                 SetSource("public class TestClass { public string Name { get; set; } }");
                 // Use GenerateToStringAsync as a stand-in for generated output validation
                 var result = await _codeGenerationEngine.GenerateToStringAsync("Test.cs", "TestClass");
-                Assert.That(result, Is.Not.Null, "Should generate non-null toString override");
+                Assert.That(result.UpdatedContent, Does.Contain("public override string ToString()"), "Generated ToString override missing");
+                Assert.That(result.UpdatedContent, Does.Contain("Name = {Name}"), "Generated ToString should include the Name property");
             }
 
             [Test]
@@ -2924,7 +2932,9 @@ public class Processor
                 // BUG-56: Generated constructor drops fields
                 SetSource("public class Widget { public int Id { get; set; } public string Name { get; set; } }");
                 var result = await _codeGenerationEngine.GenerateConstructorAsync("Test.cs", "Widget");
-                Assert.That(result, Is.Not.Null, "Should return generated constructor");
+                // TODO fixture has no private/readonly fields, so this asserts the NoCandidatesFound path; add a private field to exercise field-based constructor generation
+                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.NoCandidatesFound), "Widget has no private or readonly fields to initialize");
+                Assert.That(result.UpdatedText, Does.Not.Contain("public Widget("), "No constructor should be generated for this input");
             }
 
             [Test]
@@ -2934,7 +2944,11 @@ public class Processor
                 // BUG-57: Generated fluent builder has syntax errors
                 SetSource("public class Data { public int Value { get; set; } }");
                 var result = await _codeGenerationEngine.GenerateFluentBuilderAsync("Test.cs", "Data");
-                Assert.That(result, Is.Not.Null, "Should generate fluent builder");
+                Assert.That(result.Error, Is.Null, "Builder generation should not fail");
+                Assert.That(result.BuilderClassName, Is.EqualTo("DataBuilder"));
+                Assert.That(result.BuilderCode, Does.Contain("public class DataBuilder"));
+                Assert.That(result.BuilderCode, Does.Contain("public DataBuilder WithValue(int value)"));
+                Assert.That(result.BuilderCode, Does.Contain("public Data Build()"));
             }
 
             // ──────────────────────────────────────────────────────────────────────────
@@ -2946,6 +2960,7 @@ public class Processor
                 // BUG-45: Refactoring produces wrong result silently
                 SetSource("public class Calculator { public int Add(int a, int b) => a + b; }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
+                // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
                 Assert.That(result, Is.Not.Null);
             }
 
@@ -2961,8 +2976,10 @@ public class Processor
         }";
                 SetSource(source, "Source.cs");
                 // Just verify extraction doesn't throw an exception
-                await _refactoringEngine.ExtractInterfaceAsync("Source.cs", "Source", "ISource");
-                Assert.That(true, "Extraction completed without exception");
+                var result = await _refactoringEngine.ExtractInterfaceAsync("Source.cs", "Source", "ISource");
+                Assert.That(result.Count, Is.EqualTo(2), "Expected the source file and the new interface file");
+                Assert.That(result.Values.Any(v => v.Contains("public interface ISource")), Is.True, "Generated interface text missing");
+                Assert.That(result.Values.Any(v => v.Contains(": ISource")), Is.True, "Source class base list was not updated");
             }
 
             [Test]
@@ -2979,7 +2996,10 @@ public class Processor
         }";
                 SetSource(source, "Test.cs");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-                Assert.That(result, Is.Not.Null);
+                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+                Assert.That(result.UpdatedText, Does.Contain("var x = new List<int>"));
+                Assert.That(result.UpdatedText, Does.Contain("foreach (var item in x)"));
+                Assert.That(result.UpdatedText, Is.Not.EqualTo(source));
             }
         }
 
