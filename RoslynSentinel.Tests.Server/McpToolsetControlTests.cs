@@ -489,6 +489,7 @@ public class McpToolsetControlTests
         var health = await live.CallAsync("GetWorkspaceHealth", new() { ["reason"] = Reason });
         Assert.That(LiveServer.Text(health), Does.Not.Contain("Unable to resolve"), "dependencies of on-demand classes must be registered");
         Assert.That(LiveServer.Text(health), Does.Not.Contain("No service for type"));
+        Assert.That(health.IsError, Is.Not.True, LiveServer.Text(health));
     }
 
     [Test]
@@ -501,6 +502,7 @@ public class McpToolsetControlTests
         var call = await live.CallAsync("GetWorkspaceHealth", new() { ["reason"] = Reason });
 
         Assert.That(call.IsError, Is.True);
+        Assert.That(LiveServer.Text(call), Does.Contain("GetWorkspaceHealth"));
     }
 
     [Test]
@@ -515,6 +517,8 @@ public class McpToolsetControlTests
 
         var after = await live.CallAsync("McpServerStatus", new() { ["toolListing"] = "inactive", ["toolNameFilter"] = "Declaration", ["reason"] = Reason });
         Assert.That(LiveServer.Text(after), Does.Not.Contain("McpToolsetControl(toolSet: declarations"));
+        Assert.That(after.IsError, Is.Not.True, LiveServer.Text(after));
+        Assert.That(LiveServer.Text(after), Does.Contain("Declaration"));
     }
 
     [TestCase(true)]
@@ -617,6 +621,7 @@ public class McpToolsetControlTests
 
         Assert.That(call.IsError, Is.True);
         Assert.That(live.ListChangedCount, Is.Zero);
+        Assert.That(LiveServer.Text(call), Does.Contain("notASet"));
     }
 
     // ---- DeclarationTool (step 4a-1): merges ModifyModifierTool, ChangeAccessibilityTool, ModifyAttributeTool and ModifyBaseTypeTool; on-demand in claude-lean only ----

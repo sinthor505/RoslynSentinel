@@ -135,6 +135,8 @@ public class TestCategoryToolSchemaTests
         var (_, text) = await CallWithFrameworkAsync("NUnit");
 
         Assert.That(text, Does.Not.Contain("not a valid value for parameter 'framework'"));
+        // TODO isError is true here (SolutionNotLoaded, no solution in this fixture); load a solution fixture to pin a success outcome.
+        Assert.That(text, Does.Contain("TagTestCategories failed"));
     }
 
     [Test]

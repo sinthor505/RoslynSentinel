@@ -235,6 +235,7 @@ public class SchemaLeanProfileTests
 
         // Whatever the tool then does (no solution is loaded here, so it may well report an error), it
         // must not be the validator's "Unknown parameter" rejection.
+        Assert.That(text, Is.Not.Empty);
         Assert.That(text, Does.Not.Contain("Unknown parameter"), text);
     }
 
