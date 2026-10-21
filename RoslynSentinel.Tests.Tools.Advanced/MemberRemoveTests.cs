@@ -50,8 +50,6 @@ public enum Status { Active = 1, Pending = 2 }
 
     private static string Crlf(string source) => source.ReplaceLineEndings("\r\n");
 
-    private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateRefactoringStructuralTools(workspaceManager);
-
     // Concatenates every document's text so a test can assert a declaration is gone from the whole solution.
     private static string AllText(InMemoryWorkspace workspace)
     {
@@ -67,7 +65,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddMemberToClass_ValidClass_AddsTagPropertyToOrder()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", SimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.addMember, "Order", newMemberSource: "public string Tag { get; set; }");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("public string Tag { get; set; }"));
@@ -79,7 +77,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task RemoveMember_ValidMember_RemovesGetLabelAndKeepsSibling()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", SimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.remove, memberName: "GetLabel");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var orderText = workspace.ReadText("Order.cs");
@@ -93,7 +91,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         // GetLabel has no callers in SimpleSource, so the default precheck must let it through.
         using var workspace = InMemoryWorkspace.Create(("Order.cs", SimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.remove, memberName: "GetLabel");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var orderText = workspace.ReadText("Order.cs");
@@ -119,7 +117,7 @@ public enum Status { Active = 1, Pending = 2 }
             }
             """);
         using var workspace = InMemoryWorkspace.Create(("Helper.cs", source));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Helper.cs"), MemberAction.remove, memberName: "GetName");
         Assert.That(result.IsError, Is.True, "A member with a real caller must be refused by default.");
         Assert.That(result.ErrorData, Is.Not.Null);
@@ -150,7 +148,7 @@ public enum Status { Active = 1, Pending = 2 }
             }
             """);
         using var workspace = InMemoryWorkspace.Create(("Helper.cs", source));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Helper.cs"), MemberAction.remove, memberName: "GetName", skipPrecheck: true);
         Assert.That(result.IsError, Is.True, "The engine's own caller check still applies even with skipPrecheck: true.");
         Assert.That(workspace.ReadText("Helper.cs"), Does.Contain("public string GetName()"));
@@ -179,7 +177,7 @@ public enum Status { Active = 1, Pending = 2 }
             }
             """);
         using var workspace = InMemoryWorkspace.Create(("Greeter.cs", source));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var refused = await tools.MemberTool(reason: "test message", workspace.PathOf("Greeter.cs"), MemberAction.remove, memberName: "Greet");
         Assert.That(refused.IsError, Is.True, "An interface member's implementation must be caught by the default precheck.");
         Assert.That(refused.ErrorData!.Message, Does.Contain("implementation"), "Default refusal must come from the tool-level precheck, listing the implementation.");
@@ -214,7 +212,7 @@ public enum Status { Active = 1, Pending = 2 }
                     public CircularDependencyChain Make() => new CircularDependencyChain("x");
                 }
                 """)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
 
         var withPrecheck = await tools.MemberTool(reason: "test message", workspace.PathOf("Chain.cs"), MemberAction.remove, memberName: "CircularDependencyChain");
         Assert.That(withPrecheck.IsError, Is.True, "A record with a real caller must be refused by the default precheck.");
@@ -240,7 +238,7 @@ public enum Status { Active = 1, Pending = 2 }
 
                 public record OrphanRecord(string Name);
                 """)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
 
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Orphan.cs"), MemberAction.remove, memberName: "OrphanRecord");
         Assert.That(result.IsError, Is.False, "Member(remove) must remove an unreferenced type-level declaration.");
@@ -257,7 +255,7 @@ public enum Status { Active = 1, Pending = 2 }
 
                 public interface IOrphan { void M(); }
                 """)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
 
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("IOrphan.cs"), MemberAction.remove, memberName: "IOrphan");
         Assert.That(result.IsError, Is.False, "Member(remove) must remove an unreferenced interface declaration.");
@@ -287,7 +285,7 @@ public enum Status { Active = 1, Pending = 2 }
                     public override string Speak() => "woof";
                 }
                 """)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
 
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Dog.cs"), MemberAction.remove, memberName: "Speak");
         Assert.That(result.IsError, Is.False, "An override with no callers and nothing overriding it in turn must succeed under the default precheck.");
@@ -310,7 +308,7 @@ public enum Status { Active = 1, Pending = 2 }
                     string Greeting { get; }
                 }
                 """)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
 
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("IGreeter.cs"), MemberAction.remove, memberName: "Greeting");
         Assert.That(result.IsError, Is.False, "Member(remove) must be able to target a property declared directly on an interface.");
@@ -331,7 +329,7 @@ public enum Status { Active = 1, Pending = 2 }
                     public string Goodbye() => "bye";
                 }
                 """)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
 
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Greeter.cs"), MemberAction.remove, memberName: "Hello");
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
@@ -357,7 +355,7 @@ public enum Status { Active = 1, Pending = 2 }
                     public void Print(int number) { }
                 }
                 """)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
 
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Printer.cs"), MemberAction.remove, memberName: "Print", contextSnippet: "public void Print(int number)");
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
@@ -383,7 +381,7 @@ public enum Status { Active = 1, Pending = 2 }
                     public string Goodbye() => "bye";
                 }
                 """)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var before = AllText(workspace);
 
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Greeter.cs"), MemberAction.remove, memberName: "Hello", dryRun: true);

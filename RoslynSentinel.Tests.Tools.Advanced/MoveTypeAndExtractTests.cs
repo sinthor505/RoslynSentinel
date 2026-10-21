@@ -82,8 +82,6 @@ public class Target {}
     private static readonly string CrlfSimpleSource = SimpleSource.ReplaceLineEndings("\r\n");
     private static readonly string CrlfRefactorSource = RefactorSource.ReplaceLineEndings("\r\n");
 
-    private static AdvancedRefactoringTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateAdvancedRefactoringTools(workspaceManager);
-
     // Concatenates every document's text so a test can assert a type exists somewhere in the solution.
     private static string AllText(InMemoryWorkspace workspace)
     {
@@ -99,7 +97,7 @@ public class Target {}
     public async Task ExtractSuperclass_DogWithAnimalBase_IsRefusedWithoutMemberNames()
     {
         using var workspace = InMemoryWorkspace.Create(("Dog.cs", CrlfRefactorSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.ExtractMembersTool(reason: "test message", workspace.PathOf("Dog.cs"), "Dog", ExtractAsType.superclass, "AnimalBase");
         // TODO ExtractMembers superclass with no memberNames throws IndexOutOfRangeException instead of a structured argument error
         Assert.That(result.IsError, Is.True);
@@ -112,7 +110,7 @@ public class Target {}
     public async Task ExtractInterface_OrderClass_CreatesIOrderInterface()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.ExtractMembersTool(reason: "test message", workspace.PathOf("Order.cs"), "Order", ExtractAsType.@interface, "IOrder");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(AllText(workspace), Does.Contain("interface IOrder"));
@@ -124,7 +122,7 @@ public class Target {}
     public async Task MoveTypeToFile_StatusEnum_MovesEnumToOwnFile()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveTypeTool(reason: "test message", workspace.PathOf("Order.cs"), "Status", "ownFile");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Status.cs"), Does.Contain("enum Status"));
@@ -137,7 +135,7 @@ public class Target {}
     public async Task MoveAllTypesToFiles_FileScope_EachTypeGetsOwnFile()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveAllTypesToFilesTool(reason: "test message", ToolScope.file, workspace.PathOf("Order.cs"));
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Status.cs"), Does.Contain("enum Status"));
@@ -151,7 +149,7 @@ public class Target {}
     public async Task MoveAllTypesToFilesInProject_ProjectScope_MovesStatusToOwnFile()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveAllTypesToFilesTool(reason: "test message", ToolScope.project, "InMemoryProject");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Status.cs"), Does.Contain("enum Status"));
@@ -163,7 +161,7 @@ public class Target {}
     public async Task MoveAllTypesToFilesInSolution_SolutionScope_MovesStatusToOwnFile()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveAllTypesToFilesTool(reason: "test message", ToolScope.solution);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Status.cs"), Does.Contain("enum Status"));
@@ -175,7 +173,7 @@ public class Target {}
     public async Task ExtractMembersToPartial_GetLabel_IsRefusedWithCompilerErrors()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.ExtractMembersTool(reason: "test message", workspace.PathOf("Order.cs"), "Order", ExtractAsType.partialClass, memberNames: ["GetLabel"]);
         // TODO ExtractMembers partialClass on a non-partial class yields compiler errors (ErrorData.Message omits the diagnostics; cause not confirmed)
         Assert.That(result.IsError, Is.True);
@@ -188,7 +186,7 @@ public class Target {}
     public async Task MoveTypeToOuterScope_NestedInner_MovesInnerOutOfOuter()
     {
         using var workspace = InMemoryWorkspace.Create(("Outer.cs", "namespace TestProj; public class Outer { public class Inner {} }".ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveTypeTool(reason: "test message", workspace.PathOf("Outer.cs"), "Inner", "outerScope");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(AllText(workspace), Does.Contain("class Inner"));

@@ -50,8 +50,6 @@ public enum Status { Active = 1, Pending = 2 }
 
     private const string MismatchedSource = "namespace TestProj;\n\npublic class HelperResult\n{\n    public bool Ok { get; set; }\n}\n\npublic class MainService\n{\n    public int Id { get; set; }\n}\n";
 
-    private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateRefactoringStructuralTools(workspaceManager);
-
     // TODO SyncTypeAndFilenameTool reports a file that already matches its type name as an error; decide whether a no-op should be success
     // Pins current behaviour: a no-op rename is reported as an error (see TODO if that should change).
     [Test]
@@ -59,7 +57,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task SyncTypeAndFilename_FileAlreadyMatchingItsType_ReportsNoChangeAndLeavesFileUnchanged()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", SimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.SyncTypeAndFilenameTool(reason: "test message", workspace.PathOf("Order.cs"));
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.Message, Does.Contain("no change"));
@@ -75,7 +73,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task SyncTypeAndFilename_TargetTypeName_SelectsNonFirstDeclaredTypeAsync()
     {
         using var workspace = InMemoryWorkspace.Create(("Mismatched.cs", MismatchedSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.SyncTypeAndFilenameTool(reason: "test message", workspace.PathOf("Mismatched.cs"), targetTypeName: "MainService");
         Assert.That(!result.IsError, Is.True, $"Expected rename to succeed; error: {result.ErrorData?.Message}");
         var summary = (AppliedChangeSummary)result.SuccessData!;
@@ -89,7 +87,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task SyncTypeAndFilename_UnknownTargetTypeName_ReturnsActionableErrorAsync()
     {
         using var workspace = InMemoryWorkspace.Create(("Mismatched.cs", MismatchedSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.SyncTypeAndFilenameTool(reason: "test message", workspace.PathOf("Mismatched.cs"), targetTypeName: "DoesNotExist");
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData!.Message, Does.Contain("DoesNotExist"));

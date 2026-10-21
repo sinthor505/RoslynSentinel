@@ -51,15 +51,13 @@ public enum Status { Active = 1, Pending = 2 }
     // The original fixture was CRLF (verbatim literals inside a CRLF file); the EOL guard compares against the document's endings.
     private static readonly string CrlfSimpleSource = SimpleSource.ReplaceLineEndings("\r\n");
 
-    private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateRefactoringStructuralTools(workspaceManager);
-
     // --- MemberTool on enum containers (routes to AddEnumMemberAsync/RemoveEnumMemberAsync/ReplaceEnumMemberAsync) ---
     [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task Member_Add_OnEnumContainer_AddsEnumMemberToEnum()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.addMember, "Status", newMemberSource: "Cancelled");
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("Cancelled"));
@@ -70,7 +68,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_Remove_OnEnumMember_RemovesPendingFromEnum()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.remove, memberName: "Pending", skipPrecheck: true);
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var text = workspace.ReadText("Order.cs");
@@ -83,7 +81,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_Replace_OnEnumMember_ReplacesPendingWithInProgress()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.replace, memberName: "Pending", newMemberSource: "InProgress=2");
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var text = workspace.ReadText("Order.cs");
@@ -98,7 +96,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_View_WithMemberName_ReturnsThatMembersSource()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.view, memberName: "GetStatus");
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var view = result.SuccessData as MemberSourceViewResult;
@@ -115,7 +113,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_View_WithMissingMemberName_ReturnsNotFound()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.view, memberName: "NoSuchMember");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
@@ -126,7 +124,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task Member_View_OnEnumContainer_ReturnsEnumMembers()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         // A container-only view (no memberName) returns MemberViewResult with the container's direct members, not MemberSourceViewResult.
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.view, "Status");
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
@@ -142,7 +140,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InsertMemberAfter_GetLabel_PlacesNewMemberAfterGetLabel()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.addMember, "Order", newMemberSource: "public string Description => \"\";", position: "after:GetLabel");
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var text = workspace.ReadText("Order.cs");
@@ -156,7 +154,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task InsertMemberBefore_GetLabel_PlacesNewMemberBeforeGetLabel()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.MemberTool(reason: "test message", workspace.PathOf("Order.cs"), MemberAction.addMember, "Order", newMemberSource: "public string Tag => \"\";", position: "before:GetLabel");
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var text = workspace.ReadText("Order.cs");
@@ -171,7 +169,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddAttribute_SerializableOnOrder_IsRefusedWithCompilerErrors()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.ModifyAttributeTool(reason: "test message", workspace.PathOf("Order.cs"), "Order", "[System.Serializable]", AttributeModifyAction.add);
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.Message, Does.Contain("new compiler errors"));
@@ -184,7 +182,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task AddBaseType_OrderClass_AddsIServiceBaseType()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.ModifyBaseTypeTool(reason: "test message", workspace.PathOf("Order.cs"), "Order", "IService", AddRemoveAction.add);
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         // The tool may place the colon on the line after the class name, so the separator is matched loosely.
@@ -199,7 +197,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         var source = CrlfSimpleSource.Replace("public class Order", "[Serializable]\r\npublic class Order", StringComparison.Ordinal);
         using var workspace = InMemoryWorkspace.Create(("Order.cs", source));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.ModifyAttributeTool(reason: "test message", workspace.PathOf("Order.cs"), "Order", "Serializable", AttributeModifyAction.remove);
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var text = workspace.ReadText("Order.cs");
@@ -214,7 +212,7 @@ public enum Status { Active = 1, Pending = 2 }
     {
         var source = CrlfSimpleSource.Replace("public class Order", "public class Order : IService", StringComparison.Ordinal);
         using var workspace = InMemoryWorkspace.Create(("Order.cs", source));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.ModifyBaseTypeTool(reason: "test message", workspace.PathOf("Order.cs"), "Order", "IService", AddRemoveAction.remove);
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var text = workspace.ReadText("Order.cs");

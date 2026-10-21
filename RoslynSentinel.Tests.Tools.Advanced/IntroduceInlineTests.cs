@@ -132,15 +132,13 @@ public class Calc
     private static readonly string CrlfParameterSource = ParameterSource.ReplaceLineEndings("\r\n");
     private static readonly string CrlfLocalVariableSource = LocalVariableSource.ReplaceLineEndings("\r\n");
 
-    private static AdvancedRefactoringTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateAdvancedRefactoringTools(workspaceManager);
-
     // --- InlineSymbol (method) ---
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task InlineMethod_ValidMethod_ChangesSource()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.InlineSymbolTool(reason: "test message", workspace.PathOf("Order.cs"), "GetLabel", InlineKind.method);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Is.Not.EqualTo(CrlfSimpleSource));
@@ -153,7 +151,7 @@ public class Calc
     public async Task IntroduceField_ValidContext_AddsNamedField()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.IntroduceSymbolTool(reason: "test message", workspace.PathOf("Order.cs"), "\"Unknown\"", "unknownStatus", IntroduceAsType.field);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("unknownStatus"));
@@ -166,7 +164,7 @@ public class Calc
     public async Task IntroduceParameter_ValidContext_AddsNamedParameter()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.IntroduceSymbolTool(reason: "test message", workspace.PathOf("Order.cs"), "\"Active\"", "activeLabel", IntroduceAsType.parameter);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("activeLabel"));
@@ -178,7 +176,7 @@ public class Calc
     public async Task InlineField_ValidField_InlinesConstantValue()
     {
         using var workspace = InMemoryWorkspace.Create(("Counter.cs", CrlfConstFieldSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.InlineSymbolTool(reason: "test message", workspace.PathOf("Counter.cs"), "Step", InlineKind.field);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var text = workspace.ReadText("Counter.cs");
@@ -193,7 +191,7 @@ public class Calc
     public async Task InlineParameter_ValidParameter_ReportsSuccessButLeavesFileUnchanged()
     {
         using var workspace = InMemoryWorkspace.Create(("Calc.cs", CrlfParameterSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.InlineSymbolTool(reason: "test message", workspace.PathOf("Calc.cs"), "amount", InlineKind.parameter, "Add");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Calc.cs"), Is.EqualTo(CrlfParameterSource));
@@ -207,7 +205,7 @@ public class Calc
         using var workspace = InMemoryWorkspace.Create(
             ("Helper.cs", "namespace App; public class Helper { public int Value; public void Go() {} }".ReplaceLineEndings("\r\n")),
             ("Owner.cs", "namespace App; public class Owner {}".ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.InlineClassTool(reason: "test message", workspace.PathOf("Helper.cs"), workspace.PathOf("Owner.cs"), "Helper", dryRun: false, returnDiff: false);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var owner = workspace.ReadText("Owner.cs");
@@ -222,7 +220,7 @@ public class Calc
     public async Task IntroduceVariable_ValidContext_IntroducesLocalVariable()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.IntroduceSymbolTool(reason: "test message", workspace.PathOf("Order.cs"), "string.Format(\"{0}: {1}\", OrderId, CustomerName)", "formatted", IntroduceAsType.localVariable);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("formatted"));
@@ -234,7 +232,7 @@ public class Calc
     public async Task InlineVariable_ValidVariable_InlinesInitializer()
     {
         using var workspace = InMemoryWorkspace.Create(("Calc.cs", CrlfLocalVariableSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.InlineSymbolTool(reason: "test message", workspace.PathOf("Calc.cs"), "total", InlineKind.variable);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         var text = workspace.ReadText("Calc.cs");
@@ -248,7 +246,7 @@ public class Calc
     public async Task IntroduceParameterObject_ValidMethod_CreatesParameterObject()
     {
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", CrlfRefactorSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.IntroduceParameterObjectTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Process");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Refactor.cs"), Is.Not.EqualTo(CrlfRefactorSource));
@@ -260,7 +258,7 @@ public class Calc
     {
         const string source = "public class C {}";
         using var workspace = InMemoryWorkspace.Create(("Test.cs", source));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.IntroduceParameterObjectTool(reason: "test message", workspace.PathOf("NonExistent.cs"), "Process");
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.Message, Is.Not.Null.And.Not.Empty);

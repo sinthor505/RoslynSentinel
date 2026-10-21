@@ -65,15 +65,13 @@ public enum Status { Active = 1, Pending = 2 }
 
     private static string Crlf(string source) => source.ReplaceLineEndings("\r\n");
 
-    private static RefactoringSignatureTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateRefactoringSignatureTools(workspaceManager);
-
     // --- ConstructorParameterTool ---
     [Test]
     [Category("RefactoringSignatureTools")] // sentinel:auto-category
     public async Task ConstructorParameter_Add_NoExistingCallers_AddsParameterToConstructor()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
         var result = await tools.ConstructorParameterTool(reason: "test message", workspace.PathOf("Order.cs"), AddRemoveViewAction.add, "Order", "notes", "string");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("string notes"));
@@ -84,7 +82,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ConstructorParameter_Add_WithDefaultValue_BackwardCompatibleWithExistingCaller()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource), ("Caller.cs", Crlf(OrderCallerSource)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
         var result = await tools.ConstructorParameterTool(reason: "test message", workspace.PathOf("Order.cs"), AddRemoveViewAction.add, "Order", "notes", "string", defaultValue: "\"\"");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("string notes = \"\""));
@@ -96,7 +94,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ConstructorParameter_Add_WithNullDefault_BackwardCompatibleWithExistingCaller()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource), ("Caller.cs", Crlf(OrderCallerSource)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
         var result = await tools.ConstructorParameterTool(reason: "test message", workspace.PathOf("Order.cs"), AddRemoveViewAction.add, "Order", "notes", "string", nullDefault: true);
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("notes = null"));
@@ -108,7 +106,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ConstructorParameter_Add_NullDefaultAndDefaultValueBothSet_Refused()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
         var result = await tools.ConstructorParameterTool(reason: "test message", workspace.PathOf("Order.cs"), AddRemoveViewAction.add, "Order", "notes", "string", defaultValue: "\"\"", nullDefault: true);
         Assert.That(result.IsError, Is.True, "Setting both nullDefault and defaultValue must be refused.");
         Assert.That(result.ErrorData?.Message, Does.Contain("mutually exclusive"));
@@ -120,7 +118,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task ConstructorParameter_Add_NoDefaultValue_ExistingCallerBreaksAndIsRefused()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource), ("Caller.cs", Crlf(OrderCallerSource)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
         var result = await tools.ConstructorParameterTool(reason: "test message", workspace.PathOf("Order.cs"), AddRemoveViewAction.add, "Order", "notes", "string");
         Assert.That(result.IsError, Is.True, "An existing caller would break without a default, so the add must be refused.");
         Assert.That(workspace.ReadText("Order.cs"), Is.EqualTo(CrlfSimpleSource));
@@ -133,7 +131,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MethodSignature_View_ListsExistingParameters()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
         var result = await tools.MethodSignatureTool(reason: "test message", workspace.PathOf("Order.cs"), AddRemoveViewAction.view, "GetLabel");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Is.EqualTo(CrlfSimpleSource), "A view must not modify the file.");
@@ -144,7 +142,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MethodSignature_Add_AppendsRequiredParameter_NoExistingCallers()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
         var result = await tools.MethodSignatureTool(reason: "test message", workspace.PathOf("Order.cs"), AddRemoveViewAction.add, "GetStatus", "verbose", "bool");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("GetStatus(bool verbose)"));
@@ -155,7 +153,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MethodSignature_Add_WithDefaultValue_BackwardCompatibleWithExistingCaller()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource), ("Caller.cs", Crlf(StatusCallerSource)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
         var result = await tools.MethodSignatureTool(reason: "test message", workspace.PathOf("Order.cs"), AddRemoveViewAction.add, "GetStatus", "verbose", "bool", defaultValue: "false");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("GetStatus(bool verbose = false)"));
@@ -168,7 +166,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MethodSignature_Remove_LastParameter_UpdatesCallSite()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", Crlf(RenameSource)), ("Caller.cs", Crlf(RenameCallerSource)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
         var result = await tools.MethodSignatureTool(reason: "test message", workspace.PathOf("Order.cs"), AddRemoveViewAction.remove, "Rename", "last");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("Rename(string first)").And.Not.Contain("string last"));
@@ -180,7 +178,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MethodSignature_Remove_NonLastParameter_Refused()
     {
         using var workspace = InMemoryWorkspace.Create(("Dog.cs", Crlf(ProcessSource)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
         var result = await tools.MethodSignatureTool(reason: "test message", workspace.PathOf("Dog.cs"), AddRemoveViewAction.remove, "Process", "a");
         Assert.That(result.IsError, Is.True, "Removing a non-trailing parameter must be refused, not silently applied.");
         Assert.That(result.ErrorData?.Message, Does.Contain("last parameter"));
@@ -192,7 +190,7 @@ public enum Status { Active = 1, Pending = 2 }
     public async Task MethodSignature_Remove_NamedArgumentCallSite_Refused()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", Crlf(RenameSource)), ("Caller.cs", Crlf(NamedRenameCallerSource)));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateRefactoringSignatureTools(workspace.Manager);
         var result = await tools.MethodSignatureTool(reason: "test message", workspace.PathOf("Order.cs"), AddRemoveViewAction.remove, "Rename", "last");
         Assert.That(result.IsError, Is.True, "A named-argument call site cannot be safely rewritten and must refuse the whole operation.");
         Assert.That(result.ErrorData?.Message, Does.Contain("named arguments"));

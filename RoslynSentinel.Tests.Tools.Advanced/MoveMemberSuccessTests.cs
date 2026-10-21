@@ -11,9 +11,6 @@ namespace RoslynSentinel.Tests.Tools.Advanced;
 [Parallelizable(ParallelScope.All)]
 public sealed class MoveMemberSuccessTests
 {
-    // Same wiring as MoveMemberRefusalTests: MoveMemberTool lives on AdvancedRefactoringTools, which takes only the
-    // workspace manager.
-    private static AdvancedRefactoringTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateAdvancedRefactoringTools(workspaceManager);
 
     private static string Lf(string text) => text.ReplaceLineEndings("\n");
 
@@ -64,7 +61,7 @@ public sealed class MoveMemberSuccessTests
     {
         var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x)\n    {\n        return x + 1;\n    }\n\n    public int Caller()\n    {\n        return Foo(2);\n    }\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")), ("Target.cs", "public class Target\n{\n}\n".ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "Target");
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         Assert.That(Lf(workspace.ReadText("Refactor.cs")), Does.Contain("return this._impl.Foo(2);"));
@@ -77,7 +74,7 @@ public sealed class MoveMemberSuccessTests
     {
         var source = "public class Source\n{\n    private string _a = \"source\";\n    public string M() { var first = _a; return first + this._a; }\n}\n\npublic class Target\n{\n    private string _b = \"target\";\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", source.ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["M"], "Target", fieldMap: new Dictionary<string, string> { ["_a"] = "_b" });
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = Lf(workspace.ReadText("Refactor.cs"));
@@ -94,7 +91,7 @@ public sealed class MoveMemberSuccessTests
         var source = "public class Source\n{\n    private string _a = \"source\";\n    public string M() { var first = _a; return first + this._a; }\n}\n\npublic class Target\n{\n    private string _b = \"target\";\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", source.ReplaceLineEndings("\r\n")));
         var before = await ReadAllDocumentsAsync(workspace);
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["M"], "Target", dryRun: true, returnDiff: true, fieldMap: new Dictionary<string, string> { ["_a"] = "_b" });
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var summary = (AppliedChangeSummary)result.SuccessData!;
@@ -109,7 +106,7 @@ public sealed class MoveMemberSuccessTests
     {
         var source = "public class Source\n{\n    public int Get() => 1;\n}\n\npublic class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", source.ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Get"], "Target");
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = Lf(workspace.ReadText("Refactor.cs"));
@@ -124,7 +121,7 @@ public sealed class MoveMemberSuccessTests
         var original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         var caller = "public class Caller\n{\n    public int Call() => Src.Foo(1);\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")), ("Caller.cs", caller.ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = Lf(workspace.ReadText("Refactor.cs"));
@@ -142,7 +139,7 @@ public sealed class MoveMemberSuccessTests
         var original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         var caller = "public class Caller\n{\n    public int Call() => Src.Foo(1);\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")), ("Caller.cs", caller.ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper);
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = Lf(workspace.ReadText("Refactor.cs"));
@@ -162,7 +159,7 @@ public sealed class MoveMemberSuccessTests
         var original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n";
         var caller = "public class Caller\n{\n    public int Call() => Src.Foo(1);\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")), ("Caller.cs", caller.ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Foo"], "NewTarget", oldMember: MoveMemberOldMember.keepDelegator);
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = Lf(workspace.ReadText("Refactor.cs"));
@@ -181,7 +178,7 @@ public sealed class MoveMemberSuccessTests
     {
         var original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Foo"], "NewTarget", oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper);
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = Lf(workspace.ReadText("Refactor.cs"));
@@ -196,7 +193,7 @@ public sealed class MoveMemberSuccessTests
         var original = "public class Src\n{\n    public static int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
         var before = await ReadAllDocumentsAsync(workspace);
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Src", ["Foo"], "Target", dryRun: true, returnDiff: true, oldMember: MoveMemberOldMember.keepDelegator);
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var summary = (AppliedChangeSummary)result.SuccessData!;
@@ -212,7 +209,7 @@ public sealed class MoveMemberSuccessTests
         var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         var caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")), ("Caller.cs", caller.ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = Lf(workspace.ReadText("Refactor.cs"));
@@ -230,7 +227,7 @@ public sealed class MoveMemberSuccessTests
         var original = "public class Source\n{\n    private readonly Target _a = new Target();\n    private readonly Target _b = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         var caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")), ("Caller.cs", caller.ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator, forwarderReceiver: "_b");
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = Lf(workspace.ReadText("Refactor.cs"));
@@ -248,7 +245,7 @@ public sealed class MoveMemberSuccessTests
         var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         var caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")), ("Caller.cs", caller.ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper);
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = Lf(workspace.ReadText("Refactor.cs"));
@@ -264,7 +261,7 @@ public sealed class MoveMemberSuccessTests
     {
         var original = "public class Source\n{\n    private int _base = 1;\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + _base; }\n}\n\npublic class Target\n{\n    private int _b = 0;\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator, fieldMap: new Dictionary<string, string> { ["_base"] = "_b" });
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = Lf(workspace.ReadText("Refactor.cs"));
@@ -284,7 +281,7 @@ public sealed class MoveMemberSuccessTests
         var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
         var caller = "public class Caller\n{\n    public int Call(Source s) => s.Foo(1);\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")), ("Caller.cs", caller.ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator, autoResolveCallSites: false);
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         Assert.That(Lf(workspace.ReadText("Refactor.cs")), Does.Contain("public int Foo(int x) => this._impl.Foo(x);"), "The forwarder is written with nothing to resolve.");
@@ -297,7 +294,7 @@ public sealed class MoveMemberSuccessTests
     {
         var original = "public class Source\n{\n    private readonly Target _impl = new Target();\n    public int Foo(int x) { return x + 1; }\n    public int Bar() => Foo(1);\n}\n\npublic class Target\n{\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = Lf(workspace.ReadText("Refactor.cs"));
@@ -316,7 +313,7 @@ public sealed class MoveMemberSuccessTests
         // the abstract base member, so its outcome was not a clean pull-up).
         var original = "public class Animal\n{\n}\n\npublic class Dog : Animal\n{\n    public string Bark() => \"woof\";\n}\n";
         using var workspace = InMemoryWorkspace.Create(("Refactor.cs", original.ReplaceLineEndings("\r\n")));
-        var tools = BuildTools(workspace.Manager);
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Dog", ["Bark"], "Animal");
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = Lf(workspace.ReadText("Refactor.cs"));
