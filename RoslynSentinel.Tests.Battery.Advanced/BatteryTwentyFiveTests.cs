@@ -264,6 +264,7 @@ public class AntiPatternEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Entity.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.FindMutablePublicPropertiesAsync(filePath: "Entity.cs");
+        // TODO engine does not flag property 'Name' in class 'Entity': the DtoSuffixes exclusion likely skips it (verify suffix list)
         Assert.That(result, Is.Not.Null);
     }
 
@@ -274,6 +275,7 @@ public class AntiPatternEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("MyClass.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.FindNamingViolationsAsync(filePath: "MyClass.cs");
+        // TODO engine does not flag class name 'my_class' or public field 'myField': FindNamingViolationsAsync only checks private field, method and parameter names
         Assert.That(result, Is.Not.Null);
     }
 
