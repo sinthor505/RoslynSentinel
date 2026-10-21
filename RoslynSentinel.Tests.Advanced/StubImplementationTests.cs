@@ -142,6 +142,7 @@ class C {
     {
         SetSource("class C {}");
         var result = await _ideStyleEngine.UseNullPropagationAsync("NoSuchFile.cs");
+        // TODO throw-migration: assert the typed exception once IDEStyleEngine throws
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -315,6 +316,7 @@ class C {
     {
         SetSource("class C {}");
         var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Missing.cs");
+        // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -402,7 +404,8 @@ class C {
         // The if-statement starts at line 4
         var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "remove-braces", 4);
         // After removing braces: should have the statement without a block
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Does.Not.Contain("{ DoWork(); }"), "remove-braces should drop the block around the single statement");
+        Assert.That(result.UpdatedText, Does.Contain("if (x > 0) DoWork();"), "The single statement should remain as the if body");
     }
 
     [Test]
@@ -435,6 +438,7 @@ class C {
     {
         SetSource("class C { void M() {} }");
         var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("NoFile.cs", "type-to-var", 1);
+        // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
         Assert.That(result.UpdatedText, Is.Null);
     }
 

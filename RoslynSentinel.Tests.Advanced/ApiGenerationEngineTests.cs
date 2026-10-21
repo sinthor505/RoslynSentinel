@@ -124,6 +124,7 @@ public class OrdersController
 
         var result = await _engine.GenerateHttpClientForControllerAsync("Missing.cs", "MyController");
 
+        // TODO throw-migration: assert the typed exception once ApiGenerationEngine throws
         Assert.That(result.UpdatedText, Is.Null, "Should return null when file not found");
     }
 
@@ -135,6 +136,7 @@ public class OrdersController
 
         var result = await _engine.GenerateHttpClientForControllerAsync("Test.cs", "MissingController");
 
+        // TODO throw-migration: assert the typed exception once ApiGenerationEngine throws
         Assert.That(result.UpdatedText, Is.Null, "Should return null when controller class not found");
     }
 }

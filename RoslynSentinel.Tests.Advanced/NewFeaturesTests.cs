@@ -156,6 +156,10 @@ public class MyService
         var groups = await _cloneEngine.FindDuplicateBlocksInClassAsync("MyService.cs", "MyService", minStatements: 2);
 
         Assert.That(groups, Is.Not.Empty, "Should flag blocks at minStatements=2");
+        Assert.That(groups[0].StatementCount, Is.EqualTo(2));
+        var methodNames = groups[0].Occurrences.Select(o => o.MethodName).ToHashSet();
+        Assert.That(methodNames, Does.Contain("Alpha"), "Alpha should be one occurrence");
+        Assert.That(methodNames, Does.Contain("Beta"), "Beta should be one occurrence");
     }
 
     [Test]
@@ -188,6 +192,9 @@ public class MyService
         // At least one group should have HasControlFlowExit = true
         var exitGroup = groups.FirstOrDefault(g => g.HasControlFlowExit);
         Assert.That(exitGroup, Is.Not.Null, "Should detect control flow exit in clone block");
+        Assert.That(exitGroup!.StatementCount, Is.GreaterThanOrEqualTo(3));
+        var exitMethodNames = exitGroup.Occurrences.Select(o => o.MethodName).ToHashSet();
+        Assert.That(exitMethodNames, Does.Contain("Alpha").And.Contain("Beta"), "Both methods should contribute the exiting clone");
     }
 
     [Test]
@@ -341,7 +348,7 @@ public class MyService
         var groups = await _cloneEngine.FindDuplicateBlocksInClassAsync("MyService.cs", "MyService", minStatements: 4);
 
         Assert.That(groups, Is.Not.Empty);
-        Assert.That(groups[0].SnippetPreview, Is.Not.Null.And.Not.Empty);
+        Assert.That(groups[0].SnippetPreview, Does.Match("^int [xa] = 1;$"), "Preview should be the first statement of the first clone window");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
