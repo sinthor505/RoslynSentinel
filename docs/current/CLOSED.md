@@ -8,6 +8,15 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## TODO punchlist leftovers, `docCommentId` audit and C5b-2c leftovers - resolved (2026-10-20)
+
+- Async batch: `FlagBridgeCandidateForReviewAsync` now passes the cancellation token to `ApplyProposedChangesAsync`; a cancelled flag write is still logged and skipped (best-effort helper). The bridge CT-add and body-rewrite flag tests exist (`AsyncBatchEngineFlagOutcomeTests`).
+- `GitImpl`: the 15 remaining `catch (Exception ex)` clauses now carry `when (ex is not OperationCanceledException)`, matching the other Git operations.
+- `IntroduceParameterObject`: the interface-only branch returns a WARNING that implementations were not updated; BUG_57 test tightened and renamed; tool-level test added. `docCommentId` descriptions: `DeleteUnusedSymbol` (both declarations), `NamedArguments` `targetSymbol` and `SemanticFindReplace` `symbol`/`factory` now say "from Search(mode: symbol), pass exactly as returned, do not construct"; `DeleteUnusedSymbol.filePath` says it is still required; `DocCommentIdWordingTests` pins it.
+- C5b-2c: `ExtractMethodSafeAsync` annotates only the call statement and the new method (untouched code keeps its spacing); pins added for a stray LF in a CRLF document, a stray CRLF on a blank line, CR-only and U+2028 separators, and the known trivia loss (SortUsings comments, ExtractMethod inter-statement comments; the last two carry TODOs).
+- `RemoveMethodParameterAsync` span formatting (item 21) was already done earlier (commit 7912b15e).
+- Evidence: solution test run 2026-10-20, 5529 passed, 0 failed (`Tests.ModelEval` did not build: CS2012 file lock).
+
 ## TODO punchlist small items 1-8, 11, 12 - resolved (2026-10-20)
 
 **Evidence (2026-10-20):** ReplaceSnippet split-class schema wording (832b2ddc); SubAgent failure message now ends with the absolute run-log path (05001466); async batch bridge/uplift skips write the NeedsManualReview flag via `FlagBridgeCandidateForReviewAsync` and say "flagged" only on a successful write, dead `fallbackHandled` stores removed (05001466); `InlineVariableAsync` fallback routed through container-scoped removal (d77a039f); `InvertAssignments` trivia leak (`SwapAssignmentOperands`) and `SimplifyMemberAccess` `this` trivia fixed with byte-exact tests (05001466); `AddUsingDirective` simplifyExisting annotates qualified names so the Simplifier shortens them (6eaace53); all 15 `GitImpl` `ex.Message` sites use `UnexpectedFailure<T>` (05001466); MoveMember ledger `TryOpen`/already-open tool-layer paths pinned (5470d393); `NormalizeEolOfChangedLines` repeated-line limitation accepted and pinned as a test case (c1a4bbd7). The bridge skip flag tests and `IntroduceParameterObject` defect 2 landed later the same day (1cad63e5, 6382d48e, 9aac88fd, b96db444).
