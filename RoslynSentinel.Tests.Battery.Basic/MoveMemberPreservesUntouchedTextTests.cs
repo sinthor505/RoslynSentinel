@@ -318,6 +318,30 @@ public class MoveMemberPreservesUntouchedTextTests
 
         var sourceKey = result.Changes.Keys.Single(k => k.ToString().EndsWith("Source.cs", StringComparison.OrdinalIgnoreCase));
         var sourceNewText = result.Changes[sourceKey];
+        var targetKey = result.Changes.Keys.Single(k => k.ToString().EndsWith("Target.cs", StringComparison.OrdinalIgnoreCase));
+        var targetNewText = result.Changes[targetKey];
+        var callerKey = result.Changes.Keys.Single(k => k.ToString().EndsWith("Caller.cs", StringComparison.OrdinalIgnoreCase));
+        var callerNewText = result.Changes[callerKey];
+
+        // Verify source file: only the Norm member (and its trailing blank line) should be removed
+        AssertOnlySpansChanged(sourceNoFinalNewline, sourceNewText, new[]
+        {
+            new ContentSpan("    public static string Norm(string x) => x;\n\n", string.Empty)
+        });
+
+        // Verify target file: only the inserted Norm member should be added
+        AssertOnlySpansChanged(targetWithNewline, targetNewText, new[]
+        {
+            new ContentSpan(
+                "    public static int Count() => 0;\n",
+                "    public static int Count() => 0;\n\n    public static string Norm(string x) => x;\n")
+        });
+
+        // Verify caller file: only the A.Norm reference should change to B.Norm
+        AssertOnlySpansChanged(callerWithNewline, callerNewText, new[]
+        {
+            new ContentSpan("A.Norm(", "B.Norm(")
+        });
 
         // Verify source file WITHOUT final newline stays without one
         Assert.That(sourceNewText.EndsWith("\n"), Is.False,

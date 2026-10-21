@@ -480,17 +480,19 @@ public class PreviewInstanceMoveCallSitesTests
                 """));
 
         var fieldMap = new Dictionary<string, string> { ["_a"] = "_b" };
-        try
+        var result = await engine.MoveMemberAsync(
+            workspace.PathOf("ContosoOrders.Core/FieldMapSourceClass.cs"),
+            "FieldMapSourceClass", ["ReadA"], "FieldMapTargetClass",
+            null, CancellationToken.None, true, null, fieldMap);
+
+        Assert.Multiple(() =>
         {
-            await engine.MoveMemberAsync(
-                workspace.PathOf("ContosoOrders.Core/FieldMapSourceClass.cs"),
-                "FieldMapSourceClass", ["ReadA"], "FieldMapTargetClass",
-                null, CancellationToken.None, true, null, fieldMap);
-        }
-        catch (RoslynSentinel.Common.ToolInvalidArgumentException ex) when (ex.Message.Contains("private/internal"))
-        {
-            Assert.Fail($"fieldMap should satisfy the '_a' dependency, but the move still refused it: {ex.Message}");
-        }
+            Assert.That(result.Changes.Keys.Any(k => k.ToString().Contains("FieldMapSourceClass")), Is.True, "the source file must be in Changes");
+            Assert.That(result.Changes.Keys.Any(k => k.ToString().Contains("FieldMapTargetClass")), Is.True, "the target file must be in Changes");
+            var targetText = result.Changes.Single(kv => kv.Key.ToString().Contains("FieldMapTargetClass")).Value;
+            Assert.That(targetText, Does.Contain("_b"), "the moved body must reference the mapped target field");
+            Assert.That(targetText, Does.Not.Contain("_a"), "no reference to the source field may remain in the target");
+        });
     }
 
     [Test]
@@ -765,6 +767,8 @@ public class PreviewInstanceMoveCallSitesTests
 
         var applyResult = await workspace.Manager.ApplyProposedChangesAsync(result.Changes, validateChanges: false);
         Assert.That(!applyResult.IsError, Is.True, applyResult.Summary);
+        Assert.That(applyResult.SucceededFiles.Any(f => f.Contains("MoveInstanceClassE.cs")), Is.True,
+            "the source file must be written by the setup apply");
 
         var opened = ((IScopedOperationLedger)workspace.Manager).TryOpen(
             "MoveMember_Test_Decision5", result.PendingLedgerEntries!, out var rejectionReason);

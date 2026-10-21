@@ -97,7 +97,14 @@ public class MakeStaticRewritesCallersTests
 
         var result = await engine.ConvertMembersToStaticAsync([Request(workspace, 0, "Helper.cs", "Normalize")], CancellationToken.None);
 
-        Assert.That(result.Notes, Has.None.Contain("no longer read"));
+        var consumerText = result.Changes.Single(kv => kv.Key.ToString().Contains("Consumer.cs")).Value;
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.HandledIndexes, Is.EquivalentTo(new[] { 0 }));
+            Assert.That(consumerText, Does.Contain("Helper.Normalize(x)"), "the Normalize call must be rewritten to the static form");
+            Assert.That(consumerText, Does.Contain("_helper.Length(x)"), "the receiver field is still read by Size and must stay");
+            Assert.That(result.Notes, Has.None.Contain("no longer read"));
+        });
     }
 
     [Test]
@@ -180,6 +187,7 @@ public class MakeStaticRewritesCallersTests
 
         var result = await engine.ConvertMembersToStaticAsync([Request(workspace, 0, "Box.cs", "Value"), Request(workspace, 1, "Box.cs", "Twice")], CancellationToken.None);
 
+        // TODO caller is not told why a request was skipped (Notes stays empty)
         Assert.That(result.HandledIndexes, Is.Empty);
         Assert.That(result.Changes, Is.Empty);
     }
