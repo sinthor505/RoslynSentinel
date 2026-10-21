@@ -164,7 +164,8 @@ public class AsyncVoidGotchaTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Bad.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var reports = await _engine.DetectAsyncVoidMethodsAsync("Bad.cs");
-        Assert.That(reports, Is.Not.Empty, "public async void must be flagged.");
+        Assert.That(reports, Has.Count.EqualTo(1), "One public async void method (DoWork) is planted, so exactly one report is expected.");
+        Assert.That(reports[0].MethodName, Does.Contain("DoWork"));
     }
 
     [Test]
@@ -180,7 +181,8 @@ public class AsyncVoidGotchaTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Bad.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var reports = await _engine.DetectAsyncVoidMethodsAsync("Bad.cs");
-        Assert.That(reports, Is.Not.Empty, "private async void is still unsafe and must be flagged.");
+        Assert.That(reports, Has.Count.EqualTo(1), "One private async void method (FireAndForget) is planted, so exactly one report is expected.");
+        Assert.That(reports[0].MethodName, Does.Contain("FireAndForget"));
     }
 
     [Test]
@@ -294,7 +296,8 @@ public class LockInAsyncGotchaTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Poller.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var reports = await _engine.FindBlockingCallsInAsyncAsync("Poller.cs");
-        Assert.That(reports, Is.Not.Empty, "Thread.Sleep inside async method must be flagged.");
+        Assert.That(reports, Has.Count.EqualTo(1), "One Thread.Sleep call is planted inside PollAsync, so exactly one report is expected.");
+        Assert.That(reports[0].MethodName, Does.Contain("PollAsync"));
     }
 
     [Test]
@@ -312,7 +315,8 @@ public class LockInAsyncGotchaTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("WaitInAsync.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var reports = await _engine.FindBlockingCallsInAsyncAsync("WaitInAsync.cs");
-        Assert.That(reports, Is.Not.Empty, ".Wait() inside async method must be flagged.");
+        Assert.That(reports, Has.Count.EqualTo(1), "One .Wait() call is planted inside DoAsync, so exactly one report is expected.");
+        Assert.That(reports[0].MethodName, Does.Contain("DoAsync"));
     }
 
     [Test]
@@ -331,7 +335,8 @@ public class LockInAsyncGotchaTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("HiddenBlock.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var reports = await _engine.FindBlockingCallsInAsyncAsync("HiddenBlock.cs");
-        Assert.That(reports, Is.Not.Empty, ".GetAwaiter().GetResult() inside async method must be flagged.");
+        Assert.That(reports, Has.Count.EqualTo(1), "One .GetAwaiter().GetResult() call is planted inside DoAsync, so exactly one report is expected.");
+        Assert.That(reports[0].MethodName, Does.Contain("DoAsync"));
     }
 
     [Test]
@@ -530,7 +535,9 @@ public class ValueTaskMisuseGotchaTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("DoubleVT.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var reports = await _engine.DetectValueTaskMisuseAsync("DoubleVT.cs");
-        Assert.That(reports, Is.Not.Empty, "Awaiting a ValueTask local twice must be flagged.");
+        // TODO the first await of a ValueTask is legal; only the second is the misuse - the engine reports both sites (pinned at 2); decide whether it should report one
+        Assert.That(reports, Has.Count.EqualTo(2), "The ValueTask local vt is awaited twice in Bad; the engine flags both await sites, so two reports are expected.");
+        Assert.That(reports[0].MethodName, Does.Contain("Bad"));
     }
 
     [Test]
@@ -1107,7 +1114,9 @@ public class FireAndForgetGotchaTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Launcher.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Launcher.cs");
-        Assert.That(reports, Is.Not.Empty, "A raw unawaited call to an Async method must be flagged as fire-and-forget.");
+        Assert.That(reports, Has.Count.EqualTo(1), "One raw unawaited RunAsync() call is planted in StartAsync, so exactly one report is expected.");
+        Assert.That(reports[0].MethodName, Does.Contain("StartAsync"));
+        Assert.That(reports[0].Reason, Does.Contain("RunAsync"));
     }
 
     [Test]
@@ -1205,7 +1214,8 @@ public class ConfigureAwaitInLibraryGotchaTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("DataService.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var reports = await _engine.FindConfigureAwaitMissingAsync("DataService.cs");
-        Assert.That(reports, Is.Not.Empty, "await without .ConfigureAwait(false) in a library class must be flagged.");
+        Assert.That(reports, Has.Count.EqualTo(1), "One await without ConfigureAwait(false) is planted in FetchAsync, so exactly one report is expected.");
+        Assert.That(reports[0].MethodName, Does.Contain("FetchAsync"));
     }
 
     [Test]
