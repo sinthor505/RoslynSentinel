@@ -204,7 +204,7 @@ symptom this proposal wants to stop depending on. Needed:
 2. Automatic retry count and delay (recommended: 1 retry, a few seconds).
 3. Should a later successful debounce/background reload clear the latch? (Recommended yes: it is the same operation as `LoadSolution(forceReload)`.)
 4. Separate latch, or reuse `SessionHalted` machinery (`HaltInfo` kind, stamp) with its own recovery? Relation to `plan_session_halt_recovery_and_git_gaps.md` to be settled with the owner.
-5. Do `.props`/`.targets`/`Directory.Build.props` belong in the watcher? Separate decision, bigger blast radius (more reloads).
+5. Do `.props`/`.targets`/`Directory.Build.props` belong in the watcher? Separate decision, bigger blast radius (more reloads). Decided 2026-10-21: do it as a small follow-up AFTER slices 1-2 (the reload path and failure record are being reworked there); route them to the full reload (2A), not the `.cs` fold.
 6. Does `Server.Advanced` register the same halt-stamp filter chain as Basic (`AddHaltStampFilter`)? Unverified.
 
 ## Cost / risk

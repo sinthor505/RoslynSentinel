@@ -3096,6 +3096,9 @@ public class AsyncifyTools
         return false;
     }
 
+    // Returns a note when a cleanup ApplyProposedChangesAsync write was refused, else null.
+    private static string? CleanupFailureNote(ApplyChangesResult result) => result.IsError ? "cleanup write refused: " + result.Summary : null;
+
     // ── Phase 3b: Convert AsyncHandlerCandidate event handlers in-place ────────
     // Event handlers flagged as AsyncHandlerCandidate call obsolete bridge wrappers but cannot be
     // uplifted via the standard caller-bridge path (fixed delegate signatures). Convert each
@@ -3145,6 +3148,7 @@ public class AsyncifyTools
                 continue;
             }
 
+            string? cleanupNote = null;
             try
             {
                 var handlerResult = await _asyncOptimizationEngine
@@ -3185,8 +3189,10 @@ public class AsyncifyTools
                         pattern: "AsyncHandlerCandidate",
                         cancellationToken: state.InnerToken);
                     if (removeResult.Changes.Count > 0)
-                        // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
-                        await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+                    {
+                        var cleanupApply1 = await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+                        cleanupNote ??= CleanupFailureNote(cleanupApply1);
+                    }
                 }
                 catch (Exception removeEx)
                 {
@@ -3198,7 +3204,7 @@ public class AsyncifyTools
                     FilePath = handler.FilePath,
                     MethodName = handler.MethodName,
                     Outcome = ItemRecordOutcome.Skipped,
-                    Reason = "stale-flag: already async - stripped",
+                    Reason = "stale-flag: already async - stripped" + (cleanupNote is null ? "" : " (" + cleanupNote + ")"),
                 });
                 state.P3bSkipped++; state.Skipped++;
             }
@@ -3216,16 +3222,18 @@ public class AsyncifyTools
                         pattern: "AsyncHandlerCandidate",
                         cancellationToken: state.InnerToken);
                     if (removeResult.Changes.Count > 0)
-                        // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
-                        await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+                    {
+                        var cleanupApply2 = await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+                        cleanupNote ??= CleanupFailureNote(cleanupApply2);
+                    }
 
                     var neeReviewResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
                         handler.FilePath, handler.MethodName, "NeedsManualReview",
                         score: 0,
                         reason: "Handler has blocking calls but no Asyncify-bridge wrappers - manual async conversion required",
                         cancellationToken: state.InnerToken);
-                    // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
-                    await _workspaceManager.ApplyProposedChangesAsync(neeReviewResult.Changes);
+                    var cleanupApply3 = await _workspaceManager.ApplyProposedChangesAsync(neeReviewResult.Changes);
+                    cleanupNote ??= CleanupFailureNote(cleanupApply3);
                 }
                 catch (Exception removeEx)
                 {
@@ -3237,7 +3245,7 @@ public class AsyncifyTools
                     FilePath = handler.FilePath,
                     MethodName = handler.MethodName,
                     Outcome = ItemRecordOutcome.Skipped,
-                    Reason = "stale-flag: no bridge calls - flagged NeedsManualReview",
+                    Reason = "stale-flag: no bridge calls - flagged NeedsManualReview" + (cleanupNote is null ? "" : " (" + cleanupNote + ")"),
                 });
                 state.P3bSkipped++; state.Skipped++;
             }
@@ -3254,16 +3262,18 @@ public class AsyncifyTools
                         pattern: "AsyncHandlerCandidate",
                         cancellationToken: state.InnerToken);
                     if (removeResult.Changes.Count > 0)
-                        // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
-                        await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+                    {
+                        var cleanupApply4 = await _workspaceManager.ApplyProposedChangesAsync(removeResult.Changes);
+                        cleanupNote ??= CleanupFailureNote(cleanupApply4);
+                    }
 
                     var flagResult = await _asyncOptimizationEngine.FlagMigrationCandidateAsync(
                         handler.FilePath, handler.MethodName, "NeedsManualReview",
                         score: 0,
                         reason: $"Handler in-place: {ex.Message}",
                         cancellationToken: state.InnerToken);
-                    // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
-                    await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    var cleanupApply5 = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+                    cleanupNote ??= CleanupFailureNote(cleanupApply5);
                 }
                 catch (Exception flagEx)
                 {
@@ -3276,7 +3286,7 @@ public class AsyncifyTools
                     FilePath = handler.FilePath,
                     MethodName = handler.MethodName,
                     Outcome = ItemRecordOutcome.Failed,
-                    Reason = ex.Message,
+                    Reason = ex.Message + (cleanupNote is null ? "" : " (" + cleanupNote + ")"),
                 });
                 if (failures.Count < 10)
                 {
@@ -3284,7 +3294,7 @@ public class AsyncifyTools
                     {
                         FilePath = handler.FilePath.Absolute,
                         MethodName = handler.MethodName,
-                        Reason = ex.Message,
+                        Reason = ex.Message + (cleanupNote is null ? "" : " (" + cleanupNote + ")"),
                         Outcome = ItemRecordOutcome.Failed,
                     });
                 }
