@@ -92,8 +92,11 @@ Proposed (not decided in detail). Part A fixes the leak; B-D are independent and
   disk-bound fixtures `BatteryEighteen`, `BatteryTwenty` and `BatteryTwentyFour` are `[NonParallelizable]`;
   `BatteryEighteen.SortAndDeduplicateUsings` passes `writeToFile: false`; no `BatteryFour` class exists any more;
   `BatteryTwentyTwo` runs on in-memory `SetTestSolution` and its one path-named test is a preview (no write), so it needs no
-  attribute. A4 (pre-seeded stale `Order.cs` regression test) is not built: the writers that produced the leak are now
-  in-memory, so it would guard a path nothing uses (decision open). Fake `RenameSymbol` path DONE (4c1fa3fa): `FakeWorkspaceManager.ResolveFromWireAsync` now
+  attribute. A4 (pre-seeded stale `Order.cs` regression test) DONE as a narrower test (f00a5d4d): the full form (seed a
+  stale CRLF file after Setup, assert the write passes) cannot pass without changing `PersistentWorkspaceManager`'s
+  EOL backstop to read the pre-image from the workspace instead of disk, which would weaken a real safeguard (the disk
+  file is what gets overwritten), so it was not done. `WorkingDirectoryLeakGuardTests` now tests the wipe helper directly
+  and the old stale-CRLF test is renamed to say it proves the Setup wipe. Fake `RenameSymbol` path DONE (4c1fa3fa): `FakeWorkspaceManager.ResolveFromWireAsync` now
   uses `SymbolResolver`; the two RenameSymbol tests moved to `RenameSymbolTests` (in-memory, asserts the rewritten text).
   Remaining: Parts C/D, triage of pinned tool defects.
 - **Part A progress (2026-10-20, earlier notes).** The fixture is `RoslynSentinel.Tests.Tools.Advanced/BatteryTwentyFourTests.cs`
@@ -151,6 +154,16 @@ regrouping by tool is worthwhile but is no longer required by the leak. Decision
   overload, so tests need no `SetSource` wrapper and no path literals (`ws.PathOf(Sources.Order.Path)`).
 - Start with the exact-copy fixtures in the snippet area and `Order.cs` (TwentyFour, Seven, Eighteen, TwentyOne,
   TwentyTwo); widen `SnippetMatcherTests.Corpus` with tab/BOM/non-ASCII.
+
+- **Status (2026-10-21): first slice DONE** (f00a5d4d, d6f98b5f, 732cbac5, 215d91d8). `RoslynSentinel.Tests/Support/Sources.cs`
+  holds `Sources.Order` (the 34-line `SimpleSource`) and `Sources.RichOrderService` (the ~72-line `RichSource`), both
+  CRLF-normalised, plus `Crlf`/`Lf` (`ReplaceLineEndings`, so no `\r\r\n`). All 12 `SimpleSource` copies (11 in Tools.Advanced,
+  `BatterySevenTests`) and all 4 `RichSource` copies (Tools.Basic, 2 in Tools.Advanced, Tests.Advanced) are one-line
+  `static readonly` aliases; suites green. Copy identity was a line-by-line read by the agents, not a hash. Remaining:
+  replace the 7 divergent EOL helpers (`ToCrlf` x2 is not LF-first; `Crlf` x3; `Lf`; `NormalizeEol`; `EolOf`) with
+  `Sources.Crlf/Lf`; `AsyncSource` (TwentyOne `Worker` vs TwentyThree `AsyncWorker` differ, so not a copy); the
+  `Source`-with-path `InMemoryWorkspace.Create(params Source[])` overload (undecided); `RefactorSource`; widening
+  `SnippetMatcherTests.Corpus`; then inline the 12+4 aliases to `Sources.*` at their use sites if wanted.
 
 **D. Construction via the `TestTools`/`TestEngines` factories** from the factories pilot where they exist, instead of a
 per-class `BuildTools`. Sequencing against that plan is open.
