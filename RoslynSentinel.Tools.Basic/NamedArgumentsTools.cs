@@ -49,7 +49,7 @@ public class NamedArgumentsTools
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("solution: all projects. project: the project named by scopeName. file: the file named by scopeName.")] NamedArgumentsScope scope,
         [Description("Project name (scope: project) or file path (scope: file). Must be omitted for scope: solution.")] string? scopeName,
-        [Description("Optional docCommentId of one method or constructor; only calls to it are converted.")] string? targetSymbol,
+        [Description("Optional docCommentId of one method or constructor; only calls to it are converted. From Search(mode: symbol), pass exactly as returned, do not construct.")] string? targetSymbol,
         [Description("Minimum parameter count of the called method. Omit for the default (2, or 1 when targetSymbol is given).")] int? minParameters,
         [Description("true: only name literal arguments. false: name every positional argument.")] bool literalArgumentsOnly,
         [Description("preview: report counts without writing. apply: perform the changes.")] SemanticReplaceMode mode,

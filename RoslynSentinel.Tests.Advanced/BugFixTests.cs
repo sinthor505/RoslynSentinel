@@ -3078,7 +3078,7 @@ public class StringExtensions
             // ── Bug 57: IntroduceParameterObjectTool -> Interface + All Implementations ────
             [Test]
             [Category("StructuralRefactoringEngine")] // sentinel:auto-category
-            public async Task BUG_57_IntroduceParameterObject_UpdatesInterfaceAndAllImplementations()
+            public async Task BUG_57_IntroduceParameterObject_UpdatesInterfaceOnlyAndWarns()
             {
                 const string code = @"
 public interface IProcessor
@@ -3098,10 +3098,12 @@ public class Processor2 : IProcessor
                 SetMultipleFiles(("IProcessor.cs", code));
                 var result = await _advancedStructuralEngine.IntroduceParameterObjectAsync("IProcessor.cs", "Process");
                 Assert.That(result, Is.Not.Null, "Should return a result");
-                // All implementations should be updated
-                var processMethods = result!.UpdatedText!.Count(c => c == '{') - result!.UpdatedText!.Count(c => c == '}');
-                // Verify that the code includes the interface and implementations
-                Assert.That(result.UpdatedText, Does.Contain("IProcessor"), "Should contain interface");
+                // Only the interface is updated; implementations are left as they were and a WARNING is returned
+                Assert.That(result!.Message, Does.Contain("WARNING:"), "Should warn that implementations were not updated");
+                // Interface signature is rewritten to take the generated record; implementations are unchanged
+                Assert.That(result.UpdatedText, Does.Contain("public record ProcessParameters"), "Should add the generated record");
+                Assert.That(result.UpdatedText, Does.Contain("ProcessParameters request"), "Should rewrite the interface signature to take the record");
+                Assert.That(result.UpdatedText, Does.Contain("public void Process(string name, int age, bool active) { }"), "Implementations should be left unchanged");
             }
 
 

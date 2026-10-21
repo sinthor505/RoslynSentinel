@@ -58,10 +58,10 @@ public class SemanticFindReplaceTools
     public async Task<SentinelCallToolResult<object>> SemanticFindReplaceTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("The operation to perform: invertBoolean or replaceConstruction.")] SemanticReplaceOperation operation,
-        [Description("A docCommentId. invertBoolean: the bool property or field to rename and invert. replaceConstruction: the constructed type (T:Ns.Type) or one constructor (M:Ns.Type.#ctor(System.Int32)); a constructor id restricts matching to that overload.")] string symbol,
+        [Description("A docCommentId. invertBoolean: the bool property or field to rename and invert. replaceConstruction: the constructed type (T:Ns.Type) or one constructor (M:Ns.Type.#ctor(System.Int32)); a constructor id restricts matching to that overload. From Search(mode: symbol), pass exactly as returned, do not construct.")] string symbol,
         [Description("preview: list the sites (before/after text) without writing. apply: perform the changes.")] SemanticReplaceMode mode,
         [Description("invertBoolean only, and required there: the new name for the symbol. Must be a valid C# identifier and not collide with other members, except for an alias retarget where it must be the existing sibling member the computed inverse alias negates. Ignored by replaceConstruction.")] string? newName = null,
-        [Description("replaceConstruction only, and required there: docCommentId of the static, non-generic factory method that replaces each construction, e.g. M:Ns.Factories.Create(System.Int32). Its return type must be the constructed type or a subtype. Ignored by invertBoolean.")] string? factory = null,
+        [Description("replaceConstruction only, and required there: docCommentId of the static, non-generic factory method that replaces each construction, e.g. M:Ns.Factories.Create(System.Int32). Its return type must be the constructed type or a subtype. Ignored by invertBoolean. From Search(mode: symbol), pass exactly as returned, do not construct.")] string? factory = null,
         [Description("replaceConstruction only, optional: project name or names separated by commas; only creation sites in those projects are rewritten. Omit to rewrite in every project. Ignored by invertBoolean.")] string? projectFilter = null,
         CancellationToken cancellationToken = default)
     {

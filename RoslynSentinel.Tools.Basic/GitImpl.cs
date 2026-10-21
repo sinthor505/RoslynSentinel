@@ -2426,7 +2426,7 @@ public class GitImpl : IGitOperations
                 Untracked = untracked,
             };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return UnexpectedFailure<GitStatusResult>(ex, "status");
         }
@@ -2494,7 +2494,7 @@ public class GitImpl : IGitOperations
 
             return new GitLogResult { IsError = false, Commits = commits };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return UnexpectedFailure<GitLogResult>(ex, "log");
         }
@@ -2633,7 +2633,7 @@ public class GitImpl : IGitOperations
 
             return new GitDiffResult { IsError = false, Diff = diff, FilesChanged = filesChanged, Warning = DetectDecodeCorruption(diff) };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return UnexpectedFailure<GitDiffResult>(ex, "diff");
         }
@@ -2704,7 +2704,7 @@ public class GitImpl : IGitOperations
                 Warning = DetectDecodeCorruption(diff) ?? DetectDecodeCorruption(metaParts[4]),
             };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return UnexpectedFailure<GitShowResult>(ex, "show");
         }
@@ -3135,7 +3135,7 @@ public class GitImpl : IGitOperations
 
             return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return UnexpectedFailure<GitStatusResult>(ex, "stage");
         }
@@ -3178,7 +3178,7 @@ public class GitImpl : IGitOperations
 
             return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return UnexpectedFailure<GitStatusResult>(ex, "unstage");
         }
@@ -3426,7 +3426,7 @@ public class GitImpl : IGitOperations
 
             return new GitCommitResult { IsError = false, CommitHash = hash, Message = finalMessage, RemainingStaged = remainingStaged };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return UnexpectedFailure<GitCommitResult>(ex, "commit");
         }
@@ -3463,7 +3463,7 @@ public class GitImpl : IGitOperations
             status.AbortedOperation = op;
             return status;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return UnexpectedFailure<GitStatusResult>(ex, "abort");
         }
@@ -3527,7 +3527,7 @@ public class GitImpl : IGitOperations
                 PendingCommit = noCommit,
             };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return UnexpectedFailure<GitRevertResult>(ex, "revert");
         }
@@ -3567,7 +3567,7 @@ public class GitImpl : IGitOperations
 
             return await StatusAsync(gitRoot, DefaultStatusMaxEntries, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return UnexpectedFailure<GitStatusResult>(ex, "reset");
         }
@@ -3635,7 +3635,7 @@ public class GitImpl : IGitOperations
 
             return new GitBranchResult { IsError = false, Created = branchName };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return UnexpectedFailure<GitBranchResult>(ex, "branch");
         }
@@ -3709,7 +3709,7 @@ public class GitImpl : IGitOperations
 
             return new GitCheckoutResult { IsError = false, Branch = branchName, CreatedNewBranch = createNew, Note = note };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             var failed = UnexpectedFailure<GitCheckoutResult>(ex, "checkout");
             failed.Branch = branchName;
@@ -3745,7 +3745,7 @@ public class GitImpl : IGitOperations
 
             return new GitRemoteResult { IsError = false, Operation = "push", Detail = detail };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             var failed = UnexpectedFailure<GitRemoteResult>(ex, "push");
             failed.Operation = "push";
@@ -3765,7 +3765,7 @@ public class GitImpl : IGitOperations
 
             return new GitRemoteResult { IsError = false, Operation = "fetch", Detail = detail };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             var failed = UnexpectedFailure<GitRemoteResult>(ex, "fetch");
             failed.Operation = "fetch";
@@ -3794,7 +3794,7 @@ public class GitImpl : IGitOperations
 
             return new GitRemoteResult { IsError = false, Operation = "pull", Detail = detail };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             var failed = UnexpectedFailure<GitRemoteResult>(ex, "pull");
             failed.Operation = "pull";

@@ -2090,7 +2090,7 @@ public class AsyncBatchEngine
                 reason: $"{producer} produced {diagnostics.Count} compiler error(s){DiagSummary(diagnostics)}",
                 progress: progress,
                 cancellationToken: cancellationToken);
-            var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes);
+            var flagApply = await _workspaceManager.ApplyProposedChangesAsync(flagResult.Changes, cancellationToken: cancellationToken);
             if (flagApply.IsError)
             {
                 _logger.LogWarning("NeedsManualReview flag write refused for {Method} in {File}: {Summary}",

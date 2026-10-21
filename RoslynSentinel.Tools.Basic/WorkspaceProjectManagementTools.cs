@@ -85,9 +85,9 @@ public class WorkspaceProjectManagementTools
     [Description("Deletes a symbol only if it has zero usages in the entire codebase. Distinction from RemoveMember: this tool refuses if ANY usage is found; RemoveMember checks for callers/implementations but allows skipPrecheck. Returns changeId.")]
     public Task<SentinelCallToolResult<object>> DeleteUnusedSymbolTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
-        [Description("Preferred resolution path, together with docCommentId - as returned by Search (mode: symbol or references). The most reliable and accurate way to identify the target.")] string projectName = "",
-        [Description("Preferred resolution path, together with projectName - as returned by Search (mode: symbol or references).")] string docCommentId = "",
+        [Description("File that declares the symbol; still required with docCommentId.")][Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Description("From the same Search result as docCommentId.")] string projectName = "",
+        [Description("From Search(mode: symbol), pass exactly as returned, do not construct.")] string docCommentId = "",
         [Description("Fallback resolution path if projectName/docCommentId aren't available. Combine with contextSnippet/lineBefore/lineAfter to disambiguate; symbolName alone is enough if there's only one declaration with that name.")]
         [Consumes(DataTag.SymbolName, required: false)] string? symbolName = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,

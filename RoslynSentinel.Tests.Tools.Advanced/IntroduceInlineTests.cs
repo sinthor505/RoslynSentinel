@@ -254,6 +254,23 @@ public class Calc
 
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    public async Task IntroduceParameterObject_InterfaceOnly_SummaryWarnsImplementationsNotUpdated()
+    {
+        const string interfaceOnlySource = @"
+public interface IProcessor
+{
+    void Process(string name, int age, bool active);
+}";
+        using var workspace = InMemoryWorkspace.Create(("Refactor.cs", interfaceOnlySource));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.IntroduceParameterObjectTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Process");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        var summary = (RoslynSentinel.Common.AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.Description, Does.Contain("WARNING:"));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task IntroduceParameterObject_NonExistentFile_IsRefused()
     {
         const string source = "public class C {}";

@@ -1376,6 +1376,7 @@ public class StructuralRefactoringEngine
             // Update interface method
             var newInterface = interfaceNode.ReplaceNode(methodNode, annotatedNewMethodNode);
             newRoot = root.ReplaceNode(interfaceNode, newInterface);
+            warning = "WARNING: The interface method was updated, but its implementations were not. Update the implementations manually.";
         }
         else if (classNode != null && methodSymbol?.ExplicitInterfaceImplementations.Length == 0)
         {

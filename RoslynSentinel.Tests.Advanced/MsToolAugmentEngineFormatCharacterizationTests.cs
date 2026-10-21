@@ -243,7 +243,7 @@ public class MsToolAugmentEngineFormatCharacterizationTests
     ];
 
     // Pre-existing quirk pinned as-is (not part of this slice): the new method lands after the last member behind
-    // two blank lines, and the whole annotated block is re-spaced (`_n  =  _n * 2;` loses its double spaces).
+    // two blank lines; only the call statement and the new method are re-spaced, untouched code keeps its spacing.
     private static string[] ExtractExpected() =>
     [
         "public class C",
@@ -255,7 +255,7 @@ public class MsToolAugmentEngineFormatCharacterizationTests
         "    {",
         "        // before",
         "        Step(a);",
-        "        _n = _n * 2;",
+        "        _n  =  _n * 2;",
         "    }",
         "",
         "    private int   Helper( ) { return  1; }",
@@ -312,5 +312,243 @@ public class MsToolAugmentEngineFormatCharacterizationTests
         SetFiles(("Test.cs", WithStrayCrlf(Src(false, ExtractInput()), anchor)));
 
         Assert.That(await ExtractAsync(), Is.EqualTo(WithStrayCrlf(Src(false, ExtractExpected()), anchor)));
+    }
+
+    // ================================================================ Stray bare LF in a CRLF document
+
+    private static string WithStrayBareLf(string crlfText, string anchor)
+    {
+        Assert.That(crlfText.Split(anchor + "\r\n").Length, Is.EqualTo(2), "Precondition: the anchor line is unique.");
+        var mixed = crlfText.Replace(anchor + "\r\n", anchor + "\n");
+        Assert.That(mixed.Count(c => c == '\n') - mixed.Count(c => c == '\r'), Is.EqualTo(1), "Precondition: exactly one stray bare LF.");
+        return mixed;
+    }
+
+    // Pinned as-is (known limitation): a stray bare LF on an unchanged comment line of a CRLF document survives; the
+    // rest of the document keeps CRLF.
+    [Test]
+    public async Task EncapsulateField_CrlfDocument_StrayBareLf_LineKeepsItsTerminator()
+    {
+        SetFiles(("Test.cs", WithStrayBareLf(Src(true, EncapsulateInput()), "    // keep   this   comment")));
+
+        Assert.That(await EncapsulateAsync(), Is.EqualTo(WithStrayBareLf(Src(true, EncapsulateExpected()), "    // keep   this   comment")));
+    }
+
+    // Pinned as-is (known limitation): a stray bare LF on an unchanged comment line of a CRLF document survives; the
+    // rest of the document keeps CRLF.
+    [Test]
+    public async Task SortUsings_CrlfDocument_StrayBareLf_LineKeepsItsTerminator()
+    {
+        SetFiles(("Test.cs", WithStrayBareLf(Src(true, UsingsInput()), "// header   comment")));
+
+        Assert.That(await SortUsingsAsync(), Is.EqualTo(WithStrayBareLf(Src(true, UsingsExpected()), "// header   comment")));
+    }
+
+    // Pinned as-is (known limitation): a stray bare LF on an unchanged field line of a CRLF document survives, and the
+    // appended method keeps CRLF.
+    [Test]
+    public async Task ExtractMethod_CrlfDocument_StrayBareLf_LineKeepsItsTerminator()
+    {
+        SetFiles(("Test.cs", WithStrayBareLf(Src(true, ExtractInput()), "    private   int _n;")));
+
+        Assert.That(await ExtractAsync(), Is.EqualTo(WithStrayBareLf(Src(true, ExtractExpected()), "    private   int _n;")));
+    }
+
+    // ================================================================ Stray CRLF on a blank line inside the selection
+
+    // Pinned as-is (known limitation): a stray CRLF on the blank line between two selected statements is moved out of the
+    // selection: the blank line ends up before the appended method, and the selected statements move into it.
+    // TODO ExtractMethodSafe moves a selected blank line's CRLF out of the extracted block; check the intended placement.
+    [Test]
+    public async Task ExtractMethod_MixedEol_StrayCrlfOnBlankLineInsideSelection_MovesWithAppendedMethod()
+    {
+        var lines = new[]
+        {
+            "public class C",
+            "{",
+            "    public void Run(int a)",
+            "    {",
+            "        _n  =  a  +  1;",
+            "",
+            "        _n  =  _n * 2;",
+            "    }",
+            "}",
+            "",
+        };
+        var text = Src(false, lines).Replace("        _n  =  a  +  1;\n\n", "        _n  =  a  +  1;\n\r\n");
+        Assert.That(text.Count(c => c == '\r'), Is.EqualTo(1), "Precondition: exactly one stray CRLF on the blank line.");
+        SetFiles(("Test.cs", text));
+
+        var result = await _engine.ExtractMethodSafeAsync("Test.cs", "Step", "_n  =  a  +  1;\n\n        _n  =  _n * 2;");
+
+        var expected = Src(false, new[]
+        {
+            "public class C",
+            "{",
+            "    public void Run(int a)",
+            "    {",
+            "        Step(a);",
+            "    }",
+            "\r",
+            "",
+            "    private void Step(int a)",
+            "    {",
+            "        _n = a + 1;",
+            "        _n = _n * 2;",
+            "    }",
+            "}",
+            "",
+        });
+        Assert.That(result.IsError, Is.False, result.Error);
+        Assert.That(result.UpdatedContent, Is.EqualTo(expected));
+    }
+
+    // ================================================================ CR-only and U+2028 line endings
+
+    // Separator name "CR" = carriage return only; anything else = U+2028 LINE SEPARATOR.
+    private static string Separator(string name) => name == "CR" ? ((char)0x0D).ToString() : ((char)0x2028).ToString();
+
+    // Pinned as-is (known limitation): CR-only and U+2028 separators are reused verbatim for the whole output; no
+    // normalisation to LF or CRLF happens.
+    [TestCase("CR")]
+    [TestCase("LS")]
+    public async Task SortUsings_NonLfSeparator_ReusedVerbatim(string separator)
+    {
+        SetFiles(("Test.cs", string.Join(Separator(separator), UsingsInput())));
+
+        var expected = new[]
+        {
+            "// header   comment",
+            "using System;",
+            "using System.Linq;",
+            "using System.Text;",
+            "",
+            "namespace   N",
+            "{",
+            "    public class   C { }",
+            "}",
+            "",
+        };
+        Assert.That(await SortUsingsAsync(), Is.EqualTo(string.Join(Separator(separator), expected)));
+    }
+
+    // Pinned as-is (known limitation): CR-only and U+2028 separators are reused verbatim for the whole output, including
+    // the appended method; no normalisation to LF or CRLF happens.
+    [TestCase("CR")]
+    [TestCase("LS")]
+    public async Task ExtractMethod_NonLfSeparator_ReusedVerbatim(string separator)
+    {
+        SetFiles(("Test.cs", string.Join(Separator(separator), ExtractInput())));
+
+        var expected = new[]
+        {
+            "public class C",
+            "{",
+            "    // keep   this   comment",
+            "    private   int _n;",
+            "",
+            "    public void Run(int a)",
+            "    {",
+            "        // before",
+            "        Step(a);",
+            "        _n  =  _n * 2;",
+            "    }",
+            "",
+            "    private int   Helper( ) { return  1; }",
+            "",
+            "",
+            "    private void Step(int a)",
+            "    {",
+            "        _n = a + 1;",
+            "    }",
+            "}",
+            "",
+        };
+        Assert.That(await ExtractAsync(), Is.EqualTo(string.Join(Separator(separator), expected)));
+    }
+
+    // ================================================================ Known trivia loss
+
+    // Pinned as-is (known limitation): trailing // comments on usings, a leading comment on a using and the leading
+    // trivia of a removed duplicate using are all dropped.
+    [Test]
+    public async Task SortUsings_TrailingAndLeadingComments_DuplicateTrivia_IsDropped()
+    {
+        var lines = new[]
+        {
+            "using System.Text; // trailing text",
+            "// lead of linq",
+            "using   System.Linq;",
+            "// lead of dup",
+            "using System; // trailing sys",
+            "using   System;",
+            "",
+            "namespace   N",
+            "{",
+            "    public class   C { }",
+            "}",
+            "",
+        };
+        SetFiles(("Test.cs", Src(false, lines)));
+
+        var result = await _engine.SortAndDeduplicateUsingsAsync("Test.cs", writeToFile: false);
+
+        // Pinned as-is (known limitation): every trailing and leading comment on the usings is lost.
+        // TODO SortAndDeduplicateUsings drops trailing and leading comments on usings, incl. duplicate-using trivia.
+        Assert.That(result.UpdatedContent, Is.EqualTo(Src(false, new[]
+        {
+            "using System;",
+            "using System.Linq;",
+            "using System.Text;",
+            "",
+            "namespace   N",
+            "{",
+            "    public class   C { }",
+            "}",
+            "",
+        })));
+    }
+
+    // Pinned as-is (known limitation): a comment between two selected statements is dropped from the output.
+    // TODO ExtractMethodSafe drops comments that sit between the selected statements.
+    [Test]
+    public async Task ExtractMethod_CommentBetweenSelectedStatements_IsDropped()
+    {
+        var lines = new[]
+        {
+            "public class C",
+            "{",
+            "    public void Run(int a)",
+            "    {",
+            "        _n  =  a  +  1;",
+            "        // between   the   statements",
+            "        _n  =  _n * 2;",
+            "    }",
+            "}",
+            "",
+        };
+        SetFiles(("Test.cs", Src(false, lines)));
+
+        var result = await _engine.ExtractMethodSafeAsync("Test.cs", "Step", "_n  =  a  +  1;\n        // between   the   statements\n        _n  =  _n * 2;");
+
+        Assert.That(result.IsError, Is.False, result.Error);
+        Assert.That(result.UpdatedContent, Is.EqualTo(Src(false, new[]
+        {
+            "public class C",
+            "{",
+            "    public void Run(int a)",
+            "    {",
+            "        Step(a);",
+            "    }",
+            "",
+            "",
+            "    private void Step(int a)",
+            "    {",
+            "        _n = a + 1;",
+            "        _n = _n * 2;",
+            "    }",
+            "}",
+            "",
+        })));
     }
 }

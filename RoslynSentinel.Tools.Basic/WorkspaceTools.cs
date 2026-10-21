@@ -526,9 +526,9 @@ public class WorkspaceTools
     [Description("Deletes a symbol only if it has zero usages anywhere in the codebase.")]
     public Task<SentinelCallToolResult<object>> DeleteUnusedSymbolTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
-        [Description("Preferred, with docCommentId.")] string projectName = "",
-        [Description("Preferred, with projectName (from Search, mode: symbol or references).")] string docCommentId = "",
+        [Description("File that declares the symbol; still required with docCommentId.")][Consumes(DataTag.SourceFilepath, required: true)] string filePath,
+        [Description("From the same Search result as docCommentId.")] string projectName = "",
+        [Description("From Search(mode: symbol), pass exactly as returned, do not construct.")] string docCommentId = "",
         [Description("Fallback; add contextSnippet to disambiguate.")]
         [Consumes(DataTag.SymbolName, required: false)] string? symbolName = null,
         [Description(ToolParams.ContextSnippet)][ExternalInputRequired(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,

@@ -1791,7 +1791,8 @@ public class MsToolAugmentEngine
 
         var callStmt = SyntaxFactory.ParseStatement(callText)
             .WithLeadingTrivia(firstStmt.GetLeadingTrivia())
-            .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
+            .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed))
+            .WithAdditionalAnnotations(Formatter.Annotation);
 
         // Replace the Selected statements in the block with the call
         var stmtList = block.Statements.ToList();
@@ -1807,7 +1808,7 @@ public class MsToolAugmentEngine
         newStmts.AddRange(stmtList.Skip(firstIdx + stmtsInSelection.Count));
 
         var editAnnotation = Formatter.Annotation;
-        var newBlock = block.WithStatements(SyntaxFactory.List(newStmts)).WithAdditionalAnnotations(editAnnotation);
+        var newBlock = block.WithStatements(SyntaxFactory.List(newStmts));
         var newRoot1 = root.ReplaceNode(block, newBlock);
 
         // Locate the containing type in the modified tree (by name) and add the new method
