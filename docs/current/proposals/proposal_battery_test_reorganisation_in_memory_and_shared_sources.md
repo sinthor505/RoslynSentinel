@@ -86,8 +86,14 @@ Proposed (not decided in detail). Part A fixes the leak; B-D are independent and
   Tool defects found and pinned with TODO in the new classes: ExtractMembers superclass throws `IndexOutOfRangeException`;
   ExtractMembers partialClass on a non-partial class and ModifyAttribute add `[Serializable]` are refused with compiler
   errors whose diagnostics are not in the message; InlineParameter and RemoveAttribute report success but change nothing;
-  pull-up emits `virtual`. Remaining: cleanup (de-duplicate the private `BuildTools` helpers into `BatteryToolFactory`, tidy
-  empty section comments), a fake `RenameSymbol` path, then Parts C/D.
+  pull-up emits `virtual`.
+- **Part A status (2026-10-21): slice 12 DONE** (d8b9fd20, 2b36a3ee): the 8 private `BuildTools` helpers are gone, the 86
+  call sites call `BatteryToolFactory.Create*` directly; section dividers needed no tidy. Items A2/A3 checked: the
+  disk-bound fixtures `BatteryEighteen`, `BatteryTwenty` and `BatteryTwentyFour` are `[NonParallelizable]`;
+  `BatteryEighteen.SortAndDeduplicateUsings` passes `writeToFile: false`; no `BatteryFour` class exists any more;
+  `BatteryTwentyTwo` runs on in-memory `SetTestSolution` and its one path-named test is a preview (no write), so it needs no
+  attribute. A4 (pre-seeded stale `Order.cs` regression test) is not built: the writers that produced the leak are now
+  in-memory, so it would guard a path nothing uses (decision open). Remaining: a fake `RenameSymbol` path, then Parts C/D.
 - **Part A progress (2026-10-20, earlier notes).** The fixture is `RoslynSentinel.Tests.Tools.Advanced/BatteryTwentyFourTests.cs`
   (137 tests when re-surveyed: 115 convertible, 19 read-only engine-preview tests, 3 real-disk). Slice order and
   proposed topic classes, from the second survey: (1) `SyncTypeAndFilenameTests` 3 - DONE 4f97c8ee; (2)
