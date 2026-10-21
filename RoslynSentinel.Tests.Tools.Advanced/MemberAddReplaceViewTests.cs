@@ -51,19 +51,7 @@ public enum Status { Active = 1, Pending = 2 }
     // The original fixture was CRLF (verbatim literals inside a CRLF file); the EOL guard compares against the document's endings.
     private static readonly string CrlfSimpleSource = SimpleSource.ReplaceLineEndings("\r\n");
 
-    private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager)
-    {
-        // Mirrors the engine chain in BatteryTwentyFourTests.Setup for the structural member, attribute and base-type tools.
-        var config = new SentinelConfiguration();
-        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var refactoringEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-        var memberRefactoringEngine = new MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
-        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
-        var refactoringStructuralImpl = new RefactoringStructuralImpl(refactoringEngine, memberRefactoringEngine, structuralRefinementEngine, symbolNavigationEngine, workspaceManager, validationEngine, NullLogger<RefactoringStructuralImpl>.Instance);
-        return new RefactoringStructuralTools(refactoringStructuralImpl);
-    }
+    private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateRefactoringStructuralTools(workspaceManager);
 
     // --- MemberTool on enum containers (routes to AddEnumMemberAsync/RemoveEnumMemberAsync/ReplaceEnumMemberAsync) ---
     [Test]

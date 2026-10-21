@@ -12,10 +12,7 @@ public sealed class MoveMemberRefusalTests
 {
     // Same wiring as BatteryTwentyFourTests [SetUp] for the tool under test: MoveMemberTool lives on
     // AdvancedRefactoringTools, which takes only the workspace manager, so no engines are needed for these refusals.
-    private static AdvancedRefactoringTools BuildTools(IWorkspaceManager workspaceManager)
-    {
-        return new AdvancedRefactoringTools(workspaceManager);
-    }
+    private static AdvancedRefactoringTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateAdvancedRefactoringTools(workspaceManager);
 
     [Test]
     [Category("AdvancedRefactoringTools")]

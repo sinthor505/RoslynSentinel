@@ -82,12 +82,7 @@ public class Target {}
     private static readonly string CrlfSimpleSource = SimpleSource.ReplaceLineEndings("\r\n");
     private static readonly string CrlfRefactorSource = RefactorSource.ReplaceLineEndings("\r\n");
 
-    private static AdvancedRefactoringTools BuildTools(IWorkspaceManager workspaceManager)
-    {
-        // The Setup in BatteryTwentyFourTests builds DiffEngine before ValidationEngine; every tool in this fixture
-        // is AdvancedRefactoringTools, which takes only the workspace manager and builds its own engines.
-        return new AdvancedRefactoringTools(workspaceManager);
-    }
+    private static AdvancedRefactoringTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateAdvancedRefactoringTools(workspaceManager);
 
     // Concatenates every document's text so a test can assert a type exists somewhere in the solution.
     private static string AllText(InMemoryWorkspace workspace)

@@ -50,20 +50,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     private static string Crlf(string source) => source.ReplaceLineEndings("\r\n");
 
-    private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager)
-    {
-        // Mirrors the BatteryTwentyFourTests [SetUp] wiring: DiffEngine is built before ValidationEngine, and the
-        // structural impl takes the refactoring, member, structural-refinement and navigation engines.
-        var config = new SentinelConfiguration();
-        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var refactoringEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-        var memberRefactoringEngine = new MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
-        var structuralRefinementEngine = new StructuralRefinementEngine(workspaceManager, config);
-        var impl = new RefactoringStructuralImpl(refactoringEngine, memberRefactoringEngine, structuralRefinementEngine, symbolNavigationEngine, workspaceManager, validationEngine, NullLogger<RefactoringStructuralImpl>.Instance);
-        return new RefactoringStructuralTools(impl);
-    }
+    private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateRefactoringStructuralTools(workspaceManager);
 
     // Concatenates every document's text so a test can assert a declaration is gone from the whole solution.
     private static string AllText(InMemoryWorkspace workspace)

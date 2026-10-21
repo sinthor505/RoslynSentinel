@@ -132,11 +132,7 @@ public class Calc
     private static readonly string CrlfParameterSource = ParameterSource.ReplaceLineEndings("\r\n");
     private static readonly string CrlfLocalVariableSource = LocalVariableSource.ReplaceLineEndings("\r\n");
 
-    private static AdvancedRefactoringTools BuildTools(IWorkspaceManager workspaceManager)
-    {
-        // Every tool in this fixture is AdvancedRefactoringTools, which takes only the workspace manager and builds its own engines.
-        return new AdvancedRefactoringTools(workspaceManager);
-    }
+    private static AdvancedRefactoringTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateAdvancedRefactoringTools(workspaceManager);
 
     // --- InlineSymbol (method) ---
     [Test]

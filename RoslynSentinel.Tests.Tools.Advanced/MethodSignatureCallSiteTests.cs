@@ -65,17 +65,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     private static string Crlf(string source) => source.ReplaceLineEndings("\r\n");
 
-    private static RefactoringSignatureTools BuildTools(IWorkspaceManager workspaceManager)
-    {
-        var config = new SentinelConfiguration();
-        var symbolNavigationEngine = new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
-        var diffEngine = new DiffEngine();
-        var validationEngine = new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance);
-        var refactoringEngine = new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config);
-        var memberRefactoringEngine = new MemberRefactoringEngine(workspaceManager, symbolNavigationEngine, validationEngine);
-        var impl = new RefactoringSignatureImpl(refactoringEngine, memberRefactoringEngine, workspaceManager, validationEngine, symbolNavigationEngine, NullLogger<RefactoringSignatureImpl>.Instance);
-        return new RefactoringSignatureTools(impl);
-    }
+    private static RefactoringSignatureTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateRefactoringSignatureTools(workspaceManager);
 
     // --- ConstructorParameterTool ---
     [Test]

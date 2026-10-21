@@ -13,10 +13,7 @@ public sealed class MoveMemberSuccessTests
 {
     // Same wiring as MoveMemberRefusalTests: MoveMemberTool lives on AdvancedRefactoringTools, which takes only the
     // workspace manager.
-    private static AdvancedRefactoringTools BuildTools(IWorkspaceManager workspaceManager)
-    {
-        return new AdvancedRefactoringTools(workspaceManager);
-    }
+    private static AdvancedRefactoringTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateAdvancedRefactoringTools(workspaceManager);
 
     private static string Lf(string text) => text.ReplaceLineEndings("\n");
 

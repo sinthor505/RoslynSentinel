@@ -50,19 +50,7 @@ public enum Status { Active = 1, Pending = 2 }
 
     private const string MismatchedSource = "namespace TestProj;\n\npublic class HelperResult\n{\n    public bool Ok { get; set; }\n}\n\npublic class MainService\n{\n    public int Id { get; set; }\n}\n";
 
-    private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager)
-    {
-        var config = new SentinelConfiguration();
-        var diffEngine = new DiffEngine();
-        return new RefactoringStructuralTools(new RefactoringStructuralImpl(
-            new BasicRefactoringEngine(workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, config),
-            new MemberRefactoringEngine(workspaceManager, new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance), new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance), config),
-            new StructuralRefinementEngine(workspaceManager, config),
-            new SymbolNavigationEngine(workspaceManager, NullLogger<SymbolNavigationEngine>.Instance),
-            workspaceManager,
-            new ValidationEngine(workspaceManager, diffEngine, NullLogger<ValidationEngine>.Instance),
-            NullLogger<RefactoringStructuralImpl>.Instance));
-    }
+    private static RefactoringStructuralTools BuildTools(IWorkspaceManager workspaceManager) => BatteryToolFactory.CreateRefactoringStructuralTools(workspaceManager);
 
     // TODO SyncTypeAndFilenameTool reports a file that already matches its type name as an error; decide whether a no-op should be success
     // Pins current behaviour: a no-op rename is reported as an error (see TODO if that should change).
