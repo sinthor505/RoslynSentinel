@@ -357,7 +357,9 @@ public class C
             contextSnippet: "public void Foo(");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.Candidates, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Candidates, Has.Count.EqualTo(2));
+        var candidateSignatures = string.Join("|", result.Candidates!.Select(c => c.Signature));
+        Assert.That(candidateSignatures, Does.Contain("int").And.Contain("string"));
     }
 
     [Test]
@@ -658,7 +660,7 @@ public class C
         var (outcome, message, members) = await _symbolNavigationEngine.GetContainerMembersAsync("DupContainersMembers.cs", "Dup", contextSnippet: "no such text anywhere");
 
         Assert.That(outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(message, Is.Not.Null.And.Not.Empty);
+        Assert.That(message, Does.Contain("no such text anywhere"));
         Assert.That(members, Is.Empty);
     }
 
@@ -814,6 +816,7 @@ public class C
 
         var result = await _memberRefactoringEngine.RemoveEnumMemberAsync("ToolScope.cs", "ToolScope", "nonexistent");
 
+        // TODO throw-migration: assert the typed exception once MemberRefactoringEngine throws
         Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 
@@ -853,6 +856,7 @@ public enum Singleton
 
         var result = await _memberRefactoringEngine.ReplaceEnumMemberAsync("ToolScope.cs", "ToolScope", "nonexistent", "workspace");
 
+        // TODO throw-migration: assert the typed exception once MemberRefactoringEngine throws
         Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 
@@ -2301,6 +2305,8 @@ public class OrderService
 
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, result.Message);
         Assert.That(result.Warnings, Is.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("return DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage);"));
     }
 
     [Test]
@@ -2313,6 +2319,8 @@ public class OrderService
 
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, result.Message);
         Assert.That(result.Warnings, Is.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("return DiscountCalculator.ApplyPercentage(CalculateTotal(), percentage);"));
     }
 
     [Test]
@@ -2406,6 +2414,8 @@ public class C
 
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty,
             $"containerName '{containerName}' should resolve to PairWrapper<TKey, TValue>. {result.Message}");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("public int Added"));
     }
 
     [Test]
@@ -2419,6 +2429,8 @@ public class C
             "public int Added { get; set; }");
 
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, result.Message);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("public int Added"));
     }
 
     [Test]
@@ -2462,11 +2474,8 @@ public class Helper
         var result = await _memberRefactoringEngine.RemoveMemberAsync("Helper.cs", "GetName");
         // Should error or return unchanged because GetName is used
         Assert.That(result, Is.Not.Null, "Should return a result");
-        if (!result!.Message!.Contains("error") && !result.Message!.Contains("Error"))
-        {
-            // If not an error, GetName should still be in the output
-            Assert.That(result.Message, Does.Contain("GetName"), "If removal succeeds, should indicate that member is used");
-        }
+        // TODO throw-migration: assert the typed exception (not Outcome == CannotRemove) once MemberRefactoringEngine throws
+        Assert.That(result.Message, Does.Contain("usages"), "Should error when trying to remove a used member");
     }
 
     // ────────────────────────────────────────────────────────────────────────────
@@ -2490,7 +2499,8 @@ public class Helper
         var filePath = doc.FilePath ?? "Test.cs";
         var result = await _memberRefactoringEngine.RemoveMemberAsync(filePath, "GetName");
         // Should error because GetName is used in UseHelper
-        Assert.That(result.Message, Does.Contain("ERROR") | Does.Contain("usages"), "Should error when trying to remove a used member");
+        // TODO throw-migration: assert the typed exception (not Outcome == CannotRemove) once MemberRefactoringEngine throws
+        Assert.That(result.Message, Does.Contain("usages"), "Should error when trying to remove a used member");
     }
 
     [Test]
