@@ -89,7 +89,9 @@ public interface IOrderRepository
     {
         var json = @"{""id"": 1, ""name"": ""test"", ""active"": true}";
         var result = _generationTools.GenerateClassesFromJsonTool(reason: "test message", json, "Product", "TestProj");
-        Assert.That(result, Is.Not.Null);
+        var generated = (GenerationResult)result;
+        Assert.That(generated.Content, Does.Contain("class Product"), "Generated class should be named Product");
+        Assert.That(generated.Content, Does.Contain("Name").And.Contain("Active"), "Generated properties should follow the JSON keys");
     }
 
     [Test]
@@ -98,17 +100,20 @@ public interface IOrderRepository
     {
         var json = @"{""order"": {""id"": 1, ""items"": [{""sku"": ""A""}]}}";
         var result = _generationTools.GenerateClassesFromJsonTool(reason: "test message", json, "Root", "TestProj");
-        Assert.That(result, Is.Not.Null);
+        var generated = (GenerationResult)result;
+        Assert.That(generated.Content, Does.Contain("class Root"), "Generated root class should be named Root");
+        Assert.That(generated.Content, Does.Contain("Order"), "Nested object key should produce an Order property");
     }
 
     // --- GenerateHttpClientTool ---
     [Test]
     [Category("GenerationTools")] // sentinel:auto-category
-    public async Task GenerateHttpClient_ValidController_ReturnsCode()
+    public async Task GenerateHttpClient_ValidController_ReturnsSummaryWithModifiedOutcome()
     {
         SetSource(ControllerSource, "Orders.cs");
         var result = await _generationTools.GenerateHttpClientTool(reason: "test message", "Orders.cs", "OrdersController");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result, Does.Contain($"\"Outcome\": {(int)EditOutcome.Modified}"), "Generation should report Modified");
+        // TODO GenerateHttpClient summary (ToJsonSummary) omits UpdatedText, so the generated OrdersClient source is unreachable from the tool result; assert it once the tool exposes it.
     }
 
     [Test]
@@ -117,7 +122,7 @@ public interface IOrderRepository
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _generationTools.GenerateHttpClientTool(reason: "test message", "NonExistent.cs", "OrdersController");
-        Assert.That(result, Is.Not.Null, "Tools return a message rather than throwing for an unknown file.");
+        Assert.That(result, Does.Contain("not found in the loaded solution"), "Tools return a message rather than throwing for an unknown file.");
     }
 
     // --- GenerateConstructor ---
@@ -125,18 +130,25 @@ public interface IOrderRepository
     [Category("CodeGenerationEngine")] // sentinel:auto-category
     public async Task GenerateConstructor_ValidClass_ReturnsCode()
     {
-        SetSource(PocoSource, "Order.cs");
+        // GenerateConstructorAsync takes only private or readonly FIELDS (CodeGenerationEngine.cs).
+        // PocoSource's Order has auto-properties only and yields NoCandidatesFound, so this Order declares a field.
+        // TODO <engine ignores auto-properties?> a constructor generator normally takes properties too.
+        const string source = "public class Order { private readonly string _sku; public int OrderId { get; set; } }";
+        SetSource(source, "Order.cs");
         var result = await _codeGenerationEngine.GenerateConstructorAsync("Order.cs", "Order");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("public Order("));
     }
 
     [Test]
     [Category("CodeGenerationEngine")] // sentinel:auto-category
-    public async Task GenerateConstructor_NonExistentFile_Throws()
+    public async Task GenerateConstructor_NonExistentFile_ReturnsDocumentNotFound()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _codeGenerationEngine.GenerateConstructorAsync("NonExistent.cs", "Order");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound));
         Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        // TODO throw-migration: assert the typed exception once the engine throws
     }
 
     // --- GenerateToString ---
@@ -146,7 +158,8 @@ public interface IOrderRepository
     {
         SetSource(PocoSource, "Order.cs");
         var result = await _codeGenerationEngine.GenerateToStringAsync("Order.cs", "Order");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.UpdatedContent, Does.Contain("public override string ToString()"));
+        Assert.That(result.UpdatedContent, Does.Contain("OrderId = {OrderId}"));
     }
 
     // --- GenerateRepositoryInterface ---
@@ -156,7 +169,8 @@ public interface IOrderRepository
     {
         SetSource(PocoSource, "Order.cs");
         var result = await _codeGenerationEngine.GenerateRepositoryInterfaceAsync("Order.cs", "Order");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.InterfaceName, Is.EqualTo("IOrder"));
+        Assert.That(result.InterfaceCode, Does.Contain("public interface IOrder"));
     }
 
     // --- GenerateFluentBuilder ---
@@ -166,7 +180,9 @@ public interface IOrderRepository
     {
         SetSource(PocoSource, "Order.cs");
         var result = await _codeGenerationEngine.GenerateFluentBuilderAsync("Order.cs", "Order");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Error, Is.Null.Or.Empty);
+        Assert.That(result.BuilderClassName, Is.EqualTo("OrderBuilder"));
+        Assert.That(result.BuilderCode, Does.Contain("public class OrderBuilder"));
     }
 
     // --- GenerateDecoratorClass ---
@@ -181,7 +197,7 @@ public interface IOrderRepository
 
     [Test]
     [Category("CodeGenerationEngine")] // sentinel:auto-category
-    public async Task GenerateDecoratorClass_NonExistentInterface_Throws()
+    public async Task GenerateDecoratorClass_NonExistentInterface_ReturnsNull()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("INoSuchInterface", "Logging", null);
@@ -193,9 +209,10 @@ public interface IOrderRepository
     [Category("GenerationTools")] // sentinel:auto-category
     public async Task GenerateDefaultConfigJson_ValidProject_ReturnsJson()
     {
-        SetSource(PocoSource, "Order.cs");
+        const string source = @"namespace TestProj; public class Order { public string T(IConfiguration config) => config[""Timeout""]; }";
+        SetSource(source, "Order.cs");
         var result = await _generationTools.GenerateDefaultConfigJsonTool(reason: "test message", "TestProj");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result, Does.Contain("Timeout"), "A config key read in the project should appear in the generated JSON skeleton");
     }
 
     [Test]
@@ -215,7 +232,8 @@ public interface IOrderRepository
         const string src = "namespace TestProj; public class Service { public string GetData() { return \"data\"; } }";
         SetSource(src, "Service.cs");
         var result = await _asyncOptimizationEngine.GenerateAsyncOverloadAsync("Service.cs", "GetData");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("GetDataAsync"));
     }
 
     [Test]
@@ -238,11 +256,13 @@ public interface IOrderRepository
 
     [Test]
     [Category("ApiGenerationEngine")] // sentinel:auto-category
-    public async Task AddValidationToPoco_NonExistentFile_Throws()
+    public async Task AddValidationToPoco_NonExistentFile_ReturnsDocumentNotFound()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _apiGenerationEngine.AddValidationToPocoAsync("NonExistent.cs", "Order");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound));
         Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        // TODO throw-migration: assert the typed exception once the engine throws
     }
 
     // --- ImplementInterfaceSafe ---
@@ -276,11 +296,11 @@ public interface IOrderRepository
 
     [Test]
     [Category("CodeGenerationEngine")] // sentinel:auto-category
-    public async Task ImplementInterfaceSafe_NonExistentFile_ReturnsNull()
+    public async Task ImplementInterfaceSafe_NonExistentFile_ReturnsDocumentNotFound()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("NonExistent.cs", "Order", "IOrderRepository");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound));
     }
 
     [Test]
@@ -294,11 +314,13 @@ public interface IOrderRepository
 
     [Test]
     [Category("CodeGenerationEngine")] // sentinel:auto-category
-    public async Task ConvertPropertySafe_NonExistentFile_Throws()
+    public async Task ConvertPropertySafe_NonExistentFile_ReturnsDocumentNotFound()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("NonExistent.cs", "OrderId", "ToFullProperty");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound));
         Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        // TODO throw-migration: assert the typed exception once the engine throws
     }
 
     // --- InterpolateStringSafeTool ---
@@ -309,7 +331,8 @@ public interface IOrderRepository
         const string src = @"namespace TestProj; public class Order { public string GetLabel(int id) { return string.Format(""{0}"", id); } }";
         SetSource(src, "Order.cs");
         var result = await _generationTools.InterpolateStringSafeTool(reason: "test message", "Order.cs", @"string.Format(""{0}""");
-        Assert.That(result, Is.Not.Null.And.Not.Empty);
+        Assert.That(result, Does.Contain($"\"Outcome\": {(int)EditOutcome.Modified}"), "Conversion should report Modified");
+        // TODO InterpolateString summary (ToJsonSummary) omits UpdatedText, so the converted $"..." text is unreachable from the tool result; assert it once the tool exposes it.
     }
 
     [Test]
@@ -318,6 +341,6 @@ public interface IOrderRepository
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _generationTools.InterpolateStringSafeTool(reason: "test message", "NonExistent.cs", "string.Format");
-        Assert.That(result, Is.Not.Null, "Tools return a message rather than throwing for an unknown file.");
+        Assert.That(result, Does.Contain("not found in the loaded solution"), "Tools return a message rather than throwing for an unknown file.");
     }
 }
