@@ -13,15 +13,13 @@ public class TestServiceProviderBuilderTests
         // docs/current/blockers/resolved/blocking_error_iworkspacereader_never_registered_server_wont_start.md).
         IServiceProvider? provider = null;
         Assert.DoesNotThrow(() => provider = TestServiceProviderBuilder.Build());
-        Assert.That(provider, Is.Not.Null);
 
         // Spot-check one engine that depends on IWorkspaceReader specifically.
         //var engine = provider!.GetRequiredService<BasicRefactoringEngine>();
-        //Assert.That(engine, Is.Not.Null);
 
-        // Confirm that IWorkspaceReader is registered.
+        // Confirm that IWorkspaceReader is a singleton: two resolutions return the same instance.
         var reader = provider!.GetRequiredService<IWorkspaceReader>();
-        Assert.That(reader, Is.Not.Null);
+        Assert.That(provider!.GetRequiredService<IWorkspaceReader>(), Is.SameAs(reader));
     }
 
     [Test]
@@ -31,15 +29,15 @@ public class TestServiceProviderBuilderTests
         // registered service's dependency graph doesn't resolve - this is the same check that
         // caught the IWorkspaceReader gap at real server startup (see
         // docs/current/blockers/resolved/blocking_error_iworkspacereader_never_registered_server_wont_start.md).
+        var customDummy = new object();
         IServiceProvider? provider = null;
         Assert.DoesNotThrow(() => provider = TestServiceProviderBuilder.Build(services =>
         {
             // Add a dummy singleton to confirm that custom configuration is applied.
-            services.AddSingleton(new object());
+            services.AddSingleton(customDummy);
         }));
-        Assert.That(provider, Is.Not.Null);
-        // Confirm that the dummy singleton is present.
+        // Confirm that the custom singleton is the registered instance.
         var dummy = provider!.GetRequiredService<object>();
-        Assert.That(dummy, Is.Not.Null);
+        Assert.That(dummy, Is.SameAs(customDummy));
     }
 }

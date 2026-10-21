@@ -125,6 +125,16 @@ public class HaltStampFilterTests
         Assert.That(body["isSessionHalted"]?.GetValue<bool>(), Is.True, $"isSessionHalted missing in: {body.ToJsonString()}");
         Assert.That(body["sessionHaltKind"]?.GetValue<string>(), Is.EqualTo(expectedKind));
         Assert.That(body["sessionHaltReason"]?.GetValue<string>(), Is.Not.Null.And.Not.Empty);
+        var expectedReasonFragment = expectedKind switch
+        {
+            "mutation" => "The batch-mutation breaker is tripped",
+            "orientation" => "The orientation breaker is tripped",
+            _ => null,
+        };
+        if (expectedReasonFragment is not null)
+        {
+            Assert.That(body["sessionHaltReason"]?.GetValue<string>(), Does.Contain(expectedReasonFragment));
+        }
         Assert.That(body["sessionHaltRecovery"]?.GetValue<string>(), Is.Not.Null.And.Not.Empty);
     }
 
