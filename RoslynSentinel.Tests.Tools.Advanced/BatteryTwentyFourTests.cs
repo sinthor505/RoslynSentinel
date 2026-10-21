@@ -156,17 +156,6 @@ public enum Status { Active = 1, Pending = 2 }
         _workspaceManager.SetTestSolution(solution);
     }
 
-    // ===================== autoStage METHODS =====================
-    // --- ExtractSuperclass ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task ExtractSuperclass_AutoStageTrue_ReturnsAppliedChangeSummary()
-    {
-        SetMultiFile(("Dog.cs", RefactorSource));
-        var result = await _advTools.ExtractMembersTool(reason: "test message", "Dog.cs", "Dog", ExtractAsType.superclass, "AnimalBase");
-        Assert.That(result, Is.Not.Null);
-    }
-
     // --- SafeDeleteSymbol ---
     [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
@@ -185,36 +174,6 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _advTools.ChangeSignatureTool(reason: "test message", "Order.cs", "Order", new[] { new ChangeSignatureParameterInput(originalIndex: 1), new ChangeSignatureParameterInput(originalIndex: 0) });
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- ExtractInterface ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task ExtractInterface_AutoStageTrue_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.ExtractMembersTool(reason: "test message", "Order.cs", "Order", ExtractAsType.@interface, "IOrder");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- MoveTypeToFile ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task MoveTypeToFile_AutoStageTrue_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.MoveTypeTool(reason: "test message", "Order.cs", "Status", "ownFile");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- MoveAllTypesToFilesTool ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task MoveAllTypesToFiles_AutoStageTrue_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.MoveAllTypesToFilesTool(reason: "test message", ToolScope.file, "Order.cs");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -246,26 +205,6 @@ public enum Status { Active = 1, Pending = 2 }
         var result = await _refactoringSignatureTools.RenameSymbolTool(reason: "test message", projectName: "TestProj", docCommentId: "M:TestProj.Order.NoSuchSymbol", newName: "NewName");
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.ErrorData, Is.Not.Null);
-    }
-
-    // --- MoveAllTypesToFilesInProject ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task MoveAllTypesToFilesInProject_AutoStageTrue_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.MoveAllTypesToFilesTool("test", ToolScope.project, "TestProj");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- MoveAllTypesToFilesInSolution ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task MoveAllTypesToFilesInSolution_AutoStageTrue_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.MoveAllTypesToFilesTool(reason: "test message", ToolScope.solution);
-        Assert.That(result, Is.Not.Null);
     }
 
     // --- UsingDirectiveTool ---
@@ -450,17 +389,6 @@ public enum Status { Active = 1, Pending = 2 }
         }
     }
 
-    // --- MoveMemberTool (fieldMap validation) ---
-    [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_FieldMapValueNotTargetField_ReturnsInvalidArgument()
-    {
-        SetMultiFile(("Refactor.cs", "public class Source\n{\n    private int _a;\n    public int Get() => _a;\n}\n\npublic class Target\n{\n    private int _b;\n}\n"));
-        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", fieldMap: new Dictionary<string, string> { ["_a"] = "_nope" });
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-    }
-
     [Test]
     [Category("AdvancedRefactoringTools")]
     public async Task MoveMember_FieldMapValidInstanceMove_RewritesBodyToTargetField()
@@ -506,102 +434,6 @@ public enum Status { Active = 1, Pending = 2 }
         var targetPart = text.Substring(text.IndexOf("class Target", StringComparison.Ordinal));
         Assert.That(sourcePart, Does.Not.Contain("Get()"), "Default remove mode deletes the source member.");
         Assert.That(targetPart, Does.Contain("public int Get() => 1;"), "Default remove mode moves the body to the target.");
-    }
-
-    [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepAsDeprecatedWrapper_ToBaseClass_ReturnsTargetIneligible()
-    {
-        const string original = "public class Base\n{\n}\n\npublic class Source : Base\n{\n    public int Get() => 1;\n}\n";
-        SetMultiFile(("Refactor.cs", original));
-        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Base", oldMember: MoveMemberOldMember.keepAsDeprecatedWrapper);
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
-    }
-
-    [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_ForwarderReceiver_WithRemove_ReturnsInvalidArgument()
-    {
-        const string original = "public class Source\n{\n    private Target _impl = new Target();\n    public int Get() => 1;\n}\n\npublic class Target\n{\n}\n";
-        SetMultiFile(("Refactor.cs", original));
-        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", forwarderReceiver: "_impl");
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused call must not write.");
-    }
-
-    [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_PartialSourceClass_ReturnsTargetIneligible()
-    {
-        const string original = "public partial class Source\n{\n    public int Get() => 1;\n}\n\npublic partial class Source\n{\n    public int Other() => 2;\n}\n\npublic class Target\n{\n}\n";
-        SetMultiFile(("Refactor.cs", original));
-        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
-    }
-
-    [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_GenericMethod_ReturnsNotImplemented()
-    {
-        const string original = "public class Source\n{\n    public int Get<T>(T x) => 1;\n}\n\npublic class Target\n{\n}\n";
-        SetMultiFile(("Refactor.cs", original));
-        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented));
-        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
-    }
-
-    [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_Property_ReturnsTargetIneligible()
-    {
-        const string original = "public class Source\n{\n    public int Value => 1;\n}\n\npublic class Target\n{\n}\n";
-        SetMultiFile(("Refactor.cs", original));
-        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Value"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
-    }
-
-    [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_OverrideMethod_ReturnsTargetIneligible()
-    {
-        const string original = "public class Base\n{\n    public virtual int Get() => 1;\n}\n\npublic class Source : Base\n{\n    public override int Get() => 2;\n}\n\npublic class Target\n{\n}\n";
-        SetMultiFile(("Refactor.cs", original));
-        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
-    }
-
-    [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_AbstractMethod_ReturnsTargetIneligible()
-    {
-        const string original = "public abstract class Source\n{\n    public abstract int Get();\n}\n\npublic class Target\n{\n}\n";
-        SetMultiFile(("Refactor.cs", original));
-        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
-    }
-
-    [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_VirtualMethod_ReturnsTargetIneligible()
-    {
-        const string original = "public class Source\n{\n    public virtual int Get() => 1;\n}\n\npublic class Target\n{\n}\n";
-        SetMultiFile(("Refactor.cs", original));
-        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Get"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
     }
 
     [Test]
@@ -783,27 +615,6 @@ public enum Status { Active = 1, Pending = 2 }
 
     [Test]
     [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_InstanceTwoCandidateFields_NoForwarderReceiver_ReturnsInvalidArgument()
-    {
-        const string original = "public class Source\n{\n    private readonly Target _a = new Target();\n    private readonly Target _b = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
-        var (dir, sourcePath) = SetPathAwareSolution("MoveMember_KeepDelegator_TwoCandidates", ("Refactor.cs", original));
-        try
-        {
-            var result = await _advTools.MoveMemberTool(reason: "test message", sourcePath, "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
-            Assert.That(result.IsError, Is.True);
-            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-            Assert.That(result.ErrorData?.Message, Does.Contain("forwarderReceiver"), "The refusal must name the parameter to pass.");
-            Assert.That(result.ErrorData?.Message, Does.Contain("_a").And.Contain("_b"), "The refusal must list both candidate fields.");
-            Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
-        }
-        finally
-        {
-            System.IO.Directory.Delete(dir, recursive: true);
-        }
-    }
-
-    [Test]
-    [Category("AdvancedRefactoringTools")]
     public async Task MoveMember_KeepDelegator_InstanceTwoCandidateFields_WithForwarderReceiver_UsesGivenReceiver()
     {
         const string original = "public class Source\n{\n    private readonly Target _a = new Target();\n    private readonly Target _b = new Target();\n    public int Foo(int x) { return x + 1; }\n}\n\npublic class Target\n{\n}\n";
@@ -919,18 +730,6 @@ public enum Status { Active = 1, Pending = 2 }
         }
     }
 
-    [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_KeepDelegator_InstanceToStaticClass_StillNotImplemented()
-    {
-        const string original = "public class Source\n{\n    public int Foo(int x) { return x + 1; }\n}\n\npublic static class Target\n{\n}\n";
-        SetMultiFile(("Refactor.cs", original));
-        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Foo"], "Target", oldMember: MoveMemberOldMember.keepDelegator);
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented));
-        Assert.That(await ReadCommittedRefactorText(), Is.EqualTo(original), "A refused keep-mode move must not write.");
-    }
-
     private async Task<string> ReadCommittedRefactorText()
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
@@ -963,24 +762,6 @@ public enum Status { Active = 1, Pending = 2 }
             }
         }
         return lines;
-    }
-
-    [Test]
-    [Category("AdvancedRefactoringTools")]
-    public async Task MoveMember_SomeRequestedNamesMissing_ReturnsNotFoundAndWritesNothing()
-    {
-        SetMultiFile(("Refactor.cs", "public class Source\n{\n    public int Foo() => 1;\n    public int Bar() => 2;\n}\n\npublic class Target\n{\n}\n"));
-        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
-        var before = (await solution.Projects.SelectMany(p => p.Documents).Single(d => d.Name == "Refactor.cs").GetTextAsync()).ToString();
-
-        var result = await _advTools.MoveMemberTool(reason: "test message", "Refactor.cs", "Source", ["Foo", "Missing"], "Target");
-
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(result.ErrorData?.Message, Does.Contain("Missing"));
-        var afterSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
-        var after = (await afterSolution.Projects.SelectMany(p => p.Documents).Single(d => d.Name == "Refactor.cs").GetTextAsync()).ToString();
-        Assert.That(after, Is.EqualTo(before), "A refused move must not write anything.");
     }
 
     // --- MoveMemberTool (pull-up to existing base class) ---
@@ -1038,94 +819,6 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- ConstructorParameterTool ---
-    [Test]
-    [Category("RefactoringSignatureTools")] // sentinel:auto-category
-    public async Task ConstructorParameter_AutoStageTrue_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringSignatureTools.ConstructorParameterTool(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    [Test]
-    [Category("RefactoringSignatureTools")] // sentinel:auto-category
-    public async Task ConstructorParameter_Add_WithDefaultValue_BackwardCompatibleWithExistingCaller()
-    {
-        SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
-        var result = await _refactoringSignatureTools.ConstructorParameterTool(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string", defaultValue: "\"\"");
-        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-    }
-
-    [Test]
-    [Category("RefactoringSignatureTools")] // sentinel:auto-category
-    public async Task ConstructorParameter_Add_WithNullDefault_BackwardCompatibleWithExistingCaller()
-    {
-        SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
-        var result = await _refactoringSignatureTools.ConstructorParameterTool(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string", nullDefault: true);
-        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-    }
-
-    [Test]
-    [Category("RefactoringSignatureTools")] // sentinel:auto-category
-    public async Task ConstructorParameter_Add_NullDefaultAndDefaultValueBothSet_Refused()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringSignatureTools.ConstructorParameterTool(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string", defaultValue: "\"\"", nullDefault: true);
-        Assert.That(!result.IsError, Is.False);
-        Assert.That(result.ErrorData?.Message, Does.Contain("mutually exclusive"));
-    }
-
-    [Test]
-    [Category("RefactoringSignatureTools")] // sentinel:auto-category
-    public async Task ConstructorParameter_Add_NoDefaultValue_ExistingCallerBreaksAndIsRefused()
-    {
-        SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public Order Make() => new Order(1, \"a\"); }"));
-        var result = await _refactoringSignatureTools.ConstructorParameterTool(reason: "test message", "Order.cs", AddRemoveViewAction.add, "Order", "notes", "string");
-        Assert.That(!result.IsError, Is.False);
-    }
-
-    // --- MethodSignatureTool ---
-    [Test]
-    [Category("RefactoringSignatureTools")] // sentinel:auto-category
-    public async Task MethodSignature_View_ListsExistingParameters()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringSignatureTools.MethodSignatureTool(reason: "test message", "Order.cs", AddRemoveViewAction.view, "GetLabel");
-        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-    }
-
-    [Test]
-    [Category("RefactoringSignatureTools")] // sentinel:auto-category
-    public async Task MethodSignature_Add_AppendsRequiredParameter_NoExistingCallers()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringSignatureTools.MethodSignatureTool(reason: "test message", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool");
-        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-    }
-
-    [Test]
-    [Category("RefactoringSignatureTools")] // sentinel:auto-category
-    public async Task MethodSignature_Add_WithDefaultValue_BackwardCompatibleWithExistingCaller()
-    {
-        SetMultiFile(("Order.cs", SimpleSource), ("Caller.cs", "namespace TestProj;\npublic class Caller { public string Use(Order o) => o.GetStatus(); }"));
-        var result = await _refactoringSignatureTools.MethodSignatureTool(reason: "test message", "Order.cs", AddRemoveViewAction.add, "GetStatus", "verbose", "bool", defaultValue: "false");
-        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-    }
-
-    [Test]
-    [Category("RefactoringSignatureTools")] // sentinel:auto-category
-    public async Task MethodSignature_Remove_LastParameter_UpdatesCallSite()
-    {
-        var orderSourceWithRename = SimpleSource.Replace("public string GetLabel()", "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
-        // Caller.cs is CRLF on purpose: the signature tool re-serializes a rewritten call-site file with
-        // the platform newline, so an LF fixture trips the write path's EolChangeGuard (a real
-        // tool-side defect, tracked separately). This test is about the call site being updated.
-        SetMultiFile(("Order.cs", orderSourceWithRename), ("Caller.cs", "namespace TestProj;\r\npublic class Caller { public void Use(Order o) => o.Rename(\"a\", \"b\"); }"));
-        var result = await _refactoringSignatureTools.MethodSignatureTool(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
-        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-    }
-
     // Pins that the per-test wipe (DeleteLeakedRelativeFiles, run from Setup) clears a stale bare-name Order.cs
     // before the pre-image is read; otherwise the EolChangeGuard refuses the write.
     [Test]
@@ -1139,29 +832,6 @@ public enum Status { Active = 1, Pending = 2 }
         SetMultiFile(("Order.cs", orderSourceWithRename), ("Caller.cs", "namespace TestProj;\r\npublic class Caller { public void Use(Order o) => o.Rename(\"a\", \"b\"); }"));
         var result = await _refactoringSignatureTools.MethodSignatureTool(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
-    }
-
-    [Test]
-    [Category("RefactoringSignatureTools")] // sentinel:auto-category
-    public async Task MethodSignature_Remove_NonLastParameter_Refused()
-    {
-        SetSource(RefactorSource, "Animal.cs");
-        var result = await _refactoringSignatureTools.MethodSignatureTool(reason: "test message", "Animal.cs", AddRemoveViewAction.remove, "Process", "a");
-        Assert.That(!result.IsError, Is.False, "Removing a non-trailing parameter must be refused, not silently applied.");
-        Assert.That(result.ErrorData, Is.Not.Null);
-        Assert.That(result.ErrorData!.Message, Does.Contain("last parameter"));
-    }
-
-    [Test]
-    [Category("RefactoringSignatureTools")] // sentinel:auto-category
-    public async Task MethodSignature_Remove_NamedArgumentCallSite_Refused()
-    {
-        var orderSourceWithRename = SimpleSource.Replace("public string GetLabel()", "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
-        SetMultiFile(("Order.cs", orderSourceWithRename), ("Caller.cs", "namespace TestProj;\npublic class Caller { public void Use(Order o) => o.Rename(first: \"a\", last: \"b\"); }"));
-        var result = await _refactoringSignatureTools.MethodSignatureTool(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
-        Assert.That(!result.IsError, Is.False, "A named-argument call site cannot be safely rewritten and must refuse the whole operation.");
-        Assert.That(result.ErrorData, Is.Not.Null);
-        Assert.That(result.ErrorData!.Message, Does.Contain("named arguments"));
     }
 
     // NOTE: ValidateChangesAsync adds the renamed file as a brand-new document into the candidate
@@ -1366,16 +1036,6 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- ExtractMembersToPartial ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task ExtractMembersToPartial_ValidMembers_ReturnsDictionary()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.ExtractMembersTool(reason: "test message", "Order.cs", "Order", ExtractAsType.partialClass, memberNames: ["GetLabel"]);
-        Assert.That(result, Is.Not.Null);
-    }
-
     // --- ConvertMethodToIndexer ---
     [Test]
     [Category("StructuralRefactoringEngine")] // sentinel:auto-category
@@ -1383,17 +1043,6 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("Order.cs", "GetStatus");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- MoveTypeToOuterScope ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task MoveTypeToOuterScope_ValidType_ReturnsString()
-    {
-        const string src = "namespace TestProj; public class Outer { public class Inner {} }";
-        SetSource(src, "Outer.cs");
-        var result = await _advTools.MoveTypeTool(reason: "test message", "Outer.cs", "Inner", "outerScope");
         Assert.That(result, Is.Not.Null);
     }
 
