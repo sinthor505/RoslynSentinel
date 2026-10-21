@@ -49,15 +49,15 @@ public class BatteryEighteenTests
     {
         SetSource("namespace TestProj; public class Order { public int OrderId; }", "Test.cs");
         var result = await _msEngine.EncapsulateFieldSafeAsync("Test.cs", "OrderId");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(result.UpdatedContent, Does.Contain("public int OrderId")); Assert.That(result.UpdatedContent, Does.Contain("_orderId"));
     }
 
     [Test]
-    public async Task EncapsulateFieldSafe_NonExistentFile_ReturnsNull()
+    public async Task EncapsulateFieldSafe_NonExistentFile_ReturnsError()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _msEngine.EncapsulateFieldSafeAsync("NonExistent.cs", "OrderId");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.True); Assert.That(result.Error, Does.Contain("File not found")); Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound)); // TODO throw-migration: assert the typed exception once MsToolAugmentEngine throws
     }
 
     [Test]
@@ -65,33 +65,33 @@ public class BatteryEighteenTests
     {
         SetSource(RichSource, "Test.cs");
         var result = await _msEngine.AnalyzeSwitchForPatternConversionAsync("Test.cs", "switch (status)");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.TotalCases, Is.GreaterThan(0));
     }
 
     [Test]
-    public async Task AnalyzeSwitchForPatternConversion_NonExistentFile_ReturnsNotNull()
+    public async Task AnalyzeSwitchForPatternConversion_NonExistentFile_ReturnsError()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _msEngine.AnalyzeSwitchForPatternConversionAsync("NonExistent.cs", "switch (x)");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsSafeToConvert, Is.False); Assert.That(result.TotalCases, Is.Zero); Assert.That(result.BlockingReason, Does.Contain("File not found")); // TODO throw-migration: assert the typed exception once MsToolAugmentEngine throws
     }
 
     // --- ConvertSwitchToPatternSafe ---
 
     [Test]
-    public async Task ConvertSwitchToPatternSafe_WithSwitchStatement_ReturnsResult()
+    public async Task ConvertSwitchToPatternSafe_WithComplexCaseBody_ReturnsError()
     {
         SetSource(RichSource, "Test.cs");
         var result = await _msEngine.ConvertSwitchToPatternSafeAsync("Test.cs", "switch (status)");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.True); Assert.That(result.Error, Does.Contain("has a complex body")); // Engine rejects case 1/2 (Console.WriteLine bodies) - not an assignment, return or throw
     }
 
     [Test]
-    public async Task ConvertSwitchToPatternSafe_NonExistentFile_ReturnsNotNull()
+    public async Task ConvertSwitchToPatternSafe_NonExistentFile_ReturnsError()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _msEngine.ConvertSwitchToPatternSafeAsync("NonExistent.cs", "switch (x)");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.True); Assert.That(result.Error, Does.Contain("File not found")); // TODO throw-migration: assert the typed exception once MsToolAugmentEngine throws
     }
 
     // --- ConvertStringFormatToInterpolatedSmart ---
@@ -101,15 +101,15 @@ public class BatteryEighteenTests
     {
         SetSource(RichSource, "Test.cs");
         var result = await _msEngine.ConvertStringFormatToInterpolatedSmartAsync("Test.cs", @"string.Format(""{0}: {1}""");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(result.UpdatedContent, Does.Contain("$\""));
     }
 
     [Test]
-    public async Task ConvertStringFormatToInterpolatedSmart_NonExistentFile_ReturnsNotNull()
+    public async Task ConvertStringFormatToInterpolatedSmart_NonExistentFile_ReturnsError()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _msEngine.ConvertStringFormatToInterpolatedSmartAsync("NonExistent.cs", "string.Format");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.True); Assert.That(result.Error, Does.Contain("File not found")); Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound)); // TODO throw-migration: assert the typed exception once MsToolAugmentEngine throws
     }
 
     // --- SortAndDeduplicateUsings ---
@@ -120,7 +120,7 @@ public class BatteryEighteenTests
         SetSource(RichSource, "Test.cs");
         // writeToFile: false keeps this test from leaking Test.cs into the working directory.
         var result = await _msEngine.SortAndDeduplicateUsingsAsync("Test.cs", writeToFile: false);
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.WrittenToDisk, Is.False); Assert.That(result.OriginalCount, Is.GreaterThan(0)); Assert.That(result.UpdatedContent, Does.Contain("using "));
     }
 
     [Test]
@@ -137,16 +137,16 @@ public class BatteryEighteenTests
     public async Task FormatDocumentSafe_ValidFile_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _msEngine.FormatDocumentSafeAsync("Test.cs");
-        Assert.That(result, Is.Not.Null);
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.Guid.NewGuid().ToString("N") + ".cs"); System.IO.File.WriteAllText(path, RichSource); try { var result = await _msEngine.FormatDocumentSafeAsync(path);
+        Assert.That(result.IsError, Is.False); Assert.That(result.UpdatedContent, Does.Contain("class")); } finally { System.IO.File.Delete(path); }
     }
 
     [Test]
-    public async Task FormatDocumentSafe_NonExistentFile_ReturnsNotNull()
+    public async Task FormatDocumentSafe_NonExistentFile_ReturnsError()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _msEngine.FormatDocumentSafeAsync("NonExistent.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.True); Assert.That(result.Error, Does.Contain("Could not read file")); // TODO throw-migration: assert the typed exception once MsToolAugmentEngine throws
     }
 
     // --- AnalyzeForeachForLinqConversion ---
@@ -155,16 +155,16 @@ public class BatteryEighteenTests
     public async Task AnalyzeForeachForLinqConversion_WithForeach_ReturnsAnalysis()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _msEngine.AnalyzeForeachForLinqConversionAsync("Test.cs", "foreach (var i in");
-        Assert.That(result, Is.Not.Null);
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.Guid.NewGuid().ToString("N") + ".cs"); System.IO.File.WriteAllText(path, RichSource); try { var result = await _msEngine.AnalyzeForeachForLinqConversionAsync(path, "foreach (var i in");
+        Assert.That(result.BlockingReason ?? "", Does.Not.Contain("Could not read file")); Assert.That(result.Recommendation, Is.Not.EqualTo("Cannot analyze.")); } finally { System.IO.File.Delete(path); }
     }
 
     [Test]
-    public async Task AnalyzeForeachForLinqConversion_NonExistentFile_ReturnsNotNull()
+    public async Task AnalyzeForeachForLinqConversion_NonExistentFile_ReturnsError()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _msEngine.AnalyzeForeachForLinqConversionAsync("NonExistent.cs", "foreach");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsSafeToConvert, Is.False); Assert.That(result.BlockingReason, Does.Contain("Could not read file")); Assert.That(result.Recommendation, Is.EqualTo("Cannot analyze.")); // TODO throw-migration: assert the typed exception once MsToolAugmentEngine throws
     }
 
     // --- GetWorkspaceHealthAsync ---
@@ -175,7 +175,7 @@ public class BatteryEighteenTests
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _workspaceHealthMisc.GetWorkspaceHealthAsync();
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsOperational, Is.True); Assert.That(result.HasLoadedSolution, Is.True); Assert.That(result.ProjectCount, Is.GreaterThan(0));
     }
 
     [Test]
@@ -183,7 +183,7 @@ public class BatteryEighteenTests
     public async Task GetWorkspaceHealth_NoSolution_ReturnsReport()
     {
         var result = await _workspaceHealthMisc.GetWorkspaceHealthAsync();
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsOperational, Is.True); Assert.That(result.HasLoadedSolution, Is.False); Assert.That(result.ProjectCount, Is.Zero);
     }
 
     // --- PreviewAddMissingUsings ---
@@ -193,15 +193,15 @@ public class BatteryEighteenTests
     {
         SetSource("namespace TestProj; public class Order { }", "Test.cs");
         var result = await _msEngine.PreviewAddMissingUsingsAsync("Test.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.SolutionRequired, Is.False); Assert.That(result.UsingsToAdd, Is.Empty); Assert.That(result.UpdatedContent, Does.Contain("class Order"));
     }
 
     [Test]
-    public async Task PreviewAddMissingUsings_NonExistentFile_ReturnsNotNull()
+    public async Task PreviewAddMissingUsings_NonExistentFile_ReturnsError()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _msEngine.PreviewAddMissingUsingsAsync("NonExistent.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.SolutionRequired, Is.False); Assert.That(result.UsingsToAdd, Is.Empty); Assert.That(result.Warning, Does.Contain("not part of the loaded solution")); // TODO throw-migration: assert the typed exception once MsToolAugmentEngine throws
     }
 
     // --- ExtractConstantSafe ---
@@ -211,16 +211,16 @@ public class BatteryEighteenTests
     {
         const string src = @"namespace TestProj; public class Order { public string GetLabel() { return ""hello""; } }";
         SetSource(src, "Test.cs");
-        var result = await _msEngine.ExtractConstantSafeAsync("Test.cs", @"""hello""", "HelloLabel");
-        Assert.That(result, Is.Not.Null);
+        var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), System.Guid.NewGuid().ToString("N") + ".cs"); System.IO.File.WriteAllText(path, src); try { var result = await _msEngine.ExtractConstantSafeAsync(path, @"""hello""", "HelloLabel");
+        Assert.That(result.IsError, Is.False); Assert.That(result.UpdatedContent, Does.Contain("const string HelloLabel")); } finally { System.IO.File.Delete(path); }
     }
 
     [Test]
-    public async Task ExtractConstantSafe_NonExistentFile_ReturnsNotNull()
+    public async Task ExtractConstantSafe_NonExistentFile_ReturnsError()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _msEngine.ExtractConstantSafeAsync("NonExistent.cs", @"""hello""", "HelloLabel");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.True); Assert.That(result.Error, Does.Contain("Could not read file")); // TODO throw-migration: assert the typed exception once MsToolAugmentEngine throws
     }
 
     // --- GenerateToStringSafe ---
@@ -230,15 +230,15 @@ public class BatteryEighteenTests
     {
         SetSource(RichSource, "Test.cs");
         var result = await _msEngine.GenerateToStringSafeAsync("Test.cs", "Order");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(result.UpdatedContent, Does.Contain("override string ToString()"));
     }
 
     [Test]
-    public async Task GenerateToStringSafe_NonExistentFile_ReturnsNull()
+    public async Task GenerateToStringSafe_NonExistentFile_ReturnsError()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _msEngine.GenerateToStringSafeAsync("NonExistent.cs", "Order");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.True); Assert.That(result.Error, Does.StartWith("Could not read")); // TODO throw-migration: assert the typed exception once MsToolAugmentEngine throws
     }
 
     // --- ExtractMethodTool ---
@@ -248,14 +248,14 @@ public class BatteryEighteenTests
     {
         SetSource(RichSource, "Test.cs");
         var result = await _msEngine.ExtractMethodSafeAsync("Test.cs", "DoProcess", @"var result = string.Format");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(result.UpdatedContent, Does.Contain("DoProcess("));
     }
 
     [Test]
-    public async Task ExtractMethod_NonExistentFile_ReturnsNotNull()
+    public async Task ExtractMethod_NonExistentFile_ReturnsError()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _msEngine.ExtractMethodSafeAsync("NonExistent.cs", "NewMethod", "some code");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.True); Assert.That(result.Error, Does.Contain("File not found in solution")); // TODO throw-migration: assert the typed exception once MsToolAugmentEngine throws
     }
 }
