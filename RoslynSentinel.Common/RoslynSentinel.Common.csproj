@@ -23,6 +23,7 @@
 
 	<ItemGroup>
 		<InternalsVisibleTo Include="RoslynSentinel.Tests" />
+			<InternalsVisibleTo Include="RoslynSentinel.Tests.Tools.Basic" />
 	</ItemGroup>
 
 </Project>

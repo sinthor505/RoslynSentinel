@@ -26,7 +26,8 @@ public class ServerStatusTools
     [Produces(DataTag.ResultOnly)]
     [Description("Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, serverBinaryPath, serverPid, binaryStaleness = loaded assemblies with a newer build on disk), session-halt state, circuit breaker, loaded workspace (isFreshStartup = this server process has not loaded a solution yet, e.g. just restarted), active tool-mode resolution. " +
         "Tools are gated per mode: before concluding a tool does not exist, call with toolListing=inactive." +
-        " solutionLoadStatus = NotLoaded | Loading | Loaded | Failed; tool calls wait up to 30 s for a Loading solution.")]
+        " solutionLoadStatus = NotLoaded | Loading | Loaded | Failed; tool calls wait up to 30 s for a Loading solution." +
+        " workspaceStale = a workspace reload failed and the loaded solution may not match disk (see reloadFailure; recover with LoadSolution forceReload: true); lastLoadFailure = text of the last failed load.")]
     public object McpServerStatusTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("inactive: declared tools not active in this mode, with an enabledBy hint. all: every declared tool.")]
@@ -75,6 +76,8 @@ public class ServerStatusTools
                 || t.ClassName.Contains(toolNameFilter, StringComparison.OrdinalIgnoreCase))
             .ToArray();
 
+        var reloadFailure = (_workspaceManager as IWorkspaceReloadFailureProvider)?.ReloadFailure;
+
         return new SentinelCallToolResult<McpServerStatusResult>
         {
             IsError = false,
@@ -122,7 +125,10 @@ public class ServerStatusTools
             ),
             DeclaredToolCount: declaredTools.Length,
             InactiveToolCount: declaredTools.Count(t => !t.ActiveForThisMode),
-            AllDeclaredTools: allDeclaredTools
+            AllDeclaredTools: allDeclaredTools,
+            WorkspaceStale: reloadFailure is not null,
+            ReloadFailure: reloadFailure,
+            LastLoadFailure: _workspaceManager.LoadState.LastLoadFailure
         )
         };
     }
@@ -213,7 +219,10 @@ public sealed record McpServerStatusResult(
     McpServerStatusStoppedByScript StoppedByScript,
     int DeclaredToolCount,
     int InactiveToolCount,
-    IReadOnlyCollection<McpServerStatusDeclaredTool> AllDeclaredTools);
+    IReadOnlyCollection<McpServerStatusDeclaredTool> AllDeclaredTools,
+    bool WorkspaceStale,
+    WorkspaceReloadFailure? ReloadFailure,
+    string? LastLoadFailure);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this

@@ -22,7 +22,7 @@ namespace RoslynSentinel.Common;
 /// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which stands up a disposable on-disk copy of
 /// the Samples/ContosoOrders scenario and loads it through this class.
 /// </summary>
-public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader
+public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolutionProvider, IManualCircuitBreaker, IAutomaticCircuitBreaker, IUnrecoverableBreaker, IWorkspaceHealthReporter, IWorkspaceMutator, IRateLimiter, ISymbolResolver, IScopedOperationLedger, IWorkspaceReader, IWorkspaceReloadFailureProvider
 {
     private readonly ILogger<IWorkspaceManager> _logger;
     private MSBuildWorkspace? _workspace;
@@ -35,6 +35,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     private readonly List<string> _workspaceLoadErrors = new();
     private readonly ConcurrentBag<string> _externalChanges = new();
     private volatile bool _watcherOverflowed;
+    // Set by OnWatcherError so a watcher fault is reported as WatcherError, not WatcherOverflow.
+    private volatile bool _watcherErrored;
     // Session-wide fatal latch: set once by ApplyProposedChangesAsync on a confirmed hash-backed
     // drift hit (see docs/current/ideas/external-drift-hard-blocker.md proposal item 2). While
     // true, every mutating call fails immediately via SessionHaltedException, regardless of which
@@ -157,9 +159,32 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     private TaskCompletionSource? _loadSignal;
     // Failure text of the last finished load, cleared by the next successful one; backs LoadState.LastLoadFailure.
     private string? _lastLoadFailure;
+    // Sticky record of the last failed load/reload, cleared by the next successful full load or reload.
+    private WorkspaceReloadFailure? _reloadFailure;
     private readonly Timer _debounceTimer;
 
     public SolutionLoadState LoadState => new(SolutionLoadState.ProcessStartedUtc, _lastSuccessfulLoadUtc, Volatile.Read(ref _loadsInProgress) > 0, Volatile.Read(ref _lastLoadFailure));
+
+    /// <summary>The last failed workspace reload, or null when none is recorded.</summary>
+    public WorkspaceReloadFailure? ReloadFailure => Volatile.Read(ref _reloadFailure);
+
+    internal void RecordReloadFailure(WorkspaceReloadTriggerKind trigger, string? triggerFile, Exception ex, bool oldWorkspaceKept)
+    {
+        var previous = Volatile.Read(ref _reloadFailure);
+        var record = new WorkspaceReloadFailure(
+            trigger,
+            triggerFile is null ? null : Path.GetFileName(triggerFile),
+            DateTime.UtcNow,
+            previous is null ? 1 : previous.Attempts + 1,
+            oldWorkspaceKept,
+            WorkspaceReloadCause.Sanitize(ex));
+        Volatile.Write(ref _reloadFailure, record);
+    }
+
+    internal void ClearReloadFailure()
+    {
+        Volatile.Write(ref _reloadFailure, null);
+    }
 
     public SolutionLoadStatus SolutionLoadStatus => Volatile.Read(ref _loadsInProgress) > 0 ? SolutionLoadStatus.Loading : (SolutionLoadStatus)Volatile.Read(ref _terminalLoadStatus);
 
@@ -631,6 +656,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         BeginLoadTracking();
         var terminal = SolutionLoadStatus.Failed;
         string? failure = null;
+        var failureRecorded = false;
         try
         {
             await _solutionLock.WaitAsync(loadToken);
@@ -685,6 +711,10 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         _logger.LogError(ex, "Failed to open solution '{SolutionPath}'. Some projects might not load correctly.", solutionPath);
                     }
                     _workspaceLoadErrors.Add($"Failed to open solution: {ex.Message}");
+                    // TODO StartupLoad vs ExplicitLoad cannot be told apart here; the startup auto-load path would need to pass its trigger in.
+                    // oldWorkspaceKept is false: this method disposes the old workspace before opening the new one.
+                    RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), ex, oldWorkspaceKept: false);
+                    failureRecorded = true;
                     // Even if solution fails to open, try to get current partial solution if any
                     CurrentSolution = _workspace.CurrentSolution;
                     if (CurrentSolution?.ProjectIds.Count == 0 && _workspaceLoadErrors.Count == 0)
@@ -725,6 +755,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 }
 
                 _lastSuccessfulLoadUtc = DateTime.UtcNow;
+                // A partial load (open threw but projects remain) keeps its failure record; only a full success clears it.
+                if (!failureRecorded)
+                {
+                    ClearReloadFailure();
+                }
                 terminal = SolutionLoadStatus.Loaded;
                 SweepLargeResultsInBackground(GetSolutionRoot());
             }
@@ -737,11 +772,17 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         {
             // Our own timeout fired (not the caller's token): report it as a timeout with an actionable message.
             failure = SolutionNotLoadedMessage.LoadCancelledAfterTimeout(timeout);
-            throw new SolutionLoadTimeoutException(failure);
+            var timeoutException = new SolutionLoadTimeoutException(failure);
+            RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), timeoutException, oldWorkspaceKept: false);
+            throw timeoutException;
         }
         catch (Exception ex)
         {
-            failure = ex.Message;
+            failure = WorkspaceReloadCause.Sanitize(ex.Message);
+            if (!failureRecorded)
+            {
+                RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), ex, oldWorkspaceKept: false);
+            }
             throw;
         }
         finally
@@ -938,6 +979,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             _logger.LogError(e.GetException(), "FileSystemWatcher error - file change notifications may have been lost. Forcing a full solution reload.");
         }
 
+        _watcherErrored = true;
         _watcherOverflowed = true;
         _debounceTimer.Change(500, Timeout.Infinite);
     }
@@ -1075,6 +1117,43 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         _debounceTimer.Change(500, Timeout.Infinite);
     }
 
+    private static WorkspaceReloadTriggerKind ClassifyReloadTrigger(IReadOnlyList<string> changes, bool watcherErrored, bool overflowed, out string? triggerFile)
+    {
+        if (watcherErrored)
+        {
+            triggerFile = null;
+            return WorkspaceReloadTriggerKind.WatcherError;
+        }
+
+        if (overflowed)
+        {
+            triggerFile = null;
+            return WorkspaceReloadTriggerKind.WatcherOverflow;
+        }
+
+        foreach (var path in changes)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            if (ext is ".sln" or ".slnx")
+            {
+                triggerFile = Path.GetFileName(path);
+                return WorkspaceReloadTriggerKind.SolutionFileChange;
+            }
+        }
+
+        foreach (var path in changes)
+        {
+            if (string.Equals(Path.GetExtension(path), ".csproj", StringComparison.OrdinalIgnoreCase))
+            {
+                triggerFile = Path.GetFileName(path);
+                return WorkspaceReloadTriggerKind.ProjectFileChange;
+            }
+        }
+
+        triggerFile = changes.Count > 0 ? Path.GetFileName(changes[0]) : null;
+        return WorkspaceReloadTriggerKind.SourceFileChange;
+    }
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage("AsyncUsage", "AsyncFixer03:Fire-and-forget async-void methods or delegates", Justification = "Event handler")]
     private async void OnDebounceTimerElapsed(object? state)
     {
@@ -1083,15 +1162,20 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             return;
         }
 
+        List<string> changes = [];
+        bool overflowed = false;
+        bool watcherErrored = false;
         bool acquired = false;
         try
         {
             await _solutionLock.WaitAsync();
             acquired = true;
-            var changes = _pendingChanges.Keys.ToList();
+            changes = _pendingChanges.Keys.ToList();
             _pendingChanges.Clear();
-            bool overflowed = _watcherOverflowed;
+            overflowed = _watcherOverflowed;
             _watcherOverflowed = false;
+            watcherErrored = _watcherErrored;
+            _watcherErrored = false;
 
             if (_workspace == null || CurrentSolution == null)
             {
@@ -1167,12 +1251,18 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         // guaranteed to match the new one, so every cached Compilation is unusable.
                         _compilationCache.Clear();
                         old?.Dispose();
+                        ClearReloadFailure();
                     }
                     catch
                     {
                         newWorkspace.Dispose();
                         throw;
                     }
+                }
+                else
+                {
+                    var emptyPathTrigger = ClassifyReloadTrigger(changes, watcherErrored, overflowed, out var emptyPathFile);
+                    RecordReloadFailure(emptyPathTrigger, emptyPathFile, new InvalidOperationException("The loaded solution has no file path, so it cannot be reloaded."), oldWorkspaceKept: true);
                 }
             }
             else
@@ -1191,6 +1281,12 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         CurrentSolution = await _workspace.OpenSolutionAsync(slnPath);
                         // Full workspace recreation -> ProjectIds are not guaranteed stable.
                         _compilationCache.Clear();
+                        ClearReloadFailure();
+                    }
+                    else
+                    {
+                        var emptyPathTrigger = ClassifyReloadTrigger(changes, watcherErrored, overflowed, out var emptyPathFile);
+                        RecordReloadFailure(emptyPathTrigger, emptyPathFile, new InvalidOperationException("The loaded solution has no file path, so it cannot be reloaded."), oldWorkspaceKept: true);
                     }
                 }
                 else
@@ -1209,6 +1305,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             {
                 _logger.LogError(ex, "ErrorData refreshing workspace.");
             }
+
+            var trigger = ClassifyReloadTrigger(changes, watcherErrored, overflowed, out var triggerFile);
+            RecordReloadFailure(trigger, triggerFile, ex, oldWorkspaceKept: true);
         }
         finally
         {
@@ -1955,8 +2054,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 {
                     if (_logger.IsEnabled(LogLevel.Warning))
                     {
-                        _logger.LogWarning(ex, "Workspace refresh failed after applying changes. Workspace may be stale; call LoadSolution to resync.");
+                        _logger.LogWarning(ex, "Workspace refresh failed after applying changes. Workspace may be stale; call LoadSolution with forceReload: true to resync.");
                     }
+                    RecordReloadFailure(WorkspaceReloadTriggerKind.PostWriteSync, null, ex, oldWorkspaceKept: true);
                 }
             }
 
@@ -1991,6 +2091,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         {
                             _logger.LogError(ex, "Background workspace reload failed.");
                         }
+                        RecordReloadFailure(WorkspaceReloadTriggerKind.PostWriteReload, null, ex, oldWorkspaceKept: true);
                     }
                 });
             }
@@ -2153,6 +2254,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             {
                 _logger.LogError(ex, "Background MSBuild reload failed for {SlnPath}", slnPath);
             }
+            RecordReloadFailure(WorkspaceReloadTriggerKind.PostWriteReload, slnPath, ex, oldWorkspaceKept: true);
             newWorkspace.Dispose();
             return;
         }
@@ -2180,6 +2282,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             }
 
             old?.Dispose();
+            ClearReloadFailure();
         }
         finally
         {
