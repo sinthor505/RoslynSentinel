@@ -31,7 +31,8 @@ public class RelativePathInputAuditTests
     private TestSolutionFixture _fixture = null!;
     private string _relativeProbeFilePath = null!;
 
-    private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace" };
+    // Deviation: Member is registered in the Refactor mode, so Workspace alone left its row vacuous.
+    private static readonly HashSet<string> ActiveModes = new(StringComparer.OrdinalIgnoreCase) { "Workspace", "Claude", "Refactor" };
 
     [SetUp]
     public async Task SetUp()
@@ -114,6 +115,16 @@ public class RelativePathInputAuditTests
         return (result, text);
     }
 
+    // Positive check: the tool was registered, ran and returned a non-error result. Optional probe must appear in the output.
+    private static void AssertCallSucceeded(string tool, CallToolResult result, string text, string? probe = null)
+    {
+        Assert.That(result.IsError, Is.Not.True, $"{tool} returned an error result: {text}");
+        if (probe is not null)
+        {
+            Assert.That(text, Does.Contain(probe), $"{tool} output does not reference '{probe}': {text}");
+        }
+    }
+
     private bool IsPathResolutionError(string errorMsg)
     {
         return errorMsg.Contains("NotFound", StringComparison.OrdinalIgnoreCase)
@@ -134,8 +145,7 @@ public class RelativePathInputAuditTests
             ["filePath"] = _relativeProbeFilePath,
         });
 
-        Assert.That(!IsPathResolutionError(text), Is.True,
-            $"GetFileOutline failed with a path resolution error: {text}");
+        AssertCallSucceeded("GetFileOutline", result, text, "AuditTarget");
     }
 
     // Row 2: GetMethodSourceTool with relative path
@@ -150,8 +160,7 @@ public class RelativePathInputAuditTests
             ["methodName"] = "AuditTarget",
         });
 
-        Assert.That(!IsPathResolutionError(text), Is.True,
-            $"GetMethodSource failed with a path resolution error: {text}");
+        AssertCallSucceeded("GetMethodSource", result, text, "AuditTarget");
     }
 
     // Row 3: ReadFileTool with relative path
@@ -165,8 +174,7 @@ public class RelativePathInputAuditTests
             ["filePath"] = _relativeProbeFilePath,
         });
 
-        Assert.That(!IsPathResolutionError(text), Is.True,
-            $"ReadFile failed with a path resolution error: {text}");
+        AssertCallSucceeded("ReadFile", result, text, "RelativePathAuditProbe");
     }
 
     // Row 4: DeclarationTool (read-only) with relative path
@@ -182,6 +190,7 @@ public class RelativePathInputAuditTests
             ["symbolName"] = "RelativePathAuditProbe",
         });
 
+        // TODO Declaration is not registered in the Workspace or Refactor modes (Unknown tool), so this row passes vacuously - run it in a mode that registers it.
         Assert.That(!IsPathResolutionError(text), Is.True,
             $"Declaration (view) failed with a path resolution error: {text}");
     }
@@ -200,6 +209,7 @@ public class RelativePathInputAuditTests
             ["methodName"] = "AuditTarget",
         });
 
+        // TODO ParameterEdit is not registered in the Workspace or Refactor modes (Unknown tool), so this row passes vacuously - run it in a mode that registers it.
         Assert.That(!IsPathResolutionError(text), Is.True,
             $"ParameterEdit (view) failed with a path resolution error: {text}");
     }
@@ -216,8 +226,9 @@ public class RelativePathInputAuditTests
             ["symbolName"] = "AuditTarget",
         });
 
-        Assert.That(!IsPathResolutionError(text), Is.True,
-            $"DeleteUnusedSymbol failed with a path resolution error: {text}");
+        // AuditTarget has a usage, so the tool refuses with CannotEdit; reaching that refusal proves the path resolved.
+        Assert.That(text, Does.Contain("CannotEdit"),
+            $"DeleteUnusedSymbol did not reach the CannotEdit refusal: {text}");
     }
 
     // Row 7: GetDiagnosticsTool with relative file path (scope=file)
@@ -232,8 +243,7 @@ public class RelativePathInputAuditTests
             ["scopeName"] = _relativeProbeFilePath,
         });
 
-        Assert.That(!IsPathResolutionError(text), Is.True,
-            $"GetDiagnostics (file scope) failed with a path resolution error: {text}");
+        AssertCallSucceeded("GetDiagnostics", result, text);
     }
 
     // Row 8: MemberTool (operation view) with relative path
@@ -249,8 +259,7 @@ public class RelativePathInputAuditTests
             ["containerName"] = "RelativePathAuditProbe",
         });
 
-        Assert.That(!IsPathResolutionError(text), Is.True,
-            $"Member (view) failed with a path resolution error: {text}");
+        AssertCallSucceeded("Member", result, text, "RelativePathAuditProbe");
     }
 
     // Row 9: ReplaceSnippetTool (validate action, single edit) with relative path
@@ -264,11 +273,10 @@ public class RelativePathInputAuditTests
             ["action"] = "validate",
             ["filePath"] = _relativeProbeFilePath,
             ["oldContent"] = "public void AuditTarget() { }",
-            ["newContent"] = "public void AuditTargetRenamed() { }",
+            ["newContent"] = "public void AuditTarget() { /* audited */ }",
         });
 
-        Assert.That(!IsPathResolutionError(text), Is.True,
-            $"ReplaceSnippet (validate, single) failed with a path resolution error: {text}");
+        AssertCallSucceeded("ReplaceSnippet (single)", result, text);
     }
 
     // Row 10: ReplaceSnippetTool (validate action, batchEdits) with relative path in batchEdits[].filePath
@@ -290,8 +298,7 @@ public class RelativePathInputAuditTests
             ["batchEdits"] = new[] { batchEdit },
         });
 
-        Assert.That(!IsPathResolutionError(text), Is.True,
-            $"ReplaceSnippet (validate, batch) failed with a path resolution error: {text}");
+        AssertCallSucceeded("ReplaceSnippet (batch)", result, text);
     }
 
     // Row 11: BuildTool (file scope) with relative path
@@ -307,7 +314,6 @@ public class RelativePathInputAuditTests
             ["scopeName"] = _relativeProbeFilePath,
         });
 
-        Assert.That(!IsPathResolutionError(text), Is.True,
-            $"Build (file scope, quickBuild) failed with a path resolution error: {text}");
+        AssertCallSucceeded("Build", result, text);
     }
 }
