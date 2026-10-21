@@ -53,6 +53,7 @@ public class CodeStyleEngineTests
 
         var result = await _engine.ConvertPropertyToMethodsAsync("DoesNotExist.cs", "Name");
 
+        // TODO throw-migration: assert the typed exception once CodeStyleEngine throws
         Assert.That(result.UpdatedText, Is.Null, "Unknown file should return null UpdatedText");
     }
 
@@ -112,6 +113,7 @@ public class SyntaxUpgradeEngineTests
 
         var result = await _engine.AddBracesAsync("DoesNotExist.cs");
 
+        // TODO throw-migration: assert the typed exception once SyntaxUpgradeEngine throws
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -171,7 +173,8 @@ public class ModernizationEngineTests
 
         var result = await _engine.ClassToRecordAsync("DoesNotExist.cs", "Point");
 
-        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified),
+        // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound),
             "Engines report not-found through Outcome instead of throwing.");
     }
 
@@ -220,6 +223,7 @@ public class RefactoringEngineTests
 
         var result = await _engine.FormatDocumentAsync("DoesNotExist.cs");
 
+        // TODO throw-migration: assert the typed exception once BasicRefactoringEngine throws
         Assert.That(result.UpdatedText, Is.Null);
     }
 
@@ -234,6 +238,7 @@ public class RefactoringEngineTests
 
         Assert.That(result.UpdatedText, Is.Not.Empty, "Formatted text should not be empty");
         Assert.That(result.UpdatedText, Does.Contain("class C"), "Class declaration should remain");
+        Assert.That(result.UpdatedText, Does.Contain("var x = 1;"), "Formatter should normalize spacing around operators");
     }
 
     [Test]

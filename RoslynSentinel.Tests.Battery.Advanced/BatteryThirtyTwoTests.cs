@@ -80,8 +80,10 @@ public class BatteryThirtyTwoTests
         }, "GenerateFluentBuilderAsync must NOT throw - should return an error result instead");
 
         Assert.That(result, Is.Not.Null, "Result must not be null");
-        Assert.That(result!.Error, Is.Not.Null.And.Not.Empty,
-            "DI service class with no settable properties should produce a non-empty ErrorDetails field");
+        Assert.That(result!.IsError, Is.True,
+            "DI service class with no settable properties should produce an error result");
+        Assert.That(result.Error, Does.Contain("OrderService"), "Error text should name the class");
+        Assert.That(result.BuilderCode, Is.Null.Or.Empty, "An error result should carry no builder code");
     }
 
     [Test]
@@ -106,8 +108,10 @@ public class BatteryThirtyTwoTests
             result = await _codeGenerationEngine.GenerateFluentBuilderAsync("ProductsController.cs", "ProductsController");
         }, "API controller must NOT cause exception - returns error result");
 
-        Assert.That(result!.Error, Is.Not.Null.And.Not.Empty,
-            "Controller class (no settable props) must have non-empty ErrorDetails");
+        Assert.That(result!.IsError, Is.True,
+            "Controller class (no settable props) should produce an error result");
+        Assert.That(result.Error, Does.Contain("ProductsController"), "Error text should name the class");
+        Assert.That(result.BuilderCode, Is.Null.Or.Empty, "An error result should carry no builder code");
     }
 
     [Test]
@@ -127,7 +131,9 @@ public class BatteryThirtyTwoTests
             result = await _codeGenerationEngine.GenerateFluentBuilderAsync("BaseValidator.cs", "BaseValidator");
         });
 
-        Assert.That(result!.Error, Is.Not.Null.And.Not.Empty);
+        Assert.That(result!.IsError, Is.True);
+        Assert.That(result.Error, Does.Contain("BaseValidator"), "Error text should name the class");
+        Assert.That(result.BuilderCode, Is.Null.Or.Empty, "An error result should carry no builder code");
     }
 
     [Test]
@@ -143,8 +149,10 @@ public class BatteryThirtyTwoTests
             result = await _codeGenerationEngine.GenerateFluentBuilderAsync("EmptyClass.cs", "EmptyClass");
         });
 
-        Assert.That(result!.Error, Is.Not.Null.And.Not.Empty,
+        Assert.That(result!.IsError, Is.True,
             "Empty class must produce an error result");
+        Assert.That(result.Error, Does.Contain("EmptyClass"), "Error text should name the class");
+        Assert.That(result.BuilderCode, Is.Null.Or.Empty, "An error result should carry no builder code");
     }
 
     // =========================================================================
@@ -216,7 +224,7 @@ public class BatteryThirtyTwoTests
 
         var result = await _codeGenerationEngine.GenerateFluentBuilderAsync("CreateOrderRequest.cs", "CreateOrderRequest");
 
-        Assert.That(result.Error, Is.Null.Or.Empty,
+        Assert.That(result.IsError, Is.False,
             "POCO class with settable properties should NOT produce an error");
         Assert.That(result.BuilderCode, Does.Contain("WithCustomerName"),
             "Builder should contain With-method for CustomerName");
@@ -234,8 +242,10 @@ public class BatteryThirtyTwoTests
 
         var result = await _codeGenerationEngine.GenerateFluentBuilderAsync("ProductDto.cs", "ProductDto");
 
-        Assert.That(result.Error, Is.Null.Or.Empty,
+        Assert.That(result.IsError, Is.False,
             "Record with primary constructor should NOT produce an error");
+        Assert.That(result.BuilderCode, Does.Contain("WithName"), "Builder should contain With-method for Name");
+        Assert.That(result.BuilderCode, Does.Contain("WithPrice"), "Builder should contain With-method for Price");
         Assert.That(result.BuilderCode, Is.Not.Null.And.Not.Empty,
             "Builder code should be generated for record type");
     }
@@ -253,7 +263,7 @@ public class BatteryThirtyTwoTests
 
         var result = await _codeGenerationEngine.GenerateFluentBuilderAsync("ImmutableConfig.cs", "ImmutableConfig");
 
-        Assert.That(result.Error, Is.Null.Or.Empty,
+        Assert.That(result.IsError, Is.False,
             "Class with init-only properties should NOT produce an error");
         Assert.That(result.BuilderCode, Does.Contain("WithHost"),
             "Builder should contain With-method for Host");
