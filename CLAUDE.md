@@ -21,7 +21,7 @@ checks it; the `tidy-guidance` skill cleans up and promotes memory entries).
 
 - **Approval before editing.** Confirm the approach (a short summary) before any edit, even an obvious
   one; re-confirm if scope shifts. Reading and diagnosis need none; minor incidental finds (typo,
-  off-by-one) need no separate round.
+  off-by-one) need no separate round. Inline `// TODO` markers (below) need none at all.
 - Batch small edits onto one subagent and resume it with `SendMessage` rather than one agent per item.
 - Report a finished subagent in a few lines (changed, built/passed, decisions needed); flag high-token
   work before starting it.
@@ -30,6 +30,14 @@ checks it; the `tidy-guidance` skill cleans up and promotes memory entries).
 - Comment intentional deviations from a codebase pattern, and a `[Test]` that fails only on full/parallel runs.
 - A tool param added to stop a known model failure is mandatory unless a concrete usage needs the fallback.
 - In agent/plan docs state the allowed workflow positively; never name a tool that is gated off.
+
+## Deferred issues (no approval needed)
+
+- On noticing an issue or deferring a fix, leave `// TODO <brief issue statement>` at the spot in the
+  code and name it in your report. The code is the source of truth; `.md` files drift and miss what
+  another plan or session already flagged. `Search` a file for `TODO` before editing it.
+- Never hold work for all-or-nothing completion: new member beside the old, old `[Obsolete("Use X")]`,
+  `// TODO` for the remaining callers, finish in slices. CS0618 warnings during a migration are expected.
 
 ## Shell
 
@@ -48,7 +56,8 @@ decision for the user, not a blocker). Only if the listing is empty, try `Search
 ## Subagents (hard rules)
 
 - **Implementation is never done in the main session** - not even small edits, unless the user asks and
-  approves for that task (approval does not carry over). Dispatch `implementer` (several edits, few
+  approves for that task (approval does not carry over); the one exception is a `// TODO` comment the
+  session already knows about, added with `ReplaceSnippet`/`Member`. Dispatch `implementer` (several edits, few
   files), `implementer-sweep` (one mechanical operation, many files), `implementer-senior` (over the
   limits) or `test-writer`. The main session plans, briefs, dispatches, reviews and commits; reading,
   searching, building, tests, git and Markdown edits stay. Load the `dispatch-implementer` skill before
@@ -109,25 +118,26 @@ unreachable or has no equivalent (and no staged route exists), finish in-flight 
 speculatively or route around it with shell tools.
 
 `.claude/hooks/enforce-dogfood.ps1` mechanically blocks common violations (including `Read` on an
-in-repo `.cs`). It is a backstop that matches literal text, so it can block a benign command that merely
-mentions `.cs` or `git log`. If it blocks something genuinely necessary, say so and stop; do not reword
-to slip past it. A custom subagent that lists `Read` must also list `ReadFile`/`GetMethodSource`/`Search`.
+in-repo `.cs`). A blocked attempt needs no report or log: use the MCP tool instead. The hook matches
+literal text, so it can block a benign command that merely mentions `.cs` or `git log`; report that
+false positive and stop - do not reword to slip past it. A custom subagent that lists `Read` must also
+list `ReadFile`/`GetMethodSource`/`Search`.
 
-- **Accidental bypass** (used `Read`/`Edit`/`Write`/shell on a `.cs` or shell git when an MCP tool fit):
-  report it and continue; no blocker doc. If it caused an unexplained tool-side symptom, treat that as a tool failure.
-- **Hook bypass** is legitimate only for a `.cs` outside the repo or a manual call you decided is right;
-  never for a failed tool. Routes and logging: `docs/current/references/reference_hook_bypass.md`.
+- **Successful bypass** (a `Read`/`Edit`/`Write`/shell call on a `.cs`, or shell git, that went through
+  when an MCP tool fit): report it and continue; no blocker doc. If it caused an unexplained tool-side
+  symptom, treat that as a tool failure. Deliberate bypass is legitimate only for a `.cs` outside the
+  repo or a manual call you decided is right, never for a failed tool; routes and logging:
+  `docs/current/references/reference_hook_bypass.md`.
 - **Never delete a tracked file with a shell command** (it trips external-drift detection and halts all
   mutating tools: `SessionHalted`). Use `DeleteFile`. If halted: `ExternalFileDrift(operation: List)`
-  then `Acknowledge`; report it as a self-inflicted bypass.
+  then `Acknowledge`; report it as a successful bypass.
 
 ## Tool-experience journal
 
-A `SessionStart` hook prints the session journal path (`.claude/journal/<date>_<sid8>.md`). Append
-`- HH:mm [+|-|~] ToolName: one sentence` right after anything notable - never save it for the end,
-compaction erases it. Note: one call replacing many, confusing descriptions/parameters, error messages
-that did or did not help, and every shell/built-in fallback on C# with the reason. A `Stop` hook nudges
-after 15 MCP calls, a failed call or a C# fallback; "`~ nothing notable`" is fine. `/journal-review` summarizes.
+The `SessionStart` hook prints the journal path. Append `- HH:mm [+|-|~] ToolName: one sentence` right
+after anything notable (compaction erases late notes): one call replacing many, confusing
+descriptions/parameters, helpful or unhelpful errors, and every unblocked shell/built-in fallback on C#
+with the reason. Hook-blocked attempts are not logged. "`~ nothing notable`" is fine.
 
 ## Failure analysis
 
@@ -203,5 +213,5 @@ Compare test results with the baselines (`docs/known-failing-tests.{Basic,Advanc
 
 ## Compact instructions
 
-When compacting, keep this session's journal path and list notable tool experiences (including C#
+When compacting, keep this session's journal path and list notable tool experiences (including unblocked C#
 shell/built-in fallbacks and why) not yet written to it.

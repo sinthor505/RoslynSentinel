@@ -106,7 +106,7 @@
 | WorkspaceBuildTestTools | RunTest | WorkspaceBuildTest | - | Runs `dotnet test` on the solution or one project. |
 | WorkspaceFileEditTools | CreateFile | WorkspaceFileContent, WorkspaceFileIO | - | Creates a new file. |
 | WorkspaceFileEditTools | ReadFile | WorkspaceFileContent, WorkspaceFileIO | Allowed | Returns the raw text of a file in the loaded solution, verbatim (no reformatting). |
-| WorkspaceFileEditTools | ReplaceSnippet | WorkspaceFileContent, WorkspaceFileIO | - | Replaces one exact block of text with another in a single file, for localized batchEdits. |
+| WorkspaceFileEditTools | ReplaceSnippet | WorkspaceFileContent, WorkspaceFileIO | - | Replaces one exact text block with another in a file, for small localized edits. |
 | WorkspaceFileEditTools | RetryFailedChanges | WorkspaceFileContent, WorkspaceFileIO | - | Retries failed file writes using server-cached content - no need to re-send file contents. specificFiles limits to a... |
 | WorkspaceFileEditTools | UndoLastApply | WorkspaceFileContent, WorkspaceFileIO | - | Reverts files from a previously applied batch to their pre-apply state using the forensic blob written at apply time. |
 | WorkspaceHealthMiscTools | Features | WorkspaceHealthMisc | - | Queries or updates feature flags. |
