@@ -52,7 +52,8 @@ public class Bus {
     public System.Threading.Tasks.Task PublishAsync() => System.Threading.Tasks.Task.CompletedTask;
 }");
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Test.cs");
-        Assert.That(reports, Is.Not.Empty, "_ = _bus.PublishAsync() should be flagged");
+        Assert.That(reports, Has.Count.EqualTo(1), "_ = _bus.PublishAsync() should be flagged");
+        Assert.That(reports[0].Reason, Does.Contain("PublishAsync"));
     }
 
     [Test]
@@ -101,7 +102,8 @@ public class Bus {
     public System.Threading.Tasks.Task PublishAsync() => System.Threading.Tasks.Task.CompletedTask;
 }");
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Test.cs");
-        Assert.That(reports, Is.Not.Empty, "null-conditional discard inside foreach should be flagged");
+        Assert.That(reports, Has.Count.EqualTo(1), "null-conditional discard inside foreach should be flagged");
+        Assert.That(reports[0].Reason, Does.Contain("PublishAsync"));
     }
 
     [Test]
@@ -113,7 +115,8 @@ public class C {
     public void M() { SendAsync(); }
 }");
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Test.cs");
-        Assert.That(reports, Is.Not.Empty, "SendAsync() called with no await and no discard should be flagged");
+        Assert.That(reports, Has.Count.EqualTo(1), "SendAsync() called with no await and no discard should be flagged");
+        Assert.That(reports[0].Reason, Does.Contain("SendAsync"));
     }
 
     // ── Negative cases (should NOT flag) ────────────────────────────────
@@ -167,7 +170,8 @@ public class C {
     public void M(bool flag) { _ = flag ? DoAAsync() : DoBAsync(); }
 }");
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Test.cs");
-        Assert.That(reports, Is.Not.Empty, "_ = flag ? DoAAsync() : DoBAsync() should be flagged");
+        Assert.That(reports, Has.Count.EqualTo(1), "_ = flag ? DoAAsync() : DoBAsync() should be flagged");
+        Assert.That(reports[0].Reason, Does.Contain("DoAAsync").Or.Contain("DoBAsync"));
     }
 
     [Test]
@@ -179,7 +183,8 @@ public class C {
     public void M(bool flag) { _ = flag ? DoAAsync() : System.Threading.Tasks.Task.CompletedTask; }
 }");
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Test.cs");
-        Assert.That(reports, Is.Not.Empty, "_ = flag ? DoAAsync() : Task.CompletedTask should be flagged (one branch is async)");
+        Assert.That(reports, Has.Count.EqualTo(1), "_ = flag ? DoAAsync() : Task.CompletedTask should be flagged (one branch is async)");
+        Assert.That(reports[0].Reason, Does.Contain("DoAAsync"));
     }
 
     [Test]
@@ -211,7 +216,8 @@ public class C {
     }
 }");
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Test.cs");
-        Assert.That(reports, Is.Not.Empty, "DoWorkAsync() inside an async lambda body without await should be detected");
+        Assert.That(reports, Has.Count.EqualTo(2), "DoWorkAsync() inside an async lambda body without await should be detected (plus the discarded Task.Run)");
+        Assert.That(reports[0].Reason + reports[1].Reason, Does.Contain("DoWorkAsync"));
     }
 
     // ── Semantic model: catches Task-returning methods without Async suffix ──
@@ -225,7 +231,8 @@ public class C {
     public void M() { Run(); }
 }");
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Test.cs");
-        Assert.That(reports, Is.Not.Empty, "A Task-returning method named 'Run' (no Async suffix) should be caught via semantic model");
+        Assert.That(reports, Has.Count.EqualTo(1), "A Task-returning method named 'Run' (no Async suffix) should be caught via semantic model");
+        Assert.That(reports[0].Reason, Does.Contain("Run"));
     }
 
     [Test]
@@ -250,7 +257,8 @@ public class C {
     public void M() { _ = FlushAsync(); }
 }");
         var reports = await _engine.FindUnawaitedFireAndForgetAsync("Test.cs");
-        Assert.That(reports, Is.Not.Empty, "_ = ValueTask-returning method should be flagged - semantic model recognizes ValueTask");
+        Assert.That(reports, Has.Count.EqualTo(1), "_ = ValueTask-returning method should be flagged - semantic model recognizes ValueTask");
+        Assert.That(reports[0].Reason, Does.Contain("FlushAsync"));
     }
 }
 
