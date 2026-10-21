@@ -87,9 +87,11 @@ public class Worker
     [Category("CodeHealingEngine")] // sentinel:auto-category
     public async Task FixThreadSleep_FileWithThreadSleep_ReturnsUpdatedSource()
     {
-        SetSource(AsyncSource, "Worker.cs");
+        const string src = "using System.Threading; using System.Threading.Tasks; namespace TestProj; public class Worker { public async Task DoWorkAsync() { Thread.Sleep(100); await Task.CompletedTask; } }";
+        SetSource(src, "Worker.cs");
         var result = await _codeHealingEngine.FixThreadSleepAsync("Worker.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Not.Contain("Thread.Sleep"));
     }
 
     [Test]
@@ -108,7 +110,8 @@ public class Worker
         const string src = "public class C { void M() { if (true) Console.WriteLine(\"x\"); } }";
         SetSource(src, "C.cs");
         var result = await _syntaxUpgradeEngine.AddBracesAsync("C.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Match(@"if \(true\)\s*\{"));
     }
 
     [Test]
@@ -125,9 +128,11 @@ public class Worker
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradePatternMatching_ValidFile_ReturnsSource()
     {
-        SetSource(RichSource, "Test.cs");
+        const string src = "public class C { public int M(object o) { if (o is string) { var s = (string)o; return s.Length; } return 0; } }";
+        SetSource(src, "Test.cs");
         var result = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync("Test.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("is string s"));
     }
 
     [Test]
@@ -143,9 +148,11 @@ public class Worker
     [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task UseIndexFromEnd_ValidFile_ReturnsSource()
     {
-        SetSource(RichSource, "Test.cs");
+        const string src = "public class C { public int F(int[] a) => a[a.Length - 1]; }";
+        SetSource(src, "Test.cs");
         var result = await _codeStyleEngine.UseIndexFromEndAsync("Test.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("a[^1]"));
     }
 
     [Test]
@@ -161,9 +168,12 @@ public class Worker
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UseFieldBackedProperties_ValidFile_ReturnsSource()
     {
-        SetSource(RichSource, "Test.cs");
+        const string src = "public class C { private int _count; public int Count { get => _count; set => _count = value; } }";
+        SetSource(src, "Test.cs");
         var result = await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync("Test.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Not.Contain("_count"));
+        Assert.That(result.UpdatedText, Does.Match(@"int Count\s*\{\s*get;\s*set;\s*\}"));
     }
 
     [Test]
@@ -182,7 +192,8 @@ public class Worker
         const string src = "namespace TestProj; public class Point { public int X { get; init; } public int Y { get; init; } }";
         SetSource(src, "Point.cs");
         var result = await _modernizationEngine.ClassToRecordAsync("Point.cs", "Point");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("record Point"));
     }
 
     [Test]
@@ -201,7 +212,9 @@ public class Worker
         const string src = "namespace TestProj; public record Point(int X, int Y);";
         SetSource(src, "Point.cs");
         var result = await _modernizationEngine.RecordToClassAsync("Point.cs", "Point");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("class Point"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("record Point"));
     }
 
     [Test]
@@ -219,7 +232,8 @@ public class Worker
     {
         SetSource(RichSource, "Test.cs");
         var result = await _codeStyleEngine.SimplifyVerbosityAsync("Test.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        // TODO RichSource is not verified to trigger SimplifyVerbosity; pin the transformed text once a triggering fixture is confirmed
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
     }
 
     [Test]
@@ -237,7 +251,8 @@ public class Worker
     {
         SetSource(AsyncSource, "Worker.cs");
         var result = await _codeStyleEngine.FixDangerousLockAsync("Worker.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        // TODO FixDangerousLockAsync returns Modified regardless of MadeChanges; pin the Lock _lockObj text once AsyncSource is confirmed to trigger DangerousLockRewriter
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
     }
 
     [Test]
@@ -253,9 +268,11 @@ public class Worker
     [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task UseTimeProvider_ValidFile_ReturnsSource()
     {
-        SetSource(RichSource, "Test.cs");
+        const string src = "public class C { public System.DateTime Now() => System.DateTime.Now; }";
+        SetSource(src, "Test.cs");
         var result = await _codeStyleEngine.UseTimeProviderAsync("Test.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("TimeProvider"));
     }
 
     [Test]
