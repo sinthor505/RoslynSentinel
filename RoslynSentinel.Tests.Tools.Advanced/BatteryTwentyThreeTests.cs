@@ -662,9 +662,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("ControlFlowEngine")] // sentinel:auto-category
     public async Task AnalyzeMethodControlFlow_ValidMethod_ReturnsResult()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _controlFlowEngine.AnalyzeMethodControlFlowAsync("Quality.cs", "Process");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class F { public int Check(int x) { if (x > 0) { return 1; } return 0; } }", "Flow.cs");
+        var result = await _controlFlowEngine.AnalyzeMethodControlFlowAsync("Flow.cs", "Check");
+        Assert.That(result.ReturnStatements, Is.EqualTo(new[] { "return 1;", "return 0;" }));
+        Assert.That(result.EndPointIsReachable, Is.False);
+        Assert.That(result.Error, Is.Null);
+        SetSource("public class F { public int Check(int x) { return x; } }", "Clean.cs");
+        var missing = await _controlFlowEngine.AnalyzeMethodControlFlowAsync("Clean.cs", "Missing");
+        Assert.That(missing.Error, Does.Contain("Method 'Missing' not found"));
     }
 
     // --- AnalyzeMethodDataFlow ---
@@ -672,9 +677,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("ControlFlowEngine")] // sentinel:auto-category
     public async Task AnalyzeMethodDataFlow_ValidMethod_ReturnsResult()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _controlFlowEngine.AnalyzeMethodDataFlowAsync("Quality.cs", "Process");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class D { public int Sum(int a) { int b = a + 1; return b; } }", "Calc.cs");
+        var result = await _controlFlowEngine.AnalyzeMethodDataFlowAsync("Calc.cs", "Sum");
+        Assert.That(result.VariablesDeclared, Is.EqualTo(new[] { "b" }));
+        Assert.That(result.ReadInside, Does.Contain("a"));
+        Assert.That(result.Error, Is.Null);
+        SetSource("public class D { public int Sum(int a) { return a; } }", "Clean.cs");
+        var missing = await _controlFlowEngine.AnalyzeMethodDataFlowAsync("Clean.cs", "Missing");
+        Assert.That(missing.Error, Does.Contain("Method 'Missing' not found"));
     }
 
     // --- FindConfigureAwaitMissing ---
@@ -712,9 +722,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindAsyncInConstructor_ValidFile_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
-        var result = await _asyncSafetyEngine.FindAsyncInConstructorAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class K { public K() { LoadAsync(); } public System.Threading.Tasks.Task LoadAsync() { return System.Threading.Tasks.Task.CompletedTask; } }", "Ctor.cs");
+        var result = await _asyncSafetyEngine.FindAsyncInConstructorAsync("Ctor.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Is.EqualTo("K"));
+        Assert.That(result[0].Reason, Does.StartWith("Line 1: Constructor invokes async code"));
+        SetSource("public class K { private int _x; public K() { _x = 1; } }", "Clean.cs");
+        var clean = await _asyncSafetyEngine.FindAsyncInConstructorAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindTaskRunInAsync ---
@@ -722,9 +737,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindTaskRunInAsync_ValidFile_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
-        var result = await _asyncSafetyEngine.FindTaskRunInAsyncAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("using System.Threading.Tasks; public class R { public async Task RunAsync() { await Task.Run(() => { }); } }", "Run.cs");
+        var result = await _asyncSafetyEngine.FindTaskRunInAsyncAsync("Run.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Is.EqualTo("RunAsync"));
+        Assert.That(result[0].Reason, Does.StartWith("Line 1: await Task.Run(...) in server code"));
+        SetSource("using System.Threading.Tasks; public class R { public async Task RunAsync() { await Task.Delay(1); } }", "Clean.cs");
+        var clean = await _asyncSafetyEngine.FindTaskRunInAsyncAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindConcurrentCollectionOpportunities ---
@@ -732,9 +752,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindConcurrentCollectionOpportunities_ValidFile_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
-        var result = await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("using System.Collections.Generic; public class Cache { private readonly object _gate = new object(); private readonly Dictionary<string, int> _map = new Dictionary<string, int>(); public void Add(string k) { lock (_gate) { _map[k] = 1; } } }", "Cache.cs");
+        var result = await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync("Cache.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Is.EqualTo("Add"));
+        Assert.That(result[0].Reason, Does.Contain("ConcurrentDictionary"));
+        SetSource("using System.Collections.Generic; public class Cache { private readonly Dictionary<string, int> _map = new Dictionary<string, int>(); public void Add(string k) { _map[k] = 1; } }", "Clean.cs");
+        var clean = await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindUnsafeLazyInit ---
@@ -742,9 +767,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindUnsafeLazyInit_ValidFile_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
-        var result = await _asyncSafetyEngine.FindUnsafeLazyInitAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class Holder { private object _instance; public object Get() { if (_instance == null) { _instance = new object(); } return _instance; } }", "Lazy.cs");
+        var result = await _asyncSafetyEngine.FindUnsafeLazyInitAsync("Lazy.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Does.EndWith(":1"));
+        Assert.That(result[0].Reason, Does.Contain("Unsafe lazy init: '_instance'"));
+        SetSource("public class Holder { private volatile object _instance; public object Get() { if (_instance == null) { _instance = new object(); } return _instance; } }", "Clean.cs");
+        var clean = await _asyncSafetyEngine.FindUnsafeLazyInitAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- DetectValueTaskMisuse ---
@@ -752,9 +782,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task DetectValueTaskMisuse_ValidFile_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
-        var result = await _asyncSafetyEngine.DetectValueTaskMisuseAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("using System.Threading.Tasks; public class V { public async Task RunAsync() { ValueTask<int> vt = Get(); await vt; await vt; } public ValueTask<int> Get() { return new ValueTask<int>(1); } }", "Vt.cs");
+        var result = await _asyncSafetyEngine.DetectValueTaskMisuseAsync("Vt.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Is.EqualTo("RunAsync"));
+        Assert.That(result[0].Reason, Does.Contain("ValueTask variable 'vt' is awaited more than once"));
+        SetSource("using System.Threading.Tasks; public class V { public async Task RunAsync() { var vt = Get(); await vt; } public ValueTask<int> Get() { return new ValueTask<int>(1); } }", "Clean.cs");
+        var clean = await _asyncSafetyEngine.DetectValueTaskMisuseAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindAsyncOverSync ---
@@ -763,8 +798,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     public async Task FindAsyncOverSync_FileWithSyncMethods_ReturnsList()
     {
         SetSource(AsyncSource, "Async.cs");
-        var result = await _asyncSafetyEngine.FindAsyncOverSyncAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("using System.Threading.Tasks; public class O { public async Task<int> GetAsync() { return 1; } }", "Over.cs");
+        var result = await _asyncSafetyEngine.FindAsyncOverSyncAsync("Over.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Is.EqualTo("GetAsync"));
+        Assert.That(result[0].Reason, Does.StartWith("Line 1: async method contains no await"));
+        SetSource("using System.Threading.Tasks; public class O { public async Task RunAsync() { await Task.Delay(1); } }", "Clean.cs");
+        var clean = await _asyncSafetyEngine.FindAsyncOverSyncAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindUnawaitedFireAndForget ---
