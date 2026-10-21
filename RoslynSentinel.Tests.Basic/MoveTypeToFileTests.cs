@@ -71,7 +71,8 @@ public sealed record FeatureGateErrorResponse { public string ErrorMessage { get
             Assert.That(changes, Is.Not.Null);
             Assert.That(changes.Count, Is.EqualTo(2));
             var newFilePath = changes.Keys.FirstOrDefault(k => k.Contains("FeatureGateErrorResponse.cs"));
-            Assert.That(newFilePath.Absolute, Is.Not.Null);
+            Assert.That(newFilePath.Absolute, Does.EndWith("FeatureGateErrorResponse.cs"), "the moved type must land in FeatureGateErrorResponse.cs");
+            Assert.That(changes[newFilePath], Does.Contain("record FeatureGateErrorResponse"), "new file must contain the moved record");
         });
     }
 
@@ -180,6 +181,12 @@ public class WidgetB { public string Label { get; set; } }
         _workspaceManager.SetTestSolution(solution);
 
         var changes = await _refactoringEngine.MoveTypeToFileAsync("Combined.cs", "WidgetB");
+
+        Assert.That(changes, Has.Count.EqualTo(2), "source file + new WidgetB.cs");
+        var newKey = changes.Keys.Single(k => k.Contains("WidgetB.cs"));
+        var srcKey = changes.Keys.Single(k => !k.Contains("WidgetB.cs"));
+        Assert.That(changes[newKey], Does.Contain("class WidgetB"), "new file must contain the moved type");
+        Assert.That(changes[srcKey], Does.Contain("class WidgetA"), "source file must keep the primary type");
 
         foreach (var (path, content) in changes)
         {

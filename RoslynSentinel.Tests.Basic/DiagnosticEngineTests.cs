@@ -44,6 +44,9 @@ public class DiagnosticEngineTests
         var result = await engine.GetFileDiagnosticsAsync(new FilePathWrapper("Test.cs"));
 
         Assert.That(result.Data.Errors, Is.GreaterThan(0));
+        var cs0103 = result.Data.Details.Single(d => d.Id == "CS0103");
+        Assert.That(cs0103.Severity, Is.EqualTo("Error"));
+        Assert.That(cs0103.StartLine, Is.EqualTo(1), "the unresolved call is on the file's only line");
     }
 
     [Test]

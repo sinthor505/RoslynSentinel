@@ -96,10 +96,12 @@ public class WriteChokepointGuardrailTests
         // 4 CRLF + 1 LF: already mixed, dominant CRLF. A small edit that keeps it that way is fine.
         var mixedSource = "namespace T;\r\npublic class A\r\n{\r\n    public int X() => 1;\n}\r\n";
         using var workspace = InMemoryWorkspace.Create(("A.cs", mixedSource));
+        var edited = mixedSource.Replace("=> 1;", "=> 2;");
 
-        var outcome = await ApplyAsync(workspace, new() { [workspace.PathOf("A.cs")] = mixedSource.Replace("=> 1;", "=> 2;") });
+        var outcome = await ApplyAsync(workspace, new() { [workspace.PathOf("A.cs")] = edited });
 
         Assert.That(outcome.Error, Is.Null);
+        Assert.That(workspace.ReadText("A.cs"), Is.EqualTo(edited));
     }
 
     [Test]
