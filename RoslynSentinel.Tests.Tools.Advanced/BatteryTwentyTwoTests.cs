@@ -389,9 +389,10 @@ public class BatteryTwentyTwoTests
     [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedInterfaces_ValidSolution_ReturnsList()
     {
-        SetSource(RichSource, "Test.cs");
+        SetSource("namespace TestProj;\npublic interface IFoo { }\npublic class Bar { }", "Test.cs");
         var result = await _deadCodeEngine.FindUnusedInterfacesAsync();
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result, Does.Contain("Interface 'IFoo' has no implementations."));
         //Assert.That(result.Count > 0);
     }
 
@@ -695,7 +696,7 @@ public class BatteryTwentyTwoTests
     {
         SetSource(RichSource, "Test.cs");
         var result = await _symbolRelationshipTools.FindReferencesTool(reason: "test message", "ProcessAsync", FindReferencesKind.all, filePath: "Test.cs");
-        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.IsError, Is.False);
         Assert.That(result.SuccessData, Is.Not.Null);
         var json = System.Text.Json.JsonSerializer.Serialize(result.SuccessData);
         Assert.That(json, Does.Contain("callers"));
@@ -710,7 +711,7 @@ public class BatteryTwentyTwoTests
         SetSource(RichSource, "Test.cs");
         var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "Order", FindUsagesSearchKind.objectCreations);
         Assert.That(result, Is.Not.Null);
-        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.IsError, Is.False);
     }
 
     [Test]
@@ -732,7 +733,7 @@ public class BatteryTwentyTwoTests
         // "IOrderService" has zero attribute usages, but a real implementor exists (OrderService) ->
         // broaden-on-empty should surface that under 'implementorsOf' instead of just returning [].
         var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "IOrderService", FindUsagesSearchKind.attributeUsages);
-        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.IsError, Is.False);
         Assert.That(result.WarningDetails, Is.Not.Null.And.Contains("Broadened"));
         Assert.That(result.WarningDetails, Does.Contain("implementorsOf"));
     }
@@ -743,7 +744,7 @@ public class BatteryTwentyTwoTests
     {
         SetSource(RichSource, "Test.cs");
         var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "ThisNameAppearsNowhereInTheSolution", FindUsagesSearchKind.attributeUsages);
-        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.IsError, Is.False);
         Assert.That(result.WarningDetails, Does.Contain("nothing found under any kind"));
     }
 
