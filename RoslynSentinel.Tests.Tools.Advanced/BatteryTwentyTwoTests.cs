@@ -219,6 +219,8 @@ public class BatteryTwentyTwoTests
         Assert.That(metrics.TotalFiles, Is.EqualTo(1));
         Assert.That(metrics.TotalTypes, Is.EqualTo(3));
         Assert.That(metrics.Projects, Has.Count.EqualTo(1));
+        Assert.That(metrics.TotalMethods, Is.EqualTo(9));
+        Assert.That(metrics.TotalLines, Is.EqualTo(72));
     }
 
     [Test]
@@ -256,7 +258,9 @@ public class BatteryTwentyTwoTests
         SetSource("public class Order\n{\n    private void Unused() { }\n    public int Id { get; set; }\n}", "Test.cs");
         var result = await _deadCodeEngine.FindUnusedPrivateMembersAsync("Test.cs", "Order");
         Assert.That(result, Has.Count.EqualTo(1));
-        // TODO DeadCodeReport member name not pinned; expect the flagged member Unused. Engine only reports private methods/properties, not fields (DeadCodeEngine.cs:37)
+        Assert.That(result.Single().SymbolName, Is.EqualTo("Unused"));
+        Assert.That(result.Single().Type, Is.EqualTo("UnusedPrivateMember"));
+        // TODO Engine only reports private methods/properties, not fields (DeadCodeEngine.cs:37)
     }
 
     // --- DetectUnusedPrivateFields (via DeadCodeEngine) ---
@@ -267,7 +271,7 @@ public class BatteryTwentyTwoTests
         SetSource("public class Order\n{\n    private int _unused;\n}", "Test.cs");
         var result = await _deadCodeEngine.DetectUnusedPrivateFieldsAsync("Test.cs");
         Assert.That(result, Has.Count.EqualTo(1));
-        // TODO DeadCodeReport member name not pinned; expect the flagged field _unused
+        Assert.That(result.Single().SymbolName, Is.EqualTo("_unused"));
     }
 
     // --- DetectUnusedLocalVariables (via DeadCodeEngine) ---
@@ -278,7 +282,7 @@ public class BatteryTwentyTwoTests
         SetSource("public class Order\n{\n    public void M()\n    {\n        var unusedLocal = 1;\n    }\n}", "Test.cs");
         var result = await _deadCodeEngine.DetectUnusedLocalVariablesAsync("Test.cs");
         Assert.That(result, Has.Count.EqualTo(1));
-        // TODO DeadCodeReport local name not pinned; expect unusedLocal
+        Assert.That(result.Single().SymbolName, Is.EqualTo("unusedLocal"));
     }
 
     // --- DetectLongParameterLists (via AnalysisEngine) ---
@@ -300,7 +304,8 @@ public class BatteryTwentyTwoTests
         SetSource(RichSource, "Test.cs");
         var result = await _deadCodeEngine.FindUninstantiatedTypesAsync();
         Assert.That(result, Has.Count.EqualTo(2));
-        // TODO pin the two reported type names once the report shape is read
+        Assert.That(result, Does.Contain("Type 'TestProj.Order' in Test.cs is never instantiated."));
+        Assert.That(result, Does.Contain("Type 'TestProj.OrderService' in Test.cs is never instantiated."));
         //Assert.That(result.Count > 0);
     }
 
@@ -554,7 +559,7 @@ public class BatteryTwentyTwoTests
     {
         SetSource(RichSource, "Test.cs");
         var result = await _tools.GetCallGraphTool(reason: "test message", "Test.cs", "NoSuchMethod99");
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
@@ -566,7 +571,7 @@ public class BatteryTwentyTwoTests
         SetSource(RichSource, "Test.cs");
         var result = await _tools.GetCallGraphTool(reason: "test message", "Test.cs", "GetStatus", "reverse");
         Assert.That(result, Is.Not.Null);
-        Assert.That(!result.IsError, Is.True);
+        Assert.That(result.IsError, Is.False);
     }
 
     [Test]
