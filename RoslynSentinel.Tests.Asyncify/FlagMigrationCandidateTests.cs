@@ -114,6 +114,8 @@ namespace Avaal.Service
         // Attribute class is intentionally emitted in the global namespace (not the target
         // file's namespace) to avoid CS0104 ambiguity when multiple copies are glob-included
         // by an SDK-style project. See BuildMigrationCandidateAttributeSource.
+        Assert.That(changes[attrKey], Does.Contain("class MigrationCandidateAttribute"),
+            "Attribute class should be injected into the attribute file.");
         Assert.That(changes[attrKey], Does.Not.Contain("namespace Avaal.Service"),
             "Injected attribute class should use the global namespace, not the target file's namespace.");
     }
@@ -216,6 +218,8 @@ public class Svc { public int Search(string q) => 0; }", "Svc.cs");
             PathOf("Svc.cs"), "Search", "AsyncBridge", score: 0);
         var changes = result.Changes;
 
+        Assert.That(changes[PathOf("Svc.cs")], Does.Contain("[MigrationCandidate(\"AsyncBridge\""),
+            "Flag attribute should be emitted with the migration kind.");
         Assert.That(changes[PathOf("Svc.cs")], Does.Not.Contain("Score"),
             "Score named argument should be omitted when score is 0.");
     }

@@ -165,8 +165,14 @@ public class NotificationService
         // void bridge: NotifyAsync(message).GetAwaiter().GetResult() -> no 'return' keyword.
         Assert.That(result.UpdatedText, Does.Contain("NotifyAsync"),
             "Async overload should be named NotifyAsync.");
-        Assert.That(result.UpdatedText, Does.Contain("Task NotifyAsync") | Does.Contain("Task\r\nNotifyAsync") | Does.Contain("async Task"),
+        Assert.That(result.UpdatedText, Does.Contain("Task NotifyAsync"),
             "Async overload should return Task (not Task<void>).");
+        Assert.That(result.UpdatedText, Does.Not.Contain("Task<void>"),
+            "Async overload should not return Task<void>.");
+        Assert.That(result.UpdatedText, Does.Contain("NotifyAsync(message).GetAwaiter().GetResult();"),
+            "Void bridge should be a single expression statement.");
+        Assert.That(result.UpdatedText, Does.Not.Contain("return NotifyAsync("),
+            "Void bridge must not return the Task.");
         // No return keyword in the bridge call (void bridge = expression statement).
         // The async method may have return, but the bridge itself must not have 'return GetAwaiter'.
         Assert.That(result.UpdatedText, Does.Contain("GetAwaiter"),
@@ -211,6 +217,8 @@ public class TripService
             "Async overload should exist.");
         Assert.That(result.UpdatedText, Does.Contain("DataHelper.Search"),
             "Original body expression should be carried into the async overload.");
+        Assert.That(result.UpdatedText, Does.Match(@"GetTripsAsync\([^)]*\)\s*\{"),
+            "Async overload should have a block body ({), not an expression body (=>).");
     }
 
     [Test, CancelAfter(5000)]
@@ -254,6 +262,8 @@ public class TripService
         var asyncBodyIdx = result.UpdatedText!.IndexOf("DataHelper.Search", StringComparison.Ordinal);
 
         // Bridge body (GetAwaiter) should appear before the async overload's body (DataHelper.Search).
+        Assert.That(bridgeIdx, Is.GreaterThanOrEqualTo(0), "Bridge body (GetAwaiter) must be present.");
+        Assert.That(asyncBodyIdx, Is.GreaterThanOrEqualTo(0), "Async overload body (DataHelper.Search) must be present.");
         Assert.That(bridgeIdx, Is.LessThan(asyncBodyIdx),
             "The bridge wrapper should be emitted before the async overload in the file.");
     }
