@@ -166,10 +166,8 @@ public class Looper
         Assert.That(report.Error, Is.Null, $"Should not error: {report.Error}");
         // Declaration of x is inside foreach -> IsInLoop should be true
         var decl = report.Accesses.FirstOrDefault(a => a.AccessKind == "Declaration");
-        if (decl != null)
-        {
-            Assert.That(decl.IsInLoop, Is.True, "Variable declared inside foreach should have IsInLoop=true");
-        }
+        Assert.That(decl, Is.Not.Null, "Declaration access for x should be found");
+        Assert.That(decl!.IsInLoop, Is.True, "Variable declared inside foreach should have IsInLoop=true");
     }
 
     [Test]

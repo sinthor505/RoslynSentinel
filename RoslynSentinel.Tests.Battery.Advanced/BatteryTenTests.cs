@@ -222,8 +222,9 @@ public class DiagnosticEngineTests
         var summary = await _engine.GetProjectDiagnosticsAsync("Source");
 
         Assert.That(summary, Is.Not.Null, "Known project should return a summary");
-        Assert.That(summary.Data.Errors, Is.GreaterThanOrEqualTo(0));
-        Assert.That(summary.Data.Warnings, Is.GreaterThanOrEqualTo(0));
+        Assert.That(summary.Outcome, Is.EqualTo(EngineOutcome.Success), "Known project should succeed");
+        Assert.That(summary.Data.Errors, Is.Zero, "Known project should report no errors");
+        Assert.That(summary.Data.Warnings, Is.Zero, "Known project should report no warnings");
     }
 }
 

@@ -52,7 +52,11 @@ public static class ServiceExtensions
 }";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("ServiceExtensions.cs", source)]));
         var registrations = await _engine.FindDiRegistrationsAsync(filePath: "ServiceExtensions.cs");
-        Assert.That(registrations, Is.Not.Empty, "file with AddSingleton/AddScoped calls should yield registrations");
+        Assert.That(registrations, Has.Count.EqualTo(2), "AddSingleton and AddScoped should yield two registrations");
+        Assert.That(registrations[0].ServiceType.ToString(), Does.Contain("IMyService"), "first registration should be IMyService");
+        Assert.That(registrations[0].Lifetime.ToString(), Does.Contain("Singleton"), "AddSingleton should map to Singleton lifetime");
+        Assert.That(registrations[1].ServiceType.ToString(), Does.Contain("IOrderService"), "second registration should be IOrderService");
+        Assert.That(registrations[1].Lifetime.ToString(), Does.Contain("Scoped"), "AddScoped should map to Scoped lifetime");
     }
 }
 
@@ -74,6 +78,7 @@ public class GranularRefactoringEngineTests
     public async Task InlineField_UnknownFile_ReturnsEmptyString()
     {
         var result = await new StructuralRefactoringEngine(_mgr).InlineFieldAsync("NoSuchFile.cs", "_field");
+        // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
         Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
     }
 
@@ -130,6 +135,8 @@ public class HealthOrchestrationEngineTests
     {
         var report = await _engine.GenerateComprehensiveHealthReportAsync();
         Assert.That(report, Is.Not.Null, "health check should return a non-null report");
+        // TODO engine does not populate ProjectSummaries for a minimal test solution (returns 0); assert Count == 1 once it does
+        Assert.That(report.HasMoreData, Is.False, "minimal solution should not report more data");
     }
 
     [Test]
@@ -143,6 +150,6 @@ public class HealthOrchestrationEngineTests
     public async Task GenerateHealthReport_TotalIssues_IsNonNegative()
     {
         var report = await _engine.GenerateComprehensiveHealthReportAsync();
-        Assert.That(report.TotalIssues, Is.GreaterThanOrEqualTo(0), "issue count should be non-negative");
+        Assert.That(report.TotalIssues, Is.EqualTo(0), "minimal solution with no planted issues should report zero issues");
     }
 }
