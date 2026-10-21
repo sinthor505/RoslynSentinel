@@ -487,6 +487,92 @@ public class CreateFileDeleteFileTests
         Assert.That(workspaceManager.GetExternalFileChanges(), Does.Not.Contain(projectFile).IgnoreCase);
     }
 
+    // .slnx counterpart of the .sln touch test above: a timestamp-only touch of a solution file with
+    // identical content must not be flagged as drift. Covered together with the control test below,
+    // which proves the watcher does report a real .slnx content change.
+    [Test]
+    [NonParallelizable]
+    public async Task ExternalTouch_SlnxFileWithIdenticalContent_IsNotFlaggedAsDriftAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "RoslynSentinelSlnxTouch_" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var slnxPath = WriteSlnxFixture(root);
+            using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            await workspaceManager.LoadSolutionAsync(slnxPath);
+
+            File.SetLastWriteTimeUtc(slnxPath, DateTime.UtcNow.AddMinutes(-5));
+
+            // Longer than the 500 ms debounce, so a flagged touch would certainly be recorded by now.
+            await Task.Delay(2000);
+            Assert.That(workspaceManager.GetExternalFileChanges(), Does.Not.Contain(slnxPath).IgnoreCase);
+        }
+        finally
+        {
+            DeleteFixtureDirectory(root);
+        }
+    }
+
+    // Control for the .slnx touch test above: a REAL content change to the solution file must be flagged,
+    // the debounce-driven full-solution reload must re-baseline its hash, and a later touch with
+    // identical content must then not be flagged.
+    [Test]
+    [NonParallelizable]
+    public async Task ExternalEdit_SlnxFileWithChangedContent_IsFlaggedThenRebaselinedAsync()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "RoslynSentinelSlnxEdit_" + Guid.NewGuid().ToString("n"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var slnxPath = WriteSlnxFixture(root);
+            using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+            await workspaceManager.LoadSolutionAsync(slnxPath);
+            var hashes = (System.Collections.IDictionary)typeof(PersistentWorkspaceManager)
+                .GetField("_knownFileHashes", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(workspaceManager)!;
+            var key = new RoslynSentinel.Common.FilePathWrapper(slnxPath);
+
+            static string HashOf(string content)
+                => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content)));
+
+            var originalContent = await File.ReadAllTextAsync(slnxPath);
+
+            // A trailing XML comment after the root element keeps the solution file well-formed.
+            await File.WriteAllTextAsync(slnxPath, originalContent + "\n<!-- drift -->\n");
+            var editedContent = await File.ReadAllTextAsync(slnxPath);
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (!workspaceManager.GetExternalFileChanges().Contains(slnxPath, StringComparer.OrdinalIgnoreCase) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(25);
+            }
+
+            Assert.That(workspaceManager.GetExternalFileChanges(), Does.Contain(slnxPath).IgnoreCase);
+
+            // Poll the baseline entry until the debounce reload records the edited content's hash.
+            deadline = DateTime.UtcNow.AddSeconds(15);
+            while ((hashes[key] as string) != HashOf(editedContent) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(25);
+            }
+
+            Assert.That((hashes[key] as string) == HashOf(editedContent), Is.True,
+                "the debounce reload did not re-baseline the .slnx file");
+
+            // Drop the content-change flag, then touch the file without changing its content.
+            workspaceManager.ClearExternalFileChanges(new[] { slnxPath });
+            File.SetLastWriteTimeUtc(slnxPath, DateTime.UtcNow.AddMinutes(-5));
+
+            // Longer than the 500 ms debounce, so a flagged touch would certainly be recorded by now.
+            await Task.Delay(2000);
+            Assert.That(workspaceManager.GetExternalFileChanges(), Does.Not.Contain(slnxPath).IgnoreCase);
+        }
+        finally
+        {
+            DeleteFixtureDirectory(root);
+        }
+    }
+
     // A flagged real external edit is folded into the in-memory workspace by the watcher's debounce
     // (OnDebounceTimerElapsed -> ApplyInMemoryDocumentUpdatesAsync, the real route; nothing is called
     // directly). The fold must record the folded content's hash as the document's baseline so it is never
@@ -746,5 +832,48 @@ public class CreateFileDeleteFileTests
         Assert.That(content, Does.Contain("public class Foo"));
         Assert.That(content, Does.Contain("public int Value"));
         Assert.That(content, Does.Contain("public class Bar"));
+    }
+
+    private static string WriteSlnxFixture(string root)
+    {
+        var slnxPath = Path.Combine(root, "SlnxFixture.slnx");
+        File.WriteAllText(slnxPath, """
+            <Solution>
+              <Project Path="Lib/Lib.csproj" />
+            </Solution>
+            """);
+
+        var directory = Path.Combine(root, "Lib");
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "Lib.csproj"), """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(directory, "LibValue.cs"), """
+            namespace Slnx.Lib;
+
+            public static class LibValue
+            {
+                public static string Name => "lib";
+            }
+            """);
+        return slnxPath;
+    }
+
+    private static void DeleteFixtureDirectory(string root)
+    {
+        try
+        {
+            Directory.Delete(root, recursive: true);
+        }
+        catch (IOException)
+        {
+            // Best-effort temp cleanup; a watcher or build node may still hold a handle briefly.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best-effort temp cleanup.
+        }
     }
 }
