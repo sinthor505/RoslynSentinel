@@ -433,6 +433,70 @@ public class CreateFileDeleteFileTests
         }
     }
 
+    // A flagged real external edit is folded into the in-memory workspace by the watcher's debounce
+    // (OnDebounceTimerElapsed -> ApplyInMemoryDocumentUpdatesAsync, the real route; nothing is called
+    // directly). The fold must record the folded content's hash as the document's baseline so it is never
+    // baseline-less afterwards.
+    // What this really covers: (1) the discriminating assertion is the reflection check that
+    // _knownFileHashes moves from the load-time hash to the hash of the folded (drifted) content; without
+    // the fix it stays at the load-time hash. (2) The identical-content touch and (3) the further real edit
+    // are behaviour pins that would ALSO pass without the fix in this fixture, because the folded document's
+    // text is still resident (TryGetText true) so the older no-baseline branch decides them; the case the
+    // fix exists for (folded text released by Roslyn, then a real edit) cannot be forced deterministically.
+    [Test]
+    public async Task ExternalEdit_FoldedDocument_GetsBaselineHashThenTouchIgnoredAndEditFlaggedAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var targetFile = workspaceManager.CurrentSolution!.Projects
+            .SelectMany(p => p.Documents)
+            .First(d => d.FilePath is not null && File.Exists(d.FilePath) && d.FilePath.StartsWith(fixture.SolutionDirectory, StringComparison.OrdinalIgnoreCase))
+            .FilePath!;
+        var hashes = (System.Collections.IDictionary)typeof(PersistentWorkspaceManager)
+            .GetField("_knownFileHashes", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(workspaceManager)!;
+        var key = new RoslynSentinel.Common.FilePathWrapper(targetFile);
+        var loadTimeHash = (string)hashes[key]!;
+
+        static string HashOf(string content)
+            => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content)));
+
+        async Task<bool> WaitUntilAsync(Func<bool> condition, int seconds)
+        {
+            var deadline = DateTime.UtcNow.AddSeconds(seconds);
+            while (!condition() && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(25);
+            }
+
+            return condition();
+        }
+
+        bool IsFlagged() => workspaceManager.GetExternalFileChanges().Contains(targetFile, StringComparer.OrdinalIgnoreCase);
+
+        // Real external edit -> flagged, then folded in by the debounce.
+        var foldedContent = await File.ReadAllTextAsync(targetFile) + "\n// drift 1\n";
+        await File.WriteAllTextAsync(targetFile, foldedContent);
+        Assert.That(await WaitUntilAsync(IsFlagged, 5), Is.True, "the real edit should be flagged");
+        Assert.That(await WaitUntilAsync(() => hashes[key] as string == HashOf(foldedContent), 15), Is.True,
+            "the fold should record the folded content's hash (load-time hash was " + loadTimeHash + ")");
+
+        // Acknowledge the drift, as ExternalFileDrift(Acknowledge) does.
+        workspaceManager.ClearExternalFileChanges([targetFile]);
+        Assert.That(IsFlagged(), Is.False);
+
+        // Identical-content touch of the folded document is not flagged.
+        File.SetLastWriteTimeUtc(targetFile, DateTime.UtcNow.AddMinutes(-5));
+        await Task.Delay(2000);
+        Assert.That(IsFlagged(), Is.False);
+
+        // A further real edit is flagged again.
+        await File.WriteAllTextAsync(targetFile, foldedContent + "// drift 2\n");
+        Assert.That(await WaitUntilAsync(IsFlagged, 5), Is.True, "a further real edit should be flagged again");
+    }
+
     // CreateFileTool (the MCP tool, WorkspaceTools.CreateFileTool) -> distinct from
     // WriteFileTool(operation=CreateFileTool) exercised above; the two share a name coincidentally (tool
     // name vs WriteFileOperation enum member). This tool never accepts free-form content: for .cs

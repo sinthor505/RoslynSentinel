@@ -418,6 +418,17 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         return Convert.ToHexStringLower(bytes);
     }
 
+    // Same decoding as File.ReadAllText (UTF-8 default, BOM detection) so hashes/comparisons are
+    // byte-identical, but opened FileShare.ReadWrite | Delete: File.ReadAllText uses FileShare.Read, which
+    // makes a concurrent File.Delete/rename of the same path by another fixture or process fail with an
+    // IOException while this (watcher-thread) read has it open.
+    private static string ReadAllTextShared(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+        return reader.ReadToEnd();
+    }
+
     // The single definition of "this document's in-memory text equals what is on disk", shared by
     // GetContentExternalFileChangesAsync (full scan) and IsTrackedDocumentUnchangedOnDisk (watcher).
     private static bool DocumentTextMatchesDisk(string inMemoryText, string onDiskText)
@@ -445,7 +456,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 return false;
             }
 
-            return DocumentTextMatchesDisk(inMemoryText.ToString(), File.ReadAllText(fullPath));
+            return DocumentTextMatchesDisk(inMemoryText.ToString(), ReadAllTextShared(fullPath));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -477,7 +488,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
             try
             {
-                var content = File.ReadAllText(document.FilePath);
+                var content = ReadAllTextShared(document.FilePath);
                 var filePath = new FilePathWrapper(document.FilePath);
                 _knownFileHashes[filePath] = ComputeContentHash(content);
                 // Detect whether the file has a UTF-8 BOM by checking the first three bytes.
@@ -485,9 +496,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 // Detect the file's dominant line-ending style so we can normalize edits to match.
                 _knownFileEolPresence[filePath] = EolUtilities.DetectDominantEol(content);
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                // Locked/mid-write during load -> leave unhashed; the next write or watcher event
+                // Locked/mid-write (or unreadable) during load -> leave unhashed; the next write or watcher event
                 // that touches this path will populate it then.
             }
         }
@@ -509,11 +520,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
             try
             {
-                _knownFileHashes[new FilePathWrapper(structuralFilePath)] = ComputeContentHash(File.ReadAllText(structuralFilePath));
+                _knownFileHashes[new FilePathWrapper(structuralFilePath)] = ComputeContentHash(ReadAllTextShared(structuralFilePath));
             }
-            catch (IOException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                // Locked/mid-write during load -> leave unhashed (keeps flagging, the old behavior).
+                // Locked/mid-write (or unreadable) during load -> leave unhashed (keeps flagging, the old behavior).
             }
         }
     }
@@ -960,7 +971,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     }
 
                     // Throws here are common if the watcher checks are fill in response to the server writing it, and does not indicate a problem. The exception will be caught and handled.
-                    var onDiskContent = File.Exists(e.FullPath) ? File.ReadAllText(e.FullPath) : null;
+                    var onDiskContent = File.Exists(e.FullPath) ? ReadAllTextShared(e.FullPath) : null;
                     var onDiskHash = onDiskContent is null ? null : ComputeContentHash(onDiskContent);
                     if (_logger.IsEnabled(LogLevel.Debug))
                     {
@@ -1030,7 +1041,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             {
                 try
                 {
-                    var onDiskContent = File.Exists(e.FullPath) ? File.ReadAllText(e.FullPath) : null;
+                    var onDiskContent = File.Exists(e.FullPath) ? ReadAllTextShared(e.FullPath) : null;
                     if (onDiskContent == recordedChange.Content)
                     {
                         return;
@@ -2004,6 +2015,14 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         }
     }
 
+    // A document whose text was just folded into CurrentSolution from disk (WithDocumentText/AddDocument)
+    // now holds constant, recoverable text that is exactly `content`. Record that content's hash as its
+    // baseline, using the same hash/key convention as PopulateKnownFileHashes and the successful-write
+    // updates: otherwise the document would be baseline-less, and a later real external edit could be
+    // missed by the hash gate while the workspace still serves the folded (stale) text.
+    private void RecordFoldedDocumentBaseline(string filePath, string content)
+        => _knownFileHashes[new FilePathWrapper(filePath)] = ComputeContentHash(content);
+
     // Fast in-memory path -> O(files), no MSBuild, no I/O beyond reading .cs file content.
     // Returns true when a structural file (.csproj / .sln) was among the affected files and a
     // full MSBuild reload is needed; the caller fires that reload after releasing the lock.
@@ -2067,6 +2086,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             if (doc != null)
             {
                 CurrentSolution = CurrentSolution.WithDocumentText(doc.Id, sourceText);
+                RecordFoldedDocumentBaseline(filePath, content);
             }
             else
             {
@@ -2076,6 +2096,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     var docId = DocumentId.CreateNewId(project.Id);
                     var fileName = Path.GetFileName(filePath);
                     CurrentSolution = CurrentSolution.AddDocument(docId, fileName, sourceText, filePath: filePath);
+                    RecordFoldedDocumentBaseline(filePath, content);
                 }
                 else
                 {
