@@ -82,6 +82,35 @@ Survey (2026-10-20, `RoslynSentinel.Common/IResultStatus.cs`): `IResultStatus` h
 8. **Memory note** that `ToolErrorMapper` masks errors as SolutionNotLoaded was not reproduced in current source (the mapper returns it only for a thrown `SolutionNotLoadedException`); the operation-blob path behind the note was not read.
 9. **Raw IO exceptions escaping engines (decided: route into this migration, 2026-10-21).** `CheckPackageInconsistencyAsync` on an in-memory test solution throws a raw `FileNotFoundException`: the in-memory project has no `.csproj` on disk and the engine does not guard it. Pinned in `RoslynSentinel.Tests.Battery.Advanced/BatteryTwentyFiveTests.cs` (`CheckPackageInconsistencyAsync_InMemorySolution`) with a `// TODO throw-migration`. Decide in S1 whether the engine skips projects with no file path or throws a typed `ToolException`; also audit other engines that read project files for the same unguarded IO.
 
+10. **Not-found contract is inconsistent across engines (found by Track A, 2026-10-21).** Today a missing document/target is reported six ways, so a tool cannot map it uniformly and tests pin whichever the engine happens to return:
+    - `DocumentNotFound` with four different messages: `// Document not found.` (CodeHealing, CodeStyle x4, Modernization x3, LogicSimplification, IDEStyle, TestingEngine, AsyncOptimization ConvertToAsyncEnumerable / AddCancellationTokenToMethod); `// File not found in workspace.` (UseFieldBackedProperties); `// File not found.` (UpgradeToPrimaryConstructor); `// ErrorDetails: File not found in the loaded solution.` (OptimizeIndependentAwaits). None names the file.
+    - `DocumentNotFound` with an empty `Message` (ConvertStaticToExtension).
+    - `CannotEdit` with `// File not found.` (AddBraces, UpgradePatternMatching, UpgradeToModernGuards, ConvertSwitchToExpression, CleanupImplicitSpans) - a missing file reported as a refusal.
+    - `TargetNotFound` (UseExceptionExpressions, ThreadSafety MakeMethodThreadSafe).
+    - `Error` with code `NotFound` (ThreadSafety ConvertLockToSemaphoreSlim).
+    - Already throws `ToolNotFoundException`: OptimizeToValueTask and the logging-conversion path; plus the three `MsToolAugmentEngine` contracts noted earlier.
+    Decision needed: one contract (throw `ToolNotFoundException` naming the file) for all of these in S1; every test carrying `// TODO throw-migration` is the work list. Related: the `SyncInterface` tool collapses the engine's distinct causes (class file / class / interface not found, nothing to sync) into one NotFound naming both class and interface (TODO in `AdvancedRefactoringTools.SyncInterfaceTool`); the typed exception should carry the real cause.
+11. **`DocumentEditResult.ToJsonSummary()` omits `UpdatedText`**, so GenerateHttpClient / InterpolateStringSafe output is not visible through the tool result. Decide whether the success summary must carry the text (or an offload id) when the edit is not applied to disk.
+
+## Appendix: engine defects found while strengthening tests (not throw-migration items)
+
+Each is pinned in a test with a `// TODO` describing the defect; none is fixed yet.
+
+- `UpgradeToPrimaryConstructor` produces a malformed header.
+- `OptimizeToValueTask` drops the space (`ValueTask<int>ProcessAsync`).
+- `OptimizeIndependentAwaits` returns Modified without introducing `Task.WhenAll`.
+- `ConvertToSwitch` / `ConvertToPattern` return Modified with unchanged text on a valid fixture; `ReduceBlockDepth` returns CannotOptimize on a nested-if fixture. A no-op reports Modified instead of NoChange across several engines.
+- `ReplaceConstructorWithFactory` reports Modified with an empty `Changes` map.
+- `IntroduceSymbolTool` (extract constant) fails with "Could not read file" on an in-memory document.
+- `GenerateConstructor` ignores auto-properties; `DocumentPocoFields` ignores fields; `DeadCodeEngine.FindUnusedPrivateMembers` ignores fields.
+- `AnalyzePerformance` flags `PotentialDoubleEnumeration` on a string (false positive).
+- `GenerateTestScaffold` emits xUnit/Moq usings for an NUnit project.
+- `DetectMemoryLeaks` needs an explicit `this`.
+- `ApplyDiff` / `ApplyUnifiedDiff` say "'filePath' is required" even when it is supplied.
+- `ExternalFileDrift` Acknowledge accepts malformed JSON.
+- `features get` with empty names returns all flags.
+- Three negative-only detectors in `BatteryTwentyTwoTests` have no positive case yet (TODOs in place).
+
 ## Cost / risk
 
 - **Silent swallowers change behaviour when exceptions propagate:** `SemanticRefactoringEngine.InlineVariableAsync` has 4 bare `catch` blocks returning `root.ToFullString()` (`:91`, `:117`, `:132`, `:152`); swallow-only catches around `GetSemanticModelAsync` (`AsyncOptimizationEngine` x5, `AsyncSafetyEngine` x2, `BasicRefactoringEngine` x2, `SymbolNavigationEngine` x2, `CloneDetectionEngine`, `CompilerErrorLookupHelper` x6); 74 generic catches in 23 engine files and 23 in `PersistentWorkspaceManager` around the write chokepoint. Each needs a decision before S1 on that file; `SymbolNavigationEngine` swallowed `InvalidOperationException` as control flow per the plan (line numbers stale, not re-checked).
