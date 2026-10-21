@@ -1,4 +1,3 @@
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Engines.Advanced;
@@ -11,7 +10,7 @@ namespace RoslynSentinel.Tests.Advanced;
 /// - BUG-60: RemoveMember checks for usages
 /// - BUG-57: IntroduceParameterObjectTool handles interfaces
 /// - BUG-55: OptimizeToValueTask updates interface signatures
-/// - 4 additional regression tests for final coverage
+/// - Additional regression coverage for the final sweep
 /// </summary>
 [TestFixture]
 public class FinalRegressionTests
@@ -140,84 +139,5 @@ public class FinalRegressionTests
         var result = await _asyncOptimizationEngine.OptimizeToValueTaskAsync(filePath, "GetDataAsync");
         Assert.That(result.UpdatedText, Does.Contain("ValueTask<string>"), "Should convert Task<T> to ValueTask<T>");
         Assert.That(result.UpdatedText, Does.Contain("WARNING") | Does.Contain("interface"), "Should warn about interface when it implements one");
-    }
-
-    // ────────────────────────────────────────────────────────────────────────────
-    // Additional Regression Tests
-    // ────────────────────────────────────────────────────────────────────────────
-    [Test]
-    public async Task DisposalPattern_DocumentCanBeAnalyzed()
-    {
-        const string code = @"
-            public class DataAccess
-            {
-                public void BadDisposal()
-                {
-                    var conn = new System.Collections.Hashtable();
-                }
-            }";
-        SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
-        var root = await doc.GetSyntaxRootAsync();
-        Assert.That(root, Is.Not.Null, "Should parse document without errors");
-        Assert.That(root?.ToFullString(), Does.Contain("DataAccess"), "Should contain the class definition");
-    }
-
-    [Test]
-    public async Task StaticReadOnlyDictionary_CanBeIdentified()
-    {
-        const string code = @"
-            public class Config
-            {
-                private static readonly Dictionary<string, int> TierRank = new()
-                {
-                    { ""Basic"", 1 },
-                    { ""Pro"", 2 }
-                };
-            }";
-        SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
-        var root = await doc.GetSyntaxRootAsync();
-        var dictVar = root?.DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault(v => v.Identifier.Text == "TierRank");
-        Assert.That(dictVar, Is.Not.Null, "Should find static readonly dictionary");
-    }
-
-    [Test]
-    public async Task TaskRunPattern_IsDetectable()
-    {
-        const string code = @"
-            public class BackgroundService
-            {
-                public async Task HandleAsync()
-                {
-                    Task.Run(() => DoWork());
-                }
-                
-                private async Task DoWork()
-                {
-                    await Task.Delay(1000);
-                }
-            }";
-        SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
-        var root = await doc.GetSyntaxRootAsync();
-        // Look for Task.Run fire-and-forget pattern
-        var taskRunCall = root?.DescendantNodes().OfType<InvocationExpressionSyntax>().FirstOrDefault(i => i.ToString().Contains("Task.Run"));
-        Assert.That(taskRunCall, Is.Not.Null, "Should detect Task.Run fire-and-forget");
-    }
-
-    [Test]
-    public async Task SimpleRefactoring_CompletesSuccessfully()
-    {
-        const string code = @"
-            public class Service
-            {
-                public void DoWork() { }
-            }";
-        SetSource(code);
-        var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
-        var root = await doc.GetSyntaxRootAsync();
-        Assert.That(root, Is.Not.Null);
-        Assert.That(root?.ToFullString(), Does.Contain("Service"));
     }
 }

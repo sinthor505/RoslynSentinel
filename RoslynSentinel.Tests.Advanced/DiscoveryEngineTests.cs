@@ -402,7 +402,7 @@ public class MyService
 
     [Test]
     [Category("RenameImpactPreview")] // sentinel:auto-category
-    public async Task PreviewRenameImpact_DefinitionOnly_ReportsOneReference()
+    public async Task PreviewRenameImpact_DefinitionOnly_ReportsZeroReferences()
     {
         // Source: single file, MyMethod is declared but never called
         // Line 3: "    public void MyMethod() { }"
@@ -414,10 +414,10 @@ public class MyService
 
         Assert.That(preview.SymbolName, Is.EqualTo("MyMethod"),
             "SymbolName should reflect the name passed in.");
-        Assert.That(preview.TotalReferences, Is.GreaterThanOrEqualTo(0),
-            "TotalReferences should be a non-negative count.");
-        Assert.That(preview.FilesAffected, Is.GreaterThanOrEqualTo(0),
-            "FilesAffected should be a non-negative count.");
+        Assert.That(preview.TotalReferences, Is.EqualTo(0),
+            "A declared-but-never-called method has no reference locations (definition excluded).");
+        Assert.That(preview.FilesAffected, Is.EqualTo(0),
+            "A declared-but-never-called method touches no files beyond its declaration.");
     }
 
     [Test]
