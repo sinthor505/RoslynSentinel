@@ -155,8 +155,7 @@ public class SubscriberService
     {
         SetSource(SqlConcatSource, "QueryBuilder.cs");
         var results = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("QueryBuilder.cs");
-        Assert.That(results, Is.Not.Null);
-        Assert.That(results.Any(r => r.Type == "EventSubscriptionWithoutUnsubscription"), Is.False, "sql += string concatenation must NOT be flagged as EventSubscriptionWithoutUnsubscription");
+        Assert.That(results, Is.Empty, "sql += string concatenation must NOT be flagged as EventSubscriptionWithoutUnsubscription");
     }
 
     [Test]
@@ -164,8 +163,7 @@ public class SubscriberService
     {
         SetSource(NumericPlusEqualsSource, "Counter.cs");
         var results = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("Counter.cs");
-        Assert.That(results, Is.Not.Null);
-        Assert.That(results.Any(r => r.Type == "EventSubscriptionWithoutUnsubscription"), Is.False, "Numeric += accumulation must NOT be flagged as EventSubscriptionWithoutUnsubscription");
+        Assert.That(results, Is.Empty, "Numeric += accumulation must NOT be flagged as EventSubscriptionWithoutUnsubscription");
     }
 
     [Test]
@@ -173,8 +171,11 @@ public class SubscriberService
     {
         SetSource(RealEventSource, "Subscriber.cs");
         var results = await _deadCodeEngine.CheckForUnusedEventSubscriptionsAsync("Subscriber.cs");
-        Assert.That(results, Is.Not.Null);
-        Assert.That(results.Any(r => r.Type == "EventSubscriptionWithoutUnsubscription"), Is.True, "A real += event subscription with no matching -= MUST be reported");
+        Assert.That(results, Has.Count.EqualTo(1), "A real += event subscription with no matching -= MUST be reported, and nothing else");
+        Assert.That(results[0].Type, Is.EqualTo("EventSubscriptionWithoutUnsubscription"));
+        Assert.That(results[0].SymbolName, Is.EqualTo("_button.Click"));
+        Assert.That(results[0].Line, Is.EqualTo(17));
+        Assert.That(results.Any(r => r.Line == 8), Is.False, "The OnClick line (8) must not be reported");
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -254,8 +255,7 @@ public class MultiCacheService
     {
         SetSource(ValueTaskWrapperSource, "CacheService.cs");
         var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("CacheService.cs");
-        Assert.That(results, Is.Not.Null);
-        Assert.That(results.Any(r => r.Contains("FetchFromDbAsync")), Is.False, "FetchFromDbAsync inside new ValueTask<T>(...) must NOT be flagged as unawaited");
+        Assert.That(results, Is.Empty, "FetchFromDbAsync inside new ValueTask<T>(...) must NOT be flagged as unawaited");
     }
 
     [Test]
@@ -263,8 +263,9 @@ public class MultiCacheService
     {
         SetSource(TrulyUnawaitedSource, "FireForget.cs");
         var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("FireForget.cs");
-        Assert.That(results, Is.Not.Null);
-        Assert.That(results.Any(r => r.Contains("DoBackgroundWorkAsync")), Is.True, "A truly fire-and-forget Task call MUST be flagged as a mismatched await");
+        Assert.That(results, Has.Count.EqualTo(1), "A truly fire-and-forget Task call MUST be flagged as a mismatched await, and nothing else");
+        Assert.That(results[0], Does.Contain("Call to 'DoBackgroundWorkAsync' is not awaited"));
+        Assert.That(results[0], Does.Contain("at line 9"));
     }
 
     [Test]
@@ -272,17 +273,7 @@ public class MultiCacheService
     {
         SetSource(MultipleValueTaskWrappersSource, "MultiCacheService.cs");
         var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("MultiCacheService.cs");
-        Assert.That(results, Is.Not.Null);
-        var wrappedMethods = new[]
-        {
-            "FetchUserAsync",
-            "FetchProductAsync",
-            "FetchCategoryAsync"
-        };
-        foreach (var method in wrappedMethods)
-        {
-            Assert.That(results.Any(r => r.Contains(method)), Is.False, $"{method} inside new ValueTask<T>(...) must NOT be flagged as unawaited");
-        }
+        Assert.That(results, Is.Empty, "ValueTask<T> wrapped Fetch*Async calls must NOT be flagged as unawaited");
     }
 
     public AntiPatternEngine _antiPatternEngine;
