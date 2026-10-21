@@ -1104,6 +1104,11 @@ public class AntiPatternEngine
             }
 
             var path = document.FilePath ?? document.Name;
+            foreach (var typeDecl in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
+            {
+                findings.AddRange(CheckTypeNamingConventions(typeDecl, path));
+            }
+
             foreach (var classDecl in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
             {
                 findings.AddRange(CheckFieldNamingConventions(classDecl, path));
@@ -1113,6 +1118,26 @@ public class AntiPatternEngine
         }
 
         return findings;
+    }
+
+    private static IEnumerable<AntiPatternFinding> CheckTypeNamingConventions(BaseTypeDeclarationSyntax typeDecl, FilePathWrapper filePath)
+    {
+        var name = typeDecl.Identifier.Text;
+        if (string.IsNullOrEmpty(name))
+        {
+            yield break;
+        }
+
+        bool startsLowercase = char.IsLower(name[0]);
+        bool badInterfaceName = typeDecl is InterfaceDeclarationSyntax && !(name.Length >= 2 && name[0] == 'I' && char.IsUpper(name[1]));
+        if (startsLowercase || badInterfaceName)
+        {
+            var line = typeDecl.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+            var message = startsLowercase
+                ? $"Type '{name}' starts with a lowercase letter; C# convention requires PascalCase."
+                : $"Interface '{name}' does not follow the 'IPascalCase' convention (e.g. 'IService').";
+            yield return new AntiPatternFinding("NamingViolation", message, "Low", filePath, line, name);
+        }
     }
 
     private static IEnumerable<AntiPatternFinding> CheckFieldNamingConventions(ClassDeclarationSyntax classDecl, FilePathWrapper filePath)
@@ -1132,6 +1157,17 @@ public class AntiPatternEngine
             bool isPrivateOrImplicit = field.Modifiers.Any(m => m.IsKind(SyntaxKind.PrivateKeyword)) || (!field.Modifiers.Any(m => m.IsKind(SyntaxKind.PublicKeyword) || m.IsKind(SyntaxKind.ProtectedKeyword) || m.IsKind(SyntaxKind.InternalKeyword)));
             if (!isPrivateOrImplicit)
             {
+                // Non-private instance fields must be PascalCase (only lowercase starts are flagged).
+                foreach (var variable in field.Declaration.Variables)
+                {
+                    var name = variable.Identifier.Text;
+                    if (name.Length > 0 && char.IsLower(name[0]))
+                    {
+                        var line = variable.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+                        yield return new AntiPatternFinding("NamingViolation", $"Non-private field '{name}' starts with a lowercase letter; C# convention requires PascalCase.", "Low", filePath, line, name);
+                    }
+                }
+
                 continue;
             }
 

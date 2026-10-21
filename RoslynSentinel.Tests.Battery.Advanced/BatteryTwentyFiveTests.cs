@@ -277,14 +277,16 @@ public class AntiPatternEngineGapTests
     }
 
     [Test]
-    public async Task FindNamingViolationsAsync_ClassWithBadName_ReturnsNonNull()
+    public async Task FindNamingViolationsAsync_ClassWithBadName_FlagsTypeAndPublicField()
     {
         var source = "public class my_class { public int myField = 0; }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("MyClass.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.FindNamingViolationsAsync(filePath: "MyClass.cs");
-        // TODO engine does not flag class name 'my_class' or public field 'myField': FindNamingViolationsAsync only checks private field, method and parameter names
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(2));
+        var descriptions = string.Join("|", result.Select(f => f.Description));
+        Assert.That(descriptions, Does.Contain("my_class"));
+        Assert.That(descriptions, Does.Contain("myField"));
     }
 
     [Test]
