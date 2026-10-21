@@ -306,8 +306,8 @@ public class RegressionTests
             "Processor.cs", "Process", contextSnippet: "string name");
 
         // Both should find calls from Run
-        Assert.That(intCallers, Is.Not.Empty, "Should find callers for int overload");
-        Assert.That(strCallers, Is.Not.Empty, "Should find callers for string overload");
+        Assert.That(intCallers.Select(c => c.CodeSnippet), Is.EqualTo(new[] { "_p.Process(42);" }));
+        Assert.That(strCallers.Select(c => c.CodeSnippet), Is.EqualTo(new[] { "_p.Process(\"hello\");" }));
     }
 
     [Test]

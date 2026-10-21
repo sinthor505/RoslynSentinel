@@ -212,7 +212,7 @@ public class GitToolsSmokeTests
         var result = await _gitTools.GitTool(reason: "test message", GitOperation.status);
         sw.Stop();
 
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("\"IsClean\":true").And.Contain("\"Staged\":[]").And.Contain("\"Unstaged\":[]").And.Contain("\"Untracked\":[]")); // TODO fixture dependence: Branch is the temp repo's default branch name, so it is not pinned
         Assert.That(sw.Elapsed, Is.LessThan(ResponseBound), $"Git(status) took {sw.Elapsed}, expected under {ResponseBound}.");
     }
 
@@ -223,7 +223,7 @@ public class GitToolsSmokeTests
         var result = await _gitTools.GitTool(reason: "test message", GitOperation.log, count: 5);
         sw.Stop();
 
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("\"Message\":\"initial commit\"")); // TODO fixture dependence: pins the fixture's single commit; hash and date are not stable
         Assert.That(sw.Elapsed, Is.LessThan(ResponseBound), $"Git(log) took {sw.Elapsed}, expected under {ResponseBound}.");
     }
 
@@ -340,7 +340,7 @@ public class GitToolsSmokeTests
         var result = await _gitTools.GitTool(reason: "test message", GitOperation.diff);
         sw.Stop();
 
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("\"FilesChanged\":1").And.Contain("diff --git a/README.md b/README.md").And.Contain("hello again"));
         Assert.That(sw.Elapsed, Is.LessThan(ResponseBound), $"Git(diff) took {sw.Elapsed}, expected under {ResponseBound}.");
     }
 

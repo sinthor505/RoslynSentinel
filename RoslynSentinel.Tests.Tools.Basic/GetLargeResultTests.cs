@@ -319,7 +319,7 @@ public class GetLargeResultTests
 
         Assert.That(!result.IsError, Is.False,
             "A result file outside .roslynsentinel/largeresults/ must be rejected.");
-        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound)); Assert.That(result.ErrorData!.Message, Is.EqualTo("Result file not found. Supply a valid resultId or filePath pointing to a largeresult_*.json file in the largeresults directory.")); // TODO engine: the miss is the largeresult_ filename prefix, not the outside-dir check the test name describes
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
