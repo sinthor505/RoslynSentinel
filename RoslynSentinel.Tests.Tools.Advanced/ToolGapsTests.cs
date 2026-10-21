@@ -354,7 +354,7 @@ public class C {
             "C.cs");
         var findings = await _discoveryEngine.FindTodoFixmeCommentsAsync("C.cs");
         Assert.That(findings, Is.Not.Empty);
-        Assert.That(findings.Any(f => f.Kind == "TODO"), Is.True);
+        Assert.That(findings.Select(f => f.Kind), Is.EqualTo(new[] { "TODO" }));
     }
 
     [Test]
@@ -367,7 +367,7 @@ public class C {
             "C.cs");
         var findings = await _discoveryEngine.FindTodoFixmeCommentsAsync("C.cs");
         Assert.That(findings, Is.Not.Empty);
-        Assert.That(findings.Any(f => f.Kind == "FIXME"), Is.True);
+        Assert.That(findings.Select(f => f.Kind), Is.EqualTo(new[] { "FIXME" }));
     }
 
     [Test]

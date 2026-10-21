@@ -70,6 +70,8 @@ public class BlobIntegrityInvariantTests
         var changeId = (result.SuccessData as AppliedChangeSummary)?.ChangeId;
         if (string.IsNullOrEmpty(changeId))
         {
+            // A declined change issues no changeId and must not be reported as an error.
+            Assert.That(result.IsError, Is.False, $"{toolName} issued no changeId but reported an error. Code={result.Code}; Message={result.Message}");
             return;
         }
 
@@ -121,12 +123,24 @@ public class BlobIntegrityInvariantTests
     [Test]
     public async Task SyncInterface_IssuedChangeIdResolvesToABlobAsync()
     {
-        var typeName = await FindATypeNameAsync();
+        // Seed a solution-declared interface and an implementing class with one extra public member,
+        // so the sync has real work to do and must issue a changeId. Names are unique per run.
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var interfaceName = $"IBlobSyncProbe{suffix}";
+        var className = $"BlobSyncProbe{suffix}Impl";
+        // Must sit inside a project folder: the .csproj uses default Compile globbing, so a file at the
+        // solution root is on disk but in no project and the tool reports it as not in the solution.
+        var probeRelativePath = Path.Combine("ContosoOrders.Core", $"BlobSyncProbe{suffix}.cs");
+        await _fixture.AddFileToSolution(_workspaceManager, probeRelativePath,
+            $"public interface {interfaceName} {{ void A(); }}\npublic class {className} : {interfaceName} {{ public void A() {{ }} public void B() {{ }} }}\n");
+        var probePath = Path.Combine(_fixture.SolutionDirectory, probeRelativePath);
 
         var result = await _advancedRefactoringTools.SyncInterfaceTool(
-            reason: "test message", _targetFile, interfaceName: "IDisposable", action: SyncInterfaceAction.sync,
-            className: typeName, dryRun: false);
+            reason: "test message", probePath, interfaceName: interfaceName, action: SyncInterfaceAction.sync,
+            className: className, dryRun: false);
 
+        Assert.That((result.SuccessData as AppliedChangeSummary)?.ChangeId, Is.Not.Null.And.Not.Empty,
+            $"sync adds B to the interface, so a changeId must be issued. IsError={result.IsError}; Code={result.Code}; Message={result.Message}");
         AssertChangeIdIsRedeemable(result, "SyncInterface");
     }
 

@@ -98,7 +98,8 @@ public class Consumer {}";
             var rawResult = await _advancedStructuralEngine.InlineClassAsync("File.cs", "File.cs", "HelperClass");
             result = rawResult;
         });
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Does.ContainKey(new FilePathWrapper("File.cs")), "Should produce updated File.cs");
+        Assert.That(result!["File.cs"], Does.Not.Contain("class HelperClass"), "HelperClass should be inlined and removed");
     }
 
     [Test]
@@ -300,7 +301,9 @@ public class MyList {
     {
         SetSource("public class X {}", "Known.cs");
         var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("unknown_file.cs", "Get");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound), "Unknown file should report DocumentNotFound");
         Assert.That(result.UpdatedText, Is.Null, "File not found should return null UpdatedText");
+        // TODO throw-migration: assert the typed exception once the engine throws
     }
 
     [Test]
