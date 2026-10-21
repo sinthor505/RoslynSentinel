@@ -465,7 +465,8 @@ public class C {
     }
 }");
         var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("Test.cs");
-        Assert.That(results, Is.Not.Empty, "unawaited Task call in statement should be flagged");
+        Assert.That(results, Has.Count.EqualTo(1), "unawaited Task call in statement should be flagged");
+        Assert.That(results[0], Does.Contain("DoWorkAsync"));
     }
 
     // ── Negative cases (should NOT flag) ────────────────────────────────
@@ -686,7 +687,8 @@ public class C {
     }
 }");
         var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("Test.cs");
-        Assert.That(results, Is.Not.Empty, "calling a Func<Task> without await should be detected - semantic model resolves Func<Task>.Invoke() return type");
+        Assert.That(results, Has.Count.EqualTo(1), "calling a Func<Task> without await should be detected - semantic model resolves Func<Task>.Invoke() return type");
+        Assert.That(results[0], Does.Contain("fn"));
     }
 
     [Test]
@@ -718,7 +720,8 @@ public class C {
     }
 }");
         var results = await _antiPatternEngine.DetectMismatchedAwaitAsync("Test.cs");
-        Assert.That(results, Is.Not.Empty, "unawaited ValueTask should be caught - semantic model recognizes ValueTask as awaitable");
+        Assert.That(results, Has.Count.EqualTo(1), "unawaited ValueTask should be caught - semantic model recognizes ValueTask as awaitable");
+        Assert.That(results[0], Does.Contain("FlushAsync"));
     }
 
     [Test]
@@ -2453,7 +2456,8 @@ public class Y { public Y(Z z) { } }
 public class Z { public Z(X x) { } }
 ");
         var results = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).FindCircularTypeReferencesAsync();
-        Assert.That(results, Is.Not.Empty, "X->Y->Z->X is a three-way cycle");
+        Assert.That(results, Has.Count.EqualTo(1), "X->Y->Z->X is a three-way cycle");
+        Assert.That(results[0], Does.Contain("X").And.Contain("Y").And.Contain("Z"));
     }
 }
 
@@ -2900,7 +2904,8 @@ public class C : System.IDisposable {
     ~C() { /* no disposed guard */ Dispose(); }
 }");
         var results = await new ResourceSafetyEngine(_workspaceManager, new SentinelConfiguration()).FindFinalizerOnDisposableAsync();
-        Assert.That(results, Is.Not.Empty, "IDisposable class with unguarded finalizer should be flagged");
+        Assert.That(results, Has.Count.EqualTo(1), "IDisposable class with unguarded finalizer should be flagged");
+        Assert.That(results[0], Does.Contain("C"));
     }
 
     [Test]
@@ -2928,7 +2933,8 @@ public class Cache {
     public void Add(string key, object value) { _cache.Add(key, value); }
 }");
         var results = await _antiPatternEngine.FindUnboundedStaticCollectionsAsync();
-        Assert.That(results, Is.Not.Empty, "Static Dictionary populated without size cap should be flagged");
+        Assert.That(results, Has.Count.EqualTo(1), "Static Dictionary populated without size cap should be flagged");
+        Assert.That(results[0], Does.Contain("_cache"));
     }
 
     [Test]
@@ -3070,7 +3076,8 @@ public class C {
     }
 }");
         var results = await _engine.FindUnsafeLazyInitAsync();
-        Assert.That(results, Is.Not.Empty, "Null-check then assign without lock or volatile should be flagged");
+        Assert.That(results, Has.Count.EqualTo(1), "Null-check then assign without lock or volatile should be flagged");
+        Assert.That(results[0], Does.Contain("_instance"));
     }
 
     [Test]
@@ -3105,7 +3112,8 @@ public class C {
     }
 }");
         var results = await _engine.FindCasLoopWithoutBackoffAsync();
-        Assert.That(results, Is.Not.Empty, "CAS retry loop without SpinWait should be flagged");
+        Assert.That(results, Has.Count.EqualTo(1), "CAS retry loop without SpinWait should be flagged");
+        Assert.That(results[0], Does.Contain("_val"));
     }
 
     [Test]
@@ -3206,7 +3214,8 @@ public class C {
     }
 }");
         var reports = await _engine.FindSequentialIndependentAwaitsAsync();
-        Assert.That(reports, Is.Not.Empty, "Two independent sequential awaits should be flagged");
+        Assert.That(reports, Has.Count.EqualTo(1), "Two independent sequential awaits should be flagged");
+        Assert.That(reports[0].Reason, Does.Contain("M"));
     }
 
     [Test]
@@ -3236,7 +3245,8 @@ public class C {
     }
 }");
         var reports = await _engine.FindAsyncVoidWithoutTryCatchAsync();
-        Assert.That(reports, Is.Not.Empty, "async void without try/catch should be flagged");
+        Assert.That(reports, Has.Count.EqualTo(1), "async void without try/catch should be flagged");
+        Assert.That(reports[0].Reason, Does.Contain("OnClick"));
     }
 
     [Test]
@@ -3284,7 +3294,8 @@ public class C {
     public List<string> Items { get; set; } = new();
 }");
         var results = await _engine.FindMutablePublicCollectionPropertiesAsync();
-        Assert.That(results, Is.Not.Empty, "public List<T> { get; set; } should be flagged");
+        Assert.That(results, Has.Count.EqualTo(1), "public List<T> { get; set; } should be flagged");
+        Assert.That(results[0], Does.Contain("Items"));
     }
 
     [Test]
@@ -3466,7 +3477,8 @@ public class Singleton {
     }
 }");
         var results = await _engine.FindDoubleCheckedLockingAsync();
-        Assert.That(results, Is.Not.Empty, "DCL without volatile field should be flagged");
+        Assert.That(results, Has.Count.EqualTo(1), "DCL without volatile field should be flagged");
+        Assert.That(results[0], Does.Contain("_instance"));
     }
 
     [Test]
@@ -3625,7 +3637,8 @@ public class C {
     }
 }");
         var results = await _engine.FindCheckThenActOnDictionaryAsync();
-        Assert.That(results, Is.Not.Empty, "ContainsKey + Add without lock is a check-then-act race and should be flagged");
+        Assert.That(results, Has.Count.EqualTo(1), "ContainsKey + Add without lock is a check-then-act race and should be flagged");
+        Assert.That(results[0], Does.Contain("_d"));
     }
 
     [Test]
@@ -3680,7 +3693,8 @@ public class C : IDisposable {
     }
 }");
         var results = await _engine.FindUnawaitedDisposeAsyncAsync();
-        Assert.That(results, Is.Not.Empty, "DisposeAsync() without await in sync Dispose should be flagged");
+        Assert.That(results, Has.Count.EqualTo(1), "DisposeAsync() without await in sync Dispose should be flagged");
+        Assert.That(results[0].Reason, Does.Contain("DisposeAsync"));
     }
 
     [Test]
