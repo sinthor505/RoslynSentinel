@@ -298,6 +298,7 @@ public class Service {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.FindMissingCancellationTokensAsync(filePath: "Service.cs");
+        // TODO engine does not flag async method 'DoWorkAsync' without a CancellationToken (returns no findings)
         Assert.That(result, Is.Not.Null);
     }
 
@@ -314,7 +315,8 @@ public class Service {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.AnalyzeExceptionHandlingAsync("Service.cs");
-        Assert.That(result, Is.Not.Null);
+        // TODO assert ExceptionHandlingFinding members for the empty catch (engine returns two findings)
+        Assert.That(result, Has.Count.EqualTo(2));
     }
 }
 
@@ -469,6 +471,7 @@ public class Calc {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.DetectUnusedLocalVariablesAsync("Calc.cs");
+        // TODO assert DeadCodeReport members naming 'unused' (result is a single report object)
         Assert.That(result, Is.Not.Null);
     }
 
@@ -703,7 +706,7 @@ public class PerformanceEngineGapTests
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Service { public void Go() {} }")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.OptimizeResourceDisposalAsync(filePath: "Service.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Is.Empty);
     }
 }
 
@@ -852,6 +855,7 @@ public class Dog : IAnimal { public void Speak() { } }
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Animals.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.FindAllImplementationsAsync("IAnimal");
+        // TODO assert ImplementationInfo members for 'Dog' (result is a single object)
         Assert.That(result, Is.Not.Null);
     }
 
@@ -877,6 +881,7 @@ public class Person {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Person.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.GetTypeMembersDetailAsync("Person");
+        // TODO assert TypeMemberDetail members for 'Name' and 'Age' (result is a single report object)
         Assert.That(result, Is.Not.Null);
     }
 
@@ -900,7 +905,9 @@ public class Worker1 : IWorker { public void Work() {} public string Report() =>
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Workers.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.VerifyInterfaceCompletenessAsync("IWorker");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].ImplementorName, Is.EqualTo("Worker1"));
+        Assert.That(result[0].IsFullyComplete, Is.True);
     }
 
     [Test]
@@ -924,6 +931,7 @@ public static class StringExtensions {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Extensions.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.FindExtensionMethodsAsync("string");
+        // TODO assert ExtensionMethodInfo members for 'Shout' (result is a single object)
         Assert.That(result, Is.Not.Null);
     }
 
@@ -933,7 +941,7 @@ public static class StringExtensions {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.FindExtensionMethodsAsync("SomeRandomType");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Is.Empty);
     }
 }
 
