@@ -76,7 +76,19 @@ Proposed (not decided in detail). Part A fixes the leak; B-D are independent and
 4. Regression test per the issue: pre-seed a stale CRLF `Order.cs` in the bin dir and assert the disk-bound path
    still passes; a green suite alone says nothing (no current test pre-seeds it).
 
-- **Part A progress (2026-10-20).** The fixture is `RoslynSentinel.Tests.Tools.Advanced/BatteryTwentyFourTests.cs`
+- **Part A status (2026-10-21): slices 1-11 DONE** (4f97c8ee, ae61d002, 8d104e8f, 04421eb5 = slices 4/9/10,
+  96a85858 = slices 5-8, 1125d4ce = slice 11; ~130 tests moved, `BatteryTwentyFourTests` 2141 -> ~580 lines).
+  Slices 4-10 ran as parallel agents each creating only its own new file (no drift, no compile-gate interference), then
+  one sequential sweep removed the originals; fix rounds need a RunTest, which must be sequential. What stays in
+  `BatteryTwentyFourTests`: 18 read-only engine-preview tests, plus the disk tests (two `RenameSymbol` tests - the fake
+  throws `NotImplementedException` on that path; `ChangeAccessibility_StampsIncreasingWorkspaceVersion` - the fake always
+  reports 0; the `UsingDirective` diff test; the EOL-guard and stale-CRLF tests; two `SyncTypeAndFilename` disk tests).
+  Tool defects found and pinned with TODO in the new classes: ExtractMembers superclass throws `IndexOutOfRangeException`;
+  ExtractMembers partialClass on a non-partial class and ModifyAttribute add `[Serializable]` are refused with compiler
+  errors whose diagnostics are not in the message; InlineParameter and RemoveAttribute report success but change nothing;
+  pull-up emits `virtual`. Remaining: cleanup (de-duplicate the private `BuildTools` helpers into `BatteryToolFactory`, tidy
+  empty section comments), a fake `RenameSymbol` path, then Parts C/D.
+- **Part A progress (2026-10-20, earlier notes).** The fixture is `RoslynSentinel.Tests.Tools.Advanced/BatteryTwentyFourTests.cs`
   (137 tests when re-surveyed: 115 convertible, 19 read-only engine-preview tests, 3 real-disk). Slice order and
   proposed topic classes, from the second survey: (1) `SyncTypeAndFilenameTests` 3 - DONE 4f97c8ee; (2)
   `WrapRangeAndGenerationTests` 7 - DONE ae61d002 (adds `BatteryToolFactory`); then `UsingDocsTypedMemberTests` 7,
