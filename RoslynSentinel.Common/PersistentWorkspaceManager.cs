@@ -668,20 +668,16 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     _logger.LogInformation("Loading solution: {SolutionPath}", solutionPath);
                 }
 
-                _workspace?.Dispose();
-                // Suppress NuGet vulnerability audit during workspace load -> this is a code-analysis
-                // workspace, not a production build. Audit warnings (NU1901-NU1904) are MSBuild
-                // design-time errors that block project loading but are irrelevant for code analysis.
-                _workspace = MSBuildWorkspace.Create(new Dictionary<string, string>
+                // Build the new workspace beside the old one and swap only after the open produced a solution:
+                // a failed or cancelled explicit load must not destroy a previously good solution.
+                // Same MSBuild properties as before: suppress NuGet audit (NU1901-NU1904), which blocks design-time loads.
+                var newWorkspace = MSBuildWorkspace.Create(new Dictionary<string, string>
                 {
                     { "NuGetAudit", "false" },
                     { "NuGetAuditLevel", "critical" }
                 });
-                // Fresh MSBuildWorkspace -> any cached Compilation from a prior load is unusable,
-                // whether this is the first load or a reload of an already-running server.
-                _compilationCache.Clear();
                 _workspaceLoadErrors.Clear();
-                _workspace.RegisterWorkspaceFailedHandler((d) =>
+                newWorkspace.RegisterWorkspaceFailedHandler((d) =>
                 {
                     if (_logger.IsEnabled(LogLevel.Warning))
                     {
@@ -690,18 +686,21 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     _workspaceLoadErrors.Add(d.Diagnostic.Message);
                 });
 
+                var hadUsableSolution = CurrentSolution is { ProjectIds.Count: > 0 };
+                Solution opened;
                 try
                 {
-                    CurrentSolution = await _workspace.OpenSolutionAsync(solutionPath, null, loadToken);
+                    opened = await OpenSolutionOverride(newWorkspace, solutionPath, loadToken);
                     if (_logger.IsEnabled(LogLevel.Information))
                     {
-                        _logger.LogInformation("Solution loaded with {ProjectCount} projects in {ElapsedMs} ms.", CurrentSolution.ProjectIds.Count, loadStopwatch.ElapsedMilliseconds);
+                        _logger.LogInformation("Solution loaded with {ProjectCount} projects in {ElapsedMs} ms.", opened.ProjectIds.Count, loadStopwatch.ElapsedMilliseconds);
                     }
                 }
                 catch (Exception) when (timeoutCts.IsCancellationRequested)
                 {
                     // A cancelled load (timeout or caller cancel) must stop here instead of being turned into a
-                    // "partial solution" by the catch-all below.
+                    // "partial solution" by the catch-all below. The old workspace was never touched.
+                    newWorkspace.Dispose();
                     throw;
                 }
                 catch (Exception ex)
@@ -712,19 +711,41 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     }
                     _workspaceLoadErrors.Add($"Failed to open solution: {ex.Message}");
                     // TODO StartupLoad vs ExplicitLoad cannot be told apart here; the startup auto-load path would need to pass its trigger in.
-                    // oldWorkspaceKept is false: this method disposes the old workspace before opening the new one.
-                    RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), ex, oldWorkspaceKept: false);
+                    RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), ex, oldWorkspaceKept: hadUsableSolution);
                     failureRecorded = true;
-                    // Even if solution fails to open, try to get current partial solution if any
-                    CurrentSolution = _workspace.CurrentSolution;
-                    if (CurrentSolution?.ProjectIds.Count == 0 && _workspaceLoadErrors.Count == 0)
+                    if (hadUsableSolution)
+                    {
+                        // Keep the previously loaded solution and workspace untouched; report the failure to the caller.
+                        newWorkspace.Dispose();
+                        throw new ToolNotFoundException($"Solution '{solutionPath}' failed to load: {string.Join(" ", _workspaceLoadErrors)} The previously loaded solution is still active.");
+                    }
+
+                    // First load: even if the solution fails to open, keep the partial solution if any (existing behaviour).
+                    opened = newWorkspace.CurrentSolution;
+                    if (opened.ProjectIds.Count == 0 && _workspaceLoadErrors.Count == 0)
                     {
                         _workspaceLoadErrors.Add($"Solution '{solutionPath}' opened but no projects were found. This often indicates MSBuild errors. Check server logs for details.");
                     }
                 }
 
-                _lastLoadedAt = DateTime.UtcNow;
+                // SolutionPath must be set before the swap: RecordStructuralFileHashes reads it.
                 SolutionPath = solutionPath;
+                try
+                {
+                    // clearReloadFailure: false - this method clears the record itself below, only on a full success
+                    // (a partial load keeps its ExplicitLoad failure).
+                    SwapInFreshWorkspaceLocked(newWorkspace, opened, pruneInternalChanges: false, clearReloadFailure: false);
+                }
+                catch
+                {
+                    if (!ReferenceEquals(_workspace, newWorkspace))
+                    {
+                        newWorkspace.Dispose();
+                    }
+                    throw;
+                }
+
+                // TODO an open that succeeds with zero projects still replaces a previously good solution (same as before this change); consider keeping the old one.
                 var solutionDirectory = Path.GetDirectoryName(solutionPath)!;
                 SetupWatcher(solutionDirectory);
                 SetupOutOfTreeWatchers(solutionDirectory);
@@ -773,7 +794,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             // Our own timeout fired (not the caller's token): report it as a timeout with an actionable message.
             failure = SolutionNotLoadedMessage.LoadCancelledAfterTimeout(timeout);
             var timeoutException = new SolutionLoadTimeoutException(failure);
-            RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), timeoutException, oldWorkspaceKept: false);
+            RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), timeoutException, oldWorkspaceKept: CurrentSolution is { ProjectIds.Count: > 0 });
             throw timeoutException;
         }
         catch (Exception ex)
@@ -781,7 +802,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             failure = WorkspaceReloadCause.Sanitize(ex.Message);
             if (!failureRecorded)
             {
-                RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), ex, oldWorkspaceKept: false);
+                RecordReloadFailure(WorkspaceReloadTriggerKind.ExplicitLoad, Path.GetFileName(solutionPath), ex, oldWorkspaceKept: CurrentSolution is { ProjectIds.Count: > 0 });
             }
             throw;
         }
@@ -1225,37 +1246,20 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     // CS0234/CS0246 errors until the next explicit LoadSolution. Building a new
                     // instance and only swapping it in on success keeps the existing _workspace
                     // (and CurrentSolution) untouched and valid on failure.
-                    var newWorkspace = MSBuildWorkspace.Create(new Dictionary<string, string>
-                    {
-                        { "NuGetAudit", "false" },
-                        { "NuGetAuditLevel", "critical" }
-                    });
-                    newWorkspace.RegisterWorkspaceFailedHandler(d =>
-                    {
-                        if (_logger.IsEnabled(LogLevel.Warning))
-                        {
-                            _logger.LogWarning("Refresh error: {Message}", d.Diagnostic.Message);
-                        }
-                    });
-
+                    var (newWorkspace, newSolution) = await OpenFreshWorkspaceAsync(slnPath, CancellationToken.None);
                     try
                     {
-                        var newSolution = await newWorkspace.OpenSolutionAsync(slnPath);
-                        var old = _workspace;
-                        _workspace = newWorkspace;
-                        // Re-baseline the structural file hashes (.csproj/.sln) against the reloaded solution
-                        // before swapping it in, so a later timestamp-only touch is not flagged as drift.
-                        RecordStructuralFileHashes(newSolution);
-                        CurrentSolution = newSolution;
-                        // Full workspace recreation -> ProjectIds from the old solution are not
-                        // guaranteed to match the new one, so every cached Compilation is unusable.
-                        _compilationCache.Clear();
-                        old?.Dispose();
-                        ClearReloadFailure();
+                        // pruneInternalChanges: false keeps this path's existing behaviour (it never pruned).
+                        SwapInFreshWorkspaceLocked(newWorkspace, newSolution, pruneInternalChanges: false);
                     }
                     catch
                     {
-                        newWorkspace.Dispose();
+                        // The swap throws only before it assigns _workspace (RecordStructuralFileHashes runs first);
+                        // dispose the unused new instance, but never one that has already become _workspace.
+                        if (!ReferenceEquals(_workspace, newWorkspace))
+                        {
+                            newWorkspace.Dispose();
+                        }
                         throw;
                     }
                 }
@@ -2227,26 +2231,12 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             _logger.LogInformation("Background MSBuild reload: {SlnPath}", slnPath);
         }
 
-        // We create a new workspace instance to ensure no cached metadata remains.
-        // Pass the same MSBuild properties used in LoadSolutionAsync so that
-        // NuGet vulnerability audit (NU1901-NU1904) does not block project loading.
-        var newWorkspace = MSBuildWorkspace.Create(new Dictionary<string, string>
-        {
-            { "NuGetAudit", "false" },
-            { "NuGetAuditLevel", "critical" }
-        });
-        newWorkspace.RegisterWorkspaceFailedHandler(d =>
-        {
-            if (_logger.IsEnabled(LogLevel.Warning))
-            {
-                _logger.LogWarning("Refresh error: {Message}", d.Diagnostic.Message);
-            }
-        });
-
+        // Open outside the lock (slow MSBuild load); OpenFreshWorkspaceAsync disposes the new instance itself if the open throws.
+        MSBuildWorkspace newWorkspace;
         Solution newSolution;
         try
         {
-            newSolution = await newWorkspace.OpenSolutionAsync(slnPath, null, cancellationToken);
+            (newWorkspace, newSolution) = await OpenFreshWorkspaceAsync(slnPath, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -2255,23 +2245,91 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 _logger.LogError(ex, "Background MSBuild reload failed for {SlnPath}", slnPath);
             }
             RecordReloadFailure(WorkspaceReloadTriggerKind.PostWriteReload, slnPath, ex, oldWorkspaceKept: true);
-            newWorkspace.Dispose();
             return;
         }
 
         // Brief re-acquisition of the lock only to swap the workspace and solution.
-        await _solutionLock.WaitAsync(cancellationToken);
         try
         {
-            var old = _workspace;
-            _workspace = newWorkspace;
-            CurrentSolution = newSolution;
-            _lastLoadedAt = DateTime.UtcNow;
-            Interlocked.Increment(ref _workspaceVersion);
-            // Full workspace recreation -> ProjectIds from the old solution are not guaranteed to
-            // match the new one, so every cached Compilation is unusable regardless of key.
-            _compilationCache.Clear();
+            await _solutionLock.WaitAsync(cancellationToken);
+        }
+        catch
+        {
+            newWorkspace.Dispose();
+            throw;
+        }
 
+        try
+        {
+            SwapInFreshWorkspaceLocked(newWorkspace, newSolution, pruneInternalChanges: true);
+        }
+        catch
+        {
+            // The swap throws only before it assigns _workspace; never dispose an instance that already became _workspace.
+            if (!ReferenceEquals(_workspace, newWorkspace))
+            {
+                newWorkspace.Dispose();
+            }
+            throw;
+        }
+        finally
+        {
+            _solutionLock.Release();
+        }
+    }
+
+    // Test seam so tests can make the MSBuild open throw; default is the real open.
+    internal Func<MSBuildWorkspace, string, CancellationToken, Task<Solution>> OpenSolutionOverride { get; set; } = static (ws, path, ct) => ws.OpenSolutionAsync(path, null, ct);
+
+    // TODO slice 2 steps 2-4: move 2A, ReloadWorkspaceFromDiskAsync and LoadSolutionAsync onto these helpers
+    // No lock needed; the old workspace is never touched here.
+    private async Task<(MSBuildWorkspace Workspace, Solution Solution)> OpenFreshWorkspaceAsync(string solutionPath, CancellationToken cancellationToken)
+    {
+        // Same MSBuild properties as LoadSolutionAsync so NuGet audit (NU1901-NU1904) does not block loading.
+        var workspace = MSBuildWorkspace.Create(new Dictionary<string, string>
+        {
+            { "NuGetAudit", "false" },
+            { "NuGetAuditLevel", "critical" }
+        });
+        workspace.RegisterWorkspaceFailedHandler(d =>
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning("Refresh error: {Message}", d.Diagnostic.Message);
+            }
+        });
+
+        try
+        {
+            var solution = await OpenSolutionOverride(workspace, solutionPath, cancellationToken);
+            return (workspace, solution);
+        }
+        catch
+        {
+            workspace.Dispose();
+            throw;
+        }
+    }
+
+    // TODO slice 2 steps 2-4: move 2A, ReloadWorkspaceFromDiskAsync and LoadSolutionAsync onto these helpers
+    // Caller must hold _solutionLock. Step order matters: hashes are recorded before anything is swapped,
+    // so a throw leaves the old state intact; the old workspace is disposed last.
+    private void SwapInFreshWorkspaceLocked(MSBuildWorkspace newWorkspace, Solution newSolution, bool pruneInternalChanges, bool clearReloadFailure = true)
+    {
+        RecordStructuralFileHashes(newSolution);
+
+        var old = _workspace;
+        _workspace = newWorkspace;
+        CurrentSolution = newSolution;
+
+        // ProjectIds are not stable across a full workspace recreation, so cached Compilations are unusable.
+        _compilationCache.Clear();
+
+        _lastLoadedAt = DateTime.UtcNow;
+        Interlocked.Increment(ref _workspaceVersion);
+
+        if (pruneInternalChanges)
+        {
             var cutoff = DateTime.UtcNow.AddSeconds(-5);
             foreach (var key in _internalChanges.Keys.ToList())
             {
@@ -2280,13 +2338,23 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                     _internalChanges.TryRemove(key, out _);
                 }
             }
+        }
 
-            old?.Dispose();
+        if (clearReloadFailure)
+        {
             ClearReloadFailure();
         }
-        finally
+
+        try
         {
-            _solutionLock.Release();
+            old?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(ex, "Disposing the replaced workspace failed");
+            }
         }
     }
 

@@ -112,4 +112,46 @@ public class WorkspaceReloadFailureStatusTests
         Assert.That(status.LastLoadFailure, Is.Not.Null.And.Not.Empty);
         Assert.That(status.LastLoadFailure, Does.Not.Contain(Path.GetTempPath()), "the status must not expose the absolute directory");
     }
+
+    [Test]
+    public async Task LoadSolutionAsync_ReloadOpenThrows_KeepsPreviousSolutionAndRecordsFailure()
+    {
+        await _manager.LoadSolutionAsync(_fixture.SolutionPath);
+        var before = _manager.CurrentSolution;
+        var versionBefore = _manager.WorkspaceVersion;
+        _manager.OpenSolutionOverride = (ws, path, ct) => throw new IOException("boom");
+
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _manager.LoadSolutionAsync(_fixture.SolutionPath));
+
+        Assert.That(ReferenceEquals(_manager.CurrentSolution, before), Is.True, "a failed reload must keep the previous solution instance");
+        Assert.That(_manager.WorkspaceVersion, Is.EqualTo(versionBefore), "a failed reload must not bump the workspace version");
+        var failure = _manager.ReloadFailure;
+        Assert.That(failure, Is.Not.Null, "the failed reload must be recorded");
+        Assert.That(failure!.Trigger, Is.EqualTo(WorkspaceReloadTriggerKind.ExplicitLoad));
+        Assert.That(failure.OldWorkspaceKept, Is.True);
+        Assert.That(failure.Cause, Does.Contain("IOException"));
+        Assert.That(_manager.SolutionLoadStatus, Is.EqualTo(SolutionLoadStatus.Loaded), "the previous solution is still loaded");
+    }
+
+    [Test]
+    public async Task LoadSolutionAsync_ReloadSucceedsAfterFailedReload_ClearsFailureAndSwapsSolution()
+    {
+        await _manager.LoadSolutionAsync(_fixture.SolutionPath);
+        var before = _manager.CurrentSolution;
+        var projectCountBefore = before!.Projects.Count();
+        // Capture the default open seam so it can be restored exactly after the failing override.
+        var defaultOpen = _manager.OpenSolutionOverride;
+        _manager.OpenSolutionOverride = (ws, path, ct) => throw new IOException("boom");
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _manager.LoadSolutionAsync(_fixture.SolutionPath));
+        Assert.That(_manager.ReloadFailure, Is.Not.Null, "precondition: the failed reload must be recorded");
+
+        var versionBeforeRetry = _manager.WorkspaceVersion;
+        _manager.OpenSolutionOverride = defaultOpen;
+        await _manager.LoadSolutionAsync(_fixture.SolutionPath);
+
+        Assert.That(_manager.ReloadFailure, Is.Null, "a successful reload clears the sticky failure");
+        Assert.That(_manager.CurrentSolution, Is.Not.SameAs(before), "a successful reload swaps in a new solution instance");
+        Assert.That(_manager.CurrentSolution!.Projects.Count(), Is.EqualTo(projectCountBefore));
+        Assert.That(_manager.WorkspaceVersion, Is.GreaterThan(versionBeforeRetry));
+    }
 }
