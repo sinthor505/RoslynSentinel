@@ -288,11 +288,11 @@ public class Worker
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
     public async Task UpgradeToModernGuards_ValidFile_ReturnsSource()
     {
-        SetSource(RichSource, "Test.cs");
+        const string src = "public class C { public void M(string s) { if (s == null) throw new ArgumentNullException(nameof(s)); } }";
+        SetSource(src, "Test.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("Test.cs");
-        // RichSource contains no if-throw guard-clause patterns, so this is a no-op path;
-        // the no-op explanation is carried on Message, not UpdatedText (see convention in SyntaxUpgradeEngine).
-        Assert.That(result.Message, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("ThrowIfNull"));
     }
 
     [Test]
@@ -401,7 +401,8 @@ public class Worker
         const string src = "namespace TestProj; public class Config { public string Host { get; set; } public int Port { get; set; } }";
         SetSource(src, "Config.cs");
         var result = await _modernizationEngine.MakeClassImmutableAsync("Config.cs", "Config");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("init"));
     }
 
     [Test]
@@ -420,7 +421,8 @@ public class Worker
         const string src = "namespace TestProj; public static class Helper { public static string Format(string s) => s.Trim(); }";
         SetSource(src, "Helper.cs");
         var result = await _logicOptimizationEngine.ConvertStaticToExtensionAsync("Helper.cs", "Format");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("this string s"));
     }
 
     [Test]
@@ -439,7 +441,9 @@ public class Worker
         const string src = "namespace TestProj; public class Flags { public bool IsActive; public void Toggle() { IsActive = !IsActive; } }";
         SetSource(src, "Flags.cs");
         var result = await _tools.InvertBooleanLogicTool(reason: "test message", "Flags.cs", "IsActive");
-        Assert.That(result, Is.Not.Null);
+        // TODO test name says ReturnsDictionary but the assertion is on the tool envelope; pin the SuccessData shape once confirmed
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.SuccessData, Is.Not.Null);
     }
 
     [Test]
@@ -483,9 +487,12 @@ public class Worker
     [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task OptimizeToValueTask_AsyncMethod_ReturnsSource()
     {
-        SetSource(RichSource, "Test.cs");
+        const string src = "using System.Threading.Tasks; namespace TestProj; public class C { public async Task<int> ProcessAsync() { return await Task.FromResult(1); } }";
+        SetSource(src, "Test.cs");
         var result = await _asyncOptimizationEngine.OptimizeToValueTaskAsync("Test.cs", "ProcessAsync");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        // TODO ValueTask return type drops the space before the method name (ParseTypeName trivia); tighten to Contains("ValueTask<int> ProcessAsync") once fixed
+        Assert.That(result.UpdatedText, Does.Match(@"ValueTask<int>\s*ProcessAsync"));
     }
 
     [Test]
@@ -529,7 +536,10 @@ public class Service
 }";
         SetSource(src, "Service.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("Service.cs", "Service");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        // TODO engine emits a malformed header ("public class Service" then "(string name)" on its own line); pin the full primary-constructor header once fixed
+        Assert.That(result.UpdatedText, Does.Contain("public string GetName() => name;"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("_name"));
     }
 
     [Test]
@@ -546,9 +556,12 @@ public class Service
     [Category("CodeStyleEngine")] // sentinel:auto-category
     public async Task FindUseFrozenCollections_ValidFile_ReturnsList()
     {
-        SetSource(RichSource, "Test.cs");
+        const string src = "public class C { private static readonly System.Collections.Generic.Dictionary<string, int> _map = new System.Collections.Generic.Dictionary<string, int>(); }";
+        SetSource(src, "Test.cs");
         var result = await _codeStyleEngine.FindUseFrozenCollectionsAsync("Test.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Pattern, Is.EqualTo("UseFrozenCollection"));
+        Assert.That(result[0].Description, Does.Contain("FrozenDictionary"));
     }
 
     // --- UseExceptionExpressions (via SyntaxUpgradeEngine) ---
@@ -566,7 +579,8 @@ public class Validator
 }";
         SetSource(src, "Validator.cs");
         var result = await _syntaxUpgradeEngine.UseExceptionExpressionsAsync("Validator.cs", "Check");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("ThrowIfNull"));
     }
 
     [Test]
