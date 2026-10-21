@@ -427,9 +427,13 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task DetectReflectionUsage_ValidFile_ReturnsList()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _antiPatternEngine.DetectReflectionUsageAsync(filePath: "Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class Plain { public int Add(int a, int b) { return a + b; } }", "Plain.cs");
+        var result = await _antiPatternEngine.DetectReflectionUsageAsync(filePath: "Plain.cs");
+        Assert.That(result, Is.Empty);
+        SetSource("public class R { public object Run(System.Type t) { return t.GetMethod(\"X\"); } }", "Refl.cs");
+        result = await _antiPatternEngine.DetectReflectionUsageAsync(filePath: "Refl.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0], Does.StartWith("[REFLECTION] Potential reflection usage in Refl.cs at line 1 (.GetMethod)"));
     }
 
     // --- CheckForEmptyCatchBlocks ---
@@ -577,9 +581,12 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("SecurityEngine")] // sentinel:auto-category
     public async Task CheckForSqlInjection_FileWithSqlInjection_ReturnsList()
     {
-        SetSource(SecuritySource, "Security.cs");
+        SetSource("public class Db { public void Del(object cmd, string id) { cmd.ExecuteNonQuery($\"DELETE FROM t WHERE id = {id}\"); } }", "Security.cs");
         var result = await _securityEngine.CheckForSqlInjectionAsync("Security.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].IssueType, Is.EqualTo("PossibleSqlInjection"));
+        Assert.That(result[0].Line, Is.EqualTo(1));
+        Assert.That(result[0].Description, Does.Contain("'ExecuteNonQuery'"));
     }
 
     // --- AnalyzeMethodControlFlow ---
