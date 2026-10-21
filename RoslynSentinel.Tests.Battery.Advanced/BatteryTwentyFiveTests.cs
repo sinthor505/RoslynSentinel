@@ -39,7 +39,7 @@ public class Calc {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new LogicSimplificationEngine(_workspaceManager).ConvertIfToSwitchStatementAsync("Calc.cs", "Describe", CancellationToken.None);
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("switch"));
     }
 
     [Test]
@@ -64,7 +64,7 @@ public class Looper {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new LogicSimplificationEngine(_workspaceManager).ConvertForEachToForAsync("Looper.cs", 5);
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("for ("));
     }
 
     [Test]
@@ -79,7 +79,7 @@ public class Looper {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new LogicSimplificationEngine(_workspaceManager).ConvertForToForEachAsync("Looper.cs", 4);
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("foreach ("));
     }
 
     [Test]
@@ -95,7 +95,7 @@ public class Looper {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Looper.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Looper.cs", 5);
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("for ("));
     }
 }
 
@@ -328,11 +328,11 @@ public class CodeHealingEngineGapTests
     [Test]
     public async Task AddRetryPolicyAsync_AnyInput_ReturnsNonNull()
     {
-        // AddRetryPolicyAsync is a stub that always returns "" -> verify it at least doesn't throw
+        // AddRetryPolicyAsync wraps the method body in a retry loop; assert the real outcome and rewritten text
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", "public class Service { public void Go() {} }")]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.AddRetryPolicyAsync("Service.cs", 1, 5, 3);
-        Assert.That(result, Is.Not.Null, "Stub method should return a non-null string");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("_retryCount"));
     }
 }
 
@@ -366,7 +366,7 @@ public class Slicer {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Slicer.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.UseIndexFromEndAsync("Slicer.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("^1"));
     }
 
     [Test]
@@ -510,7 +510,7 @@ public class DependencyEngineGapTests
         }
 
         // Either a valid empty result OR a graceful expected exception is acceptable
-        Assert.That(result != null || caughtEx != null, Is.True, "Should return a list or throw a known file-system exception, not crash with NullReferenceException");
+        Assert.That(caughtEx, Is.InstanceOf<System.IO.FileNotFoundException>(), "In-memory project path does not exist on disk"); Assert.That(result, Is.Null); // TODO throw-migration: assert the typed exception once DependencyEngine throws (raw FileNotFoundException escapes for in-memory projects)
     }
 }
 
@@ -559,7 +559,7 @@ public class DependencyInjectionEngineGapTests
             caughtEx = ex;
         }
 
-        Assert.That(result != null || caughtEx != null, Is.True, "Should return a string or throw a structured exception, not crash silently");
+        Assert.That(result, Is.Null); Assert.That(caughtEx, Is.InstanceOf<ToolNotFoundException>());
     }
 }
 
@@ -819,7 +819,7 @@ public class Calculator {
         // The method may return null if it can't resolve the symbol in in-memory workspace
         var result = await _engine.GetSymbolInfoAsync("Calculator.cs", "Add");
         // Either a valid result or null is acceptable -> method should not throw
-        Assert.That((result == null || result.Name != null), Is.True, "Should return SymbolHoverInfo or null without throwing");
+        Assert.That(result, Is.Not.Null); Assert.That(result!.Name, Is.EqualTo("Add"));
     }
 
     [Test]
