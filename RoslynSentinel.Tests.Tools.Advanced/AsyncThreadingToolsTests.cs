@@ -49,7 +49,7 @@ public class AsyncThreadingToolsTests
     {
         SetSource("public class MyLib { public async System.Threading.Tasks.Task DoWork() { await System.Threading.Tasks.Task.Delay(100).ConfigureAwait(false); } }", "MyLib.cs");
         var reports = await _asyncSafetyEngine.FindConfigureAwaitMissingAsync("MyLib.cs");
-        Assert.That(reports, Is.Empty);
+        Assert.That(reports, Is.Empty); SetSource("public class MyLib { public async System.Threading.Tasks.Task DoWork() { await System.Threading.Tasks.Task.Delay(100); } }", "MyLib.cs"); var positive = await _asyncSafetyEngine.FindConfigureAwaitMissingAsync("MyLib.cs"); Assert.That(positive, Is.Not.Empty); Assert.That(positive[0].Reason, Does.Contain("ConfigureAwait"));
     }
 
     [Test]
@@ -57,7 +57,7 @@ public class AsyncThreadingToolsTests
     {
         SetSource("public class HomeController { public async System.Threading.Tasks.Task DoWork() { await System.Threading.Tasks.Task.Delay(100); } }", "HomeController.cs");
         var reports = await _asyncSafetyEngine.FindConfigureAwaitMissingAsync("HomeController.cs");
-        Assert.That(reports, Is.Empty);
+        Assert.That(reports, Is.Empty); SetSource("public class MyLib { public async System.Threading.Tasks.Task DoWork() { await System.Threading.Tasks.Task.Delay(100); } }", "MyLib.cs"); var positive = await _asyncSafetyEngine.FindConfigureAwaitMissingAsync("MyLib.cs"); Assert.That(positive, Is.Not.Empty); Assert.That(positive[0].Reason, Does.Contain("ConfigureAwait"));
     }
 
     // --- FindBlockingCallsInAsync ---
@@ -94,7 +94,7 @@ public class AsyncThreadingToolsTests
     {
         SetSource("public class C { public void M() { System.Threading.Thread.Sleep(1000); } }", "C.cs");
         var reports = await _asyncSafetyEngine.FindBlockingCallsInAsyncAsync("C.cs");
-        Assert.That(reports, Is.Empty);
+        Assert.That(reports, Is.Empty); SetSource("public class C { public async System.Threading.Tasks.Task M() { System.Threading.Thread.Sleep(1000); } }", "C.cs"); var positive = await _asyncSafetyEngine.FindBlockingCallsInAsyncAsync("C.cs"); Assert.That(positive, Is.Not.Empty); Assert.That(positive[0].Reason, Does.Contain("Thread.Sleep"));
     }
 
     // --- FindAsyncInConstructor ---
@@ -113,7 +113,7 @@ public class AsyncThreadingToolsTests
     {
         SetSource("public class C { private int _x; public C() { _x = 5; } }", "C.cs");
         var reports = await _asyncSafetyEngine.FindAsyncInConstructorAsync("C.cs");
-        Assert.That(reports, Is.Empty);
+        Assert.That(reports, Is.Empty); SetSource("public class C { public C() { SomeMethodAsync().Wait(); } private System.Threading.Tasks.Task SomeMethodAsync() => System.Threading.Tasks.Task.CompletedTask; }", "C.cs"); var positive = await _asyncSafetyEngine.FindAsyncInConstructorAsync("C.cs"); Assert.That(positive, Is.Not.Empty); Assert.That(positive[0].Reason, Does.Contain("factory method"));
     }
 
     // --- FindTaskRunInAsync ---
@@ -132,7 +132,7 @@ public class AsyncThreadingToolsTests
     {
         SetSource("public class C { public async System.Threading.Tasks.Task M() { await System.Threading.Tasks.Task.Delay(1); } }", "C.cs");
         var reports = await _asyncSafetyEngine.FindTaskRunInAsyncAsync("C.cs");
-        Assert.That(reports, Is.Empty);
+        Assert.That(reports, Is.Empty); SetSource("public class C { public async System.Threading.Tasks.Task M() { await System.Threading.Tasks.Task.Run(() => { }); } }", "C.cs"); var positive = await _asyncSafetyEngine.FindTaskRunInAsyncAsync("C.cs"); Assert.That(positive, Is.Not.Empty); Assert.That(positive[0].Reason, Does.Contain("Task.Run"));
     }
 
     // --- FindConcurrentCollectionOpportunities ---
@@ -162,7 +162,7 @@ public class C {
 }";
         SetSource(src, "C.cs");
         var reports = await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync("C.cs");
-        Assert.That(reports, Is.Empty);
+        Assert.That(reports, Is.Empty); SetSource("public class C { private System.Collections.Generic.List<int> _items = new(); private object _lock = new(); public void Add(int x) { lock(_lock) { _items.Add(x); } } }", "C.cs"); var positive = await _asyncSafetyEngine.FindConcurrentCollectionOpportunitiesAsync("C.cs"); Assert.That(positive, Is.Not.Empty); Assert.That(positive[0].Reason, Does.Contain("ConcurrentDictionary"));
     }
 
     // --- FindUnsafeLazyInit ---
@@ -199,7 +199,7 @@ public class C {
 }";
         SetSource(src, "C.cs");
         var reports = await _asyncSafetyEngine.FindUnsafeLazyInitAsync("C.cs");
-        Assert.That(reports, Is.Empty);
+        Assert.That(reports, Is.Empty); SetSource("public class C { private object _lock = new(); private string _svc; public string GetSvc() { if (_svc == null) { lock(_lock) { if (_svc == null) { _svc = string.Empty; } } } return _svc; } }", "C.cs"); var positive = await _asyncSafetyEngine.FindUnsafeLazyInitAsync("C.cs"); Assert.That(positive, Is.Not.Empty); Assert.That(positive[0].Reason, Does.Contain("volatile"));
     }
 
     // --- AddConfigureAwaitFalse ---
