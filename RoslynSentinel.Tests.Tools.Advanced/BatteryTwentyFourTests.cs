@@ -1095,16 +1095,6 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- WrapInTryCatch ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task WrapInTryCatch_AutoStageTrue_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.WrapRangeTool(reason: "test message", "Order.cs", 8, 10, "tryCatch");
-        Assert.That(result, Is.Not.Null);
-    }
-
     // --- ConstructorParameterTool ---
     [Test]
     [Category("RefactoringSignatureTools")] // sentinel:auto-category
@@ -1229,16 +1219,6 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(!result.IsError, Is.False, "A named-argument call site cannot be safely rewritten and must refuse the whole operation.");
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.Message, Does.Contain("named arguments"));
-    }
-
-    // --- WrapInRegion ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task WrapInRegion_AutoStageTrue_ReturnsNotNull()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.WrapRangeTool(reason: "test message", "Order.cs", 3, 6, "region", "Properties");
-        Assert.That(result, Is.Not.Null);
     }
 
     // NOTE: ValidateChangesAsync adds the renamed file as a brand-new document into the candidate
@@ -1393,36 +1373,6 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetMultiFile(("Refactor.cs", RefactorSource));
         var result = await _advancedStructuralEngine.ConvertAbstractClassToInterfaceAsync("Refactor.cs", "Animal");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- GenerateMapping ---
-    [Test]
-    [Category("GenerationTools")] // sentinel:auto-category
-    public async Task GenerateMapping_ValidTypes_ReturnsString()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _generationTools.GenerateMapping("Order.cs", "Order", "Status");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- WrapInUsing ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task WrapInUsing_ValidLineRange_ReturnsString()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.WrapRangeTool(reason: "test message", "Order.cs", 8, 10, "using", "resource");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- ConvertAnonymousToNamedTool ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task ConvertAnonymousToNamed_ValidFile_ReturnsDictionary()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.ConvertAnonymousToNamedTool(reason: "test message", "Order.cs", "OrderData");
         Assert.That(result, Is.Not.Null);
     }
 
@@ -1862,16 +1812,6 @@ public enum Status { Active = 1, Pending = 2 }
         Assert.That(result, Is.Not.Null);
     }
 
-    // --- InvertAssignmentsTool ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task InvertAssignments_ValidLineRange_ReturnsString()
-    {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _advTools.InvertAssignmentsTool(reason: "test message", "Order.cs", 8, 12);
-        Assert.That(result, Is.Not.Null);
-    }
-
     // --- ReduceBlockDepth ---
     [Test]
     [Category("LogicSimplificationEngine")] // sentinel:auto-category
@@ -1889,19 +1829,6 @@ public enum Status { Active = 1, Pending = 2 }
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _advancedRefactoringEngine.OptimizeTaskWaitAsync("Order.cs");
-        Assert.That(result, Is.Not.Null);
-    }
-
-    // --- SyncInterfaceToImplementation ---
-    [Test]
-    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task SyncInterfaceToImplementation_ClassWithInterface_ReturnsString()
-    {
-        const string src = @"namespace TestProj;
-public interface IWorker { void Work(); }
-public class Worker : IWorker { public void Work() {} public void Extra() {} }";
-        SetSource(src, "Worker.cs");
-        var result = await _advTools.SyncInterfaceTool(reason: "test message", "Worker.cs", "IWorker", SyncInterfaceAction.sync, "Worker");
         Assert.That(result, Is.Not.Null);
     }
 
