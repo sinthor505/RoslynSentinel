@@ -813,9 +813,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindUnawaitedFireAndForget_FileWithFireAndForget_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
-        var result = await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("using System.Threading.Tasks;\nnamespace TestProj;\npublic class F { private async Task DoWorkAsync() { await Task.CompletedTask; } public void Go() { DoWorkAsync(); } }", "Unawaited.cs");
+        var result = await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync("Unawaited.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result, Has.Some.Property("MethodName").EqualTo("Go"));
+        Assert.That(result, Has.Some.Property("Reason").Contains("Line 3: Task-returning method 'DoWorkAsync' called without await - exceptions will be swallowed silently."));
+        SetSource("using System.Threading.Tasks;\nnamespace TestProj;\npublic class F { private async Task DoWorkAsync() { await Task.CompletedTask; } public async Task GoAsync() { await DoWorkAsync(); } }", "Unawaited.cs");
+        var clean = await _asyncSafetyEngine.FindUnawaitedFireAndForgetAsync("Unawaited.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindLongParameterList ---
@@ -823,9 +828,15 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindLongParameterList_ValidFile_ReturnsList()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _antiPatternEngine.FindLongParameterListAsync("Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class P { public void Run(int a, int b, int c, int d) { } }", "LongParams.cs");
+        var result = await _antiPatternEngine.FindLongParameterListAsync("LongParams.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result, Has.Some.Property("Pattern").EqualTo("LongParameterList"));
+        Assert.That(result, Has.Some.Property("Description").EqualTo("'Run' has 4 parameters (a, b, c, d). Consider introducing a Parameter Object."));
+        Assert.That(result, Has.Some.Property("Severity").EqualTo("Medium"));
+        SetSource("public class P { public void Run(int a, int b, int c) { } }", "LongParams.cs");
+        var clean = await _antiPatternEngine.FindLongParameterListAsync("LongParams.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- OptimizeResourceDisposal ---
@@ -833,9 +844,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task OptimizeResourceDisposal_ValidFile_ReturnsList()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _performanceEngine.OptimizeResourceDisposalAsync("Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class R { public void Go() { var s = new System.IO.MemoryStream(); } }", "Disposal.cs");
+        var result = await _performanceEngine.OptimizeResourceDisposalAsync("Disposal.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result, Has.Some.Property("IssueType").EqualTo("MissingDisposal"));
+        Assert.That(result, Has.Some.Property("Description").EqualTo("Type 'MemoryStream' implements IDisposable but is not wrapped in a 'using' statement."));
+        SetSource("public class R { public void Go() { using (var s = new System.IO.MemoryStream()) { } } }", "Disposal.cs");
+        var clean = await _performanceEngine.OptimizeResourceDisposalAsync("Disposal.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- DetectInefficientStringComparisons ---
@@ -843,9 +859,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task DetectInefficientStringComparisons_ValidFile_ReturnsList()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _performanceEngine.DetectInefficientStringComparisonsAsync("Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class S { public bool Eq(string a, string b) { return a.ToLower() == b; } }", "StrCmp.cs");
+        var result = await _performanceEngine.DetectInefficientStringComparisonsAsync("StrCmp.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result, Has.Some.Property("IssueType").EqualTo("InefficientStringComparison"));
+        Assert.That(result, Has.Some.Property("Description").EqualTo("Inefficient string comparison: avoid using .ToLower()/.ToUpper()/.ToLowerInvariant()/.ToUpperInvariant() for comparison. Use string.Equals with StringComparison.OrdinalIgnoreCase instead."));
+        SetSource("public class S { public bool Eq(string a, string b) { return a == b; } }", "StrCmp.cs");
+        var clean = await _performanceEngine.DetectInefficientStringComparisonsAsync("StrCmp.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindBoxingAllocations ---
@@ -853,9 +874,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("PerformanceEngine")] // sentinel:auto-category
     public async Task FindBoxingAllocations_ValidFile_ReturnsList()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _performanceEngine.FindBoxingAllocationsAsync("Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class B { public void Take(object o) { } public void Go() { Take(1); } }", "Boxing.cs");
+        var result = await _performanceEngine.FindBoxingAllocationsAsync("Boxing.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result, Has.Some.Property("IssueType").EqualTo("BoxingAllocation"));
+        Assert.That(result, Has.Some.Property("Description").EqualTo("Boxing detected: converting value type 'Int32' to 'object' in parameter 'o'."));
+        SetSource("public class B { public void Take(int o) { } public void Go() { Take(1); } }", "Boxing.cs");
+        var clean = await _performanceEngine.FindBoxingAllocationsAsync("Boxing.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindPrimitiveObsession ---
@@ -863,9 +889,15 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindPrimitiveObsession_ValidFile_ReturnsList()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _antiPatternEngine.FindPrimitiveObsessionAsync("Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class PO { public void Make(string a, string b, string c) { } }", "Primitive.cs");
+        var result = await _antiPatternEngine.FindPrimitiveObsessionAsync("Primitive.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result, Has.Some.Property("Pattern").EqualTo("PrimitiveObsession"));
+        Assert.That(result, Has.Some.Property("Description").EqualTo("'Make' has 3 parameters of type 'string': a, b, c. Consider a dedicated type."));
+        Assert.That(result, Has.Some.Property("Severity").EqualTo("Medium"));
+        SetSource("public class PO { public void Make(string a, string b, int c) { } }", "Primitive.cs");
+        var clean = await _antiPatternEngine.FindPrimitiveObsessionAsync("Primitive.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindInconsistentAsyncSuffix ---
@@ -873,9 +905,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindInconsistentAsyncSuffix_ValidFile_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
-        var result = await _antiPatternEngine.FindInconsistentAsyncSuffixAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class IA { public async Task Fetch() { await Task.CompletedTask; } public int GetCountAsync() { return 1; } }", "AsyncSuffix.cs");
+        var result = await _antiPatternEngine.FindInconsistentAsyncSuffixAsync("AsyncSuffix.cs");
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result, Has.Some.Property("Description").EqualTo("Method 'Fetch' is async/Task-returning but does not end with 'Async'. Rename to 'FetchAsync'."));
+        Assert.That(result, Has.Some.Property("Description").EqualTo("Method 'GetCountAsync' ends with 'Async' but is not async and does not return Task/ValueTask. Remove 'Async' suffix."));
+        SetSource("public class IA { public async Task FetchAsync() { await Task.CompletedTask; } public int Count() { return 1; } }", "AsyncSuffix.cs");
+        var clean = await _antiPatternEngine.FindInconsistentAsyncSuffixAsync("AsyncSuffix.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- GetDiagnosticsSummary ---
@@ -883,8 +920,15 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("DiagnosticEngine")] // sentinel:auto-category
     public async Task GetDiagnosticsSummary_ValidFile_ReturnsSummaryResult()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _diagnosticEngine.GetFileDiagnosticsAsync("Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class E { public int M() { int x = \"s\"; return x; } }", "Diag.cs");
+        var result = await _diagnosticEngine.GetFileDiagnosticsAsync("Diag.cs");
+        Assert.That(result.Data.Errors, Is.EqualTo(1));
+        Assert.That(result.Data.Warnings, Is.EqualTo(0));
+        Assert.That(result.Data.Details, Has.Some.Property("Id").EqualTo("CS0029"));
+        Assert.That(result.Data.Details, Has.Some.Property("Severity").EqualTo("Error"));
+        SetSource("public class E { public int M() { return 1; } }", "Diag.cs");
+        var clean = await _diagnosticEngine.GetFileDiagnosticsAsync("Diag.cs");
+        Assert.That(clean.Data.Errors, Is.EqualTo(0));
+        Assert.That(clean.Data.Details, Is.Empty);
     }
 }
