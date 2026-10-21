@@ -16,6 +16,8 @@ namespace RoslynSentinel.Tests.Tools.Advanced;
 /// nothing. Control: the plain engine passes the same call, so the refusal is the normalizer's doing.
 /// </summary>
 [TestFixture]
+// Runs exclusively: the leak guard wipes top-level *.cs in the shared working directory, which would delete files parallel fixtures in this assembly are using (AssemblyInfo.cs sets ParallelScope.Fixtures).
+[NonParallelizable]
 public class MoveMemberToolCollateralRefusalTests
 {
     private const string Eol = "\r\n";
@@ -57,7 +59,7 @@ public class MoveMemberToolCollateralRefusalTests
     [SetUp]
     public void Setup()
     {
-        DeleteLeakedRelativeFiles();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
     }
 
@@ -70,7 +72,7 @@ public class MoveMemberToolCollateralRefusalTests
             System.IO.Directory.Delete(_projectDir, recursive: true);
         }
         _projectDir = null;
-        DeleteLeakedRelativeFiles();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
     }
 
     private void SetRefactorSource()
@@ -128,18 +130,6 @@ public class MoveMemberToolCollateralRefusalTests
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None);
         var doc = solution.Projects.SelectMany(p => p.Documents).Single(d => d.Name == fileName);
         return (await doc.GetTextAsync()).ToString();
-    }
-
-    /// <summary>
-    /// Fixture documents use bare relative names, so applied edits land in the working directory. Clearing the
-    /// working directory's .cs files before and after each test keeps the on-disk pre-image check honest.
-    /// </summary>
-    private static void DeleteLeakedRelativeFiles()
-    {
-        foreach (var leaked in System.IO.Directory.GetFiles(System.IO.Directory.GetCurrentDirectory(), "*.cs", System.IO.SearchOption.TopDirectoryOnly))
-        {
-            System.IO.File.Delete(leaked);
-        }
     }
 
     private static string Lines(params string[] lines) => string.Join(Eol, lines) + Eol;

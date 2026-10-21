@@ -12,6 +12,8 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+// Runs exclusively: Setup wipes top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard), which would delete files parallel fixtures are using.
+[NonParallelizable]
 [Category("WorkspaceTools")] // sentinel:auto-category
 public class BatteryTwentyTests
 {
@@ -32,6 +34,8 @@ public class BatteryTwentyTests
     [SetUp]
     public void Setup()
     {
+        // The DeleteUnusedSymbol_* tests write a bare Test.cs into the working directory.
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _diffEngine = new DiffEngine();
@@ -53,7 +57,11 @@ public class BatteryTwentyTests
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
+    }
 
     private void SetSource(string source, string fileName = "Test.cs")
     {

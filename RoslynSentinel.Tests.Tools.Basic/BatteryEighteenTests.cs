@@ -11,6 +11,8 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Battery.Basic;
 
 [TestFixture]
+// Runs exclusively: Setup wipes top-level *.cs in the shared working directory (WorkingDirectoryLeakGuard), which would delete files parallel fixtures are using.
+[NonParallelizable]
 [Category("MsToolAugmentEngine")] // sentinel:auto-category
 public class BatteryEighteenTests
 {
@@ -94,6 +96,8 @@ public class OrderService : IOrderService
     [SetUp]
     public void Setup()
     {
+        // Eight tests read bare names such as Test.cs from the working directory, so a stale file from another fixture would be their input.
+        WorkingDirectoryLeakGuard.DeleteLeakedSourceFiles();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _msEngine = new MsToolAugmentEngine(_workspaceManager);
         _workspaceHealthMisc = new WorkspaceHealthMiscImpl(_workspaceManager);

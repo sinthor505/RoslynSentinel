@@ -175,7 +175,8 @@ public class AnalyzeForeachAdvancedTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
 
-    private static string MakeTempFile() => Path.GetTempFileName() + ".cs";
+    // GetTempFileName would create (and leak) a .tmp file next to the .cs.
+    private static string MakeTempFile() => Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".cs");
     private static void SafeDelete(string path)
     {
         try { File.Delete(path); } catch { }
