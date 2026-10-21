@@ -26,7 +26,7 @@ public class ListProjectFrameworkTargetsTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new FakeWorkspaceManager();
+        _workspaceManager = FakeWorkspaceManager.ReadOnly();
         _tempDir = Path.Combine(Path.GetTempPath(), "ListProjectFrameworkTargetsTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
 

@@ -35,7 +35,7 @@ public class UndoLastApplyTests
     [SetUp]
     public void Setup()
     {
-        _fakeWorkspaceManager = new FakeWorkspaceManager();
+        _fakeWorkspaceManager = FakeWorkspaceManager.ReadOnly();
         _tempDir = Path.Combine(Path.GetTempPath(), "UndoLastApplyTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
         _fakeWorkspaceManager.SolutionPath = Path.Combine(_tempDir, "Test.sln");

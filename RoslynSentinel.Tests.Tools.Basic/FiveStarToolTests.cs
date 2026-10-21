@@ -32,7 +32,7 @@ public class ExtractConstantSafeStrongTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new FakeWorkspaceManager();
+        _workspaceManager = FakeWorkspaceManager.ReadOnly();
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 
@@ -343,7 +343,7 @@ public class ConvertStringFormatSmartTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new FakeWorkspaceManager();
+        _workspaceManager = FakeWorkspaceManager.ReadOnly();
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 
@@ -559,7 +559,7 @@ public class PreviewAddMissingUsingsLoadedTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new FakeWorkspaceManager();
+        _workspaceManager = FakeWorkspaceManager.ReadOnly();
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 
@@ -724,7 +724,7 @@ public class FormatDocumentSafeTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new FakeWorkspaceManager();
+        _workspaceManager = FakeWorkspaceManager.ReadOnly();
         _engine = new MsToolAugmentEngine(_workspaceManager);
     }
 

@@ -61,7 +61,7 @@ namespace Fixtures
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new FakeWorkspaceManager();
+        _workspaceManager = FakeWorkspaceManager.ReadWrite();
         _workspaceManager.SetTestSolution(BuildSolution());
         _tool = new TestCategoryTaggingTools(
             new TestCategoryTaggingImpl(

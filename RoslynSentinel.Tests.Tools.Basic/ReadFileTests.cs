@@ -26,7 +26,7 @@ public class ReadFileTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new FakeWorkspaceManager();
+        _workspaceManager = FakeWorkspaceManager.ReadOnly();
         _documentPath = Path.Combine(Path.GetTempPath(), "ReadFileTests_" + Guid.NewGuid().ToString("N"), "Foo.cs");
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject(
@@ -278,7 +278,7 @@ public class ReadFileTests
     {
         // Create tools backed by a FakeWorkspaceManager that has NOT been assigned a solution,
         // so CurrentSolution is null and ResolveFromWire returns NoSolutionLoaded.
-        var workspaceManager = new FakeWorkspaceManager();
+        var workspaceManager = FakeWorkspaceManager.ReadOnly();
         // Deliberately do NOT call SetTestSolution, leaving CurrentSolution null.
 
         var config = new SentinelConfiguration();

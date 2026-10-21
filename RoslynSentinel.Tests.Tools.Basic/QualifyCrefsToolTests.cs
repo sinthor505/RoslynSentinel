@@ -92,7 +92,7 @@ public class QualifyCrefsToolTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new FakeWorkspaceManager();
+        _workspaceManager = FakeWorkspaceManager.ReadWrite();
         _tool = new QualifyCrefsTools(
             new QualifyCrefsImpl(new ValidationEngine(_workspaceManager), _workspaceManager, NullLogger.Instance));
     }

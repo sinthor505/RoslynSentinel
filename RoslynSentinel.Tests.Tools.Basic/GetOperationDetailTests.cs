@@ -29,7 +29,7 @@ public class GetOperationDetailTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new FakeWorkspaceManager();
+        _workspaceManager = FakeWorkspaceManager.ReadOnly();
         _tempDir = Path.Combine(Path.GetTempPath(), "GetOperationDetailTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDir);
         _workspaceManager.SolutionPath = Path.Combine(_tempDir, "Test.sln");

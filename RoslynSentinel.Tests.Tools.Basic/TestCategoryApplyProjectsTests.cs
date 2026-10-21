@@ -105,7 +105,7 @@ namespace FixturesP
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new FakeWorkspaceManager();
+        _workspaceManager = FakeWorkspaceManager.ReadWrite();
         _workspaceManager.SetTestSolution(BuildSolution());
         var planner = new TestCategoryTaggingEngine(_workspaceManager);
         var applier = new TestCategoryApplyEngine(_workspaceManager, new ValidationEngine(_workspaceManager));

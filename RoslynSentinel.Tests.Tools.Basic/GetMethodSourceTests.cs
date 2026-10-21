@@ -25,7 +25,7 @@ public class GetMethodSourceTests
     [SetUp]
     public void Setup()
     {
-        _workspaceManager = new FakeWorkspaceManager();
+        _workspaceManager = FakeWorkspaceManager.ReadOnly();
         _documentPath = Path.Combine(Path.GetTempPath(), "GetMethodSourceTests_" + Guid.NewGuid().ToString("N"), "Foo.cs");
 
         var solution = TestSolutionBuilder.CreateSolutionWithProject(
