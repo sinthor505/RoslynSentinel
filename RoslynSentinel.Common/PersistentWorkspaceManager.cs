@@ -474,12 +474,12 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         _knownFileHashes.Clear();
         _knownFileBomPresence.Clear();
         _knownFileEolPresence.Clear();
-        if (CurrentSolution is null)
+        if (CurrentSolution is not { } solution)
         {
             return;
         }
 
-        foreach (var document in CurrentSolution.Projects.SelectMany(p => p.Documents))
+        foreach (var document in solution.Projects.SelectMany(p => p.Documents))
         {
             if (document.FilePath is null || !File.Exists(document.FilePath))
             {
@@ -504,13 +504,20 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         }
 
         // The watcher also reports .csproj/.sln/.slnx, which are not documents and so were never
-        // baselined above: a timestamp-only touch of them was flagged as external drift. Hash each
-        // loaded project file and the solution file so the same hash gate suppresses touch-only
-        // events; a real content change still mismatches and is flagged. Hash only (no BOM/EOL):
-        // nothing writes these through the document path.
-        var structuralFilePaths = CurrentSolution.Projects.Select(p => p.FilePath)
+        // baselined above: a timestamp-only touch of them was flagged as external drift.
+        RecordStructuralFileHashes(solution);
+    }
+
+    // Baselines the content hash of the given solution's project files and of the solution file(s), so
+    // the hash gate suppresses timestamp-only touches of them. Called after a load (PopulateKnownFileHashes)
+    // and before a debounce-driven .csproj/.sln reload swaps in its new CurrentSolution. Does not clear or
+    // re-hash tracked documents. Hash only (no BOM/EOL): nothing writes these through the document path.
+    // Called with _solutionLock already held.
+    private void RecordStructuralFileHashes(Solution solution)
+    {
+        var structuralFilePaths = solution.Projects.Select(p => p.FilePath)
             .Append(SolutionPath)
-            .Append(CurrentSolution.FilePath);
+            .Append(solution.FilePath);
         foreach (var structuralFilePath in structuralFilePaths)
         {
             if (string.IsNullOrEmpty(structuralFilePath) || !File.Exists(structuralFilePath))
@@ -1097,7 +1104,6 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             }
 
             bool solutionNeedsReload = overflowed;
-            var projectsToReload = new HashSet<ProjectId>();
 
             if (!solutionNeedsReload)
             {
@@ -1110,18 +1116,13 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         break;
                     }
 
+                    // A changed .csproj always takes the full-solution reload: OpenProjectAsync throws
+                    // "already part of the workspace" on a project that is already open, so a per-project
+                    // reload cannot re-open it. The full reload also refreshes the structural file hashes.
                     if (ext == ".csproj")
                     {
-                        var project = CurrentSolution.Projects.FirstOrDefault(p => p.FilePath?.Equals(path, StringComparison.OrdinalIgnoreCase) == true);
-                        if (project != null)
-                        {
-                            projectsToReload.Add(project.Id);
-                        }
-                        else
-                        {
-                            solutionNeedsReload = true;
-                            break;
-                        }
+                        solutionNeedsReload = true;
+                        break;
                     }
                 }
             }
@@ -1158,6 +1159,9 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         var newSolution = await newWorkspace.OpenSolutionAsync(slnPath);
                         var old = _workspace;
                         _workspace = newWorkspace;
+                        // Re-baseline the structural file hashes (.csproj/.sln) against the reloaded solution
+                        // before swapping it in, so a later timestamp-only touch is not flagged as drift.
+                        RecordStructuralFileHashes(newSolution);
                         CurrentSolution = newSolution;
                         // Full workspace recreation -> ProjectIds from the old solution are not
                         // guaranteed to match the new one, so every cached Compilation is unusable.
@@ -1169,28 +1173,6 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         newWorkspace.Dispose();
                         throw;
                     }
-                }
-            }
-            else if (projectsToReload.Count > 0)
-            {
-                foreach (var projectId in projectsToReload)
-                {
-                    var project = CurrentSolution.GetProject(projectId);
-                    if (project?.FilePath != null)
-                    {
-                        if (_logger.IsEnabled(LogLevel.Information))
-                        {
-                            _logger.LogInformation("Reloading project: {ProjectName}", project.Name);
-                        }
-                        await _workspace.OpenProjectAsync(project.FilePath);
-                    }
-                }
-                CurrentSolution = _workspace.CurrentSolution;
-                // Only these specific projects were reloaded -> invalidate just their cache
-                // entries, not the whole cache.
-                foreach (var reloadedProjectId in projectsToReload)
-                {
-                    _compilationCache.TryRemove(reloadedProjectId, out _);
                 }
             }
             else

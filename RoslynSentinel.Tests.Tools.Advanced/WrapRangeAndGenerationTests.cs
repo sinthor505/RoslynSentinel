@@ -148,4 +148,26 @@ public class Worker : IWorker { public void Work() {} public void Extra() {} }";
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Worker.cs"), Does.Contain("class Worker : IWorker"));
     }
+
+    // Sync writes the new member into the interface's own file and leaves the class file untouched.
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task SyncInterfaceToImplementation_InterfaceInOtherFile_UpdatesInterfaceFileOnly()
+    {
+        const string workerSrc = @"namespace TestProj;
+public class Worker : IWorker { public void Work() {} public void Extra() {} }";
+        const string ifaceSrc = @"namespace TestProj;
+public interface IWorker { void Work(); }";
+        using var workspace = InMemoryWorkspace.Create(
+            ("Worker.cs", workerSrc.ReplaceLineEndings("\r\n")),
+            ("IWorker.cs", ifaceSrc.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.SyncInterfaceTool(reason: "test message", workspace.PathOf("Worker.cs"), "IWorker", SyncInterfaceAction.sync, "Worker");
+
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(workspace.ReadText("IWorker.cs"), Does.Contain("void Extra()"));
+        Assert.That(workspace.ReadText("Worker.cs"), Is.EqualTo(workerSrc.ReplaceLineEndings("\r\n")));
+        Assert.That(workspace.ReadText("IWorker.cs"), Does.Not.Contain("// Updated file:"));
+        Assert.That(workspace.ReadText("Worker.cs"), Does.Not.Contain("// Updated file:"));
+    }
 }

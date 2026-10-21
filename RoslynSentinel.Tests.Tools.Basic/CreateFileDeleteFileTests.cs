@@ -433,6 +433,60 @@ public class CreateFileDeleteFileTests
         }
     }
 
+    // Waits on the debounce-driven project reload (OnDebounceTimerElapsed), so it cannot run in parallel.
+    // A real .csproj content change reloads the project and must re-baseline its hash, so a later
+    // timestamp-only touch with identical content is not flagged as drift.
+    [Test]
+    [NonParallelizable]
+    public async Task ExternalTouch_ProjectFileAfterDebounceReload_IsNotFlaggedAsDriftAsync()
+    {
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+
+        var projectFile = workspaceManager.CurrentSolution!.Projects
+            .Select(p => p.FilePath)
+            .First(f => f is not null && File.Exists(f) && f.StartsWith(fixture.SolutionDirectory, StringComparison.OrdinalIgnoreCase))!;
+        var hashes = (System.Collections.IDictionary)typeof(PersistentWorkspaceManager)
+            .GetField("_knownFileHashes", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(workspaceManager)!;
+        var key = new RoslynSentinel.Common.FilePathWrapper(projectFile);
+
+        static string HashOf(string content)
+            => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content)));
+
+        var originalContent = await File.ReadAllTextAsync(projectFile);
+
+        // A trailing XML comment after the root element keeps the project file well-formed.
+        await File.WriteAllTextAsync(projectFile, originalContent + "\n<!-- drift -->\n");
+        var editedContent = await File.ReadAllTextAsync(projectFile);
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!workspaceManager.GetExternalFileChanges().Contains(projectFile, StringComparer.OrdinalIgnoreCase) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25);
+        }
+
+        Assert.That(workspaceManager.GetExternalFileChanges(), Does.Contain(projectFile).IgnoreCase);
+
+        // Poll the baseline entry until the debounce reload records the edited content's hash.
+        deadline = DateTime.UtcNow.AddSeconds(15);
+        while ((hashes[key] as string) != HashOf(editedContent) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(25);
+        }
+
+        Assert.That((hashes[key] as string) == HashOf(editedContent), Is.True,
+            "the debounce reload did not re-baseline the project file");
+
+        // Drop the content-change flag, then touch the file without changing its content.
+        workspaceManager.ClearExternalFileChanges(new[] { projectFile });
+        File.SetLastWriteTimeUtc(projectFile, DateTime.UtcNow.AddMinutes(-5));
+
+        // Longer than the 500 ms debounce, so a flagged touch would certainly be recorded by now.
+        await Task.Delay(2000);
+        Assert.That(workspaceManager.GetExternalFileChanges(), Does.Not.Contain(projectFile).IgnoreCase);
+    }
+
     // A flagged real external edit is folded into the in-memory workspace by the watcher's debounce
     // (OnDebounceTimerElapsed -> ApplyInMemoryDocumentUpdatesAsync, the real route; nothing is called
     // directly). The fold must record the folded content's hash as the document's baseline so it is never

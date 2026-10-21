@@ -8,6 +8,13 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Punchlist batch 2026-10-21: SyncInterface cross-file write, debounce .csproj reload, Plan:/Closes: convention
+
+- `SyncInterfaceToImplementation` cross-file defect fixed: `SyncInterfaceTool` wrote the interface's text (prefixed `// Updated file: ...`) over the class file and never wrote the interface file (it ignored `syncResult.FilePath`). The engine no longer prefixes the text; the tool writes to the result's file and its `AppliedChangeSummary` names it. Evidence: `WrapRangeAndGenerationTests.SyncInterfaceToImplementation_InterfaceInOtherFile_UpdatesInterfaceFileOnly` (red before, green after), 7 of 7 `SyncInterface` tests pass.
+- `OnDebounceTimerElapsed` per-project reload removed: `OpenProjectAsync` on an open project always threw "already part of the workspace" (logged only), leaving the workspace stale and the `.csproj` hash stale (the SessionHalted false positive on later touches). A loaded `.csproj` now takes the full-solution reload, which re-records project/solution hashes. Evidence: `ExternalTouch_ProjectFileAfterDebounceReload_IsNotFlaggedAsDriftAsync`, 30 of 30 `CreateFileDeleteFileTests` pass. Open parts stay in TODO.md.
+- `Member`/`UsingDirective` hardcoded `autoStage = true` on the tool methods: closed as by design (not in the schema; the no-autoStage failure path is tested through the Impl in `MemberOutcomeFollowsCauseTests`).
+- `Plan:`/`Closes:` commit trailer convention written down in `templates/README.md` rule 11; the reconciliation script stays open in TODO.md.
+
 ## Punchlist items 17-20: Member(replace), MoveType ownFile, ExtractInterface comments - resolved (2026-10-21)
 
 - `MoveType(destination: ownFile)`: new optional `targetFolder` parameter (engine `MoveTypeToFileAsync` and tool); the moved type keeps its `///` doc comment; unused usings (CS8019) are dropped from the new file in both `MoveTypeToFileAsync` and `MoveAllTypesToFilesForDocumentAsync` (`RemoveUnusedUsingsAsync`). Shared byte-exact pins now use `Int32` so `using System;` stays used.

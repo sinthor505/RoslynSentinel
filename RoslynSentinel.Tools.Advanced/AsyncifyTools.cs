@@ -512,8 +512,18 @@ public class AsyncifyTools
                 cancellationToken: cancellationToken);
 
             if (!dryRun && engineResult.Changes.Count > 0)
-                // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
-                await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes, validateChanges: true);
+            {
+                var applyResult = await _workspaceManager.ApplyProposedChangesAsync(engineResult.Changes, validateChanges: true);
+                if (applyResult.IsError)
+                {
+                    return new SentinelCallToolResult<BatchResultSummary>
+                    {
+                        IsError = true,
+                        ErrorData = new ResultError(applyResult.RefusalCode ?? MigrationErrorCode.Exception,
+                                      $"Flag removal was refused: {applyResult.Summary}")
+                    };
+                }
+            }
 
             var items = engineResult.Removed.Select(r => new OperationItemRecord
             {
@@ -2527,10 +2537,17 @@ public class AsyncifyTools
                     continue;
                 }
 
-                // TODO(ignored-apply-result): the ApplyProposedChangesAsync result is discarded; check IsError and surface the failure.
-                await _workspaceManager.ApplyProposedChangesAsync(
+                var applyResult = await _workspaceManager.ApplyProposedChangesAsync(
                     new Dictionary<FilePathWrapper, string> { { candidate.FilePath, extractResult.UpdatedContent! } },
                     validateChanges: true);
+                if (applyResult.IsError)
+                {
+                    var applyReason = $"apply refused [{applyResult.RefusalCode ?? MigrationErrorCode.Exception}]: {applyResult.Summary}";
+                    state.Items.Add(new OperationItemRecord { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Outcome = ItemRecordOutcome.Failed, Reason = applyReason });
+                    if (state.Failures.Count < 10) state.Failures.Add(new FailureDetail { FilePath = candidate.FilePath, MethodName = candidate.MethodName, Reason = applyReason, Outcome = ItemRecordOutcome.Failed });
+                    state.P0Failed++; state.Failed++;
+                    continue;
+                }
 
                 state.Items.Add(new OperationItemRecord
                 {

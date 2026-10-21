@@ -388,7 +388,7 @@ public class AdvancedRefactoringEngine
             {
                 Outcome = EditOutcome.Modified,
                 FilePath = updatedPath,
-                UpdatedText = "// Updated file: " + updatedPath + "\n" + await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
+                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
             };
         }
 

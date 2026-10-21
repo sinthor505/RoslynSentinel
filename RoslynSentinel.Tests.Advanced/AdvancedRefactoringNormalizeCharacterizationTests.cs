@@ -249,6 +249,49 @@ public class AdvancedRefactoringNormalizeCharacterizationTests
         Assert.That(await RunAsync(site), Is.EqualTo(Src(crlf, s.IrregularExpected)));
     }
 
+    // Limitation pinned: sync re-spaces an irregular interface member it touches (`int  A( ) ;` becomes `int A();`);
+    // the blank lines and the `// c` comment between members are preserved.
+    [Test]
+    public async Task SyncInterface_SameFile_RespacesIrregularMembers_Pinned([Values(false, true)] bool crlf)
+    {
+        SetFiles(("Test.cs", Src(crlf,
+            "public interface IThing",
+            "{",
+            "    int  A( ) ;",
+            "",
+            "",
+            "    // c",
+            "    int B();",
+            "}",
+            "",
+            "public class C : IThing",
+            "{",
+            "    public int A() { return 1; }",
+            "    public int B() { return 2; }",
+            "    public int Extra() { return 3; }",
+            "}",
+            "")));
+
+        Assert.That(await RunAsync(MethodSite), Is.EqualTo(Src(crlf,
+            "public interface IThing",
+            "{",
+            "    int A();",
+            "",
+            "",
+            "    // c",
+            "    int B();",
+            "    int Extra();",
+            "}",
+            "",
+            "public class C : IThing",
+            "{",
+            "    public int A() { return 1; }",
+            "    public int B() { return 2; }",
+            "    public int Extra() { return 3; }",
+            "}",
+            "")));
+    }
+
     [Test]
     public async Task LfDocument_ResultHasNoCarriageReturn([ValueSource(nameof(AllSites))] string site)
     {

@@ -1,6 +1,6 @@
 # Idea: commit trailers (Plan:/Closes:) to reconcile plan, proposal and finding docs with git history
 
-**Status:** NOT DESIGNED 2026-10-18. Convention plus a script first; a later `ProjectDoc` extension.
+**Status:** PARTLY DONE 2026-10-21. The convention is written down (templates/README.md rule 11); the reconciliation script and the later `ProjectDoc` extension are not built.
 
 ## What happened
 Plans, proposals and findings were left open long after the work shipped, so TODO.md and the doc

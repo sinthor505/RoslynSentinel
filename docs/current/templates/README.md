@@ -40,3 +40,10 @@ Create the folder if it does not exist yet.
 9. **Legacy docs** (anything at the `docs/current/` root, `specs/`, or hyphenated/`-v1` names)
    predate these rules. Leave them in place; do not copy their layout.
 10. **Maintaining this folder:** if the house style changes, change the template first.
+11. **Commit trailers:** the doc ID is the filename without its extension (`plan_semantic_find_replace`).
+    A commit that advances a plan, proposal, finding or issue doc carries a `Plan: <id>` trailer; the
+    commit that finishes it carries `Closes: <id>` (put both above `Co-Authored-By`). Only `Closes:` means
+    done; plans land in slices, so `Plan:` alone means in progress. Do not put IDs in code comments. On
+    closing, update the doc's Status line, move it to its folder's `closed/` and move its TODO.md entry to
+    CLOSED.md. A reconciliation script is not built yet (see
+    [idea_doc_id_commit_trailers_and_reconciliation.md](../ideas/idea_doc_id_commit_trailers_and_reconciliation.md)).

@@ -1069,9 +1069,11 @@ public class AdvancedRefactoringTools
                         IsError = true,
                         ErrorData = new ResultError(ToolErrorCode.NotFound, $"SyncInterface sync: class '{className}' or interface '{interfaceName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " + "Verify both names are spelled correctly (case-sensitive). Use Search(mode: symbol) to confirm the interface exists in the solution.")
                     };
+                // Cross-file sync: the engine returns the interface's text with the interface's path in FilePath.
+                var syncTargetFile = !string.IsNullOrEmpty(syncResult.FilePath) && !syncResult.FilePath.Equals(resolvedFilePath) ? syncResult.FilePath : resolvedFilePath;
                 var syncChanges = new Dictionary<FilePathWrapper, string>
                 {
-                    [resolvedFilePath] = syncResult.UpdatedText
+                    [syncTargetFile] = syncResult.UpdatedText
                 };
                 var syncApply = await ValidateAndApplyAsync(syncChanges, $"Sync '{interfaceName}' to '{className}' implementation.", "SyncInterface_sync", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (syncApply.Error is not null)
@@ -1083,7 +1085,7 @@ public class AdvancedRefactoringTools
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = false,
-                    SuccessData = new AppliedChangeSummary(syncApply.ChangeId, [resolvedFilePath], $"Synced '{interfaceName}' to '{className}' implementation in {Path.GetFileName(resolvedFilePath)}.", syncApply.DryRun, syncApply.Diff, ChangedContentResultId: syncApply.ChangedContentResultId)
+                    SuccessData = new AppliedChangeSummary(syncApply.ChangeId, [syncTargetFile], $"Synced '{interfaceName}' to '{className}' implementation in {Path.GetFileName(syncTargetFile)}.", syncApply.DryRun, syncApply.Diff, ChangedContentResultId: syncApply.ChangedContentResultId)
                 };
             }
 
