@@ -163,7 +163,7 @@ public class BasicRefactoringEngineFormatCharacterizationTests
         "",
         "    public class Moved",
         "    {",
-        "        public int Value;",
+        "        public Int32 Value;",
         "    }",
         "}",
         "",
@@ -191,7 +191,7 @@ public class BasicRefactoringEngineFormatCharacterizationTests
         "{",
         "    public class Moved",
         "    {",
-        "        public int Value;",
+        "        public Int32 Value;",
         "    }",
         "}",
         "",
@@ -207,6 +207,78 @@ public class BasicRefactoringEngineFormatCharacterizationTests
 
         Assert.That(ValueOfKeyContaining(result, "Test.cs"), Is.EqualTo(Src(crlf, SplitOrigExpected())), "original file");
         Assert.That(ValueOfKeyContaining(result, "Moved.cs"), Is.EqualTo(Src(crlf, SplitNewExpected())), "new file");
+    }
+
+    [Test]
+    public async Task MoveTypeToFile_TargetFolder_PlacesNewFileThere()
+    {
+        SetSource(Src(false, SplitInput()));
+
+        var result = await _engine.MoveTypeToFileAsync("Test.cs", "Moved", @"C:\proj\Sub");
+
+        var newKeys = result.Keys.Select(k => (string)k).Where(k => k.Contains("Sub") && k.EndsWith("Moved.cs", StringComparison.Ordinal)).ToList();
+        Assert.That(newKeys, Has.Count.EqualTo(1), "new file key under the target folder");
+        Assert.That(ValueOfKeyContaining(result, "Test.cs"), Is.EqualTo(Src(false, SplitOrigExpected())), "original file");
+    }
+
+    [Test]
+    public async Task MoveTypeToFile_KeepsDocComment()
+    {
+        SetSource(Src(false,
+        [
+            "using System;",
+            "",
+            "namespace Demo",
+            "{",
+            "    public class Keep",
+            "    {",
+            "    }",
+            "",
+            "    /// <summary>Moved type.</summary>",
+            "    public class Moved",
+            "    {",
+            "        public int Value;",
+            "    }",
+            "}",
+            "",
+        ]));
+
+        var result = await _engine.MoveTypeToFileAsync("Test.cs", "Moved");
+
+        Assert.That(ValueOfKeyContaining(result, "Moved.cs"), Does.Match(@"/// <summary>Moved type\.</summary>\r?\n\s*public class Moved"), "new file keeps doc comment");
+        Assert.That(ValueOfKeyContaining(result, "Test.cs"), Does.Not.Contain("/// <summary>Moved type.</summary>"), "original file");
+    }
+
+    [Test]
+    public async Task MoveTypeToFile_UnusedUsings_AreNotCopied()
+    {
+        SetSource(Src(false,
+        [
+            "using System;",
+            "using System.Collections.Generic;",
+            "",
+            "namespace Demo",
+            "{",
+            "    public class Keep",
+            "    {",
+            "    }",
+            "",
+            "    public class Moved",
+            "    {",
+            "        public Int32 Value;",
+            "    }",
+            "}",
+            "",
+        ]));
+
+        var result = await _engine.MoveTypeToFileAsync("Test.cs", "Moved");
+
+        var newText = ValueOfKeyContaining(result, "Moved.cs");
+        Assert.That(newText, Does.Contain("using System;"), "used using is copied");
+        Assert.That(newText, Does.Not.Contain("System.Collections.Generic"), "unused using is not copied");
+        var origText = ValueOfKeyContaining(result, "Test.cs");
+        Assert.That(origText, Does.Contain("using System;"), "original keeps System");
+        Assert.That(origText, Does.Contain("using System.Collections.Generic;"), "original keeps Generic");
     }
 
     [Test]

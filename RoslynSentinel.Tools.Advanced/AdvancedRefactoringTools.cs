@@ -1566,6 +1566,7 @@ public class AdvancedRefactoringTools
                                                                                                                                                                                                                                                                                                                                                                                                        // [Description(ToolParams.AutoStage)] bool autoStage = true,
         [Description(ToolParams.DryRun)][ToolOption(ToolOptionTag.DryRun)] bool dryRun = false, [Description(ToolParams.ReturnDiff)][ToolOption(ToolOptionTag.ReturnDiff)] bool returnDiff = false, // RequestContext<CallToolRequestParams> requestParams = null,
         [Description("outerScope only: when true, a nested type declared private/protected is widened to internal instead of refused. Default false.")] bool allowWidenToInternal = false,
+        [Description("ownFile only: folder for the new file. Default: the source file's folder.")] string? targetFolder = null,
  CancellationToken cancellationToken = default)
     {
         // Hardcoded: autoStage is hidden from the schema until the server has a real staging mode.
@@ -1575,7 +1576,8 @@ public class AdvancedRefactoringTools
         {
             if (destination == "ownFile")
             {
-                var changes = await _refactoringEngine.MoveTypeToFileAsync(resolvedFilePath, typeName, cancellationToken: cancellationToken);
+                string? resolvedTargetFolder = string.IsNullOrEmpty(targetFolder) ? null : _workspaceManager.ResolveFromWire(targetFolder);
+                var changes = await _refactoringEngine.MoveTypeToFileAsync(resolvedFilePath, typeName, targetFolder: resolvedTargetFolder, cancellationToken: cancellationToken);
                 if (!autoStage)
                 {
                     return new SentinelCallToolResult<AppliedChangeSummary>

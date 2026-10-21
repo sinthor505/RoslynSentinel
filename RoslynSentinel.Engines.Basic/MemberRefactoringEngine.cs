@@ -2939,6 +2939,17 @@ public class MemberRefactoringEngine
             };
         }
 
+        // A type declaration written over a non-type target (e.g. a same-named constructor) would produce CS0542; refuse it.
+        if (newMember is BaseTypeDeclarationSyntax && member is not BaseTypeDeclarationSyntax)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = "// newMemberSource declares a type, but Member(replace) replaces members, not types. To replace a type use ReplaceSnippet or ApplyDiff."
+            };
+        }
+
         var replacedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, member, newMember, cancellationToken);
         if (string.Equals(replacedText, root.ToFullString(), StringComparison.Ordinal))
         {

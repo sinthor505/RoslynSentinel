@@ -512,7 +512,7 @@ public class BasicRefactoringEngine
         return new ChangeSignatureResult(result, skippedCallSites);
     }
 
-    public async Task<Dictionary<FilePathWrapper, string>> MoveTypeToFileAsync(FilePathWrapper filePath, string typeName, CancellationToken cancellationToken = default)
+    public async Task<Dictionary<FilePathWrapper, string>> MoveTypeToFileAsync(FilePathWrapper filePath, string typeName, string? targetFolder = null, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
@@ -547,7 +547,8 @@ public class BasicRefactoringEngine
         }
 
         var sourceDirectory = Path.GetDirectoryName(document.FilePath ?? filePath);
-        var newPath = string.IsNullOrEmpty(sourceDirectory) ? $"{typeName}.cs" : Path.Combine(sourceDirectory, $"{typeName}.cs");
+        var targetDirectory = string.IsNullOrEmpty(targetFolder) ? sourceDirectory : targetFolder;
+        var newPath = string.IsNullOrEmpty(targetDirectory) ? $"{typeName}.cs" : Path.Combine(targetDirectory, $"{typeName}.cs");
         // Guard: if the type's name already matches the source file name, it's already in its own file -> nothing to move
         if (string.Equals(typeName, Path.GetFileNameWithoutExtension(document.Name), StringComparison.OrdinalIgnoreCase))
         {
@@ -555,7 +556,7 @@ public class BasicRefactoringEngine
         }
 
         var updatedOrig = RemoveOrphanedRegionDirectives(root!.RemoveNode(typeNode, SyntaxRemoveOptions.KeepNoTrivia)!);
-        var newDoc = document.Project.AddDocument($"{typeName}.cs", newRoot);
+        var newDoc = await RemoveUnusedUsingsAsync(document.Project.AddDocument($"{typeName}.cs", newRoot), cancellationToken);
         // The new file and the trimmed original are both fully owned by this tool, so both are formatted whole; the source
         // document's text supplies the line ending (C5c-3), so an LF source no longer gets a CRLF scaffolded file.
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -624,7 +625,7 @@ public class BasicRefactoringEngine
 
             var typeName = typeNode.Identifier.Text;
             var newPath = string.IsNullOrEmpty(sourceDirectory) ? $"{typeName}.cs" : Path.Combine(sourceDirectory, $"{typeName}.cs");
-            var newDoc = document.Project.AddDocument($"{typeName}.cs", newRoot);
+            var newDoc = await RemoveUnusedUsingsAsync(document.Project.AddDocument($"{typeName}.cs", newRoot), cancellationToken);
             var formattedNewDoc = await RoslynFormattingHelper.FormatWholeDocumentAsync(newDoc, sourceText, cancellationToken);
             var newText = (await formattedNewDoc.GetTextAsync(cancellationToken)).ToString();
             // The scaffolded file must end with exactly one EOL, in the source document's EOL kind (the formatter drops it).
@@ -644,7 +645,9 @@ public class BasicRefactoringEngine
     // - file-scoped types promoted to internal (file modifier = visible only in declaring file)
     private static (CompilationUnitSyntax newRoot, BaseTypeDeclarationSyntax cleanNode) BuildSplitFileRoot(CompilationUnitSyntax root, BaseTypeDeclarationSyntax typeNode)
     {
-        var cleanNode = typeNode.WithoutLeadingTrivia().WithLeadingTrivia(SyntaxFactory.ElasticCarriageReturnLineFeed);
+        // Keep the type's doc comment (/// and /** */) so the split file retains its documentation; #region and plain comments are still dropped.
+        var docTrivia = typeNode.GetLeadingTrivia().Where(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) || t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia));
+        var cleanNode = typeNode.WithoutLeadingTrivia().WithLeadingTrivia(SyntaxFactory.TriviaList(docTrivia.Prepend(SyntaxFactory.ElasticCarriageReturnLineFeed)));
         // Promote `file` modifier to `internal` -> the type is now in its own file and must be accessible
         if (cleanNode.Modifiers.Any(m => m.IsKind(SyntaxKind.FileKeyword)))
         {
@@ -777,12 +780,14 @@ public class BasicRefactoringEngine
         // the interface (as SyncInterfaceToImplementation does).
         static T Strip<T>(T node) where T : SyntaxNode => RoslynFormattingHelper.StripAllTrivia(node);
         static T? StripOrNull<T>(T? node) where T : SyntaxNode => node is null ? null : Strip(node);
-        var ifaceMethods = methods.Select(m => (MemberDeclarationSyntax)SyntaxFactory.MethodDeclaration(Strip(m.ReturnType), m.Identifier.WithoutTrivia()).WithTypeParameterList(StripOrNull(m.TypeParameterList)).WithParameterList(Strip(m.ParameterList)).WithConstraintClauses(SyntaxFactory.List(m.ConstraintClauses.Select(c => Strip(c)))).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
+        // Only the source member's documentation comments survive onto the interface member; other trivia is dropped.
+        static SyntaxTriviaList DocComments(SyntaxNode node) => SyntaxFactory.TriviaList(node.GetLeadingTrivia().Where(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) || t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia)));
+        var ifaceMethods = methods.Select(m => (MemberDeclarationSyntax)SyntaxFactory.MethodDeclaration(Strip(m.ReturnType), m.Identifier.WithoutTrivia()).WithTypeParameterList(StripOrNull(m.TypeParameterList)).WithParameterList(Strip(m.ParameterList)).WithConstraintClauses(SyntaxFactory.List(m.ConstraintClauses.Select(c => Strip(c)))).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithLeadingTrivia(DocComments(m)));
         var ifaceProperties = properties.Select(p =>
         {
             // Build interface accessor list: only keep get/set/init that existed in source
             var accessors = p.AccessorList!.Accessors.Select(acc => SyntaxFactory.AccessorDeclaration(acc.Kind()).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
-            return (MemberDeclarationSyntax)SyntaxFactory.PropertyDeclaration(Strip(p.Type), p.Identifier.WithoutTrivia()).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors)));
+            return (MemberDeclarationSyntax)SyntaxFactory.PropertyDeclaration(Strip(p.Type), p.Identifier.WithoutTrivia()).WithAccessorList(SyntaxFactory.AccessorList(SyntaxFactory.List(accessors))).WithLeadingTrivia(DocComments(p));
         });
         var ifaceMembers = ifaceProperties.Concat(ifaceMethods).ToArray();
         var ifaceNode = SyntaxFactory.InterfaceDeclaration(interfaceName).AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)).AddMembers(ifaceMembers);
@@ -2556,6 +2561,32 @@ public class BasicRefactoringEngine
             FilePath = filePath,
             Message = "// InvertBooleanAsync is not implemented."
         };
+    }
+
+    // Removes the compiler's unused-using diagnostics (CS8019) from a freshly scaffolded split file. The original
+    // document still declares the type, so the new document has a duplicate declaration (CS0101); that does not stop
+    // usings from binding, so only the genuinely unused directives are reported.
+    private static async Task<Document> RemoveUnusedUsingsAsync(Document newDoc, CancellationToken cancellationToken)
+    {
+        var semanticModel = await newDoc.GetSemanticModelAsync(cancellationToken);
+        var root = await newDoc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
+        if (semanticModel == null || root == null)
+        {
+            return newDoc;
+        }
+
+        var unusedUsings = semanticModel.GetDiagnostics(cancellationToken: cancellationToken)
+            .Where(d => d.Id == "CS8019")
+            .Select(d => root.FindNode(d.Location.SourceSpan).AncestorsAndSelf().OfType<UsingDirectiveSyntax>().FirstOrDefault())
+            .OfType<UsingDirectiveSyntax>()
+            .Distinct()
+            .ToList();
+        if (unusedUsings.Count == 0)
+        {
+            return newDoc;
+        }
+
+        return newDoc.WithSyntaxRoot(root.RemoveNodes(unusedUsings, SyntaxRemoveOptions.KeepNoTrivia)!);
     }
 }
 /// <summary>

@@ -8,6 +8,14 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Punchlist items 17-20: Member(replace), MoveType ownFile, ExtractInterface comments - resolved (2026-10-21)
+
+- `MoveType(destination: ownFile)`: new optional `targetFolder` parameter (engine `MoveTypeToFileAsync` and tool); the moved type keeps its `///` doc comment; unused usings (CS8019) are dropped from the new file in both `MoveTypeToFileAsync` and `MoveAllTypesToFilesForDocumentAsync` (`RemoveUnusedUsingsAsync`). Shared byte-exact pins now use `Int32` so `using System;` stays used.
+- `ExtractInterface`: each interface member keeps its leading `///` doc comment. Comments inside a signature are still dropped (pinned); a warnings field was not added (it needs a new result type), see TODO.md.
+- `Member(replace)`: a `newMemberSource` that declares a type over a non-type target (the same-named constructor reached through a namespace `containerName`, CS0542) is refused with `SourceInvalid` and a ReplaceSnippet/ApplyDiff hint. The reported silent no-op on a constructor replace does not reproduce: `ReplaceMember_Constructor_ReplacesConstructorBody` passes.
+- Item 20 (C5c-3: base-list colon, trailing newline) was already fixed in commits 7517b6d1 and 1aab6edf; only the proposal status line was stale.
+- Evidence: solution run 2026-10-21, 5533 passed, 5 failed: four `Flags_*` tests in `SentinelAccuracyTests.cs` (file edited by another session, uncommitted before this work) and `FullBuild_UpstreamProjectFails_DownstreamProjectsReportNoErrors` (passes on re-run).
+
 ## TODO punchlist leftovers, `docCommentId` audit and C5b-2c leftovers - resolved (2026-10-20)
 
 - Async batch: `FlagBridgeCandidateForReviewAsync` now passes the cancellation token to `ApplyProposedChangesAsync`; a cancelled flag write is still logged and skipped (best-effort helper). The bridge CT-add and body-rewrite flag tests exist (`AsyncBatchEngineFlagOutcomeTests`).

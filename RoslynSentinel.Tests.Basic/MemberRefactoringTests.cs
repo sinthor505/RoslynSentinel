@@ -2381,6 +2381,30 @@ public class C
     }
 
     [Test]
+    public async Task ReplaceMember_Constructor_ReplacesConstructorBody()
+    {
+        // Repro for a reported silent no-op when the member name equals the enclosing type name.
+        SetSource("public class Foo { public Foo() { } }", "C.cs");
+
+        var result = await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public Foo(int x) { }");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText!, Contains.Substring("Foo(int x)"));
+        Assert.That(result.UpdatedText!, Does.Not.Contain("Foo()"));
+    }
+
+    [Test]
+    public async Task ReplaceMember_WholeClassOverSameNamedConstructor_IsRefused()
+    {
+        SetSource("namespace N { public class Foo { public Foo() { } } }", "C.cs");
+
+        var result = await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public class Foo { }", containerName: "N");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.SourceInvalid));
+        Assert.That(result.Message, Does.Contain("ReplaceSnippet"));
+    }
+
+    [Test]
     public async Task BUG_60_RemoveMember_SucceedsWhenMemberUnused()
     {
         const string code = @"

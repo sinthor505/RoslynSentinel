@@ -586,7 +586,7 @@ estimates for this pattern have been unreliable so far.
 
 **Guard still advisory (item C):** enforcement design is in `proposals/proposal_enforce_normalize_whole_subtree_whitespace_rule.md` (DESIGN AGREED 2026-10-15; slices C0-C6 not started).
 
-### ExtractInterfaceAsync base-list layout defect and moved-type files lack trailing newline (2026-10-17) - not started
+### ExtractInterfaceAsync base-list layout defect and moved-type files lack trailing newline (2026-10-17) - DONE 2026-10-20 (see CLOSED.md; commits 7517b6d1, 1aab6edf)
 
 Found in C5c-3. ExtractInterfaceAsync (BasicRefactoringEngine) AddBaseListTypes leaves the colon on its own line at column 0 (class Svc / : ISvc / {); fix by moving the class-identifier trailing trivia, then the site can use an annotated route instead of FormatWholeDocumentAsync. Files scaffolded by MoveTypeToFileAsync end at the closing brace with no trailing newline. Both are pinned as-is in BasicRefactoringEngineFormatCharacterizationTests.
 

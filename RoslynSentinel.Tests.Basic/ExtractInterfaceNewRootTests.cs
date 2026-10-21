@@ -119,6 +119,20 @@ public class ExtractInterfaceNewRootTests
     }
 
     [Test]
+    public async Task ExtractInterface_KeepsMemberDocComments()
+    {
+        // Source member documentation comments are carried onto the interface members; a comment inside a copied
+        // signature is still dropped.
+        const string source = "using System;\n\nnamespace MyApp;\n\npublic class Svc\n{\n    /// <summary>Adds numbers.</summary>\n    public int Add(int a /* c */, int b) => a + b;\n\n    /// <summary>The value.</summary>\n    public int Value { get; set; }\n}\n";
+
+        var content = await ExtractInterfaceFileAsync(source, "Svc", "ISvc");
+
+        Assert.That(content, Does.Match(@"/// <summary>Adds numbers\.</summary>\r?\n    int Add\(int a, int b\);"), "method doc comment sits directly above its signature");
+        Assert.That(content, Does.Match(@"/// <summary>The value\.</summary>\r?\n    int Value \{ get; set; \}"), "property doc comment sits directly above its signature");
+        Assert.That(content, Does.Not.Contain("/* c */"), "comment inside the copied signature is dropped");
+    }
+
+    [Test]
     public async Task ExtractInterface_MixedDocument_UsingsStayByteExact_NewStructureTakesDominantEol()
     {
         // The CRLF header line, the using's trailing comment and its inner spacing are kept; the new lines are LF.
