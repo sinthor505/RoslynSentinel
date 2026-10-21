@@ -517,9 +517,13 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task DetectAntiPatterns_ValidFile_ReturnsList()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _antiPatternEngine.DetectAntiPatternsAsync("Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class C { public async void Go() { } }", "Async.cs");
+        var result = await _antiPatternEngine.DetectAntiPatternsAsync("Async.cs");
+        Assert.That(result, Has.Some.Property("Pattern").EqualTo("AsyncVoidMethod"));
+        Assert.That(result, Has.Some.Property("Description").Contains("'async void' method 'Go'"));
+        SetSource("using System.Threading.Tasks; public class C { public async Task RunAsync() { await Task.CompletedTask; } }", "Clean.cs");
+        var clean = await _antiPatternEngine.DetectAntiPatternsAsync("Clean.cs");
+        Assert.That(clean, Has.None.Property("Pattern").EqualTo("AsyncVoidMethod"));
     }
 
     // --- FindPossibleInfiniteLoops ---
@@ -570,9 +574,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindMutablePublicProperties_ValidFile_ReturnsList()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _antiPatternEngine.FindMutablePublicPropertiesAsync("Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class Mut { public string Name { get; set; } }", "Mut.cs");
+        var result = await _antiPatternEngine.FindMutablePublicPropertiesAsync("Mut.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Pattern, Is.EqualTo("MutablePublicApi"));
+        Assert.That(result[0].Description, Does.Contain("'Name'"));
+        SetSource("public class Mut { public string Name { get; } }", "Clean.cs");
+        var clean = await _antiPatternEngine.FindMutablePublicPropertiesAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindNamingViolations ---
@@ -580,9 +589,13 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindNamingViolations_ValidFile_ReturnsList()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _antiPatternEngine.FindNamingViolationsAsync("Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class lowerClass { public int count; }", "Naming.cs");
+        var result = await _antiPatternEngine.FindNamingViolationsAsync("Naming.cs");
+        Assert.That(result, Has.Some.Property("Description").Contains("Type 'lowerClass' starts with a lowercase letter"));
+        Assert.That(result, Has.Some.Property("Description").Contains("Non-private field 'count' starts with a lowercase letter"));
+        SetSource("public class GoodClass { private int _value; public int Value { get; } }", "Clean.cs");
+        var clean = await _antiPatternEngine.FindNamingViolationsAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindStringMagicValues ---
@@ -590,9 +603,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindStringMagicValues_ValidFile_ReturnsList()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _antiPatternEngine.FindStringMagicValuesAsync("Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class Magic { public string A() { return \"magic-value\"; } public string B() { return \"magic-value\"; } public string C() { return \"magic-value\"; } }", "Magic.cs");
+        var result = await _antiPatternEngine.FindStringMagicValuesAsync("Magic.cs");
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Value, Is.EqualTo("magic-value"));
+        Assert.That(result[0].OccurrenceCount, Is.EqualTo(3));
+        SetSource("public class Magic { public string A() { return \"magic-value\"; } public string B() { return \"magic-value\"; } }", "Clean.cs");
+        var clean = await _antiPatternEngine.FindStringMagicValuesAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindMissingCancellationTokens ---
@@ -600,9 +618,13 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task FindMissingCancellationTokens_ValidFile_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
+        SetSource("using System.Threading; using System.Threading.Tasks; public class W { public async Task DoWorkAsync() { await Helper(CancellationToken.None); } public Task Helper(CancellationToken ct) { return Task.CompletedTask; } }", "Async.cs");
         var result = await _antiPatternEngine.FindMissingCancellationTokensAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Is.EqualTo("DoWorkAsync"));
+        SetSource("using System.Threading; using System.Threading.Tasks; public class W { public async Task DoWorkAsync(CancellationToken ct) { await Helper(ct); } public Task Helper(CancellationToken ct) { return Task.CompletedTask; } }", "Clean.cs");
+        var clean = await _antiPatternEngine.FindMissingCancellationTokensAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- AnalyzeExceptionHandling ---
@@ -610,9 +632,13 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AntiPatternEngine")] // sentinel:auto-category
     public async Task AnalyzeExceptionHandling_FileWithCatch_ReturnsList()
     {
-        SetSource(QualitySource, "Quality.cs");
-        var result = await _antiPatternEngine.AnalyzeExceptionHandlingAsync("Quality.cs");
-        Assert.That(result, Is.Not.Null);
+        SetSource("public class E { public void Run() { try { Do(); } catch { } } public void Do() { } }", "Exc.cs");
+        var result = await _antiPatternEngine.AnalyzeExceptionHandlingAsync("Exc.cs");
+        Assert.That(result, Has.Some.Property("Description").Contains("Catching System.Exception"));
+        Assert.That(result, Has.Some.Property("Description").Contains("Empty catch block silently swallows"));
+        SetSource("public class E { public void Run() { try { Do(); } catch (System.IO.IOException) { throw; } } public void Do() { } }", "Clean.cs");
+        var clean = await _antiPatternEngine.AnalyzeExceptionHandlingAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- CheckForSqlInjection ---
@@ -656,9 +682,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindConfigureAwaitMissing_FileWithAwaits_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
+        SetSource("using System.Threading.Tasks; public class Svc { public async Task RunAsync() { await Task.CompletedTask; } }", "Async.cs");
         var result = await _asyncSafetyEngine.FindConfigureAwaitMissingAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Is.EqualTo("RunAsync"));
+        Assert.That(result[0].Reason, Does.StartWith("Line 1: Await missing .ConfigureAwait(false)"));
+        SetSource("using System.Threading.Tasks; public class Svc { public async Task RunAsync() { await Task.CompletedTask.ConfigureAwait(false); } }", "Clean.cs");
+        var clean = await _asyncSafetyEngine.FindConfigureAwaitMissingAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindBlockingCallsInAsync ---
@@ -666,9 +697,14 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     [Category("AsyncAnalysisEngine")] // sentinel:auto-category
     public async Task FindBlockingCallsInAsync_FileWithThreadSleep_ReturnsList()
     {
-        SetSource(AsyncSource, "Async.cs");
+        SetSource("using System.Threading; using System.Threading.Tasks; public class B { public async Task RunAsync() { Thread.Sleep(1); await Task.CompletedTask; } }", "Async.cs");
         var result = await _asyncSafetyEngine.FindBlockingCallsInAsyncAsync("Async.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Is.EqualTo("RunAsync"));
+        Assert.That(result[0].Reason, Does.StartWith("Line 1: Thread.Sleep() in async method"));
+        SetSource("using System.Threading; public class B { public void Run() { Thread.Sleep(1); } }", "Clean.cs");
+        var clean = await _asyncSafetyEngine.FindBlockingCallsInAsyncAsync("Clean.cs");
+        Assert.That(clean, Is.Empty);
     }
 
     // --- FindAsyncInConstructor ---
