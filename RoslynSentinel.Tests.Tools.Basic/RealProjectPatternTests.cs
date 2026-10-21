@@ -222,7 +222,8 @@ internal static class ScoringWeights
 
         // We expect either Fail (because static class can't have instance ToString)
         // OR the engine generates ToString for the constants -> accept either as long as no crash
-        Assert.That(result, Is.Not.Null, "Engine must return a result, not throw");
+        Assert.That(result.IsError, Is.True, "Internal static class with constants must fail");
+        Assert.That(result.Error, Does.Contain("No public properties or fields found on 'ScoringWeights'"));
     }
 
     [Test]
@@ -310,8 +311,8 @@ public class InventoryCache
     }
 
     [Test]
-    [Description("Encapsulate already-private field returns Fail")]
-    public async Task EncapsulateField_AlreadyPrivateField_ReturnsFail()
+    [Description("Encapsulate already-private field succeeds")]
+    public async Task EncapsulateField_AlreadyPrivateField_Succeeds()
     {
         const string source = @"
 public class Service
@@ -324,7 +325,9 @@ public class Service
 
         // Either the field is found and processed, or fail because it's private
         // The important thing: no exception is thrown
-        Assert.That(result, Is.Not.Null, "Must return a result without throwing");
+        // Engine returns success for an already-private field
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.Error, Is.Null);
     }
 
     [Test]
@@ -478,8 +481,8 @@ public class ReportBuilder
     // ══════════════════════════════════════════════════════════════════════════
 
     [Test]
-    [Description("Pattern from InventoryItemService.cs: extract magic string to named constant")]
-    public async Task ExtractConstant_MagicStringInCacheKey_ExtractedToConst()
+    [Description("Pattern from InventoryItemService.cs: literal inside an interpolated cache key is refused with a message")]
+    public async Task ExtractConstant_InterpolatedCacheKey_RefusedWithMessage()
     {
         // Pattern matching InventoryItemService cache key helpers
         const string source = @"
@@ -488,21 +491,21 @@ public class InventoryItemService
     private static string UserInventoryKey(System.Guid userId) => $""inv:user:{userId}:items"";
     private static string ItemKey(System.Guid itemId) => $""inv:item:{itemId}"";
 }";
-        SetSource(source, "InventoryItemService.cs");
-
-        var result = await _engine.ExtractConstantSafeAsync(
-            "InventoryItemService.cs",
-            "\"inv:user:{userId}:items\"", // The literal to extract
-            "InventoryCacheKeyFmt");
-
-        // Engine must return result without crashing
-        Assert.That(result, Is.Not.Null, "ExtractConstant must not throw");
-        // Even if it fails (interpolated string can't be const), it should explain why
-        if (result.IsError)
+        var tempFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"rse_test_{Guid.NewGuid():N}.cs");
+        try
         {
-            Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
-                "Failure must have a descriptive error message");
+            await System.IO.File.WriteAllTextAsync(tempFile, source);
+
+            var result = await _engine.ExtractConstantSafeAsync(
+                tempFile,
+                "\"inv:user:{userId}:items\"", // The literal to extract
+                "InventoryCacheKeyFmt");
+
+            // TODO engine cannot extract a literal inside an interpolated string; decide whether this fixture should use a plain literal
+            Assert.That(result.IsError, Is.True);
+            Assert.That(result.Error, Is.EqualTo("No literal expression found at contextSnippet location. Provide a contextSnippet that directly contains or is adjacent to the literal."));
         }
+        finally { try { System.IO.File.Delete(tempFile); } catch { /* ignore */ } }
     }
 
     [Test]
@@ -517,21 +520,23 @@ public class ShoppingService
         return ""CheapestOverall"";
     }
 }";
-        SetSource(source, "ShoppingService.cs");
-
-        var result = await _engine.ExtractConstantSafeAsync(
-            "ShoppingService.cs",
-            "\"CheapestOverall\"",
-            "DefaultStrategy");
-
-        Assert.That(result, Is.Not.Null, "ExtractConstant must not throw");
-        if (!result.IsError)
+        var tempFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"rse_test_{Guid.NewGuid():N}.cs");
+        try
         {
-            Assert.That(result.UpdatedContent, Does.Contain("DefaultStrategy"),
-                "New constant name must appear in output");
-            Assert.That(result.UpdatedContent, Does.Contain("\"CheapestOverall\""),
-                "Constant value must appear in output");
+            await System.IO.File.WriteAllTextAsync(tempFile, source);
+
+            var result = await _engine.ExtractConstantSafeAsync(
+                tempFile,
+                "\"CheapestOverall\"",
+                "DefaultStrategy");
+
+            Assert.That(result.IsError, Is.False, result.Error);
+            Assert.That(result.UpdatedContent, Does.Contain("DefaultStrategy = \"CheapestOverall\""),
+                "Constant declaration must be emitted");
+            Assert.That(result.UpdatedContent, Does.Contain("return DefaultStrategy;"),
+                "Literal usage must be replaced with the constant");
         }
+        finally { try { System.IO.File.Delete(tempFile); } catch { /* ignore */ } }
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -563,7 +568,8 @@ public class Optimizer
             "Optimizer.cs", "ValidateItems", "if (items.Count == 0)");
 
         // Guard clauses often can't be extracted cleanly -> accept either success or descriptive failure
-        Assert.That(result, Is.Not.Null, "Must return a result without throwing");
+        Assert.That(result.IsError, Is.False, "Validation early-return extraction must succeed");
+        Assert.That(result.Error, Is.Null);
         if (result.IsError)
         {
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
@@ -595,7 +601,8 @@ public class InventoryService
         var result = await _engine.ExtractMethodSafeAsync(
             "InventoryService.cs", "FetchItems", "var items = await FetchFromDbAsync(userId)");
 
-        Assert.That(result, Is.Not.Null, "Must return result without throwing");
+        Assert.That(result.IsError, Is.False, "Async cache logic extraction must succeed");
+        Assert.That(result.Error, Is.Null);
     }
 
     [Test]
@@ -730,7 +737,7 @@ namespace Test; public class C { }";
 
     [Test]
     [Description("Pattern from InventoryRepository: partial class - engine must handle partial keyword")]
-    public async Task GenerateToStringSafe_PartialClass_HandledGracefullyOrSucceeds()
+    public async Task GenerateToStringSafe_PartialClass_Succeeds()
     {
         const string source = @"
 namespace ExpressRecipe.InventoryService.Data;
@@ -743,8 +750,9 @@ public partial class InventoryRepository
 
         var result = await _engine.GenerateToStringSafeAsync("InventoryRepository.cs", "InventoryRepository");
 
-        // Partial class support: either succeeds (if engine handles it) or fails gracefully
-        Assert.That(result, Is.Not.Null, "Must not throw for partial class");
+        // Partial class support: engine must generate ToString
+        Assert.That(result.IsError, Is.False, "Partial class must generate ToString");
+        Assert.That(result.UpdatedContent, Does.Contain("public override string ToString()"));
         if (!result.IsError)
         {
             Assert.That(result.UpdatedContent, Does.Contain("{{ "),
@@ -914,7 +922,7 @@ public class Stats
 
     [Test]
     [Description("GenerateToStringSafe: BackgroundService pattern with no public properties returns Fail gracefully")]
-    public async Task GenerateToStringSafe_BackgroundServiceWithPrivateFields_ReturnsFailOrSucceeds()
+    public async Task GenerateToStringSafe_BackgroundServiceWithPrivateFields_ReturnsFail()
     {
         // LowStockMonitorWorker inherits BackgroundService and has only private fields
         const string source = @"
@@ -942,7 +950,9 @@ public interface ILogger { }";
 
         // BackgroundService with only private fields has no public members to include
         // Engine should fail gracefully -> no crash, descriptive error
-        Assert.That(result, Is.Not.Null, "Engine must not throw for BackgroundService pattern");
+        // Engine deterministically fails for a class with no public members
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.Error, Does.Contain("No public properties or fields found on 'LowStockMonitorWorker'"));
         if (result.IsError)
         {
             Assert.That(result.Error, Is.Not.Null.And.Not.Empty,

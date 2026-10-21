@@ -300,7 +300,8 @@ public class ExtractConstantSafeStrongTests
             // (a) fail gracefully because the $ prefix makes it an interpolated expression, not a literal
             // (b) succeed if it finds an adjacent string piece
             // Either way: no throw, no null result, always has an error message when IsSuccess=false
-            Assert.That(result, Is.Not.Null);
+            Assert.That(result.IsError, Is.True, "Interpolated string must fail cleanly");
+        Assert.That(result.Error, Does.Contain("No literal expression found at contextSnippet location"));
             if (result.IsError)
             {
                 Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
@@ -864,7 +865,8 @@ public class FormatDocumentSafeTests
             var result = await _engine.FormatDocumentSafeAsync(tempFile, preview: true);
 
             // We don't mandate success here -> just that it doesn't throw
-            Assert.That(result, Is.Not.Null, "Must return a result, never throw");
+            Assert.That(result.IsError, Is.False, "FormatDocumentSafe on syntax errors returns without error");
+        Assert.That(result.Error, Is.Null);
         }
         finally { SafeDelete(tempFile); }
     }
