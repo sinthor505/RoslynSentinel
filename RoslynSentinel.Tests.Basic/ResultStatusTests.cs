@@ -555,13 +555,13 @@ public class ResultStatusTests
         Assert.That(nf.IsError, Is.True);
         Assert.That(nf.Status, Is.EqualTo(ResultStatus.NotFound));
         Assert.That(nf.Code, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(nf.Message, Is.Not.Null.And.Not.Empty);
+        Assert.That(nf.Message, Does.Contain("File 'a.cs' was not found anywhere in the loaded solution").And.Not.Contain("x/a.cs"));
 
         IResultStatus amb = ambiguous;
         Assert.That(amb.IsError, Is.True);
         Assert.That(amb.Status, Is.EqualTo(ResultStatusExtensions.FromFlag(true, ToolErrorCode.Ambiguous)));
         Assert.That(amb.Code, Is.EqualTo(ToolErrorCode.Ambiguous));
-        Assert.That(amb.Message, Is.Not.Null.And.Not.Empty);
+        Assert.That(amb.Message, Does.Contain("'a.cs' matches 2 different files in the solution").And.Contain("x/a.cs").And.Contain("y/a.cs"));
 
         // Found with no Document is not a usable result, so it reads as an error (IsFound is false).
         IResultStatus found = foundWithoutDocument;
