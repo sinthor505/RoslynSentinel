@@ -403,6 +403,11 @@ public static class ToolArgumentValidator
                 ["newAccessibility"] = "accessibility",
                 ["symbolName"] = "targetName",
             },
+            ["ReplaceSnippet"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["oldSnippet"] = "oldContent",
+                ["newSnippet"] = "newContent",
+            },
         };
 
     /// <summary>

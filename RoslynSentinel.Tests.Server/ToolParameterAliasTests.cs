@@ -249,6 +249,14 @@ public class ToolParameterAliasTests
     }
 
     [Test]
+    public void ReplaceSnippetSnippetAliases_IsInTheAliasTable_MappedToContentParams()
+    {
+        // ReplaceSnippet declares oldContent/newContent as top-level params; the snippet-named habit maps onto them.
+        Assert.That(ToolArgumentValidator.ParameterAliases["ReplaceSnippet"]["oldSnippet"], Is.EqualTo("oldContent"));
+        Assert.That(ToolArgumentValidator.ParameterAliases["ReplaceSnippet"]["newSnippet"], Is.EqualTo("newContent"));
+    }
+
+    [Test]
     [Category("ToolArgumentValidator")] // sentinel:auto-category
     public async Task EveryAliasEntry_ForAnActiveTool_PointsAtADeclaredParameter_AndIsNotItselfDeclared()
     {
