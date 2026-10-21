@@ -99,7 +99,7 @@ public class BatteryTwentyTwoTests
     {
         SetSource(RichSource, "Test.cs");
         var result = await _scanTools.RunScanDetectorTool(reason: "test message", detector: ScanTools.DetectorId.unused_references, scope: ToolScope.file, filePath: "Test.cs");
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
@@ -113,6 +113,8 @@ public class BatteryTwentyTwoTests
         var result = await _tools.GetComprehensiveHealthReportTool(reason: "test message", timeoutSeconds: 5);
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
+        Assert.That(result.SuccessData, Is.Not.Null);
+        // TODO health report DTO is typed object here; pin its sections/engine names once the shape is read
     }
 
     // --- GetBlastRadius (via InspectSymbolTool) ---
@@ -140,6 +142,9 @@ public class BatteryTwentyTwoTests
         var result = await _symbolNavigationTools.InspectSymbolTool(reason: "test message", "Test.cs", "ProcessAsync", InspectSymbolAspect.blastRadius);
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
+        var report = (ImpactReport)result.SuccessData!;
+        Assert.That(report.Error, Is.Null);
+        Assert.That(report.SymbolName, Does.Contain("ProcessAsync"));
     }
 
     [Test]
@@ -162,7 +167,7 @@ public class BatteryTwentyTwoTests
         SetSource(RichSource, "Test.cs");
         var result = await _symbolNavigationTools.InspectSymbolTool(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.blastRadius);
         Assert.That(result, Is.Not.Null);
-        Assert.That(!result.IsError, Is.False);
+        Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound.ToString()));
         Assert.That(result.ErrorData!.Message, Is.Not.Null.And.Not.Empty);
@@ -175,8 +180,8 @@ public class BatteryTwentyTwoTests
         SetSource(RichSource, "Test.cs");
         var resultInfo = await _symbolNavigationTools.InspectSymbolTool(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.info);
         var resultBlastRadius = await _symbolNavigationTools.InspectSymbolTool(reason: "test message", "Test.cs", "ThisTextDoesNotExistAnywhere", InspectSymbolAspect.blastRadius);
-        Assert.That(!resultInfo.IsError, Is.False);
-        Assert.That(!resultBlastRadius.IsError, Is.False);
+        Assert.That(resultInfo.IsError, Is.True);
+        Assert.That(resultBlastRadius.IsError, Is.True);
         Assert.That(resultInfo.ErrorData, Is.Not.Null);
         Assert.That(resultBlastRadius.ErrorData, Is.Not.Null);
         Assert.That(resultInfo.ErrorData!.Message, Is.Not.Null.And.Not.Empty);
@@ -192,7 +197,8 @@ public class BatteryTwentyTwoTests
     {
         var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "List<string>", FindUsagesSearchKind.methodsByReturnType);
         Assert.That(result, Is.Not.Null);
-        Assert.That(result.TotalRecords > 0);
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.TotalRecords, Is.EqualTo(1));
     }
 
     // --- GetSolutionMetricsTool ---
@@ -204,6 +210,8 @@ public class BatteryTwentyTwoTests
         var result = await _tools.GetSolutionMetricsTool(reason: "test message");
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
+        Assert.That(result.SuccessData, Is.Not.Null);
+        // TODO metrics DTO is typed object here; pin solution-level counts once the shape is read
     }
 
     [Test]
@@ -214,6 +222,8 @@ public class BatteryTwentyTwoTests
         var result = await _tools.GetSolutionMetricsTool(reason: "test message", "TestProj");
         Assert.That(result, Is.Not.Null);
         Assert.That(!result.IsError, Is.True);
+        Assert.That(result.SuccessData, Is.Not.Null);
+        // TODO project-scoped metrics DTO is typed object here; pin TestProj counts once the shape is read
     }
 
     // --- GetCodeInventoryTool ---
@@ -224,7 +234,8 @@ public class BatteryTwentyTwoTests
         SetSource(RichSource, "Test.cs");
         var result = await _tools.GetCodeInventoryTool(reason: "test message", "Test.cs");
         Assert.That(result, Is.Not.Null);
-        //Assert.That(result.TotalRecords > 0);
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.TotalRecords, Is.GreaterThanOrEqualTo(5));
     }
 
     // --- FindUnusedPrivateMembers (via DeadCodeEngine) ---
@@ -232,10 +243,10 @@ public class BatteryTwentyTwoTests
     [Category("DeadCodeEngine")] // sentinel:auto-category
     public async Task FindUnusedPrivateMembers_ValidClass_ReturnsList()
     {
-        SetSource(RichSource, "Test.cs");
+        SetSource("public class Order\n{\n    private void Unused() { }\n    public int Id { get; set; }\n}", "Test.cs");
         var result = await _deadCodeEngine.FindUnusedPrivateMembersAsync("Test.cs", "Order");
-        Assert.That(result, Is.Not.Null);
-        //Assert.That(result.Count > 0);
+        Assert.That(result, Has.Count.EqualTo(1));
+        // TODO DeadCodeReport member name not pinned; expect the flagged member Unused. Engine only reports private methods/properties, not fields (DeadCodeEngine.cs:37)
     }
 
     // --- DetectUnusedPrivateFields (via DeadCodeEngine) ---
