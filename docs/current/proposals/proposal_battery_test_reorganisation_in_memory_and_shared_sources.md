@@ -93,7 +93,9 @@ Proposed (not decided in detail). Part A fixes the leak; B-D are independent and
   `BatteryEighteen.SortAndDeduplicateUsings` passes `writeToFile: false`; no `BatteryFour` class exists any more;
   `BatteryTwentyTwo` runs on in-memory `SetTestSolution` and its one path-named test is a preview (no write), so it needs no
   attribute. A4 (pre-seeded stale `Order.cs` regression test) is not built: the writers that produced the leak are now
-  in-memory, so it would guard a path nothing uses (decision open). Remaining: a fake `RenameSymbol` path, then Parts C/D.
+  in-memory, so it would guard a path nothing uses (decision open). Fake `RenameSymbol` path DONE (4c1fa3fa): `FakeWorkspaceManager.ResolveFromWireAsync` now
+  uses `SymbolResolver`; the two RenameSymbol tests moved to `RenameSymbolTests` (in-memory, asserts the rewritten text).
+  Remaining: Parts C/D, triage of pinned tool defects.
 - **Part A progress (2026-10-20, earlier notes).** The fixture is `RoslynSentinel.Tests.Tools.Advanced/BatteryTwentyFourTests.cs`
   (137 tests when re-surveyed: 115 convertible, 19 read-only engine-preview tests, 3 real-disk). Slice order and
   proposed topic classes, from the second survey: (1) `SyncTypeAndFilenameTests` 3 - DONE 4f97c8ee; (2)
