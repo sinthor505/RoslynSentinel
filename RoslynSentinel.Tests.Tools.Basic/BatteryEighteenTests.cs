@@ -184,7 +184,8 @@ public class OrderService : IOrderService
     public async Task SortAndDeduplicateUsings_FileWithUsings_ReturnsResult()
     {
         SetSource(RichSource, "Test.cs");
-        var result = await _msEngine.SortAndDeduplicateUsingsAsync("Test.cs");
+        // writeToFile: false keeps this test from leaking Test.cs into the working directory.
+        var result = await _msEngine.SortAndDeduplicateUsingsAsync("Test.cs", writeToFile: false);
         Assert.That(result, Is.Not.Null);
     }
 

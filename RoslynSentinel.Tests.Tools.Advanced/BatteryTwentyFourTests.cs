@@ -11,6 +11,8 @@ using RoslynSentinel.Tools.Basic;
 namespace RoslynSentinel.Tests.Tools.Advanced;
 
 [TestFixture]
+// Runs exclusively because Setup/TearDown wipe every top-level *.cs in the shared working directory (DeleteLeakedRelativeFiles), which would delete files other parallel fixtures in this assembly (AssemblyInfo.cs sets ParallelScope.Fixtures) are using.
+[NonParallelizable]
 public class BatteryTwentyFourTests
 {
     private IWorkspaceManager _workspaceManager;
@@ -109,6 +111,7 @@ public enum Status { Active = 1, Pending = 2 }
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         _config = new SentinelConfiguration();
         _symbolNavigationEngine = new SymbolNavigationEngine(_workspaceManager, NullLogger<SymbolNavigationEngine>.Instance);
+        _diffEngine = new DiffEngine();
         _validationEngine = new ValidationEngine(_workspaceManager, _diffEngine, NullLogger<ValidationEngine>.Instance);
         _refactoringEngine = new BasicRefactoringEngine(_workspaceManager, NullLogger<BasicRefactoringEngine>.Instance, _config);
         _memberRefactoringEngine = new MemberRefactoringEngine(_workspaceManager, _symbolNavigationEngine, _validationEngine);
@@ -122,7 +125,6 @@ public enum Status { Active = 1, Pending = 2 }
         _advancedRefactoringEngine = new AdvancedRefactoringEngine(_workspaceManager);
         _logicOptimizationEngine = new LogicSimplificationEngine(_workspaceManager);
         _modernizationEngine = new SyntaxModernizationEngine(_workspaceManager, _config);
-        _diffEngine = new DiffEngine();
         _msToolAugmentEngine = new MsToolAugmentEngine(_workspaceManager);
         _generationTools = new GenerationTools(_workspaceManager, NullLogger<GenerationTools>.Instance);
 
@@ -1186,6 +1188,21 @@ public enum Status { Active = 1, Pending = 2 }
         // Caller.cs is CRLF on purpose: the signature tool re-serializes a rewritten call-site file with
         // the platform newline, so an LF fixture trips the write path's EolChangeGuard (a real
         // tool-side defect, tracked separately). This test is about the call site being updated.
+        SetMultiFile(("Order.cs", orderSourceWithRename), ("Caller.cs", "namespace TestProj;\r\npublic class Caller { public void Use(Order o) => o.Rename(\"a\", \"b\"); }"));
+        var result = await _refactoringSignatureTools.MethodSignatureTool(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+    }
+
+    // Pins that the per-test wipe (DeleteLeakedRelativeFiles, run from Setup) clears a stale bare-name Order.cs
+    // before the pre-image is read; otherwise the EolChangeGuard refuses the write.
+    [Test]
+    [Category("RefactoringSignatureTools")]
+    public async Task MethodSignature_Remove_LastParameter_StaleCrlfOrderCsOnDisk_StillUpdatesCallSite()
+    {
+        System.IO.File.WriteAllText(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "Order.cs"), "namespace Stale;\r\npublic class Old { }\r\n");
+        Setup();
+        Assert.That(System.IO.File.Exists(System.IO.Path.Combine(System.IO.Directory.GetCurrentDirectory(), "Order.cs")), Is.False, "Setup() must wipe the stale bare-name Order.cs before the pre-image is read");
+        var orderSourceWithRename = SimpleSource.Replace("public string GetLabel()", "public void Rename(string first, string last) { CustomerName = first; }\n\n    public string GetLabel()");
         SetMultiFile(("Order.cs", orderSourceWithRename), ("Caller.cs", "namespace TestProj;\r\npublic class Caller { public void Use(Order o) => o.Rename(\"a\", \"b\"); }"));
         var result = await _refactoringSignatureTools.MethodSignatureTool(reason: "test message", "Order.cs", AddRemoveViewAction.remove, "Rename", "last");
         Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
