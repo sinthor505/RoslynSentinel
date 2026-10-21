@@ -143,18 +143,18 @@ public class QualityClass
     [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task AddGuardClauses_ValidMethod_ReturnsUpdatedSource()
     {
-        SetSource(QualitySource, "Quality.cs");
+        SetSource("public class Guarded { public void Process(string s) { System.Console.WriteLine(s); } }", "Quality.cs");
         var result = await _logicOptimizationEngine.AddGuardClausesAsync("Quality.cs", "Process");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("ArgumentNullException"));
     }
 
     [Test]
     [Category("LogicSimplificationEngine")] // sentinel:auto-category
-    public async Task AddGuardClauses_NonExistentFile_Throws()
+    public async Task AddGuardClauses_NonExistentFile_ReportsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _logicOptimizationEngine.AddGuardClausesAsync("NonExistent.cs", "Process");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound)); // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
     }
 
     // --- AddBenchmarkStub ---
@@ -164,16 +164,16 @@ public class QualityClass
     {
         SetSource(QualitySource, "Quality.cs");
         var result = await _testingEngine.AddBenchmarkStubAsync("Quality.cs", "QualityClass", "Process");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("[Benchmark]"));
     }
 
     [Test]
     [Category("TestingEngine")] // sentinel:auto-category
-    public async Task AddBenchmarkStub_NonExistentFile_Throws()
+    public async Task AddBenchmarkStub_NonExistentFile_ReportsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _testingEngine.AddBenchmarkStubAsync("NonExistent.cs", "C", "M");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound)); // TODO throw-migration: assert the typed exception once TestingEngine throws
     }
 
     // --- AddConfigureAwaitFalse ---
@@ -183,7 +183,7 @@ public class QualityClass
     {
         SetSource(AsyncSource, "Async.cs");
         var result = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("Async.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain(".ConfigureAwait(false)"));
     }
 
     [Test]
@@ -202,7 +202,7 @@ public class QualityClass
         const string src = "using System.Threading.Tasks; namespace TestProj; public class W { public async Task DoAsync() { await System.Threading.Tasks.Task.Delay(1).ConfigureAwait(false); } }";
         SetSource(src, "W.cs");
         var result = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync("W.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Not.Contain(".ConfigureAwait(false)"));
     }
 
     [Test]
@@ -220,16 +220,16 @@ public class QualityClass
     {
         SetSource(AsyncSource, "Async.cs");
         var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("Async.cs", "MethodWithLock");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("SemaphoreSlim"));
     }
 
     [Test]
     [Category("ThreadSafetyEngine")] // sentinel:auto-category
-    public async Task ConvertLockToSemaphoreSlim_NonExistentFile_ReturnsNull()
+    public async Task ConvertLockToSemaphoreSlim_NonExistentFile_ReportsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("NonExistent.cs", "MethodWithLock");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Error)); // TODO throw-migration: assert the typed exception once ThreadSafetyEngine throws
     }
 
     [Test]
@@ -253,16 +253,16 @@ public class QualityClass
 public class Streamer { public IEnumerable<int> GetData() { yield return 1; yield return 2; } }";
         SetSource(src, "Streamer.cs");
         var result = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync("Streamer.cs", "GetData");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("IAsyncEnumerable"));
     }
 
     [Test]
     [Category("AsyncOptimizationEngine")] // sentinel:auto-category
-    public async Task ConvertToAsyncEnumerable_NonExistentFile_ReturnsNull()
+    public async Task ConvertToAsyncEnumerable_NonExistentFile_ReportsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync("NonExistent.cs", "GetData");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound)); // TODO throw-migration: assert the typed exception once AsyncOptimizationEngine throws
     }
 
     // --- AddCancellationTokenToMethod---
@@ -272,16 +272,16 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     {
         SetSource(AsyncSource, "Async.cs");
         var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("Async.cs", "WorkAsync");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("CancellationToken"));
     }
 
     [Test]
     [Category("AsyncOptimizationEngine")] // sentinel:auto-category
-    public async Task AddCancellationTokenToMethod_NonExistentFile_ReturnsNull()
+    public async Task AddCancellationTokenToMethod_NonExistentFile_ReportsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("NonExistent.cs", "WorkAsync");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound)); // TODO throw-migration: assert the typed exception once AsyncOptimizationEngine throws
     }
 
     // --- MakeMethodThreadSafe---
@@ -291,16 +291,16 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     {
         SetSource(AsyncSource, "Async.cs");
         var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("Async.cs", "SyncMethod");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified)); Assert.That(result.UpdatedText, Does.Contain("lock"));
     }
 
     [Test]
     [Category("ThreadSafetyEngine")] // sentinel:auto-category
-    public async Task MakeMethodThreadSafe_NonExistentFile_ReturnsNotNull()
+    public async Task MakeMethodThreadSafe_NonExistentFile_ReportsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
         var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("NonExistent.cs", "SyncMethod");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound)); // TODO throw-migration: assert the typed exception once ThreadSafetyEngine throws
     }
 
     // ===================== NON-THROW METHODS =====================
