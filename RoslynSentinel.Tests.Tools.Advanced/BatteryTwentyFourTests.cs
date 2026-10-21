@@ -294,9 +294,16 @@ public class BatteryTwentyFourTests
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
     public async Task MakeMethodStatic_ValidMethod_ReturnsString()
     {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringStructuralTools.ModifyModifierTool(reason: "test message", "Order.cs", "GetLabel", NonAccessibilityModifier.@static, AddRemoveAction.add);
-        Assert.That(result, Is.Not.Null);
+        var source = "namespace TestProj;\n\npublic class Order\n{\n    public int Twice(int x)\n    {\n        return x * 2;\n    }\n}\n";
+        SetSource(source, "Order.cs");
+        var result = await _refactoringStructuralTools.ModifyModifierTool(reason: "test message", "Order.cs", "Twice", NonAccessibilityModifier.@static, AddRemoveAction.add);
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        var summary = (AppliedChangeSummary)result.SuccessData!;
+        Assert.That(summary.Status, Is.EqualTo("applied"));
+        Assert.That(summary.AffectedFiles.Select(f => f.ToString()), Does.Contain("Order.cs"));
+        var text = await ReadCommittedText("Order.cs");
+        Assert.That(text, Does.Contain("public static int Twice(int x)"));
+        Assert.That(text, Does.Not.Contain("public int Twice(int x)"));
     }
 
     // --- ExtensionToStatic ---
@@ -351,7 +358,9 @@ public class BatteryTwentyFourTests
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _advancedStructuralEngine.ReplaceConstructorWithFactoryAsync("Order.cs", "Order");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        // TODO ReplaceConstructorWithFactoryAsync reports Modified but returns an empty Changes map on SimpleSource; assert the factory method and retained constructor once the engine writes the file text.
+        Assert.That(result.Changes, Is.Empty);
     }
 
     // --- ReduceBlockDepth ---
@@ -421,7 +430,11 @@ public class BatteryTwentyFourTests
     {
         SetSource(SimpleSource, "Order.cs");
         var result = await _refactoringEngine.AnalyzeControlFlowAsync("Order.cs", "GetStatus");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.MethodName, Is.EqualTo("GetStatus"));
+        Assert.That(result.AlwaysReturns, Is.True);
+        Assert.That(result.NeverReturns, Is.False);
+        Assert.That(result.ReturnPoints, Has.Count.EqualTo(3));
+        Assert.That(result.ThrowPoints, Is.Empty);
     }
 
     // --- AnalyzeDataFlow ---
@@ -429,9 +442,13 @@ public class BatteryTwentyFourTests
     [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task AnalyzeDataFlow_ValidMethod_ReturnsSummary()
     {
-        SetSource(SimpleSource, "Order.cs");
-        var result = await _refactoringEngine.AnalyzeDataFlowAsync("Order.cs", "GetStatus");
-        Assert.That(result, Is.Not.Null);
+        var source = "namespace TestProj;\n\npublic class Order\n{\n    public int Sum(int a)\n    {\n        var total = a;\n        total += 1;\n        return total;\n    }\n}\n";
+        SetSource(source, "Order.cs");
+        var result = await _refactoringEngine.AnalyzeDataFlowAsync("Order.cs", "Sum");
+        Assert.That(result.MethodName, Is.EqualTo("Sum"));
+        Assert.That(result.WrittenInside, Does.Contain("total"));
+        Assert.That(result.ReadInside, Does.Contain("total"));
+        Assert.That(result.WrittenInside, Does.Not.Contain("a"));
     }
 
     // --- FormatDocumentPreview ---
@@ -439,9 +456,11 @@ public class BatteryTwentyFourTests
     [Category("BasicRefactoringEngine")] // sentinel:auto-category
     public async Task FormatDocumentPreview_ValidFile_ReturnsPreviewResult()
     {
-        SetSource(SimpleSource, "Order.cs");
+        SetSource("namespace TestProj;\n\npublic class Order{public int X(){return 1;}}\n", "Order.cs");
         var result = await _refactoringEngine.FormatDocumentPreviewAsync("Order.cs");
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result.Changed, Is.True);
+        Assert.That(result.TotalHunks, Is.GreaterThan(0));
+        Assert.That(result.Hunks, Has.Count.EqualTo(result.TotalHunks));
     }
 
     // --- ConvertToNullCoalescing ---

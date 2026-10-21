@@ -50,5 +50,7 @@ public sealed class RenameSymbolTests
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.Message, Does.Contain("NoSuchSymbol").Or.Contain("no longer resolves"));
+        // TODO throw-migration: assert the typed not-found exception once the rename engine throws; ErrorCode is currently the generic "Exception".
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo("Exception"));
     }
 }
