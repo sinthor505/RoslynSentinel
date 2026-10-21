@@ -515,9 +515,8 @@ public class Logger
         SetSource(code, "Logger.cs");
         // Target the string.Format call itself so the engine can locate the invocation
         var result = await _codeGenerationEngine.InterpolateStringAsync("Logger.cs", "string.Format(Format, value, count)");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return interpolated string result");
-        // Either should contain interpolated result or return the code as-is
-        Assert.That(result.UpdatedText!.Length, Is.GreaterThan(0), "Should return a result");
+        Assert.That(result.UpdatedText, Does.Contain("$\"").And.Contain("{value}"), "Should interpolate the const format string");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), "Should convert the string.Format call");
     }
 
     [Test]
@@ -2447,11 +2446,10 @@ public class MyClass
                 }
 
                 var result = await _codeGenerationEngine.InterpolateStringAsync(document.FilePath, "string.Format(CacheKeyFmt", lineBefore: null, lineAfter: null);
-                // Should not crash and should either:
-                // 1. Return an error message (not crash)
-                // 2. Return the interpolated string
+                // Should not crash and must convert the named const format string
                 Assert.That(result, Is.Not.Null, "Should handle named const without crashing");
-                Assert.That(result.UpdatedText!.Length, Is.GreaterThan(0), "Should return non-empty result (error or success)");
+                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), "Should convert the named const format string");
+                Assert.That(result.UpdatedText, Does.Contain("$\"key_{id}\""), "Should interpolate the named const format string");
             }
 
             // ──────────────────────────────────────────────────────────────────────────
@@ -2565,8 +2563,8 @@ public class Processor
 
                     var result = await new LogicSimplificationEngine(_workspaceManager).ReduceBlockDepthAsync(document.FilePath!, "Process");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
-                    Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-                    Assert.That(result.UpdatedText, Does.Not.Contain("// ErrorDetails"), "Should not return error");
+                    Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), "Should reduce the nested if to an early return");
+                    Assert.That(result.UpdatedText, Does.Contain("if (input.Length > 5)"), "Should keep the nested condition in the reduced method");
                 }
             }
 
@@ -2786,8 +2784,8 @@ public class Calculator
 
                     var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(document.FilePath!, "x * 2", "multiplier");
                     Assert.That(result, Is.Not.Null, "Should return non-null result");
-                    Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
-                    // Should either succeed or return unchanged code, but not crash
+                    Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), "Should add the multiplier parameter");
+                    Assert.That(result.UpdatedText, Does.Contain("int multiplier"), "Should declare the multiplier parameter");
                 }
 
                 [Test]
@@ -3288,21 +3286,8 @@ public class MyClass
     }
 }";
                 SetSource(code, "MyClass.cs");
-                try
-                {
-                    var result = await _advancedStructuralEngine.IntroduceFieldAsync("MyClass.cs", contextSnippet: "myParam", newFieldName: "_field", lineBefore: "int local = ", lineAfter: null);
-                    // Should not crash and should return code
-                    Assert.That(result, Is.Not.Null);
-                    Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return non-empty code");
-                }
-                catch (ToolException ex)
-                {
-                    // Context disambiguation errors are acceptable if the snippet is ambiguous, or was
-                    // filtered out entirely by the lineBefore disambiguation (both "myParam" occurrences
-                    // get excluded here since lineBefore matches neither match's *previous* source line ->
-                    // it's the same line's own prefix, not adjacent-line text).
-                    Assert.That(ex.Message, Does.Contain("ambiguous") | Does.Contain("match") | Does.Contain("not found"), "If it fails, should be due to ambiguous/unresolvable context, not a bug");
-                }
+                // contextSnippet matches twice but not next to lineBefore, so the lookup throws ToolNotFoundException
+                await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _advancedStructuralEngine.IntroduceFieldAsync("MyClass.cs", "myParam", "_field", "int local = ", null));
             }
 
             // ── BUG-73: SafeDeleteSymbol -> refuses when symbol IS used ──────────
