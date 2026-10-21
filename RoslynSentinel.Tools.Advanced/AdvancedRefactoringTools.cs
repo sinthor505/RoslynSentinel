@@ -1063,6 +1063,7 @@ public class AdvancedRefactoringTools
                         ErrorData = new ResultError(ToolErrorCode.Exception, syncFileErr)
                     };
                 var syncResult = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync(resolvedFilePath, className, interfaceName, cancellationToken: cancellationToken);
+                // TODO the engine reports distinct causes (class file / class / interface not found, nothing to sync) in syncResult.Outcome and Message; this branch collapses them into one NotFound naming both class and interface - name the real cause
                 if (string.IsNullOrEmpty(syncResult.UpdatedText))
                     return new SentinelCallToolResult<object>()
                     {
