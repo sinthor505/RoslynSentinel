@@ -216,7 +216,8 @@ public class SemanticRefactoringEngine
     }
 
     /// <summary>
-    /// Wraps a block of code in a using statement for an IDisposable object.
+    /// Wraps a block of code in a using statement for an IDisposable object. The range must start with the
+    /// local declaration of that object (see <see cref="WrapStatementsInUsingAsync"/>); anything else is refused.
     /// </summary>
     public async Task<DocumentEditResult> WrapInUsingAsync(FilePathWrapper filePath, int startLine, int endLine, string disposalName, CancellationToken cancellationToken = default)
     {
@@ -237,33 +238,12 @@ public class SemanticRefactoringEngine
             return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "// ErrorDetails: No statements found in the specified range.", FilePath = filePath };
         }
 
-        var firstNode = nodes[0];
-        var parentBlock = (BlockSyntax)firstNode.Parent!;
-
-        var usingStatement = SyntaxFactory.UsingStatement(
-            SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var"))
-                .WithVariables(SyntaxFactory.SingletonSeparatedList(
-                    SyntaxFactory.VariableDeclarator(disposalName))),
-            null,
-            SyntaxFactory.Block(nodes));
-
-        // Rebuild the parent block's statement list: replace the entire selected range
-        // with the single using statement. ReplaceNodes(delegate returning null) would crash Roslyn.
-        var origStatements = parentBlock.Statements.ToList();
-        int startIdx = origStatements.IndexOf(nodes[0]);
-        int endIdx = origStatements.IndexOf(nodes[^1]);
-        var newStatements = new List<StatementSyntax>();
-        newStatements.AddRange(origStatements.Take(startIdx));
-        newStatements.Add(usingStatement);
-        newStatements.AddRange(origStatements.Skip(endIdx + 1));
-
-        var newBlock = parentBlock.WithStatements(SyntaxFactory.List(newStatements));
-
-        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, parentBlock, newBlock, cancellationToken), FilePath = filePath };
+        return await WrapStatementsInUsingAsync(filePath, document, root!, nodes, disposalName, cancellationToken);
     }
 
     /// <summary>
-    /// Wraps a code snippet (identified via contextSnippet, lineBefore/lineAfter) in a using statement.
+    /// Wraps a code snippet (identified via contextSnippet, lineBefore/lineAfter) in a using statement; the same
+    /// range requirement as the line-range overload applies.
     /// Uses SnippetLookup.ResolveOrThrow to locate the snippet, then wraps the enclosing statements.
     /// </summary>
     public async Task<DocumentEditResult> WrapInUsingAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore, string? lineAfter, string disposalName, CancellationToken cancellationToken = default)
@@ -308,33 +288,83 @@ public class SemanticRefactoringEngine
                 return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "// ErrorDetails: No statements found at the snippet location.", FilePath = filePath };
             }
 
-            var firstNode = nodes[0];
-            var parentBlock = (BlockSyntax)firstNode.Parent!;
-
-            var usingStatement = SyntaxFactory.UsingStatement(
-                SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var"))
-                    .WithVariables(SyntaxFactory.SingletonSeparatedList(
-                        SyntaxFactory.VariableDeclarator(disposalName))),
-                null,
-                SyntaxFactory.Block(nodes));
-
-            // Rebuild the parent block's statement list: replace the entire selected range
-            // with the single using statement
-            var origStatements = parentBlock.Statements.ToList();
-            int startIdx = origStatements.IndexOf(nodes[0]);
-            int endIdx = origStatements.IndexOf(nodes[^1]);
-            var newStatements = new List<StatementSyntax>();
-            newStatements.AddRange(origStatements.Take(startIdx));
-            newStatements.Add(usingStatement);
-            newStatements.AddRange(origStatements.Skip(endIdx + 1));
-
-            var newBlock = parentBlock.WithStatements(SyntaxFactory.List(newStatements));
-
-            return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, parentBlock, newBlock, cancellationToken), FilePath = filePath };
+            // TODO this snippet form selects only the statement(s) containing the snippet, so it cannot cover a multi-statement range (the using block would be empty); WrapRange using is meant for startLine/endLine
+            return await WrapStatementsInUsingAsync(filePath, document, root, nodes, disposalName, cancellationToken);
         }
-        catch (ToolException ex)
+        // A using-eligibility refusal is not a snippet-lookup failure: let it reach the tool boundary with its own error code and message.
+        catch (ToolException ex) when (ex is not (ToolTargetIneligibleException or ToolInvalidArgumentException))
         {
             return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = $"// ContextSnippet error: {ex.Message}", ErrorCode = ex.ErrorCode, FilePath = filePath };
         }
+    }
+
+    /// <summary>
+    /// Replaces the selected statements with <c>using (&lt;first declaration&gt;) { &lt;remaining statements&gt; }</c>.
+    /// The range must start with a single-variable local declaration, with an initializer, of a type that
+    /// implements <see cref="IDisposable"/>, and <paramref name="disposalName"/> must be that variable's name;
+    /// anything else is refused with a <see cref="ToolTargetIneligibleException"/> (a name mismatch with a
+    /// <see cref="ToolInvalidArgumentException"/>), because a using header without an initializer is never valid C#.
+    /// Shared by both <c>WrapInUsingAsync</c> overloads.
+    /// </summary>
+    private static async Task<DocumentEditResult> WrapStatementsInUsingAsync(FilePathWrapper filePath, Document document, SyntaxNode root, IReadOnlyList<StatementSyntax> selected, string disposalName, CancellationToken cancellationToken)
+    {
+        const string Requirement = "WrapRange wrapper=using requires the range to start with a local declaration of an IDisposable (for example `var s = new MemoryStream();`), and name must be that variable's name";
+
+        var parentBlock = (BlockSyntax)selected[0].Parent!;
+
+        // DescendantNodes also yields statements nested inside the selected ones; only siblings of the first statement belong in the new block.
+        var nodes = selected.Where(n => n.Parent == parentBlock).ToList();
+
+        var firstLine = nodes[0].ToString().Trim().Split('\n')[0].Trim();
+        if (firstLine.Length > 60)
+            firstLine = firstLine[..60] + "...";
+
+        if (nodes[0] is not LocalDeclarationStatementSyntax declaration
+            || declaration.IsConst
+            || !declaration.UsingKeyword.IsKind(SyntaxKind.None)
+            || declaration.Declaration.Variables.Count != 1
+            || declaration.Declaration.Variables[0].Initializer == null)
+        {
+            throw new ToolTargetIneligibleException($"Cannot wrap in using: {Requirement}, but the first statement of the range is not a single-variable local declaration with an initializer ('{firstLine}').");
+        }
+
+        var declarator = declaration.Declaration.Variables[0];
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        var disposable = semanticModel?.Compilation.GetSpecialType(SpecialType.System_IDisposable);
+        var declaredType = (semanticModel?.GetDeclaredSymbol(declarator, cancellationToken) as ILocalSymbol)?.Type;
+        if (declaredType == null || declaredType.TypeKind == TypeKind.Error)
+        {
+            throw new ToolTargetIneligibleException($"Cannot wrap in using: {Requirement}, but the type of '{declarator.Identifier.Text}' could not be resolved (is the project compiling?).");
+        }
+
+        if (disposable == null || (!SymbolEqualityComparer.Default.Equals(declaredType, disposable) && !declaredType.AllInterfaces.Contains(disposable, SymbolEqualityComparer.Default)))
+        {
+            throw new ToolTargetIneligibleException($"Cannot wrap in using: {Requirement}, but '{declarator.Identifier.Text}' has type '{declaredType.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)}', which does not implement System.IDisposable.");
+        }
+
+        if (declarator.Identifier.Text != disposalName)
+        {
+            throw new ToolInvalidArgumentException($"Cannot wrap in using: name is '{disposalName}' but the range declares '{declarator.Identifier.Text}'; name must be the declared variable's name (case-sensitive).");
+        }
+
+        var usingStatement = SyntaxFactory.UsingStatement(
+                declaration.Declaration.WithoutTrivia(),
+                null,
+                SyntaxFactory.Block(nodes.Skip(1)))
+            .WithLeadingTrivia(declaration.GetLeadingTrivia());
+
+        // Rebuild the parent block's statement list: replace the entire selected range
+        // with the single using statement. ReplaceNodes(delegate returning null) would crash Roslyn.
+        var origStatements = parentBlock.Statements.ToList();
+        int startIdx = origStatements.IndexOf(nodes[0]);
+        int endIdx = origStatements.IndexOf(nodes[^1]);
+        var newStatements = new List<StatementSyntax>();
+        newStatements.AddRange(origStatements.Take(startIdx));
+        newStatements.Add(usingStatement);
+        newStatements.AddRange(origStatements.Skip(endIdx + 1));
+
+        var newBlock = parentBlock.WithStatements(SyntaxFactory.List(newStatements));
+
+        return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, parentBlock, newBlock, cancellationToken), FilePath = filePath };
     }
 }

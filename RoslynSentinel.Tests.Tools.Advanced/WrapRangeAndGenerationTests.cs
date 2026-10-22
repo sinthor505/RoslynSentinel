@@ -86,16 +86,78 @@ public class Holder
     }
 
     // --- WrapInUsing ---
-    // TODO WrapRangeTool using wraps non-disposable statements in invalid code that the compile gate refuses; assert success once a disposable statement range is fixtured
+    // wrapper=using needs the range to start with a local declaration of an IDisposable; the declaration becomes the using header.
+    private const string DisposableRangeSource = @"using System.IO;
+
+namespace TestProj;
+
+public class Writer
+{
+    public int Run()
+    {
+        var s = new MemoryStream();
+        s.WriteByte(1);
+        return (int)s.Length;
+    }
+
+    public int Count()
+    {
+        var n = 5;
+        return n + 1;
+    }
+}
+";
+
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task WrapInUsing_NonDisposableStatementRange_ReturnsCompilerErrorRefusal()
+    public async Task WrapInUsing_RangeNotStartingWithDeclaration_RefusedAsTargetIneligible()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Order.cs"), 11, 12, "using", "resource");
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData!.Message, Does.Contain("introduces new compiler errors"));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(result.ErrorData!.Message, Does.Contain("IDisposable"));
+        Assert.That(workspace.ReadText("Order.cs"), Is.EqualTo(CrlfSimpleSource));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    public async Task WrapInUsing_RangeStartingWithDisposableDeclaration_UsesTheDeclarationAsTheHeader()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Writer.cs", DisposableRangeSource.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Writer.cs"), 9, 11, "using", "s");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        var text = workspace.ReadText("Writer.cs");
+        Assert.That(text, Does.Contain("using (var s = new MemoryStream())"));
+        Assert.That(text, Does.Contain("s.WriteByte(1);"));
+        Assert.That(text, Does.Contain("return (int)s.Length;"));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    public async Task WrapInUsing_RangeStartingWithNonDisposableDeclaration_RefusedAsTargetIneligible()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Writer.cs", DisposableRangeSource.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Writer.cs"), 16, 17, "using", "n");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(result.ErrorData!.Message, Does.Contain("IDisposable"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("'n'"));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")] // sentinel:auto-category
+    public async Task WrapInUsing_NameDiffersFromDeclaredVariable_RefusedNamingBoth()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Writer.cs", DisposableRangeSource.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Writer.cs"), 9, 11, "using", "stream");
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.Message, Does.Contain("'stream'"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("'s'"));
     }
 
     // --- GenerateMapping ---
