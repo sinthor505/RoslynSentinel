@@ -107,9 +107,9 @@ public class BasicRefactoringEngine
     public async Task<DocumentEditResult> FormatDocumentAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: _workspaceManager is ISolutionProvider-typed (40 construction sites
-        // across the solution as of 2026-09-25, including production callers in
-        // AdvancedRefactoringTools.cs and RefactoringSignatureTools.cs/RefactoringStructuralTools.cs --
-        // widening the constructor to IWorkspaceManager would force touching all of them). Every real
+        // across the solution as of 2026-09-25; the only production construction site is
+        // AdvancedRefactoringTools.cs:42. FormatDocumentAsync itself has no production caller (tests only).
+        // widening the constructor to IWorkspaceManager would force touching every construction site). Every real
         // ISolutionProvider implementation (PersistentWorkspaceManager, FakeWorkspaceManager) also
         // implements IWorkspaceManager, so this cast is safe today. Cleanup target: widen the
         // constructor and drop this cast once BasicRefactoringEngine's caller list has been consolidated.
@@ -127,11 +127,22 @@ public class BasicRefactoringEngine
         }
 
         var formatted = await Formatter.FormatAsync(document, null, cancellationToken);
+        var formattedText = (await formatted.GetTextAsync(cancellationToken)).ToString();
+        var currentText = (await document.GetTextAsync(cancellationToken)).ToString();
+        if (string.Equals(formattedText, currentText, StringComparison.Ordinal))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.AlreadyInTargetState,
+                FilePath = filePath
+            };
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            UpdatedText = (await formatted.GetTextAsync(cancellationToken)).ToString()
+            UpdatedText = formattedText
         };
     }
 

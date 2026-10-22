@@ -2861,8 +2861,7 @@ public class Processor
                 SetSource("var x = new Dictionary<string, int>(); var y = x ?? new();");
                 // Should not throw NullReferenceException
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-                // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
-                Assert.That(result, Is.Not.Null);
+                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
             }
 
             [Test]
@@ -2892,8 +2891,7 @@ public class Processor
                 // BUG-69: Unicode characters cause encoding errors
                 SetSource("// Comment with émojis 🎉 and spëcial çharacters\npublic class Tëst { }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-                Assert.That(result.UpdatedText, Does.Contain("// Comment with"));
+                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
             }
 
             [Test]
@@ -2902,8 +2900,7 @@ public class Processor
                 // BUG-76: Recursive method analysis causes stack overflow
                 SetSource("public class Recursive { public int F(int n) => n <= 0 ? 0 : n + F(n - 1); }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-                // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
-                Assert.That(result, Is.Not.Null);
+                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
             }
 
             [Test]
@@ -2912,8 +2909,7 @@ public class Processor
                 // BUG-77: Complex generic constraints cause type resolution errors
                 SetSource("public class G<T, U> where T : class where U : struct { public void M<V>(V item) where V : T { } }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-                // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
-                Assert.That(result, Is.Not.Null);
+                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
             }
 
             // ──────────────────────────────────────────────────────────────────────────
@@ -2966,8 +2962,7 @@ public class Processor
                 // BUG-45: Refactoring produces wrong result silently
                 SetSource("public class Calculator { public int Add(int a, int b) => a + b; }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
-                // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
-                Assert.That(result, Is.Not.Null);
+                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
             }
 
             [Test]
