@@ -469,10 +469,9 @@ public class MsToolAugmentEngineFormatCharacterizationTests
 
     // ================================================================ Known trivia loss
 
-    // Pinned as-is (known limitation): trailing // comments on usings, a leading comment on a using and the leading
-    // trivia of a removed duplicate using are all dropped.
+    // Comments on usings survive the sort and dedup, attached to their using. The removed duplicate's own trivia goes with it.
     [Test]
-    public async Task SortUsings_TrailingAndLeadingComments_DuplicateTrivia_IsDropped()
+    public async Task SortUsings_TrailingAndLeadingComments_DuplicateTrivia_CommentsSurvive()
     {
         var lines = new[]
         {
@@ -493,13 +492,13 @@ public class MsToolAugmentEngineFormatCharacterizationTests
 
         var result = await _engine.SortAndDeduplicateUsingsAsync("Test.cs", writeToFile: false);
 
-        // Pinned as-is (known limitation): every trailing and leading comment on the usings is lost.
-        // TODO SortAndDeduplicateUsings drops trailing and leading comments on usings, incl. duplicate-using trivia.
         Assert.That(result.UpdatedContent, Is.EqualTo(Src(false, new[]
         {
-            "using System;",
+            "// lead of dup",
+            "using System; // trailing sys",
+            "// lead of linq",
             "using System.Linq;",
-            "using System.Text;",
+            "using System.Text; // trailing text",
             "",
             "namespace   N",
             "{",

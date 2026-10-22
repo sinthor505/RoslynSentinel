@@ -610,12 +610,14 @@ public class MsToolAugmentEngine
         var annotation = Formatter.Annotation;
         var newUsings = SyntaxFactory.List(sorted.Select((u, idx) =>
         {
-            // Clean up trivia -> each using on its own line, no extra blanks
-            var clean = u.WithLeadingTrivia(SyntaxFactory.TriviaList())
-                         .WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.CarriageReturnLineFeed))
+            // Clean up trivia -> each using on its own line, no extra blanks; comments stay with their using.
+            // The first original using's leading trivia (file header) is emitted at position 0, so it is not kept twice.
+            var isFirstOriginal = u == original[0];
+            var clean = u.WithLeadingTrivia(isFirstOriginal ? SyntaxFactory.TriviaList() : KeepCommentLines(u.GetLeadingTrivia()))
+                         .WithTrailingTrivia(KeepTrailingComment(u))
                          .WithAdditionalAnnotations(annotation);
             return idx == 0
-                ? clean.WithLeadingTrivia(root.Usings.First().GetLeadingTrivia())
+                ? clean.WithLeadingTrivia(root.Usings.First().GetLeadingTrivia().AddRange(clean.GetLeadingTrivia()))
                 : clean;
         }));
 
@@ -634,6 +636,61 @@ public class MsToolAugmentEngine
     }
 
     // ── Private Helpers ───────────────────────────────────────────────────────
+
+    private static bool IsCommentTrivia(SyntaxTrivia t) =>
+        t.IsKind(SyntaxKind.SingleLineCommentTrivia) || t.IsKind(SyntaxKind.MultiLineCommentTrivia)
+        || t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) || t.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia);
+
+    // Keeps comment trivia and the end-of-line that follows each comment; drops indentation and blank lines.
+    private static SyntaxTriviaList KeepCommentLines(SyntaxTriviaList trivia)
+    {
+        var kept = new List<SyntaxTrivia>();
+        bool afterComment = false;
+        foreach (var t in trivia)
+        {
+            if (IsCommentTrivia(t))
+            {
+                kept.Add(t);
+                afterComment = true;
+            }
+            else if (afterComment && t.IsKind(SyntaxKind.EndOfLineTrivia))
+            {
+                kept.Add(t);
+                afterComment = false;
+            }
+        }
+        return SyntaxFactory.TriviaList(kept);
+    }
+
+    // Trailing trivia of a using is whitespace, an optional // comment and the end of line. Keeps the comment with the
+    // whitespace before it and always ends with CRLF, as the normalisation has always done.
+    private static SyntaxTriviaList KeepTrailingComment(UsingDirectiveSyntax u)
+    {
+        var kept = new List<SyntaxTrivia>();
+        SyntaxTrivia? space = null;
+        foreach (var t in u.GetTrailingTrivia())
+        {
+            if (t.IsKind(SyntaxKind.WhitespaceTrivia))
+            {
+                space = t;
+            }
+            else if (IsCommentTrivia(t))
+            {
+                if (space is { } s)
+                {
+                    kept.Add(s);
+                }
+                kept.Add(t);
+                break;
+            }
+            else
+            {
+                space = null;
+            }
+        }
+        kept.Add(SyntaxFactory.CarriageReturnLineFeed);
+        return SyntaxFactory.TriviaList(kept);
+    }
 
     private static bool IsSystemUsing(UsingDirectiveSyntax u)
     {
