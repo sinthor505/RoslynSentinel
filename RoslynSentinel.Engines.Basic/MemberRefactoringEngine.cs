@@ -2159,7 +2159,7 @@ public class MemberRefactoringEngine
         {
             var allCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken);
             var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allCandidates.Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
-            var memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            var memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(DropOwnConstructorsWhenTypeMatches(memberCandidates, allCandidates, contextSnippet, lineBefore, lineAfter), sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
             if (memberNode != null)
             {
@@ -2359,6 +2359,23 @@ public class MemberRefactoringEngine
         };
     }
 
+    /// <summary>
+    /// A bare type name also matches its own constructor. With no snippet the type is meant; pass a
+    /// contextSnippet to target the constructor. Returns an empty member list in that case so the
+    /// caller's type fallback runs.
+    /// </summary>
+    private static List<SyntaxNodeCandidate> DropOwnConstructorsWhenTypeMatches(List<SyntaxNodeCandidate> memberCandidates, List<SyntaxNodeCandidate> allCandidates, string? contextSnippet, string? lineBefore, string? lineAfter)
+    {
+        var hasSnippet = !string.IsNullOrWhiteSpace(contextSnippet) || !string.IsNullOrWhiteSpace(lineBefore) || !string.IsNullOrWhiteSpace(lineAfter);
+        if (hasSnippet || memberCandidates.Count == 0 || memberCandidates.Any(c => c.Kind != CandidateKind.Constructor))
+        {
+            return memberCandidates;
+        }
+
+        var hasType = allCandidates.Any(c => c.Kind is CandidateKind.Class or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Interface or CandidateKind.Enum);
+        return hasType ? new List<SyntaxNodeCandidate>() : memberCandidates;
+    }
+
     public async Task<DocumentEditResult> RemoveAttributeAsync(FilePathWrapper filePath, string targetName, string attributeName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -2398,7 +2415,7 @@ public class MemberRefactoringEngine
         {
             var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
                 .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
-            memberTarget = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            memberTarget = SyntaxTargetResolver.ResolveBySnippetOrThrow(DropOwnConstructorsWhenTypeMatches(memberCandidates, SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken), contextSnippet, lineBefore, lineAfter), sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
         catch (ToolException ex)
@@ -2410,6 +2427,28 @@ public class MemberRefactoringEngine
                 Message = ex.Message,
                 ErrorCode = ex.ErrorCode
             };
+        }
+
+        if (memberTarget == null)
+        {
+            try
+            {
+                var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
+                    .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                    .ToList();
+                memberTarget = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                    (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
+            }
+            catch (ToolException ex)
+            {
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.CannotEdit,
+                    FilePath = filePath,
+                    Message = ex.Message,
+                    ErrorCode = ex.ErrorCode
+                };
+            }
         }
 
         if (memberTarget == null)

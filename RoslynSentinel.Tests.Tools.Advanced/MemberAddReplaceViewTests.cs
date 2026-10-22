@@ -131,17 +131,15 @@ public sealed class MemberAddReplaceViewTests
     }
 
     // --- AddAttribute ---
-    // TODO ModifyAttribute add of [Serializable] on a plain class is refused with compiler errors (diagnostics not in the message; cause unconfirmed)
     [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
-    public async Task AddAttribute_SerializableOnOrder_IsRefusedWithCompilerErrors()
+    public async Task AddAttribute_SerializableOnOrder_AddsAttributeToClass()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
         var tools = BatteryToolFactory.CreateRefactoringStructuralTools(workspace.Manager);
         var result = await tools.ModifyAttributeTool(reason: "test message", workspace.PathOf("Order.cs"), "Order", "[System.Serializable]", AttributeModifyAction.add);
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.Message, Does.Contain("new compiler errors"));
-        Assert.That(workspace.ReadText("Order.cs"), Is.EqualTo(CrlfSimpleSource));
+        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
+        Assert.That(workspace.ReadText("Order.cs"), Does.Match(@"\[System\.Serializable\]\s*\r?\npublic class Order"));
     }
 
     // --- AddBaseType ---
@@ -158,10 +156,9 @@ public sealed class MemberAddReplaceViewTests
     }
 
     // --- RemoveAttribute ---
-    // TODO RemoveAttribute reports success but leaves the attribute (existingAttribute "Serializable", targetName "Order", action remove)
     [Test]
     [Category("RefactoringStructuralTools")] // sentinel:auto-category
-    public async Task RemoveAttribute_SerializableOnOrder_ReportsSuccessButLeavesAttribute()
+    public async Task RemoveAttribute_SerializableOnOrder_RemovesAttribute()
     {
         var source = CrlfSimpleSource.Replace("public class Order", "[Serializable]\r\npublic class Order", StringComparison.Ordinal);
         using var workspace = InMemoryWorkspace.Create(("Order.cs", source));
@@ -169,7 +166,7 @@ public sealed class MemberAddReplaceViewTests
         var result = await tools.ModifyAttributeTool(reason: "test message", workspace.PathOf("Order.cs"), "Order", "Serializable", AttributeModifyAction.remove);
         Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
         var text = workspace.ReadText("Order.cs");
-        Assert.That(text, Does.Contain("[Serializable]"));
+        Assert.That(text, Does.Not.Contain("[Serializable]"));
         Assert.That(text, Does.Contain("public class Order"));
     }
 
