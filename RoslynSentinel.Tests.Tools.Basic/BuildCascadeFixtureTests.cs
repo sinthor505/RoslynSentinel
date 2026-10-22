@@ -12,6 +12,9 @@ public class BuildCascadeFixtureTests
     // Characterises MSBuild's behaviour: a project whose ProjectReference failed to compile is not
     // compiled itself, so a full build reports only the root layer (here Base). Mid and Top are valid
     // code that would compile if Base succeeded, so any error from them would mean MSBuild cascaded.
+    // FLAKY on full-suite runs (confirmed 2026-10-22): occasionally fails there with "No data on Failure
+    // result" (result.Data read on a failed RunFullBuildAsync) yet passes alone; it may always have been
+    // flaky and gone unnoticed. Not worth chasing each time - re-run it alone before treating it as new.
     [Test]
     [NonParallelizable]
     public async Task FullBuild_UpstreamProjectFails_DownstreamProjectsReportNoErrors()
