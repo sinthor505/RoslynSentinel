@@ -625,9 +625,8 @@ public class GranularRefactoringEngineGapTests
         var source = "public class Service { public void Go(int x) { var y = x + 1; } }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new StructuralRefactoringEngine(_workspaceManager).InlineParameterAsync("Service.cs", "Go", "x");
-        // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
-        Assert.That(result, Is.Not.Null);
+        var engine = new StructuralRefactoringEngine(_workspaceManager);
+        await Assert.ThrowsAsync<ToolNotImplementedException>(() => engine.InlineParameterAsync("Service.cs", "Go", "x"));
     }
 
     [Test]

@@ -123,15 +123,15 @@ public class Calc
     }
 
     // --- InlineParameter ---
-    // TODO InlineParameter (AdvancedRefactoringTools.InlineSymbolTool kind=parameter) reports success but leaves the file unchanged
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task InlineParameter_ValidParameter_ReportsSuccessButLeavesFileUnchanged()
+    public async Task InlineParameter_ValidParameter_IsRefusedAsNotImplementedAndLeavesFileUnchanged()
     {
         using var workspace = InMemoryWorkspace.Create(("Calc.cs", CrlfParameterSource));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.InlineSymbolTool(reason: "test message", workspace.PathOf("Calc.cs"), "amount", InlineKind.parameter, "Add");
-        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(result.IsError, Is.True, "inline parameter must be refused until implemented");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented), $"error: {result.ErrorData?.Message}");
         Assert.That(workspace.ReadText("Calc.cs"), Is.EqualTo(CrlfParameterSource));
     }
 

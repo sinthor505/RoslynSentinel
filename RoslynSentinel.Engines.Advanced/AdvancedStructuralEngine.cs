@@ -620,12 +620,8 @@ public class StructuralRefactoringEngine
             };
         }
 
-        return new DocumentEditResult
-        {
-            Outcome = EditOutcome.Modified,
-            FilePath = filePath,
-            UpdatedText = root!.ToFullString()
-        };
+        // TODO implement parameter inlining (bind the constant argument into the body and drop the parameter plus every call-site argument); until then refuse
+        throw new ToolNotImplementedException($"Inline/parameter is not implemented: parameter '{parameterName}' of '{methodName}' was found but the tool cannot inline it yet; the file was not changed.");
     }
 
     public async Task<DocumentEditResult> ConvertMethodToIndexerAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
