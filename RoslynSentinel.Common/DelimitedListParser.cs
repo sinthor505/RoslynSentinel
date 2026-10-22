@@ -8,8 +8,8 @@ public static class DelimitedListParser
     /// Parses a caller-supplied "list of strings" parameter that may arrive as either a plain
     /// comma-separated string ("a.cs,b.cs") or a JSON array literal textified into the same string
     /// ("[\"a.cs\", \"b.cs\"]") - the shape a caller reaches for out of habit when other params on
-    /// the same tool surface use real JSON arrays for multi-item values. Shape is detected purely
-    /// by whether the trimmed input starts with '[' and ends with ']'; once committed to that
+    /// the same tool surface use real JSON arrays for multi-item values. Input is treated as JSON
+    /// when it is bracketed ('[' ... ']') or has exactly one bracket end plus a double quote; once committed to that
     /// shape, malformed JSON is reported via <paramref name="error"/> instead of silently falling
     /// through to a comma split that would mangle it into one bogus token (see
     /// blocking_error_git_stage_jsonarray_string_pathspec_failure.md).
@@ -27,7 +27,9 @@ public static class DelimitedListParser
         }
 
         var trimmed = input.Trim();
-        if (!trimmed.StartsWith('[') || !trimmed.EndsWith(']'))
+        var bracketed = trimmed.StartsWith('[') && trimmed.EndsWith(']');
+        var halfBracketedQuoted = (trimmed.StartsWith('[') || trimmed.EndsWith(']')) && trimmed.Contains('"');
+        if (!bracketed && !halfBracketedQuoted)
         {
             return trimmed.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         }
