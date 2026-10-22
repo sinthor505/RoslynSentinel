@@ -1635,22 +1635,228 @@ public class StructuralRefactoringEngine
         ExpressionSyntax template,
         IReadOnlyDictionary<IdentifierNameSyntax, int> parameterOrdinalById,
         IReadOnlyDictionary<int, int> argumentIndexByOrdinal,
-        InvocationExpressionSyntax rewrittenInvocation)
+        InvocationExpressionSyntax rewrittenInvocation,
+        IReadOnlyDictionary<SimpleNameSyntax, SyntaxAnnotation>? nameAnnotations = null)
     {
-        if (parameterOrdinalById.Count == 0)
+        if (parameterOrdinalById.Count == 0 && (nameAnnotations == null || nameAnnotations.Count == 0))
         {
             return template;
         }
 
-        return template.ReplaceNodes(parameterOrdinalById.Keys, (parameterReference, _) =>
+        var nodesToReplace = parameterOrdinalById.Keys.Cast<SimpleNameSyntax>()
+            .Concat(nameAnnotations?.Keys ?? Enumerable.Empty<SimpleNameSyntax>())
+            .ToList();
+        return template.ReplaceNodes(nodesToReplace, (reference, rewritten) =>
         {
-            var argument = rewrittenInvocation.ArgumentList.Arguments[argumentIndexByOrdinal[parameterOrdinalById[parameterReference]]].Expression;
+            if (reference is not IdentifierNameSyntax parameterReference || !parameterOrdinalById.TryGetValue(parameterReference, out var ordinal))
+            {
+                return rewritten.WithAdditionalAnnotations(nameAnnotations![reference]);
+            }
+
+            var argument = rewrittenInvocation.ArgumentList.Arguments[argumentIndexByOrdinal[ordinal]].Expression;
             var needsParentheses = argument is not (IdentifierNameSyntax or LiteralExpressionSyntax or MemberAccessExpressionSyntax
                 or InvocationExpressionSyntax or ElementAccessExpressionSyntax or ThisExpressionSyntax or ParenthesizedExpressionSyntax);
             return needsParentheses
                 ? SyntaxFactory.ParenthesizedExpression(argument.WithoutTrivia()).WithTriviaFrom(parameterReference)
                 : argument.WithTriviaFrom(parameterReference);
         });
+    }
+
+    /// <summary>
+    /// Analyses the inlined method's expression (bound in the DEFINING document) for the names that are not the
+    /// method's own parameters. <c>Names</c> are the names that must keep their meaning at every call site (the
+    /// leftmost name of a chain, an unqualified name, <c>this.X</c> and reduced extension-method names).
+    /// <c>QualifiedMembers</c> are members reached through a qualifier or initializer: they bind through that
+    /// qualifier, so only their accessibility is checked. <c>ThisDependency</c> names the first thing that needs
+    /// the defining instance (an instance member by implicit <c>this</c>, or <c>this</c>/<c>base</c> itself), else null.
+    /// Locals, range variables, lambda parameters and discards declared inside the template are skipped.
+    /// </summary>
+    private static (Dictionary<SimpleNameSyntax, ISymbol> Names, List<ISymbol> QualifiedMembers, string? ThisDependency) CollectInlineTemplateNames(
+        ExpressionSyntax template,
+        SemanticModel model,
+        IMethodSymbol methodSymbol,
+        IReadOnlyDictionary<IdentifierNameSyntax, int> parameterOrdinalById,
+        CancellationToken cancellationToken)
+    {
+        var names = new Dictionary<SimpleNameSyntax, ISymbol>();
+        var qualifiedMembers = new List<ISymbol>();
+        var thisDependency = template.DescendantNodesAndSelf().Any(n => n is ThisExpressionSyntax or BaseExpressionSyntax) ? "this" : null;
+
+        foreach (var name in template.DescendantNodesAndSelf().OfType<SimpleNameSyntax>())
+        {
+            if (name is IdentifierNameSyntax identifier && (identifier.IsVar || parameterOrdinalById.ContainsKey(identifier)))
+            {
+                continue;
+            }
+
+            var symbol = model.GetSymbolInfo(name, cancellationToken).Symbol;
+            if (symbol == null || symbol is ILocalSymbol or IRangeVariableSymbol or ILabelSymbol or IDiscardSymbol or IAliasSymbol)
+            {
+                continue;
+            }
+
+            if (symbol is IParameterSymbol parameterSymbol
+                && (SymbolEqualityComparer.Default.Equals(parameterSymbol.ContainingSymbol, methodSymbol)
+                    || parameterSymbol.DeclaringSyntaxReferences.Any(r => r.SyntaxTree == template.SyntaxTree && template.Span.Contains(r.Span))
+                    || name.Parent is NameColonSyntax))
+            {
+                continue; // the method's own parameter, a lambda parameter, or the parameter name of a named argument
+            }
+
+            var isReducedExtension = symbol is IMethodSymbol { ReducedFrom: not null };
+            var isQualified = !isReducedExtension && name.Parent switch
+            {
+                MemberAccessExpressionSyntax access => access.Name == name && access.Expression is not (ThisExpressionSyntax or BaseExpressionSyntax),
+                MemberBindingExpressionSyntax => true,
+                QualifiedNameSyntax qualifiedName => qualifiedName.Right == name,
+                AliasQualifiedNameSyntax aliasQualified => aliasQualified.Name == name,
+                NameColonSyntax or NameEqualsSyntax => true,
+                AssignmentExpressionSyntax assignment => assignment.Left == name
+                    && assignment.Parent is InitializerExpressionSyntax initializer && initializer.IsKind(SyntaxKind.ObjectInitializerExpression),
+                _ => false,
+            };
+
+            if (isQualified)
+            {
+                qualifiedMembers.Add(symbol);
+                continue;
+            }
+
+            names[name] = symbol;
+            var isInstanceMember = symbol switch
+            {
+                IFieldSymbol field => !field.IsStatic && !field.IsConst,
+                IPropertySymbol property => !property.IsStatic,
+                IMethodSymbol method => !method.IsStatic && method.ReducedFrom == null && method.MethodKind == MethodKind.Ordinary,
+                IEventSymbol @event => !@event.IsStatic,
+                IParameterSymbol => true, // a captured parameter of a primary constructor
+                _ => false,
+            };
+            if (thisDependency == null && isInstanceMember)
+            {
+                thisDependency = symbol.Name;
+            }
+        }
+
+        return (names, qualifiedMembers, thisDependency);
+    }
+
+    /// <summary>
+    /// Refuses a call site where inlining would silently change what the expression means. The call's receiver is
+    /// dropped by inlining, so (a) a template that needs the defining instance requires an implicit or <c>this</c>
+    /// receiver, and any other receiver must be a plain name or member chain (no side effects to drop); (b) every
+    /// member the template uses must be accessible at the call site; (c) every name must re-bind to the same symbol
+    /// there (speculative binding of the substituted expression at the call's position; if that is unavailable the
+    /// site is refused rather than guessed).
+    /// </summary>
+    private static void ThrowIfInlinedNamesDoNotRebind(
+        string methodName,
+        ExpressionSyntax template,
+        IReadOnlyDictionary<IdentifierNameSyntax, int> parameterOrdinalById,
+        IReadOnlyDictionary<SimpleNameSyntax, ISymbol> names,
+        IReadOnlyList<ISymbol> qualifiedMembers,
+        string? thisDependency,
+        InvocationExpressionSyntax invocation,
+        IReadOnlyDictionary<int, int> argumentIndexByOrdinal,
+        SemanticModel callSiteModel,
+        string callSiteFileName)
+    {
+        ToolTargetIneligibleException Refuse(string referredName, string reason) =>
+            new($"Cannot inline '{methodName}': in '{callSiteFileName}' the expression refers to '{referredName}', which does not mean the same thing at this call site ({reason}); inlining would silently change what the code does, so make the member accessible or inline this call by hand.");
+
+        static bool IsPlainReceiver(ExpressionSyntax expression) => expression switch
+        {
+            SimpleNameSyntax or ThisExpressionSyntax or BaseExpressionSyntax or PredefinedTypeSyntax => true,
+            MemberAccessExpressionSyntax access when access.IsKind(SyntaxKind.SimpleMemberAccessExpression) => IsPlainReceiver(access.Expression),
+            _ => false,
+        };
+
+        static ISymbol Canonical(ISymbol symbol) => (symbol is IMethodSymbol { ReducedFrom: { } reduced } ? reduced : symbol).OriginalDefinition;
+
+        var receiver = (invocation.Expression as MemberAccessExpressionSyntax)?.Expression;
+        if (receiver != null && receiver is not ThisExpressionSyntax)
+        {
+            if (thisDependency != null)
+            {
+                throw Refuse(thisDependency, "instance member of another instance");
+            }
+
+            if (!IsPlainReceiver(receiver))
+            {
+                throw new ToolTargetIneligibleException($"Cannot inline '{methodName}': a call in '{callSiteFileName}' has the receiver '{receiver}', which is not a plain name or member chain; inlining drops the receiver, and with it any side effects it has.");
+            }
+        }
+
+        var position = invocation.SpanStart;
+        foreach (var symbol in names.Values.Concat(qualifiedMembers))
+        {
+            var target = symbol is IMethodSymbol { ReducedFrom: { } reducedFrom } ? reducedFrom : symbol;
+            if (target.Kind is SymbolKind.NamedType or SymbolKind.Field or SymbolKind.Property or SymbolKind.Method or SymbolKind.Event
+                && !callSiteModel.IsAccessible(position, target))
+            {
+                throw Refuse(symbol.Name, "inaccessible");
+            }
+        }
+
+        if (names.Count == 0)
+        {
+            return;
+        }
+
+        const string annotationKind = "RoslynSentinel.InlineMethod.TemplateName";
+        var ordered = names.Keys.ToList();
+        var annotations = new Dictionary<SimpleNameSyntax, SyntaxAnnotation>();
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            annotations[ordered[i]] = new SyntaxAnnotation(annotationKind, i.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        // Which speculative root can be bound depends on where the call sits: a statement inside a body, an arrow
+        // body, or a field/property initializer. Try each; if none binds, refuse rather than guess.
+        var substituted = SubstituteInlinedArguments(template, parameterOrdinalById, argumentIndexByOrdinal, invocation, annotations);
+        var statement = SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(SyntaxKind.SimpleAssignmentExpression, SyntaxFactory.IdentifierName("_"), substituted));
+        var arrowBody = SyntaxFactory.ArrowExpressionClause(substituted);
+        var initializer = SyntaxFactory.EqualsValueClause(substituted);
+        SyntaxNode? boundRoot = null;
+        SemanticModel? speculativeModel;
+        if (callSiteModel.TryGetSpeculativeSemanticModel(position, statement, out speculativeModel) && speculativeModel != null)
+        {
+            boundRoot = statement;
+        }
+        else if (callSiteModel.TryGetSpeculativeSemanticModel(position, arrowBody, out speculativeModel) && speculativeModel != null)
+        {
+            boundRoot = arrowBody;
+        }
+        else if (callSiteModel.TryGetSpeculativeSemanticModel(position, initializer, out speculativeModel) && speculativeModel != null)
+        {
+            boundRoot = initializer;
+        }
+
+        if (boundRoot == null || speculativeModel == null)
+        {
+            throw Refuse(names.Values.First().Name, "its binding could not be verified at this call site");
+        }
+
+        foreach (var node in boundRoot.DescendantNodes().OfType<SimpleNameSyntax>())
+        {
+            var annotation = node.GetAnnotations(annotationKind).FirstOrDefault();
+            if (annotation?.Data == null)
+            {
+                continue;
+            }
+
+            var expected = names[ordered[int.Parse(annotation.Data, System.Globalization.CultureInfo.InvariantCulture)]];
+            var info = speculativeModel.GetSymbolInfo(node);
+            if (info.Symbol == null)
+            {
+                throw Refuse(expected.Name, info.CandidateReason == CandidateReason.Inaccessible ? "inaccessible" : "not in scope");
+            }
+
+            if (!SymbolEqualityComparer.Default.Equals(Canonical(expected), Canonical(info.Symbol)))
+            {
+                throw Refuse(expected.Name, "binds to a different member");
+            }
+        }
     }
 
     /// <summary>
@@ -1748,6 +1954,9 @@ public class StructuralRefactoringEngine
             }
         }
 
+        // The template's other names (fields, statics, types needing a using...) as bound in the defining document; every call site must see them mean the same thing.
+        var (templateNames, qualifiedTemplateMembers, thisDependency) = CollectInlineTemplateNames(expressionTemplate, semanticModel, methodSymbol, parameterOrdinalById, cancellationToken);
+
         // Find ALL references across the solution grouped by document
         var references = await SymbolFinder.FindReferencesAsync(methodSymbol, solution, cancellationToken);
         var byDocument = references.SelectMany(r => r.Locations).Where(l => l.Document.FilePath != null).GroupBy(l => l.Document.Id).ToDictionary(g => g.Key, g => g.ToList());
@@ -1823,6 +2032,7 @@ public class StructuralRefactoringEngine
 
                 if (sites.All(s => s.Invocation != invocation))
                 {
+                    ThrowIfInlinedNamesDoNotRebind(methodName, expressionTemplate, parameterOrdinalById, templateNames, qualifiedTemplateMembers, thisDependency, invocation, argumentIndexByOrdinal, docModel, Path.GetFileName(doc.FilePath));
                     sites.Add((invocation, argumentIndexByOrdinal));
                 }
             }
@@ -1833,8 +2043,7 @@ public class StructuralRefactoringEngine
             }
         }
 
-        // Pass 2: replace each call with the per-site expression.
-        // TODO no accessibility check: the inlined expression may reference members that are private to the defining type when a call site is in another type
+        // Pass 2: replace each call with the per-site expression (Pass 1 already refused any site where the template's names would not keep their meaning).
         foreach (var (docId, sites) in plannedSites)
         {
             var docRoot = await solution.GetDocument(docId)!.GetSyntaxRootAsync(cancellationToken);

@@ -3581,6 +3581,151 @@ public class Service
                 SetSource(code, "Service.cs");
                 await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Service.cs", "Process"), "Multi-statement method should fail gracefully via a typed exception, not crash");
             }
+
+            [Test]
+            public async Task BUG_InlineMethod_InstanceFieldTemplateCalledFromOtherType_IsRefused()
+            {
+                const string code = @"
+public class A
+{
+    private int _x = 1;
+
+    public int Answer() => _x + 1;
+}
+
+public class B
+{
+    public int Run(A a)
+    {
+        return a.Answer();
+    }
+}";
+                SetSource(code, "Pair.cs");
+                var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Pair.cs", "Answer"));
+                Assert.That(ex!.Message, Does.Contain("'_x'").And.Contain("instance member of another instance"));
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_InstanceFieldTemplateCalledOnOtherInstanceOfSameType_IsRefused()
+            {
+                const string code = @"
+public class A
+{
+    private int _x = 1;
+
+    public int Answer() => _x + 1;
+
+    public int Run(A other)
+    {
+        return other.Answer();
+    }
+}";
+                SetSource(code, "A.cs");
+                var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("A.cs", "Answer"));
+                Assert.That(ex!.Message, Does.Contain("instance member of another instance"));
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_PrivateStaticMemberCalledFromOtherType_IsRefused()
+            {
+                const string code = @"
+public class Defs
+{
+    private static int Offset = 10;
+
+    public int Shift(int x) => x + Offset;
+}
+
+public class User
+{
+    public int Run(Defs d)
+    {
+        return d.Shift(1);
+    }
+}";
+                SetSource(code, "Pair.cs");
+                var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Pair.cs", "Shift"));
+                Assert.That(ex!.Message, Does.Contain("'Offset'").And.Contain("inaccessible"));
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_SameTypeImplicitAndThisCalls_WithInstanceFieldAndPrivateStatic_Inline()
+            {
+                const string code = "public class Counter\r\n{\r\n    private int _count;\r\n    private static int Step = 2;\r\n\r\n    private int Next() => _count + Step;\r\n\r\n    public int RunA()\r\n    {\r\n        return Next();\r\n    }\r\n\r\n    public int RunB()\r\n    {\r\n        return this.Next();\r\n    }\r\n}";
+                SetSource(code, "Counter.cs");
+                var result = await _advancedStructuralEngine.InlineMethodAsync("Counter.cs", "Next");
+                const string expected = "public class Counter\r\n{\r\n    private int _count;\r\n    private static int Step = 2;\r\n\r\n    public int RunA()\r\n    {\r\n        return _count + Step;\r\n    }\r\n\r\n    public int RunB()\r\n    {\r\n        return _count + Step;\r\n    }\r\n}";
+                Assert.That(result.Values.Single(), Is.EqualTo(expected), "Implicit and this-qualified calls in the defining type keep binding to the same instance field and private static");
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_StatelessInstanceMethodOnIdentifierReceiver_DropsReceiver()
+            {
+                const string code = @"
+public class Doubler
+{
+    public int Double(int x) => x * 2;
+}
+
+public class User
+{
+    public int Run(Doubler d, int v)
+    {
+        return d.Double(v);
+    }
+}";
+                SetSource(code, "Pair.cs");
+                var result = await _advancedStructuralEngine.InlineMethodAsync("Pair.cs", "Double");
+                var resultText = string.Join("\n", result.Values);
+                Assert.That(resultText, Does.Contain("return v * 2;"), "A stateless template does not need the receiver, so it is dropped");
+                Assert.That(resultText, Does.Not.Contain("Double("), "The method and its call should be gone");
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_StatelessMethodOnCallReceiver_IsRefused()
+            {
+                const string code = @"
+public class Doubler
+{
+    public int Double(int x) => x * 2;
+}
+
+public class User
+{
+    private static Doubler Make() => new Doubler();
+
+    public int Run()
+    {
+        return Make().Double(3);
+    }
+}";
+                SetSource(code, "Pair.cs");
+                var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Pair.cs", "Double"));
+                Assert.That(ex!.Message, Does.Contain("Make()").And.Contain("side effects"));
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_StaticTemplateUsingUnqualifiedStaticMemberCalledFromOtherType_IsRefused()
+            {
+                const string code = @"
+public class Util
+{
+    public static int Factor = 2;
+
+    public static int Double(int x) => x * Factor;
+}
+
+public class User
+{
+    public int Run()
+    {
+        return Util.Double(3);
+    }
+}";
+                SetSource(code, "Pair.cs");
+                var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Pair.cs", "Double"));
+                Assert.That(ex!.Message, Does.Contain("'Factor'").And.Contain("not in scope"));
+            }
         }
 
         /// <summary>

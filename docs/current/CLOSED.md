@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `Inline(method)` changed meaning at call sites where the template's names bind differently - resolved (2026-10-22)
+
+- `InlineMethodAsync` Pass 1 now runs `CollectInlineTemplateNames` (defining model) and `ThrowIfInlinedNamesDoNotRebind` (per call site): explicit non-`this` receivers are refused when the template needs the defining instance or is not a plain name chain (receiver dropped), every used member must be accessible at the call position, and the substituted expression is bound speculatively so each name must resolve to the same symbol; failures throw `ToolTargetIneligibleException`. Removes the `// TODO no accessibility check`. Evidence: seven `BUG_InlineMethod_*` tests in `BugFixTests.cs` (instance field from another type / other instance, private static from another type, unqualified static from another type, call-receiver, plus the two positive same-type and stateless cases).
+
 ## `Inline(method)` silently picked the first same-named method - resolved (2026-10-22)
 
 - `StructuralRefactoringEngine.InlineMethodAsync` now refuses with `ToolTargetIneligibleException` ("declared N times in 'File.cs' (Type.Name(params), ...)") when the defining file declares the name more than once (overloads, or the same name in two types); a unique name behaves as before. Evidence: `BUG_InlineMethod_OverloadedName_IsRefused`, `BUG_InlineMethod_SameNameInTwoTypes_IsRefused` in `BugFixTests.cs`; the tool has no overload selector, so refusal is the safe answer.
