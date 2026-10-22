@@ -516,7 +516,7 @@ public class WorkspaceProjectManagementImpl
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, resolution.Error!.Message)
+                        ErrorData = new ResultError(resolution.Error!.Code == EngineErrorCode.SymbolNotResolved ? ToolErrorCode.NotFound : ToolErrorCode.Exception, resolution.Error!.Message)
                     };
                 }
 
