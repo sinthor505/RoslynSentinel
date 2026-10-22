@@ -746,9 +746,8 @@ public class MsToolAugmentEngine
     public async Task<MsAugmentResult> FormatDocumentSafeAsync(
         FilePathWrapper filePath, bool preview = true, CancellationToken cancellationToken = default)
     {
-        string source;
-        try { source = await File.ReadAllTextAsync(filePath, cancellationToken); }
-        catch (Exception ex) when (ex is not OperationCanceledException) { return MsAugmentResult.Fail($"Could not read file '{filePath}': {ex.Message}"); }
+        var (source, readError) = await ReadSourceAsync(filePath, cancellationToken);
+        if (source == null) { return MsAugmentResult.Fail($"Could not read file '{filePath}': {readError}"); }
 
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
         var root = await tree.GetRootAsync(cancellationToken);
@@ -811,12 +810,11 @@ public class MsToolAugmentEngine
         string? lineBefore = null, string? lineAfter = null,
         CancellationToken cancellationToken = default)
     {
-        string source;
-        try { source = await File.ReadAllTextAsync(filePath, cancellationToken); }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        var (source, readError) = await ReadSourceAsync(filePath, cancellationToken);
+        if (source == null)
         {
             return new ForeachLinqAnalysis(false, "", 0,
-                $"Could not read file: {ex.Message}", "Cannot analyze.");
+                $"Could not read file: {readError}", "Cannot analyze.");
         }
 
         var sourceText = SourceText.From(source);
@@ -1118,9 +1116,8 @@ public class MsToolAugmentEngine
             return MsAugmentResult.Fail($"'{constantName}' is not a valid C# identifier.", ToolErrorCode.InvalidArgument);
         }
 
-        string source;
-        try { source = await File.ReadAllTextAsync(filePath, cancellationToken); }
-        catch (Exception ex) when (ex is not OperationCanceledException) { return MsAugmentResult.Fail($"Could not read file '{filePath}': {ex.Message}"); }
+        var (source, readError) = await ReadSourceAsync(filePath, cancellationToken);
+        if (source == null) { return MsAugmentResult.Fail($"Could not read file '{filePath}': {readError}"); }
 
         var sourceText = SourceText.From(source);
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
@@ -1263,33 +1260,8 @@ public class MsToolAugmentEngine
         FilePathWrapper filePath, string typeName, IList<string>? members = null,
         CancellationToken cancellationToken = default)
     {
-        // Read source: prefer workspace (always in sync, supports testability)
-        // then fall back to disk for files not loaded in the solution.
-        string source;
-        Solution? currentSolution;
-        try
-        {
-            currentSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        }
-        catch (SolutionNotLoadedException)
-        {
-            currentSolution = null;
-        }
-
-        var wsDoc = currentSolution?.GetDocumentIdsWithFilePath(filePath)
-            .Select(currentSolution.GetDocument)
-            .FirstOrDefault();
-
-        if (wsDoc != null)
-        {
-            var wsText = await wsDoc.GetTextAsync(cancellationToken);
-            source = wsText.ToString();
-        }
-        else
-        {
-            try { source = await File.ReadAllTextAsync(filePath, cancellationToken); }
-            catch (Exception ex) when (ex is not OperationCanceledException) { return MsAugmentResult.Fail($"Could not read '{filePath}': {ex.Message}"); }
-        }
+        var (source, readError) = await ReadSourceAsync(filePath, cancellationToken);
+        if (source == null) { return MsAugmentResult.Fail($"Could not read '{filePath}': {readError}"); }
 
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
         var root = await tree.GetRootAsync(cancellationToken);
@@ -1891,5 +1863,43 @@ public class MsToolAugmentEngine
 
         var formattedDoc = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(doc, finalRoot, cancellationToken);
         return MsAugmentResult.Ok((await formattedDoc.GetTextAsync(cancellationToken)).ToString());
+    }
+
+    /// <summary>
+    /// Reads the source text for a file: the loaded workspace document first (in sync with the
+    /// workspace and works for in-memory documents), then disk for files not loaded in the solution.
+    /// Returns the raw read error message (not a tool result) so each caller keeps its own error wording.
+    /// </summary>
+    private async Task<(string? Source, string? ReadError)> ReadSourceAsync(
+        FilePathWrapper filePath, CancellationToken cancellationToken)
+    {
+        Solution? currentSolution;
+        try
+        {
+            currentSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        }
+        catch (SolutionNotLoadedException)
+        {
+            currentSolution = null;
+        }
+
+        var wsDoc = currentSolution?.GetDocumentIdsWithFilePath(filePath)
+            .Select(currentSolution.GetDocument)
+            .FirstOrDefault();
+
+        if (wsDoc != null)
+        {
+            var wsText = await wsDoc.GetTextAsync(cancellationToken);
+            return (wsText.ToString(), null);
+        }
+
+        try
+        {
+            return (await File.ReadAllTextAsync(filePath, cancellationToken), null);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return (null, ex.Message);
+        }
     }
 }

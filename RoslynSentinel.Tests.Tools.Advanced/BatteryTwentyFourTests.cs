@@ -410,15 +410,13 @@ public class BatteryTwentyFourTests
     // --- ExtractConstant ---
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task ExtractConstant_WithLiteralSnippet_ReturnsSentinelResult()
+    public async Task ExtractConstant_WithLiteralSnippet_AppliesConstant()
     {
         const string src = @"namespace TestProj; public class C { public string GetLabel() { return ""hello""; } }";
         SetSource(src, "C.cs");
         var result = await _advTools.IntroduceSymbolTool(reason: "test message", "C.cs", @"""hello""", "HelloLabel", IntroduceAsType.@constant, returnDiff: true);
-        // TODO ExtractConstant via IntroduceSymbolTool fails on an in-memory document - assert the applied change once it works
-        Assert.That(result.Code, Is.EqualTo("Exception"));
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.Message, Does.StartWith("Could not read file 'C.cs'"));
+        Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
+        Assert.That(System.Text.Json.JsonSerializer.Serialize(result), Does.Contain("const string HelloLabel"));
     }
 
     // --- AnalyzeControlFlow ---
