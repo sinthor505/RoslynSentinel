@@ -1,5 +1,6 @@
 // Battery #22 -> IntelligenceTools
 // Tests all 45 public methods of IntelligenceTools in-memory via TestSolutionBuilder.
+using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
 using RoslynSentinel.Common;
@@ -317,8 +318,31 @@ public class BatteryTwentyTwoTests
         SetSource(RichSource, "Test.cs");
         var result = await _solutionStructureEngine.FindCircularDependenciesAsync();
         Assert.That(result, Is.Empty);
-        // TODO positive case needs a multi-project dependency cycle fixture
-        //Assert.That(result.Count > 0);
+        // the engine detects type-level cycles, not project-reference cycles (see FindCircularDependencies_TypeCycle_ReportsBothTypes)
+    }
+
+    [Test]
+    [Category("SolutionStructureEngine")] // sentinel:auto-category
+    public async Task FindCircularDependencies_TypeCycle_ReportsBothTypes()
+    {
+        var source = """
+            namespace TestProj;
+
+            public class A
+            {
+                public B? Partner { get; set; }
+            }
+
+            public class B
+            {
+                public A? Partner { get; set; }
+            }
+            """;
+        SetSource(source, "Cycle.cs");
+        var result = await _solutionStructureEngine.FindCircularDependenciesAsync();
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].Cycle, Is.EqualTo(new[] { "TestProj.A", "TestProj.B", "TestProj.A" }));
+        Assert.That(result[0].CycleType, Is.EqualTo("Direct"));
     }
 
     // --- GenerateCallTree (via GetCallGraphTool "tree") ---
@@ -366,8 +390,21 @@ public class BatteryTwentyTwoTests
         SetSource(RichSource, "Test.cs");
         var result = await _dependencyEngine.FindUnusedReferencesAsync("TestProj");
         Assert.That(result, Is.Empty);
-        // TODO positive case needs a project with an unreferenced project reference
-        //Assert.That(result.Count > 0);
+    }
+
+    [Test]
+    [Category("DependencyEngine")] // sentinel:auto-category
+    public async Task FindUnusedReferences_UnreferencedProjectReference_IsReported()
+    {
+        var projectIdA = ProjectId.CreateNewId();
+        var projectIdB = ProjectId.CreateNewId();
+        var solution = new AdhocWorkspace().CurrentSolution
+            .AddProject(projectIdA, "ProjA", "ProjA", LanguageNames.CSharp)
+            .AddProject(projectIdB, "ProjB", "ProjB", LanguageNames.CSharp)
+            .AddProjectReference(projectIdA, new ProjectReference(projectIdB));
+        _workspaceManager.SetTestSolution(solution);
+        var result = await _dependencyEngine.FindUnusedReferencesAsync("ProjA");
+        Assert.That(result, Is.EqualTo(new[] { "ProjB" }));
     }
 
     // --- CheckPackageInconsistency (via DependencyEngine) ---
@@ -385,8 +422,28 @@ public class BatteryTwentyTwoTests
         var dependencyEngine = new DependencyEngine(workspaceManager);
         var result = await dependencyEngine.CheckPackageInconsistencyAsync();
         Assert.That(result, Is.Empty);
-        // TODO positive case needs a fixture csproj with mismatched PackageReference versions
-        //Assert.That(result.Count > 0);
+    }
+
+    [Test]
+    [Category("DependencyEngine")] // sentinel:auto-category
+    public async Task CheckPackageInconsistency_MismatchedVersions_IsReported()
+    {
+        using var fixture = new TestSolutionFixture();
+        var csprojPaths = Directory.EnumerateFiles(fixture.SolutionDirectory, "*.csproj", SearchOption.AllDirectories).Order().ToArray();
+        Assert.That(csprojPaths, Has.Length.GreaterThanOrEqualTo(2));
+        const string packageId = "Contoso.Fixture.Probe";
+        var firstText = await File.ReadAllTextAsync(csprojPaths[0]);
+        await File.WriteAllTextAsync(csprojPaths[0], firstText.Replace("</Project>", $"  <ItemGroup>\n    <PackageReference Include=\"{packageId}\" Version=\"13.0.1\" />\n  </ItemGroup>\n</Project>"));
+        var secondText = await File.ReadAllTextAsync(csprojPaths[1]);
+        await File.WriteAllTextAsync(csprojPaths[1], secondText.Replace("</Project>", $"  <ItemGroup>\n    <PackageReference Include=\"{packageId}\" Version=\"12.0.3\" />\n  </ItemGroup>\n</Project>"));
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        var dependencyEngine = new DependencyEngine(workspaceManager);
+        var result = await dependencyEngine.CheckPackageInconsistencyAsync();
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0], Does.StartWith($"Package '{packageId}' has multiple versions: "));
+        Assert.That(result[0], Does.Contain($"{Path.GetFileNameWithoutExtension(csprojPaths[0])} (13.0.1)"));
+        Assert.That(result[0], Does.Contain($"{Path.GetFileNameWithoutExtension(csprojPaths[1])} (12.0.3)"));
     }
 
     // --- FindUnusedInterfaces (via AnalysisEngine) ---
