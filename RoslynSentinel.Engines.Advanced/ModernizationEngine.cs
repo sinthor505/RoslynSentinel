@@ -269,6 +269,15 @@ public class SyntaxModernizationEngine
 
         var rewriter = new PatternModernizationRewriter();
         var newRoot = rewriter.Visit(root);
+        if (newRoot.IsEquivalentTo(root))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.AlreadyInTargetState,
+                FilePath = filePath,
+                Message = "No null check or comparison was converted to a pattern."
+            };
+        }
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,

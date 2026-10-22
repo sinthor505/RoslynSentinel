@@ -308,8 +308,8 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return code");
-        Assert.That(result.UpdatedText, Does.Contain("if (x > 0)"), "Code without patterns should remain unchanged");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "No conversion, so no updated text");
     }
 
     /// <summary>
@@ -360,9 +360,8 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return code");
-        // For now, not null patterns might not be converted depending on implementation
-        Assert.That(result.UpdatedText, Does.Contain("Not null"), "Logic should be preserved");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "x != null is not rewritten to a pattern, so no updated text");
     }
 
     /// <summary>

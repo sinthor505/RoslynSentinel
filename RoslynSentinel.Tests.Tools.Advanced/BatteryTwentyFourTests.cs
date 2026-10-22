@@ -516,9 +516,8 @@ public class BatteryTwentyFourTests
     {
         SetSource(@"namespace TestProj; public class C { public bool Check(object o) { var s = o as string; return s != null && s.Length > 0; } }", "Order.cs");
         var result = await _modernizationEngine.ConvertToPatternAsync("Order.cs");
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
-        // TODO no-op returns Modified - assert NoChange once the engine distinguishes it (as-cast null check is not rewritten to an is-pattern)
-        Assert.That(result.UpdatedText, Does.Contain("o as string"));
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 
     [Test]
