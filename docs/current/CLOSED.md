@@ -15,6 +15,7 @@ Entries moved here from TODO.md on 2026-10-17 carry their original text plus an 
 ## `RunTest` surfaces a failing fixture `[OneTimeTearDown]` - resolved (2026-10-21)
 
 - `TestRunEngine.ParseFixtureTearDownFailures(stderr)` turns the "TearDown failed for test fixture <Name>" stderr block (name, message up to `StackTrace:`) into `failureSummary` entries, wired into `RunOneProjectAsync` and the aggregate in `RunAsync`; counts and `RunSucceeded` are unchanged. Evidence: five tests in `TestRunEngineLockDetectionTests` (real sample captured from a scratch NUnit 5.0.0 project). Remaining gaps are in TODO.md.
+- 2026-10-22: the teardown entries are now prepended (`TestRunEngine.PrependTearDownFailures`) in both the per-project and aggregate paths, so `TestRunResultProjector.MaxFailureGroups` (10) cannot drop them; pinned by two `PrependTearDownFailures_*` tests.
 
 ## `Inline(kind: method)` argument binding and precedence parentheses - resolved (2026-10-21)
 

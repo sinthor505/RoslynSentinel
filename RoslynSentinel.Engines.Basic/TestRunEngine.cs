@@ -217,16 +217,18 @@ public class TestRunEngine
         var allCaseResults = projectResults.SelectMany(p => p.Result.Results).ToList();
         var failedCaseResults = allCaseResults.Where(r => r.Outcome == TestOutcome.Failed).ToList();
 
-        var failureSummary = failedCaseResults
+        var testGroups = failedCaseResults
             .GroupBy(r => Signature(r.ErrorMessage))
             .Select(g => new GroupedCountSummary(Signature: g.Key, Count: g.Count(), ExampleRef: g.First().TestName))
             .OrderByDescending(g => g.Count)
             .ToList();
-        // Per-project test failures are already counted above from failedCaseResults; only the
-        // fixture TearDown entries (absent from the TRX) are taken from the per-project summaries.
-        failureSummary.AddRange(projectResults
+        // Per-project test failures are already counted above from failedCaseResults; the fixture
+        // TearDown entries (absent from the TRX) are taken from the per-project summaries and prepended.
+        var teardownEntries = projectResults
             .SelectMany(p => p.Result.FailureSummary)
-            .Where(s => s.Signature.StartsWith(TearDownFailureSignaturePrefix, StringComparison.Ordinal)));
+            .Where(s => s.Signature.StartsWith(TearDownFailureSignaturePrefix, StringComparison.Ordinal))
+            .ToList();
+        var failureSummary = PrependTearDownFailures(testGroups, teardownEntries);
 
         IEnumerable<TestCaseResult> filtered = resultsType switch
         {
@@ -351,6 +353,14 @@ public class TestRunEngine
             .GroupBy(e => e.Signature)
             .Select(g => new GroupedCountSummary(Signature: g.Key, Count: g.Count(), ExampleRef: g.First().Fixture))
             .ToList();
+    }
+
+    /// <summary>Fixture teardown entries go first so TestRunResultProjector.MaxFailureGroups cannot drop them when there are many failing-test groups.</summary>
+    public static List<GroupedCountSummary> PrependTearDownFailures(List<GroupedCountSummary> testFailureGroups, IEnumerable<GroupedCountSummary> tearDownFailures)
+    {
+        var merged = new List<GroupedCountSummary>(tearDownFailures);
+        merged.AddRange(testFailureGroups);
+        return merged;
     }
 
     /// <summary>Runs `dotnet test` against a single project with its own dedicated TRX file, and
@@ -505,8 +515,6 @@ public class TestRunEngine
                 .Select(g => new GroupedCountSummary(Signature: g.Key, Count: g.Count(), ExampleRef: g.First().TestName))
                 .OrderByDescending(g => g.Count)
                 .ToList();
-            failureSummary.AddRange(ParseFixtureTearDownFailures(stderrText));
-
             return new TestRunResult(
                 RunSucceeded: process.ExitCode == 0 && failedCount == 0,
                 ExitCode: process.ExitCode,
@@ -514,7 +522,7 @@ public class TestRunEngine
                 PassedCount: passedCount,
                 FailedCount: failedCount,
                 SkippedCount: skippedCount,
-                FailureSummary: failureSummary,
+                FailureSummary: PrependTearDownFailures(failureSummary, ParseFixtureTearDownFailures(stderrText)),
                 Results: allResults,
                 StdoutTail: Tail(stdoutText),
                 StderrTail: string.IsNullOrWhiteSpace(stderrText) ? null : Tail(stderrText),

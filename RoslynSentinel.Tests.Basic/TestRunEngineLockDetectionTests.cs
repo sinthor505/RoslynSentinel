@@ -88,4 +88,35 @@ public class TestRunEngineLockDetectionTests
         Assert.That(entries, Has.Count.EqualTo(1));
         Assert.That(entries[0].Count, Is.EqualTo(2));
     }
+
+    [Test]
+    public void PrependTearDownFailures_TearDownEntriesComeFirst()
+    {
+        var testGroups = Enumerable.Range(1, 12)
+            .Select(i => new GroupedCountSummary(Signature: $"test failure {i}", Count: 1, ExampleRef: $"Test{i}"))
+            .ToList();
+        var teardown = new GroupedCountSummary(Signature: TestRunEngine.TearDownFailureSignaturePrefix + "F: boom", Count: 1, ExampleRef: "F");
+
+        var result = TestRunEngine.PrependTearDownFailures(testGroups, new[] { teardown });
+
+        Assert.That(result[0], Is.EqualTo(teardown));
+        Assert.That(result.Take(10), Does.Contain(teardown));
+        Assert.That(result, Has.Count.EqualTo(13));
+    }
+
+    [Test]
+    public void PrependTearDownFailures_NoTearDown_ReturnsTestGroupsUnchanged()
+    {
+        var testGroups = new List<GroupedCountSummary>
+        {
+            new(Signature: "first", Count: 2, ExampleRef: "A"),
+            new(Signature: "second", Count: 1, ExampleRef: "B"),
+        };
+
+        var result = TestRunEngine.PrependTearDownFailures(testGroups, Array.Empty<GroupedCountSummary>());
+
+        Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result[0].Signature, Is.EqualTo("first"));
+        Assert.That(result[1].Signature, Is.EqualTo("second"));
+    }
 }
