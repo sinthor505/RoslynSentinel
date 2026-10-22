@@ -1802,7 +1802,10 @@ public class MsToolAugmentEngine
         sb.AppendLine("{");
         foreach (var stmt in stmtsInSelection)
         {
-            sb.AppendLine($"    {stmt.WithoutLeadingTrivia().ToFullString().TrimEnd()}");
+            // Only the first statement's leading trivia is reused by the call site (callStmt below);
+            // later statements keep their comments inside the extracted body.
+            var bodyStmt = stmt == firstStmt ? stmt.WithoutLeadingTrivia() : stmt;
+            sb.AppendLine($"    {bodyStmt.ToFullString().TrimEnd()}");
         }
 
         if (returnsOutVars)

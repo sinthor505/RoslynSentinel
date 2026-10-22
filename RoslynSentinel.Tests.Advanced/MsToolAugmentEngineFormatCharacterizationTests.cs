@@ -394,6 +394,7 @@ public class MsToolAugmentEngineFormatCharacterizationTests
             "    private void Step(int a)",
             "    {",
             "        _n = a + 1;",
+            "",
             "        _n = _n * 2;",
             "    }",
             "}",
@@ -508,10 +509,8 @@ public class MsToolAugmentEngineFormatCharacterizationTests
         })));
     }
 
-    // Pinned as-is (known limitation): a comment between two selected statements is dropped from the output.
-    // TODO ExtractMethodSafe drops comments that sit between the selected statements.
     [Test]
-    public async Task ExtractMethod_CommentBetweenSelectedStatements_IsDropped()
+    public async Task ExtractMethod_CommentBetweenSelectedStatements_IsKept()
     {
         var lines = new[]
         {
@@ -544,6 +543,7 @@ public class MsToolAugmentEngineFormatCharacterizationTests
             "    private void Step(int a)",
             "    {",
             "        _n = a + 1;",
+            "        // between   the   statements",
             "        _n = _n * 2;",
             "    }",
             "}",
