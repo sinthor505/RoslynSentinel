@@ -344,7 +344,7 @@ public enum ToolScope
 
     [Test]
     [Category("MemberRefactoringEngine")] // sentinel:auto-category
-    public async Task ReplaceMember_SnippetMatchesBothOverloads_SetsStructuredCandidates()
+    public async Task ReplaceMember_SnippetMatchesBothOverloads_ThrowsAmbiguousWithStructuredCandidates()
     {
         SetSource(@"
 public class C
@@ -353,12 +353,15 @@ public class C
     public void Foo(string x) { }
 }", "C.cs");
 
-        var result = await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(double x) { }",
-            contextSnippet: "public void Foo(");
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+        {
+            await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(double x) { }",
+                contextSnippet: "public void Foo(");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.Candidates, Has.Count.EqualTo(2));
-        var candidateSignatures = string.Join("|", result.Candidates!.Select(c => c.Signature));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.Candidates, Has.Count.EqualTo(2));
+        var candidateSignatures = string.Join("|", ex.Candidates!.Select(c => c.Signature));
         Assert.That(candidateSignatures, Does.Contain("int").And.Contain("string"));
     }
 
@@ -492,6 +495,116 @@ public class C
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
         {
             await _memberRefactoringEngine.InsertMemberAfterAsync("HolderNotFound.cs", "Holder", "Run", "public void Added() { }", contextSnippet: "public class Missing");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task RemoveBaseType_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        const string holderSource = """
+            namespace TestProj;
+
+            public class Holder : IFoo
+            {
+                public void Run(int x) { }
+            }
+            """;
+        SetSource(holderSource, "HolderRemoveBaseNotFound.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveBaseTypeAsync("HolderRemoveBaseNotFound.cs", "Holder", "IFoo", contextSnippet: "public class Missing");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task AddBaseType_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        const string holderSource = """
+            namespace TestProj;
+
+            public class Holder
+            {
+                public void Run(int x) { }
+            }
+            """;
+        SetSource(holderSource, "HolderAddBaseNotFound.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.AddBaseTypeAsync("HolderAddBaseNotFound.cs", "Holder", "IFoo", contextSnippet: "public class Missing");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task RemoveMember_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        const string holderSource = """
+            namespace TestProj;
+
+            public class Holder
+            {
+                public void Run(int x) { }
+            }
+            """;
+        SetSource(holderSource, "HolderRemoveNotFound.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveMemberAsync("HolderRemoveNotFound.cs", "Run", contextSnippet: "public class Missing");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task AddMember_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        const string holderSource = """
+            namespace TestProj;
+
+            public class Holder
+            {
+                public void Run(int x) { }
+            }
+            """;
+        SetSource(holderSource, "HolderAddNotFound.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.AddMemberAsync("HolderAddNotFound.cs", "Holder", "public void Added() { }", contextSnippet: "public class Missing");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task InsertMemberBefore_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        const string holderSource = """
+            namespace TestProj;
+
+            public class Holder
+            {
+                public void Run(int x) { }
+            }
+            """;
+        SetSource(holderSource, "HolderBeforeNotFound.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.InsertMemberBeforeAsync("HolderBeforeNotFound.cs", "Holder", "Run", "public void Added() { }", contextSnippet: "public class Missing");
         });
 
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
@@ -1531,7 +1644,7 @@ public class Baz
                  + "collision per the plan's Task D test guidance - plain top-level name collisions "
                  + "don't compile). Confirms the NearMissList hint also covers the type-level helper, "
                  + "not just the member-level one.")]
-    public async Task AddBaseType_TwoNestedTypesSameName_AmbiguousSnippetListsBothCandidates()
+    public async Task AddBaseType_TwoNestedTypesSameName_ThrowsNotFoundListsBothCandidates()
     {
         SetSource(@"
 public class Outer1
@@ -1543,13 +1656,17 @@ public class Outer2
     public class Nested { public int B; }
 }", "C.cs");
 
-        var result = await _memberRefactoringEngine.AddBaseTypeAsync("C.cs", "Nested", "IFoo",
-            contextSnippet: "this text does not appear anywhere in the file");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.AddBaseTypeAsync("C.cs", "Nested", "IFoo",
+                contextSnippet: "this text does not appear anywhere in the file");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.Message, Does.Contain("contextSnippet not found (2 candidates):"));
-        Assert.That(result.Message, Does.Contain("line 4 `public class Nested { public int A; }`"));
-        Assert.That(result.Message, Does.Contain("line 8 `public class Nested { public int B; }`"));
+        // TODO type-level not-found (AddBaseType/RemoveBaseType via ResolveBySnippetOrThrow) carries no Snippet detail: ex.Snippet is null, candidates only appear in Message. Align with the member-level throws, then assert ex.Snippet here.
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("contextSnippet not found (2 candidates):"));
+        Assert.That(ex.Message, Does.Contain("line 4 `public class Nested { public int A; }`"));
+        Assert.That(ex.Message, Does.Contain("line 8 `public class Nested { public int B; }`"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -2420,22 +2537,24 @@ public class C
         Assert.That(noSnippetResult.UpdatedText, Is.Not.Null.And.Not.Empty,
             "With 2+ overloads and no contextSnippet, existing first-match behavior should still apply.");
 
-        var mismatchedSnippetResult = await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(bool x) { }",
-            contextSnippet: "this text does not appear anywhere in the file");
-        Assert.That(mismatchedSnippetResult.UpdatedText, Is.Null.Or.Empty,
-            "A genuinely ambiguous name (2+ overloads) with a non-matching contextSnippet must still fail - " +
-            "the single-candidate bypass must not apply when there IS real ambiguity to resolve.");
-        Assert.That(mismatchedSnippetResult.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
+        // A genuinely ambiguous name (2+ overloads) with a non-matching contextSnippet must still fail -
+        // the single-candidate bypass must not apply when there IS real ambiguity to resolve.
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(bool x) { }",
+                contextSnippet: "this text does not appear anywhere in the file");
+        });
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
 
         // Task I (docs/plan-tool-disambiguation-remediation-v1.md) picked NearMissList as the
         // winning hint strategy: it's the only one of the 3 evaluated that lists every real
         // candidate (up to 3) instead of just the nearest one, so assert its specific shape here
         // now that there's a real answer, per the plan's Risks-section instruction to tighten
         // loosely-asserting tests once a strategy is chosen.
-        Assert.That(mismatchedSnippetResult.Message, Does.Contain("contextSnippet not found (2 candidates):"));
-        Assert.That(mismatchedSnippetResult.Message, Does.Contain("line 4 `public void Foo(int x) { }`"));
-        Assert.That(mismatchedSnippetResult.Message, Does.Contain("line 5 `public void Foo(string x) { }`"));
-        Assert.That(mismatchedSnippetResult.Message, Does.Contain("Provide a more specific contextSnippet or use lineBefore/lineAfter."));
+        Assert.That(ex.Message, Does.Contain("contextSnippet not found (2 candidates):"));
+        Assert.That(ex.Message, Does.Contain("line 4 `public void Foo(int x) { }`"));
+        Assert.That(ex.Message, Does.Contain("line 5 `public void Foo(string x) { }`"));
+        Assert.That(ex.Message, Does.Contain("Provide a more specific contextSnippet or use lineBefore/lineAfter."));
     }
 
     [Test]
@@ -2443,7 +2562,7 @@ public class C
                  + "just the first one - the losing NearestSnippet/CorrectedCoordinates strategies "
                  + "only ever showed candidate #1 here, which would mislead an agent into thinking "
                  + "there was one unrelated nearby match instead of 2 genuine ones to choose between.")]
-    public async Task ReplaceMember_ThreeOverloads_AmbiguousSnippetListsUpToThreeCandidates()
+    public async Task ReplaceMember_ThreeOverloads_ThrowsNotFoundListsUpToThreeCandidates()
     {
         SetSource(@"
 public class C
@@ -2453,14 +2572,17 @@ public class C
     public void Foo(bool x) { }
 }", "C.cs");
 
-        var result = await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(double x) { }",
-            contextSnippet: "this text does not appear anywhere in the file");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(double x) { }",
+                contextSnippet: "this text does not appear anywhere in the file");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.Message, Does.Contain("contextSnippet not found (3 candidates):"));
-        Assert.That(result.Message, Does.Contain("line 4 `public void Foo(int x) { }`"));
-        Assert.That(result.Message, Does.Contain("line 5 `public void Foo(string x) { }`"));
-        Assert.That(result.Message, Does.Contain("line 6 `public void Foo(bool x) { }`"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("contextSnippet not found (3 candidates):"));
+        Assert.That(ex.Message, Does.Contain("line 4 `public void Foo(int x) { }`"));
+        Assert.That(ex.Message, Does.Contain("line 5 `public void Foo(string x) { }`"));
+        Assert.That(ex.Message, Does.Contain("line 6 `public void Foo(bool x) { }`"));
     }
 
     [Test]
