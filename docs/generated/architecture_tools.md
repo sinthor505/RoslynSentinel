@@ -6,7 +6,7 @@
 |-------|-----------|-------|---------|---------|
 | AdvancedRefactoringTools | ChangeSignature | Claude, claude-lean (on demand), Refactor | - | Reorders, adds, or removes method parameters and updates all call sites solution-wide. |
 | AdvancedRefactoringTools | ConvertAnonymousToNamed | Claude, claude-lean (on demand), Refactor | - | Converts the first anonymous object creation in a file into a named class declaration. |
-| AdvancedRefactoringTools | ExtractMembers | Claude, claude-lean (on demand), Refactor | - | Extracts class members into a new interface, partial class, or superclass. |
+| AdvancedRefactoringTools | ExtractMembers | Claude, claude-lean (on demand), Refactor | - | Extracts class members into a new interface or partial class (newType=superclass is not implemented). |
 | AdvancedRefactoringTools | Inline | Claude, claude-lean (on demand), Refactor | - | Inlines a symbol by replacing all usages with its definition. |
 | AdvancedRefactoringTools | InlineClass | Claude, claude-lean (on demand), Refactor | - | Merges a source class's members into a target class and removes the source declaration. |
 | AdvancedRefactoringTools | Introduce | Claude, claude-lean (on demand), Refactor | - | Introduces a named local variable, field, parameter, or constant from an expression. |
