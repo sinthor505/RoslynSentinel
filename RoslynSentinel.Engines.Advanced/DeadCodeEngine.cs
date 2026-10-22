@@ -379,7 +379,20 @@ public class DeadCodeEngine
                 continue;
             }
 
-            var interfaces = compilation.GlobalNamespace.GetNamespaceMembers().SelectMany(n => n.GetTypeMembers()).Where(t => t.TypeKind == TypeKind.Interface && t.DeclaringSyntaxReferences.Length > 0);
+            // Walk the global namespace and every nested namespace at any depth.
+            static IEnumerable<INamespaceSymbol> WalkNamespaces(INamespaceSymbol ns)
+            {
+                yield return ns;
+                foreach (var child in ns.GetNamespaceMembers())
+                {
+                    foreach (var nested in WalkNamespaces(child))
+                    {
+                        yield return nested;
+                    }
+                }
+            }
+
+            var interfaces = WalkNamespaces(compilation.GlobalNamespace).SelectMany(n => n.GetTypeMembers()).Where(t => t.TypeKind == TypeKind.Interface && t.DeclaringSyntaxReferences.Length > 0);
             foreach (var @interface in interfaces)
             {
                 var implementations = await SymbolFinder.FindImplementationsAsync(@interface, solution, cancellationToken: cancellationToken);

@@ -238,12 +238,14 @@ public class Router {
         var source = @"
 public interface IFoo { void Do(); }
 public class Bar {}
+namespace Outer.Inner { public interface IBar { void Run(); } }
 ";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("App.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new DeadCodeEngine(_workspaceManager, new SentinelConfiguration()).FindUnusedInterfacesAsync();
-        // TODO engine does not flag unused interface 'IFoo' (returns no findings for this fixture)
         Assert.That(result, Is.Not.Null);
+        Assert.That(result.Exists(r => r.Contains("'IFoo'")), Is.True, "global-namespace interface IFoo should be reported");
+        Assert.That(result.Exists(r => r.Contains("'IBar'")), Is.True, "nested-namespace interface IBar should be reported");
     }
 }
 
