@@ -23,7 +23,7 @@ public sealed record TestCategoryProjectApplyResult(
     IReadOnlyList<string> AffectedFiles,
     string? ChangeId,
     ResultError? Error,
-    IReadOnlyList<TestCategoryEditSkip> SkippedEdits) : IResultStatus
+    IReadOnlyList<TestCategoryEditSkip> SkippedEdits) : IOperationResult
 {
     public bool Succeeded => Error is null;
 
@@ -45,7 +45,7 @@ public sealed record TestCategoryProjectApplyResult(
 }
 
 /// <summary>Per-project outcomes of an apply run, in plan order.</summary>
-public sealed record TestCategoryApplyResult(IReadOnlyList<TestCategoryProjectApplyResult> Projects) : IResultStatus
+public sealed record TestCategoryApplyResult(IReadOnlyList<TestCategoryProjectApplyResult> Projects) : IOperationResult
 {
     /// <summary>True when any project's batch was rejected.</summary>
     [System.Text.Json.Serialization.JsonIgnore]

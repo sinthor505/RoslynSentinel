@@ -21,7 +21,7 @@ public record ProjectTestSummary(
     int FailedCount,
     int SkippedCount,
     string? Detail
-) : IResultStatus
+) : IOperationResult
 {
     /// <summary>True when the project's test run did not succeed.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -57,7 +57,7 @@ public record TestRunResult(
     List<ProjectTestSummary>? ProjectSummaries = null,
     string? FullResultsId = null,
     int OmittedResultCount = 0
-) : IResultStatus
+) : IOperationResult
 {
     // The RunTest tool itself sets the MCP isError only when !RunCompleted (WorkspaceBuildTestImpl.cs ~311).
     // This member is the stricter engine-level view: a completed run with test failures is also an error.

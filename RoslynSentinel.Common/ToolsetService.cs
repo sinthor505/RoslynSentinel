@@ -24,7 +24,7 @@ public sealed record ToolsetChange(
     IReadOnlyList<string> RemovedTools,
     IReadOnlyList<string> UnavailableTools,
     IReadOnlyList<ToolSetName> EnabledToolSets,
-    IReadOnlyList<string> ActiveTools) : IResultStatus
+    IReadOnlyList<string> ActiveTools) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => false;

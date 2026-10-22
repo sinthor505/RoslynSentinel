@@ -64,8 +64,8 @@ ones are not renamed for this rule alone (see section 5).
 
 ## 4. Result shape
 
-Every operation result implements the status interface (`IResultStatus`, being renamed to
-`IOperationResult`): `IsError`, `Status`, `Code`, `Message`. Use a DTO for 2+ fields; deriving from
+Every operation result implements the status interface `IOperationResult` (renamed from
+`IResultStatus`): `Status` and a derived `IsError`, `Code`, `Message`. Use a DTO for 2+ fields; deriving from
 `EngineResultBase` gives the interface for free. Do not add new uses of `EngineResultWrapper<T>`.
 
 ## 5. Wire safety

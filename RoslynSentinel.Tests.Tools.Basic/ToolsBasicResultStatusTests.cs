@@ -12,7 +12,7 @@ public class ToolsBasicResultStatusTests
     [Test]
     public void GitResult_Success_IsSuccessWithNoCode()
     {
-        IResultStatus ok = new GitResult { IsError = false };
+        IOperationResult ok = new GitResult { IsError = false };
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -38,7 +38,7 @@ public class ToolsBasicResultStatusTests
     [TestCase(GitErrorCodes.Fallback, ResultStatus.Failed)]
     public void GitResult_ClassifiedFailure_MapsCodeToStatus_AndStaysAnError(string kind, ResultStatus expected)
     {
-        IResultStatus bad = new GitResult { IsError = true, Error = "refused", ErrorKind = kind };
+        IOperationResult bad = new GitResult { IsError = true, Error = "refused", ErrorKind = kind };
 
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(expected));
@@ -50,7 +50,7 @@ public class ToolsBasicResultStatusTests
     [Test]
     public void GitResult_UnclassifiedFailure_UsesFallbackCode_AndFailed()
     {
-        IResultStatus bad = new GitResult { IsError = true, Error = "boom" };
+        IOperationResult bad = new GitResult { IsError = true, Error = "boom" };
 
         Assert.That(bad.Code, Is.EqualTo(GitErrorCodes.Fallback));
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
@@ -67,8 +67,8 @@ public class ToolsBasicResultStatusTests
     [Test]
     public void DocWriteResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new DocWriteResult { IsError = false, Filename = "a.md" };
-        IResultStatus bad = new DocWriteResult { IsError = true, Error = "disk full" };
+        IOperationResult ok = new DocWriteResult { IsError = false, Filename = "a.md" };
+        IOperationResult bad = new DocWriteResult { IsError = true, Error = "disk full" };
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -85,9 +85,9 @@ public class ToolsBasicResultStatusTests
     [Test]
     public void DocReadResult_FoundNotFoundAndError_StatusAgreesWithFlagAndKeepsDeclaredProperties()
     {
-        IResultStatus found = new DocReadResult { Found = true, Filename = "a.md", Content = "x", Warning = "fallback used" };
-        IResultStatus notFound = new DocReadResult { Found = false, Filename = "a.md" };
-        IResultStatus bad = new DocReadResult { Found = true, Error = "boom" };
+        IOperationResult found = new DocReadResult { Found = true, Filename = "a.md", Content = "x", Warning = "fallback used" };
+        IOperationResult notFound = new DocReadResult { Found = false, Filename = "a.md" };
+        IOperationResult bad = new DocReadResult { Found = true, Error = "boom" };
 
         // A Warning alone does not make the result an error.
         Assert.That(found.IsError, Is.False);
@@ -111,8 +111,8 @@ public class ToolsBasicResultStatusTests
     [Test]
     public void DocListResult_SuccessAndError_StatusAgreesWithError_AndKeepsDeclaredProperties()
     {
-        IResultStatus ok = new DocListResult { Files = ["a.md"], Count = 1 };
-        IResultStatus bad = new DocListResult { Error = "boom" };
+        IOperationResult ok = new DocListResult { Files = ["a.md"], Count = 1 };
+        IOperationResult bad = new DocListResult { Error = "boom" };
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -135,7 +135,7 @@ public class ToolsBasicResultStatusTests
     public void TestCategoryProjectOutcome_Applied_IsSuccess()
     {
         TestCategoryProjectOutcome outcome = MakeOutcome("applied");
-        IResultStatus view = outcome;
+        IOperationResult view = outcome;
 
         Assert.That(outcome.IsError, Is.False);
         Assert.That(view.Status, Is.EqualTo(ResultStatus.Success));
@@ -147,7 +147,7 @@ public class ToolsBasicResultStatusTests
     public void TestCategoryProjectOutcome_NoChanges_IsAlreadyInState()
     {
         TestCategoryProjectOutcome outcome = MakeOutcome("no_changes");
-        IResultStatus view = outcome;
+        IOperationResult view = outcome;
 
         Assert.That(outcome.IsError, Is.False);
         Assert.That(view.Status, Is.EqualTo(ResultStatus.AlreadyInState));
@@ -159,7 +159,7 @@ public class ToolsBasicResultStatusTests
     public void TestCategoryProjectOutcome_Failed_IsFailedWithErrorCodeAndMessage()
     {
         TestCategoryProjectOutcome outcome = MakeOutcome("failed", ToolErrorCode.Exception, "boom");
-        IResultStatus view = outcome;
+        IOperationResult view = outcome;
 
         Assert.That(outcome.IsError, Is.True);
         Assert.That(view.Status, Is.EqualTo(ResultStatus.Failed));
@@ -176,7 +176,7 @@ public class ToolsBasicResultStatusTests
     public void TestCategoryAppliedSummary_Applied_IsSuccess()
     {
         TestCategoryAppliedSummary summary = MakeSummary(0, true, MakeOutcome("applied"));
-        IResultStatus view = summary;
+        IOperationResult view = summary;
 
         Assert.That(summary.Status, Is.EqualTo("applied"));
         Assert.That(view.Status, Is.EqualTo(ResultStatus.Success));
@@ -189,7 +189,7 @@ public class ToolsBasicResultStatusTests
     public void TestCategoryAppliedSummary_PartiallyApplied_IsFailedWithCountMessage()
     {
         TestCategoryAppliedSummary summary = MakeSummary(1, true, MakeOutcome("applied"), MakeOutcome("failed", null, "boom"));
-        IResultStatus view = summary;
+        IOperationResult view = summary;
 
         Assert.That(summary.Status, Is.EqualTo("partially_applied"));
         Assert.That(view.Status, Is.EqualTo(ResultStatus.Failed));
@@ -202,7 +202,7 @@ public class ToolsBasicResultStatusTests
     public void TestCategoryAppliedSummary_NoChanges_IsAlreadyInState()
     {
         TestCategoryAppliedSummary summary = MakeSummary(0, false, MakeOutcome("no_changes"));
-        IResultStatus view = summary;
+        IOperationResult view = summary;
 
         Assert.That(summary.Status, Is.EqualTo("no_changes"));
         Assert.That(view.Status, Is.EqualTo(ResultStatus.AlreadyInState));
@@ -244,10 +244,10 @@ public class ToolsBasicResultStatusTests
                 Assert.That(type.GetProperty(name)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, $"{type.Name}.{name}");
             }
 
-            // Explicit IResultStatus.Status is a non-public property named after the interface.
-            System.Reflection.PropertyInfo explicitStatus = type.GetProperty("RoslynSentinel.Common.IResultStatus.Status", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
+            // Explicit IOperationResult.Status is a non-public property named after the interface.
+            System.Reflection.PropertyInfo explicitStatus = type.GetProperty("RoslynSentinel.Common.IOperationResult.Status", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!;
             Assert.That(explicitStatus, Is.Not.Null, type.Name);
-            Assert.That(explicitStatus.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, $"{type.Name}.IResultStatus.Status");
+            Assert.That(explicitStatus.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, $"{type.Name}.IOperationResult.Status");
         }
     }
 }

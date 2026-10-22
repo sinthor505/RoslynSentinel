@@ -28,7 +28,7 @@ public record ApplyChangesResult(
     List<string>? RolledBackFiles = null,
     List<string>? NoOpFiles = null,
     string? RefusalCode = null
-) : IResultStatus
+) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);

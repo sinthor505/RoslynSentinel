@@ -5,7 +5,7 @@ namespace RoslynSentinel.Common;
 public record DiagnosticReport(
     bool IsError,
     List<DiagnosticInfo> Diagnostics
-) : IResultStatus
+) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);

@@ -14,7 +14,7 @@ using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
 
-public record ExtractMethodResult(bool IsError, string? ErrorMessage, string? BeforeSnippet, string? CallSiteReplacement, string? ExtractedMethodText, string? UpdatedSourceContent) : IResultStatus
+public record ExtractMethodResult(bool IsError, string? ErrorMessage, string? BeforeSnippet, string? CallSiteReplacement, string? ExtractedMethodText, string? UpdatedSourceContent) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);
@@ -27,7 +27,7 @@ public record ExtractMethodResult(bool IsError, string? ErrorMessage, string? Be
 }
 public record UsingDirectiveInfo(string Name, bool IsStatic, string? Alias);
 public record ResidualMention(FilePathWrapper FilePath, int LineNumber, string LineText);
-public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null) : IResultStatus
+public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes, List<SkippedCallSite> SkippedCallSites, string? Error = null) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;
@@ -41,7 +41,7 @@ public record ChangeSignatureResult(Dictionary<FilePathWrapper, string> Changes,
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Error;
 }
-public record RenameSymbolResult(string OldName, string NewName, Dictionary<FilePathWrapper, string> PendingChanges, string? Error = null, SymbolHandle? UpdatedHandle = null, List<ResidualMention>? ResidualMentions = null) : IResultStatus
+public record RenameSymbolResult(string OldName, string NewName, Dictionary<FilePathWrapper, string> PendingChanges, string? Error = null, SymbolHandle? UpdatedHandle = null, List<ResidualMention>? ResidualMentions = null) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;
@@ -64,7 +64,7 @@ public record RenameSymbolResult(string OldName, string NewName, Dictionary<File
 public record ControlFlowSummary(string MethodName, bool AlwaysReturns, bool SometimesReturns, bool NeverReturns, List<string> ReturnPoints, List<string> ThrowPoints, int ExitPathCount);
 public record DataFlowSummary(string MethodName, List<string> ReadBeforeAssignment, List<string> WrittenInside, List<string> ReadInside, List<string> WrittenOutside, List<string> CapturedVariables, List<string> DataFlowWarnings);
 public record FormatHunk(int StartLine, int EndLine, List<string> ContextBefore, List<string> RemovedLines, List<string> AddedLines, List<string> ContextAfter);
-public record FormatPreviewResult(bool Changed, int TotalHunks, List<FormatHunk> Hunks) : IResultStatus
+public record FormatPreviewResult(bool Changed, int TotalHunks, List<FormatHunk> Hunks) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => false;

@@ -16,7 +16,7 @@ public sealed record NamedArgumentsRewriteResult(SyntaxNode Root, int CallSitesC
 public sealed record NamedArgumentsFileSummary(string FilePath, int CallSites, int Arguments);
 
 /// <summary>New text for every changed file (keyed by path), per-file counts, or an error.</summary>
-public sealed record NamedArgumentsOutcome(Dictionary<FilePathWrapper, string> Changes, IReadOnlyList<NamedArgumentsFileSummary> Files, ResultError? Error) : IResultStatus
+public sealed record NamedArgumentsOutcome(Dictionary<FilePathWrapper, string> Changes, IReadOnlyList<NamedArgumentsFileSummary> Files, ResultError? Error) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;

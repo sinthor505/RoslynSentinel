@@ -14,16 +14,16 @@ public record TestScaffoldResult(
     string Namespace,
     string Code,
     string? Error = null
-) : IResultStatus
+) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;
 
     [System.Text.Json.Serialization.JsonIgnore]
-    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, ((IResultStatus)this).Code);
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, ((IOperationResult)this).Code);
 
     // Explicit: this record's positional Code parameter is the generated test source, not an error code.
-    string? IResultStatus.Code => IsError ? ToolErrorCode.Exception : null;
+    string? IOperationResult.Code => IsError ? ToolErrorCode.Exception : null;
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Error;

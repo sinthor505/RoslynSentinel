@@ -12,7 +12,7 @@ namespace RoslynSentinel.Engines.Basic;
 
 // ── Result Types ──────────────────────────────────────────────────────────────
 
-public record MsAugmentResult(bool IsError, string? Error, string? UpdatedContent, string? ErrorCode = null) : IResultStatus
+public record MsAugmentResult(bool IsError, string? Error, string? UpdatedContent, string? ErrorCode = null) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);

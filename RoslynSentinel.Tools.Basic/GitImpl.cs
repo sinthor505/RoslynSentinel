@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace RoslynSentinel.Tools.Basic;
 
 // ─── Result types ────────────────────────────────────────────────────────────
-public record GitResult : IResultStatus
+public record GitResult : IOperationResult
 {
     public bool IsError
     {

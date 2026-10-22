@@ -11,7 +11,7 @@ public enum EngineErrorCode
     BuildNotRun,
 }
 
-public sealed class EngineResultWrapper<T> : IResultStatus
+public sealed class EngineResultWrapper<T> : IOperationResult
 {
     public EngineOutcome Outcome
     {

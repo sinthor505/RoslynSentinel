@@ -7,7 +7,7 @@ namespace RoslynSentinel.Tools.Basic;
 
 // ─── Result types ────────────────────────────────────────────────────────────
 
-public class DocReadResult : IResultStatus
+public class DocReadResult : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null || !Found;
@@ -45,7 +45,7 @@ public class DocReadResult : IResultStatus
     }
 }
 
-public class DocWriteResult : IResultStatus
+public class DocWriteResult : IOperationResult
 {
     public bool IsError
     {
@@ -72,7 +72,7 @@ public class DocWriteResult : IResultStatus
     public string? Message => Error;
 }
 
-public class DocListResult : IResultStatus
+public class DocListResult : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;

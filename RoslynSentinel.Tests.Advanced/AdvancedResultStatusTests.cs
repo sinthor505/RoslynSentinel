@@ -11,8 +11,8 @@ public class AdvancedResultStatusTests
     [Test]
     public void ControlFlowAnalysisResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new ControlFlowAnalysisResult("m", true, [], [], [], [], null);
-        IResultStatus bad = new ControlFlowAnalysisResult("m", true, [], [], [], [], "boom");
+        IOperationResult ok = new ControlFlowAnalysisResult("m", true, [], [], [], [], null);
+        IOperationResult bad = new ControlFlowAnalysisResult("m", true, [], [], [], [], "boom");
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -34,8 +34,8 @@ public class AdvancedResultStatusTests
     [Test]
     public void DataFlowAnalysisResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new DataFlowAnalysisResult("m", [], [], [], [], [], [], null);
-        IResultStatus bad = new DataFlowAnalysisResult("m", [], [], [], [], [], [], "boom");
+        IOperationResult ok = new DataFlowAnalysisResult("m", [], [], [], [], [], [], null);
+        IOperationResult bad = new DataFlowAnalysisResult("m", [], [], [], [], [], [], "boom");
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -57,8 +57,8 @@ public class AdvancedResultStatusTests
     [Test]
     public void TestScaffoldResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new TestScaffoldResult("c", "tc", "ns", "code", null);
-        IResultStatus bad = new TestScaffoldResult("c", "tc", "ns", "code", "boom");
+        IOperationResult ok = new TestScaffoldResult("c", "tc", "ns", "code", null);
+        IOperationResult bad = new TestScaffoldResult("c", "tc", "ns", "code", "boom");
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -85,8 +85,8 @@ public class AdvancedResultStatusTests
     [Test]
     public void FluentBuilderResult_StatusAgreesWithIsError_AndSerializationKeepsDeclaredPropertiesOnly()
     {
-        IResultStatus ok = new FluentBuilderResult("b", "c", "u", null);
-        IResultStatus bad = new FluentBuilderResult("b", "c", "u", "boom");
+        IOperationResult ok = new FluentBuilderResult("b", "c", "u", null);
+        IOperationResult bad = new FluentBuilderResult("b", "c", "u", "boom");
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -105,8 +105,8 @@ public class AdvancedResultStatusTests
     [Test]
     public void MemberCommentOutcome_StatusAgreesWithSucceeded_AndSerializationKeepsDeclaredPropertiesOnly()
     {
-        IResultStatus ok = new CommentingEngine.MemberCommentOutcome(null!, true, null);
-        IResultStatus bad = new CommentingEngine.MemberCommentOutcome(null!, false, "boom");
+        IOperationResult ok = new CommentingEngine.MemberCommentOutcome(null!, true, null);
+        IOperationResult bad = new CommentingEngine.MemberCommentOutcome(null!, false, "boom");
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -134,9 +134,9 @@ public class AdvancedResultStatusTests
     [Test]
     public void PropagateCtResult_StatusAgreesWithMethodFoundAndError_AndSurfaceIsDeclaredOnly()
     {
-        IResultStatus ok = new PropagateCtResult { MethodFound = true };
-        IResultStatus notFound = new PropagateCtResult { MethodFound = false };
-        IResultStatus bad = new PropagateCtResult { MethodFound = true, Error = "boom" };
+        IOperationResult ok = new PropagateCtResult { MethodFound = true };
+        IOperationResult notFound = new PropagateCtResult { MethodFound = false };
+        IOperationResult bad = new PropagateCtResult { MethodFound = true, Error = "boom" };
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -166,8 +166,8 @@ public class AdvancedResultStatusTests
     [Test]
     public void UpliftBatchMultiMethodResult_StatusAgreesWithError_AndSurfaceIsDeclaredOnly()
     {
-        IResultStatus ok = new UpliftBatchMultiMethodResult { BridgedMethodName = "m" };
-        IResultStatus bad = new UpliftBatchMultiMethodResult { Error = "boom" };
+        IOperationResult ok = new UpliftBatchMultiMethodResult { BridgedMethodName = "m" };
+        IOperationResult bad = new UpliftBatchMultiMethodResult { Error = "boom" };
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -198,7 +198,7 @@ public class AdvancedResultStatusTests
     {
         var result = new UpliftBatchResult(new List<UpliftCallerInfo>(), new List<UpliftSkippedInfo>(), 0, "batch_complete");
 
-        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result, Is.InstanceOf<IOperationResult>());
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(result.Code, Is.Null);
@@ -235,7 +235,7 @@ public class AdvancedResultStatusTests
             PerMethod = new List<UpliftBatchMultiMethodResult> { new() { BridgedMethodName = "a" } },
         };
 
-        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result, Is.InstanceOf<IOperationResult>());
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(result.Code, Is.Null);
@@ -265,7 +265,7 @@ public class AdvancedResultStatusTests
     {
         var result = new PropagateCtFileResult();
 
-        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result, Is.InstanceOf<IOperationResult>());
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(result.Code, Is.Null);
@@ -294,7 +294,7 @@ public class AdvancedResultStatusTests
             Applied = new List<PropagateCtFileResult> { new() },
         };
 
-        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result, Is.InstanceOf<IOperationResult>());
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(result.Code, Is.Null);

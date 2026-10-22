@@ -48,7 +48,7 @@ public sealed record DocumentLookupResult(
     string RequestedPath,
     Document? Document,
     IReadOnlyList<string> CandidatePaths,
-    int SearchedProjectCount) : IResultStatus
+    int SearchedProjectCount) : IOperationResult
 {
     /// <summary>True when the lookup failed; mirrors <see cref="IsFound"/>.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -62,9 +62,9 @@ public sealed record DocumentLookupResult(
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => IsFound ? null : Describe();
 
-    /// <summary>Explicit: the positional <see cref="Status"/> is a <see cref="DocumentLookupStatus"/>, so the IResultStatus view is exposed here.</summary>
+    /// <summary>Explicit: the positional <see cref="Status"/> is a <see cref="DocumentLookupStatus"/>, so the IOperationResult view is exposed here.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    ResultStatus IResultStatus.Status => ResultStatusExtensions.FromFlag(IsError, Code);
+    ResultStatus IOperationResult.Status => ResultStatusExtensions.FromFlag(IsError, Code);
 
     /// <summary>True when <see cref="Document"/> is populated.</summary>
     public bool IsFound => Status == DocumentLookupStatus.Found && Document is not null;

@@ -16,7 +16,7 @@ public record OutParamConversionResult(
     int CallSitesRewritten,
     List<string> CallSiteWarnings,
     Dictionary<FilePathWrapper, string>? Changes = null
-) : IResultStatus
+) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, Code);

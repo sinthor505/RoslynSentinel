@@ -263,7 +263,7 @@ public class CommentingEngine
     // ── Phase 2: comment one file's worth of stale members ──────────────────
 
     /// <summary>Per-member outcome from <see cref="CommentFileAsync"/>.</summary>
-    public sealed record MemberCommentOutcome(MemberSite Site, bool Succeeded, string? FailureReason) : IResultStatus
+    public sealed record MemberCommentOutcome(MemberSite Site, bool Succeeded, string? FailureReason) : IOperationResult
     {
         [System.Text.Json.Serialization.JsonIgnore]
         public bool IsError => !Succeeded;

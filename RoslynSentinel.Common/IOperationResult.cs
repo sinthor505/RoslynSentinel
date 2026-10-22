@@ -1,32 +1,39 @@
 namespace RoslynSentinel.Common;
 
 /// <summary>
-/// The exception-side counterpart of <see cref="IOperationResult"/>: a failure carried by an exception. Implemented by
-/// ToolException and by the wire ResultError.
+/// The status every status-carrying result exposes, so a result can be inspected, branched on and passed upward
+/// without re-parsing it or translating between per-layer vocabularies. <see cref="IsError"/> is the same flag
+/// as the MCP protocol's <c>CallToolResult.isError</c>; there is deliberately no <c>IsSuccess</c>.
 /// </summary>
-public interface IOperationError
+/// <remarks>
+/// A type that has its own outcome or status member should compute <see cref="IsError"/> from
+/// <see cref="Status"/> via <see cref="ResultStatusExtensions.IsErrorStatus"/> so the two cannot disagree;
+/// wrappers and types with no status of their own store it.
+/// </remarks>
+public interface IOperationResult
 {
-    /// <summary>The stable error code naming the failure cause.</summary>
-    string ErrorCode
+    /// <summary>True when the operation did not succeed. Matches the MCP <c>isError</c> flag.</summary>
+    bool IsError
     {
         get;
     }
 
-    /// <summary>Human-readable explanation of the failure.</summary>
-    string Message
+    /// <summary>The canonical outcome. Consistent with <see cref="IsError"/>.</summary>
+    ResultStatus Status
     {
         get;
     }
 
-    /// <summary>The cause category, as a <see cref="ResultStatus"/>.</summary>
-    ResultStatus Category
+    /// <summary>A <see cref="ToolErrorCode"/> value naming the failure cause; null when there is none.</summary>
+    string? Code
     {
         get;
     }
 
-    /// <summary>Wire-safe payload for the tool layer; null when there is none.</summary>
-    System.Collections.Generic.IReadOnlyList<object>? StructuredDetail
+    /// <summary>Human-readable explanation of the failure; null when there is none.</summary>
+    string? Message
     {
         get;
     }
+
 }

@@ -13,7 +13,7 @@ public record ControlFlowAnalysisResult(
     List<string> ThrowStatements,
     List<string> BreakStatements,
     List<string> ContinueStatements,
-    string? Error = null) : IResultStatus
+    string? Error = null) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;
@@ -36,7 +36,7 @@ public record DataFlowAnalysisResult(
     List<string> AlwaysAssigned,
     List<string> ReadInside,
     List<string> WrittenInside,
-    string? Error = null) : IResultStatus
+    string? Error = null) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;

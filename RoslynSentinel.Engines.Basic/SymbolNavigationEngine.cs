@@ -32,7 +32,7 @@ public record SymbolHoverInfo(
     int? DefinedAtLine,
     List<string> Modifiers,
     string? Error = null
-) : IResultStatus
+) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;

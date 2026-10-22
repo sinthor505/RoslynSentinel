@@ -76,7 +76,7 @@ public record UpliftBatchResult(
     List<UpliftSkippedInfo> Skipped,
     int RemainingCallers,
     string StopReason
-) : IResultStatus
+) : IOperationResult
 {
     // A skip is not a failure: a run that skipped everything is an error only when it stopped short.
     // A no_callers or dry_run result with skips is an expected outcome, not a failure.
@@ -132,7 +132,7 @@ public class UpliftBatchMultiInput
 }
 
 /// <summary>Per-method result within <c>UpliftBatchMultiResult</c>.</summary>
-public class UpliftBatchMultiMethodResult : IResultStatus
+public class UpliftBatchMultiMethodResult : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;
@@ -159,7 +159,7 @@ public class UpliftBatchMultiMethodResult : IResultStatus
 }
 
 /// <summary>Aggregate result of <c>run_uplift_batch_multi</c>.</summary>
-public class UpliftBatchMultiResult : IResultStatus
+public class UpliftBatchMultiResult : IOperationResult
 {
     public List<UpliftBatchMultiMethodResult> PerMethod { get; set; } = new();
 
@@ -227,7 +227,7 @@ public class CallSiteSkip
 }
 
 /// <summary>Result of a single-method CancellationToken propagation operation.</summary>
-public class PropagateCtResult : IResultStatus
+public class PropagateCtResult : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null || !MethodFound;
@@ -268,7 +268,7 @@ public class PropagateCtResult : IResultStatus
 }
 
 /// <summary>Result of a file-level CancellationToken propagation operation.</summary>
-public class PropagateCtFileResult : IResultStatus
+public class PropagateCtFileResult : IOperationResult
 {
     public string? ChangeId
     {
@@ -349,7 +349,7 @@ public class PropagateCtFileFailure
 }
 
 /// <summary>Aggregate result of <c>propagate_cancellation_token_batch</c>.</summary>
-public class PropagateCtBatchResult : IResultStatus
+public class PropagateCtBatchResult : IOperationResult
 {
     public List<PropagateCtFileResult> Applied { get; set; } = new();
 

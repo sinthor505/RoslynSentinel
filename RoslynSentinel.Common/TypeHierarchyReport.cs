@@ -1,6 +1,6 @@
 namespace RoslynSentinel.Common;
 
-public record TypeHierarchyReport : IResultStatus
+public record TypeHierarchyReport : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;

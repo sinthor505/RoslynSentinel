@@ -24,7 +24,7 @@ public record BuildResult(
     int OmittedErrorCount = 0,
     int SuppressedDownstreamErrorCount = 0,
     string? FullDiagnosticsResultId = null,
-    [property: JsonIgnore] BuildFullDiagnostics? FullDiagnostics = null) : IResultStatus
+    [property: JsonIgnore] BuildFullDiagnostics? FullDiagnostics = null) : IOperationResult
 {
     /// <summary>True unless the build succeeded; a NotRun build gives no verification, so it is an error.</summary>
     [System.Text.Json.Serialization.JsonIgnore]

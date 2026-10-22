@@ -826,7 +826,7 @@ public class Clean
 
         Assert.That(!result.IsError, Is.False);
         Assert.That(result.Message, Does.Contain("not found").IgnoreCase);
-        IResultStatus status = result;
+        IOperationResult status = result;
         Assert.That(status.IsError, Is.True);
         Assert.That(status.Status, Is.EqualTo(ResultStatus.Failed));
         Assert.That(status.Code, Is.EqualTo(ToolErrorCode.Exception));

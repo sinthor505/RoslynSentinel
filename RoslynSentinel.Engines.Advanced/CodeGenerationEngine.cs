@@ -23,7 +23,7 @@ public record FluentBuilderResult(
     string BuilderCode,
     string UsageExample,
     string? Error = null
-) : IResultStatus
+) : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;

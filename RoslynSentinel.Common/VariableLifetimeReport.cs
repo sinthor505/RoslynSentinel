@@ -1,6 +1,6 @@
 namespace RoslynSentinel.Common;
 
-public record VariableLifetimeReport : IResultStatus
+public record VariableLifetimeReport : IOperationResult
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Error is not null;

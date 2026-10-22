@@ -11,7 +11,7 @@ public class ResultStatusTests
     [Test]
     public void Envelope_Success_IsNotError_AndStatusIsSuccess()
     {
-        IResultStatus result = new SentinelCallToolResult<string> { IsError = false, SuccessData = "x" };
+        IOperationResult result = new SentinelCallToolResult<string> { IsError = false, SuccessData = "x" };
 
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
@@ -32,7 +32,7 @@ public class ResultStatusTests
     [TestCase("SomeUnknownCode", ResultStatus.Failed)]
     public void Envelope_Failure_MapsErrorCodeToStatus_AndIsError(string code, ResultStatus expected)
     {
-        IResultStatus result = new SentinelCallToolResult<string>
+        IOperationResult result = new SentinelCallToolResult<string>
         {
             IsError = true,
             ErrorData = new ResultError(code, "boom")
@@ -47,7 +47,7 @@ public class ResultStatusTests
     [Test]
     public void Envelope_FailureWithoutErrorData_IsFailed()
     {
-        IResultStatus result = new SentinelCallToolResult<string> { IsError = true };
+        IOperationResult result = new SentinelCallToolResult<string> { IsError = true };
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
@@ -117,7 +117,7 @@ public class ResultStatusTests
         Assert.That(outcome.ToResultStatus(), Is.EqualTo(expectedStatus));
         Assert.That(outcome.ToErrorCode(), Is.EqualTo(expectedCode));
 
-        IResultStatus result = new DocumentEditResult(outcome, default);
+        IOperationResult result = new DocumentEditResult(outcome, default);
         Assert.That(result.Status, Is.EqualTo(expectedStatus));
         Assert.That(result.IsError, Is.EqualTo(expectedStatus.IsErrorStatus()));
         Assert.That(result.Code, Is.EqualTo(expectedCode));
@@ -132,7 +132,7 @@ public class ResultStatusTests
             Assert.That(outcome.ToErrorCode() is null, Is.EqualTo(!status.IsErrorStatus()), $"{outcome}: code presence must match IsError");
         }
 
-        IResultStatus withCode = new DocumentEditResult(EditOutcome.CannotEdit, default) { ErrorCode = ToolErrorCode.Ambiguous };
+        IOperationResult withCode = new DocumentEditResult(EditOutcome.CannotEdit, default) { ErrorCode = ToolErrorCode.Ambiguous };
         Assert.That(withCode.Code, Is.EqualTo(ToolErrorCode.Ambiguous));
         Assert.That(withCode.IsError, Is.True);
 
@@ -220,8 +220,8 @@ public class ResultStatusTests
     [Test]
     public void ExtractMethodResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new ExtractMethodResult(false, null, "b", "c", "m", "u");
-        IResultStatus bad = new ExtractMethodResult(true, "cannot extract", null, null, null, null);
+        IOperationResult ok = new ExtractMethodResult(false, null, "b", "c", "m", "u");
+        IOperationResult bad = new ExtractMethodResult(true, "cannot extract", null, null, null, null);
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -238,9 +238,9 @@ public class ResultStatusTests
     [Test]
     public void ApplyChangesResult_StatusAgreesWithIsError_AndRefusalCodeWins()
     {
-        IResultStatus ok = new ApplyChangesResult(false, [], [], "wrote 1 file");
-        IResultStatus failed = new ApplyChangesResult(true, [], [], "write failed");
-        IResultStatus refused = new ApplyChangesResult(true, [], [], "eol refused", RefusalCode: ToolErrorCode.EolChangeRefused);
+        IOperationResult ok = new ApplyChangesResult(false, [], [], "wrote 1 file");
+        IOperationResult failed = new ApplyChangesResult(true, [], [], "write failed");
+        IOperationResult refused = new ApplyChangesResult(true, [], [], "eol refused", RefusalCode: ToolErrorCode.EolChangeRefused);
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -260,8 +260,8 @@ public class ResultStatusTests
     [Test]
     public void DiagnosticReport_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new DiagnosticReport(false, []);
-        IResultStatus bad = new DiagnosticReport(true, [new DiagnosticInfo("CS0103", "Error", "m", "C.cs", 1, 1, 1, 2)]);
+        IOperationResult ok = new DiagnosticReport(false, []);
+        IOperationResult bad = new DiagnosticReport(true, [new DiagnosticInfo("CS0103", "Error", "m", "C.cs", 1, 1, 1, 2)]);
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -279,9 +279,9 @@ public class ResultStatusTests
     [Test]
     public void MsAugmentResult_StatusAgreesWithIsError_AndExplicitErrorCodeWins()
     {
-        IResultStatus ok = MsAugmentResult.Ok("text");
-        IResultStatus plain = MsAugmentResult.Fail("boom");
-        IResultStatus coded = MsAugmentResult.Fail("nope", ToolErrorCode.TargetIneligible);
+        IOperationResult ok = MsAugmentResult.Ok("text");
+        IOperationResult plain = MsAugmentResult.Fail("boom");
+        IOperationResult coded = MsAugmentResult.Fail("nope", ToolErrorCode.TargetIneligible);
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -302,7 +302,7 @@ public class ResultStatusTests
     [TestCase(EngineOutcome.InternalError, ResultStatus.Failed, ToolErrorCode.Exception)]
     public void EngineResultWrapper_EveryOutcome_StatusAndCodeAgreeWithIsError(EngineOutcome outcome, ResultStatus expectedStatus, string? expectedCode)
     {
-        IResultStatus result = new EngineResultWrapper<int>(outcome, outcome == EngineOutcome.Success ? 1 : default, outcome == EngineOutcome.Success ? null : new EngineError("m"));
+        IOperationResult result = new EngineResultWrapper<int>(outcome, outcome == EngineOutcome.Success ? 1 : default, outcome == EngineOutcome.Success ? null : new EngineError("m"));
 
         Assert.That(result.IsError, Is.EqualTo(expectedStatus.IsErrorStatus()));
         Assert.That(result.Status, Is.EqualTo(expectedStatus));
@@ -321,8 +321,8 @@ public class ResultStatusTests
     [Test]
     public void ImpactReport_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new ImpactReport("s", "k", new List<ReferenceInfo>(), 0, 0, null);
-        IResultStatus bad = new ImpactReport("", "", new List<ReferenceInfo>(), 0, 0, "boom");
+        IOperationResult ok = new ImpactReport("s", "k", new List<ReferenceInfo>(), 0, 0, null);
+        IOperationResult bad = new ImpactReport("", "", new List<ReferenceInfo>(), 0, 0, "boom");
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -344,8 +344,8 @@ public class ResultStatusTests
     [Test]
     public void TypeHierarchyReport_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new TypeHierarchyReport { TypeName = "T" };
-        IResultStatus bad = new TypeHierarchyReport { Error = "boom" };
+        IOperationResult ok = new TypeHierarchyReport { TypeName = "T" };
+        IOperationResult bad = new TypeHierarchyReport { Error = "boom" };
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -367,8 +367,8 @@ public class ResultStatusTests
     [Test]
     public void VariableLifetimeReport_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new VariableLifetimeReport { VariableName = "v" };
-        IResultStatus bad = new VariableLifetimeReport { Error = "boom" };
+        IOperationResult ok = new VariableLifetimeReport { VariableName = "v" };
+        IOperationResult bad = new VariableLifetimeReport { Error = "boom" };
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -390,8 +390,8 @@ public class ResultStatusTests
     [Test]
     public void ToolsetChange_ChangedMapsToSuccessOrAlreadyInState_AndSerializationHasNoStatusFields()
     {
-        IResultStatus changed = new ToolsetChange(default, true, true, [], [], [], [], []);
-        IResultStatus noop = new ToolsetChange(default, false, false, [], [], [], [], []);
+        IOperationResult changed = new ToolsetChange(default, true, true, [], [], [], [], []);
+        IOperationResult noop = new ToolsetChange(default, false, false, [], [], [], [], []);
 
         Assert.That(changed.IsError, Is.False);
         Assert.That(changed.Status, Is.EqualTo(ResultStatus.Success));
@@ -413,8 +413,8 @@ public class ResultStatusTests
     [Test]
     public void ChangeSignatureResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), [], null);
-        IResultStatus bad = new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), [], "boom");
+        IOperationResult ok = new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), [], null);
+        IOperationResult bad = new ChangeSignatureResult(new Dictionary<FilePathWrapper, string>(), [], "boom");
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -436,8 +436,8 @@ public class ResultStatusTests
     [Test]
     public void RenameSymbolResult_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new RenameSymbolResult("a", "b", new Dictionary<FilePathWrapper, string>());
-        IResultStatus bad = new RenameSymbolResult("a", "b", new Dictionary<FilePathWrapper, string>(), "boom");
+        IOperationResult ok = new RenameSymbolResult("a", "b", new Dictionary<FilePathWrapper, string>());
+        IOperationResult bad = new RenameSymbolResult("a", "b", new Dictionary<FilePathWrapper, string>(), "boom");
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -460,7 +460,7 @@ public class ResultStatusTests
     [TestCase(false, ResultStatus.AlreadyInState)]
     public void FormatPreviewResult_ChangedMapsToSuccessOrAlreadyInState_AndSerializationHasNoStatusFields(bool changed, ResultStatus expected)
     {
-        IResultStatus result = new FormatPreviewResult(changed, 0, []);
+        IOperationResult result = new FormatPreviewResult(changed, 0, []);
 
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(expected));
@@ -478,8 +478,8 @@ public class ResultStatusTests
     [Test]
     public void SymbolHoverInfo_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new SymbolHoverInfo("n", "k", "sig", null, null, null, "public", null, null, [], null);
-        IResultStatus bad = new SymbolHoverInfo("n", "k", "sig", null, null, null, "public", null, null, [], "boom");
+        IOperationResult ok = new SymbolHoverInfo("n", "k", "sig", null, null, null, "public", null, null, [], null);
+        IOperationResult bad = new SymbolHoverInfo("n", "k", "sig", null, null, null, "public", null, null, [], "boom");
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -501,8 +501,8 @@ public class ResultStatusTests
     [Test]
     public void NamedArgumentsOutcome_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new NamedArgumentsOutcome(new Dictionary<FilePathWrapper, string>(), [], null);
-        IResultStatus bad = new NamedArgumentsOutcome(new Dictionary<FilePathWrapper, string>(), [], new ResultError(ToolErrorCode.NotFound, "gone"));
+        IOperationResult ok = new NamedArgumentsOutcome(new Dictionary<FilePathWrapper, string>(), [], null);
+        IOperationResult bad = new NamedArgumentsOutcome(new Dictionary<FilePathWrapper, string>(), [], new ResultError(ToolErrorCode.NotFound, "gone"));
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -524,8 +524,8 @@ public class ResultStatusTests
     [Test]
     public void SemanticReplaceOutcome_StatusAgreesWithIsError_AndSerializationHasNoStatusFields()
     {
-        IResultStatus ok = new SemanticReplaceOutcome([], new Dictionary<FilePathWrapper, string>(), null);
-        IResultStatus bad = new SemanticReplaceOutcome([], new Dictionary<FilePathWrapper, string>(), new ResultError(ToolErrorCode.NotFound, "gone"));
+        IOperationResult ok = new SemanticReplaceOutcome([], new Dictionary<FilePathWrapper, string>(), null);
+        IOperationResult bad = new SemanticReplaceOutcome([], new Dictionary<FilePathWrapper, string>(), new ResultError(ToolErrorCode.NotFound, "gone"));
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
@@ -551,20 +551,20 @@ public class ResultStatusTests
         var ambiguous = new DocumentLookupResult(DocumentLookupStatus.Ambiguous, "a.cs", null, new[] { "x/a.cs", "y/a.cs" }, 2);
         var foundWithoutDocument = new DocumentLookupResult(DocumentLookupStatus.Found, "a.cs", null, Array.Empty<string>(), 2);
 
-        IResultStatus nf = notFound;
+        IOperationResult nf = notFound;
         Assert.That(nf.IsError, Is.True);
         Assert.That(nf.Status, Is.EqualTo(ResultStatus.NotFound));
         Assert.That(nf.Code, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(nf.Message, Does.Contain("File 'a.cs' was not found anywhere in the loaded solution").And.Not.Contain("x/a.cs"));
 
-        IResultStatus amb = ambiguous;
+        IOperationResult amb = ambiguous;
         Assert.That(amb.IsError, Is.True);
         Assert.That(amb.Status, Is.EqualTo(ResultStatusExtensions.FromFlag(true, ToolErrorCode.Ambiguous)));
         Assert.That(amb.Code, Is.EqualTo(ToolErrorCode.Ambiguous));
         Assert.That(amb.Message, Does.Contain("'a.cs' matches 2 different files in the solution").And.Contain("x/a.cs").And.Contain("y/a.cs"));
 
         // Found with no Document is not a usable result, so it reads as an error (IsFound is false).
-        IResultStatus found = foundWithoutDocument;
+        IOperationResult found = foundWithoutDocument;
         Assert.That(found.IsError, Is.True);
         Assert.That(found.Code, Is.EqualTo(ToolErrorCode.NotFound));
 
@@ -636,7 +636,7 @@ public class ResultStatusTests
     {
         OperationSummary summary = SummarizeCounts(3, 0, 0, 0);
 
-        Assert.That(summary, Is.InstanceOf<IResultStatus>());
+        Assert.That(summary, Is.InstanceOf<IOperationResult>());
         Assert.That(summary.Outcome, Is.EqualTo(OperationOutcome.CompletedFully));
         Assert.That(summary.IsError, Is.False);
         Assert.That(summary.Status, Is.EqualTo(ResultStatus.Success));
@@ -704,7 +704,7 @@ public class ResultStatusTests
     {
         var result = new AsyncifyLoopResult { TotalSucceeded = 4, TotalFailed = 0 };
 
-        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result, Is.InstanceOf<IOperationResult>());
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(result.Code, Is.Null);
@@ -727,7 +727,7 @@ public class ResultStatusTests
     {
         var result = new BridgeAsyncMethodsResult { Summary = new BatchResultSummary { Succeeded = 4, Failed = 0 } };
 
-        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result, Is.InstanceOf<IOperationResult>());
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(result.Code, Is.Null);
@@ -750,7 +750,7 @@ public class ResultStatusTests
     {
         var result = new UpliftCallersResult { Summary = new BatchResultSummary { Succeeded = 4, Failed = 0 } };
 
-        Assert.That(result, Is.InstanceOf<IResultStatus>());
+        Assert.That(result, Is.InstanceOf<IOperationResult>());
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(result.Code, Is.Null);
@@ -1083,7 +1083,7 @@ public class ResultStatusTests
 
     private static void AssertAppliedSummaryNotError(AppliedChangeSummary summary, ResultStatus expected)
     {
-        var result = (IResultStatus)summary;
+        var result = (IOperationResult)summary;
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(expected));
         Assert.That(result.Code, Is.Null);
@@ -1134,8 +1134,8 @@ public class ResultStatusTests
             Assert.That(typeof(AppliedChangeSummary).GetProperty(name)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, name);
         }
 
-        var explicitStatus = typeof(AppliedChangeSummary).GetProperty("RoslynSentinel.Common.IResultStatus.Status", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var explicitStatus = typeof(AppliedChangeSummary).GetProperty("RoslynSentinel.Common.IOperationResult.Status", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         Assert.That(explicitStatus, Is.Not.Null);
-        Assert.That(explicitStatus!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, "IResultStatus.Status");
+        Assert.That(explicitStatus!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, "IOperationResult.Status");
     }
 }

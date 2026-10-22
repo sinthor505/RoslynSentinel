@@ -4,7 +4,7 @@ namespace RoslynSentinel.Common;
 /// Substrate-derived operation result with structured outcome classification and routed failure hints (spec §3.6).
 /// Always produced by <see cref="FromCounts"/> -> never constructed at call sites.
 /// </summary>
-public sealed class OperationSummary : IResultStatus
+public sealed class OperationSummary : IOperationResult
 {
     public string BlobName { get; init; } = "";
     public string ChangeId { get; init; } = "";

@@ -147,7 +147,7 @@ public record BatchResultSummary : EngineResultBase
 }
 
 /// <summary>Return type for <c>AsyncifyLoop</c> -> aggregates per-iteration Asyncify results.</summary>
-public record AsyncifyLoopResult : IResultStatus
+public record AsyncifyLoopResult : IOperationResult
 {
     /// <summary>Number of complete iterations executed.</summary>
     public int LoopsCompleted
@@ -392,7 +392,7 @@ public class AsyncifyInput
 /// <see cref="SuggestedUpliftTargets"/> -> the exact input for the next workflow step
 /// (<c>uplift_callers</c>).
 /// </summary>
-public class BridgeAsyncMethodsResult : IResultStatus
+public class BridgeAsyncMethodsResult : IOperationResult
 {
     public BatchResultSummary Summary { get; init; } = new();
     /// <summary>
@@ -423,7 +423,7 @@ public class BridgeAsyncMethodsResult : IResultStatus
 /// <see cref="SuggestedPropagateTargets"/> -> the exact input for the next workflow step
 /// (<c>propagate_cancellation_token</c>).
 /// </summary>
-public class UpliftCallersResult : IResultStatus
+public class UpliftCallersResult : IOperationResult
 {
     public BatchResultSummary Summary { get; init; } = new();
     /// <summary>

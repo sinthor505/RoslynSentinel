@@ -19,7 +19,7 @@ public record AppliedChangeSummary(
     List<FileLineChange>? LineChanges = null,
     string? ChangedContentResultId = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] List<AppliedEditSpan>? EditSpans = null
-) : IResultStatus
+) : IOperationResult
 {
     /// <summary>
     /// Machine-parseable outcome -> "dry_run_ok" when validated but deliberately not written,
@@ -81,19 +81,19 @@ public record AppliedChangeSummary(
     // Failures never reach this summary: they arrive as a ResultError on the wrapper. Only the four
     // success-shaped Status strings are produced here, so IsError is always false.
 
-    /// <summary><see cref="IResultStatus.Status"/>: AlreadyInState for "no_changes", else Success. Explicit because the public <see cref="Status"/> is a string. Not serialized.</summary>
+    /// <summary><see cref="IOperationResult.Status"/>: AlreadyInState for "no_changes", else Success. Explicit because the public <see cref="Status"/> is a string. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    ResultStatus IResultStatus.Status => Status == "no_changes" ? ResultStatus.AlreadyInState : ResultStatus.Success;
+    ResultStatus IOperationResult.Status => Status == "no_changes" ? ResultStatus.AlreadyInState : ResultStatus.Success;
 
-    /// <summary><see cref="IResultStatus.IsError"/>: always false (see the comment above). Not serialized.</summary>
+    /// <summary><see cref="IOperationResult.IsError"/>: always false (see the comment above). Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => false;
 
-    /// <summary><see cref="IResultStatus.Code"/>: always null. Not serialized.</summary>
+    /// <summary><see cref="IOperationResult.Code"/>: always null. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Code => null;
 
-    /// <summary><see cref="IResultStatus.Message"/>: the <see cref="Note"/> text. Not serialized.</summary>
+    /// <summary><see cref="IOperationResult.Message"/>: the <see cref="Note"/> text. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Note;
 

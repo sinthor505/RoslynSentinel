@@ -30,7 +30,7 @@ public sealed record TestCategoryProjectOutcome(
     string? ErrorCode,
     string? Error,
     string? ErrorDetail,
-    List<TestCategorySkippedEdit> SkippedEdits) : IResultStatus
+    List<TestCategorySkippedEdit> SkippedEdits) : IOperationResult
 {
     /// <summary>True when the project's batch was rejected (Status is "failed").</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -45,11 +45,11 @@ public sealed record TestCategoryProjectOutcome(
     public string? Message => IsError ? Error : null;
 
     /// <summary>
-    /// Explicit: the public <c>Status</c> is the string verdict (applied, no_changes, failed), so the IResultStatus view
+    /// Explicit: the public <c>Status</c> is the string verdict (applied, no_changes, failed), so the IOperationResult view
     /// is exposed here. "failed" maps through ErrorCode; "no_changes" is AlreadyInState; anything else is Success.
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    ResultStatus IResultStatus.Status => Status switch
+    ResultStatus IOperationResult.Status => Status switch
     {
         "failed" => ResultStatusExtensions.FromFlag(true, ErrorCode),
         "no_changes" => ResultStatus.AlreadyInState,
@@ -80,7 +80,7 @@ public sealed record TestCategoryAppliedSummary(
     int SkippedExisting,
     int Failed,
     List<TestCategoryProjectOutcome> Projects,
-    List<string> Warnings) : IResultStatus
+    List<string> Warnings) : IOperationResult
 {
     /// <summary>"applied", "partially_applied" (some project failed, others landed) or "no_changes".</summary>
     public string Status => Failed > 0 && AffectedFiles.Count > 0
@@ -92,11 +92,11 @@ public sealed record TestCategoryAppliedSummary(
     public bool IsError => Projects.Any(p => p.IsError);
 
     /// <summary>
-    /// Explicit: the public <c>Status</c> is the string verdict, so the IResultStatus view is exposed here. Any failed
+    /// Explicit: the public <c>Status</c> is the string verdict, so the IOperationResult view is exposed here. Any failed
     /// project makes the summary Failed; "no_changes" is AlreadyInState; anything else is Success.
     /// </summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    ResultStatus IResultStatus.Status => IsError ? ResultStatus.Failed : Status == "no_changes" ? ResultStatus.AlreadyInState : ResultStatus.Success;
+    ResultStatus IOperationResult.Status => IsError ? ResultStatus.Failed : Status == "no_changes" ? ResultStatus.AlreadyInState : ResultStatus.Success;
 
     /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
