@@ -64,6 +64,12 @@ public static class SemanticTypeHelper
             return false;
         }
 
+        // string is IEnumerable<char> but enumerating it twice is cheap and not a lazy-sequence defect
+        if (type.SpecialType == SpecialType.System_String)
+        {
+            return false;
+        }
+
         var def = (type as INamedTypeSymbol)?.OriginalDefinition ?? type;
 
         // Exclude materialized collection types

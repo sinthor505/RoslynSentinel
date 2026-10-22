@@ -314,10 +314,9 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
         Assert.That(result, Is.Empty);
         SetSource("public class P { public string Build(string[] xs) { var s = \"\"; foreach (var x in xs) { s += x; } return s; } }", "Perf.cs");
         var positive = await _performanceEngine.AnalyzePerformanceAsync("Perf.cs");
-        Assert.That(positive, Has.Count.EqualTo(2));
+        Assert.That(positive, Has.Count.EqualTo(1));
         Assert.That(positive, Has.Some.Property("IssueType").EqualTo("StringConcatenationInLoop"));
-        // TODO PotentialDoubleEnumeration fires on a string variable 's' (a string is not a lazy sequence); engine false positive, pinned as-is
-        Assert.That(positive, Has.Some.Property("IssueType").EqualTo("PotentialDoubleEnumeration"));
+        Assert.That(positive, Has.None.Property("IssueType").EqualTo("PotentialDoubleEnumeration"));
     }
 
     // --- AnalyzeSecurity ---
