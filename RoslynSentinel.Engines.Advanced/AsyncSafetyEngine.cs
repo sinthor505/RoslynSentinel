@@ -679,7 +679,7 @@ public class AsyncAnalysisEngine
             }
 
             SemanticModel? semanticModel = null;
-            try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch { }
+            try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch (Exception ex) when (ex is not OperationCanceledException) { }
 
             var docPath = document.FilePath ?? document.Name;
 
@@ -968,7 +968,7 @@ public class AsyncAnalysisEngine
 
             // Get semantic model for this doc (optional -> fall back to syntax heuristics if unavailable)
             SemanticModel? model = null;
-            try { model = await doc.GetSemanticModelAsync(cancellationToken); } catch { }
+            try { model = await doc.GetSemanticModelAsync(cancellationToken); } catch (Exception ex) when (ex is not OperationCanceledException) { }
 
             foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
             {

@@ -40,6 +40,7 @@ public static class ValidateAndApplyHelper
             beforeTexts = await ReadBeforeTextsAsync(
                 workspaceManager, changes.Keys.Select(k => (string)k).Concat((deletePaths ?? []).Select(k => (string)k)), cancellationToken);
         }
+        // TODO cancellation: ToolErrorMapper maps OCE to a Cancelled result; decide rethrow vs result; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a
         catch (Exception ex)
         {
             logger.LogError(ex, "ValidateAndApply pre-image read failed for {OperationName}", operationName);
@@ -104,6 +105,7 @@ public static class ValidateAndApplyHelper
                 : (removePaths ?? []).Concat(deletePaths).ToList();
             validation = await validationEngine.ValidateChangesAsync(changes, allRemovePaths, cancellationToken);
         }
+        // TODO cancellation: ToolErrorMapper maps OCE to a Cancelled result; decide rethrow vs result; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a
         catch (Exception ex)
         {
             logger.LogError(ex, "ValidateAndApply pre-validate failed for {OperationName}", operationName);

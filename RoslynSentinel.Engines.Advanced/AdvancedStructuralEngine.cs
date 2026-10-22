@@ -807,7 +807,7 @@ public class StructuralRefactoringEngine
                     return false;
                 }
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // If we can't determine the symbol, be conservative
                 return false;

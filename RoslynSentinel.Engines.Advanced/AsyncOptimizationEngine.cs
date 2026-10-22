@@ -1300,13 +1300,14 @@ public class AsyncOptimizationEngine
                 FilePath = filePath
             };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = $"// ErrorDetails: {ex.Message}"
+                Message = $"// ErrorDetails: {ex.Message}",
+                ErrorCode = (ex as ToolException)?.ErrorCode
             };
         }
     }
@@ -1386,7 +1387,7 @@ public class AsyncOptimizationEngine
         }
 
         SemanticModel? semanticModel = null;
-        try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch { }
+        try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch (Exception ex) when (ex is not OperationCanceledException) { }
 
         // Rewrite callees in method body
         SyntaxNode bodyToRewrite = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody!;
@@ -1534,7 +1535,7 @@ public class AsyncOptimizationEngine
         }
 
         SemanticModel? semanticModel = null;
-        try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch { }
+        try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch (Exception ex) when (ex is not OperationCanceledException) { }
 
         // Build the set of requested names for fast lookup (null = all).
         var requested = methodNames != null
@@ -2608,7 +2609,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
                 if (!docSemanticModelFetched)
                 {
                     docSemanticModelFetched = true;
-                    try { docSemanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false); } catch { }
+                    try { docSemanticModel = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false); } catch (Exception ex) when (ex is not OperationCanceledException) { }
                 }
 
                 if (docSemanticModel != null)
@@ -3113,7 +3114,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         result.TokenParameterName = ctParamName;
 
         SemanticModel? semanticModel = null;
-        try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch { }
+        try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch (Exception ex) when (ex is not OperationCanceledException) { }
 
         var body = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody;
         if (body == null)
@@ -3362,7 +3363,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         }
 
         SemanticModel? semanticModel = null;
-        try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch { }
+        try { semanticModel = await document.GetSemanticModelAsync(cancellationToken); } catch (Exception ex) when (ex is not OperationCanceledException) { }
 
         var requested = methodNames != null
             ? new HashSet<string>(methodNames, StringComparer.Ordinal)

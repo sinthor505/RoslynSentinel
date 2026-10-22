@@ -1480,13 +1480,14 @@ public class LogicSimplificationEngine
                 UpdatedText = root.ToFullString()
             };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = $"// ErrorDetails: {ex.Message}"
+                Message = $"// ErrorDetails: {ex.Message}",
+                ErrorCode = (ex as ToolException)?.ErrorCode
             };
         }
     }

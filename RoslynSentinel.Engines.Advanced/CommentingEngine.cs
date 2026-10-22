@@ -408,6 +408,7 @@ public class CommentingEngine
                 var summary = await _llmClient.CompleteAsync(CommentSystemPrompt, memberText, maxTokens, cancellationToken);
                 results[index] = (summary, null);
             }
+            // TODO cancellation: per-item catch around the LLM call; an HTTP timeout (TaskCanceledException) would abort the whole run if filtered (unverified); see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a
             catch (Exception ex)
             {
                 results[index] = (string.Empty, ex.Message);

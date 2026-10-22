@@ -1338,7 +1338,7 @@ public class CodeGenerationEngine
                     formatString = s;
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // If constant value resolution fails (e.g., invalid const reference),
                 // return a graceful error instead of crashing

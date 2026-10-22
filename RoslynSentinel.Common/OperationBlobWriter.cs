@@ -126,6 +126,7 @@ public static class OperationBlobWriter
 
             return BlobWriteResult.Success(fileName);
         }
+        // TODO cancellation: propagating OCE would report cancelled for a change already applied with no undo blob; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a
         catch (Exception ex)
         {
             // Logged at ErrorData with the exception attached: the previous catch discarded it

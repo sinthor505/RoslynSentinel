@@ -1848,6 +1848,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                         _logger.LogInformation("Deleted {FilePathWrapper}", filePath);
                     }
                 }
+                // TODO cancellation: rethrowing mid-loop would skip rollbackOnPartialFailure and workspace sync and leave written files on disk; decide cancel-vs-rollback semantics; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a
                 catch (Exception ex)
                 {
                     failed[filePath] = ex.Message;
@@ -1985,6 +1986,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                             await Task.Delay(500);
                         }
                     }
+                    // TODO cancellation: rethrowing mid-loop would skip rollbackOnPartialFailure and workspace sync and leave written files on disk; decide cancel-vs-rollback semantics; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a
                     catch (Exception ex)
                     {
                         lastError = ex.Message;

@@ -680,7 +680,7 @@ public class AsyncBatchEngine
                                     }
                                 }
                             }
-                            catch (Exception stripEx)
+                            catch (Exception stripEx) when (stripEx is not OperationCanceledException)
                             {
                                 _logger.LogWarning(stripEx,
                                     "Could not strip stale AsyncBridgeCandidate from '{Method}' - continuing",
@@ -694,7 +694,7 @@ public class AsyncBatchEngine
                         }
                     }
                 }
-                catch (Exception ctEx)
+                catch (Exception ctEx) when (ctEx is not OperationCanceledException)
                 {
                     _logger.LogWarning(ctEx, "CT-add fallback failed for '{AsyncMethod}'", asyncMethodName);
                 }
@@ -728,7 +728,7 @@ public class AsyncBatchEngine
                             candidate.MethodName, candidate.FilePath, flagApply.Summary);
                     }
                 }
-                catch (Exception flagEx)
+                catch (Exception flagEx) when (flagEx is not OperationCanceledException)
                 {
                     _logger.LogWarning(flagEx,
                         "Could not flag {Method} as NeedsManualReview after pre-condition failure",
@@ -739,6 +739,7 @@ public class AsyncBatchEngine
                     $"Pre-condition: {ex.Message}", new List<DiagnosticInfo>()));
                 continue;
             }
+            // TODO cancellation: logs an error and persists a NeedsManualReview flag for a candidate that never failed on cancellation; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a
             catch (Exception ex)
             {
                 // Unexpected error -> also flag NeedsManualReview to prevent infinite retries.
@@ -759,7 +760,7 @@ public class AsyncBatchEngine
                             candidate.MethodName, candidate.FilePath, flagApply.Summary);
                     }
                 }
-                catch (Exception flagEx)
+                catch (Exception flagEx) when (flagEx is not OperationCanceledException)
                 {
                     _logger.LogWarning(flagEx,
                         "Could not flag {Method} as NeedsManualReview after unexpected error",
@@ -786,7 +787,7 @@ public class AsyncBatchEngine
                                 newSource, candidate.FilePath, asyncMethodNameForProp, progress, cancellationToken);
                         sourceToValidate = propagatedSource;
                     }
-                    catch (Exception propEx)
+                    catch (Exception propEx) when (propEx is not OperationCanceledException)
                     {
                         _logger.LogWarning(propEx,
                             "CT propagation failed for '{Method}' - continuing with unpropagated source",
@@ -809,7 +810,7 @@ public class AsyncBatchEngine
                         sourceToValidate = bodyRewrite.UpdatedText;
                     }
                 }
-                catch (Exception rewriteEx)
+                catch (Exception rewriteEx) when (rewriteEx is not OperationCanceledException)
                 {
                     _logger.LogWarning(rewriteEx,
                         "Bridge body rewrite failed for '{Method}' - continuing with unrewritten source",
@@ -856,7 +857,7 @@ public class AsyncBatchEngine
                         flagOutcome = "flagged NeedsManualReview";
                     }
                 }
-                catch (Exception flagEx)
+                catch (Exception flagEx) when (flagEx is not OperationCanceledException)
                 {
                     _logger.LogWarning(flagEx,
                         "Could not flag {Method} as NeedsManualReview - continuing",
@@ -1406,7 +1407,7 @@ public class AsyncBatchEngine
                         ?? throw new InvalidOperationException("In-place async void conversion returned null source.");
                     isEventHandlerInPlace = true;
                 }
-                catch (Exception inPlaceEx)
+                catch (Exception inPlaceEx) when (inPlaceEx is not OperationCanceledException)
                 {
                     _logger.LogWarning(
                         "In-place async void conversion failed for '{Method}': {Message}",
@@ -1425,7 +1426,7 @@ public class AsyncBatchEngine
                     callerFilePath, callerMethodName,
                     $"Bridge pre-condition: {ex.Message}", new List<DiagnosticInfo>()));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogError(ex, "Unexpected error bridging caller {Method}", callerMethodName);
                 return (null, null, new UpliftSkippedInfo(
@@ -1458,7 +1459,7 @@ public class AsyncBatchEngine
 
                 rewrittenSource = semanticResult;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogWarning(
                     "Semantic body rewrite failed for {Method}: {Message}", rewriteTarget, ex.Message);
@@ -1486,7 +1487,7 @@ public class AsyncBatchEngine
                 rewrittenSource = await RewriteCallerAsyncBodyAsync(
                     callerDocument, bridgedCallerSource, rewriteTarget, bridgedMethodName, cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogWarning(
                     "Body rewrite failed for {Method}: {Message}", rewriteTarget, ex.Message);
@@ -1510,7 +1511,7 @@ public class AsyncBatchEngine
                         rewrittenSource, callerFilePath, callerAsyncName, progress, cancellationToken);
                 sourceResult = propagated;
             }
-            catch (Exception propEx)
+            catch (Exception propEx) when (propEx is not OperationCanceledException)
             {
                 _logger.LogWarning(propEx,
                     "CT propagation failed for '{Method}' - using unrewritten source",
@@ -1821,6 +1822,7 @@ public class AsyncBatchEngine
                     batchResult.TotalForwarded += fileResult.TotalForwarded;
                     batchResult.TotalSkipped += fileResult.TotalSkipped;
                 }
+                // TODO cancellation: batch loop records Failed on cancellation and the entry point loses partial results; decide a StopReason or propagate; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a
                 catch (Exception ex)
                 {
                     batchResult.Failed.Add(new PropagateCtFileFailure
@@ -1859,6 +1861,7 @@ public class AsyncBatchEngine
                     .PropagateCancellationTokenInFileAsync(
                         target.FilePath, target.MethodNames, progress: progress, cancellationToken: cancellationToken);
             }
+            // TODO cancellation: batch loop records Failed on cancellation and the entry point loses partial results; decide a StopReason or propagate; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "PropagateCancellationToken failed for file '{File}'", target.FilePath);
@@ -1927,7 +1930,7 @@ public class AsyncBatchEngine
 
                             failure.FlaggedMethods.Add(perMethod.MethodName);
                         }
-                        catch (Exception flagEx)
+                        catch (Exception flagEx) when (flagEx is not OperationCanceledException)
                         {
                             _logger.LogWarning(flagEx,
                                 "Could not flag method {Method} as NeedsManualReview", perMethod.MethodName);
@@ -2033,6 +2036,7 @@ public class AsyncBatchEngine
                 result.TotalSkipped += methodResult.Result.Skipped.Count;
                 result.TotalRemainingCallers += methodResult.Result.RemainingCallers;
             }
+            // TODO cancellation: batch loop records Failed on cancellation and the entry point loses partial results; decide a StopReason or propagate; see docs/current/proposals/proposal_throw_typed_exceptions_not_failure_results.md S1a
             catch (Exception ex)
             {
                 _logger.LogWarning(ex,
@@ -2104,7 +2108,7 @@ public class AsyncBatchEngine
                 flagOutcome = "flagged NeedsManualReview";
             }
         }
-        catch (Exception flagEx)
+        catch (Exception flagEx) when (flagEx is not OperationCanceledException)
         {
             _logger.LogWarning(flagEx, "Could not flag {Method} as NeedsManualReview - continuing", methodName);
         }
