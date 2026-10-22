@@ -21,8 +21,8 @@ public class SubAgentLaunchTests
         // The same millisecond on purpose: a live server can start several calls inside one tick, and
         // the timestamp alone would collide. Only the GUID suffix keeps them apart.
         var instant = DateTimeOffset.UtcNow;
-        // TODO suspected flaky: the suffix is 8 hex digits (32 bits), so 5000 ids collide by the birthday bound (~n^2/2^33) in roughly 0.3% of runs; lower the count (e.g. 200) or lengthen the suffix (NewRunId_HasSortableTimestampPrefixAndShortSuffix pins 8 digits)
-        var ids = Enumerable.Range(0, 5000).Select(_ => SubAgentRunNaming.NewRunId(instant)).ToList();
+        // 200 ids on purpose: the suffix is 8 hex digits (32 bits), so 5000 ids collided by the birthday bound in about 0.3% of runs; 200 ids is about 5e-6. A longer suffix would break NewRunId_HasSortableTimestampPrefixAndShortSuffix, which pins 8 digits.
+        var ids = Enumerable.Range(0, 200).Select(_ => SubAgentRunNaming.NewRunId(instant)).ToList();
 
         Assert.That(ids.Distinct().Count(), Is.EqualTo(ids.Count));
     }
