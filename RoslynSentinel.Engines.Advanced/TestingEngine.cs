@@ -321,7 +321,16 @@ public class TestingEngine
 
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
-        bool isStaticClass = classNode?.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)) == true;
+        if (classNode == null)
+        {
+            return new DocumentEditResult()
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"Class '{className}' was not found in {filePath}."
+            };
+        }
+        bool isStaticClass = classNode.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
 
         var sb = new StringBuilder();
         sb.AppendLine("using BenchmarkDotNet.Attributes;");

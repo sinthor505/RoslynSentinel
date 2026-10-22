@@ -3985,21 +3985,19 @@ namespace MyApp
         }
 
         [Test]
-        public async Task AddBenchmarkStubAsync_ClassNotInFile_ReturnsOriginalContent()
+        public async Task AddBenchmarkStubAsync_ClassNotInFile_ReturnsTargetNotFound()
         {
-            // TODO AddBenchmarkStub returns Modified for a missing class; should be TargetNotFound (TestingEngine.cs AddBenchmarkStubAsync, finding #21)
             var result = await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-            Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "A missing class must not produce a stub");
         }
 
         [Test]
         public async Task AddBenchmarkStub_Tool_ClassNotFound_DoesNotThrow()
         {
-            // TODO AddBenchmarkStub returns Modified for a missing class; should be TargetNotFound (TestingEngine.cs AddBenchmarkStubAsync, finding #21)
             var result = await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-            Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
+            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "A missing class must not produce a stub");
         }
     }
 
