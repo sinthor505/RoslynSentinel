@@ -117,7 +117,7 @@ public static class CompilerErrorLookupHelper
         {
             candidates = await symbolNavigationEngine.LocateSymbolAsync(name, exactMatch: true, cancellationToken: cancellationToken);
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return $"  '{name}' is not a known symbol at this location. Common causes: a typo, a missing `using` for its namespace, or (if it's a static member of another class) calling it unqualified - C# does not resolve another class's static members just because you share a namespace or `using` it; qualify the call as ClassName.{name}(...).";
         }
@@ -132,7 +132,7 @@ public static class CompilerErrorLookupHelper
         {
             usingContext = await symbolNavigationEngine.GetFileUsingContextAsync(diagnostic.FilePath, cancellationToken);
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Fall through without namespace triage below -> the plain candidate list still helps.
         }
@@ -205,7 +205,7 @@ public static class CompilerErrorLookupHelper
                     memberName, exactMatch: true, cancellationToken: cancellationToken);
             }
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             candidates = [];
         }
@@ -254,7 +254,7 @@ public static class CompilerErrorLookupHelper
             candidates = await symbolNavigationEngine.LocateSymbolAsync(
                 memberName, exactMatch: true, containingType: simpleTypeName, cancellationToken: cancellationToken);
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             candidates = [];
         }
@@ -271,7 +271,7 @@ public static class CompilerErrorLookupHelper
             callerType = await symbolNavigationEngine.GetEnclosingTypeNameAsync(
                 diagnostic.FilePath, diagnostic.StartLine, diagnostic.StartColumn, cancellationToken);
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Fall through without a caller type name below -> the accessibility guidance still helps.
         }
@@ -326,7 +326,7 @@ public static class CompilerErrorLookupHelper
             candidates = await symbolNavigationEngine.LocateSymbolAsync(
                 memberName, exactMatch: true, containingType: typeName, cancellationToken: cancellationToken);
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             candidates = [];
         }

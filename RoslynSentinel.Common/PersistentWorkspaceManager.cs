@@ -1782,7 +1782,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                 {
                     preImages[key] = await FileIoHelper.ReadAllTextIfExistsAsync(key, cancellationToken);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     // Cannot read pre-image -> log and record null so the caller knows undo
                     // for this specific file is unavailable, but do not abort the whole batch.
@@ -1921,7 +1921,7 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
                             _logger.LogDebug("Formatter divergence for {FilePathWrapper}: written content differs from Formatter.Format output (line delta {LineDelta}).", filePath, lineDelta);
                         }
                     }
-                    catch
+                    catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         // Diagnostic-only -> a parse/format failure here must never block the real write.
                     }

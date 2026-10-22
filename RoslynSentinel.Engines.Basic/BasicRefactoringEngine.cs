@@ -986,7 +986,7 @@ public class BasicRefactoringEngine
 
             return null;
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return null;
         }

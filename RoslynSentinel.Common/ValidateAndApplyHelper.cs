@@ -215,7 +215,7 @@ public static class ValidateAndApplyHelper
             var (offloaded, filePath, resultId) = await LargeResultHelper.StoreRawJsonAsync(json, solutionRoot, cancellationToken);
             return offloaded ? resultId : null;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "Failed to store changed content for large-result offload");
             return null;

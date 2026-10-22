@@ -260,7 +260,7 @@ public class SymbolNavigationEngine
             {
                 compilation = await project.GetCompilationAsync(cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogWarning(ex, "LocateSymbol: could not compile project '{Project}'", project.Name);
             }
@@ -335,7 +335,7 @@ public class SymbolNavigationEngine
                             contextSnippet = sourceText.Lines[line - 1].ToString().Trim();
                         }
                     }
-                    catch (Exception ex)
+                    catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         _logger.LogDebug(ex, "LocateSymbol: could not read source text for context snippet");
                     }
@@ -487,7 +487,7 @@ public class SymbolNavigationEngine
                 }
             }
         }
-        catch { }
+        catch (Exception ex) when (ex is not OperationCanceledException) { }
 
         var modifiers = new List<string>();
         switch (symbol)
@@ -2452,7 +2452,7 @@ public class SymbolNavigationEngine
             {
                 compilation = await project.GetCompilationAsync(cancellationToken);
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // Same "unbuildable project can't be scanned" tolerance as ResolveSymbolByNameAsync -
                 // a near-miss hint is best-effort, not worth failing the whole error message over.
@@ -2822,7 +2822,7 @@ public class SymbolNavigationEngine
             {
                 compilation = await project.GetCompilationAsync(cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogWarning(ex, "ResolveCandidatesWithSemanticAsync: could not compile project '{Project}'", project.Name);
             }

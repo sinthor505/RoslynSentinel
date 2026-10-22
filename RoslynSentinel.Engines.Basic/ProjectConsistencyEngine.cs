@@ -78,7 +78,7 @@ public class ProjectConsistencyEngine
                     frameworkByProject[project.Name] = (framework, project.FilePath);
                 }
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // Malformed .csproj -> skip
             }
@@ -187,7 +187,7 @@ public class ProjectConsistencyEngine
                     framework = doc.Descendants("TargetFramework").FirstOrDefault()?.Value?.Trim()
                              ?? doc.Descendants("TargetFrameworks").FirstOrDefault()?.Value?.Trim();
                 }
-                catch (Exception) { /* malformed - leave null */ }
+                catch (Exception ex) when (ex is not OperationCanceledException) { /* malformed - leave null */ }
             }
 
             results.Add(new ProjectFrameworkSummary(project.Name, framework ?? "unknown", project.FilePath));

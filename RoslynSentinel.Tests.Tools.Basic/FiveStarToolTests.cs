@@ -777,6 +777,23 @@ public class FormatDocumentSafeTests
         finally { SafeDelete(tempFile); }
     }
 
+    [Test]
+    [Description("A cancelled token must surface as OperationCanceledException, not as a 'Could not read file' Fail result")]
+    public async Task FormatDocumentSafe_CancelledToken_PropagatesOperationCanceledException()
+    {
+        var tempFile = MakeTempFile();
+        try
+        {
+            await File.WriteAllTextAsync(tempFile, "public class Z { }");
+            using var cts = new CancellationTokenSource();
+            await cts.CancelAsync();
+
+            await Assert.CatchAsync<OperationCanceledException>(
+                async () => await _engine.FormatDocumentSafeAsync(tempFile, preview: true, cancellationToken: cts.Token));
+        }
+        finally { SafeDelete(tempFile); }
+    }
+
     // ── Apply mode ────────────────────────────────────────────────────────────
 
     [Test]

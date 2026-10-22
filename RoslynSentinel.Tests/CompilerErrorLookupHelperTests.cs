@@ -211,4 +211,29 @@ public class CompilerErrorLookupHelperTests
         Assert.That(description, Does.Contain("CS1002 at C:\\repo\\Other.cs:7: ; expected"));
         Assert.That(description, Does.StartWith("CS1002 at C:\\repo\\Other.cs:7: ; expected\n"));
     }
+
+    /// <summary>
+    /// Regression guard (throw-typed-exceptions S1a): the best-effort symbol lookups behind a hint must
+    /// not swallow cancellation into a "not a known symbol" message; a cancelled token has to surface.
+    /// </summary>
+    [Test]
+    public async Task DescribeAsync_CancelledToken_PropagatesOperationCanceledException()
+    {
+        var report = await CompileAndGetErrorsAsync(
+            ("Broken.cs", """
+            namespace TestProj;
+
+            public class Broken
+            {
+                public int Run() => MissingName;
+            }
+            """));
+        Assert.That(report.Diagnostics.Select(d => d.Id), Does.Contain("CS0103"));
+
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.CatchAsync<OperationCanceledException>(
+            async () => await CompilerErrorLookupHelper.DescribeAsync(report, _symbolNavigationEngine, cts.Token));
+    }
 }

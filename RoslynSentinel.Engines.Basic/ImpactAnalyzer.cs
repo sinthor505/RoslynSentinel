@@ -118,7 +118,7 @@ public class ImpactAnalyzer
                 affectedProjects.Count
             );
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return new ImpactReport("", "", [], 0, 0, Error: ex.Message);
         }

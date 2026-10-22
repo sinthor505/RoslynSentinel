@@ -89,6 +89,34 @@ public class ToolGapsTests
         Assert.That(result!.Message, Does.StartWith("// ErrorDetails:"));
     }
 
+    // The engine's whole-method catch must not turn a cancelled token into an "// ErrorDetails:" edit result.
+    [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
+    public async Task MakeMethodThreadSafe_CancelledToken_PropagatesOperationCanceledException()
+    {
+        SetSource(
+            "public class C { public void DoWork() { int x = 1; } }",
+            "C.cs");
+        using var cts = new CancellationTokenSource();
+        await cts.CancelAsync();
+
+        await Assert.CatchAsync<OperationCanceledException>(
+            async () => await _threadSafetyEngine.MakeMethodThreadSafeAsync("C.cs", "DoWork", "_lock", cts.Token));
+    }
+
+    // The catch used to drop the ToolException's code (only Message was set); the sibling catch in
+    // ConvertLockToSemaphoreSlimAsync already carried it. No solution loaded -> SolutionNotLoadedException.
+    [Test]
+    [Category("ThreadSafetyEngine")] // sentinel:auto-category
+    public async Task MakeMethodThreadSafe_ToolExceptionInsideTry_KeepsErrorCode()
+    {
+        // Deliberately no SetSource: GetSolutionAsync throws SolutionNotLoadedException inside the try.
+        var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("C.cs", "DoWork");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Error));
+        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
+    }
+
     // ──────────────────────────────────────────────────────────────────────────
     // Bug 2: FindTaskWhenAllUsageAsync -> dependency-aware sequential detection
     // ──────────────────────────────────────────────────────────────────────────

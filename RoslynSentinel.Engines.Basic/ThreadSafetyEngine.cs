@@ -123,13 +123,14 @@ public class ThreadSafetyEngine
                 UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, typeNode, newTypeNode, cancellationToken)
             };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.Error,
                 FilePath = filePath,
-                Message = $"// ErrorDetails: {ex.Message}"
+                Message = $"// ErrorDetails: {ex.Message}",
+                ErrorCode = (ex as ToolException)?.ErrorCode
             };
         }
     }
@@ -288,7 +289,7 @@ public class ThreadSafetyEngine
                 UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, typeNode, newTypeNode, cancellationToken)
             };
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return new DocumentEditResult
             {

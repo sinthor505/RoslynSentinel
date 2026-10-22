@@ -88,7 +88,7 @@ public class SemanticRefactoringEngine
             {
                 return await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, declarationStatement, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken);
             }
-            catch
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 return root.ToFullString();
             }
@@ -149,7 +149,7 @@ public class SemanticRefactoringEngine
         {
             return await RoslynFormattingHelper.RemoveNodeAndFormatContainerAsync(document, root, declarationStatement, SyntaxRemoveOptions.KeepUnbalancedDirectives, cancellationToken);
         }
-        catch
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return root.ToFullString();
         }

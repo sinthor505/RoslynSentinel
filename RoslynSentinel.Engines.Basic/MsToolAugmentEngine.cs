@@ -748,7 +748,7 @@ public class MsToolAugmentEngine
     {
         string source;
         try { source = await File.ReadAllTextAsync(filePath, cancellationToken); }
-        catch (Exception ex) { return MsAugmentResult.Fail($"Could not read file '{filePath}': {ex.Message}"); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { return MsAugmentResult.Fail($"Could not read file '{filePath}': {ex.Message}"); }
 
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
         var root = await tree.GetRootAsync(cancellationToken);
@@ -787,7 +787,7 @@ public class MsToolAugmentEngine
                 // No solution loaded -> the chokepoint requires CurrentSolution, so fall back to a
                 // direct write. Same fallback the previous code silently relied on via its try/catch.
                 try { await File.WriteAllTextAsync(filePath, formatted, cancellationToken); }
-                catch (Exception ex) { return MsAugmentResult.Fail($"Could not write file '{filePath}': {ex.Message}"); }
+                catch (Exception ex) when (ex is not OperationCanceledException) { return MsAugmentResult.Fail($"Could not write file '{filePath}': {ex.Message}"); }
             }
         }
 
@@ -813,7 +813,7 @@ public class MsToolAugmentEngine
     {
         string source;
         try { source = await File.ReadAllTextAsync(filePath, cancellationToken); }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             return new ForeachLinqAnalysis(false, "", 0,
                 $"Could not read file: {ex.Message}", "Cannot analyze.");
@@ -1120,7 +1120,7 @@ public class MsToolAugmentEngine
 
         string source;
         try { source = await File.ReadAllTextAsync(filePath, cancellationToken); }
-        catch (Exception ex) { return MsAugmentResult.Fail($"Could not read file '{filePath}': {ex.Message}"); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { return MsAugmentResult.Fail($"Could not read file '{filePath}': {ex.Message}"); }
 
         var sourceText = SourceText.From(source);
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
@@ -1288,7 +1288,7 @@ public class MsToolAugmentEngine
         else
         {
             try { source = await File.ReadAllTextAsync(filePath, cancellationToken); }
-            catch (Exception ex) { return MsAugmentResult.Fail($"Could not read '{filePath}': {ex.Message}"); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { return MsAugmentResult.Fail($"Could not read '{filePath}': {ex.Message}"); }
         }
 
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);

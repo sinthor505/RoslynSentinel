@@ -730,7 +730,7 @@ public class DiscoveryEngine
                         contextSnippet = src.Lines[line - 1].ToString().Trim();
                     }
                 }
-                catch (Exception)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                 // non-fatal -> contextSnippet stays null
                 }
@@ -835,7 +835,7 @@ public class DiscoveryEngine
                             contextSnippet = src.Lines[line - 1].ToString().Trim();
                         }
                     }
-                    catch (Exception)
+                    catch (Exception ex) when (ex is not OperationCanceledException)
                     {
                         // non-fatal
                     }
