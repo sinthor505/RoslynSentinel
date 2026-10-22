@@ -823,7 +823,7 @@ public class AdvancedRefactoringTools
     // solution -> same new-class behavior) and additionally supports moving into an EXISTING class.
     [McpServerTool(Name = "ExtractMembers")]
     [Produces(DataTag.ChangeId)]
-    [Description("Extracts class members into a new interface, partial class, or superclass.")]
+    [Description("Extracts class members into a new interface or partial class (newType=superclass is not implemented).")]
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: newTypeName required for newType=interface/superclass; memberNames required for newType=partial; none individually required by the schema. Enforced at runtime.
     public async Task<SentinelCallToolResult<AppliedChangeSummary>> ExtractMembersTool([Description(ToolParams.Reason)] ToolCallReason reason, [Consumes(DataTag.SourceFilepath, required: true)][Description("The file path of the destination file.")] string filePath, [Consumes(DataTag.SymbolName, required: true)][Description("The name of the class from which to extract members.")] string className, [ExternalInputRequired(DataTag.SymbolKind)][Description("Extraction target kind: interface, partial class, or superclass.")] ExtractAsType newType, [ExternalInputRequired(DataTag.SymbolName)][Description("Required for newType=interface/superclass: name of the new type.")] string? newTypeName = null, [ExternalInputRequired(DataTag.SymbolName)][Description("Required for newType=partial class: members to extract.")] string[]? memberNames = null, [ExternalInputRequired(DataTag.SourceFilepath)][Description("Required for newType=superclass: file paths matching classNames.")] string[]? memberFilePaths = null, [ExternalInputRequired(DataTag.ClassName)][Description("Required for newType=superclass: classes to extract common members from.")] string[]? classNames = null, // autoStage removed from the schema: stage-then-apply is retired, the value is hardcoded to true below.
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    // [ToolOption(ToolOptionTag.AutoStage, required: false)][Description("true (default) = write immediately; false = return content without writing.")] bool autoStage = true,
@@ -931,53 +931,8 @@ public class AdvancedRefactoringTools
 
             if (newType == ExtractAsType.superclass)
             {
-                if (string.IsNullOrEmpty(newTypeName))
-                {
-                    return new SentinelCallToolResult<AppliedChangeSummary>()
-                    {
-                        IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "newTypeName (new base class name) is required when newType=superclass.")
-                    };
-                }
-
-                var actualClassNames = classNames ?? new[]
-                {
-                    className
-                };
-                try
-                {
-                    var changes = await _advancedStructuralEngine.ExtractSuperclassAsync(actualFilePaths, actualClassNames, newTypeName, cancellationToken: cancellationToken);
-                    if (!autoStage)
-                    {
-                        return new SentinelCallToolResult<AppliedChangeSummary>()
-                        {
-                            IsError = false,
-                            SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: changes.Keys.ToList(), Description: $"Extract superclass '{newTypeName}' from {actualClassNames.Length} class(es).", DryRun: false, Diff: null, ChangedContent: changes.Count == 0 ? null : changes, Validated: false)
-                        };
-                    }
-
-                    var apply = await ValidateAndApplyAsync(changes, $"Extract superclass '{newTypeName}' from {actualClassNames.Length} class(es).", "ExtractMembers_superclass", dryRun, returnDiff, cancellationToken: cancellationToken);
-                    if (apply.Error is not null)
-                        return new SentinelCallToolResult<AppliedChangeSummary>
-                        {
-                            IsError = true,
-                            ErrorData = apply.Error
-                        };
-                    return new SentinelCallToolResult<AppliedChangeSummary>()
-                    {
-                        IsError = false,
-                        SuccessData = new AppliedChangeSummary(apply.ChangeId, changes.Keys.ToList(), $"Extracted superclass '{newTypeName}' from {actualClassNames.Length} class(es).", apply.DryRun, apply.Diff, ChangedContent: changes, Validated: true, LineChanges: apply.LineChanges, ChangedContentResultId: apply.ChangedContentResultId)
-                    };
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "ExtractMembers/superclass unexpected exception for '{NewTypeName}'", newTypeName);
-                    return new SentinelCallToolResult<AppliedChangeSummary>()
-                    {
-                        IsError = true,
-                        ErrorData = ToolErrorMapper.ToResultError(ex, _workspaceManager, $"ExtractMembers newType=superclass for '{newTypeName}'")
-                    };
-                }
+                // ExtractSuperclassAsync is a stub (copies only public properties, never rebases the derived class); refuse rather than report a half-done refactoring.
+                throw new ToolNotImplementedException("ExtractMembers newType=superclass is not implemented: it would only copy public properties into a new class and not rebase the derived class. Use newType=interface or newType=partial, or create the base class with CreateFile/Member and use ModifyBaseType on the derived class.");
             }
 
             return new SentinelCallToolResult<AppliedChangeSummary>()

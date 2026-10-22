@@ -32,15 +32,15 @@ public sealed class MoveTypeAndExtractTests
     // --- ExtractSuperclass ---
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task ExtractSuperclass_DogWithAnimalBase_NoMemberFilePaths_SucceedsWithEmptyBaseAndDoesNotRebaseDerived()
+    public async Task ExtractSuperclass_DogWithAnimalBase_RefusesAsNotImplemented()
     {
         using var workspace = InMemoryWorkspace.Create(("Dog.cs", CrlfRefactorSource));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.ExtractMembersTool(reason: "test message", workspace.PathOf("Dog.cs"), "Dog", ExtractAsType.superclass, "AnimalBase");
-        // TODO ExtractSuperclass is a stub: it copies only the first class's public properties and does not rebase the derived class, so the no-property case yields an empty abstract class; decide refuse vs implement
-        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
-        Assert.That(AllText(workspace), Does.Contain("abstract class AnimalBase"));
-        Assert.That(AllText(workspace), Does.Contain("class Dog : Animal"));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented));
+        Assert.That(result.ErrorData?.Message, Does.Contain("not implemented"));
+        Assert.That(AllText(workspace), Does.Not.Contain("AnimalBase"));
     }
 
     // --- ExtractInterface ---
