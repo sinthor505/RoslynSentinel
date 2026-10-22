@@ -357,8 +357,8 @@ public class BatteryTwentyFourTests
         SetSource(SimpleSource, "Order.cs");
         var result = await _advancedStructuralEngine.ReplaceConstructorWithFactoryAsync("Order.cs", "Order");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        // TODO ReplaceConstructorWithFactoryAsync reports Modified but returns an empty Changes map on SimpleSource; assert the factory method and retained constructor once the engine writes the file text.
-        Assert.That(result.Changes, Is.Empty);
+        Assert.That(result.UpdatedText, Does.Contain("public static Order Create("));
+        Assert.That(result.UpdatedText, Does.Contain("private Order("));
     }
 
     // --- ReduceBlockDepth ---

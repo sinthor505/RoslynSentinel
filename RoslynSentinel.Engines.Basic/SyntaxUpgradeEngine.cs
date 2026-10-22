@@ -769,8 +769,8 @@ public class SyntaxUpgradeEngine
 
         // Rewrite identifiers: field references -> param names
         var newClassNode = classNode.WithMembers(SyntaxFactory.List(newMembers))
-            .WithIdentifier(classNode.Identifier)
-            .WithParameterList(paramListSyntax);
+            .WithIdentifier(classNode.Identifier.WithTrailingTrivia())
+            .WithParameterList(paramListSyntax.WithCloseParenToken(paramListSyntax.CloseParenToken.WithTrailingTrivia(classNode.Identifier.TrailingTrivia)));
 
         // Rewrite all IdentifierNameSyntax references of the field names to param names
         var rewriter = new FieldToParamRewriter(rewriteMap);

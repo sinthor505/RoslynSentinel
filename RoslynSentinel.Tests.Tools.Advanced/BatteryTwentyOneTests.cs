@@ -571,12 +571,12 @@ public class Worker
     [Category("AsyncOptimizationEngine")] // sentinel:auto-category
     public async Task OptimizeIndependentAwaits_AsyncMethod_ReturnsSource()
     {
-        const string src = "using System.Threading.Tasks; namespace TestProj; public class C { private Task<int> GetA() => Task.FromResult(1); private Task<int> GetB() => Task.FromResult(2); public async Task<int> ProcessAsync() { var a = await GetA(); var b = await GetB(); return a + b; } }";
+        const string src = "using System.Threading.Tasks; namespace TestProj; public class C { private Task SaveA() => Task.CompletedTask; private Task SaveB() => Task.CompletedTask; public async Task ProcessAsync() { await SaveA(); await SaveB(); } }";
         SetSource(src, "Test.cs");
         var result = await _asyncOptimizationEngine.OptimizeIndependentAwaitsAsync("Test.cs", "ProcessAsync");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        // TODO engine returns Modified but does not produce Task.WhenAll for the two independent `var x = await` awaits; the exact output was not captured, so only GetB() is pinned. Pin the full rewritten text once the rewrite fires on this fixture
-        Assert.That(result.UpdatedText, Does.Contain("GetB()"));
+        Assert.That(result.UpdatedText, Does.Contain("Task.WhenAll"));
+        Assert.That(result.UpdatedText, Does.Contain("SaveB()"));
     }
 
     [Test]
@@ -605,7 +605,7 @@ public class Service
         SetSource(src, "Service.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("Service.cs", "Service");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        // TODO engine emits a malformed header ("public class Service" then "(string name)" on its own line); pin the full primary-constructor header once fixed
+        Assert.That(result.UpdatedText, Does.Contain("public class Service(string name)"));
         Assert.That(result.UpdatedText, Does.Contain("public string GetName() => name;"));
         Assert.That(result.UpdatedText, Does.Not.Contain("_name"));
     }
