@@ -194,16 +194,22 @@ public class Writer
     }
 
     // --- ConvertAnonymousToNamedTool ---
-    // TODO ConvertAnonymousToNamedTool reports success but leaves the anonymous type in place for this inline input; find the input shape that converts
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task ConvertAnonymousToNamed_InlineAnonymousType_ReportsSuccessWithoutChange()
+    public async Task ConvertAnonymousToNamed_InlineAnonymousType_ReplacesItWithTheNamedClass()
     {
         using var workspace = InMemoryWorkspace.Create(("Holder.cs", AnonymousSource.ReplaceLineEndings("\r\n")));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.ConvertAnonymousToNamedTool(reason: "test message", workspace.PathOf("Holder.cs"), "OrderData");
         Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
-        Assert.That(workspace.ReadText("Holder.cs"), Does.Contain("new {"));
+        var holder = workspace.ReadText("Holder.cs");
+        Assert.That(holder, Does.Contain("new OrderData { Id = 1, Name = \"x\" }"));
+        Assert.That(holder, Does.Not.Contain("new {"));
+        var orderData = workspace.ReadText("OrderData.cs");
+        Assert.That(orderData, Does.Contain("namespace TestProj;"));
+        Assert.That(orderData, Does.Contain("public class OrderData"));
+        Assert.That(orderData, Does.Contain("public int Id { get; set; }"));
+        Assert.That(orderData, Does.Contain("public string Name { get; set; }"));
     }
 
     // --- InvertAssignmentsTool ---

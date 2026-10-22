@@ -118,6 +118,10 @@ public class StructuralRefactoringEngine
         };
     }
 
+    // ExtractSuperclass is DELIBERATELY left unimplemented (stubbed): it copies only public properties and never
+    // rebases the derived class. Low priority.
+    // The ExtractMembers tool refuses newType=superclass; the workaround is CreateFile/Member plus ModifyBaseType.
+    // Decided 2026-10-22 (docs/current/TODO.md, pinned tool defects entry). Do not re-raise it as a gap in reviews.
     public async Task<Dictionary<FilePathWrapper, string>> ExtractSuperclassAsync(FilePathWrapper[] filePaths, string[] classNames, string newBaseClassName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -2271,31 +2275,118 @@ public class StructuralRefactoringEngine
         return changes;
     }
 
+    /// <summary>
+    /// The type text for a property generated from an anonymous-object member: the member's semantic type, written relative
+    /// to the position of the anonymous expression (the new file repeats the source's usings and namespace), or "object"
+    /// when the type is unknown or cannot be named in a new file (error, anonymous, type parameter, void, pointer).
+    /// </summary>
+    private static string AnonymousMemberTypeName(ITypeSymbol? type, SemanticModel? semanticModel, int position)
+    {
+        return type is null || semanticModel is null || !CanBeDeclared(type) ? "object" : type.ToMinimalDisplayString(semanticModel, position);
+
+        static bool CanBeDeclared(ITypeSymbol symbol) => symbol switch
+        {
+            IErrorTypeSymbol => false,
+            IArrayTypeSymbol array => CanBeDeclared(array.ElementType),
+            INamedTypeSymbol named => !named.IsAnonymousType && named.SpecialType != SpecialType.System_Void && named.TypeArguments.All(CanBeDeclared),
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// The PascalCase property name for an anonymous-object member: the explicit name, else the name the compiler infers
+    /// from the initializer (x, this.x, a.b, a?.b), else a positional placeholder (an unnamed non-inferable member is a
+    /// compile error in the source anyway).
+    /// </summary>
+    private static string AnonymousMemberPropertyName(AnonymousObjectMemberDeclaratorSyntax member, int index)
+    {
+        var name = member.NameEquals?.Name.Identifier.ValueText ?? InferredName(member.Expression) ?? "Prop" + (index + 1);
+        return char.ToUpperInvariant(name[0]) + name.Substring(1);
+
+        static string? InferredName(ExpressionSyntax expression) => expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            MemberAccessExpressionSyntax access => access.Name.Identifier.ValueText,
+            MemberBindingExpressionSyntax binding => binding.Name.Identifier.ValueText,
+            ConditionalAccessExpressionSyntax conditional => InferredName(conditional.WhenNotNull),
+            _ => null,
+        };
+    }
+
     public async Task<Dictionary<FilePathWrapper, string>> ConvertAnonymousToNamedAsync(FilePathWrapper filePath, string newClassName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
-        var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var anonType = root?.DescendantNodes().OfType<AnonymousObjectCreationExpressionSyntax>().FirstOrDefault();
-        if (anonType != null)
+        var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
+        var anonType = root?.DescendantNodes().OfType<AnonymousObjectCreationExpressionSyntax>().FirstOrDefault() ?? throw new ToolNotFoundException("Anonymous type not found.");
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+
+        // One property per member, typed from the member's initializer (object only when the type cannot be named in a new
+        // file), and the matching "Name = expression" assignment for the object initializer that replaces the anonymous one.
+        var properties = new List<PropertyDeclarationSyntax>();
+        var initializerItems = new List<SyntaxNodeOrToken>();
+        for (var i = 0; i < anonType.Initializers.Count; i++)
         {
-            var properties = anonType.Initializers.Select(init =>
+            var member = anonType.Initializers[i];
+            var propertyName = AnonymousMemberPropertyName(member, i);
+            var typeName = AnonymousMemberTypeName(semanticModel?.GetTypeInfo(member.Expression, cancellationToken).Type, semanticModel, anonType.SpanStart);
+            properties.Add(SyntaxFactory.PropertyDeclaration(SyntaxFactory.ParseTypeName(typeName), propertyName).AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)).AddAccessorListAccessors(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)), SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken))));
+
+            // The member's own trivia (comments, line breaks) moves onto the assignment.
+            ExpressionSyntax assignment;
+            if (member.NameEquals is { } nameEquals)
             {
-                var name = init.NameEquals?.Name.Identifier.Text ?? "Prop";
-                return SyntaxFactory.PropertyDeclaration(SyntaxFactory.ParseTypeName("object"), char.ToUpper(name[0]) + name.Substring(1)).AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)).AddAccessorListAccessors(SyntaxFactory.AccessorDeclaration(SyntaxKind.GetAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)), SyntaxFactory.AccessorDeclaration(SyntaxKind.SetAccessorDeclaration).WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)));
-            });
-            var newClass = SyntaxFactory.ClassDeclaration(newClassName).AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)).AddMembers(properties.ToArray());
-            // The class is built from scratch, so every node is new and formatted; the file takes the dominant line ending
-            // of the document it was extracted from.
-            return new Dictionary<FilePathWrapper, string>
+                assignment = SyntaxFactory.AssignmentExpression(SyntaxKind.SimpleAssignmentExpression, SyntaxFactory.IdentifierName(SyntaxFactory.Identifier(propertyName).WithTriviaFrom(nameEquals.Name.Identifier)), nameEquals.EqualsToken, member.Expression);
+            }
+            else
             {
-                {
-                    Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"),
-                    await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, SyntaxFactory.CompilationUnit().AddMembers(newClass), _ => true, cancellationToken)
-                }
-            };
+                assignment = SyntaxFactory.AssignmentExpression(
+                    SyntaxKind.SimpleAssignmentExpression,
+                    SyntaxFactory.IdentifierName(SyntaxFactory.Identifier(propertyName).WithLeadingTrivia(member.Expression.GetLeadingTrivia()).WithTrailingTrivia(SyntaxFactory.Space)),
+                    SyntaxFactory.Token(SyntaxKind.EqualsToken).WithTrailingTrivia(SyntaxFactory.Space),
+                    member.Expression.WithLeadingTrivia(SyntaxTriviaList.Empty));
+            }
+
+            initializerItems.Add(assignment);
+            if (i < anonType.Initializers.SeparatorCount)
+            {
+                initializerItems.Add(anonType.Initializers.GetSeparator(i));
+            }
         }
 
-        throw new ToolNotFoundException("Anonymous type not found.");
+        var newClass = SyntaxFactory.ClassDeclaration(newClassName).AddModifiers(SyntaxFactory.Token(SyntaxKind.PublicKeyword)).AddMembers(properties.ToArray());
+
+        // new { ... } -> new ClassName { ... }: the braces, separators and surrounding trivia of the anonymous expression are
+        // kept; the class name takes the trailing trivia of the "new" keyword so a brace on the next line stays there.
+        var initializer = SyntaxFactory.InitializerExpression(SyntaxKind.ObjectInitializerExpression, anonType.OpenBraceToken, SyntaxFactory.SeparatedList<ExpressionSyntax>(initializerItems), anonType.CloseBraceToken);
+        var typeNameSyntax = SyntaxFactory.IdentifierName(SyntaxFactory.Identifier(newClassName)).WithTrailingTrivia(anonType.NewKeyword.TrailingTrivia).WithAdditionalAnnotations(Formatter.Annotation);
+        var creation = SyntaxFactory.ObjectCreationExpression(anonType.NewKeyword.WithTrailingTrivia(SyntaxFactory.Space), typeNameSyntax, null, initializer);
+        var updatedRoot = root!.ReplaceNode(anonType, creation);
+
+        // The new file repeats the source's usings and namespace so the type names written relative to the anonymous
+        // expression resolve the same way in it.
+        var ns = anonType.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
+        var classRoot = SyntaxFactory.CompilationUnit().WithUsings(root.Usings);
+        if (ns != null)
+        {
+            var newNs = ns is FileScopedNamespaceDeclarationSyntax ? SyntaxFactory.FileScopedNamespaceDeclaration(ns.Name) : (BaseNamespaceDeclarationSyntax)SyntaxFactory.NamespaceDeclaration(ns.Name);
+            classRoot = classRoot.AddMembers(newNs.AddMembers(newClass));
+        }
+        else
+        {
+            classRoot = classRoot.AddMembers(newClass);
+        }
+
+        return new Dictionary<FilePathWrapper, string>
+        {
+            {
+                filePath,
+                await FormatAnnotatedTextAsync(document, updatedRoot, cancellationToken)
+            },
+            {
+                Path.Combine(Path.GetDirectoryName(filePath)!, $"{newClassName}.cs"),
+                await RoslynFormattingHelper.FormatNewRootKeepingTriviaAsync(document, classRoot, n => n is not UsingDirectiveSyntax, cancellationToken)
+            }
+        };
     }
 }

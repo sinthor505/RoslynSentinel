@@ -42,19 +42,22 @@ public class ConvertToClassNewNodeTests
         return result.Single(kv => kv.Key.Contains("DataResult.cs")).Value;
     }
 
-    private async Task<string> AnonymousClassFileAsync(string source)
+    private async Task<(string Original, string ClassFile)> AnonymousFilesAsync(string source)
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Test.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.ConvertAnonymousToNamedAsync("Test.cs", "ItemDto");
-        Assert.That(result, Has.Count.EqualTo(1), "only the new class file is returned");
-        return result.Single(kv => kv.Key.Contains("ItemDto.cs")).Value;
+        Assert.That(result, Has.Count.EqualTo(2), "the updated original file and the new class file are returned");
+        return (result.Single(kv => kv.Key.Contains("Test.cs")).Value, result.Single(kv => kv.Key.Contains("ItemDto.cs")).Value);
     }
+
+    private async Task<string> AnonymousClassFileAsync(string source) => (await AnonymousFilesAsync(source)).ClassFile;
 
     // ---- ConvertAnonymousToNamedTool ----
 
     private const string AnonymousLfSource = "public class Factory\n{\n    public void Build()\n    {\n        var item = new { Name = \"widget\", Quantity = 10 };\n    }\n}\n";
-    private const string AnonymousLfExpected = "public class ItemDto\n{\n    public object Name { get; set; }\n    public object Quantity { get; set; }\n}\n";
+    private const string AnonymousLfExpected = "public class ItemDto\n{\n    public string Name { get; set; }\n    public int Quantity { get; set; }\n}\n";
+    private const string AnonymousLfOriginalExpected = "public class Factory\n{\n    public void Build()\n    {\n        var item = new ItemDto { Name = \"widget\", Quantity = 10 };\n    }\n}\n";
 
     [Test]
     public async Task ConvertAnonymousToNamed_LfDocument_ProducesExactClassFile()
@@ -65,20 +68,48 @@ public class ConvertToClassNewNodeTests
     }
 
     [Test]
-    public async Task ConvertAnonymousToNamed_UnnamedInitializer_UsesPropName()
+    public async Task ConvertAnonymousToNamed_LfDocument_RewritesTheOriginalExpression()
     {
-        var content = await AnonymousClassFileAsync("public class Factory\n{\n    public void Build(int x)\n    {\n        var item = new { x };\n    }\n}\n");
+        var (original, _) = await AnonymousFilesAsync(AnonymousLfSource);
 
-        Assert.That(content, Is.EqualTo("public class ItemDto\n{\n    public object Prop { get; set; }\n}\n"));
+        Assert.That(original, Is.EqualTo(AnonymousLfOriginalExpected));
+    }
+
+    [Test]
+    public async Task ConvertAnonymousToNamed_UnnamedInitializer_DerivesThePropertyNameFromTheExpression()
+    {
+        var (original, content) = await AnonymousFilesAsync("public class Factory\n{\n    public void Build(int x)\n    {\n        var item = new { x };\n    }\n}\n");
+
+        Assert.That(content, Is.EqualTo("public class ItemDto\n{\n    public int X { get; set; }\n}\n"));
+        Assert.That(original, Is.EqualTo("public class Factory\n{\n    public void Build(int x)\n    {\n        var item = new ItemDto { X = x };\n    }\n}\n"));
+    }
+
+    [Test]
+    public async Task ConvertAnonymousToNamed_MemberAccessAndUnnamableTypes_UseMemberNamesAndObjectFallback()
+    {
+        // this.count -> Count (int); the nested anonymous value cannot be named in a new file, so it stays object.
+        var (original, content) = await AnonymousFilesAsync("using System.Collections.Generic;\n\nnamespace Demo;\n\npublic class Factory\n{\n    private int count;\n    private List<string> names = new();\n\n    public void Build()\n    {\n        var item = new { this.count, this.names, Inner = new { A = 1 } };\n    }\n}\n");
+
+        Assert.That(content, Is.EqualTo("using System.Collections.Generic;\n\nnamespace Demo;\n\npublic class ItemDto\n{\n    public int Count { get; set; }\n    public List<string> Names { get; set; }\n    public object Inner { get; set; }\n}\n"));
+        Assert.That(original, Does.Contain("new ItemDto { Count = this.count, Names = this.names, Inner = new { A = 1 } }"));
+    }
+
+    [Test]
+    public async Task ConvertAnonymousToNamed_MultiLineInitializerWithComments_KeepsLayoutAndComments()
+    {
+        var (original, _) = await AnonymousFilesAsync("public class Factory\n{\n    public void Build()\n    {\n        var item = new\n        {\n            // the name\n            Name = \"widget\", // trailing\n            Quantity = 10\n        };\n    }\n}\n");
+
+        Assert.That(original, Is.EqualTo("public class Factory\n{\n    public void Build()\n    {\n        var item = new ItemDto\n        {\n            // the name\n            Name = \"widget\", // trailing\n            Quantity = 10\n        };\n    }\n}\n"));
     }
 
     [Test]
     public async Task ConvertAnonymousToNamed_CrlfDocument_ProducesClassFileWithCrlfOnly()
     {
-        var content = await AnonymousClassFileAsync(AnonymousLfSource.Replace("\n", "\r\n"));
+        var (original, content) = await AnonymousFilesAsync(AnonymousLfSource.Replace("\n", "\r\n"));
 
         Assert.That(content, Is.EqualTo(AnonymousLfExpected.Replace("\n", "\r\n")));
         Assert.That(content.Replace("\r\n", string.Empty), Does.Not.Contain("\n"), "no lone line feed may remain in a CRLF document's class file");
+        Assert.That(original, Is.EqualTo(AnonymousLfOriginalExpected.Replace("\n", "\r\n")));
     }
 
     [Test]

@@ -588,14 +588,31 @@ public class AdvancedStructuralNormalizeCharacterizationTests
 
         var result = await _engine.ConvertAnonymousToNamedAsync("Maker.cs", "Item");
 
-        Assert.That(result.Keys.Select(k => k.ToString()), Is.EquivalentTo(new[] { "Item.cs" }));
-        // Every node is new: the class takes the dominant line ending throughout and the file ends with a line break.
-        AssertPinned(result.Values.Single(), Build(eol == "CRLF" ? "CRLF" : "LF",
-            "public class Item",
-            "{",
-            "    public object Id { get; set; }",
-            "    public object Name { get; set; }",
-            "}",
-            ""));
+        Assert.That(result.Keys.Select(k => k.ToString()), Is.EquivalentTo(new[] { "Maker.cs", "Item.cs" }));
+        Assert.Multiple(() =>
+        {
+            // Only the replaced expression is changed; the rest of the file keeps its text and line endings. The changed
+            // line takes the document's dominant ending (no "~" here, so it is LF in the Mixed variant), like every other
+            // changed line pinned in this fixture.
+            AssertPinned(result["Maker.cs"], Build(eol,
+                "namespace Demo;",
+                "",
+                "public class Maker",
+                "{",
+                "    public object Make() => new Item { Id = 1, Name = \"a\" };",
+                UntouchedLine,
+                "}"));
+            // Every node is new: the class (in the source's namespace, properties typed from the initializers) takes the
+            // dominant line ending throughout and the file ends with a line break.
+            AssertPinned(result["Item.cs"], Build(eol == "CRLF" ? "CRLF" : "LF",
+                "namespace Demo;",
+                "",
+                "public class Item",
+                "{",
+                "    public int Id { get; set; }",
+                "    public string Name { get; set; }",
+                "}",
+                ""));
+        });
     }
 }
