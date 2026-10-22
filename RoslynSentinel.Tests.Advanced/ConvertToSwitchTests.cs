@@ -378,10 +378,8 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return code");
-        // Two-branch should not be converted to switch
-        var hasIfStatement = result.UpdatedText!.Contains("if (x == 1)") || result.UpdatedText!.Contains("if (x==1)");
-        Assert.That(hasIfStatement, Is.True, "Should preserve if-else for two branches");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 
     /// <summary>
@@ -412,12 +410,8 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return code");
-        // Complex condition should not be converted
-        var hasIfStatement = (result.UpdatedText!.Contains("if") && result.UpdatedText!.Contains("&&")) || result.UpdatedText!.Contains("||");
-        Assert.That(hasIfStatement || !result.UpdatedText!.Contains("switch"),
-            Is.True, 
-            "Should preserve complex if conditions (not convert to switch)");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 
     /// <summary>
@@ -448,10 +442,8 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return code");
-        // Different subjects should not be converted
-        var shouldHaveIf = result.UpdatedText!.Contains("if (x == 1)") || result.UpdatedText!.Contains("if (x==1)");
-        Assert.That(shouldHaveIf, Is.True, "Should preserve if when subjects differ");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 
     /// <summary>
@@ -482,10 +474,8 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return code");
-        // Non-equality comparisons should not be converted
-        var shouldHaveIf = result.UpdatedText!.Contains("if") && result.UpdatedText!.Contains("<");
-        Assert.That(shouldHaveIf, Is.True, "Should preserve non-equality comparisons");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
     }
 
     /// <summary>
@@ -611,10 +601,10 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        // Note: Boolean switch is less common, but should still work
-        // May or may not convert depending on implementation details
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        // The two-branch fixture has no else, so the rewriter leaves it unchanged.
+        
     }
 
     /// <summary>

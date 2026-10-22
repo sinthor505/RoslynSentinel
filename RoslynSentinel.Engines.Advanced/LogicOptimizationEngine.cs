@@ -208,6 +208,15 @@ public class LogicSimplificationEngine
 
         var rewriter = new SwitchConversionRewriter();
         var newRoot = rewriter.Visit(root);
+        if (newRoot.IsEquivalentTo(root))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.AlreadyInTargetState,
+                FilePath = filePath,
+                Message = "No if/else-if chain was converted to a switch."
+            };
+        }
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,

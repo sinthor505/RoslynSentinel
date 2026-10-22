@@ -492,9 +492,9 @@ public class BatteryTwentyFourTests
     {
         SetSource(@"namespace TestProj; public class C { public string Get(int x) { if (x == 1) return ""a""; else if (x == 2) return ""b""; return ""c""; } }", "Order.cs");
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Order.cs");
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
-        // TODO no-op returns Modified - assert NoChange once the engine distinguishes it (if/else-if chain with returns is not converted to switch)
-        Assert.That(result.UpdatedText, Does.Contain("if (x == 1)"));
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.AlreadyInTargetState));
+        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        
     }
 
     [Test]
