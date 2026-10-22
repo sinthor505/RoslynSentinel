@@ -163,14 +163,34 @@ public class Writer
     // --- GenerateMapping ---
     [Test]
     [Category("GenerationTools")] // sentinel:auto-category
-    public async Task GenerateMapping_OrderToOrderDto_ReturnsCompilerErrorRefusal()
+    public async Task GenerateMapping_OrderToOrderDto_WritesMapperClassToNewFileAndLeavesSourceUnchanged()
     {
-        using var workspace = InMemoryWorkspace.Create(("Order.cs", MappingSource.ReplaceLineEndings("\r\n")));
+        var crlfMappingSource = MappingSource.ReplaceLineEndings("\r\n");
+        using var workspace = InMemoryWorkspace.Create(("Order.cs", crlfMappingSource));
         var tools = BatteryToolFactory.CreateGenerationTools(workspace.Manager);
         var result = await tools.GenerateMapping(workspace.PathOf("Order.cs"), "Order", "OrderDto");
-        // TODO GenerateMapping(Order, OrderDto) on matching types is refused because the generated code introduces compiler errors; decide what the mapping should emit
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(workspace.ReadText("Order.cs"), Is.EqualTo(crlfMappingSource), "the source file must never be rewritten");
+        var mapper = workspace.ReadText("OrderToOrderDtoMapper.cs");
+        Assert.That(mapper, Does.Contain("namespace TestProj;"));
+        Assert.That(mapper, Does.Contain("static class OrderToOrderDtoMapper"));
+        Assert.That(mapper, Does.Contain("MapOrderToOrderDto"));
+        Assert.That(mapper, Does.Contain("dest.OrderId = source.OrderId;"));
+        Assert.That(mapper, Does.Contain("dest.CustomerName = source.CustomerName;"));
+    }
+
+    [Test]
+    [Category("GenerationTools")] // sentinel:auto-category
+    public async Task GenerateMapping_MapperFileAlreadyExists_RefusedWithoutOverwriting()
+    {
+        const string existingMapper = "namespace TestProj;\r\n\r\npublic static class Existing\r\n{\r\n}\r\n";
+        using var workspace = InMemoryWorkspace.Create(("Order.cs", MappingSource.ReplaceLineEndings("\r\n")), ("OrderToOrderDtoMapper.cs", existingMapper));
+        var tools = BatteryToolFactory.CreateGenerationTools(workspace.Manager);
+        var result = await tools.GenerateMapping(workspace.PathOf("Order.cs"), "Order", "OrderDto");
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData!.Message, Does.Contain("introduces new compiler errors"));
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData!.Message, Does.Contain("already exists"));
+        Assert.That(workspace.ReadText("OrderToOrderDtoMapper.cs"), Is.EqualTo(existingMapper));
     }
 
     // --- ConvertAnonymousToNamedTool ---

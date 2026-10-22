@@ -16,6 +16,12 @@ public class MappingEngine
         _workspaceManager = workspaceManager;
     }
 
+    /// <summary>Resolves a type by fully-qualified metadata name first, then by simple name; null when neither finds it.</summary>
+    private static INamedTypeSymbol? ResolveType(Compilation? compilation, string typeName, CancellationToken cancellationToken) =>
+        compilation?.GetTypeByMetadataName(typeName)
+        ?? compilation?.GetSymbolsWithName(n => n == typeName || n == typeName.Split('.').Last(), SymbolFilter.Type, cancellationToken)
+            .OfType<INamedTypeSymbol>().FirstOrDefault();
+
     /// <summary>
     /// Generates a mapping method between two types based on property names.
     /// </summary>
@@ -40,12 +46,8 @@ public class MappingEngine
         var compilation = await document.Project.GetCompilationAsync(cancellationToken);
 
         // Try fully-qualified name first, then fall back to simple name search
-        var fromSymbol = compilation?.GetTypeByMetadataName(fromType)
-            ?? compilation?.GetSymbolsWithName(n => n == fromType || n == fromType.Split('.').Last(), SymbolFilter.Type, cancellationToken)
-                .OfType<INamedTypeSymbol>().FirstOrDefault();
-        var toSymbol = compilation?.GetTypeByMetadataName(toType)
-            ?? compilation?.GetSymbolsWithName(n => n == toType || n == toType.Split('.').Last(), SymbolFilter.Type, cancellationToken)
-                .OfType<INamedTypeSymbol>().FirstOrDefault();
+        var fromSymbol = ResolveType(compilation, fromType, cancellationToken);
+        var toSymbol = ResolveType(compilation, toType, cancellationToken);
 
         if (fromSymbol == null || toSymbol == null)
         {
@@ -89,6 +91,96 @@ public class MappingEngine
             FilePath = filePath,
             Message = $"// Mapping method generated for {fromSymbol.Name} to {toSymbol.Name}",
             UpdatedText = await RoslynFormattingHelper.FormatNewSnippetAsync(document, mappingMethod, cancellationToken)
+        };
+    }
+
+    /// <summary>
+    /// Generates the mapping from <paramref name="fromType"/> to <paramref name="toType"/> as the full text of a NEW file
+    /// (never an edit of an existing one): a <c>static class {From}To{To}Mapper</c> holding the method
+    /// <see cref="GenerateMappingAsync"/> produces, in the source type's namespace (file-scoped when the source file uses
+    /// one) and in the same folder as the source type's file. <see cref="EngineResultBase.FilePath"/> is the new file's path
+    /// and <see cref="EngineResultBase.UpdatedText"/> its whole text. The class is public only when both types are public
+    /// (otherwise the public mapping method would expose a less accessible type). Refuses with
+    /// <see cref="ToolErrorCode.InvalidArgument"/> when a document or file already exists at that path.
+    /// </summary>
+    public async Task<DocumentEditResult> GenerateMappingFileAsync(
+        FilePathWrapper filePath,
+        string fromType,
+        string toType,
+        CancellationToken cancellationToken = default)
+    {
+        var snippetResult = await GenerateMappingAsync(filePath, fromType, toType, cancellationToken);
+        if (snippetResult.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(snippetResult.UpdatedText))
+        {
+            return snippetResult;
+        }
+
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        var compilation = document == null ? null : await document.Project.GetCompilationAsync(cancellationToken);
+        var fromSymbol = ResolveType(compilation, fromType, cancellationToken);
+        var toSymbol = ResolveType(compilation, toType, cancellationToken);
+        if (document == null || fromSymbol == null || toSymbol == null)
+        {
+            return DocumentEditResult.TargetNotFound(filePath);
+        }
+
+        var sourceTree = fromSymbol.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree;
+        string sourcePath = sourceTree?.FilePath ?? document.FilePath ?? (string)filePath;
+        var directory = Path.GetDirectoryName(sourcePath);
+        var className = $"{fromSymbol.Name}To{toSymbol.Name}Mapper";
+        var fileName = className + ".cs";
+        FilePathWrapper newPath = string.IsNullOrEmpty(directory) ? fileName : Path.Combine(directory, fileName);
+        if (solution.GetDocumentIdsWithFilePath(newPath).Any() || File.Exists(newPath))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.CannotEdit,
+                FilePath = newPath,
+                ErrorCode = ToolErrorCode.InvalidArgument,
+                Message = $"GenerateMapping: '{newPath}' already exists. GenerateMapping never overwrites a file - delete or rename the existing file, or add the mapping method to it yourself."
+            };
+        }
+
+        var sourceNamespace = fromSymbol.ContainingNamespace is { IsGlobalNamespace: false } ns ? ns.ToDisplayString() : null;
+        var sourceRoot = sourceTree == null ? null : await sourceTree.GetRootAsync(cancellationToken);
+        var fileScoped = sourceRoot?.DescendantNodes().OfType<FileScopedNamespaceDeclarationSyntax>().Any() == true;
+
+        // Only the two mapped types are named in the method, so their namespaces are the only usings it can need.
+        var usings = new[] { fromSymbol, toSymbol }
+            .Select(s => s.ContainingNamespace)
+            .Where(n => !n.IsGlobalNamespace)
+            .Select(n => n.ToDisplayString())
+            .Where(n => n != sourceNamespace)
+            .Distinct()
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+
+        var method = (MethodDeclarationSyntax)SyntaxFactory.ParseMemberDeclaration(snippetResult.UpdatedText)!;
+        var classAccessibility = fromSymbol.DeclaredAccessibility == Accessibility.Public && toSymbol.DeclaredAccessibility == Accessibility.Public
+            ? SyntaxKind.PublicKeyword
+            : SyntaxKind.InternalKeyword;
+        MemberDeclarationSyntax topLevel = SyntaxFactory.ClassDeclaration(className)
+            .AddModifiers(SyntaxFactory.Token(classAccessibility), SyntaxFactory.Token(SyntaxKind.StaticKeyword))
+            .AddMembers(method);
+        if (sourceNamespace != null)
+        {
+            var namespaceName = SyntaxFactory.ParseName(sourceNamespace);
+            topLevel = fileScoped
+                ? SyntaxFactory.FileScopedNamespaceDeclaration(namespaceName).AddMembers(topLevel)
+                : SyntaxFactory.NamespaceDeclaration(namespaceName).AddMembers(topLevel);
+        }
+
+        var body = await RoslynFormattingHelper.FormatNewSnippetAsync(document, topLevel, cancellationToken);
+        var eol = EolUtilities.DetectDominantEol((await document.GetTextAsync(cancellationToken)).ToString());
+        var header = usings.Count == 0 ? string.Empty : string.Concat(usings.Select(u => $"using {u};{eol}")) + eol;
+
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = newPath,
+            Message = $"// Mapping class {className} generated for {fromSymbol.Name} to {toSymbol.Name} in a new file",
+            UpdatedText = header + body + eol
         };
     }
 

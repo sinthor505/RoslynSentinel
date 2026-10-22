@@ -252,15 +252,19 @@ public class GenerationTools
             ProgressToken progressToken = requestParams?.Params?.ProgressToken ?? new ProgressToken();
             IProgress<ProgressNotificationValue> progress = new Progress<ProgressNotificationValue>(msg => requestParams?.Server?.NotifyProgressAsync(progressToken, new ProgressNotificationValue() { Progress = msg.Progress, Total = msg.Total, Message = msg.Message }, null, cancellationToken));
 
-            var result = await _mappingEngine.GenerateMappingAsync(filePathResolved, fromType, toType, cancellationToken);
+            // The mapping goes into a NEW file ({From}To{To}Mapper.cs beside the source type); the source file is never rewritten.
+            var result = await _mappingEngine.GenerateMappingFileAsync(filePathResolved, fromType, toType, cancellationToken);
+            if (result.IsError)
+                return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(result.Code ?? ToolErrorCode.Exception, result.Message) };
             if (string.IsNullOrEmpty(result.UpdatedText))
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' -> '{toType}' in '{filePathResolved}'. Ensure both types exist in the solution.") };
 
-            var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
+            FilePathWrapper newFilePath = result.FilePath;
+            var changes = new Dictionary<FilePathWrapper, string> { [newFilePath] = result.UpdatedText };
             var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
-            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [filePathResolved], $"Generated mapping from '{fromType}' to '{toType}' in {Path.GetFileName(filePathResolved)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId) };
+            return new SentinelCallToolResult<object> { IsError = false, SuccessData = new AppliedChangeSummary(apply.ChangeId, [newFilePath], $"Generated mapping from '{fromType}' to '{toType}' in new file {Path.GetFileName(newFilePath)}.", apply.DryRun, apply.Diff, ChangedContentResultId: apply.ChangedContentResultId) };
         }
         catch (Exception ex)
         {
