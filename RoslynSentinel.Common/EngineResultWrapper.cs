@@ -72,6 +72,7 @@ public sealed class EngineResultWrapper<T> : IOperationResult
         ResultStatus.NotFound => ToolErrorCode.NotFound,
         ResultStatus.InvalidInput => ToolErrorCode.InvalidArgument,
         ResultStatus.TimedOut => ToolErrorCode.TimedOut,
+        ResultStatus.Failed or ResultStatus.PartialFailure => ToolErrorCode.Exception,
         _ => ToolErrorCode.Exception
     };
 

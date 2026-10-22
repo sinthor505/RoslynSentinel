@@ -35,7 +35,10 @@ public enum ResultStatus
     TimedOut,
 
     /// <summary>The operation failed for a reason none of the other members describes.</summary>
-    Failed
+    Failed,
+
+    /// <summary>Some items of an aggregate failed and some succeeded. An error status; set only by <see cref="ResultStatusExtensions.FromFailureCount"/>.</summary>
+    PartialFailure
 }
 
 /// <summary>Single source of truth for which <see cref="ResultStatus"/> values are errors and how a tool error code maps to one.</summary>
@@ -78,8 +81,15 @@ public static class ResultStatusExtensions
         return mapped.IsErrorStatus() ? mapped : ResultStatus.Failed;
     }
 
-    /// <summary>Status for an aggregate with <paramref name="failed"/> failed items: <see cref="ResultStatus.Failed"/> when any failed, otherwise <see cref="ResultStatus.Success"/>.</summary>
-    public static ResultStatus FromFailureCount(int failed) => failed > 0 ? ResultStatus.Failed : ResultStatus.Success;
+    /// <summary>
+    /// Status for an aggregate of <paramref name="failed"/> failed and <paramref name="succeeded"/> succeeded items:
+    /// <see cref="ResultStatus.Success"/> when none failed, <see cref="ResultStatus.Failed"/> when all failed (none succeeded),
+    /// otherwise <see cref="ResultStatus.PartialFailure"/>.
+    /// </summary>
+    public static ResultStatus FromFailureCount(int failed, int succeeded) =>
+        failed == 0 ? ResultStatus.Success
+        : succeeded == 0 ? ResultStatus.Failed
+        : ResultStatus.PartialFailure;
 
     /// <summary>Message for an aggregate with failures, for example "2 of 5 failed"; null when none failed.</summary>
     public static string? FailureCountMessage(int succeeded, int failed) =>

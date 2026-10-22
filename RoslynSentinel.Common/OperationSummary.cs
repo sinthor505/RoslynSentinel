@@ -61,9 +61,11 @@ public sealed class OperationSummary : IOperationResult
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => (Failed + Blocked) > 0 || Outcome == OperationOutcome.NoProgress;
 
-    /// <summary>Failed when IsError; AlreadyInState when nothing was attempted; otherwise Success.</summary>
+    /// <summary>PartialFailure when some items failed and some succeeded, Failed when none succeeded; AlreadyInState when nothing was attempted; otherwise Success.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public ResultStatus Status => IsError ? ResultStatus.Failed
+    public ResultStatus Status => IsError
+        // A NoProgress outcome with no failed or blocked count (hand-built summary) is still an error: Failed, never Success.
+        ? (Failed + Blocked == 0 ? ResultStatus.Failed : ResultStatusExtensions.FromFailureCount(Failed + Blocked, Succeeded))
         : Outcome == OperationOutcome.NothingToDo ? ResultStatus.AlreadyInState
         : ResultStatus.Success;
 

@@ -178,7 +178,7 @@ public record AsyncifyLoopResult : IOperationResult
 
     /// <summary>Failed when any iteration failed; otherwise Success.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(TotalFailed);
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(TotalFailed, TotalSucceeded);
 
     /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -407,7 +407,7 @@ public class BridgeAsyncMethodsResult : IOperationResult
 
     /// <summary>Failed when any method failed; otherwise Success.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Summary.Failed);
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Summary.Failed, Summary.Succeeded);
 
     /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -439,7 +439,7 @@ public class UpliftCallersResult : IOperationResult
 
     /// <summary>Failed when any uplift failed; otherwise Success.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Summary.Failed);
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Summary.Failed, Summary.Succeeded);
 
     /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]

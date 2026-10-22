@@ -169,7 +169,7 @@ public class UpliftBatchMultiResult : IOperationResult
 
     /// <summary>Failed when any method failed; otherwise Success.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(PerMethod.Count(m => m.IsError));
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(PerMethod.Count(m => m.IsError), PerMethod.Count(m => !m.IsError));
 
     /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -283,7 +283,7 @@ public class PropagateCtFileResult : IOperationResult
 
     /// <summary>Failed when any method failed; otherwise Success.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(PerMethod.Count(m => m.IsError));
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(PerMethod.Count(m => m.IsError), PerMethod.Count(m => !m.IsError));
 
     /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
@@ -359,7 +359,7 @@ public class PropagateCtBatchResult : IOperationResult
 
     /// <summary>Failed when any file failed; otherwise Success.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Failed.Count);
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Failed.Count, Applied.Count);
 
     /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]

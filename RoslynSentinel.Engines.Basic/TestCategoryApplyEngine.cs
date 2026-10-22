@@ -53,7 +53,7 @@ public sealed record TestCategoryApplyResult(IReadOnlyList<TestCategoryProjectAp
 
     /// <summary>Failed when any project failed; otherwise Success.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Projects.Count(p => p.IsError));
+    public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Projects.Count(p => p.IsError), Projects.Count(p => !p.IsError));
 
     /// <summary>ToolErrorCode.Exception when IsError; null otherwise.</summary>
     [System.Text.Json.Serialization.JsonIgnore]

@@ -213,7 +213,7 @@ public class AdvancedResultStatusTests
     }
 
     [Test]
-    public void UpliftBatchMultiResult_PartialFailure_IsFailedWithCountMessage()
+    public void UpliftBatchMultiResult_PartialFailure_IsPartialFailureWithCountMessage()
     {
         var result = new UpliftBatchMultiResult
         {
@@ -225,7 +225,7 @@ public class AdvancedResultStatusTests
         };
 
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.PartialFailure));
         Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
         Assert.That(result.Message, Is.EqualTo("1 of 2 failed"));
     }
@@ -272,7 +272,7 @@ public class AdvancedResultStatusTests
     }
 
     [Test]
-    public void PropagateCtBatchResult_PartialFailure_IsFailedWithCountMessage()
+    public void PropagateCtBatchResult_PartialFailure_IsPartialFailureWithCountMessage()
     {
         var result = new PropagateCtBatchResult
         {
@@ -281,7 +281,7 @@ public class AdvancedResultStatusTests
         };
 
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.PartialFailure));
         Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
         Assert.That(result.Message, Is.EqualTo("1 of 2 failed"));
     }

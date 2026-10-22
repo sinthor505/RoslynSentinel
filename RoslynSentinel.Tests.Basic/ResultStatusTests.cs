@@ -551,15 +551,27 @@ public class ResultStatusTests
     [Test]
     public void FailureCountHelpers_ZeroFailed_IsSuccessWithNoMessage()
     {
-        Assert.That(ResultStatusExtensions.FromFailureCount(0), Is.EqualTo(ResultStatus.Success));
+        Assert.That(ResultStatusExtensions.FromFailureCount(0, 3), Is.EqualTo(ResultStatus.Success));
         Assert.That(ResultStatusExtensions.FailureCountMessage(3, 0), Is.Null);
     }
 
     [Test]
-    public void FailureCountHelpers_SomeFailed_IsFailedWithCountMessage()
+    public void FailureCountHelpers_SomeFailedSomeSucceeded_IsPartialFailureWithCountMessage()
     {
-        Assert.That(ResultStatusExtensions.FromFailureCount(2), Is.EqualTo(ResultStatus.Failed));
+        Assert.That(ResultStatusExtensions.FromFailureCount(2, 3), Is.EqualTo(ResultStatus.PartialFailure));
         Assert.That(ResultStatusExtensions.FailureCountMessage(3, 2), Is.EqualTo("2 of 5 failed"));
+    }
+
+    [Test]
+    public void FailureCountHelpers_AllFailed_IsFailed()
+    {
+        Assert.That(ResultStatusExtensions.FromFailureCount(2, 0), Is.EqualTo(ResultStatus.Failed));
+    }
+
+    [Test]
+    public void PartialFailure_IsAnErrorStatus()
+    {
+        Assert.That(ResultStatus.PartialFailure.IsErrorStatus(), Is.True);
     }
 
     private static OperationSummary SummarizeCounts(int succeeded, int alreadySatisfied, int failed, int blocked) =>
@@ -580,13 +592,13 @@ public class ResultStatusTests
     }
 
     [Test]
-    public void OperationSummary_PartialFailure_IsFailedWithCountMessage()
+    public void OperationSummary_PartialFailure_IsPartialFailureWithCountMessage()
     {
         OperationSummary summary = SummarizeCounts(3, 0, 2, 0);
 
         Assert.That(summary.Outcome, Is.EqualTo(OperationOutcome.PartialProgress));
         Assert.That(summary.IsError, Is.True);
-        Assert.That(summary.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(summary.Status, Is.EqualTo(ResultStatus.PartialFailure));
         Assert.That(summary.Code, Is.EqualTo(ToolErrorCode.Exception));
         Assert.That(summary.Message, Is.EqualTo("2 of 5 failed"));
     }
@@ -647,12 +659,12 @@ public class ResultStatusTests
     }
 
     [Test]
-    public void AsyncifyLoopResult_PartialFailure_IsFailedWithCountMessage()
+    public void AsyncifyLoopResult_PartialFailure_IsPartialFailureWithCountMessage()
     {
         var result = new AsyncifyLoopResult { TotalSucceeded = 3, TotalFailed = 2 };
 
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.PartialFailure));
         Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
         Assert.That(result.Message, Is.EqualTo("2 of 5 failed"));
     }
@@ -670,12 +682,12 @@ public class ResultStatusTests
     }
 
     [Test]
-    public void BridgeAsyncMethodsResult_PartialFailure_IsFailedWithCountMessage()
+    public void BridgeAsyncMethodsResult_PartialFailure_IsPartialFailureWithCountMessage()
     {
         var result = new BridgeAsyncMethodsResult { Summary = new BatchResultSummary { Succeeded = 3, Failed = 2 } };
 
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.PartialFailure));
         Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
         Assert.That(result.Message, Is.EqualTo("2 of 5 failed"));
     }
@@ -693,12 +705,12 @@ public class ResultStatusTests
     }
 
     [Test]
-    public void UpliftCallersResult_PartialFailure_IsFailedWithCountMessage()
+    public void UpliftCallersResult_PartialFailure_IsPartialFailureWithCountMessage()
     {
         var result = new UpliftCallersResult { Summary = new BatchResultSummary { Succeeded = 3, Failed = 2 } };
 
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.PartialFailure));
         Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
         Assert.That(result.Message, Is.EqualTo("2 of 5 failed"));
     }
@@ -824,7 +836,7 @@ public class ResultStatusTests
     }
 
     [Test]
-    public void TestCategoryApplyResult_OneProjectRejected_IsFailedWithCountMessage()
+    public void TestCategoryApplyResult_OneProjectRejected_IsPartialFailureWithCountMessage()
     {
         var result = new TestCategoryApplyResult(new[]
         {
@@ -833,7 +845,7 @@ public class ResultStatusTests
         });
 
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
+        Assert.That(result.Status, Is.EqualTo(ResultStatus.PartialFailure));
         Assert.That(result.Code, Is.EqualTo(ToolErrorCode.Exception));
         Assert.That(result.Message, Is.EqualTo("1 of 2 failed"));
     }
