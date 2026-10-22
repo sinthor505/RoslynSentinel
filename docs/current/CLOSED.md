@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `CreateFile` global namespace, `Inline` description, InlineParameter test name - resolved (2026-10-21)
+
+- `CreateFile` for a `.cs` file no longer requires `namespaceName`: omitted, null or whitespace creates the type in the global namespace (`WorkspaceFileEditImpl.CreateFile`; both tool declarations' `namespaceName` descriptions say so). Evidence: `CreateFileDeleteFileTests.CreateFileTool_NoNamespaceForCsFile_CreatesGlobalNamespaceTypeAsync` replaced the old refusal pin.
+- The `Inline` tool's `kind`/`targetName`/`methodName` descriptions no longer advertise `kind: parameter` as usable (it refuses with `NotImplemented`; the real implementation stays open in TODO.md).
+- `BatteryTwentyFiveTests.InlineParameterAsync_MethodWithParam_ReturnsNonNull` renamed `..._ThrowsToolNotImplemented` (it asserts the exception, not a result).
+
 ## RunTest environment passthrough, ExtractMembers superclass crash, pull-up `virtual` - resolved (2026-10-21)
 
 - `RunTest` gained an optional `environment` map (name -> value) copied into the `dotnet test` child process before the `useScratchDir` isolation variables (`TestRunEngine.RunOneProjectAsync`; tool, facade and `WorkspaceBuildTestImpl.RunTest` thread it). Evidence: `RunTestTests.RunTest_EnvironmentParameter_ReachesTestProcessAsync`; the claude-lean schema budget was raised 28000 -> 28500 for it (parameter costs about 365 chars).

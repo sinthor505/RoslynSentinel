@@ -175,7 +175,7 @@ public class WorkspaceTools
     public Task<SentinelCallToolResult<object>> CreateFileTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath,
-        [Description("Required for .cs files: namespace to seed the file with.")] string? namespaceName = null,
+        [Description("For .cs files: namespace to seed the file with; omit it for the global namespace.")] string? namespaceName = null,
         [Description("Required for .cs files: kind of top-level type to seed (class/interface/etc). Use staticClass for a static utility class.")] NewTypeKind? typeKind = null,
         [Description("Required for .cs files: name of the seeded top-level type.")] string? typeName = null,
         CancellationToken cancellationToken = default)

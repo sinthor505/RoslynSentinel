@@ -622,7 +622,7 @@ public class GranularRefactoringEngineGapTests
     }
 
     [Test]
-    public async Task InlineParameterAsync_MethodWithParam_ReturnsNonNull()
+    public async Task InlineParameterAsync_MethodWithParam_ThrowsToolNotImplemented()
     {
         var source = "public class Service { public void Go(int x) { var y = x + 1; } }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);

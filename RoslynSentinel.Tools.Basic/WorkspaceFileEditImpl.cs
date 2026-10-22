@@ -995,15 +995,6 @@ public class WorkspaceFileEditImpl
             }
 
             bool isCSharpFile = filePathResolved.Absolute.EndsWith(".cs", StringComparison.OrdinalIgnoreCase);
-            if (isCSharpFile && string.IsNullOrWhiteSpace(namespaceName))
-            {
-                return new SentinelCallToolResult<object>()
-                {
-                    IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'namespaceName' is required for a .cs file, so the new file starts as a valid compilation unit that Member(add) can populate.")
-                };
-            }
-
             if (isCSharpFile && (typeKind == null || string.IsNullOrWhiteSpace(typeName)))
             {
                 return new SentinelCallToolResult<object>()
@@ -1017,7 +1008,10 @@ public class WorkspaceFileEditImpl
             if (isCSharpFile)
             {
                 string keyword = typeKind!.Value == NewTypeKind.staticClass ? "static class" : typeKind.Value.ToString().TrimStart('@');
-                content = $"namespace {namespaceName};\n\npublic {keyword} {typeName}\n{{\n}}\n";
+                // A null/whitespace namespaceName means the global namespace, by design (e.g. an NUnit [SetUpFixture]).
+                content = string.IsNullOrWhiteSpace(namespaceName)
+                    ? $"public {keyword} {typeName}\n{{\n}}\n"
+                    : $"namespace {namespaceName};\n\npublic {keyword} {typeName}\n{{\n}}\n";
             }
             else
             {

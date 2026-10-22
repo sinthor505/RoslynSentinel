@@ -640,27 +640,28 @@ public class CreateFileDeleteFileTests
     // CreateFileTool (the MCP tool, WorkspaceTools.CreateFileTool) -> distinct from
     // WriteFileTool(operation=CreateFileTool) exercised above; the two share a name coincidentally (tool
     // name vs WriteFileOperation enum member). This tool never accepts free-form content: for .cs
-    // files, namespaceName + typeKind + typeName are all mandatory, seeding a namespace plus one
-    // empty top-level type skeleton in a single call -> deliberately not optional, so a model can't
-    // forget typeKind/typeName and have to make a second MemberTool(add) round-trip just to reach a
-    // populatable type.
+    // files, typeKind + typeName are mandatory (seeding one empty top-level type skeleton in a single
+    // call, so a model can't forget them and need a second MemberTool(add) round-trip). namespaceName
+    // is optional: null/whitespace means the global namespace, by design (e.g. an NUnit [SetUpFixture]).
 
     [Test]
     [Category("WorkspaceTools")] // sentinel:auto-category
-    public async Task CreateFileTool_MissingNamespaceForCsFile_FailsAsync()
+    public async Task CreateFileTool_NoNamespaceForCsFile_CreatesGlobalNamespaceTypeAsync()
     {
         using var fixture = new TestSolutionFixture();
         using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
         await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
         var workspaceTools = BuildTools(workspaceManager);
 
-        var newFile = Path.Combine(fixture.SolutionDirectory, "NoNamespace.cs");
+        var newFile = Path.Combine(fixture.SolutionDirectory, "GlobalNamespace.cs");
 
         var result = await workspaceTools.CreateFileTool(reason: "test message", newFile, typeKind: NewTypeKind.@class, typeName: "Foo");
 
-        Assert.That(!result.IsError, Is.False);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-        Assert.That(File.Exists(newFile), Is.False);
+        Assert.That(result.IsError, Is.False);
+        Assert.That(File.Exists(newFile), Is.True);
+        var content = await File.ReadAllTextAsync(newFile);
+        Assert.That(content, Does.Contain("public class Foo"));
+        Assert.That(content, Does.Not.Contain("namespace"));
     }
 
     [TestCase(null, "Foo", TestName = "CreateFileTool_MissingTypeKindForCsFile_FailsAsync")]
