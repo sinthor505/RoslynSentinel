@@ -60,9 +60,21 @@ public sealed class ToolNotFoundException : ToolException
 {
     public override string ErrorCode => ToolErrorCode.NotFound;
 
-    public ToolNotFoundException(string message) : base(message)
+    public ToolNotFoundException(string message, string? missingTargetKind = null, string? missingTargetName = null, SnippetMatching.SnippetFailureDetail? snippet = null) : base(message)
     {
+        MissingTargetKind = missingTargetKind;
+        MissingTargetName = missingTargetName;
+        Snippet = snippet;
     }
+
+    /// <summary>What kind of target was not found ("document", "class", "interface", "member", ...); null when the throw site did not say.</summary>
+    public string? MissingTargetKind { get; }
+
+    /// <summary>The name the caller supplied that did not resolve; null when the throw site did not supply it.</summary>
+    public string? MissingTargetName { get; }
+
+    /// <summary>Set when the not-found cause is a snippet that did not match; null otherwise.</summary>
+    public SnippetMatching.SnippetFailureDetail? Snippet { get; }
 }
 
 /// <summary>
@@ -91,13 +103,17 @@ public sealed class ToolAmbiguousMatchException : ToolException
 {
     public override string ErrorCode => ToolErrorCode.Ambiguous;
 
-    public ToolAmbiguousMatchException(string message, IReadOnlyList<AmbiguousCandidate>? candidates = null) : base(message)
+    public ToolAmbiguousMatchException(string message, IReadOnlyList<AmbiguousCandidate>? candidates = null, SnippetMatching.SnippetFailureDetail? snippet = null) : base(message)
     {
         Candidates = candidates;
+        Snippet = snippet;
     }
 
     /// <summary>Candidates that made the lookup ambiguous, for structured retry hints; null when the throw site did not supply them.</summary>
     public IReadOnlyList<AmbiguousCandidate>? Candidates { get; }
+
+    /// <summary>Set when the ambiguity came from a snippet match; null otherwise.</summary>
+    public SnippetMatching.SnippetFailureDetail? Snippet { get; }
 }
 
 /// <summary>
@@ -110,9 +126,13 @@ public sealed class ToolTargetIneligibleException : ToolException
 {
     public override string ErrorCode => ToolErrorCode.TargetIneligible;
 
-    public ToolTargetIneligibleException(string message) : base(message)
+    public ToolTargetIneligibleException(string message, string? suggestedTool = null) : base(message)
     {
+        SuggestedTool = suggestedTool;
     }
+
+    /// <summary>Name of the tool or route that can do the job instead; null when none is known.</summary>
+    public string? SuggestedTool { get; }
 }
 
 /// <summary>
@@ -125,9 +145,13 @@ public sealed class DiffApplyException : ToolException
 {
     public override string ErrorCode => ToolErrorCode.DiffApplyFailed;
 
-    public DiffApplyException(string message) : base(message)
+    public DiffApplyException(string message, IReadOnlyList<DiffHunkFailure>? failedHunks = null) : base(message)
     {
+        FailedHunks = failedHunks;
     }
+
+    /// <summary>Hunks that could not be applied, for structured retry hints; null when the throw site did not supply them.</summary>
+    public IReadOnlyList<DiffHunkFailure>? FailedHunks { get; }
 }
 
 /// <summary>

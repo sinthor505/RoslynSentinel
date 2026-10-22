@@ -125,7 +125,8 @@ public class DiffEngine
                 throw new DiffApplyException(
                     $"Malformed hunk header \"{line}\": expected the form \"@@ -oldStart,oldCount " +
                     "+newStart,newCount @@\" (counts may be omitted, e.g. \"@@ -5 +5 @@\", but the " +
-                    "old/new start line numbers are required). Regenerate the diff with a well-formed header.");
+                    "old/new start line numbers are required). Regenerate the diff with a well-formed header.",
+                    failedHunks: new[] { new DiffHunkFailure(line, 0, "MalformedHeader") });
             }
 
             if (match.Success)
@@ -168,7 +169,8 @@ public class DiffEngine
                     {
                         if (currentLine >= lines.Count)
                         {
-                            throw new DiffApplyException($"Line {currentLine + 1} out of bounds.");
+                            throw new DiffApplyException($"Line {currentLine + 1} out of bounds.",
+                                failedHunks: new[] { new DiffHunkFailure(match.Value, currentLine + 1, "OutOfBounds") });
                         }
                         var expected = diffLine.Substring(1).Trim();
                         var actual = lines[currentLine].Trim();
@@ -179,7 +181,8 @@ public class DiffEngine
                                 $"at line {currentLine + 1}, but found \"{actual}\". The hunk's line numbers may be " +
                                 "stale relative to hunks applied earlier in this same diff - regenerate the diff " +
                                 "against the file's current content, or use a whole-member/whole-file replacement " +
-                                "tool instead.");
+                                "tool instead.",
+                                failedHunks: new[] { new DiffHunkFailure(match.Value, currentLine + 1, "ContentMismatch", expected, actual) });
                         }
                         lines.RemoveAt(currentLine);
                         endings.RemoveAt(currentLine);
@@ -194,7 +197,8 @@ public class DiffEngine
                         // desynchronize currentLine from the anchor ReanchorHunk already matched.
                         if (currentLine >= lines.Count)
                         {
-                            throw new DiffApplyException($"Context line {currentLine + 1} out of bounds.");
+                            throw new DiffApplyException($"Context line {currentLine + 1} out of bounds.",
+                                failedHunks: new[] { new DiffHunkFailure(match.Value, currentLine + 1, "OutOfBounds") });
                         }
 
                         var expected = diffLine.Length == 0 ? "" : diffLine.Substring(1).Trim();
@@ -206,7 +210,8 @@ public class DiffEngine
                                 $"at line {currentLine + 1}, but found \"{actual}\". The hunk's line numbers may be " +
                                 "stale relative to hunks applied earlier in this same diff - regenerate the diff " +
                                 "against the file's current content, or use a whole-member/whole-file replacement " +
-                                "tool instead.");
+                                "tool instead.",
+                                failedHunks: new[] { new DiffHunkFailure(match.Value, currentLine + 1, "ContentMismatch", expected, actual) });
                         }
                         currentLine++;
                     }
@@ -325,7 +330,8 @@ public class DiffEngine
             $"hunk '{hunkHeader}' declares line {declaredLine + 1}, but its content " +
             $"wasn't found there or within {HunkReanchorWindow} lines in either direction. {mismatchDetail} " +
             "Regenerate the diff against the file's current content, or use a " +
-            "whole-member/whole-file replacement tool instead.");
+            "whole-member/whole-file replacement tool instead.",
+            failedHunks: new[] { new DiffHunkFailure(hunkHeader, declaredLine + 1, "ReanchorFailed") });
     }
 
     /// <summary>
