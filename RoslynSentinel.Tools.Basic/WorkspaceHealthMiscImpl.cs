@@ -68,6 +68,15 @@ public class WorkspaceHealthMiscImpl
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken).ConfigureAwait(false);
             }
 
+            if (action == FeaturesAction.get && (names is null || names.TrueForAll(string.IsNullOrWhiteSpace)))
+            {
+                return new SentinelCallToolResult<object>
+                {
+                    IsError = true,
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Features: 'names' is required for action=get (the feature names to look up). Use action=list to return every flag.")
+                };
+            }
+
             return action switch
             {
                 FeaturesAction.list => new SentinelCallToolResult<object> { IsError = false, SuccessData = _config.GetFeatureStatuses() },

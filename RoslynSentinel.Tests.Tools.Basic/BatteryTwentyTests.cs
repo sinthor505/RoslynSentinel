@@ -93,10 +93,28 @@ public class BatteryTwentyTests
     }
 
     [Test]
-    public async Task Features_GetEmptyList_ReturnsResult()
+    public async Task Features_GetEmptyNames_ReturnsInvalidArgument()
     {
         var result = await _workspaceTools.McpServerFeaturesTool(reason: "test message", FeaturesAction.get, names: new List<string>());
-        Assert.That(result.IsError, Is.False); Assert.That(System.Text.Json.JsonSerializer.Serialize(result.SuccessData), Does.Contain("ExtractMethod")); // TODO engine oddity: get with names=[] returns every flag instead of an empty list
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(result.ErrorData.Message, Is.EqualTo("Features: 'names' is required for action=get (the feature names to look up). Use action=list to return every flag."));
+    }
+
+    [Test]
+    public async Task Features_GetWithNames_ReturnsOnlyThoseFlags()
+    {
+        var listed = await _workspaceTools.McpServerFeaturesTool(reason: "test message", FeaturesAction.list);
+        var flags = (List<KeyValuePair<string, bool>>)listed.SuccessData!;
+        Assert.That(flags.Count, Is.GreaterThanOrEqualTo(2));
+        var first = flags[0].Key;
+        var other = flags[1].Key;
+
+        var result = await _workspaceTools.McpServerFeaturesTool(reason: "test message", FeaturesAction.get, names: new List<string> { first });
+        Assert.That(result.IsError, Is.False);
+        var json = System.Text.Json.JsonSerializer.Serialize(result.SuccessData);
+        Assert.That(json, Does.Contain("\"" + first + "\""));
+        Assert.That(json, Does.Not.Contain("\"" + other + "\""));
     }
 
     [Test]
