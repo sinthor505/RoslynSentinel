@@ -217,9 +217,15 @@ public sealed class SessionHaltedException : ToolException
 /// not be true. Replaces the old per-tool pattern of appending a fixed "Check that the solution is
 /// loaded and the file path is valid" sentence to every exception regardless of type. Call this
 /// from every MCP tool method's catch block instead of hand-rolling the mapping.
+/// ToResultError is the single exception-to-ResultError translator; it reads the exception's
+/// StructuredDetail (IOperationError) and attaches it to the result.
 /// </summary>
 public static class ToolErrorMapper
 {
+    /// <summary>
+    /// The single exception-to-ResultError translator. Reads the exception's StructuredDetail
+    /// (IOperationError) and attaches it when present.
+    /// </summary>
     /// <param name="ex">The caught exception.</param>
     /// <param name="workspaceManager">
     /// Unused by the classification itself (callers now throw <see cref="SolutionNotLoadedException"/>
@@ -229,9 +235,11 @@ public static class ToolErrorMapper
     public static ResultError ToResultError(Exception ex, ISolutionProvider workspaceManager, string context)
     {
         var (code, message) = ToCodeAndMessage(ex, workspaceManager, context);
-        // The candidate list is capped by the engine (<=10 plus a dropped count), far under the offload
-        // threshold, and ToResultError is synchronous, so it is inlined rather than offloaded.
-        if (ex is ToolAmbiguousMatchException ambiguous && ToStructuredDetail(ambiguous.Candidates) is { } detail)
+        // The structured payload (ambiguous candidates, snippet failure detail, failed diff hunks) is
+        // small and capped by the engine, far under the offload threshold, and ToResultError is
+        // synchronous, so it is inlined rather than offloaded.
+        var detail = (ex as IOperationError)?.StructuredDetail;
+        if (detail is { Count: > 0 })
             return new ResultError(code, message, ex.Message, StructuredDetail: detail);
         return new ResultError(code, message, ex.Message);
     }
@@ -263,11 +271,6 @@ public static class ToolErrorMapper
         if (ex is ToolException toolEx)
         {
             return (toolEx.ErrorCode, $"{context} failed: {toolEx.Message}");
-        }
-
-        if (ex is SolutionNotLoadedException)
-        {
-            return (ToolErrorCode.SolutionNotLoaded, $"{context} failed: no solution is loaded. Call LoadSolution first. Data: {ex.Message}");
         }
 
         if (ex is OperationCanceledException)
