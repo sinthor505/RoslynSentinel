@@ -190,11 +190,11 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult
         }
     }
 
-    /// <summary><see cref="IOperationResult.Code"/>: the <see cref="ResultError.ErrorCode"/> when <see cref="ErrorData"/> is a <see cref="ResultError"/>, else null. Not serialized.</summary>
+    /// <summary><see cref="Code"/>: the <see cref="ResultError.ErrorCode"/> when <see cref="ErrorData"/> is a <see cref="ResultError"/>, else null. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Code => (ErrorData as ResultError)?.ErrorCode;
 
-    /// <summary><see cref="IOperationResult.Message"/>: the <see cref="ResultError.Message"/> when <see cref="ErrorData"/> is a <see cref="ResultError"/>, else null. Not serialized.</summary>
+    /// <summary><see cref="Message"/>: the <see cref="ResultError.Message"/> when <see cref="ErrorData"/> is a <see cref="ResultError"/>, else null. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => (ErrorData as ResultError)?.Message;
 

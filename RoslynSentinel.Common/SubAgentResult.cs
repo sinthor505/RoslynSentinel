@@ -45,11 +45,11 @@ public sealed record SubAgentResult : IOperationResult
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => IsError ? ResultStatus.Failed : ResultStatus.Success;
 
-    /// <summary><see cref="IOperationResult.Code"/>: Exception when not converged; null otherwise. Not serialized.</summary>
+    /// <summary><see cref="Code"/>: Exception when not converged; null otherwise. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Code => IsError ? ToolErrorCode.Exception : null;
 
-    /// <summary><see cref="IOperationResult.Message"/>: names the stop reason when not converged; null otherwise. Not serialized.</summary>
+    /// <summary><see cref="Message"/>: names the stop reason when not converged; null otherwise. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => IsError ? $"Sub-agent stopped without converging: {StopReason}" : null;
 }

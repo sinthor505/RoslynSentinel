@@ -89,11 +89,11 @@ public record AppliedChangeSummary(
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => false;
 
-    /// <summary><see cref="IOperationResult.Code"/>: always null. Not serialized.</summary>
+    /// <summary><see cref="Code"/>: always null. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Code => null;
 
-    /// <summary><see cref="IOperationResult.Message"/>: the <see cref="Note"/> text. Not serialized.</summary>
+    /// <summary><see cref="Message"/>: the <see cref="Note"/> text. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Note;
 

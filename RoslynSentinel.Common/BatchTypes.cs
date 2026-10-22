@@ -176,7 +176,7 @@ public record AsyncifyLoopResult : IOperationResult
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => TotalFailed > 0;
 
-    /// <summary>Failed when any iteration failed; otherwise Success.</summary>
+    /// <summary>Success when no iteration failed, Failed when none succeeded, PartialFailure when some of each (TotalFailed, TotalSucceeded).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFailureCount(TotalFailed, TotalSucceeded);
 
@@ -405,7 +405,7 @@ public class BridgeAsyncMethodsResult : IOperationResult
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Summary.Failed > 0;
 
-    /// <summary>Failed when any method failed; otherwise Success.</summary>
+    /// <summary>Success when no method failed, Failed when none succeeded, PartialFailure when some of each (Summary.Failed, Summary.Succeeded).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Summary.Failed, Summary.Succeeded);
 
@@ -437,7 +437,7 @@ public class UpliftCallersResult : IOperationResult
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Summary.Failed > 0;
 
-    /// <summary>Failed when any uplift failed; otherwise Success.</summary>
+    /// <summary>Success when no uplift failed, Failed when none succeeded, PartialFailure when some of each (Summary.Failed, Summary.Succeeded).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Summary.Failed, Summary.Succeeded);
 

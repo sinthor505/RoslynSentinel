@@ -30,7 +30,7 @@ namespace RoslynSentinel.Common
             get; init;
         }
 
-        /// <summary><see cref="IOperationResult.Code"/>: <see cref="ErrorCode"/> when set, else the code for <see cref="EngineResultBase.Outcome"/>. Not serialized.</summary>
+        /// <summary><see cref="Code"/>: <see cref="ErrorCode"/> when set, else the code for <see cref="EngineResultBase.Outcome"/>. Not serialized.</summary>
         [System.Text.Json.Serialization.JsonIgnore]
         public override string? Code => ErrorCode ?? base.Code;
 

@@ -167,7 +167,7 @@ public class UpliftBatchMultiResult : IOperationResult
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => PerMethod.Any(m => m.IsError);
 
-    /// <summary>Failed when any method failed; otherwise Success.</summary>
+    /// <summary>Success when no method failed, Failed when none succeeded, PartialFailure when some of each.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFailureCount(PerMethod.Count(m => m.IsError), PerMethod.Count(m => !m.IsError));
 
@@ -281,7 +281,7 @@ public class PropagateCtFileResult : IOperationResult
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => PerMethod.Any(m => m.IsError);
 
-    /// <summary>Failed when any method failed; otherwise Success.</summary>
+    /// <summary>Success when no method failed, Failed when none succeeded, PartialFailure when some of each. A file with no methods is Success.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFailureCount(PerMethod.Count(m => m.IsError), PerMethod.Count(m => !m.IsError));
 
@@ -357,7 +357,7 @@ public class PropagateCtBatchResult : IOperationResult
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Failed.Count > 0;
 
-    /// <summary>Failed when any file failed; otherwise Success.</summary>
+    /// <summary>Success when no file failed, Failed when none succeeded (Applied is empty), PartialFailure when some of each (Failed.Count, Applied.Count).</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => ResultStatusExtensions.FromFailureCount(Failed.Count, Applied.Count);
 

@@ -44,7 +44,7 @@ public record EngineResultBase : IOperationResult
     [JsonIgnore]
     public bool IsError => Status.IsErrorStatus();
 
-    /// <summary><see cref="IOperationResult.Code"/>: the <see cref="ToolErrorCode"/> for <see cref="Outcome"/>; null when not an error. Not serialized.</summary>
+    /// <summary><see cref="Code"/>: the <see cref="ToolErrorCode"/> for <see cref="Outcome"/>; null when not an error. Not serialized.</summary>
     [JsonIgnore]
     public virtual string? Code => Outcome.ToErrorCode();
 }

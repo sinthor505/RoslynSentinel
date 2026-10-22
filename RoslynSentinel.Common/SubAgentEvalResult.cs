@@ -59,13 +59,13 @@ public sealed record SubAgentEvalResult : IOperationResult
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status => IsError ? ResultStatus.Failed : ResultStatus.Success;
 
-    /// <summary><see cref="IOperationResult.Code"/>: BuildFailed, TestRunFailed or Exception (non-convergence), in that order; null when not an error. Not serialized.</summary>
+    /// <summary><see cref="Code"/>: BuildFailed, TestRunFailed or Exception (non-convergence), in that order; null when not an error. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Code => IsError
         ? (!BuildSucceeded ? ToolErrorCode.BuildFailed : TestFailedCount > 0 ? ToolErrorCode.TestRunFailed : ToolErrorCode.Exception)
         : null;
 
-    /// <summary><see cref="IOperationResult.Message"/>: <see cref="FailureExcerpt"/> when set, else the first applicable of the build, test or convergence reason; null when not an error. Not serialized.</summary>
+    /// <summary><see cref="Message"/>: <see cref="FailureExcerpt"/> when set, else the first applicable of the build, test or convergence reason; null when not an error. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => IsError
         ? FailureExcerpt

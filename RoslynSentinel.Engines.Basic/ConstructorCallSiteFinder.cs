@@ -72,7 +72,7 @@ public sealed record AddConstructorParameterCascadeResult(DocumentEditResult Cla
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsError => Status != ResultStatus.Success;
 
-    /// <summary><see cref="IOperationResult.Code"/>: the ToolErrorCode for the state; null on success. Not serialized.</summary>
+    /// <summary><see cref="Code"/>: the ToolErrorCode for the state; null on success. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Code =>
         InvalidArgumentMessage is not null ? ToolErrorCode.InvalidArgument
@@ -80,7 +80,7 @@ public sealed record AddConstructorParameterCascadeResult(DocumentEditResult Cla
         : UnresolvedSites.Count > 0 ? ToolErrorCode.UnresolvedCallSites
         : null;
 
-    /// <summary><see cref="IOperationResult.Message"/>: the invalid-argument text, else the class edit's message, else a count of unresolved sites; null on success. Not serialized.</summary>
+    /// <summary><see cref="Message"/>: the invalid-argument text, else the class edit's message, else a count of unresolved sites; null on success. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message =>
         InvalidArgumentMessage
