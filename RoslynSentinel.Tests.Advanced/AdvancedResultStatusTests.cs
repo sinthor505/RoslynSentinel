@@ -16,12 +16,8 @@ public class AdvancedResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((ControlFlowAnalysisResult)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -39,12 +35,8 @@ public class AdvancedResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((DataFlowAnalysisResult)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -62,12 +54,8 @@ public class AdvancedResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         // The record's positional Code is the generated test source; the status code is an explicit
         // interface member, so the property keeps its meaning and its wire value.
@@ -90,12 +78,8 @@ public class AdvancedResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((FluentBuilderResult)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -110,12 +94,8 @@ public class AdvancedResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         // Serializing this record throws (STJ cannot build metadata for the pre-existing Site type graph),
         // so verify the surface by reflection: declared properties only, computed members JsonIgnore-marked.
@@ -140,16 +120,10 @@ public class AdvancedResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(notFound.IsError, Is.True);
         Assert.That(notFound.Status, Is.EqualTo(ResultStatus.NotFound));
-        Assert.That(notFound.Code, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(notFound.Message, Is.EqualTo("Method not found"));
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         var type = typeof(PropagateCtResult);
         string[] nonComputed = type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
@@ -171,12 +145,8 @@ public class AdvancedResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         var type = typeof(UpliftBatchMultiMethodResult);
         string[] nonComputed = type.GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)

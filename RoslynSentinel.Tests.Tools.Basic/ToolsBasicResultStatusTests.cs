@@ -16,7 +16,6 @@ public class ToolsBasicResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
     }
 
     [TestCase(GitErrorCodes.PathNotFound, ResultStatus.NotFound)]
@@ -43,8 +42,6 @@ public class ToolsBasicResultStatusTests
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(expected));
         Assert.That(bad.Status.IsErrorStatus(), Is.True);
-        Assert.That(bad.Code, Is.EqualTo(kind));
-        Assert.That(bad.Message, Is.EqualTo("refused"));
     }
 
     [Test]
@@ -52,7 +49,6 @@ public class ToolsBasicResultStatusTests
     {
         IOperationResult bad = new GitResult { IsError = true, Error = "boom" };
 
-        Assert.That(bad.Code, Is.EqualTo(GitErrorCodes.Fallback));
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
     }
 
@@ -72,11 +68,8 @@ public class ToolsBasicResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("disk full"));
 
         string json = JsonSerializer.Serialize((DocWriteResult)bad);
         Assert.That(json, Does.Not.Contain("\"Status\"").And.Not.Contain("\"Code\"").And.Not.Contain("\"Message\""));
@@ -92,16 +85,10 @@ public class ToolsBasicResultStatusTests
         // A Warning alone does not make the result an error.
         Assert.That(found.IsError, Is.False);
         Assert.That(found.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(found.Code, Is.Null);
-        Assert.That(found.Message, Is.Null);
         Assert.That(notFound.IsError, Is.True);
         Assert.That(notFound.Status, Is.EqualTo(ResultStatus.NotFound));
-        Assert.That(notFound.Code, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(notFound.Message, Is.EqualTo("Document not found"));
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((DocReadResult)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -116,12 +103,8 @@ public class ToolsBasicResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((DocListResult)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();

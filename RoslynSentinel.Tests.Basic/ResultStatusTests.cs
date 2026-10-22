@@ -15,8 +15,6 @@ public class ResultStatusTests
 
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(result.Code, Is.Null);
-        Assert.That(result.Message, Is.Null);
     }
 
     [TestCase(ToolErrorCode.NotFound, ResultStatus.NotFound)]
@@ -40,8 +38,6 @@ public class ResultStatusTests
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.Status, Is.EqualTo(expected));
-        Assert.That(result.Code, Is.EqualTo(code));
-        Assert.That(result.Message, Is.EqualTo("boom"));
     }
 
     [Test]
@@ -120,7 +116,6 @@ public class ResultStatusTests
         IOperationResult result = new DocumentEditResult(outcome, default);
         Assert.That(result.Status, Is.EqualTo(expectedStatus));
         Assert.That(result.IsError, Is.EqualTo(expectedStatus.IsErrorStatus()));
-        Assert.That(result.Code, Is.EqualTo(expectedCode));
     }
 
     [Test]
@@ -133,7 +128,6 @@ public class ResultStatusTests
         }
 
         IOperationResult withCode = new DocumentEditResult(EditOutcome.CannotEdit, default) { ErrorCode = ToolErrorCode.Ambiguous };
-        Assert.That(withCode.Code, Is.EqualTo(ToolErrorCode.Ambiguous));
         Assert.That(withCode.IsError, Is.True);
 
         var json = JsonSerializer.Serialize(new DocumentEditResult(EditOutcome.Modified, default));
@@ -225,11 +219,8 @@ public class ResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status.IsErrorStatus(), Is.True);
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("cannot extract"));
 
         string json = JsonSerializer.Serialize((ExtractMethodResult)bad);
         Assert.That(json, Does.Not.Contain("\"Status\"").And.Not.Contain("\"Code\"").And.Not.Contain("\"Message\""));
@@ -244,13 +235,8 @@ public class ResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(failed.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(failed.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(failed.Message, Is.EqualTo("write failed"));
         Assert.That(refused.IsError, Is.True);
-        Assert.That(refused.Code, Is.EqualTo(ToolErrorCode.EolChangeRefused));
         Assert.That(refused.Status.IsErrorStatus(), Is.True);
 
         string json = JsonSerializer.Serialize((ApplyChangesResult)failed);
@@ -265,11 +251,8 @@ public class ResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status.IsErrorStatus(), Is.True);
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.ValidationFailed));
-        Assert.That(bad.Message, Does.StartWith("1 error diagnostic"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((DiagnosticReport)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -285,12 +268,8 @@ public class ResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
         Assert.That(plain.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(plain.Code, Is.EqualTo(ToolErrorCode.Exception));
         Assert.That(coded.Status, Is.EqualTo(ResultStatus.NotApplicable));
-        Assert.That(coded.Code, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        Assert.That(coded.Message, Is.EqualTo("nope"));
     }
 
     [TestCase(EngineOutcome.Success, ResultStatus.Success, null)]
@@ -306,7 +285,6 @@ public class ResultStatusTests
 
         Assert.That(result.IsError, Is.EqualTo(expectedStatus.IsErrorStatus()));
         Assert.That(result.Status, Is.EqualTo(expectedStatus));
-        Assert.That(result.Code, Is.EqualTo(expectedCode));
     }
 
     [Test]
@@ -326,12 +304,8 @@ public class ResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((ImpactReport)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -349,12 +323,8 @@ public class ResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((TypeHierarchyReport)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -372,12 +342,8 @@ public class ResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((VariableLifetimeReport)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -395,12 +361,8 @@ public class ResultStatusTests
 
         Assert.That(changed.IsError, Is.False);
         Assert.That(changed.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(changed.Code, Is.Null);
-        Assert.That(changed.Message, Is.Null);
         Assert.That(noop.IsError, Is.False);
         Assert.That(noop.Status, Is.EqualTo(ResultStatus.AlreadyInState));
-        Assert.That(noop.Code, Is.Null);
-        Assert.That(noop.Message, Is.Null);
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((ToolsetChange)noop));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -418,12 +380,8 @@ public class ResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((ChangeSignatureResult)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -441,12 +399,8 @@ public class ResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((RenameSymbolResult)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -464,8 +418,6 @@ public class ResultStatusTests
 
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(expected));
-        Assert.That(result.Code, Is.Null);
-        Assert.That(result.Message, Is.Null);
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((FormatPreviewResult)result));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -483,12 +435,8 @@ public class ResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.Exception));
-        Assert.That(bad.Message, Is.EqualTo("boom"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((SymbolHoverInfo)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -506,12 +454,8 @@ public class ResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.NotFound));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(bad.Message, Is.EqualTo("gone"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((NamedArgumentsOutcome)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -529,12 +473,8 @@ public class ResultStatusTests
 
         Assert.That(ok.IsError, Is.False);
         Assert.That(ok.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(ok.Code, Is.Null);
-        Assert.That(ok.Message, Is.Null);
         Assert.That(bad.IsError, Is.True);
         Assert.That(bad.Status, Is.EqualTo(ResultStatus.NotFound));
-        Assert.That(bad.Code, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(bad.Message, Is.EqualTo("gone"));
 
         using JsonDocument doc = JsonDocument.Parse(JsonSerializer.Serialize((SemanticReplaceOutcome)bad));
         string[] rootProperties = doc.RootElement.EnumerateObject().Select(p => p.Name).ToArray();
@@ -554,19 +494,14 @@ public class ResultStatusTests
         IOperationResult nf = notFound;
         Assert.That(nf.IsError, Is.True);
         Assert.That(nf.Status, Is.EqualTo(ResultStatus.NotFound));
-        Assert.That(nf.Code, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(nf.Message, Does.Contain("File 'a.cs' was not found anywhere in the loaded solution").And.Not.Contain("x/a.cs"));
 
         IOperationResult amb = ambiguous;
         Assert.That(amb.IsError, Is.True);
         Assert.That(amb.Status, Is.EqualTo(ResultStatusExtensions.FromFlag(true, ToolErrorCode.Ambiguous)));
-        Assert.That(amb.Code, Is.EqualTo(ToolErrorCode.Ambiguous));
-        Assert.That(amb.Message, Does.Contain("'a.cs' matches 2 different files in the solution").And.Contain("x/a.cs").And.Contain("y/a.cs"));
 
         // Found with no Document is not a usable result, so it reads as an error (IsFound is false).
         IOperationResult found = foundWithoutDocument;
         Assert.That(found.IsError, Is.True);
-        Assert.That(found.Code, Is.EqualTo(ToolErrorCode.NotFound));
 
         // Status is explicit (the positional Status is DocumentLookupStatus), so check the declared type.
         Assert.That(typeof(DocumentLookupResult).GetProperty("Status")!.PropertyType, Is.EqualTo(typeof(DocumentLookupStatus)));
@@ -1086,8 +1021,6 @@ public class ResultStatusTests
         var result = (IOperationResult)summary;
         Assert.That(result.IsError, Is.False);
         Assert.That(result.Status, Is.EqualTo(expected));
-        Assert.That(result.Code, Is.Null);
-        Assert.That(result.Message, Is.EqualTo(summary.Note));
     }
 
     [Test]

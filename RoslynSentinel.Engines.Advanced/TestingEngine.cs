@@ -20,10 +20,7 @@ public record TestScaffoldResult(
     public bool IsError => Error is not null;
 
     [System.Text.Json.Serialization.JsonIgnore]
-    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, ((IOperationResult)this).Code);
-
-    // Explicit: this record's positional Code parameter is the generated test source, not an error code.
-    string? IOperationResult.Code => IsError ? ToolErrorCode.Exception : null;
+    public ResultStatus Status => ResultStatusExtensions.FromFlag(IsError, ToolErrorCode.Exception);
 
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message => Error;
