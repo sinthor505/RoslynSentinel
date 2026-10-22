@@ -8,7 +8,8 @@ namespace RoslynSentinel.Tests;
 /// doc comment for the full picture of which implementation to use). Copies the repo's
 /// Samples/ContosoOrders scenario project into a fresh temp directory per instance so tests can
 /// load/watch/write real files without touching the checked-in sample or colliding with other
-/// tests. Dispose() deletes the copy.
+/// tests. Dispose() deletes the copy. Prefer <c>RoslynSentinel.Tests.Fakes.InMemoryWorkspace</c> (a FakeWorkspaceManager over
+/// source strings, no disk I/O) unless the test really needs file I/O, MSBuild load or watcher behavior.
 /// </summary>
 public sealed class TestSolutionFixture : IDisposable
 {

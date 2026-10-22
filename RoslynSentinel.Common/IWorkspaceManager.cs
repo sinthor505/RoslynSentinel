@@ -6,7 +6,9 @@ namespace RoslynSentinel.Common;
 /// bookkeeping. Prefer a narrower interface (ISolutionProvider, etc.) where possible.
 /// Implementations: <see cref="PersistentWorkspaceManager"/> (production, real MSBuild-backed
 /// solution) and <c>RoslynSentinel.Tests.Fakes.FakeWorkspaceManager</c> (test double, throws
-/// NotImplementedException on anything not explicitly stubbed). For tests that need a real
+/// NotImplementedException on anything not explicitly stubbed; create it with FakeWorkspaceManager.ReadOnly() or
+/// ReadWrite(), and build its solution from source strings with <c>RoslynSentinel.Tests.Fakes.InMemoryWorkspace</c>,
+/// which does no disk I/O). For tests that need a real
 /// on-disk solution rather than the fake's in-memory/SetTestSolution path, see
 /// <c>RoslynSentinel.Tests.TestSolutionFixture</c>, which loads via
 /// <see cref="PersistentWorkspaceManager"/>.
