@@ -368,12 +368,23 @@ public class StructuralRefactoringEngine
             "extract-constant" => ApplyExtractConstant(root, line),
             _ => throw new ToolInvalidArgumentException($"Unknown micro-refactoring '{refactoringId}'. " + "Known IDs: type-to-var, remove-unused-local, add-braces, remove-braces, extract-constant.")
         };
+        // The Apply* helpers return the original root when they find nothing to change.
+        var resultRoot = newRoot ?? root;
+        if (string.Equals(resultRoot.ToFullString(), root.ToFullString(), StringComparison.Ordinal))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.AlreadyInTargetState,
+                FilePath = filePath
+            };
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            // The Apply* helpers annotate only the nodes they create; a refactoring that finds nothing returns the text as is.
-            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot ?? root, cancellationToken)
+            // The Apply* helpers annotate only the nodes they create, so the formatted text carries the change.
+            UpdatedText = await FormatAnnotatedTextAsync(document, resultRoot, cancellationToken)
         };
     }
 

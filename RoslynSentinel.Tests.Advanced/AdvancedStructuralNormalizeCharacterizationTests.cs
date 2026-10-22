@@ -383,8 +383,15 @@ public class AdvancedStructuralNormalizeCharacterizationTests
 
         var result = await _engine.RunMicroRefactoringAsync("Test.cs", refactoringId, line);
 
+        // Line 2 is a genuine no-op for type-to-var, so the outcome must be AlreadyInTargetState, not Modified.
+        if (line == 2)
+        {
+            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
+            return;
+        }
+
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        AssertPinned(result.UpdatedText, MicroExpected(line == 2 ? "none" : refactoringId, eol));
+        AssertPinned(result.UpdatedText, MicroExpected(refactoringId, eol));
     }
 
     /// <summary>

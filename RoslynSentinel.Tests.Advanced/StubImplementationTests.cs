@@ -351,7 +351,7 @@ class C {
 ";
         SetSource(source);
         var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Test.cs", "type-to-var", 4);
-        Assert.That(result.UpdatedText, Does.Contain("const int x"), "const declarations must not be changed to var");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState), "const declarations must not be changed to var");
     }
 
     [Test]

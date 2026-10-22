@@ -600,15 +600,15 @@ public class GranularRefactoringEngineGapTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
     [Test]
-    public async Task RunMicroRefactoringAsync_ValidFile_ReturnsNonNull()
+    public async Task RunMicroRefactoringAsync_ValidFile_ReturnsAlreadyInTargetStateForNoOp()
     {
         var source = "public class Service { public void Go() { var x = 1; } }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         // Use a real dispatch ID -> 'type-to-var' is safe on any code (converts explicit types)
         var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("Service.cs", "type-to-var", 1);
-        // TODO no-op returns Modified - assert NoChange once the engine distinguishes it
         Assert.That(result, Is.Not.Null);
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
     }
 
     [Test]
