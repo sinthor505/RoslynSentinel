@@ -89,7 +89,7 @@ Survey (2026-10-20, `RoslynSentinel.Common/IResultStatus.cs`): `IResultStatus` h
     - `TargetNotFound` (UseExceptionExpressions, ThreadSafety MakeMethodThreadSafe).
     - `Error` with code `NotFound` (ThreadSafety ConvertLockToSemaphoreSlim).
     - Already throws `ToolNotFoundException`: OptimizeToValueTask and the logging-conversion path; plus the three `MsToolAugmentEngine` contracts noted earlier.
-    Decision needed: one contract (throw `ToolNotFoundException` naming the file) for all of these in S1; every test carrying `// TODO throw-migration` is the work list. Related: the `SyncInterface` tool collapses the engine's distinct causes (class file / class / interface not found, nothing to sync) into one NotFound naming both class and interface (TODO in `AdvancedRefactoringTools.SyncInterfaceTool`); the typed exception should carry the real cause.
+    Decision needed: one contract (throw `ToolNotFoundException` naming the file) for all of these in S1; every test carrying `// TODO throw-migration` is the work list. Related: the `SyncInterface` tool collapses the engine's distinct causes (class file / class / interface not found, nothing to sync) into one NotFound naming both class and interface (message fixed in 128be7b9, TODO removed); the typed exception should carry the real cause.
 11. **`DocumentEditResult.ToJsonSummary()` omits `UpdatedText`**, so GenerateHttpClient / InterpolateStringSafe output is not visible through the tool result. Decide whether the success summary must carry the text (or an offload id) when the edit is not applied to disk.
 
 ## Appendix: engine defects found while strengthening tests (not throw-migration items)
@@ -106,9 +106,10 @@ Each is pinned in a test with a `// TODO` describing the defect; none is fixed y
 - `AnalyzePerformance` flags `PotentialDoubleEnumeration` on a string (false positive).
 - `GenerateTestScaffold` emits xUnit/Moq usings for an NUnit project.
 - `DetectMemoryLeaks` needs an explicit `this`.
-- `ApplyDiff` / `ApplyUnifiedDiff` say "'filePath' is required" even when it is supplied.
-- `ExternalFileDrift` Acknowledge accepts malformed JSON.
-- `features get` with empty names returns all flags.
+- FIXED (2fac1e84): `ApplyDiff` / `ApplyUnifiedDiff` said "'filePath' is required" even when it was supplied; an unresolvable relative path (workspace with no root) now names the value.
+- FIXED (8359a2c5): `ExternalFileDrift` Acknowledge accepted malformed JSON; `DelimitedListParser` now reports an unbalanced JSON array as a parse error.
+- FIXED (3e328b6e): `features get` with empty names returned all flags; it now returns InvalidArgument.
+- FIXED (128be7b9): `SyncInterface` now names the real cause (the engine messages name the file/class/interface; AlreadyInTargetState is no longer an error). The typed-exception version of this stays with S1.
 - Three negative-only detectors in `BatteryTwentyTwoTests` have no positive case yet (TODOs in place).
 
 ## Cost / risk
