@@ -316,7 +316,7 @@ public sealed class MoveMemberSuccessTests
         var result = await tools.MoveMemberTool(reason: "test message", workspace.PathOf("Refactor.cs"), "Dog", ["Bark"], "Animal");
         Assert.That(result.IsError, Is.False, $"{result.ErrorData?.ErrorCode}: {result.ErrorData?.Message}");
         var text = Lf(workspace.ReadText("Refactor.cs"));
-        // TODO Pull-up to an existing base class emits the member as virtual; confirm that is intended.
+        // Intended: pull-up emits virtual so the moved member stays overridable and call sites keep working (MoveMemberTextEdits.BuildPullUpModifierEdits).
         Assert.That(Before(text, "class Dog"), Does.Contain("public virtual string Bark() => \"woof\";"), "The pulled-up member must land in the base class, made virtual.");
         Assert.That(From(text, "class Dog"), Does.Not.Contain("Bark()"), "The member must be removed from the derived class.");
     }

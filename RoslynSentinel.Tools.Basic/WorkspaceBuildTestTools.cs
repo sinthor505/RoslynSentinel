@@ -61,6 +61,7 @@ public class WorkspaceBuildTestTools
         [Description("true = counts and FailureSummary only, no Results list.")] bool summary = false,
         [Description(ToolParams.UseScratchDir)] bool useScratchDir = false,
         [Description("true = keep failed tests' Output and the stdout/stderr tails. Default false: compact digest, full result behind FullResultsId.")] bool includeOutput = false,
+        [Description("Extra env vars for the test process (name -> value).")] Dictionary<string, string>? environment = null,
         CancellationToken cancellationToken = default)
-        => _impl.RunTest(reason, scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, includeOutput, cancellationToken);
+        => _impl.RunTest(reason, scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, includeOutput, environment, cancellationToken);
 }

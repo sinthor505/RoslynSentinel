@@ -514,8 +514,9 @@ public class WorkspaceTools
         [Description("true = counts and FailureSummary only, no Results list.")] bool summary = false,
         [Description(ToolParams.UseScratchDir)] bool useScratchDir = false,
         [Description("true = keep failed tests' Output and the stdout/stderr tails. Default false: compact digest, full result behind FullResultsId.")] bool includeOutput = false,
+        [Description("Extra env vars for the test process (name -> value).")] Dictionary<string, string>? environment = null,
         CancellationToken cancellationToken = default)
-        => _buildTest.RunTestTool(reason, scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, includeOutput, cancellationToken);
+        => _buildTest.RunTestTool(reason, scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, includeOutput, environment, cancellationToken);
     // CONDITIONAL-PARAM-REVIEW-REQUIRED: none of projectName/docCommentId/symbolName/line/column is
     // individually required -> the tool needs exactly one full resolution strategy: (projectName +
     // docCommentId), or symbolName (optionally with contextSnippet/lineBefore/lineAfter), or

@@ -323,6 +323,7 @@ public class WorkspaceBuildTestImpl
     public async Task<SentinelCallToolResult<object>> RunTest(ToolCallReason reason, ToolScope scope = ToolScope.solution,
         string? scopeName = null, string? filter = null, TestResultsFilter resultsType = TestResultsFilter.failed,
         int maxDetails = 50, int timeoutSeconds = 600, bool summary = false, bool useScratchDir = false, bool includeOutput = false,
+        Dictionary<string, string>? environment = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -333,7 +334,7 @@ public class WorkspaceBuildTestImpl
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, rateLimitError) };
             }
 
-            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, cancellationToken);
+            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, environment: environment, cancellationToken: cancellationToken);
 
             if (!result.TryGetData(out var testRunResult))
             {

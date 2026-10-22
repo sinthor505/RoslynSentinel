@@ -97,6 +97,7 @@ public class TestRunEngine
         int timeoutSeconds,
         bool summary = false,
         bool useScratchDir = false,
+        IReadOnlyDictionary<string, string>? environment = null,
         CancellationToken cancellationToken = default)
     {
         var start = DateTime.UtcNow;
@@ -199,7 +200,7 @@ public class TestRunEngine
         var projectResults = new List<(TestRunResult Result, string ProjectName)>();
         foreach (var (name, path) in targets)
         {
-            var result = await RunOneProjectAsync(name, path, filter, timeoutSeconds, scratchSolutionDirectory, cancellationToken);
+            var result = await RunOneProjectAsync(name, path, filter, timeoutSeconds, scratchSolutionDirectory, environment, cancellationToken);
             projectResults.Add((result, name));
         }
 
@@ -307,6 +308,7 @@ public class TestRunEngine
         string? filter,
         int timeoutSeconds,
         string? scratchSolutionDirectory,
+        IReadOnlyDictionary<string, string>? environment,
         CancellationToken cancellationToken)
     {
         var start = DateTime.UtcNow;
@@ -334,6 +336,15 @@ public class TestRunEngine
             process.StartInfo.ArgumentList.Add("quiet");
             process.StartInfo.ArgumentList.Add("--logger");
             process.StartInfo.ArgumentList.Add($"trx;LogFileName={trxPath}");
+            // Caller env is applied first so useScratchDir isolation variables still win.
+            if (environment is not null)
+            {
+                foreach (var (key, value) in environment)
+                {
+                    if (string.IsNullOrEmpty(key)) { continue; }
+                    process.StartInfo.Environment[key] = value;
+                }
+            }
             if (scratchSolutionDirectory is not null)
             {
                 BuildIsolation.ApplyScratchArtifactsPath(process.StartInfo, scratchSolutionDirectory);

@@ -840,7 +840,7 @@ public class AdvancedRefactoringTools
             resolvedMemberFilePaths = memberFilePaths.Select(p => _workspaceManager.ResolveFromWire(p)).ToArray() ?? Enumerable.Empty<FilePathWrapper>().ToArray();
         }
 
-        var actualFilePaths = resolvedMemberFilePaths ?? new[]
+        var actualFilePaths = resolvedMemberFilePaths.Length > 0 ? resolvedMemberFilePaths : new[]
         {
             resolvedFilePath
         };

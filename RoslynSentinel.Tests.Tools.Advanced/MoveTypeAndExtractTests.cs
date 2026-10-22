@@ -32,14 +32,15 @@ public sealed class MoveTypeAndExtractTests
     // --- ExtractSuperclass ---
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task ExtractSuperclass_DogWithAnimalBase_IsRefusedWithoutMemberNames()
+    public async Task ExtractSuperclass_DogWithAnimalBase_NoMemberFilePaths_SucceedsWithEmptyBaseAndDoesNotRebaseDerived()
     {
         using var workspace = InMemoryWorkspace.Create(("Dog.cs", CrlfRefactorSource));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.ExtractMembersTool(reason: "test message", workspace.PathOf("Dog.cs"), "Dog", ExtractAsType.superclass, "AnimalBase");
-        // TODO ExtractMembers superclass with no memberNames throws IndexOutOfRangeException instead of a structured argument error
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.Message, Does.Contain("failed unexpectedly"));
+        // TODO ExtractSuperclass is a stub: it copies only the first class's public properties and does not rebase the derived class, so the no-property case yields an empty abstract class; decide refuse vs implement
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(AllText(workspace), Does.Contain("abstract class AnimalBase"));
+        Assert.That(AllText(workspace), Does.Contain("class Dog : Animal"));
     }
 
     // --- ExtractInterface ---

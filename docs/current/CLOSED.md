@@ -8,6 +8,12 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## RunTest environment passthrough, ExtractMembers superclass crash, pull-up `virtual` - resolved (2026-10-21)
+
+- `RunTest` gained an optional `environment` map (name -> value) copied into the `dotnet test` child process before the `useScratchDir` isolation variables (`TestRunEngine.RunOneProjectAsync`; tool, facade and `WorkspaceBuildTestImpl.RunTest` thread it). Evidence: `RunTestTests.RunTest_EnvironmentParameter_ReachesTestProcessAsync`; the claude-lean schema budget was raised 28000 -> 28500 for it (parameter costs about 365 chars).
+- `ExtractMembers(newType: superclass)` without `memberFilePaths` threw `IndexOutOfRange` (a dead `??` fallback on an empty array in `AdvancedRefactoringTools`, not a superclass problem); it now falls back to the target file. Evidence: `ExtractSuperclass_DogWithAnimalBase_NoMemberFilePaths_SucceedsWithEmptyBaseAndDoesNotRebaseDerived`. The stub behaviour behind it stays open in TODO.md.
+- MoveMember pull-up emitting `virtual` is intended (`MoveMemberTextEdits.BuildPullUpModifierEdits`); the pinning test's TODO became a comment.
+
 ## Punchlist batch 2026-10-21: SyncInterface cross-file write, debounce .csproj reload, Plan:/Closes: convention
 
 - `SyncInterfaceToImplementation` cross-file defect fixed: `SyncInterfaceTool` wrote the interface's text (prefixed `// Updated file: ...`) over the class file and never wrote the interface file (it ignored `syncResult.FilePath`). The engine no longer prefixes the text; the tool writes to the result's file and its `AppliedChangeSummary` names it. Evidence: `WrapRangeAndGenerationTests.SyncInterfaceToImplementation_InterfaceInOtherFile_UpdatesInterfaceFileOnly` (red before, green after), 7 of 7 `SyncInterface` tests pass.

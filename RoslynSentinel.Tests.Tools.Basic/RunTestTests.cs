@@ -507,4 +507,36 @@ public class RunTestTests
 
         Assert.That(text, Does.Contain("Some.Tests").And.Contain("exited non-zero"));
     }
+
+    [Test]
+    public async Task RunTest_EnvironmentParameter_ReachesTestProcessAsync()
+    {
+        const string envProbeSource = """
+            using System;
+            using Xunit;
+
+            namespace ContosoOrders.Tests;
+
+            public class EnvPassthroughTests
+            {
+                [Fact]
+                public void EnvironmentVariableReachesTestProcess()
+                {
+                    Assert.Equal("passthrough-ok", Environment.GetEnvironmentVariable("ROSLYNSENTINEL_TEST_ENV_PASSTHROUGH"));
+                }
+            }
+            """;
+        using var fixture = new TestSolutionFixture();
+        using var workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        await workspaceManager.LoadSolutionAsync(fixture.SolutionPath);
+        await fixture.AddFileToSolution(workspaceManager, Path.Combine("ContosoOrders.Tests", "EnvPassthroughTests.cs"), envProbeSource);
+        var workspaceTools = BuildTools(workspaceManager);
+
+        var result = await workspaceTools.RunTestTool(reason: "test message", ToolScope.solution, filter: "FullyQualifiedName~EnvironmentVariableReachesTestProcess", timeoutSeconds: 120, environment: new Dictionary<string, string> { ["ROSLYNSENTINEL_TEST_ENV_PASSTHROUGH"] = "passthrough-ok" });
+
+        Assert.That(!result.IsError, Is.True, result.ErrorData?.Message);
+        var data = (TestRunResult)result.SuccessData!;
+        Assert.That(data.PassedCount, Is.EqualTo(1));
+        Assert.That(data.FailedCount, Is.EqualTo(0));
+    }
 }
