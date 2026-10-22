@@ -242,7 +242,7 @@ public class AdvancedRefactoringEngine
             {
                 Outcome = EditOutcome.DocumentNotFound,
                 FilePath = filePath,
-                Message = "// Class file not found."
+                Message = $"// File '{filePath}' was not found in the loaded solution."
             };
         }
 
@@ -253,7 +253,7 @@ public class AdvancedRefactoringEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = "// Could not parse class file."
+                Message = $"// Could not parse '{filePath}'."
             };
         }
 
@@ -264,7 +264,7 @@ public class AdvancedRefactoringEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = "// Class not found."
+                Message = $"// Class '{className}' was not found in '{System.IO.Path.GetFileName(filePath)}'."
             };
         }
 
@@ -315,7 +315,7 @@ public class AdvancedRefactoringEngine
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = "// Interface not found."
+                Message = $"// Interface '{interfaceName}' was not found in '{System.IO.Path.GetFileName(filePath)}' or any other loaded document."
             };
         }
 

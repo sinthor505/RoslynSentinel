@@ -170,4 +170,62 @@ public interface IWorker { void Work(); }";
         Assert.That(workspace.ReadText("IWorker.cs"), Does.Not.Contain("// Updated file:"));
         Assert.That(workspace.ReadText("Worker.cs"), Does.Not.Contain("// Updated file:"));
     }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task SyncInterface_sync_MissingInterface_NamesTheInterface()
+    {
+        const string src = @"namespace TestProj;
+public class Worker { public void Work() {} }";
+        using var workspace = InMemoryWorkspace.Create(("Worker.cs", src.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.SyncInterfaceTool(reason: "test message", workspace.PathOf("Worker.cs"), "IMissing", SyncInterfaceAction.sync, "Worker");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.Message, Does.Contain("Interface 'IMissing'"));
+        Assert.That(result.ErrorData!.Message, Does.Not.Contain("Class 'Worker'"));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task SyncInterface_sync_MissingClass_NamesTheClass()
+    {
+        const string src = @"namespace TestProj;
+public interface IWorker { void Work(); }";
+        using var workspace = InMemoryWorkspace.Create(("Worker.cs", src.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.SyncInterfaceTool(reason: "test message", workspace.PathOf("Worker.cs"), "IWorker", SyncInterfaceAction.sync, "Ghost");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.Message, Does.Contain("Class 'Ghost'"));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task SyncInterface_sync_AlreadyInSync_IsNotAnError()
+    {
+        const string src = @"namespace TestProj;
+public interface IWorker { void Work(); }
+public class Worker : IWorker { public void Work() {} }";
+        using var workspace = InMemoryWorkspace.Create(("Worker.cs", src.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.SyncInterfaceTool(reason: "test message", workspace.PathOf("Worker.cs"), "IWorker", SyncInterfaceAction.sync, "Worker");
+
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(workspace.ReadText("Worker.cs"), Is.EqualTo(src.ReplaceLineEndings("\r\n")));
+    }
+
+    [Test]
+    [Category("AdvancedRefactoringTools")]
+    public async Task SyncInterface_implement_AlreadyImplemented_IsNotAnError()
+    {
+        const string src = @"namespace TestProj;
+public interface IWorker { void Work(); }
+public class Worker : IWorker { public void Work() {} }";
+        using var workspace = InMemoryWorkspace.Create(("Worker.cs", src.ReplaceLineEndings("\r\n")));
+        var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
+        var result = await tools.SyncInterfaceTool(reason: "test message", workspace.PathOf("Worker.cs"), "IWorker", SyncInterfaceAction.implement, "Worker");
+
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+    }
 }
