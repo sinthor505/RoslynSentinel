@@ -109,14 +109,19 @@ public sealed class MoveTypeAndExtractTests
     // --- ExtractMembersToPartial ---
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
-    public async Task ExtractMembersToPartial_GetLabel_IsRefusedWithCompilerErrors()
+    public async Task ExtractMembersToPartial_GetLabel_MovesMemberAndMakesOriginalPartial()
     {
         using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.ExtractMembersTool(reason: "test message", workspace.PathOf("Order.cs"), "Order", ExtractAsType.partialClass, memberNames: ["GetLabel"]);
-        // TODO ExtractMembers partialClass on a non-partial class yields compiler errors (ErrorData.Message omits the diagnostics; cause not confirmed)
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.Message, Does.Contain("new compiler errors"));
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(workspace.ReadText("Order.Partial.cs"), Does.Contain("GetLabel"));
+        Assert.That(workspace.ReadText("Order.Partial.cs"), Does.Contain("partial class Order"));
+        Assert.That(workspace.ReadText("Order.cs"), Does.Contain("partial class Order"));
+        // IService in the same file also declares GetLabel, so assert on the moved method's declaration and body.
+        Assert.That(workspace.ReadText("Order.cs"), Does.Not.Contain("public string GetLabel()"));
+        Assert.That(workspace.ReadText("Order.cs"), Does.Not.Contain("string.Format"));
+        Assert.That(workspace.ReadText("Order.cs"), Does.Contain("GetStatus"));
     }
 
     // --- MoveTypeToOuterScope ---

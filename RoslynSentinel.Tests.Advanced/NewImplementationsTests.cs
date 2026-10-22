@@ -1068,5 +1068,46 @@ public class C
         Assert.That(result.UpdatedText, Does.Contain("var"), "Local variable should be declared with var.");
     }
 
+    // StructuralRefactoringEngine.ExtractMembersToPartialWithSourceAsync: the new partial file plus the rewritten source file.
+    [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
+    public async Task ExtractMembersToPartialWithSource_AlreadyPartialClass_KeepsSinglePartialModifier()
+    {
+        const string source = "public partial class C\r\n{\r\n    public void M1() { }\r\n\r\n    public void M2() { }\r\n}\r\n";
+        SetSource(source, "C.cs");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).ExtractMembersToPartialWithSourceAsync("C.cs", "C", ["M2"]);
+        Assert.That(result.Count, Is.EqualTo(2));
+        var rewrittenSource = result.Single(kv => kv.Key.ToString() == "C.cs").Value;
+        var partialFile = result.Single(kv => kv.Key.ToString() != "C.cs").Value;
+        Assert.That(rewrittenSource, Does.Contain("public partial class C"));
+        Assert.That(rewrittenSource, Does.Not.Contain("partial partial"));
+        Assert.That(rewrittenSource, Does.Contain("M1"));
+        Assert.That(rewrittenSource, Does.Not.Contain("M2"));
+        Assert.That(partialFile, Does.Contain("public partial class C"));
+        Assert.That(partialFile, Does.Not.Contain("partial partial"));
+        Assert.That(partialFile, Does.Contain("M2"));
+    }
+
+    [Test]
+    [Category("StructuralRefactoringEngine")] // sentinel:auto-category
+    public async Task ExtractMembersToPartialWithSource_GenericInternalStaticClass_PartsAgreeAndCompile()
+    {
+        const string source = "internal static class Util<T> where T : class\r\n{\r\n    public static void M1() { }\r\n\r\n    public static T M2(T value) { return value; }\r\n}\r\n";
+        SetSource(source, "Util.cs");
+        var result = await new StructuralRefactoringEngine(_workspaceManager).ExtractMembersToPartialWithSourceAsync("Util.cs", "Util", ["M2"]);
+        Assert.That(result.Count, Is.EqualTo(2));
+        var rewrittenSource = result.Single(kv => kv.Key.ToString() == "Util.cs").Value;
+        var partialFile = result.Single(kv => kv.Key.ToString() != "Util.cs").Value;
+        Assert.That(rewrittenSource, Does.Contain("internal static partial class Util<T> where T : class"));
+        Assert.That(partialFile, Does.Contain("internal static partial class Util<T> where T : class"));
+        var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
+            "PartialCheck",
+            [Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(rewrittenSource), Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(partialFile)],
+            [Microsoft.CodeAnalysis.MetadataReference.CreateFromFile(typeof(object).Assembly.Location)],
+            new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary));
+        var errors = compilation.GetDiagnostics().Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error).Select(d => d.ToString()).ToList();
+        Assert.That(errors, Is.Empty);
+    }
+
     public AntiPatternEngine _antiPatternEngine;
 }

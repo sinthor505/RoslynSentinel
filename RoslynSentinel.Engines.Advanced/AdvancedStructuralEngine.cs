@@ -1182,7 +1182,7 @@ public class StructuralRefactoringEngine
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode != null)
         {
-            var membersToMove = classNode.Members.Where(m => (m is MethodDeclarationSyntax meth && memberNames.Contains(meth.Identifier.Text)) || (m is PropertyDeclarationSyntax prop && memberNames.Contains(prop.Identifier.Text))).ToList();
+            var membersToMove = SelectMembersToMove(classNode, memberNames);
             // Extract namespace
             var namespaceDeclOpt = root?.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();
             var fileScopedNamespaceOpt = root?.DescendantNodes().OfType<FileScopedNamespaceDeclarationSyntax>().FirstOrDefault();
@@ -1226,6 +1226,109 @@ public class StructuralRefactoringEngine
         }
 
         return new Dictionary<FilePathWrapper, string>();
+    }
+
+    /// <summary>
+    /// The complete form of ExtractMembers newType=partial: returns TWO files, the new '{Class}.Partial.cs' and the source file
+    /// rewritten with the moved members removed and 'partial' added to the class (an already-partial class is left as is).
+    /// The new file is the one <see cref="ExtractMembersToPartialAsync"/> builds (same member selection, usings, namespace and
+    /// formatting), with its declaration aligned to the original class (modifiers, type parameters, constraints) so the two
+    /// parts agree. Returns an empty dictionary when the file or class is not found, like the single-file method.
+    /// </summary>
+    public async Task<Dictionary<FilePathWrapper, string>> ExtractMembersToPartialWithSourceAsync(FilePathWrapper filePath, string className, string[] memberNames, CancellationToken cancellationToken = default)
+    {
+        var partialFiles = await ExtractMembersToPartialAsync(filePath, className, memberNames, cancellationToken);
+        if (partialFiles.Count == 0)
+        {
+            return partialFiles;
+        }
+
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
+        var root = document == null ? null : await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
+        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        if (root == null || classNode == null)
+        {
+            return new Dictionary<FilePathWrapper, string>();
+        }
+
+        // Source file: the moved members leave (their comments travelled with them into the new file) and the class becomes partial.
+        var membersToMove = SelectMembersToMove(classNode, memberNames);
+        var rewrittenClass = WithPartialModifier(classNode.RemoveNodes(membersToMove, SyntaxRemoveOptions.KeepNoTrivia)!);
+        var rewrittenSource = root.ReplaceNode(classNode, rewrittenClass).ToFullString();
+
+        // New file: align the generated declaration with the original.
+        var partialPath = partialFiles.Keys.First();
+        var partialRoot = SyntaxFactory.ParseCompilationUnit(partialFiles[partialPath]);
+        var generatedPart = partialRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().First(c => c.Identifier.Text == className);
+        var alignedPartialText = partialRoot.ReplaceNode(generatedPart, AlignPartialDeclaration(generatedPart, classNode)).ToFullString();
+
+        return new Dictionary<FilePathWrapper, string>
+        {
+            { partialPath, alignedPartialText },
+            { filePath, rewrittenSource }
+        };
+    }
+
+    // The members ExtractMembers newType=partial moves: the methods and properties named in memberNames. Shared by
+    // ExtractMembersToPartialAsync (builds the new file) and ExtractMembersToPartialWithSourceAsync (removes them from the source).
+    private static List<MemberDeclarationSyntax> SelectMembersToMove(ClassDeclarationSyntax classNode, string[] memberNames)
+    {
+        return classNode.Members.Where(m => (m is MethodDeclarationSyntax meth && memberNames.Contains(meth.Identifier.Text)) || (m is PropertyDeclarationSyntax prop && memberNames.Contains(prop.Identifier.Text))).ToList();
+    }
+
+    // Returns the class with the 'partial' modifier added directly before the 'class' keyword (the only position C# accepts);
+    // an already-partial class is returned unchanged, and every existing modifier is kept.
+    private static ClassDeclarationSyntax WithPartialModifier(ClassDeclarationSyntax classNode)
+    {
+        if (classNode.Modifiers.Any(SyntaxKind.PartialKeyword))
+        {
+            return classNode;
+        }
+
+        if (classNode.Modifiers.Count > 0)
+        {
+            return classNode.AddModifiers(SyntaxFactory.Token(SyntaxKind.PartialKeyword).WithTrailingTrivia(SyntaxFactory.Space));
+        }
+
+        // No modifiers yet: the indentation (leading trivia) of the 'class' keyword moves onto the new first token.
+        var classKeyword = classNode.Keyword;
+        return classNode
+            .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PartialKeyword).WithLeadingTrivia(classKeyword.LeadingTrivia).WithTrailingTrivia(SyntaxFactory.Space)))
+            .WithKeyword(classKeyword.WithLeadingTrivia(SyntaxFactory.TriviaList()));
+    }
+
+    // Makes the generated 'public partial class X' part agree with the original declaration: the modifiers (accessibility,
+    // static/abstract/sealed, plus 'partial'), the type parameter list and the constraint clauses. Without this a generic or
+    // non-public class gets a mismatching second part (CS0260/CS0262/CS0264). The base list is deliberately not copied: the
+    // original part keeps it. The copied header tokens are normalised on their own, the generated trivia around them is kept.
+    // TODO type-parameter and constraint attributes/comments are normalised away, not carried to the partial part
+    private static ClassDeclarationSyntax AlignPartialDeclaration(ClassDeclarationSyntax generatedPart, ClassDeclarationSyntax originalClass)
+    {
+        var originalModifiers = WithPartialModifier(originalClass).Modifiers;
+        var firstLeading = generatedPart.Modifiers.Count > 0 ? generatedPart.Modifiers[0].LeadingTrivia : generatedPart.Keyword.LeadingTrivia;
+        var modifierTokens = originalModifiers
+            .Select((m, i) => m.WithoutTrivia().WithLeadingTrivia(i == 0 ? firstLeading : SyntaxFactory.TriviaList()).WithTrailingTrivia(SyntaxFactory.Space))
+            .ToList();
+        var aligned = generatedPart
+            .WithModifiers(SyntaxFactory.TokenList(modifierTokens))
+            .WithKeyword(generatedPart.Keyword.WithLeadingTrivia(SyntaxFactory.TriviaList()));
+
+        if (originalClass.TypeParameterList is not { } typeParameters)
+        {
+            return aligned;
+        }
+
+        // Whatever followed the identifier in the generated part (normally the line break before '{') now follows the header's last token.
+        var headerEnd = generatedPart.Identifier.TrailingTrivia;
+        var constraintClauses = originalClass.ConstraintClauses
+            .Select((c, i) => c.NormalizeWhitespace().WithTrailingTrivia(i == originalClass.ConstraintClauses.Count - 1 ? headerEnd : SyntaxFactory.TriviaList(SyntaxFactory.Space)))
+            .ToList();
+        var typeParameterList = typeParameters.NormalizeWhitespace().WithTrailingTrivia(constraintClauses.Count == 0 ? headerEnd : SyntaxFactory.TriviaList(SyntaxFactory.Space));
+        return aligned
+            .WithIdentifier(aligned.Identifier.WithTrailingTrivia(SyntaxFactory.TriviaList()))
+            .WithTypeParameterList(typeParameterList)
+            .WithConstraintClauses(SyntaxFactory.List(constraintClauses));
     }
 
     public async Task<DocumentEditResult> IntroduceParameterObjectAsync(FilePathWrapper filePath, string methodName, string? newTypeName = null, string[]? parameterNames = null, CancellationToken cancellationToken = default)

@@ -905,7 +905,7 @@ public class AdvancedRefactoringTools
                     };
                 }
 
-                var partialChanges = await _advancedStructuralEngine.ExtractMembersToPartialAsync(resolvedFilePath, className, memberNames, cancellationToken: cancellationToken);
+                var partialChanges = await _advancedStructuralEngine.ExtractMembersToPartialWithSourceAsync(resolvedFilePath, className, memberNames, cancellationToken: cancellationToken);
                 if (!autoStage)
                 {
                     return new SentinelCallToolResult<AppliedChangeSummary>()
