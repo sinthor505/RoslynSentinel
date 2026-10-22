@@ -487,7 +487,7 @@ public class AdvancedStructuralNormalizeCharacterizationTests
                 "{",
                 "    public class Other",
                 "    {",
-                "        public int Get() => 40 + 2 * 2;",
+                "        public int Get() => (40 + 2) * 2;",
                 "    " + UntouchedLine,
                 "    }",
                 "}"));

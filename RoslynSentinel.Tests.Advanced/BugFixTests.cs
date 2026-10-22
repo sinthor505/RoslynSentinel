@@ -3362,7 +3362,159 @@ public class Calculator
                 var result = await _advancedStructuralEngine.InlineMethodAsync("Calculator.cs", "Double");
                 Assert.That(result, Is.Not.Null, "Should return result");
                 var resultText = string.Join("\n", result.Values);
-                Assert.That(resultText, Does.Contain("x * 2"), "Should successfully inline single-expression method");
+                Assert.That(resultText, Does.Contain("(value * 2) + 5"), "Should inline the single-expression method with the argument substituted for the parameter, parenthesized because the operators differ");
+                Assert.That(resultText, Does.Not.Contain("Double"), "Method and its call should be gone");
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_NamedAndReorderedArguments_AreBoundByParameter()
+            {
+                const string code = @"
+public class Calculator
+{
+    public int Sub(int a, int b) => a - b;
+
+    public int Run(int x, int y)
+    {
+        return Sub(b: y, a: x);
+    }
+}";
+                SetSource(code, "Calculator.cs");
+                var result = await _advancedStructuralEngine.InlineMethodAsync("Calculator.cs", "Sub");
+                var resultText = string.Join("\n", result.Values);
+                Assert.That(resultText, Does.Contain("return x - y;"), "Named arguments must bind by parameter, not by position");
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_TwoParameters_SubstitutesAndParenthesizesNonPrimaryArguments()
+            {
+                const string code = @"
+public class Calculator
+{
+    public int Add(int a, int b) => a + b;
+
+    public void Run(int first)
+    {
+        var p = Add(first, 3);
+        var q = Add(first * 2, 3);
+    }
+}";
+                SetSource(code, "Calculator.cs");
+                var result = await _advancedStructuralEngine.InlineMethodAsync("Calculator.cs", "Add");
+                var resultText = string.Join("\n", result.Values);
+                Assert.That(resultText, Does.Contain("var p = first + 3;"));
+                Assert.That(resultText, Does.Contain("var q = (first * 2) + 3;"), "A binary-expression argument must be parenthesized when substituted");
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_RightOperandOfSameOperator_IsParenthesized()
+            {
+                const string code = @"
+public class Calculator
+{
+    public int Answer() => 40 + 2;
+
+    public int Run()
+    {
+        return 1 + Answer();
+    }
+}";
+                SetSource(code, "Calculator.cs");
+                var result = await _advancedStructuralEngine.InlineMethodAsync("Calculator.cs", "Answer");
+                var resultText = string.Join("\n", result.Values);
+                Assert.That(resultText, Does.Contain("return 1 + (40 + 2);"), "Right operand keeps its grouping: 1 + 40 + 2 would differ for non-associative operators");
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_NonPrimaryTemplateUnderUnaryAndCastParents_IsParenthesized()
+            {
+                const string code = @"
+public class Calculator
+{
+    public int Answer() => 40 + 2;
+
+    public void Run()
+    {
+        var negated = -Answer();
+        var widened = (long)Answer();
+    }
+}";
+                SetSource(code, "Calculator.cs");
+                var result = await _advancedStructuralEngine.InlineMethodAsync("Calculator.cs", "Answer");
+                var resultText = string.Join("\n", result.Values);
+                Assert.That(resultText, Does.Contain("var negated = -(40 + 2);"));
+                Assert.That(resultText, Does.Contain("var widened = (long)(40 + 2);"));
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_RefParameter_IsRefused()
+            {
+                const string code = @"
+public class Counter
+{
+    public void Bump(ref int x) => x++;
+
+    public void Run()
+    {
+        var v = 1;
+        Bump(ref v);
+    }
+}";
+                SetSource(code, "Counter.cs");
+                await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Counter.cs", "Bump"));
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_OptionalParameter_IsRefused()
+            {
+                const string code = @"
+public class Greeter
+{
+    public string Greet(string name = ""world"") => name;
+
+    public string Run()
+    {
+        return Greet();
+    }
+}";
+                SetSource(code, "Greeter.cs");
+                await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Greeter.cs", "Greet"));
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_MethodGroupReference_IsRefused()
+            {
+                const string code = @"
+public class Calculator
+{
+    public int Double(int x) => x * 2;
+
+    public int Apply(System.Func<int, int> f, int v) => f(v);
+
+    public int Run()
+    {
+        return Apply(Double, 4);
+    }
+}";
+                SetSource(code, "Calculator.cs");
+                await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Calculator.cs", "Double"));
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_ParameterUsedTwiceWithNonTrivialArgument_IsRefused()
+            {
+                const string code = @"
+public class Calculator
+{
+    public int Square(int x) => x * x;
+
+    public int Run(int a)
+    {
+        return Square(a + 1);
+    }
+}";
+                SetSource(code, "Calculator.cs");
+                await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Calculator.cs", "Square"));
             }
 
             [Test]

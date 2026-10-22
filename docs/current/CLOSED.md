@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `Inline(kind: method)` argument binding and precedence parentheses - resolved (2026-10-21)
+
+- `StructuralRefactoringEngine.InlineMethodAsync` now binds each call's arguments to the method's parameters (named/reordered arguments included), parenthesizes non-simple substituted arguments, and parenthesizes the inlined expression by parent context (same-operator left operand stays bare, so `40 + 2 + 1` is byte-stable). It refuses with `ToolTargetIneligibleException` for ref/out/in, params, optional, extension, generic and async methods, non-explicit arguments, method-group/`nameof`/conditional-access references, and a parameter used 0 or 2+ times with a non-identifier, non-literal argument. Evidence: `BugFixTests` (named+reordered, two parameters, ref/optional/method-group refusals, twice-used parameter, `1 + Answer()`, unary and cast parents) and `AdvancedStructuralNormalizeCharacterizationTests.InlineMethod_WithCallers_ByteExact` (`(40 + 2) * 2`). Open: private-member accessibility from another type, cross-project call sites, first-same-named-method lookup (TODO.md).
+
 ## `CreateFile` global namespace, `Inline` description, InlineParameter test name - resolved (2026-10-21)
 
 - `CreateFile` for a `.cs` file no longer requires `namespaceName`: omitted, null or whitespace creates the type in the global namespace (`WorkspaceFileEditImpl.CreateFile`; both tool declarations' `namespaceName` descriptions say so). Evidence: `CreateFileDeleteFileTests.CreateFileTool_NoNamespaceForCsFile_CreatesGlobalNamespaceTypeAsync` replaced the old refusal pin.

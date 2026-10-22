@@ -1586,6 +1586,97 @@ public class StructuralRefactoringEngine
     }
 
     /// <summary>
+    /// Refuses (before any change set is built) the method shapes whose call sites cannot be inlined by plain
+    /// argument substitution: extension, generic and async methods, and ref/out/in, params or optional parameters.
+    /// </summary>
+    private static void ThrowIfInlineMethodIneligible(IMethodSymbol methodSymbol)
+    {
+        var name = methodSymbol.Name;
+        if (methodSymbol.IsExtensionMethod)
+        {
+            throw new ToolTargetIneligibleException($"Cannot inline '{name}': extension methods are not supported (the receiver is bound to the first parameter).");
+        }
+
+        if (methodSymbol.IsGenericMethod)
+        {
+            throw new ToolTargetIneligibleException($"Cannot inline '{name}': generic methods are not supported (type arguments are not substituted).");
+        }
+
+        if (methodSymbol.IsAsync)
+        {
+            throw new ToolTargetIneligibleException($"Cannot inline '{name}': async methods are not supported.");
+        }
+
+        foreach (var parameter in methodSymbol.Parameters)
+        {
+            if (parameter.RefKind != RefKind.None)
+            {
+                throw new ToolTargetIneligibleException($"Cannot inline '{name}': parameter '{parameter.Name}' is a {parameter.RefKind} parameter, which cannot be replaced by an argument expression.");
+            }
+
+            if (parameter.IsParams)
+            {
+                throw new ToolTargetIneligibleException($"Cannot inline '{name}': parameter '{parameter.Name}' is a params array.");
+            }
+
+            if (parameter.IsOptional)
+            {
+                throw new ToolTargetIneligibleException($"Cannot inline '{name}': parameter '{parameter.Name}' is optional (its default value would have to be substituted).");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds the per-call-site expression: the method's expression with each parameter reference replaced by the
+    /// call's argument (parenthesized unless it is already a primary expression). Arguments are read from the
+    /// rewritten invocation so a nested inlined call inside an argument is carried over.
+    /// </summary>
+    private static ExpressionSyntax SubstituteInlinedArguments(
+        ExpressionSyntax template,
+        IReadOnlyDictionary<IdentifierNameSyntax, int> parameterOrdinalById,
+        IReadOnlyDictionary<int, int> argumentIndexByOrdinal,
+        InvocationExpressionSyntax rewrittenInvocation)
+    {
+        if (parameterOrdinalById.Count == 0)
+        {
+            return template;
+        }
+
+        return template.ReplaceNodes(parameterOrdinalById.Keys, (parameterReference, _) =>
+        {
+            var argument = rewrittenInvocation.ArgumentList.Arguments[argumentIndexByOrdinal[parameterOrdinalById[parameterReference]]].Expression;
+            var needsParentheses = argument is not (IdentifierNameSyntax or LiteralExpressionSyntax or MemberAccessExpressionSyntax
+                or InvocationExpressionSyntax or ElementAccessExpressionSyntax or ThisExpressionSyntax or ParenthesizedExpressionSyntax);
+            return needsParentheses
+                ? SyntaxFactory.ParenthesizedExpression(argument.WithoutTrivia()).WithTriviaFrom(parameterReference)
+                : argument.WithTriviaFrom(parameterReference);
+        });
+    }
+
+    /// <summary>
+    /// Wraps the inlined expression in parentheses (outer trivia is applied by the caller) when it is not primary
+    /// and the call it replaces sits where precedence could change its meaning. No wrap in statement-like slots
+    /// (argument, initializer, arrow body, return, expression statement, assignment right-hand side, interpolation,
+    /// parentheses) nor for a same-operator binary expression that is the LEFT operand of a binary parent
+    /// (left associativity keeps <c>a + b + c</c> meaning <c>(a + b) + c</c>).
+    /// </summary>
+    private static ExpressionSyntax ParenthesizeInlinedExpressionForContext(ExpressionSyntax inlined, InvocationExpressionSyntax original)
+    {
+        if (inlined is IdentifierNameSyntax or LiteralExpressionSyntax or InvocationExpressionSyntax or MemberAccessExpressionSyntax
+            or ElementAccessExpressionSyntax or ThisExpressionSyntax or ParenthesizedExpressionSyntax)
+        {
+            return inlined;
+        }
+
+        var parent = original.Parent;
+        var noWrap = parent is ArgumentSyntax or EqualsValueClauseSyntax or ArrowExpressionClauseSyntax or ReturnStatementSyntax
+                or ExpressionStatementSyntax or InterpolationSyntax or ParenthesizedExpressionSyntax
+            || (parent is AssignmentExpressionSyntax assignment && assignment.Right == original)
+            || (parent is BinaryExpressionSyntax binary && binary.Left == original && inlined is BinaryExpressionSyntax inlinedBinary && inlinedBinary.Kind() == binary.Kind());
+        return noWrap ? inlined : SyntaxFactory.ParenthesizedExpression(inlined.WithoutTrivia());
+    }
+
+    /// <summary>
     /// Inlines a simple method (expression-body or single-return-statement) by replacing ALL call sites
     /// solution-wide with the method's expression, then removing the method declaration.
     /// Returns a dictionary of filePath->updatedContent for every affected file.
@@ -1633,12 +1724,27 @@ public class StructuralRefactoringEngine
             throw new ToolNotFoundException($"Cannot inline '{methodName}': failed to resolve semantic symbol.");
         }
 
+        ThrowIfInlineMethodIneligible(methodSymbol);
+
+        // Parameter references inside the template, bound with the DEFINING document's model (ordinal of the parameter they name).
+        var expressionTemplate = expressionToInline; // capture once
+        var parameterOrdinalById = new Dictionary<IdentifierNameSyntax, int>();
+        foreach (var identifier in expressionTemplate.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>())
+        {
+            if (semanticModel.GetSymbolInfo(identifier, cancellationToken).Symbol is IParameterSymbol parameter
+                && SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, methodSymbol))
+            {
+                parameterOrdinalById[identifier] = parameter.Ordinal;
+            }
+        }
+
         // Find ALL references across the solution grouped by document
         var references = await SymbolFinder.FindReferencesAsync(methodSymbol, solution, cancellationToken);
         var byDocument = references.SelectMany(r => r.Locations).Where(l => l.Document.FilePath != null).GroupBy(l => l.Document.Id).ToDictionary(g => g.Key, g => g.ToList());
         var updatedRoots = new Dictionary<DocumentId, SyntaxNode>();
-        var expressionTemplate = expressionToInline; // capture once
-        // Process each document that has call sites (including the defining document)
+
+        // Pass 1: plan every call site (invocation -> argument index per parameter ordinal) and refuse before any change set exists.
+        var plannedSites = new Dictionary<DocumentId, List<(InvocationExpressionSyntax Invocation, Dictionary<int, int> ArgumentIndexByOrdinal)>>();
         foreach (var (docId, locations) in byDocument)
         {
             var doc = solution.GetDocument(docId);
@@ -1648,28 +1754,88 @@ public class StructuralRefactoringEngine
             }
 
             var docRoot = await doc.GetSyntaxRootAsync(cancellationToken);
-            if (docRoot == null)
+            var docModel = await doc.GetSemanticModelAsync(cancellationToken);
+            if (docRoot == null || docModel == null)
             {
                 continue;
             }
 
-            var callSiteNodes = new List<InvocationExpressionSyntax>();
+            var sites = new List<(InvocationExpressionSyntax Invocation, Dictionary<int, int> ArgumentIndexByOrdinal)>();
             foreach (var location in locations)
             {
-                var node = docRoot.FindNode(location.Location.SourceSpan).AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
-                if (node != null)
+                var token = docRoot.FindToken(location.Location.SourceSpan.Start);
+                var referenceNode = token.Parent;
+                if (referenceNode == null || referenceNode.IsPartOfStructuredTrivia())
                 {
-                    callSiteNodes.Add(node);
+                    continue; // e.g. a cref in a doc comment: nothing to replace
+                }
+
+                // A reference must be the callee of an invocation of this very method; method groups, nameof and
+                // conditional access (a?.M(x)) cannot be replaced by the expression.
+                var invocation = referenceNode.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault();
+                if (invocation == null
+                    || !invocation.Expression.Span.Contains(token.Span)
+                    || invocation.Expression is MemberBindingExpressionSyntax
+                    || docModel.GetOperation(invocation, cancellationToken) is not Microsoft.CodeAnalysis.Operations.IInvocationOperation invocationOperation
+                    || !SymbolEqualityComparer.Default.Equals(invocationOperation.TargetMethod.OriginalDefinition, methodSymbol))
+                {
+                    throw new ToolTargetIneligibleException($"Cannot inline '{methodName}': a reference to it in '{Path.GetFileName(doc.FilePath)}' is not a plain call (method group, nameof or conditional access).");
+                }
+
+                var argumentIndexByOrdinal = new Dictionary<int, int>();
+                foreach (var argument in invocationOperation.Arguments)
+                {
+                    if (argument.ArgumentKind != Microsoft.CodeAnalysis.Operations.ArgumentKind.Explicit
+                        || argument.Parameter == null
+                        || argument.Syntax is not ArgumentSyntax argumentSyntax)
+                    {
+                        throw new ToolTargetIneligibleException($"Cannot inline '{methodName}': a call in '{Path.GetFileName(doc.FilePath)}' passes an argument that is not an explicit argument.");
+                    }
+
+                    argumentIndexByOrdinal[argument.Parameter.Ordinal] = invocation.ArgumentList.Arguments.IndexOf(argumentSyntax);
+                }
+
+                // Only identifiers and literals may be duplicated or dropped; any other argument could change side effects or cost.
+                foreach (var parameter in methodSymbol.Parameters)
+                {
+                    if (!argumentIndexByOrdinal.TryGetValue(parameter.Ordinal, out var argumentIndex) || argumentIndex < 0)
+                    {
+                        throw new ToolTargetIneligibleException($"Cannot inline '{methodName}': a call in '{Path.GetFileName(doc.FilePath)}' has no argument for parameter '{parameter.Name}'.");
+                    }
+
+                    var useCount = parameterOrdinalById.Values.Count(ordinal => ordinal == parameter.Ordinal);
+                    var argumentExpression = invocation.ArgumentList.Arguments[argumentIndex].Expression;
+                    if (useCount != 1 && argumentExpression is not (IdentifierNameSyntax or LiteralExpressionSyntax))
+                    {
+                        throw new ToolTargetIneligibleException($"Cannot inline '{methodName}': parameter '{parameter.Name}' is used {useCount} times in the method but a call in '{Path.GetFileName(doc.FilePath)}' passes the non-trivial argument '{argumentExpression}'; only an identifier or literal argument can be duplicated or dropped.");
+                    }
+                }
+
+                if (sites.All(s => s.Invocation != invocation))
+                {
+                    sites.Add((invocation, argumentIndexByOrdinal));
                 }
             }
 
-            if (callSiteNodes.Count == 0)
+            if (sites.Count > 0)
             {
-                continue;
+                plannedSites[docId] = sites;
             }
+        }
+
+        // Pass 2: replace each call with the per-site expression.
+        // TODO no accessibility check: the inlined expression may reference members that are private to the defining type when a call site is in another type
+        foreach (var (docId, sites) in plannedSites)
+        {
+            var docRoot = await solution.GetDocument(docId)!.GetSyntaxRootAsync(cancellationToken);
+            var siteByInvocation = sites.ToDictionary(s => s.Invocation, s => s.ArgumentIndexByOrdinal);
 
             // The inlined expression is the only changed node and the only one formatted; the rest of the file keeps its text.
-            updatedRoots[docId] = docRoot.ReplaceNodes(callSiteNodes, (original, _) => expressionTemplate.WithTriviaFrom(original).WithAdditionalAnnotations(Formatter.Annotation));
+            updatedRoots[docId] = docRoot!.ReplaceNodes(
+                sites.Select(s => s.Invocation),
+                (original, rewritten) => ParenthesizeInlinedExpressionForContext(
+                        SubstituteInlinedArguments(expressionTemplate, parameterOrdinalById, siteByInvocation[original], rewritten), original)
+                    .WithTriviaFrom(original).WithAdditionalAnnotations(Formatter.Annotation));
         }
 
         // Remove the method declaration from the defining document, on top of its inlined call sites when it has any.
