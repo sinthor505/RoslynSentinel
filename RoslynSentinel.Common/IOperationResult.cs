@@ -1,24 +1,6 @@
 namespace RoslynSentinel.Common;
 
 /// <summary>
-/// The one shared status carrier for every result at every layer (engine, tool and wire). <see cref="IsError"/> is
-/// derived from <see cref="Status"/> so the two cannot disagree, and it maps to the MCP <c>isError</c> flag. After an
-/// engine call, failure means an exception was thrown, so a single-target engine result is always
-/// <see cref="ResultStatus.Success"/> or <see cref="ResultStatus.AlreadyInState"/>.
-/// </summary>
-public interface IOperationResult
-{
-    /// <summary>The canonical outcome.</summary>
-    ResultStatus Status
-    {
-        get;
-    }
-
-    /// <summary>True when the operation did not succeed. Derived from <see cref="Status"/>; matches the MCP <c>isError</c> flag.</summary>
-    bool IsError => Status.IsErrorStatus();
-}
-
-/// <summary>
 /// The exception-side counterpart of <see cref="IOperationResult"/>: a failure carried by an exception. Implemented by
 /// ToolException and by the wire ResultError.
 /// </summary>
