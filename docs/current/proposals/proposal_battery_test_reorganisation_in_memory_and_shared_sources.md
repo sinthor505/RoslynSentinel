@@ -98,7 +98,8 @@ Proposed (not decided in detail). Part A fixes the leak; B-D are independent and
   file is what gets overwritten), so it was not done. `WorkingDirectoryLeakGuardTests` now tests the wipe helper directly
   and the old stale-CRLF test is renamed to say it proves the Setup wipe. Fake `RenameSymbol` path DONE (4c1fa3fa): `FakeWorkspaceManager.ResolveFromWireAsync` now
   uses `SymbolResolver`; the two RenameSymbol tests moved to `RenameSymbolTests` (in-memory, asserts the rewritten text).
-  Remaining: Parts C/D, triage of pinned tool defects.
+  Remaining (updated 2026-10-21): Parts C and D are DONE; only triage of the pinned tool defects (the `// TODO` tests) and
+  open question 8 (non-Battery projects) remain.
 - **Part A progress (2026-10-20, earlier notes).** The fixture is `RoslynSentinel.Tests.Tools.Advanced/BatteryTwentyFourTests.cs`
   (137 tests when re-surveyed: 115 convertible, 19 read-only engine-preview tests, 3 real-disk). Slice order and
   proposed topic classes, from the second survey: (1) `SyncTypeAndFilenameTests` 3 - DONE 4f97c8ee; (2)
@@ -209,8 +210,7 @@ doc comment to describe all three tiers (table above).
 
 1. Is the survey's classification right? `BatteryTwentyFour` counts are name- and call-based (about 30% of its lines
    read); the other fixtures were mostly classified by call graph. Spot-check before slicing.
-2. Reported but unverified: `BatteryTwentyFourTests.Setup` builds `ValidationEngine` with `_diffEngine` before
-   `_diffEngine` is assigned (null on the first test of a fresh instance).
+2. RESOLVED (checked 2026-10-21): `BatteryTwentyFourTests.Setup` assigns `_diffEngine` before it builds `ValidationEngine`.
 3. `[NonParallelizable]` exclusivity semantics and the real serial cost (the plan also lists this as unverified).
 4. Can the 12 "soft" disk tests in `TwentyFour` really run on `InMemoryWorkspace` via `PathOf`? Does the fake's
    add-document path (`solution.Projects.First()`) place `MoveMember` targets correctly?
