@@ -88,6 +88,9 @@ public class TestRunEngine
         _workspaceManager = workspaceManager;
     }
 
+    /// <summary>Prefix of the stderr line `dotnet test` prints when a `[SetUpFixture]` `[OneTimeTearDown]` throws.</summary>
+    public const string TearDownFailureSignaturePrefix = "TearDown failed for test fixture ";
+
     public async Task<EngineResultWrapper<TestRunResult>> RunAsync(
         ToolScope scope,
         string? scopeName,
@@ -219,6 +222,11 @@ public class TestRunEngine
             .Select(g => new GroupedCountSummary(Signature: g.Key, Count: g.Count(), ExampleRef: g.First().TestName))
             .OrderByDescending(g => g.Count)
             .ToList();
+        // Per-project test failures are already counted above from failedCaseResults; only the
+        // fixture TearDown entries (absent from the TRX) are taken from the per-project summaries.
+        failureSummary.AddRange(projectResults
+            .SelectMany(p => p.Result.FailureSummary)
+            .Where(s => s.Signature.StartsWith(TearDownFailureSignaturePrefix, StringComparison.Ordinal)));
 
         IEnumerable<TestCaseResult> filtered = resultsType switch
         {
@@ -296,6 +304,53 @@ public class TestRunEngine
         }
 
         return null;
+    }
+
+    /// <summary>Parses `[OneTimeTearDown]` failures of a `[SetUpFixture]` out of `dotnet test` stderr. Those failures
+    /// never reach the TRX, so each one becomes a grouped summary entry (merged by fixture and message).</summary>
+    public static List<GroupedCountSummary> ParseFixtureTearDownFailures(string stderr)
+    {
+        var entries = new List<(string Signature, string Fixture)>();
+        if (string.IsNullOrEmpty(stderr))
+        {
+            return [];
+        }
+
+        var lines = stderr.Split('\n');
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i].TrimEnd('\r');
+            if (!line.StartsWith(TearDownFailureSignaturePrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var fixture = line[TearDownFailureSignaturePrefix.Length..].Trim();
+            var messageLines = new List<string>();
+            for (var j = i + 1; j < lines.Length; j++)
+            {
+                var next = lines[j].Trim();
+                if (next.Length == 0 || next.StartsWith("StackTrace:", StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                messageLines.Add(next);
+            }
+
+            var signature = $"{TearDownFailureSignaturePrefix}{fixture}: {string.Join(" ", messageLines)}";
+            if (signature.Length > 200)
+            {
+                signature = signature[..197] + "...";
+            }
+
+            entries.Add((signature, fixture));
+        }
+
+        return entries
+            .GroupBy(e => e.Signature)
+            .Select(g => new GroupedCountSummary(Signature: g.Key, Count: g.Count(), ExampleRef: g.First().Fixture))
+            .ToList();
     }
 
     /// <summary>Runs `dotnet test` against a single project with its own dedicated TRX file, and
@@ -450,6 +505,7 @@ public class TestRunEngine
                 .Select(g => new GroupedCountSummary(Signature: g.Key, Count: g.Count(), ExampleRef: g.First().TestName))
                 .OrderByDescending(g => g.Count)
                 .ToList();
+            failureSummary.AddRange(ParseFixtureTearDownFailures(stderrText));
 
             return new TestRunResult(
                 RunSucceeded: process.ExitCode == 0 && failedCount == 0,

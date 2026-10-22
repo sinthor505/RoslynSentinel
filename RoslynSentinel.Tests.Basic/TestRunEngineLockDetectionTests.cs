@@ -35,4 +35,57 @@ public class TestRunEngineLockDetectionTests
 
         Assert.That(detail, Is.Null);
     }
+
+    [Test]
+    public void ParseFixtureTearDownFailures_SampleStderr_ReturnsOneEntry()
+    {
+        const string stderr = "TearDown failed for test fixture FailingTearDown\nteardown boom\nStackTrace:    at FailingTearDown.Boom() in C:\\x\\Tests.cs:line 7\n\nTest Run Failed.\n";
+
+        var entries = TestRunEngine.ParseFixtureTearDownFailures(stderr);
+
+        Assert.That(entries, Has.Count.EqualTo(1));
+        Assert.That(entries[0].Signature, Does.StartWith(TestRunEngine.TearDownFailureSignaturePrefix).And.Contain("teardown boom"));
+        Assert.That(entries[0].ExampleRef, Is.EqualTo("FailingTearDown"));
+        Assert.That(entries[0].Count, Is.EqualTo(1));
+    }
+
+    [Test]
+    public void ParseFixtureTearDownFailures_CleanOrEmptyStderr_ReturnsEmptyList()
+    {
+        Assert.That(TestRunEngine.ParseFixtureTearDownFailures("Passed!  - Failed: 0, Passed: 3"), Is.Empty);
+        Assert.That(TestRunEngine.ParseFixtureTearDownFailures(string.Empty), Is.Empty);
+    }
+
+    [Test]
+    public void ParseFixtureTearDownFailures_TwoFixtures_ReturnsTwoEntries()
+    {
+        const string stderr = "TearDown failed for test fixture FixtureA\nboom a\nStackTrace: at A\nTearDown failed for test fixture FixtureB\nboom b\nStackTrace: at B\n";
+
+        var entries = TestRunEngine.ParseFixtureTearDownFailures(stderr);
+
+        Assert.That(entries, Has.Count.EqualTo(2));
+        Assert.That(entries[0].ExampleRef, Is.EqualTo("FixtureA"));
+        Assert.That(entries[1].ExampleRef, Is.EqualTo("FixtureB"));
+    }
+
+    [Test]
+    public void ParseFixtureTearDownFailures_MultiLineMessage_JoinsLinesWithSpaces()
+    {
+        var entries = TestRunEngine.ParseFixtureTearDownFailures(
+            "TearDown failed for test fixture F\r\nline one\r\nline two\r\nStackTrace: at X");
+
+        Assert.That(entries, Has.Count.EqualTo(1));
+        Assert.That(entries[0].Signature, Is.EqualTo(TestRunEngine.TearDownFailureSignaturePrefix + "F: line one line two"));
+    }
+
+    [Test]
+    public void ParseFixtureTearDownFailures_SameFixtureTwice_MergesToCountTwo()
+    {
+        const string once = "TearDown failed for test fixture F\nboom\nStackTrace: at F\n";
+
+        var entries = TestRunEngine.ParseFixtureTearDownFailures(once + once);
+
+        Assert.That(entries, Has.Count.EqualTo(1));
+        Assert.That(entries[0].Count, Is.EqualTo(2));
+    }
 }
