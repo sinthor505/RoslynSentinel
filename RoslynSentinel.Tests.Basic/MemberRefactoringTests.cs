@@ -2565,4 +2565,153 @@ public class Helper
             $"containerName '{containerName}' should resolve to EngineResultWrapper<T>. {result.Message}");
         Assert.That(result.UpdatedText, Does.Contain("public int Added"));
     }
+
+    [Test]
+    public async Task AddConstructorParameter_UnmatchedContextSnippet_ThrowsToolNotFound()
+    {
+        SetSource(@"
+public class Service
+{
+    private readonly int _count;
+
+    public Service(int count)
+    {
+        _count = count;
+    }
+}
+", "Service.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.AddConstructorParameterAsync("Service.cs", "Service", "limit", "int", contextSnippet: "NoSuchSnippetAnywhere");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task RemoveConstructorParameter_UnmatchedContextSnippet_ThrowsToolNotFound()
+    {
+        SetSource(@"
+public class Service
+{
+    private readonly int _count;
+
+    public Service(int count)
+    {
+        _count = count;
+    }
+}
+", "Service.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveConstructorParameterAsync("Service.cs", "Service", "count", contextSnippet: "NoSuchSnippetAnywhere");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task GetConstructorParameters_UnmatchedContextSnippet_ThrowsToolNotFound()
+    {
+        SetSource(@"
+public class Service
+{
+    private readonly int _count;
+
+    public Service(int count)
+    {
+        _count = count;
+    }
+}
+", "Service.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.GetConstructorParametersAsync("Service.cs", "Service", contextSnippet: "NoSuchSnippetAnywhere");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task ModifyEnum_UnmatchedContextSnippet_ThrowsToolNotFound()
+    {
+        SetSource(@"
+public enum Color
+{
+    Red,
+    Green
+}
+", "Color.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ModifyEnumAsync("Color.cs", "Color", "Red, Green", contextSnippet: "NoSuchSnippetAnywhere");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task GetMethodParameters_UnmatchedContextSnippet_ThrowsToolNotFound()
+    {
+        SetSource(@"
+public class Calc
+{
+    public int Add(int a, int b) => a + b;
+}
+", "Calc.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.GetMethodParametersAsync("Calc.cs", "Add", contextSnippet: "NoSuchSnippetAnywhere");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task AddMethodParameter_UnmatchedContextSnippet_ThrowsToolNotFound()
+    {
+        SetSource(@"
+public class Calc
+{
+    public int Add(int a, int b) => a + b;
+}
+", "Calc.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.AddMethodParameterAsync("Calc.cs", "Add", "c", "int", contextSnippet: "NoSuchSnippetAnywhere");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task RemoveMethodParameter_UnmatchedContextSnippet_ThrowsToolNotFound()
+    {
+        SetSource(@"
+public class Calc
+{
+    public int Add(int a, int b) => a + b;
+}
+", "Calc.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveMethodParameterAsync("Calc.cs", "Add", "b", contextSnippet: "NoSuchSnippetAnywhere");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
 }

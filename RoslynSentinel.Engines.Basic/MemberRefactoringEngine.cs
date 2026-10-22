@@ -165,24 +165,11 @@ public class MemberRefactoringEngine
     private (ClassDeclarationSyntax? Class, DocumentEditResult? Error) ResolveAddConstructorTargetClass(SyntaxNode root, SourceText sourceText, FilePathWrapper filePath, string className, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken)
     {
         BaseTypeDeclarationSyntax? classNode;
-        try
-        {
-            var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, className, cancellationToken)
-                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
-                .ToList();
-            classNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
-        }
-        catch (ToolException ex)
-        {
-            return (null, new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = ex.Message,
-                ErrorCode = ex.ErrorCode
-            });
-        }
+        var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, className, cancellationToken)
+            .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+            .ToList();
+        classNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
 
         if (classNode is not ClassDeclarationSyntax classDecl)
         {
@@ -513,24 +500,11 @@ public class MemberRefactoringEngine
         }
 
         BaseTypeDeclarationSyntax? classNode;
-        try
-        {
-            var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, className, cancellationToken)
-                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
-                .ToList();
-            classNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
-        }
-        catch (ToolException ex)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = ex.Message,
-                ErrorCode = ex.ErrorCode
-            };
-        }
+        var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, className, cancellationToken)
+            .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+            .ToList();
+        classNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
 
         if (classNode == null || classNode is not ClassDeclarationSyntax classDecl)
         {
@@ -649,18 +623,11 @@ public class MemberRefactoringEngine
         }
 
         BaseTypeDeclarationSyntax? classNode;
-        try
-        {
-            var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, className, cancellationToken)
-                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
-                .ToList();
-            classNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
-        }
-        catch (ToolException ex)
-        {
-            return (EditOutcome.CannotEdit, ex.Message, []);
-        }
+        var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, className, cancellationToken)
+            .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+            .ToList();
+        classNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
 
         if (classNode == null || classNode is not ClassDeclarationSyntax classDecl)
         {
@@ -735,24 +702,11 @@ public class MemberRefactoringEngine
         }
 
         BaseTypeDeclarationSyntax? enumNode = null;
-        try
-        {
-            var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, enumName, cancellationToken)
-                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
-                .ToList();
-            enumNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
-        }
-        catch (ToolException ex)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = ex.Message,
-                ErrorCode = ex.ErrorCode
-            };
-        }
+        var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, enumName, cancellationToken)
+            .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+            .ToList();
+        enumNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
 
         if (enumNode == null || enumNode is not EnumDeclarationSyntax)
         {
@@ -1334,17 +1288,10 @@ public class MemberRefactoringEngine
         }
 
         MemberDeclarationSyntax? memberNode;
-        try
-        {
-            var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, methodName, cancellationToken)
-                .Where(c => c.Kind == CandidateKind.Method).ToList());
-            memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
-        }
-        catch (ToolException ex)
-        {
-            return (EditOutcome.CannotEdit, ex.Message, []);
-        }
+        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, methodName, cancellationToken)
+            .Where(c => c.Kind == CandidateKind.Method).ToList());
+        memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
 
         if (memberNode is not MethodDeclarationSyntax methodDecl)
         {
@@ -1408,23 +1355,10 @@ public class MemberRefactoringEngine
         }
 
         MemberDeclarationSyntax? memberNode;
-        try
-        {
-            var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, methodName, cancellationToken)
-                .Where(c => c.Kind == CandidateKind.Method).ToList());
-            memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
-        }
-        catch (ToolException ex)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = ex.Message,
-                ErrorCode = ex.ErrorCode
-            };
-        }
+        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, methodName, cancellationToken)
+            .Where(c => c.Kind == CandidateKind.Method).ToList());
+        memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
 
         if (memberNode is not MethodDeclarationSyntax methodDecl)
         {
@@ -1507,23 +1441,10 @@ public class MemberRefactoringEngine
         }
 
         MemberDeclarationSyntax? memberNode;
-        try
-        {
-            var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, methodName, cancellationToken)
-                .Where(c => c.Kind == CandidateKind.Method).ToList());
-            memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
-        }
-        catch (ToolException ex)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = ex.Message,
-                ErrorCode = ex.ErrorCode
-            };
-        }
+        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, methodName, cancellationToken)
+            .Where(c => c.Kind == CandidateKind.Method).ToList());
+        memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
 
         if (memberNode is not MethodDeclarationSyntax methodDecl)
         {

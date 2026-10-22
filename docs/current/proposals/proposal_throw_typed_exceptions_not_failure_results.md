@@ -1,17 +1,20 @@
 # Engines and resolvers throw typed exceptions for failure; results carry only successful or legitimately empty outcomes
 
-**Status:** PROPOSED 2026-10-20; reviewed 2026-10-21, open questions 1, 2, 5, 6a and 7 are decided or answered; next step is S0 plus the S1a cancellation audit. Direction (exceptions are the single failure carrier) is already decided in `plans/plan_error_codes_follow_cause.md`, this proposal covers the remaining hop and the payload question.
+**Status:** IN-PROGRESS 2026-10-22; S0a-S0d and S1a are committed (see "Start here"); next step is S1 (stop the 36 catch-and-convert sites). Direction (exceptions are the single failure carrier) is already decided in `plans/plan_error_codes_follow_cause.md`, this proposal covers the remaining hop and the payload question.
 
 ## Start here (implementation, fresh session)
 
 Decided 2026-10-21: no `NoChange` (an engine operation changes something or throws; `AlreadyInTargetState` is the only no-op result, `NoCandidatesFound` throws `ToolNotFoundException`); typed payload properties per exception subtype; the shared interface is `IOperationResult` with derived `IsError` and the new `ResultStatus.PartialFailure`. Sizing is done (open questions 5 and 7 answered).
 
-Do next, in order, one slice per dispatch (see section 5 S0 and S1a and section 6; load `dispatch-implementer` and `dto-conventions` first; measure members and call sites with `explore-haiku` before briefing):
-1. **S0a** exception payload properties (`ToolAmbiguousMatchException`, `DiffApplyException`, `ToolTargetIneligibleException`, snippet-not-matched exception as a DTO projection of `SnippetMatchResult`). Settle which `SnippetMatchResult` fields cross the wire and the offload threshold (open question 2, remainder).
-2. **S0b** `ToolErrorMapper.ToResultError` becomes the single translator.
-3. **S0c** central filter (`ServiceRegistrationExtensionsBasic.cs:432`) uses it; check its `OperationCanceledException` handling.
-4. **S0d** `IOperationResult` and `IOperationError` beside `IResultStatus`; `PartialFailure` plus the in-place `FromFailureCount(failed, succeeded)` change, after the three risk checks in section 6.
-5. **S1a** cancellation audit (about 49 generic catches, the 4 lossy catches, 3 `PersistentWorkspaceManager` sites), then **S1** on the 36 convert sites, `MemberRefactoringEngine` first.
+DONE (verified in source and git log 2026-10-22):
+- **S0a/S0b** exception payloads (`SnippetFailureDetail`, `DiffHunkFailure`, `SuggestedTool`, `MissingTargetKind/Name`, `Candidates`) and `IOperationError`; `ToolErrorMapper.ToResultError` is the translator and attaches `StructuredDetail`.
+- **S0c** `e234ef02` central filter builds a structured failure through `ToolErrorMapper`; `OperationCanceledException` is rethrown only when the request token is cancelled, otherwise `Cancelled` (`TimeoutException` becomes `TimedOut`).
+- **S0d** `4185e5d3` `ResultStatus.PartialFailure` and `FromFailureCount(failed, succeeded)`; `IOperationResult` exists and implementers have moved (`e1b1d499` comments).
+- **S1a** `ff0ac846` (Basic engine and Common, 30 catches) and `a2fa7263` (Advanced engine catches; lossy catches keep the `ToolException` code). Left as `// TODO` design decisions: `PersistentWorkspaceManager` write/delete loops, `OperationBlobWriter`, `ValidateAndApplyHelper` tool-boundary catches.
+
+Do next, in order, one slice per dispatch (load `dispatch-implementer` and `dto-conventions` first; measure members and call sites with `explore-haiku` before briefing):
+1. **S1** on the 36 convert sites, `MemberRefactoringEngine` first (28 sites), starting with the shared `RequireDocument(solution, path)` helper (Q10).
+2. S2, S3, S4, S5 per section 5.
 
 Decided 2026-10-21 (recommendations adopted; details in the numbered Open questions below):
 - **Q6b:** the member is `ErrorCode` (matches `ToolException.ErrorCode` and `ToolErrorCode`); if the wire `ResultError` field is named differently, implement explicitly so the wire name does not change.
