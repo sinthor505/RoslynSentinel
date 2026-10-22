@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json.Serialization;
 
 namespace RoslynSentinel.Common;
 
@@ -338,8 +339,12 @@ public record ResultError(
     string? Detail = null,
     IReadOnlyList<object>? StructuredDetail = null,
     LargeResultInfo? StructuredDetailLargeResult = null
-)
+) : IOperationError
 {
+    /// <summary>The cause category, derived from <see cref="ErrorCode"/>. Not serialized.</summary>
+    [JsonIgnore]
+    public ResultStatus Category => ResultStatusExtensions.FromErrorCode(ErrorCode);
+
     /// <summary>
     /// Builds a <see cref="ResultError"/> for a <paramref name="structuredDetail"/> list that may be
     /// too large to inline (e.g. MoveMember's per-call-site unresolved-entry list). Mirrors

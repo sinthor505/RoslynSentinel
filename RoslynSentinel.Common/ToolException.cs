@@ -10,7 +10,7 @@ namespace RoslynSentinel.Common;
 /// Each subclass below corresponds to a category actually observed across the engine layer (see
 /// docs/TODO.md's error-wrapper entries) -> this is not a speculative taxonomy.
 /// </summary>
-public abstract class ToolException : Exception
+public abstract class ToolException : Exception, IOperationError
 {
     public abstract string ErrorCode
     {
@@ -20,6 +20,12 @@ public abstract class ToolException : Exception
     protected ToolException(string message) : base(message)
     {
     }
+
+    /// <summary>The cause category for this failure; subtypes may override. Defaults to the category implied by <see cref="ErrorCode"/>.</summary>
+    public virtual ResultStatus Category => ResultStatusExtensions.FromErrorCode(ErrorCode);
+
+    /// <summary>Wire-safe payload objects for the tool layer; null when there is none. Subtypes override.</summary>
+    public virtual IReadOnlyList<object>? StructuredDetail => null;
 }
 
 /// <summary>
@@ -75,6 +81,9 @@ public sealed class ToolNotFoundException : ToolException
 
     /// <summary>Set when the not-found cause is a snippet that did not match; null otherwise.</summary>
     public SnippetMatching.SnippetFailureDetail? Snippet { get; }
+
+    /// <summary>Snippet detail as the single structured-detail object; null when the not-found cause is not a snippet.</summary>
+    public override IReadOnlyList<object>? StructuredDetail => Snippet is null ? null : new object[] { Snippet };
 }
 
 /// <summary>
@@ -114,6 +123,18 @@ public sealed class ToolAmbiguousMatchException : ToolException
 
     /// <summary>Set when the ambiguity came from a snippet match; null otherwise.</summary>
     public SnippetMatching.SnippetFailureDetail? Snippet { get; }
+
+    /// <summary>Candidates as objects with the snippet detail appended when set; null when there is neither.</summary>
+    public override IReadOnlyList<object>? StructuredDetail
+    {
+        get
+        {
+            var detail = ToolErrorMapper.ToStructuredDetail(Candidates)?.ToList() ?? new List<object>();
+            if (Snippet is not null)
+                detail.Add(Snippet);
+            return detail.Count == 0 ? null : detail;
+        }
+    }
 }
 
 /// <summary>
@@ -152,6 +173,9 @@ public sealed class DiffApplyException : ToolException
 
     /// <summary>Hunks that could not be applied, for structured retry hints; null when the throw site did not supply them.</summary>
     public IReadOnlyList<DiffHunkFailure>? FailedHunks { get; }
+
+    /// <summary>Failed hunks as objects; null when there are none.</summary>
+    public override IReadOnlyList<object>? StructuredDetail => FailedHunks is { Count: > 0 } hunks ? hunks.Cast<object>().ToList() : null;
 }
 
 /// <summary>

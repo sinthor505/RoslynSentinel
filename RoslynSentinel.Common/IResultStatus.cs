@@ -44,20 +44,23 @@ public enum ResultStatus
 /// as the MCP protocol's <c>CallToolResult.isError</c>; there is deliberately no <c>IsSuccess</c>.
 /// </summary>
 /// <remarks>
+/// <see cref="IOperationResult"/> is the new shared status carrier. IResultStatus is retained during the migration:
+/// it re-declares <see cref="IsError"/> and <see cref="Status"/> (hiding the inherited members) so existing implementers
+/// keep compiling, and the forwarders below satisfy IOperationResult for types that provide only these members.
 /// A type that has its own outcome or status member should compute <see cref="IsError"/> from
 /// <see cref="Status"/> via <see cref="ResultStatusExtensions.IsErrorStatus"/> so the two cannot disagree;
 /// wrappers and types with no status of their own store it.
 /// </remarks>
-public interface IResultStatus
+public interface IResultStatus : IOperationResult
 {
     /// <summary>True when the operation did not succeed. Matches the MCP <c>isError</c> flag.</summary>
-    bool IsError
+    new bool IsError
     {
         get;
     }
 
     /// <summary>The canonical outcome. Consistent with <see cref="IsError"/>.</summary>
-    ResultStatus Status
+    new ResultStatus Status
     {
         get;
     }
@@ -73,6 +76,11 @@ public interface IResultStatus
     {
         get;
     }
+
+    // Forwarders: an implementer that only provides (or explicitly implements) the IResultStatus members still satisfies IOperationResult.
+    bool IOperationResult.IsError => IsError;
+
+    ResultStatus IOperationResult.Status => Status;
 }
 
 /// <summary>Single source of truth for which <see cref="ResultStatus"/> values are errors and how a tool error code maps to one.</summary>
