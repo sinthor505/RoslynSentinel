@@ -49,4 +49,5 @@ and leaked exceptions hurt weak models most. See the finding for evidence per de
 - Deferred items (needs user judgement) are appended below as they arise.
 
 ## Deferred
-(none yet)
+- #12 stray CRLF on a blank line moves out of an extracted selection. Not an `ExtractMethodSafe` bug: `EolUtilities.MatchMiddle` (`RoslynSentinel.Common/EolUtilities.cs` ~214/~226) matches whitespace-only lines by text, so the old blank line's CRLF binds to the first generated blank line. Fix would be global to every `FormatAnnotatedSpansAsync` caller (skip empty-text lines in the LCS match); decide whether that is worth the blast radius or reword the pin (`MsToolAugmentEngineFormatCharacterizationTests.cs`, mixed-EOL test) as an accepted limitation.
+- #9 limit: a nested or private type used by an anonymous initializer may not resolve in the new top-level file; the compile gate refuses the write. Only the first anonymous object in the file is converted.
