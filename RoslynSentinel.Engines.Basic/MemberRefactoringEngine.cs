@@ -1891,23 +1891,10 @@ public class MemberRefactoringEngine
         }
 
         MemberDeclarationSyntax? target = null;
-        try
-        {
-            var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
-                .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
-            target = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
-        }
-        catch (ToolException ex)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = ex.Message,
-                ErrorCode = ex.ErrorCode
-            };
-        }
+        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
+            .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+        target = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
 
         if (target == null)
         {
@@ -1974,23 +1961,10 @@ public class MemberRefactoringEngine
         }
 
         MemberDeclarationSyntax? target = null;
-        try
-        {
-            var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
-                .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
-            target = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
-        }
-        catch (ToolException ex)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = ex.Message,
-                ErrorCode = ex.ErrorCode
-            };
-        }
+        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
+            .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+        target = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
 
         if (target == null)
         {
@@ -2076,51 +2050,25 @@ public class MemberRefactoringEngine
 
         // Try member first, then type declaration
         SyntaxNode? targetNode = null;
-        try
+        var allCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken);
+        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allCandidates.Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+        var memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(DropOwnConstructorsWhenTypeMatches(memberCandidates, allCandidates, contextSnippet, lineBefore, lineAfter), sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
+        if (memberNode != null)
         {
-            var allCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken);
-            var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allCandidates.Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
-            var memberNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(DropOwnConstructorsWhenTypeMatches(memberCandidates, allCandidates, contextSnippet, lineBefore, lineAfter), sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
-            if (memberNode != null)
-            {
-                targetNode = memberNode;
-            }
-        }
-        catch (ToolException ex)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = ex.Message,
-                ErrorCode = ex.ErrorCode
-            };
+            targetNode = memberNode;
         }
 
         if (targetNode == null)
         {
-            try
+            var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
+                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                .ToList();
+            var typeNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
+            if (typeNode != null)
             {
-                var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
-                    .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
-                    .ToList();
-                var typeNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                    (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
-                if (typeNode != null)
-                {
-                    targetNode = typeNode;
-                }
-            }
-            catch (ToolException ex)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.CannotEdit,
-                    FilePath = filePath,
-                    Message = ex.Message,
-                    ErrorCode = ex.ErrorCode
-                };
+                targetNode = typeNode;
             }
         }
 
@@ -2136,15 +2084,7 @@ public class MemberRefactoringEngine
 
         // Insert only the attribute list as a text edit: replacing the target node and formatting it would re-format
         // every member of a type that merely needed one attribute line (see AttributeTextEditBuilder).
-        AttributeTextEditBuilder.TextEdit addEdit;
-        try
-        {
-            addEdit = AttributeTextEditBuilder.BuildAddEdit(0, targetNode, attrList, sourceText, EolUtilities.DetectNormalizableEol(sourceText));
-        }
-        catch (ToolInvalidArgumentException ex)
-        {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = ex.Message, ErrorCode = ex.ErrorCode };
-        }
+        var addEdit = AttributeTextEditBuilder.BuildAddEdit(0, targetNode, attrList, sourceText, EolUtilities.DetectNormalizableEol(sourceText));
 
         var updatedText = AttributeTextEditBuilder.TryApply(sourceText, [addEdit], out var applyError);
         if (updatedText == null)
@@ -2209,34 +2149,21 @@ public class MemberRefactoringEngine
         var newAttr = newAttrList.Attributes.First();
         // Locate target node (member first, then type)
         SyntaxNode? targetNode = null;
-        try
+        var allCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken);
+        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allCandidates.Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+        var memberTarget = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
+        if (memberTarget != null)
         {
-            var allCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken);
-            var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allCandidates.Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
-            var memberTarget = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
-            if (memberTarget != null)
-            {
-                targetNode = memberTarget;
-            }
-            else
-            {
-                var typeCandidates = allCandidates
-                    .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
-                    .ToList();
-                targetNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                    (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
-            }
+            targetNode = memberTarget;
         }
-        catch (ToolException ex)
+        else
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = ex.Message,
-                ErrorCode = ex.ErrorCode
-            };
+            var typeCandidates = allCandidates
+                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                .ToList();
+            targetNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
         }
 
         if (targetNode == null)
@@ -2332,44 +2259,18 @@ public class MemberRefactoringEngine
         }
 
         MemberDeclarationSyntax? memberTarget = null;
-        try
-        {
-            var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
-                .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
-            memberTarget = SyntaxTargetResolver.ResolveBySnippetOrThrow(DropOwnConstructorsWhenTypeMatches(memberCandidates, SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken), contextSnippet, lineBefore, lineAfter), sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
-        }
-        catch (ToolException ex)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = ex.Message,
-                ErrorCode = ex.ErrorCode
-            };
-        }
+        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
+            .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+        memberTarget = SyntaxTargetResolver.ResolveBySnippetOrThrow(DropOwnConstructorsWhenTypeMatches(memberCandidates, SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken), contextSnippet, lineBefore, lineAfter), sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
 
         if (memberTarget == null)
         {
-            try
-            {
-                var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
-                    .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
-                    .ToList();
-                memberTarget = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                    (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
-            }
-            catch (ToolException ex)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.CannotEdit,
-                    FilePath = filePath,
-                    Message = ex.Message,
-                    ErrorCode = ex.ErrorCode
-                };
-            }
+            var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
+                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+                .ToList();
+            memberTarget = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
         }
 
         if (memberTarget == null)
@@ -2420,24 +2321,11 @@ public class MemberRefactoringEngine
         }
 
         BaseTypeDeclarationSyntax? container = null;
-        try
-        {
-            var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, containerName, cancellationToken)
-                .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
-                .ToList();
-            container = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
-        }
-        catch (ToolException ex)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = ex.Message,
-                ErrorCode = ex.ErrorCode
-            };
-        }
+        var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, containerName, cancellationToken)
+            .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
+            .ToList();
+        container = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
 
         if (container == null)
         {

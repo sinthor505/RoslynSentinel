@@ -393,26 +393,109 @@ public class C
         """;
 
     [Test]
-    public async Task AddModifier_SnippetMatchesBothOverloads_ReturnsAmbiguousErrorCode()
+    public async Task AddModifier_SnippetMatchesBothOverloads_ThrowsAmbiguous()
     {
         SetSource(OverloadedRunSource, "RunAmbiguous.cs");
 
-        var result = await _memberRefactoringEngine.AddModifierAsync("RunAmbiguous.cs", "Run", "static", contextSnippet: "public void Run(");
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+        {
+            await _memberRefactoringEngine.AddModifierAsync("RunAmbiguous.cs", "Run", "static", contextSnippet: "public void Run(");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
-        Assert.That(result.Message, Does.Contain("ambiguous").IgnoreCase);
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.Message, Does.Contain("ambiguous").IgnoreCase);
     }
 
     [Test]
-    public async Task AddModifier_SnippetMatchesNothing_ReturnsNotFoundErrorCode()
+    public async Task AddModifier_SnippetMatchesNothing_ThrowsNotFound()
     {
         SetSource(OverloadedRunSource, "RunNotFound.cs");
 
-        var result = await _memberRefactoringEngine.AddModifierAsync("RunNotFound.cs", "Run", "static", contextSnippet: "public void Run(double d)");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.AddModifierAsync("RunNotFound.cs", "Run", "static", contextSnippet: "public void Run(double d)");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task RemoveModifier_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        SetSource(OverloadedRunSource, "RunRemoveNotFound.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveModifierAsync("RunRemoveNotFound.cs", "Run", "static", contextSnippet: "public void Run(double d)");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task AddAttribute_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        SetSource(OverloadedRunSource, "RunAddAttrNotFound.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.AddAttributeAsync("RunAddAttrNotFound.cs", "Run", "Obsolete", contextSnippet: "public void Run(double d)");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task ReplaceAttribute_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        SetSource(OverloadedRunSource, "RunReplaceAttrNotFound.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ReplaceAttributeAsync("RunReplaceAttrNotFound.cs", "Run", "Obsolete", "[Obsolete(\"x\")]", contextSnippet: "public void Run(double d)");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task RemoveAttribute_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        SetSource(OverloadedRunSource, "RunRemoveAttrNotFound.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveAttributeAsync("RunRemoveAttrNotFound.cs", "Run", "Obsolete", contextSnippet: "public void Run(double d)");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task InsertMemberAfter_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        const string holderSource = """
+            namespace TestProj;
+
+            public class Holder
+            {
+                public void Run(int x) { }
+            }
+            """;
+        SetSource(holderSource, "HolderNotFound.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.InsertMemberAfterAsync("HolderNotFound.cs", "Holder", "Run", "public void Added() { }", contextSnippet: "public class Missing");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
     }
 
     [Test]
