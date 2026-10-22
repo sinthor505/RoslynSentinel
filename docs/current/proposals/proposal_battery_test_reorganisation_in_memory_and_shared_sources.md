@@ -139,8 +139,8 @@ Proposed (not decided in detail). Part A fixes the leak; B-D are independent and
   (`ROSLYNSENTINEL_FAKE_WRITE_AUDIT`, `dotnet test` on that project): the audit file was never created, so no
   `ReadOnly` fake received a write attempt, swallowed or not. The audit run also reported 2 failures in 11 minutes
   that `RunTest` (82 s, 1072/1072) does not reproduce; the cause is unexplained. The obsolete parameterless
-  constructor and its guard test are removed. Gap: `RunTest` cannot pass an environment variable, so the audit needed a
-  shell `dotnet test`.
+  constructor and its guard test are removed. The audit was run via a shell `dotnet test`; `RunTest` now has an
+  `environment` parameter, so a rerun can go through it (tracked in TODO.md).
 - Limit: covers only tests that already use the fake. The hybrid tier (real manager + `SetTestSolution`, where the 784
   read-only tests sit) is untouched; moving them to a `ReadOnly` fake would turn a silent write into a failure, but the
   engines may need more of `IWorkspaceManager` than the fake implements (unverified).
