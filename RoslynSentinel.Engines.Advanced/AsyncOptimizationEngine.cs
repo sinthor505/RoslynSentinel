@@ -93,12 +93,12 @@ public class AsyncOptimizationEngine
 
         if (returnTypeStr == "Task")
         {
-            newReturnType = SyntaxFactory.ParseTypeName("ValueTask");
+            newReturnType = SyntaxFactory.ParseTypeName("ValueTask").WithTriviaFrom(methodNode.ReturnType);
         }
         else if (returnTypeStr.StartsWith("Task<"))
         {
             var innerType = returnTypeStr.Substring(5, returnTypeStr.Length - 6);
-            newReturnType = SyntaxFactory.ParseTypeName($"ValueTask<{innerType}>");
+            newReturnType = SyntaxFactory.ParseTypeName($"ValueTask<{innerType}>").WithTriviaFrom(methodNode.ReturnType);
         }
         else if (returnTypeStr == "ValueTask" || returnTypeStr.StartsWith("ValueTask<"))
         {

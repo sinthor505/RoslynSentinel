@@ -555,8 +555,7 @@ public class Worker
         SetSource(src, "Test.cs");
         var result = await _asyncOptimizationEngine.OptimizeToValueTaskAsync("Test.cs", "ProcessAsync");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        // TODO ValueTask return type drops the space before the method name (ParseTypeName trivia); tighten to Contains("ValueTask<int> ProcessAsync") once fixed
-        Assert.That(result.UpdatedText, Does.Match(@"ValueTask<int>\s*ProcessAsync"));
+        Assert.That(result.UpdatedText, Does.Contain("ValueTask<int> ProcessAsync"));
     }
 
     [Test]
