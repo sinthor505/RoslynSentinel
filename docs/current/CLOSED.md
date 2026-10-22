@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `Inline(method)` silently picked the first same-named method - resolved (2026-10-22)
+
+- `StructuralRefactoringEngine.InlineMethodAsync` now refuses with `ToolTargetIneligibleException` ("declared N times in 'File.cs' (Type.Name(params), ...)") when the defining file declares the name more than once (overloads, or the same name in two types); a unique name behaves as before. Evidence: `BUG_InlineMethod_OverloadedName_IsRefused`, `BUG_InlineMethod_SameNameInTwoTypes_IsRefused` in `BugFixTests.cs`; the tool has no overload selector, so refusal is the safe answer.
+
 ## Fake-write audit: unexplained `Tools.Basic` failures - resolved, flake (2026-10-22)
 
 - The shell `dotnet test` audit run (2026-10-21) showed 2 `Tools.Basic` failures that `RunTest` did not reproduce. Rerun through `RunTest` with `environment: ROSLYNSENTINEL_FAKE_WRITE_AUDIT` (1101/1102): the audit file was never created (no write attempt on a `ReadOnly` fake) and the one failure, `BuildCascadeFixtureTests.FullBuild_UpstreamProjectFails_DownstreamProjectsReportNoErrors` (5 min real build, "No data on Failure result"), passed 10/10 in isolation. Treated as a slow-build flake under load. Evidence: [proposal](proposals/proposal_battery_test_reorganisation_in_memory_and_shared_sources.md).

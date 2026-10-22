@@ -1697,11 +1697,21 @@ public class StructuralRefactoringEngine
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method == null || semanticModel == null)
+        var candidates = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList();
+        if (candidates.Count == 0 || semanticModel == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'.");
         }
+
+        if (candidates.Count > 1)
+        {
+            var declarations = string.Join(", ", candidates.Select(c =>
+                (c.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text ?? "<global>") + "." + methodName
+                + "(" + string.Join(", ", c.ParameterList.Parameters.Select(p => p.Type?.ToString() ?? "?")) + ")"));
+            throw new ToolTargetIneligibleException($"Cannot inline '{methodName}': it is declared {candidates.Count} times in '{Path.GetFileName(filePath)}' ({declarations}); Inline cannot tell which one to inline, so rename or move the others first.");
+        }
+
+        var method = candidates[0];
 
         ExpressionSyntax? expressionToInline = null;
         if (method.ExpressionBody != null)

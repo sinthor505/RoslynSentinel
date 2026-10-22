@@ -3501,6 +3501,49 @@ public class Calculator
             }
 
             [Test]
+            public async Task BUG_InlineMethod_OverloadedName_IsRefused()
+            {
+                const string code = @"
+public class Calc
+{
+    public int Twice(int x) => x * 2;
+
+    public long Twice(long x) => x * 2;
+
+    public int Run()
+    {
+        return Twice(3);
+    }
+}";
+                SetSource(code, "Calc.cs");
+                var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Calc.cs", "Twice"));
+                Assert.That(ex!.Message, Does.Contain("declared 2 times"));
+            }
+
+            [Test]
+            public async Task BUG_InlineMethod_SameNameInTwoTypes_IsRefused()
+            {
+                const string code = @"
+public class First
+{
+    public int Helper() => 1;
+}
+
+public class Second
+{
+    public int Helper() => 2;
+
+    public int Run()
+    {
+        return Helper();
+    }
+}";
+                SetSource(code, "Pair.cs");
+                var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.InlineMethodAsync("Pair.cs", "Helper"));
+                Assert.That(ex!.Message, Does.Contain("declared 2 times"));
+            }
+
+            [Test]
             public async Task BUG_InlineMethod_ParameterUsedTwiceWithNonTrivialArgument_IsRefused()
             {
                 const string code = @"
