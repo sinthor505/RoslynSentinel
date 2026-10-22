@@ -380,23 +380,14 @@ public class AdvancedRefactoringEngine
         }
 
         var newInterfaceNode = interfaceNode.AddMembers(newMembers.ToArray());
-        // If interface is in a different file, indicate which file was updated
-        if (interfaceDocument != classDocument)
-        {
-            var updatedPath = interfaceDocument.FilePath ?? interfaceDocument.Name;
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.Modified,
-                FilePath = updatedPath,
-                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
-            };
-        }
-
+        // Only the new members carry Formatter.Annotation, so only they are re-spaced; untouched interface members keep their text.
+        var newRoot = interfaceRoot.ReplaceNode(interfaceNode, newInterfaceNode);
+        var formatted = await RoslynFormattingHelper.FormatAnnotatedSpansAsync(interfaceDocument, newRoot, cancellationToken);
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = interfaceDocument.FilePath ?? interfaceDocument.Name,
-            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(interfaceDocument, interfaceRoot, interfaceNode, newInterfaceNode, cancellationToken)
+            UpdatedText = (await formatted.GetTextAsync(cancellationToken)).ToString()
         };
     }
 }

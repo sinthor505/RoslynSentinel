@@ -249,10 +249,9 @@ public class AdvancedRefactoringNormalizeCharacterizationTests
         Assert.That(await RunAsync(site), Is.EqualTo(Src(crlf, s.IrregularExpected)));
     }
 
-    // Limitation pinned: sync re-spaces an irregular interface member it touches (`int  A( ) ;` becomes `int A();`);
-    // the blank lines and the `// c` comment between members are preserved.
+    // Untouched interface members keep their spacing when sync adds a member: `int  A( ) ;`, the blank lines and `// c` stay as written.
     [Test]
-    public async Task SyncInterface_SameFile_RespacesIrregularMembers_Pinned([Values(false, true)] bool crlf)
+    public async Task SyncInterface_SameFile_KeepsIrregularMembers([Values(false, true)] bool crlf)
     {
         SetFiles(("Test.cs", Src(crlf,
             "public interface IThing",
@@ -275,7 +274,7 @@ public class AdvancedRefactoringNormalizeCharacterizationTests
         Assert.That(await RunAsync(MethodSite), Is.EqualTo(Src(crlf,
             "public interface IThing",
             "{",
-            "    int A();",
+            "    int  A( ) ;",
             "",
             "",
             "    // c",
@@ -288,6 +287,44 @@ public class AdvancedRefactoringNormalizeCharacterizationTests
             "    public int A() { return 1; }",
             "    public int B() { return 2; }",
             "    public int Extra() { return 3; }",
+            "}",
+            "")));
+    }
+
+    [Test]
+    public async Task SyncInterface_CrossFile_KeepsIrregularInterfaceMembers([Values(false, true)] bool crlf)
+    {
+        SetFiles(("C.cs", Src(crlf,
+            "public class C : IThing",
+            "{",
+            "    public int A() { return 1; }",
+            "    public int Extra() { return 3; }",
+            "}",
+            "")),
+            ("IThing.cs", Src(crlf,
+            "public interface IThing",
+            "{",
+            "    int  A( ) ;",
+            "",
+            "",
+            "    // c",
+            "    int B();",
+            "}",
+            "")));
+
+        var result = await _engine.SyncInterfaceToImplementationAsync("C.cs", "C", "IThing");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
+        Assert.That((string)result.FilePath, Does.EndWith("IThing.cs"));
+        Assert.That(result.UpdatedText, Is.EqualTo(Src(crlf,
+            "public interface IThing",
+            "{",
+            "    int  A( ) ;",
+            "",
+            "",
+            "    // c",
+            "    int B();",
+            "    int Extra();",
             "}",
             "")));
     }
