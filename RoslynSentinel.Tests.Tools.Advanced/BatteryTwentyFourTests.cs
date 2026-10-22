@@ -366,12 +366,12 @@ public class BatteryTwentyFourTests
     [Category("LogicSimplificationEngine")] // sentinel:auto-category
     public async Task ReduceBlockDepth_ValidMethod_ReturnsString()
     {
-        const string src = @"namespace TestProj; public class C { public string GetStatus(int a) { if (a > 0) { if (a > 1) { if (a > 2) { return ""x""; } } } return ""y""; } }";
+        const string src = @"namespace TestProj; public class C { public void Log(int a) { if (a > 0) { System.Console.WriteLine(a); } } }";
         SetSource(src, "Order.cs");
-        var result = await _logicOptimizationEngine.ReduceBlockDepthAsync("Order.cs", "GetStatus");
-        // TODO fixture does not trigger ReduceBlockDepth: nested-if method returns CannotOptimize; replace with a fixture the engine reduces, then assert Modified
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.CannotOptimize));
-        // TODO pin UpdatedText for ReduceBlockDepth once a reducible fixture is found (CannotOptimize leaves no text change to assert)
+        var result = await _logicOptimizationEngine.ReduceBlockDepthAsync("Order.cs", "Log");
+        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("return;"));
+        Assert.That(result.UpdatedText, Does.Contain("System.Console.WriteLine(a);"));
     }
 
     // --- OptimizeTaskWait ---

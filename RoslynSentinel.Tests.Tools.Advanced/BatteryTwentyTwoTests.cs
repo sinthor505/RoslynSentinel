@@ -261,7 +261,7 @@ public class BatteryTwentyTwoTests
         Assert.That(result, Has.Count.EqualTo(1));
         Assert.That(result.Single().SymbolName, Is.EqualTo("Unused"));
         Assert.That(result.Single().Type, Is.EqualTo("UnusedPrivateMember"));
-        // TODO Engine only reports private methods/properties, not fields (DeadCodeEngine.cs:37)
+        // Fields are covered by DetectUnusedPrivateFieldsAsync (see DetectUnusedPrivateFields_ValidFile_ReturnsList); FindUnusedPrivateMembers covers methods and properties by design
     }
 
     // --- DetectUnusedPrivateFields (via DeadCodeEngine) ---
