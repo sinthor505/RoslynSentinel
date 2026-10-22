@@ -425,46 +425,21 @@ public static class RoslynSentinelServiceExtensionsBasic
         }
     }
 
-    // Centralized SolutionNotLoadedException filter: converts the exception into a CallToolResult
-    // carrying the helpful message rather than a generic "tool call failed" text. It is still an
-    // error (IsError = true), matching the typed SolutionNotLoaded result path.
+    // Centralized exception filter: an exception that escapes a tool becomes a structured failure (the
+    // same SentinelCallToolResult body a tool returns itself: isError + errorData{errorCode, message,
+    // detail, structuredDetail}) built by ToolErrorMapper.ToResultError, with CallToolResult.IsError = true.
+    // A SolutionNotLoadedException keeps its actionable "Call LoadSolution" sentence and a typed
+    // ToolException keeps its code and payload. A client abort (the request's own token cancelled) is
+    // rethrown for the SDK; any other cancellation or timeout becomes a structured Cancelled/TimedOut.
+    // Registered after AddToolErrorFilter and before the drift/offload/wire filters, so those never see an
+    // escaped exception (unchanged from before). See CallToolFailureHandler.
     private static void AddWorkspaceNotLoadedFilter(IMcpRequestFilterBuilder filters)
     {
         filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
             ModelContextProtocol.Protocol.CallToolRequestParams,
             ModelContextProtocol.Protocol.CallToolResult>(
-            async (context, cancellationToken) =>
-            {
-                try
-                {
-                    return await next(context, cancellationToken);
-                }
-                catch (SolutionNotLoadedException ex)
-                {
-                    return new ModelContextProtocol.Protocol.CallToolResult
-                    {
-                        Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = ex.Message }],
-                        IsError = true,
-                    };
-                }
-                catch (Exception ex)
-                {
-                    // Every tool in this codebase catches its own exceptions and returns a
-                    // SentinelCallToolResult with IsError=true instead of throwing (see
-                    // docs/current/feedback_agent_friendly_error_messages.md), so reaching here
-                    // means an exception escaped that path entirely -> e.g. the MCP SDK's own
-                    // argument-binding failure (a required parameter missing from the call), or
-                    // a genuine bug. Either way it's a real failure, so it must surface as
-                    // IsError=true rather than silently reporting success.
-                    Debug.WriteLine($"Unexpected error in CallTool filter: {ex}");
-
-                    return new ModelContextProtocol.Protocol.CallToolResult
-                    {
-                        Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = $"Tool call failed unexpectedly ({ex.GetType().Name}): {ex.Message}" }],
-                        IsError = true,
-                    };
-                }
-            }));
+            (context, cancellationToken) => CallToolFailureHandler.InvokeAsync(
+                () => next(context, cancellationToken), context.Params?.Name, cancellationToken)));
     }
 
     private static void AddToolErrorFilter(IMcpRequestFilterBuilder filters)
