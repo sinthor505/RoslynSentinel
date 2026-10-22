@@ -1,6 +1,6 @@
 # Fix the Battery test file leak with an in-memory tier, an explicit WorkspaceAccess mode, and (optionally) topic classes and shared sources
 
-**Status:** PROPOSED 2026-10-20. Direction agreed in discussion, not built. A read-only classification survey ran the same day and is recorded below (reported by a subagent, not spot-checked). This is the starting point for the effort.
+**Status:** IMPLEMENTED 2026-10-21 (Parts A-D done; verified 2026-10-22: `RoslynSentinel.Tests` 654, `Tests.Basic` 843, `Tests.Advanced` 1409, `Tests.Tools.Basic` 1101/1102 with one flake that passed 10/10, `Tests.Tools.Advanced` 451, all green). Open: the stale doc comments on `IWorkspaceManager` and `TestSolutionFixture` do not describe the in-memory tier (the `FakeWorkspaceManager.cs` header does), and the pinned tool defects (see the findings doc in Part A status). Move to `closed/` once those two are done. The classification survey below was reported by a subagent, not spot-checked.
 
 ## Motivation
 
