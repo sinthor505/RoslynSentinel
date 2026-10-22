@@ -471,7 +471,7 @@ public class WholeFileWriteTools
                     };
                 }
 
-                if (!filePathResolved.Validated && string.IsNullOrEmpty(unifiedDiff))
+                if (!filePathResolved.Validated && string.IsNullOrWhiteSpace(filePath) && string.IsNullOrEmpty(unifiedDiff))
                 {
                     return new SentinelCallToolResult<object>()
                     {
@@ -485,7 +485,7 @@ public class WholeFileWriteTools
                     return new SentinelCallToolResult<object>()
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "ApplyDiff: 'filePath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, string.IsNullOrWhiteSpace(filePath) ? "ApplyDiff: 'filePath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'." : $"ApplyDiff: 'filePath' ('{filePath}') could not be resolved: the loaded solution has no root directory to resolve a relative path against. Pass an absolute path.")
                     };
                 }
 
@@ -619,7 +619,7 @@ public class WholeFileWriteTools
                     IsError = true,
                     ErrorData = filePathResolved.FailureReason == FilePathFailureReason.NoSolutionLoaded
                         ? new ResultError(ToolErrorCode.SolutionNotLoaded, SolutionNotLoadedMessage.ForFilePath("ApplyUnifiedDiff", _workspaceManager.LoadState))
-                        : new ResultError(ToolErrorCode.InvalidArgument, "ApplyUnifiedDiff: 'filePath' is required (it names the single file the unifiedDiff applies to).")
+                        : new ResultError(ToolErrorCode.InvalidArgument, string.IsNullOrWhiteSpace(filePath) ? "ApplyUnifiedDiff: 'filePath' is required (it names the single file the unifiedDiff applies to)." : $"ApplyUnifiedDiff: 'filePath' ('{filePath}') could not be resolved: the loaded solution has no root directory to resolve a relative path against. Pass an absolute path.")
                 };
             }
 

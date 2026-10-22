@@ -803,7 +803,7 @@ public class BatteryTwentyTests
         var diff = "--- Test.cs\n+++ Test.cs\n@@ -1,1 +1,1 @@\n-namespace TestProj; public class Order { public int Id { get; set; } }\n+namespace TestProj; public class Order { public int Id { get; set; } public string Name { get; set; } }";
 
         var result = await _wholeFileWriteTools.ApplyDiffTool(reason: "test message", ChangesetFormat.diff, ProposedChangeAction.validate, filePath: "Test.cs", unifiedDiff: diff);
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument)); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyDiff: 'filePath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")); // TODO engine: reports filePath required although filePath "Test.cs" is supplied
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument)); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyDiff: 'filePath' ('Test.cs') could not be resolved: the loaded solution has no root directory to resolve a relative path against. Pass an absolute path.")); // TODO in-memory workspace has no root directory, so the diff tools cannot target an in-memory file
     }
 
     [Test]
@@ -826,7 +826,7 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _wholeFileWriteTools.ApplyDiffTool(reason: "test message", ChangesetFormat.diff, ProposedChangeAction.apply, filePath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument)); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyDiff: 'filePath' is required when changesetFormat=diff (it names the single file the unifiedDiff applies to). Only changesetFormat=files takes multiple files via 'changes'.")); // TODO engine: NonExistent.cs is refused as a missing filePath, not as an unknown file
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument)); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyDiff: 'filePath' ('NonExistent.cs') could not be resolved: the loaded solution has no root directory to resolve a relative path against. Pass an absolute path.")); // TODO in-memory workspace has no root directory, so the diff tools cannot target an in-memory file
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
@@ -839,7 +839,7 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var diff = "--- Test.cs\n+++ Test.cs\n@@ -1,1 +1,1 @@\n-namespace TestProj; public class Order { public int Id { get; set; } }\n+namespace TestProj; public class Order { public int Id { get; set; } public string Name { get; set; } }";
         var result = await _wholeFileWriteTools.ApplyUnifiedDiffTool(reason: "test message", ProposedChangeAction.validate, filePath: "Test.cs", unifiedDiff: diff);
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument)); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyUnifiedDiff: 'filePath' is required (it names the single file the unifiedDiff applies to).")); // TODO engine: reports filePath required although filePath "Test.cs" is supplied; a valid diff should validate
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument)); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyUnifiedDiff: 'filePath' ('Test.cs') could not be resolved: the loaded solution has no root directory to resolve a relative path against. Pass an absolute path.")); // TODO in-memory workspace has no root directory, so the diff tools cannot target an in-memory file
     }
 
     [Test]
@@ -860,7 +860,7 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _wholeFileWriteTools.ApplyUnifiedDiffTool(reason: "test message", ProposedChangeAction.apply, filePath: "Test.cs", unifiedDiff: "");
 
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyUnifiedDiff: 'filePath' is required (it names the single file the unifiedDiff applies to).")); // TODO engine: a missing unifiedDiff is reported as a missing filePath; the message names the wrong field
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyUnifiedDiff: 'filePath' ('Test.cs') could not be resolved: the loaded solution has no root directory to resolve a relative path against. Pass an absolute path.")); // TODO in-memory workspace has no root directory, so the diff tools cannot target an in-memory file
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
     }
 
@@ -871,7 +871,7 @@ public class BatteryTwentyTests
         SetSource(SimpleSource, "Test.cs");
         var result = await _wholeFileWriteTools.ApplyUnifiedDiffTool(reason: "test message", ProposedChangeAction.apply, filePath: "NonExistent.cs", unifiedDiff: "--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new");
 
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument)); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyUnifiedDiff: 'filePath' is required (it names the single file the unifiedDiff applies to).")); // TODO engine: NonExistent.cs is refused as a missing filePath, not as an unknown file
+        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument)); Assert.That(result.ErrorData!.Message, Is.EqualTo("ApplyUnifiedDiff: 'filePath' ('NonExistent.cs') could not be resolved: the loaded solution has no root directory to resolve a relative path against. Pass an absolute path.")); // TODO in-memory workspace has no root directory, so the diff tools cannot target an in-memory file
         Assert.That(result.ErrorData, Is.Not.Null);
     }
 
