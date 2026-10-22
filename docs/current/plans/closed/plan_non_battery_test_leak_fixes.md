@@ -1,6 +1,6 @@
 # Plan: Fix the remaining working-directory test leaks outside the Battery fixtures and add a leak detector
 
-**Status:** DRAFT 2026-10-21. Survey done (read-only, no tests run); no slice started. Follows Part A of proposal_battery_test_reorganisation_in_memory_and_shared_sources (open question 8).
+**Status:** IMPLEMENTED 2026-10-21. Steps 1-4 done (9bd831a9, 6ffde50f, ba4cff77); Step 5 deliberately skipped. The leak was reproduced live first (C1..C5.cs), then fixed; the detector was proven with a probe test and is green in all eight projects. Follows Part A of proposal_battery_test_reorganisation_in_memory_and_shared_sources (open question 8).
 
 ## Problem
 The Battery fixtures are fixed. The earlier file counts for other projects (about 25 / 10 / 3) overstated the problem. The survey found
