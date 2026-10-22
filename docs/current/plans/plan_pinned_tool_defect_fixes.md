@@ -1,0 +1,52 @@
+# Plan: Fix the tool and engine defects pinned by tests during the Battery reorganisation
+
+**Status:** APPROVED 2026-10-21. Umbrella plan; slices land one by one. Defect list, causes and numbering (#1-#24): findings/finding_pinned_tool_defects_from_battery_reorganisation.md.
+
+## Problem
+Tests pin 24 tool/engine defects with `// TODO` markers. Silent wrong results (success with no edit, always-invalid output, dropped comments)
+and leaked exceptions hurt weak models most. See the finding for evidence per defect.
+
+## Decision
+- One umbrella plan, slices by root-cause group, each slice one Haiku `implementer` dispatch (D0: files<=3, edits<=10).
+- Every fix flips its pinning test: the slice updates the test to assert the correct behaviour and removes the `// TODO`.
+- Where a real fix needs design, ship an honest refusal first (clear, actionable error; no write).
+- Approved design choices: #3 emit a new file with a complete static class (never overwrite the source); #4 require the range to start with a
+  local declaration of an `IDisposable`, otherwise refuse; #8 refuse now; #9 infer property types from the semantic model (deferred, medium);
+  #12 read-only trace first; #20 per tool only when that tool is worked on; #24 stays with throw-migration S1.
+
+## Execution rules
+- C# edits dispatched sequentially to `implementer`; main session briefs, reviews, runs tests, commits (explicit file list, `Plan: plan_pinned_tool_defect_fixes` trailer).
+- Build 0 errors per slice; run the owning test project; one `RunTest` at a time; compare with baselines.
+- Anything needing user judgement is deferred and recorded in the Deferred section, not decided here.
+
+## Steps
+
+### Step 1 - Guard group A and C (#1, #5, #6)
+- Files: `Tools.Advanced/AdvancedRefactoringTools.cs` (WrapRangeTool guards), `Engines.Advanced/.../MemberRefactoringEngine.cs` (attribute target resolution), their pinning tests.
+- Done when: WrapRange on a ctor-header range returns a structured error, not an NRE; ModifyAttribute on a class named like its ctor edits the type; #6 asserts on `ErrorData.Detail` first.
+
+### Step 2 - One-liners (#7 refusal, #14, #13, #11, #15)
+- Done when: each pinning test asserts the corrected behaviour and the TODO is gone.
+
+### Step 3 - Contract and no-op group (#17, #18, #10 per engine, #16)
+- #10 uses `AlreadyInTargetState`, not the obsolete `NoChange`; one engine per slice (ConvertToSwitch, ConvertToPattern, FormatDocument).
+
+### Step 4 - #2 ExtractMembers partialClass
+- Remove the moved members from the source and add `partial`; <=3 files.
+
+### Step 5 - Test-only corrections (#19, #6 wording, throw-proposal appendix lines 99-103)
+
+### Step 6 - Approved refusals and designs (#4, #8, #3, #9)
+- #4 and #8 refusals; #3 new-file emit; #9 type inference (last).
+
+### Step 7 - Trace #12 (read-only) and record the outcome
+
+## Out of scope
+- The `throw-migration` markers, #20 (until a tool is touched), #21-#24.
+
+## Risks and open decisions
+- Causes were read from source, not run; each slice's agent re-verifies before editing and replies RESCOPE: if wrong.
+- Deferred items (needs user judgement) are appended below as they arise.
+
+## Deferred
+(none yet)

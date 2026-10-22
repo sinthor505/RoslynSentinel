@@ -20,10 +20,15 @@ public class MassiveRefactoringTests
     private RefactoringSignatureTools _refactoringSignatureTools;
     private AdvancedRefactoringTools _advancedRefactoringTools;
     private StructuralRefactoringEngine _structuralRefactoringEngine;
+    private string _tempDir;
 
     [SetUp]
     public void Setup()
     {
+        // unique temp dir; a bare path wrote into the working directory (leak)
+        _tempDir = Path.Combine(Path.GetTempPath(), "MassiveRefactoring_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(_tempDir);
+
         var config = new SentinelConfiguration();
         _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
 
@@ -65,7 +70,29 @@ public class MassiveRefactoringTests
     }
 
     [TearDown]
-    public void TearDown() => _workspaceManager?.Dispose();
+    // unique temp dir; a bare path wrote into the working directory (leak)
+    public void TearDown()
+    {
+        _workspaceManager?.Dispose();
+        try
+        {
+            if (Directory.Exists(_tempDir))
+            {
+                Directory.Delete(_tempDir, recursive: true);
+            }
+        }
+        catch (IOException)
+        {
+            // Best-effort cleanup; a locked file must not fail the fixture teardown.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best-effort cleanup; a locked file must not fail the fixture teardown.
+        }
+    }
+
+    // unique temp dir; a bare path wrote into the working directory (leak)
+    private string PathOf(string fileName) => Path.Combine(_tempDir, fileName);
 
     private void SetSource(string source, string fileName = "Test.cs")
     {
@@ -116,7 +143,10 @@ namespace MyApp.Services
     public async Task RenameSymbol_ShouldUpdateReferences(int id)
     {
         var source = $"public class C{id} {{ public void OldM{id}() {{}} public void U() {{ OldM{id}(); }} }}";
-        SetSource(source, $"C{id}.cs");
+        // unique temp dir; a bare path wrote into the working directory (leak)
+        var path = PathOf($"C{id}.cs");
+        File.WriteAllText(path, source);
+        SetSource(source, path);
 
         // RenameSymbolTool takes a SymbolHandle (projectName, docCommentId) -> resolve it
         // via SymbolNavigationEngine first, as an agent would via LocateSymbolTool.

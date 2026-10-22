@@ -169,23 +169,30 @@ public class C {
   </ItemGroup>
 </Project>";
 
-        var tempCsproj = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "MyProj.csproj");
-        await File.WriteAllTextAsync(tempCsproj, csproj);
+        // unique temp dir; a bare path wrote into the working directory (leak)
+        var projectDir = Path.Combine(Path.GetTempPath(), "DeepFunctional_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(projectDir);
+        try
+        {
+            var tempCsproj = Path.Combine(projectDir, "MyProj.csproj");
+            await File.WriteAllTextAsync(tempCsproj, csproj);
 
-        var projectId = ProjectId.CreateNewId();
-        var solution = new AdhocWorkspace().CurrentSolution
-            .AddProject(ProjectInfo.Create(projectId, VersionStamp.Default, "MyProj", "MyProj", LanguageNames.CSharp, filePath: tempCsproj));
+            var projectId = ProjectId.CreateNewId();
+            var solution = new AdhocWorkspace().CurrentSolution
+                .AddProject(ProjectInfo.Create(projectId, VersionStamp.Default, "MyProj", "MyProj", LanguageNames.CSharp, filePath: tempCsproj));
 
-        _workspaceManager.SetTestSolution(solution);
+            _workspaceManager.SetTestSolution(solution);
 
-        // Act
-        var report = await _dependencyEngine.GetProjectDependenciesAsync("MyProj", CancellationToken.None);
+            // Act
+            var report = await _dependencyEngine.GetProjectDependenciesAsync("MyProj", CancellationToken.None);
 
-        // Assert
-        Assert.That(report.PackageReferences, Contains.Item("Newtonsoft.Json"));
-
-        // Cleanup
-        File.Delete(tempCsproj);
+            // Assert
+            Assert.That(report.PackageReferences, Contains.Item("Newtonsoft.Json"));
+        }
+        finally
+        {
+            Directory.Delete(projectDir, recursive: true);
+        }
     }
 
     [Test]
