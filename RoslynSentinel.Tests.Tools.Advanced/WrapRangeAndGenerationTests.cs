@@ -59,7 +59,6 @@ public class Holder
         Assert.That(text, Does.Contain("catch"));
     }
 
-    // TODO WrapRange throws NullReferenceException when the range starts on a constructor header; it should return a structured range error
     [Test]
     [Category("AdvancedRefactoringTools")] // sentinel:auto-category
     public async Task WrapRange_RangeStartingOnConstructorHeader_ReturnsErrorNotNullReference()
@@ -68,7 +67,10 @@ public class Holder
         var tools = BatteryToolFactory.CreateAdvancedRefactoringTools(workspace.Manager);
         var result = await tools.WrapRangeTool(reason: "test message", workspace.PathOf("Order.cs"), 8, 10, "tryCatch");
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData!.Message, Does.Contain("unexpectedly"));
+        Assert.That(result.ErrorData, Is.Not.Null);
+        Assert.That(result.ErrorData!.Message, Does.Contain("Choose a range"));
+        Assert.That(result.ErrorData!.Message, Does.Not.Contain("unexpectedly"));
+        Assert.That(result.ErrorData!.Message, Does.Not.Contain("NullReference"));
     }
 
     // --- WrapInRegion ---

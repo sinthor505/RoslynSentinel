@@ -1274,6 +1274,8 @@ public class AdvancedRefactoringTools
                 {
                     var exceptionType = name ?? "Exception";
                     var updated = await _refactoringEngine.WrapInTryCatchAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, exceptionType, catchVariableName, catchBody, cancellationToken);
+                    var tryCatchSnippetGuard = RefactoringToolHelpers.RequireUpdatedText(updated, "WrapRange tryCatch", resolvedFilePath, "Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.");
+                    if (tryCatchSnippetGuard != null) return RefactoringToolHelpers.ToSummaryResult(tryCatchSnippetGuard);
                     if (!autoStage)
                     {
                         var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
@@ -1318,6 +1320,8 @@ public class AdvancedRefactoringTools
                     }
 
                     var updated = await _semanticRefactoringEngine.WrapInUsingAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, name, cancellationToken);
+                    var usingSnippetGuard = RefactoringToolHelpers.RequireUpdatedText(updated, "WrapRange using", resolvedFilePath, "Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.");
+                    if (usingSnippetGuard != null) return RefactoringToolHelpers.ToSummaryResult(usingSnippetGuard);
                     if (!autoStage)
                     {
                         var noStageUsingChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
@@ -1362,6 +1366,8 @@ public class AdvancedRefactoringTools
                     }
 
                     var updated = await _refactoringEngine.WrapInRegionAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, name, cancellationToken);
+                    var regionSnippetGuard = RefactoringToolHelpers.RequireUpdatedText(updated, "WrapRange region", resolvedFilePath, "Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.");
+                    if (regionSnippetGuard != null) return RefactoringToolHelpers.ToSummaryResult(regionSnippetGuard);
                     if (!autoStage)
                     {
                         var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
@@ -1407,6 +1413,8 @@ public class AdvancedRefactoringTools
                 {
                     var exceptionType = name ?? "Exception";
                     var updated = await _refactoringEngine.WrapInTryCatchAsync(resolvedFilePath, startLine, endLine, exceptionType, catchVariableName, catchBody, cancellationToken);
+                    var tryCatchLinesGuard = RefactoringToolHelpers.RequireUpdatedText(updated, "WrapRange tryCatch", resolvedFilePath, "Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.");
+                    if (tryCatchLinesGuard != null) return RefactoringToolHelpers.ToSummaryResult(tryCatchLinesGuard);
                     if (!autoStage)
                     {
                         var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
@@ -1451,6 +1459,8 @@ public class AdvancedRefactoringTools
                     }
 
                     var updated = await _semanticRefactoringEngine.WrapInUsingAsync(resolvedFilePath, startLine, endLine, name, cancellationToken);
+                    var usingLinesGuard = RefactoringToolHelpers.RequireUpdatedText(updated, "WrapRange using", resolvedFilePath, "Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.");
+                    if (usingLinesGuard != null) return RefactoringToolHelpers.ToSummaryResult(usingLinesGuard);
                     if (!autoStage)
                     {
                         var noStageUsingChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
@@ -1495,6 +1505,8 @@ public class AdvancedRefactoringTools
                     }
 
                     var updated = await _refactoringEngine.WrapInRegionAsync(resolvedFilePath, startLine, endLine, name, cancellationToken);
+                    var regionLinesGuard = RefactoringToolHelpers.RequireUpdatedText(updated, "WrapRange region", resolvedFilePath, "Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.");
+                    if (regionLinesGuard != null) return RefactoringToolHelpers.ToSummaryResult(regionLinesGuard);
                     if (!autoStage)
                     {
                         var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText) ? new Dictionary<FilePathWrapper, string>() : new Dictionary<FilePathWrapper, string>
