@@ -1,6 +1,6 @@
 # Plan: Fix the tool and engine defects pinned by tests during the Battery reorganisation
 
-**Status:** APPROVED 2026-10-21. Umbrella plan; slices land one by one. Defect list, causes and numbering (#1-#24): findings/finding_pinned_tool_defects_from_battery_reorganisation.md.
+**Status:** IN PROGRESS 2026-10-21. DONE: #1 (63c46bfc), #5/#6 (92567696), #14 (81d25534), #13 (cc95ff2d), #15 (02ca2fb6), #11 (4da6d32c), #17 (668cc3d2); #7 was already fixed (throws ToolNotImplementedException, test asserts it). NEXT: #18, then #10 per engine (ConvertToSwitch, ConvertToPattern, FormatDocument; target AlreadyInTargetState), #16, #2, test-only #19, then Step 6 (#4 refusal, #8 refusal, #3, #9) and Step 7 (#12 trace). Umbrella plan; slices land one by one. Defect list, causes and numbering (#1-#24): findings/finding_pinned_tool_defects_from_battery_reorganisation.md.
 
 ## Problem
 Tests pin 24 tool/engine defects with `// TODO` markers. Silent wrong results (success with no edit, always-invalid output, dropped comments)
