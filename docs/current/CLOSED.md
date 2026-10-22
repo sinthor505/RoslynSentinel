@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Fake-write audit: unexplained `Tools.Basic` failures - resolved, flake (2026-10-22)
+
+- The shell `dotnet test` audit run (2026-10-21) showed 2 `Tools.Basic` failures that `RunTest` did not reproduce. Rerun through `RunTest` with `environment: ROSLYNSENTINEL_FAKE_WRITE_AUDIT` (1101/1102): the audit file was never created (no write attempt on a `ReadOnly` fake) and the one failure, `BuildCascadeFixtureTests.FullBuild_UpstreamProjectFails_DownstreamProjectsReportNoErrors` (5 min real build, "No data on Failure result"), passed 10/10 in isolation. Treated as a slow-build flake under load. Evidence: [proposal](proposals/proposal_battery_test_reorganisation_in_memory_and_shared_sources.md).
+
 ## `Inline(kind: method)` argument binding and precedence parentheses - resolved (2026-10-21)
 
 - `StructuralRefactoringEngine.InlineMethodAsync` now binds each call's arguments to the method's parameters (named/reordered arguments included), parenthesizes non-simple substituted arguments, and parenthesizes the inlined expression by parent context (same-operator left operand stays bare, so `40 + 2 + 1` is byte-stable). It refuses with `ToolTargetIneligibleException` for ref/out/in, params, optional, extension, generic and async methods, non-explicit arguments, method-group/`nameof`/conditional-access references, and a parameter used 0 or 2+ times with a non-identifier, non-literal argument. Evidence: `BugFixTests` (named+reordered, two parameters, ref/optional/method-group refusals, twice-used parameter, `1 + Answer()`, unary and cast parents) and `AdvancedStructuralNormalizeCharacterizationTests.InlineMethod_WithCallers_ByteExact` (`(40 + 2) * 2`). Open: private-member accessibility from another type, cross-project call sites, first-same-named-method lookup (TODO.md).
