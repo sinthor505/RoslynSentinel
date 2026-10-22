@@ -91,6 +91,33 @@ public static class WorkspaceReloadCause
     }
 }
 
+/// <summary>
+/// Wording and classification helpers for the stale-workspace refusal. Shared so every refusal path
+/// (current and future) reports the same text.
+/// </summary>
+public static class WorkspaceStaleText
+{
+    /// <summary>How to recover from a stale workspace: fix the cause, then force a reload.</summary>
+    public const string Recovery = "Fix the cause (for example a broken .csproj or .sln file), then call LoadSolution with forceReload: true. Edits to .csproj, .sln and .slnx files are still allowed.";
+
+    /// <summary>One-line reason naming the failed reload trigger, its file (when known) and its cause.</summary>
+    public static string Reason(WorkspaceReloadFailure failure)
+    {
+        ArgumentNullException.ThrowIfNull(failure);
+        var fileSuffix = string.IsNullOrEmpty(failure.TriggerFile) ? "" : $" of '{failure.TriggerFile}'";
+        return $"A workspace reload ({failure.Trigger}{fileSuffix}) failed: {failure.Cause}. The loaded solution may not match disk.";
+    }
+
+    /// <summary>True when the path is a solution or project file, which stays editable while the workspace is stale.</summary>
+    public static bool IsStructuralTarget(string path)
+    {
+        var extension = Path.GetExtension(path);
+        return extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".sln", StringComparison.OrdinalIgnoreCase)
+            || extension.Equals(".slnx", StringComparison.OrdinalIgnoreCase);
+    }
+}
+
 /// <summary>Exposes the sticky last workspace reload failure.</summary>
 public interface IWorkspaceReloadFailureProvider
 {

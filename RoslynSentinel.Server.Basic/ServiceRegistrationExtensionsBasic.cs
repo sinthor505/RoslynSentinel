@@ -101,6 +101,7 @@ public static class RoslynSentinelServiceExtensionsBasic
             AddToolCallEchoFilter(filters);
             AddArgumentValidationFilter(filters);
             AddHaltStampFilter(filters);
+            AddWorkspaceStaleStampFilter(filters);
             AddToolErrorFilter(filters);
             AddWorkspaceNotLoadedFilter(filters);
             AddDriftFilter(filters);
@@ -951,6 +952,38 @@ public static class RoslynSentinelServiceExtensionsBasic
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"Halt stamp failed: {ex}");
+                }
+
+                return result;
+            }));
+    }
+
+    private static void AddWorkspaceStaleStampFilter(IMcpRequestFilterBuilder filters)
+    {
+        // Stale-workspace stamping: while a workspace reload has failed and not yet succeeded, stamp
+        // workspaceStale / workspaceStaleReason / workspaceStaleRecovery onto the first text block of every
+        // response, so a caller sees why source edits are refused. State is read AFTER next returns, so a
+        // LoadSolution that just cleared the failure is not stamped. Advanced reuses this registration via
+        // AddRoslynSentinelToolsBasic. See docs/current/proposals/proposal_workspace_reload_failure_visibility.md (slice 3).
+        filters.AddCallToolFilter(next => new ModelContextProtocol.Server.McpRequestHandler<
+            ModelContextProtocol.Protocol.CallToolRequestParams,
+            ModelContextProtocol.Protocol.CallToolResult>(
+            async (context, cancellationToken) =>
+            {
+                var result = await next(context, cancellationToken);
+
+                try
+                {
+                    var manager = context.Server.Services?.GetService<PersistentWorkspaceManager>();
+                    var failure = (manager as IWorkspaceReloadFailureProvider)?.ReloadFailure;
+                    if (failure is not null)
+                    {
+                        WorkspaceStaleStamp.Stamp(result, WorkspaceStaleText.Reason(failure), WorkspaceStaleText.Recovery);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Workspace stale stamp failed: {ex}");
                 }
 
                 return result;

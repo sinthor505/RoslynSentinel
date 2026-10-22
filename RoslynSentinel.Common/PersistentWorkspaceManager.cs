@@ -72,6 +72,11 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // what was on disk. Left as a toggle rather than deleted per direct instruction, in case the
     // original engine-reformatting-regression protection it existed for needs to come back.
     private const bool EnableAstNormalizationNoOpCheck = false;
+
+    // While the workspace is stale, UndoLastApply (the only exactRestore caller) is refused like any other
+    // source write. Flip to true to let undo through, since it writes back a pre-image this server captured
+    // itself. See docs/current/proposals/proposal_workspace_reload_failure_visibility.md slice 3.
+    private const bool AllowExactRestoreWhenWorkspaceStale = false;
     // Content-hash baseline: path (normalized via FilePathWrapper's own case-insensitive, separator-
     // canonicalized equality/hashing) -> SHA-256 of the last content RoslynSentinel itself wrote or
     // loaded for that file. Populated wholesale on LoadSolutionAsync, updated per-file on a
@@ -1667,6 +1672,26 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
             throw new SessionHaltedException(unrecoverableHalt);
         }
 
+        // A failed reload leaves the loaded solution possibly out of sync with disk, so refuse source
+        // edits until a reload succeeds. Structural targets stay allowed so the file that broke the
+        // reload can be repaired. exactRestore (undo) is refused too unless AllowExactRestoreWhenWorkspaceStale is set.
+        // See docs/current/proposals/proposal_workspace_reload_failure_visibility.md slice 3.
+        var reloadFailure = Volatile.Read(ref _reloadFailure);
+        if (reloadFailure is not null && !(exactRestore && AllowExactRestoreWhenWorkspaceStale))
+        {
+            var staleBlocked = changes.Keys.Concat(deletePaths)
+                .Where(target => !WorkspaceStaleText.IsStructuralTarget(target))
+                .ToList();
+            if (staleBlocked.Count > 0)
+            {
+                return new ApplyChangesResult(
+                    IsError: true,
+                    SucceededFiles: [],
+                    FailedFiles: staleBlocked.ToDictionary(f => f, _ => "Workspace is stale after a failed reload."),
+                    Summary: $"Refused - the workspace is stale. {WorkspaceStaleText.Reason(reloadFailure)} {WorkspaceStaleText.Recovery}");
+            }
+        }
+
         // Scoped operation ledger (see docs/current/proposal_scoped_operation_ledger.md, Decision 2):
         // while a ledger is open, a target is refused unless it is one of the ledger's own tracked
         // files (IsBlocked deliberately allows those through, since that's exactly where RecordFix's
@@ -2281,7 +2306,6 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
     // Test seam so tests can make the MSBuild open throw; default is the real open.
     internal Func<MSBuildWorkspace, string, CancellationToken, Task<Solution>> OpenSolutionOverride { get; set; } = static (ws, path, ct) => ws.OpenSolutionAsync(path, null, ct);
 
-    // TODO slice 2 steps 2-4: move 2A, ReloadWorkspaceFromDiskAsync and LoadSolutionAsync onto these helpers
     // No lock needed; the old workspace is never touched here.
     private async Task<(MSBuildWorkspace Workspace, Solution Solution)> OpenFreshWorkspaceAsync(string solutionPath, CancellationToken cancellationToken)
     {
@@ -2311,7 +2335,6 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
         }
     }
 
-    // TODO slice 2 steps 2-4: move 2A, ReloadWorkspaceFromDiskAsync and LoadSolutionAsync onto these helpers
     // Caller must hold _solutionLock. Step order matters: hashes are recorded before anything is swapped,
     // so a throw leaves the old state intact; the old workspace is disposed last.
     private void SwapInFreshWorkspaceLocked(MSBuildWorkspace newWorkspace, Solution newSolution, bool pruneInternalChanges, bool clearReloadFailure = true)
