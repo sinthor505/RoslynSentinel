@@ -1,6 +1,6 @@
 # Finding: Tool and engine defects pinned by tests during the Battery reorganisation, triaged
 
-**Status:** OPEN 2026-10-21. Triage only; no fix decided or started. Causes below were read from source by a read-only survey (no tests were run); "unverified" marks what was not traced.
+**Status:** IN PROGRESS 2026-10-22. Fixes run under plan_pinned_tool_defect_fixes (status and commit hashes there); fixed: #1 #2 #3 #4 #5 #6 #7 #8 #11 #13 #14 #15 #16 #17 #18 #19, #10 for ConvertToSwitch and ConvertToPattern, #20 test-only parts, #23. Still open: #9, #10 (FormatDocument, AdvancedStructuralEngine), #12, #20 (IntroduceSymbol disk read), #21 engine, #22, #24. The table and causes below are the 2026-10-21 survey and are not updated. Causes below were read from source by a read-only survey (no tests were run); "unverified" marks what was not traced.
 
 ## Context
 Converting the Battery fixtures to in-memory sources (proposal_battery_test_reorganisation_in_memory_and_shared_sources, Part A)
