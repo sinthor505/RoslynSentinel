@@ -1366,6 +1366,9 @@ public class RefactoringStructuralImpl
         try
         {
             var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePathResolved, targetTypeName, cancellationToken);
+            if (result.Outcome == EditOutcome.AlreadyInTargetState)
+                return RefactoringToolHelpers.RequireUpdatedText(result, "SyncTypeAndFilename", filePathResolved)!;
+
             if (result.Outcome != EditOutcome.Modified || result.Changes.Count == 0)
             {
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename: no change produced for '{filePathResolved}' ({result.Outcome}). {result.Message}") };
