@@ -198,16 +198,7 @@ public class MemberRefactoringEngine
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         return await AddConstructorParameterToDocumentAsync(document, filePath, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, defaultValue, nullDefault, cancellationToken);
     }
@@ -468,16 +459,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -670,16 +652,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -1323,16 +1296,7 @@ public class MemberRefactoringEngine
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -1408,16 +1372,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -1774,16 +1729,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -1846,16 +1792,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -1916,16 +1853,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -1985,16 +1913,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -2083,16 +2002,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -2207,16 +2117,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -2276,16 +2177,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -2365,16 +2257,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -2544,16 +2427,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
@@ -2612,16 +2486,7 @@ public class MemberRefactoringEngine
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
@@ -2658,16 +2523,7 @@ public class MemberRefactoringEngine
         // at all, not whether the implementer-preference narrowing ran once both were present.
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -2775,16 +2631,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -2882,16 +2729,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
@@ -2992,16 +2830,7 @@ public class MemberRefactoringEngine
         // at all, not whether the implementer-preference narrowing ran once both were present.
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -5379,16 +5208,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -5445,16 +5265,7 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)

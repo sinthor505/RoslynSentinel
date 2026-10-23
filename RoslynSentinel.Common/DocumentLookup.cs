@@ -258,6 +258,11 @@ public static class DocumentLookup
     }
 
     /// <summary>
+    /// Resolves path or throws ToolNotFoundException / ToolAmbiguousMatchException; the engine-layer replacement for an inline FirstOrDefault + EditOutcome.DocumentNotFound return.
+    /// </summary>
+    public static Document RequireDocument(Solution solution, FilePathWrapper path) => TryGetDocument(solution, path).GetDocumentOrThrow();
+
+    /// <summary>
     /// The real paths of documents whose file name matches the file name of <paramref name="requestedPath"/>
     /// (ignoring case), at most <paramref name="max"/>. Shared by the not-found errors of the lookup and of ReadFile.
     /// </summary>

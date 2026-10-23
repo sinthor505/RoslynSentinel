@@ -591,6 +591,94 @@ public class C
     }
 
     [Test]
+    public async Task AddModifier_MissingFile_ThrowsNotFound()
+    {
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.AddModifierAsync("MissingFileForNotFoundPin.cs", "Holder", "static");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task RemoveAttribute_MissingFile_ThrowsNotFound()
+    {
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveAttributeAsync("MissingFileForNotFoundPin.cs", "Holder", "Obsolete");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task AddMember_MissingFile_ThrowsNotFound()
+    {
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.AddMemberAsync("MissingFileForNotFoundPin.cs", "Holder", "public void Added() { }");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task RemoveMember_MissingFile_ThrowsNotFound()
+    {
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveMemberAsync("MissingFileForNotFoundPin.cs", "Run");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ReplaceMember_MissingFile_ThrowsNotFound()
+    {
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ReplaceMemberAsync("MissingFileForNotFoundPin.cs", "Run", "public void Run(int x) { }");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task AddBaseType_MissingFile_ThrowsNotFound()
+    {
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.AddBaseTypeAsync("MissingFileForNotFoundPin.cs", "Holder", "IFoo");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ChangeAccessibility_MissingFile_ThrowsNotFound()
+    {
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ChangeAccessibilityAsync("MissingFileForNotFoundPin.cs", "Run", AccessibilityLevel.@public);
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task SortMembers_MissingFile_ThrowsNotFound()
+    {
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.SortMembersAsync("MissingFileForNotFoundPin.cs", "Holder");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
     public async Task InsertMemberBefore_SnippetMatchesNothing_ThrowsNotFound()
     {
         const string holderSource = """

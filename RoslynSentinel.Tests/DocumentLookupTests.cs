@@ -138,4 +138,32 @@ public class DocumentLookupTests
         Assert.Throws<ToolAmbiguousMatchException>(() => ambiguous.GetDocumentOrThrow());
         Assert.Throws<ToolNotFoundException>(() => missing.GetDocumentOrThrow());
     }
+
+    [Test]
+    public void RequireDocument_Found_ReturnsDocument()
+    {
+        var solution = BuildSolution(PathOf("A", "Foo.cs"));
+
+        var document = DocumentLookup.RequireDocument(solution, new FilePathWrapper(PathOf("A", "Foo.cs")));
+
+        Assert.That(document.FilePath, Is.EqualTo(PathOf("A", "Foo.cs")));
+    }
+
+    [Test]
+    public void RequireDocument_Missing_ThrowsNotFound()
+    {
+        var solution = BuildSolution(PathOf("A", "Foo.cs"));
+
+        var ex = Assert.Throws<ToolNotFoundException>(() => DocumentLookup.RequireDocument(solution, new FilePathWrapper("Missing.cs")));
+
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public void RequireDocument_Ambiguous_ThrowsAmbiguousMatch()
+    {
+        var solution = BuildSolution(PathOf("A", "Foo.cs"), PathOf("B", "Foo.cs"));
+
+        Assert.Throws<ToolAmbiguousMatchException>(() => DocumentLookup.RequireDocument(solution, new FilePathWrapper("Foo.cs")));
+    }
 }
