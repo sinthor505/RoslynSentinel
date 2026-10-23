@@ -138,12 +138,11 @@ class C {
 
     [Test]
     [Category("IDEStyleEngine")] // sentinel:auto-category
-    public async Task UseNullPropagation_UnknownFile_ReturnsEmpty()
+    public async Task UseNullPropagation_MissingFile_ThrowsNotFound()
     {
         SetSource("class C {}");
-        var result = await _ideStyleEngine.UseNullPropagationAsync("NoSuchFile.cs");
-        // TODO throw-migration: assert the typed exception once IDEStyleEngine throws
-        Assert.That(result.UpdatedText, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _ideStyleEngine.UseNullPropagationAsync("NoSuchFile.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // ══════════════════════════════════════════════════════════════

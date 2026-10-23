@@ -197,4 +197,12 @@ public class IDEStyleSimplifyMemberAccessCharacterizationTests
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
         Assert.That(result.UpdatedText, Is.EqualTo(source));
     }
+
+    [Test]
+    public async Task SimplifyMemberAccess_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.SimplifyMemberAccessAsync("Missing.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }
