@@ -733,25 +733,27 @@ public class C
         """;
 
     [Test]
-    public async Task WrapInTryCatch_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    public async Task WrapInTryCatch_SnippetMatchesNothing_ThrowsNotFound()
     {
         SetSource(SnippetMissSource, "WrapTryCatchMiss.cs");
 
-        var result = await _basicRefactoringEngine.WrapInTryCatchAsync("WrapTryCatchMiss.cs", "no such text anywhere", null, null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _basicRefactoringEngine.WrapInTryCatchAsync("WrapTryCatchMiss.cs", "no such text anywhere", null, null));
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
     }
 
     [Test]
-    public async Task WrapInRegion_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    public async Task WrapInRegion_SnippetMatchesNothing_ThrowsNotFound()
     {
         SetSource(SnippetMissSource, "WrapRegionMiss.cs");
 
-        var result = await _basicRefactoringEngine.WrapInRegionAsync("WrapRegionMiss.cs", "no such text anywhere", null, null, "R");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _basicRefactoringEngine.WrapInRegionAsync("WrapRegionMiss.cs", "no such text anywhere", null, null, "R"));
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
     }
 
     [Test]

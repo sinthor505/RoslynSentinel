@@ -534,6 +534,66 @@ public enum OrderStatus
     }
 
     [Test]
+    public async Task AddSummaryComment_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        SetSource(@"
+namespace N;
+public enum OrderStatus
+{
+    Pending,
+    Shipped,
+    Cancelled
+}
+", "OrderStatus.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _basicRefactoringEngine.AddSummaryCommentAsync("OrderStatus.cs", "Shipped", "The order has shipped.", contextSnippet: "no such text anywhere"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task RemoveSummaryComment_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        SetSource(@"
+namespace N;
+public enum OrderStatus
+{
+    Pending,
+    Shipped,
+    Cancelled
+}
+", "OrderStatus.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _basicRefactoringEngine.RemoveSummaryCommentAsync("OrderStatus.cs", "Shipped", contextSnippet: "no such text anywhere"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task GetSummaryComment_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        SetSource(@"
+namespace N;
+public enum OrderStatus
+{
+    Pending,
+    Shipped,
+    Cancelled
+}
+", "OrderStatus.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _basicRefactoringEngine.GetSummaryCommentAsync("OrderStatus.cs", "Shipped", contextSnippet: "no such text anywhere"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
     public async Task AddSummaryComment_TargetIsRecord_Succeeds()
     {
         SetSource(@"

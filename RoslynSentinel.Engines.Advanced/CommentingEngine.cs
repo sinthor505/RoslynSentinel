@@ -330,8 +330,18 @@ public class CommentingEngine
                 continue;
             }
 
-            var editResult = await _refactoringEngine.AddSummaryCommentCoreAsync(
-                document, site.FilePath, site.MemberName, summary, site.ContextSnippet, site.LineBefore, null, site.ContainingTypeName, cancellationToken);
+            DocumentEditResult editResult;
+            try
+            {
+                // Per-item catch keeps one bad member from aborting the file.
+                editResult = await _refactoringEngine.AddSummaryCommentCoreAsync(
+                    document, site.FilePath, site.MemberName, summary, site.ContextSnippet, site.LineBefore, null, site.ContainingTypeName, cancellationToken);
+            }
+            catch (ToolException ex) // TODO no test pins this per-item catch (needs a workspace-backed CommentFileAsync fixture with FakeLlmClient)
+            {
+                outcomes.Add(new MemberCommentOutcome(site, false, $"AddSummaryComment failed: {EditOutcome.CannotEdit} - {ex.Message}"));
+                continue;
+            }
 
             if (editResult.Outcome != EditOutcome.Modified || editResult.UpdatedText == null)
             {
