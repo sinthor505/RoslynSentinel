@@ -195,6 +195,25 @@ public sealed class ToolNotImplementedException : ToolException
 }
 
 /// <summary>
+/// The requested operation is switched off by configuration (SentinelConfiguration.IsFeatureEnabled returned false) -> nothing
+/// was read or changed, and the caller cannot fix it by changing arguments. Distinct from <see cref="ToolNotImplementedException"/>
+/// (no implementation exists) and <see cref="ToolTargetIneligibleException"/> (this target is wrong). Maps to
+/// <see cref="ToolErrorCode.FeatureDisabled"/>.
+/// </summary>
+public sealed class ToolFeatureDisabledException : ToolException
+{
+    public override string ErrorCode => ToolErrorCode.FeatureDisabled;
+
+    public ToolFeatureDisabledException(string featureName) : base($"Feature '{featureName}' is not enabled in this server's configuration.")
+    {
+        FeatureName = featureName;
+    }
+
+    /// <summary>The configuration feature key that is switched off (e.g. "IDE0011").</summary>
+    public string FeatureName { get; }
+}
+
+/// <summary>
 /// A confirmed external content-drift hit tripped the session-wide halt latch (see
 /// docs/current/ideas/external-drift-hard-blocker.md). Once thrown, every subsequent mutating
 /// call on this <see cref="PersistentWorkspaceManager"/> instance throws this same exception.
