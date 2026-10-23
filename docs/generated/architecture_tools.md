@@ -101,7 +101,7 @@
 | WholeFileWriteTools | ApplyUnifiedDiff | Claude, claude-lean (on demand), WholeFileWrite | - | Applies or validates a unified diff against a single file; mismatched hunk lines are re-anchored nearby. |
 | WholeFileWriteTools | DeleteFile | Claude, claude-lean, WholeFileWrite | - | Deletes a file from disk; fails if it doesn't exist. |
 | WholeFileWriteTools | WriteFile | Claude, claude-lean (on demand), WholeFileWrite | - | Writes a whole file to disk, creating or overwriting it. |
-| WorkspaceBuildTestTools | Build | WorkspaceBuildTest | - | Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). level=fullBuild: runs `dotnet build`... |
+| WorkspaceBuildTestTools | Build | WorkspaceBuildTest | - | Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). |
 | WorkspaceBuildTestTools | GetDiagnostics | WorkspaceBuildTest | - | Gets compiler diagnostics for a file, project, or the whole solution. |
 | WorkspaceBuildTestTools | RunTest | WorkspaceBuildTest | - | Runs `dotnet test` on the solution or one project. |
 | WorkspaceFileEditTools | CreateFile | WorkspaceFileContent, WorkspaceFileIO | - | Creates a new file. |
@@ -124,7 +124,7 @@
 | WorkspaceReadNavigationTools | GetOperationDetail | Claude, claude-lean (on demand), Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Returns a filtered, paged slice of an operation result blob by changeId. |
 | WorkspaceReadNavigationTools | ListAll | Claude, Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Lists every declared symbol in the loaded solution with file, kind, name, container, and line range. |
 | WorkspaceReadNavigationTools | Search | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Unified search; mode selects the target. text: regex/literal scan of .cs files (restrict with fileGlob). symbol:... |
-| WorkspaceTools | Build | Claude, claude-lean, Workspace | - | Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). level=fullBuild: runs `dotnet build`... |
+| WorkspaceTools | Build | Claude, claude-lean, Workspace | - | Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). |
 | WorkspaceTools | CreateFile | Claude, claude-lean, Workspace | - | Creates a new file; fails if it already exists. |
 | WorkspaceTools | CreateProject | Claude, claude-lean (on demand), Workspace | - | Creates a new project and adds it to the loaded solution. |
 | WorkspaceTools | DeleteUnusedSymbol | Claude, claude-lean (on demand), Workspace | - | Deletes a symbol only if it has zero usages anywhere in the codebase. |

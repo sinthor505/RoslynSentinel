@@ -3,10 +3,10 @@ namespace RoslynSentinel.Common;
 public static class ToolParams
 {
     public const string UseScratchDir =
-        "Obsolete: Build defaults to level=fullBuildThrowaway which already writes to .roslynsentinel/build/<instance>/; RunTest always does. Build maps true with level=fullBuild to fullBuildThrowaway; RunTest ignores it.";
+        "Obsolete: true is the same as level=fullBuildThrowaway on Build; RunTest ignores it.";
 
     public const string BuildLevel =
-        "quickBuild: in-memory Roslyn diagnostics, writes nothing. fullBuildThrowaway (default): `dotnet build` into .roslynsentinel/build/<instance>/, projects' bin/ untouched. fullBuild: `dotnet build` into the projects' own bin/obj; the only level that updates bin/ (and can make isServerBinaryStale react); waits up to 30s for a competing build.";
+        "quickBuild: in-memory diagnostics. fullBuildThrowaway (default): `dotnet build` into .roslynsentinel/build/<instance>/, projects' bin/ untouched. fullBuild: builds the projects' own bin/obj; only this level updates bin/ (isServerBinaryStale).";
 
     public const string BuildDescription =
         "Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). Default level=fullBuildThrowaway: runs `dotnet build` (slower; also catches NuGet restore, resource and post-build failures) into a per-server output folder. Success returns the outcome, projects compiled and error/warning counts. Failure returns error counts by project/file/code, the first maxDetails errors (root-cause project first), SuppressedDownstreamErrorCount and OmittedErrorCount; FullDiagnosticsResultId holds all diagnostics (read with GetLargeResult). Output tails and warnings need includeOutput / includeWarnings.";

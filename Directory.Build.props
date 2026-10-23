@@ -4,4 +4,17 @@
     <!-- This is a temporary workaround to enable semantic analysis. The underlying vulnerabilities should be fixed. -->
     <NuGetAudit>false</NuGetAudit>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- Output size: every per-instance build folder (.roslynsentinel/build/<instance>/) held about 650 MB of
+         which about 54 MB was unique (12 test projects at about 44 MB each; Microsoft.CodeAnalysis.CSharp.dll
+         15 copies; Microsoft.CodeAnalysis.CSharp.resources.dll 195 copies). Keep only the en satellite
+         resources and hard-link copy-local files. Hazard: a tool that rewrites files in bin/ in place (e.g.
+         coverlet in-process instrumentation) would corrupt the hard-linked source. TestRunEngine never passes
+         a collect option; if coverage is ever added, build that run with the property
+         CreateHardLinksForCopyLocalIfPossible set to false. -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <CreateHardLinksForCopyLocalIfPossible>true</CreateHardLinksForCopyLocalIfPossible>
+    <CreateHardLinksForCopyFilesToOutputDirectoryIfPossible>true</CreateHardLinksForCopyFilesToOutputDirectoryIfPossible>
+    <CreateHardLinksForAdditionalFilesIfPossible>true</CreateHardLinksForAdditionalFilesIfPossible>
+  </PropertyGroup>
 </Project>
