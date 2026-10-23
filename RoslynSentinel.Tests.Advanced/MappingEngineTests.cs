@@ -191,7 +191,7 @@ public class TargetModel
     }
 
     [Test]
-    public async Task InvertAssignments_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    public async Task InvertAssignments_SnippetMatchesNothing_ThrowsNotFound()
     {
         SetSource(@"public class Syncer
 {
@@ -201,9 +201,10 @@ public class TargetModel
     }
 }", "SyncerMiss.cs");
 
-        var result = await _engine.InvertAssignmentsAsync("SyncerMiss.cs", "no such text anywhere", null, null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _engine.InvertAssignmentsAsync("SyncerMiss.cs", "no such text anywhere", null, null));
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
     }
 }

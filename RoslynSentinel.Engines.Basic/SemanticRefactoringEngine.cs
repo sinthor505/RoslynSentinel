@@ -262,40 +262,32 @@ public class SemanticRefactoringEngine
             return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, Message = "// Cannot edit: syntax root not found.", FilePath = filePath };
         }
 
-        try
-        {
-            // Find the snippet position
-            var snippetPos = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter).Start;
+        // Find the snippet position
+        var snippetPos = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter).Start;
 
-            // Find the statements that contain the snippet position
-            var nodes = root.DescendantNodes()
-                .Where(n => n is StatementSyntax && n.Parent is BlockSyntax && n.Span.Contains(snippetPos))
+        // Find the statements that contain the snippet position
+        var nodes = root.DescendantNodes()
+            .Where(n => n is StatementSyntax && n.Parent is BlockSyntax && n.Span.Contains(snippetPos))
+            .Cast<StatementSyntax>()
+            .ToList();
+
+        if (nodes.Count == 0)
+        {
+            // Fallback: try to find any statements in a reasonable range around the snippet
+            var span = sourceText.Lines.GetLineFromPosition(snippetPos).Span;
+            nodes = root.DescendantNodes(span)
+                .Where(n => n is StatementSyntax && n.Parent is BlockSyntax)
                 .Cast<StatementSyntax>()
                 .ToList();
-
-            if (nodes.Count == 0)
-            {
-                // Fallback: try to find any statements in a reasonable range around the snippet
-                var span = sourceText.Lines.GetLineFromPosition(snippetPos).Span;
-                nodes = root.DescendantNodes(span)
-                    .Where(n => n is StatementSyntax && n.Parent is BlockSyntax)
-                    .Cast<StatementSyntax>()
-                    .ToList();
-            }
-
-            if (nodes.Count == 0)
-            {
-                return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "// ErrorDetails: No statements found at the snippet location.", FilePath = filePath };
-            }
-
-            // TODO this snippet form selects only the statement(s) containing the snippet, so it cannot cover a multi-statement range (the using block would be empty); WrapRange using is meant for startLine/endLine
-            return await WrapStatementsInUsingAsync(filePath, document, root, nodes, disposalName, cancellationToken);
         }
-        // A using-eligibility refusal is not a snippet-lookup failure: let it reach the tool boundary with its own error code and message.
-        catch (ToolException ex) when (ex is not (ToolTargetIneligibleException or ToolInvalidArgumentException))
+
+        if (nodes.Count == 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = $"// ContextSnippet error: {ex.Message}", ErrorCode = ex.ErrorCode, FilePath = filePath };
+            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "// ErrorDetails: No statements found at the snippet location.", FilePath = filePath };
         }
+
+        // TODO this snippet form selects only the statement(s) containing the snippet, so it cannot cover a multi-statement range (the using block would be empty); WrapRange using is meant for startLine/endLine
+        return await WrapStatementsInUsingAsync(filePath, document, root, nodes, disposalName, cancellationToken);
     }
 
     /// <summary>

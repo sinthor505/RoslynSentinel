@@ -261,67 +261,53 @@ public class MappingEngine
             };
         }
 
-        try
-        {
-            // Find the snippet position
-            var snippetPos = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter).Start;
+        // Find the snippet position
+        var snippetPos = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter).Start;
 
-            // Find assignment expressions near/at the snippet position
-            var nodes = root.DescendantNodes()
-                .Where(n => n is AssignmentExpressionSyntax &&
-                           (n.Span.Contains(snippetPos) ||
-                            (n.Span.Start <= snippetPos && n.Span.End >= snippetPos)))
+        // Find assignment expressions near/at the snippet position
+        var nodes = root.DescendantNodes()
+            .Where(n => n is AssignmentExpressionSyntax &&
+                       (n.Span.Contains(snippetPos) ||
+                        (n.Span.Start <= snippetPos && n.Span.End >= snippetPos)))
+            .OfType<AssignmentExpressionSyntax>()
+            .ToList();
+
+        if (nodes.Count == 0)
+        {
+            // Fallback: try to find assignments on the same line as the snippet
+            var linePos = sourceText.Lines.GetLinePosition(snippetPos);
+            var lineNumber = linePos.Line;
+            var line = sourceText.Lines[lineNumber];
+            var span = line.Span;
+
+            nodes = root.DescendantNodes(span)
                 .OfType<AssignmentExpressionSyntax>()
                 .ToList();
-
-            if (nodes.Count == 0)
-            {
-                // Fallback: try to find assignments on the same line as the snippet
-                var linePos = sourceText.Lines.GetLinePosition(snippetPos);
-                var lineNumber = linePos.Line;
-                var line = sourceText.Lines[lineNumber];
-                var span = line.Span;
-
-                nodes = root.DescendantNodes(span)
-                    .OfType<AssignmentExpressionSyntax>()
-                    .ToList();
-            }
-
-            if (nodes.Count == 0)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// No assignment expressions found at the snippet location",
-                    UpdatedText = root.ToFullString() ?? string.Empty
-                };
-            }
-
-            var annotation = Formatter.Annotation;
-            var newRoot = root.ReplaceNodes(nodes, (oldNode, newNode) =>
-                SwapAssignmentOperands(oldNode, newNode, annotation));
-
-            var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.Modified,
-                FilePath = filePath,
-                Message = $"// Assignment expressions inverted in the snippet",
-                UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
-            };
         }
-        catch (ToolException ex)
+
+        if (nodes.Count == 0)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.TargetNotFound,
                 FilePath = filePath,
-                Message = $"// ContextSnippet error: {ex.Message}",
-                ErrorCode = ex.ErrorCode,
+                Message = $"// No assignment expressions found at the snippet location",
                 UpdatedText = root.ToFullString() ?? string.Empty
             };
         }
+
+        var annotation = Formatter.Annotation;
+        var newRoot = root.ReplaceNodes(nodes, (oldNode, newNode) =>
+            SwapAssignmentOperands(oldNode, newNode, annotation));
+
+        var formattedDoc = await RoslynSentinel.Common.RoslynFormattingHelper.FormatAnnotatedSpansAsync(document, newRoot, cancellationToken);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = $"// Assignment expressions inverted in the snippet",
+            UpdatedText = (await formattedDoc.GetTextAsync(cancellationToken)).ToString()
+        };
     }
 
     /// <summary>

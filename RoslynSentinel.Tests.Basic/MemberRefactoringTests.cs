@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 
 #pragma warning disable CS8618
@@ -757,15 +758,16 @@ public class C
     }
 
     [Test]
-    public async Task WrapInUsing_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    public async Task WrapInUsing_SnippetMatchesNothing_ThrowsNotFound()
     {
         SetSource(SnippetMissSource, "WrapUsingMiss.cs");
         var semanticEngine = new SemanticRefactoringEngine(_workspaceManager);
 
-        var result = await semanticEngine.WrapInUsingAsync("WrapUsingMiss.cs", "no such text anywhere", null, null, "d");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await semanticEngine.WrapInUsingAsync("WrapUsingMiss.cs", "no such text anywhere", null, null, "d"));
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
     }
 
     [Test]

@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.SnippetMatching;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
@@ -2350,6 +2351,31 @@ public class OtherClass
             var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody", contextSnippet: "return \"hello\";");
             Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
             Assert.That(result.Warnings, Is.Null);
+        }
+
+        [Test]
+        public async Task ConvertExpressionBody_AmbiguousMemberWithSnippetMatchingNothing_ThrowsNotFound()
+        {
+            const string src = @"public class MyClass
+{
+    public string GetName(int id)
+    {
+        return ""hello"";
+    }
+
+    public string GetName(string key)
+    {
+        return ""world"";
+    }
+}";
+            SetSource(src, "MyClass.cs");
+            var engine = new StructuralRefactoringEngine(_workspaceManager);
+
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+                await engine.ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody", contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE"));
+
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+            Assert.That(ex.Message, Is.Not.Empty);
         }
 
         /// <summary>

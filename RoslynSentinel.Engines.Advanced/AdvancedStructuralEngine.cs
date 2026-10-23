@@ -1593,23 +1593,9 @@ public class StructuralRefactoringEngine
         var candidates = SyntaxTargetResolver.ResolveCandidates(root, text, memberName, cancellationToken).Where(c => c.Kind is CandidateKind.Method or CandidateKind.Property or CandidateKind.Constructor).ToList();
         MemberDeclarationSyntax? target;
         string? snippetWarning;
-        try
-        {
-            var resolved = SyntaxTargetResolver.ResolveBySnippetWithWarning(candidates, text, contextSnippet, lineBefore, lineAfter, (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode), trustSingleCandidate: true, filePath: document.FilePath ?? string.Empty);
-            target = resolved.Candidate?.Node as MemberDeclarationSyntax;
-            snippetWarning = resolved.Warning;
-        }
-        catch (ToolException ex)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = ex.Message,
-                ErrorCode = ex.ErrorCode,
-                Candidates = (ex as ToolAmbiguousMatchException)?.Candidates
-            };
-        }
+        var resolved = SyntaxTargetResolver.ResolveBySnippetWithWarning(candidates, text, contextSnippet, lineBefore, lineAfter, (c, m, mode) => SyntaxTargetResolver.BuildHintForCandidates(c, m, mode), trustSingleCandidate: true, filePath: document.FilePath ?? string.Empty);
+        target = resolved.Candidate?.Node as MemberDeclarationSyntax;
+        snippetWarning = resolved.Warning;
 
         if (target == null)
         {
