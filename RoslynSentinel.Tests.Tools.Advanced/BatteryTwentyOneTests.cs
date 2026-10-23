@@ -117,13 +117,11 @@ public class Worker
 
     [Test]
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-    public async Task AddBraces_NonExistentFile_ReportsFileNotFound()
+    public async Task AddBraces_NonExistentFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _syntaxUpgradeEngine.AddBracesAsync("NonExistent.cs");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.Message, Is.EqualTo("// File not found."));
-        // TODO throw-migration: assert the typed exception once AddBracesAsync throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _syntaxUpgradeEngine.AddBracesAsync("NonExistent.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- UpgradePatternMatching (via SyntaxUpgradeEngine) ---
@@ -140,13 +138,11 @@ public class Worker
 
     [Test]
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-    public async Task UpgradePatternMatching_NonExistentFile_ReportsFileNotFound()
+    public async Task UpgradePatternMatching_NonExistentFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync("NonExistent.cs");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.Message, Is.EqualTo("// File not found."));
-        // TODO throw-migration: assert the typed exception once UpgradePatternMatchingAsync throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _syntaxUpgradeEngine.UpgradePatternMatchingAsync("NonExistent.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- UseIndexFromEnd (via CodeStyleEngine) ---
@@ -312,13 +308,11 @@ public class Worker
 
     [Test]
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-    public async Task UpgradeToModernGuards_NonExistentFile_ReportsFileNotFound()
+    public async Task UpgradeToModernGuards_NonExistentFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("NonExistent.cs");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.Message, Is.EqualTo("// File not found."));
-        // TODO throw-migration: assert the typed exception once UpgradeToModernGuardsAsync throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("NonExistent.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- ConvertSwitchToExpression (via SyntaxUpgradeEngine) ---
@@ -336,13 +330,11 @@ public class Worker
 
     [Test]
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-    public async Task ConvertSwitchToExpression_NonExistentFile_ReportsFileNotFound()
+    public async Task ConvertSwitchToExpression_NonExistentFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync("NonExistent.cs", "M");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.Message, Is.EqualTo("// File not found."));
-        // TODO throw-migration: assert the typed exception once ConvertSwitchToExpressionAsync throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync("NonExistent.cs", "M"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- CleanupImplicitSpans (via SyntaxUpgradeEngine) ---
@@ -358,13 +350,11 @@ public class Worker
 
     [Test]
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-    public async Task CleanupImplicitSpans_NonExistentFile_ReportsFileNotFound()
+    public async Task CleanupImplicitSpans_NonExistentFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _syntaxUpgradeEngine.CleanupImplicitSpansAsync("NonExistent.cs");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.Message, Is.EqualTo("// File not found."));
-        // TODO throw-migration: assert the typed exception once CleanupImplicitSpansAsync throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _syntaxUpgradeEngine.CleanupImplicitSpansAsync("NonExistent.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- ConvertToSourceGeneratedLogging (via ModernLoggingEngine) ---
@@ -626,12 +616,10 @@ public class Validator
 
     [Test]
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-    public async Task UseExceptionExpressions_NonExistentFile_ReportsTargetNotFound()
+    public async Task UseExceptionExpressions_NonExistentFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _syntaxUpgradeEngine.UseExceptionExpressionsAsync("NonExistent.cs", "M");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-        Assert.That(result.Message, Is.EqualTo("// File not found in workspace."));
-        // TODO throw-migration: assert the typed exception once UseExceptionExpressionsAsync throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _syntaxUpgradeEngine.UseExceptionExpressionsAsync("NonExistent.cs", "M"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 }

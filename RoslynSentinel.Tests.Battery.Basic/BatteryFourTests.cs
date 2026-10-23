@@ -183,17 +183,14 @@ public class AnalyzeForeachAdvancedTests
     }
 
     [Test]
-    [Description("Non-existent file path -> IsSafeToConvert=false with a 'Could not read file' error")]
-    public async Task AnalyzeForeach_FileNotFound_ReturnsCleanError()
+    [Description("Non-existent file path -> ToolNotFoundException (NotFound), not a safe-to-convert result")]
+    public async Task AnalyzeForeach_FileNotFound_ThrowsNotFound()
     {
         var nonExistent = Path.Combine(Path.GetTempPath(), "GhostFile_" + Guid.NewGuid() + ".cs");
 
-        var result = await _engine.AnalyzeForeachForLinqConversionAsync(nonExistent, "foreach");
-
-        Assert.That(result.IsSafeToConvert, Is.False,
-            "Non-existent file must not claim safe-to-convert");
-        Assert.That(result.BlockingReason, Does.Contain("Could not read file"),
-            "BlockingReason must explain the file could not be read");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(
+            async () => await _engine.AnalyzeForeachForLinqConversionAsync(nonExistent, "foreach"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

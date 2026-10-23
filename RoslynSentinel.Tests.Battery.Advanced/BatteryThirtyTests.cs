@@ -317,19 +317,17 @@ public class Counter {
 
     [Test]
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-    public async Task UseFieldBackedProperties_WhenNoBackingFieldPairs_ReturnsOriginalContent()
+    public async Task UseFieldBackedProperties_WhenNoBackingFieldPairs_ThrowsNotFound()
     {
-        // No pairs means source is returned unchanged.
+        // No pairs is nothing to do: the engine throws NotFound rather than returning the source.
         const string code = @"
 public class Simple {
     public string Name { get; set; }
     public int Value { get; set; }
 }";
         SetSource(code, "Simple.cs");
-        var result = await _suEngine.UseFieldBackedPropertiesAsync("Simple.cs");
-        // Auto-properties with no backing field -> no change, but must return full source
-        Assert.That(result.UpdatedText!, Is.Not.Null.And.Not.Empty, "Must return source, not empty string");
-        Assert.That(result.UpdatedText!, Contains.Substring("public string Name"), "Original content must be preserved");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _suEngine.UseFieldBackedPropertiesAsync("Simple.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -389,24 +387,22 @@ public class Dto {
     public async Task UseFieldBackedProperties_DoesNotExpandAutoPropertiesToBackingFields()
     {
         // Regression test ensuring the direction is correct: the tool must NOT expand auto-props.
+        // With only auto-properties there is nothing to collapse, so the engine throws NotFound and expands nothing.
         const string code = @"
 public class Auto {
     public string Name  { get; set; }
     public int    Count { get; set; }
 }";
         SetSource(code, "Auto.cs");
-        var result = await _suEngine.UseFieldBackedPropertiesAsync("Auto.cs");
-        // Must not expand auto-properties to backing fields
-        Assert.That(result.UpdatedText!, Does.Not.Contain("private string _name"), "Must NOT expand auto-prop to backing field");
-        Assert.That(result.UpdatedText!, Does.Not.Contain("private int _count"), "Must NOT expand auto-prop to backing field");
-        Assert.That(result.UpdatedText!, Contains.Substring("{ get; set; }"), "Auto-props must remain unchanged");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _suEngine.UseFieldBackedPropertiesAsync("Auto.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-    public async Task UseFieldBackedProperties_ReadOnlyBackingField_IsNotConverted()
+    public async Task UseFieldBackedProperties_ReadOnlyBackingField_ThrowsNotFound()
     {
-        // readonly backing fields are not candidates (they need readonly auto-property semantics which is different)
+        // readonly backing fields are not candidates, so there are no pairs to collapse and the engine throws NotFound
         const string code = @"
 public class Immutable {
     private readonly string _id;
@@ -414,25 +410,23 @@ public class Immutable {
     public Immutable(string id) { _id = id; }
 }";
         SetSource(code, "Immutable.cs");
-        var result = await _suEngine.UseFieldBackedPropertiesAsync("Immutable.cs");
-        // readonly fields should NOT be candidates for this conversion
-        Assert.That(result.UpdatedText!, Contains.Substring("private readonly string _id"), "readonly backing fields must not be converted");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _suEngine.UseFieldBackedPropertiesAsync("Immutable.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-    public async Task UseFieldBackedProperties_StaticBackingField_IsNotConverted()
+    public async Task UseFieldBackedProperties_StaticBackingField_ThrowsNotFound()
     {
-        // static backing fields are not candidates
+        // static backing fields are not candidates, so there are no pairs to collapse and the engine throws NotFound
         const string code = @"
 public class Registry {
     private static string _instance;
     public static string Instance { get => _instance; set => _instance = value; }
 }";
         SetSource(code, "Registry.cs");
-        var result = await _suEngine.UseFieldBackedPropertiesAsync("Registry.cs");
-        // static fields should NOT be converted
-        Assert.That(result.UpdatedText!, Contains.Substring("private static string _instance"), "Static backing fields must not be converted");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _suEngine.UseFieldBackedPropertiesAsync("Registry.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // =========================================================================
@@ -440,14 +434,15 @@ public class Registry {
     // =========================================================================
     [Test]
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-    public async Task UseFieldBackedPropertiesEngine_WhenFeatureDisabled_ReturnsEmptyString()
+    public async Task UseFieldBackedPropertiesEngine_WhenFeatureDisabled_ThrowsFeatureDisabled()
     {
         _cfg.SetFeatureStatus("FieldBackedProperties", false);
         try
         {
             SetSource("public class Test { public string X { get; set; } }", "Test.cs");
-            var result = await _suEngine.UseFieldBackedPropertiesAsync("Test.cs");
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.FeatureDisabled), "Disabled feature must return the FeatureDisabled outcome");
+            var ex = await Assert.ThrowsAsync<ToolFeatureDisabledException>(async () => await _suEngine.UseFieldBackedPropertiesAsync("Test.cs"));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.FeatureDisabled));
+            Assert.That(ex.FeatureName, Is.EqualTo("FieldBackedProperties"));
         }
         finally
         {

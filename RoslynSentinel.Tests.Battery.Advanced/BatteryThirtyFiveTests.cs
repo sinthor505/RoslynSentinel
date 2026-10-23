@@ -88,14 +88,12 @@ public class BatteryThirtyFiveTests
 
     [Test]
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-    public async Task UpgradeToFileScopedNamespace_NoNamespace_ReturnsMessage()
+    public async Task UpgradeToFileScopedNamespace_NoNamespace_ThrowsNotFound()
     {
         const string src = "public class Global {}";
         SetSource(src, "Global.cs");
-        var result = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync("Global.cs");
-
-        Assert.That(result.Message, Does.StartWith("// No block"),
-            "Should return a message when no namespace is found");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync("Global.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

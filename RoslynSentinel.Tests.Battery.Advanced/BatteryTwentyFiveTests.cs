@@ -968,7 +968,7 @@ public class SyntaxUpgradeEngineGapTests
     [TearDown]
     public void TearDown() => _workspaceManager?.Dispose();
     [Test]
-    public async Task ConvertSwitchExpressionToStatementAsync_FileWithSwitchExpr_ReturnsNonNull()
+    public async Task ConvertSwitchExpressionToStatementAsync_FileWithSwitchExpr_ThrowsNotImplemented()
     {
         var source = @"
 public class Router {
@@ -980,28 +980,27 @@ public class Router {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Router.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertSwitchExpressionToStatementAsync("Router.cs");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit)); Assert.That(result.Message, Does.Contain("Conversion not implemented"));
+        var ex = await Assert.ThrowsAsync<ToolNotImplementedException>(async () => await _engine.ConvertSwitchExpressionToStatementAsync("Router.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotImplemented));
     }
 
     [Test]
-    public async Task ConvertSwitchExpressionToStatementAsync_UnknownFile_ReturnsEmpty()
+    public async Task ConvertSwitchExpressionToStatementAsync_UnknownFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertSwitchExpressionToStatementAsync("NoFile.cs");
-        // TODO throw-migration: assert the typed exception once SyntaxUpgradeEngine throws
-        Assert.That(result.UpdatedText, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ConvertSwitchExpressionToStatementAsync("NoFile.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
-    public async Task UseFieldBackedPropertiesAsync_AutoProperty_ReturnsNonNull()
+    public async Task UseFieldBackedPropertiesAsync_AutoProperty_ThrowsNotFound()
     {
         var source = "public class Entity { public string Name { get; set; } = \"\"; }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Entity.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.UseFieldBackedPropertiesAsync("Entity.cs");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.NoCandidatesFound));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.UseFieldBackedPropertiesAsync("Entity.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

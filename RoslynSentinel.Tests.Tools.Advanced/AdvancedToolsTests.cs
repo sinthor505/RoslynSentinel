@@ -121,8 +121,8 @@ public class MyService {
     public MyService(IRepo repo) { _repo = repo; _repo.Init(); }
     public void Do() { _repo.Save(); }
 }", "MyService.cs");
-        var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("MyService.cs", "MyService");
-        Assert.That(result.Message, Does.Contain("// Cannot convert"));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync("MyService.cs", "MyService"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
     }
 
     [Test]

@@ -96,35 +96,31 @@ public class MsToolAugmentEngineTests
     public void TearDown() => _mgr?.Dispose();
 
     [Test]
-    public async Task EncapsulateFieldSafe_UnknownFile_ReturnsFailResult()
+    public async Task EncapsulateFieldSafe_UnknownFile_ThrowsNotFound()
     {
-        var result = await _engine.EncapsulateFieldSafeAsync("NoSuchFile.cs", "MyClass", "_field");
-        Assert.That(!result.IsError, Is.False, "unknown file should return a failure result");
-        Assert.That(result.Error, Is.Not.Null.And.Not.Empty, "failure result must contain error message");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.EncapsulateFieldSafeAsync("NoSuchFile.cs", "MyClass", "_field"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
-    public async Task FormatDocumentSafe_UnknownFile_ReturnsFailResult()
+    public async Task FormatDocumentSafe_UnknownFile_ThrowsNotFound()
     {
-        var result = await _engine.FormatDocumentSafeAsync("NoSuchFile.cs");
-        Assert.That(!result.IsError, Is.False, "unknown file should return a failure result");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.FormatDocumentSafeAsync("NoSuchFile.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
-    public async Task SortAndDeduplicateUsings_UnknownFile_ThrowsException()
+    public async Task SortAndDeduplicateUsings_UnknownFile_ThrowsNotFound()
     {
-        // SortAndDeduplicateUsingsAsync throws InvalidOperationException for unknown files
-        await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await _engine.SortAndDeduplicateUsingsAsync("NoSuchFile.cs"),
-            "unknown file should throw InvalidOperationException");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.SortAndDeduplicateUsingsAsync("NoSuchFile.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
-    public async Task EncapsulateFieldSafeAsync_NonExistentFile_ReturnsNotFoundErrorCode()
+    public async Task EncapsulateFieldSafeAsync_NonExistentFile_ThrowsNotFound()
     {
-        var result = await _engine.EncapsulateFieldSafeAsync("NonExistent.cs", "MyField");
-        Assert.That(!result.IsError, Is.False, "non-existent file should return failure");
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "error should be NotFound code");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.EncapsulateFieldSafeAsync("NonExistent.cs", "MyField"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "error should be NotFound code");
     }
 }
 

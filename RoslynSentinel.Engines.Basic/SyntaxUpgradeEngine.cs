@@ -22,35 +22,16 @@ public class SyntaxUpgradeEngine
     {
         if (!_config.IsFeatureEnabled("ModernGuardClauses"))
         {
-            return new DocumentEditResult()
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature ModernGuardClauses is not enabled."
-            };
+            throw new ToolFeatureDisabledException("ModernGuardClauses");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// File not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
         var rewriter = new ModernGuardRewriter();
@@ -59,12 +40,7 @@ public class SyntaxUpgradeEngine
         // Return no-op message when no guard clause patterns were found to upgrade
         if (!rewriter.ChangesMade)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.NoCandidatesFound,
-                FilePath = filePath,
-                Message = "// No if-throw guard clause patterns found to upgrade in this file."
-            };
+            throw new ToolNotFoundException("No if-throw guard clause patterns found to upgrade in this file.");
         }
 
         return new DocumentEditResult
@@ -79,35 +55,16 @@ public class SyntaxUpgradeEngine
     {
         if (!_config.IsFeatureEnabled("IDE0011"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature IDE0011 is not enabled."
-            };
+            throw new ToolFeatureDisabledException("IDE0011");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// File not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
         var rewriter = new BracesRewriter();
@@ -124,35 +81,16 @@ public class SyntaxUpgradeEngine
     {
         if (!_config.IsFeatureEnabled("PatternMatching"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature PatternMatching is not enabled."
-            };
+            throw new ToolFeatureDisabledException("PatternMatching");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// File not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
         var rewriter = new PatternMatchingRewriter();
@@ -169,37 +107,18 @@ public class SyntaxUpgradeEngine
     {
         if (!_config.IsFeatureEnabled("UnboundNameof"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Feature UnboundNameof is not enabled."
-            };
+            throw new ToolFeatureDisabledException("UnboundNameof");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// File not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var text = await document.GetTextAsync(cancellationToken);
         var pos = SnippetLookup.TryResolve(text, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
         if (pos < 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: {snippetError}"
-            };
+            throw new ToolNotFoundException($"ErrorDetails: {snippetError}");
         }
 
         var node = root?.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, snippetMatch!.Length))
@@ -215,60 +134,31 @@ public class SyntaxUpgradeEngine
                 UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root!, node, nameofExpr, cancellationToken)
             };
         }
-        return new DocumentEditResult
-        {
-            Outcome = EditOutcome.CannotEdit,
-            FilePath = filePath,
-            Message = "// No string literal found."
-        };
+        throw new ToolTargetIneligibleException("No string literal found at the matched context snippet.");
     }
 
     public async Task<DocumentEditResult> ConvertSwitchToExpressionAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("IfToSwitch"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Feature IfToSwitch is not enabled."
-            };
+            throw new ToolFeatureDisabledException("IfToSwitch");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// File not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
 
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Method not found."
-            };
+            throw new ToolNotFoundException("Method not found.");
         }
 
         var switchStmt = method.DescendantNodes().OfType<SwitchStatementSyntax>().FirstOrDefault();
         if (switchStmt == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Switch statement not found."
-            };
+            throw new ToolNotFoundException("Switch statement not found.");
         }
 
         var arms = switchStmt.Sections.Select(s =>
@@ -293,69 +183,31 @@ public class SyntaxUpgradeEngine
     public async Task<DocumentEditResult> ConvertSwitchExpressionToStatementAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// File not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
-        return new DocumentEditResult
-        {
-            Outcome = EditOutcome.CannotEdit,
-            FilePath = filePath,
-            Message = "// Conversion not implemented."
-        };
+        throw new ToolNotImplementedException("Conversion not implemented.");
     }
 
     public async Task<DocumentEditResult> CleanupImplicitSpansAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         if (!_config.IsFeatureEnabled("ImplicitSpanCleanup"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature ImplicitSpanCleanup is not enabled."
-            };
+            throw new ToolFeatureDisabledException("ImplicitSpanCleanup");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// File not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
         var rewriter = new ImplicitSpanRewriter();
@@ -372,12 +224,7 @@ public class SyntaxUpgradeEngine
     {
         if (!_config.IsFeatureEnabled("FieldBackedProperties"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature FieldBackedProperties is not enabled."
-            };
+            throw new ToolFeatureDisabledException("FieldBackedProperties");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -386,12 +233,7 @@ public class SyntaxUpgradeEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
         // Find private backing-field + property pairs per class and collapse them to auto-properties.
@@ -528,12 +370,7 @@ public class SyntaxUpgradeEngine
 
         if (replaceMap.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.NoCandidatesFound,
-                FilePath = filePath,
-                UpdatedText = root.ToFullString()
-            };
+            throw new ToolNotFoundException("No backing-field and property pairs found to collapse in this file.");
         }
 
         var newRoot = root.ReplaceNodes(replaceMap.Keys, (orig, _) => replaceMap[orig]);
@@ -558,24 +395,14 @@ public class SyntaxUpgradeEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Could not parse file."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Class not found."
-            };
+            throw new ToolNotFoundException("Class '" + className + "' not found in file.", "class", className);
         }
 
         // Find the constructor that consists entirely of field assignments
@@ -585,12 +412,7 @@ public class SyntaxUpgradeEngine
 
         if (ctor == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = "// Cannot convert: no eligible constructor (must have only assignment statements)."
-            };
+            throw new ToolTargetIneligibleException("Cannot convert: no eligible constructor (must have only assignment statements).");
         }
 
         if (ctor.Body!.Statements.Any(s =>
@@ -608,12 +430,7 @@ public class SyntaxUpgradeEngine
             return asgn.Right is not IdentifierNameSyntax;
         }))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = "// Cannot convert: constructor has non-assignment logic."
-            };
+            throw new ToolTargetIneligibleException("Cannot convert: constructor has non-assignment logic.");
         }
 
         // Build mapping: paramName -> fieldName (as in the class)
@@ -659,12 +476,7 @@ public class SyntaxUpgradeEngine
 
         if (paramToField.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = "// Cannot convert: could not map constructor parameters to fields."
-            };
+            throw new ToolTargetIneligibleException("Cannot convert: could not map constructor parameters to fields.");
         }
 
         // Verify fields exist as private readonly in the class
@@ -685,12 +497,7 @@ public class SyntaxUpgradeEngine
 
         if (fieldToParam.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = "// Cannot convert: no matching private readonly fields found."
-            };
+            throw new ToolTargetIneligibleException("Cannot convert: no matching private readonly fields found.");
         }
 
         // Verify each mapped field is assigned exactly once (in this ctor only)
@@ -707,12 +514,7 @@ public class SyntaxUpgradeEngine
                 });
             if (assignmentCount > 1)
             {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.CannotConvert,
-                    FilePath = filePath,
-                    Message = $"// Cannot convert: field '{field}' is assigned multiple times."
-                };
+                throw new ToolTargetIneligibleException($"Cannot convert: field '{field}' is assigned multiple times.");
             }
         }
 
@@ -770,27 +572,12 @@ public class SyntaxUpgradeEngine
     public async Task<DocumentEditResult> UpgradeToFileScopedNamespaceAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// File not found in workspace."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Could not retrieve syntax root."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
         if (root.DescendantNodes().OfType<FileScopedNamespaceDeclarationSyntax>().Any())
@@ -806,12 +593,7 @@ public class SyntaxUpgradeEngine
         var nsDecl = root.DescendantNodes().OfType<NamespaceDeclarationSyntax>().FirstOrDefault();
         if (nsDecl == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.NoCandidatesFound,
-                FilePath = filePath,
-                Message = "// No block-form namespace declaration found in this file."
-            };
+            throw new ToolNotFoundException("No block-form namespace declaration found in this file.");
         }
 
         // Preserve all members, usings, and extern aliases from the block namespace
@@ -834,39 +616,19 @@ public class SyntaxUpgradeEngine
     public async Task<DocumentEditResult> UseExceptionExpressionsAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// File not found in workspace."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Could not retrieve syntax root."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Method '{methodName}' not found in file."
-            };
+            throw new ToolNotFoundException($"Method '{methodName}' not found in file.");
         }
 
         var throwStmts = method.DescendantNodes().OfType<ThrowStatementSyntax>()
@@ -944,12 +706,7 @@ public class SyntaxUpgradeEngine
 
         if (replacements.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.NoCandidatesFound,
-                FilePath = filePath,
-                Message = "// No replacements found."
-            };
+            throw new ToolNotFoundException("No replacements found.");
         }
 
         var newRoot = root.ReplaceNodes(replacements.Keys, (orig, _) => replacements[orig]);

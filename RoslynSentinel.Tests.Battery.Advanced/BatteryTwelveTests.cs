@@ -103,29 +103,25 @@ public class SyntaxUpgradeEngineTests
     }
 
     [Test]
-    public async Task AddBraces_UnknownFile_ReturnsEmptyString()
+    public async Task AddBraces_UnknownFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Code.cs", "public class C { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _engine.AddBracesAsync("DoesNotExist.cs");
-
-        // TODO throw-migration: assert the typed exception once SyntaxUpgradeEngine throws
-        Assert.That(result.UpdatedText, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AddBracesAsync("DoesNotExist.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
-    public async Task UpgradeToModernGuards_NoGuardPatterns_ReturnsNoOpComment()
+    public async Task UpgradeToModernGuards_NoGuardPatterns_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Code.cs", "public class C { public void Run() { var x = 1; } }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _engine.UpgradeToModernGuardsAsync("Code.cs");
-
-        Assert.That(result.Message, Does.StartWith("// No if-throw guard clause"),
-            "No patterns should produce a no-op comment");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.UpgradeToModernGuardsAsync("Code.cs"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 }
 

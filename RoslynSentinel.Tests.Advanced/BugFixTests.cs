@@ -1661,7 +1661,7 @@ public class Startup
         // ── 9f: UpgradeToModernGuards -> no-op message when nothing to upgrade ─────
         [Test]
         [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-        public async Task UpgradeToModernGuards_NoPatterns_ReturnsNoOpMessage()
+        public async Task UpgradeToModernGuards_NoPatterns_ThrowsNotFound()
         {
             const string src = @"public class Service
 {
@@ -1671,10 +1671,8 @@ public class Startup
     }
 }";
             SetSource(src, "Service.cs");
-            var result = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("Service.cs");
-            // Should NOT return the full file when nothing changed -> UpdatedText stays unset
-            Assert.That(result.UpdatedText, Is.Null, "Should not return full file when no guard patterns are found");
-            Assert.That(result.Message, Does.Contain("No"), "Should return a no-op indicator message instead of full file content");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("Service.cs"));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]
@@ -4054,35 +4052,31 @@ namespace MyApp
         public void TearDown() => _workspaceManager?.Dispose();
         private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), _engine, new LogicSimplificationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new LogicSimplificationEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
         [Test]
-        public async Task AddBracesAsync_FileNotInWorkspace_ReturnsEmpty()
+        public async Task AddBracesAsync_FileNotInWorkspace_ThrowsNotFound()
         {
-            var result = await _engine.AddBracesAsync("nonexistent.cs");
-            // TODO throw-migration: assert the typed exception once SyntaxUpgradeEngine throws
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AddBracesAsync("nonexistent.cs"));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]
-        public async Task AddBraces_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
+        public async Task AddBraces_Tool_FileNotInWorkspace_ThrowsToolNotFoundException()
         {
-            var result = await _engine.AddBracesAsync("nonexistent.cs");
-            // TODO throw-migration: assert the typed exception once SyntaxUpgradeEngine throws
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AddBracesAsync("nonexistent.cs"));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]
-        public async Task UpgradePatternMatchingAsync_FileNotInWorkspace_ReturnsEmpty()
+        public async Task UpgradePatternMatchingAsync_FileNotInWorkspace_ThrowsNotFound()
         {
-            var result = await _engine.UpgradePatternMatchingAsync("nonexistent.cs");
-            // TODO throw-migration: assert the typed exception once SyntaxUpgradeEngine throws
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.UpgradePatternMatchingAsync("nonexistent.cs"));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]
-        public async Task UpgradePatternMatching_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
+        public async Task UpgradePatternMatching_Tool_FileNotInWorkspace_ThrowsToolNotFoundException()
         {
-            var result = await _engine.UpgradePatternMatchingAsync("nonexistent.cs");
-            // TODO throw-migration: assert the typed exception once SyntaxUpgradeEngine throws
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.UpgradePatternMatchingAsync("nonexistent.cs"));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
     }
 
