@@ -177,8 +177,19 @@ public class BuildEngine
         return dot > 0 ? fileName[..dot] : fileName;
     }
 
-    public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50, bool useScratchDir = false)
+    /// <summary>Prefix of <see cref="BuildResult.Detail"/> for a throwaway build that hit no problem; the tool
+    /// layer treats a detail that is only this note as clean (it drops the stdout/stderr tails).</summary>
+    public const string ThrowawayDetailPrefix = "fullBuildThrowaway: output went to ";
+
+    /// <summary>Runs `dotnet build` on the whole solution. <paramref name="level"/> = fullBuild writes the projects'
+    /// own bin/obj (and keeps the competing-build probe); fullBuildThrowaway writes to
+    /// .roslynsentinel/build/&lt;instance&gt;/ and skips the probe. <paramref name="useScratchDir"/> is obsolete:
+    /// true is the same as level = fullBuildThrowaway. Both levels hold the server-wide <see cref="BuildGate"/>.</summary>
+    public async Task<EngineResultWrapper<BuildResult>> RunFullBuildAsync(CancellationToken cancellationToken = default, int maxDetails = 50, bool useScratchDir = false,
+        BuildVerifyLevel level = BuildVerifyLevel.fullBuild)
     {
+        var throwaway = useScratchDir || level == BuildVerifyLevel.fullBuildThrowaway;
+        var usedLevel = throwaway ? BuildVerifyLevel.fullBuildThrowaway : BuildVerifyLevel.fullBuild;
         var start = DateTime.UtcNow;
         var currentSolution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var solutionPath = currentSolution?.FilePath ?? _workspaceManager.SolutionPath;
@@ -198,9 +209,23 @@ public class BuildEngine
                     "Full build compiled zero projects. The loaded solution contains no projects -- no compile verdict is available. Call LoadSolution with a populated .slnx/.sln, or ListAll(kind: \"all\") to inspect the current workspace."));
         }
 
-        if (!useScratchDir)
+        BuildGateLease gateLease;
+        try
         {
-            // A scratch build is isolated, so only a build writing to the repo's own obj/ and bin/ can collide.
+            gateLease = await BuildGate.Shared.AcquireAsync($"Build ({usedLevel})", BuildGate.DefaultMaxWait, cancellationToken);
+        }
+        catch (BuildGateBusyException busy)
+        {
+            return EngineResultWrapper<BuildResult>.Failure(
+                EngineOutcome.Failure, new EngineError(EngineErrorCode.BuildNotRun, busy.Message));
+        }
+
+        // Held until the method returns (every path below, including cancellation and the timeout kill).
+        using var gate = gateLease;
+
+        if (!throwaway)
+        {
+            // A throwaway build is isolated, so only a build writing to the repo's own obj/ and bin/ can collide.
             var targetPaths = new List<string> { solutionPath };
             targetPaths.AddRange(currentSolution?.Projects.Select(p => p.FilePath).OfType<string>() ?? []);
             var waitStart = DateTime.UtcNow;
@@ -235,9 +260,11 @@ public class BuildEngine
         // true even though real CS0618/Obsolete warnings existed on disk. fullBuild's whole purpose
         // is an authoritative from-scratch compile, so always force one.
         process.StartInfo.ArgumentList.Add("--no-incremental");
-        if (useScratchDir)
+        var solutionDirectory = Path.GetDirectoryName(solutionPath)!;
+        string? artifactsPath = null;
+        if (throwaway)
         {
-            BuildIsolation.ApplyScratchArtifactsPath(process.StartInfo, Path.GetDirectoryName(solutionPath)!);
+            artifactsPath = BuildIsolation.ApplyArtifactsPath(process.StartInfo, solutionDirectory);
         }
 
         // MSBuildLocator.RegisterDefaults() (see PersistentWorkspaceManager) pins this process's
@@ -296,9 +323,12 @@ public class BuildEngine
             detail = "Build failed to copy the output file - it is likely locked by a running process (e.g. this MCP server or an IDE holding the binary). Close the process holding the file and retry.";
         }
 
-        if (useScratchDir)
+        if (artifactsPath is not null)
         {
-            detail ??= "useScratchDir: output went to .scratch/roslynsentinel-builds/<server pid>/ next to the solution, not the projects' own bin/ and obj/ folders.";
+            var relativePath = Path.GetRelativePath(solutionDirectory, artifactsPath).Replace('\\', '/');
+            var note = $"{ThrowawayDetailPrefix}{relativePath}/, not the projects' own bin/ and obj/ folders; the projects' bin/ was not updated (use level=fullBuild for that).";
+            // Any problem text stays first so the tool layer can tell a clean throwaway build from a troubled one.
+            detail = detail is null ? note : detail + " " + note;
         }
 
         const int TailLines = 40;
@@ -307,7 +337,7 @@ public class BuildEngine
         const int SummaryTopN = 50;
         return new EngineResultWrapper<BuildResult>(EngineOutcome.Success, new BuildResult(
             Outcome: process.ExitCode == 0 ? BuildOutcome.Succeeded : BuildOutcome.Failed,
-            Level: BuildVerifyLevel.fullBuild,
+            Level: usedLevel,
             ProjectsCompiled: projectNames,
             DiagnosticsComplete: true,
             ExitCode: process.ExitCode,

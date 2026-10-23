@@ -27,7 +27,7 @@ public class WorkspaceBuildTestTools
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 50,
         [Description("Caps the number of groups returned. Only used when summarize=true.")]
         [ToolOptionAttribute(ToolOptionTag.TopN)] int topN = 20,
-        [Description("noBuild (default): diagnostics only. quickBuild/fullBuild: additionally runs a build check (see Build tool) and attaches it as BuildVerification.")]
+        [Description("noBuild (default): diagnostics only. quickBuild/fullBuild/fullBuildThrowaway: additionally runs a build check (see Build tool) and attaches it as BuildVerification.")]
         BuildVerifyLevel verify = BuildVerifyLevel.noBuild,
         CancellationToken cancellationToken = default)
         => _impl.GetDiagnostics(reason, scope, scopeName, summarize, maxDetails, topN, verify, cancellationToken);
@@ -37,11 +37,11 @@ public class WorkspaceBuildTestTools
     [Description(ToolParams.BuildDescription)]
     public Task<SentinelCallToolResult<object>> BuildTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
-        BuildVerifyLevel level = BuildVerifyLevel.fullBuild,
+        [Description(ToolParams.BuildLevel)] BuildVerifyLevel level = BuildVerifyLevel.fullBuildThrowaway,
         ToolScope scope = ToolScope.solution,
         string? scopeName = null,
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxDetails = 20,
-        [Description("Only used by level=fullBuild. " + ToolParams.UseScratchDir)] bool useScratchDir = false,
+        [Description(ToolParams.UseScratchDir)] bool useScratchDir = false,
         [Description("true = also return the build's stdout/stderr tail. Default false.")] bool includeOutput = false,
         [Description("true = also return warnings, capped by maxDetails. Default false: count only.")] bool includeWarnings = false,
         CancellationToken cancellationToken = default)

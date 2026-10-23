@@ -288,7 +288,9 @@ public enum AsyncMigrationPattern
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum BuildVerifyLevel
 {
-    noBuild, quickBuild, fullBuild
+    // Appended last on purpose: do not renumber. fullBuildThrowaway is the Build default; it runs the
+    // same full build as fullBuild but into .roslynsentinel/build/<instance>/ instead of the projects' bin/obj.
+    noBuild, quickBuild, fullBuild, fullBuildThrowaway
 }
 
 // ── RunTest ───────────────────────────────────────────────────────────────────

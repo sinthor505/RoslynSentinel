@@ -22,6 +22,11 @@ respawned, so restart it before verifying fixes live.
   `RoslynSentinel.*.dll` exists under a project's `bin/<Config>/` (omitted when current; can lag a few
   seconds). `Build(level: fullBuild)` writes those DLLs and so sets the flag; `Build(quickBuild)` is
   in-memory and does not.
+- `Build` defaults to `level: fullBuildThrowaway`, which builds into
+  `.roslynsentinel/build/<instance>/` (one folder per server instance, git-ignored) and leaves the
+  projects' own `bin/`/`obj/` untouched, so concurrent sessions do not block each other. It does not set
+  the stale flag; use `fullBuild` only when you need the shared `bin/` updated. `RunTest` always builds
+  into the same instance folder. Within one server, Build/RunTest calls queue behind one gate.
 - `McpServerStatus` gives `binaryStaleness.staleAssemblies`, `serverBinaryPath`,
   `serverBuildTimeUtc` (DLL mtime on disk) and `serverPid`. If you edited server source but have not
   run a `fullBuild`, assume the live server is old.

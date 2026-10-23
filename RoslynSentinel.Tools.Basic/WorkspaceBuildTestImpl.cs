@@ -83,8 +83,8 @@ public class WorkspaceBuildTestImpl
             BuildResult? buildVerification = null;
             if (verify != BuildVerifyLevel.noBuild)
             {
-                var buildRun = verify == BuildVerifyLevel.fullBuild
-                    ? await _buildEngine.RunFullBuildAsync(cancellationToken)
+                var buildRun = verify is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway
+                    ? await _buildEngine.RunFullBuildAsync(cancellationToken, level: verify)
                     : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken);
                 buildRun.TryGetData(out buildVerification);
             }
@@ -138,7 +138,9 @@ public class WorkspaceBuildTestImpl
     // nothing in its tails that the error/warning counts do not already say.
     private static BuildResult WithoutTailsWhenClean(BuildResult build)
     {
-        var clean = build.Outcome == BuildOutcome.Succeeded && build.Detail is null;
+        // A throwaway build's detail is only the "output went to ..." note; any problem text comes first (see BuildEngine).
+        var clean = build.Outcome == BuildOutcome.Succeeded
+            && (build.Detail is null || build.Detail.StartsWith(BuildEngine.ThrowawayDetailPrefix, StringComparison.Ordinal));
         return clean ? build with { StdoutTail = null, StderrTail = null } : build;
     }
 
@@ -255,7 +257,7 @@ public class WorkspaceBuildTestImpl
         return dot >= 0 ? name[..dot] : name;
     }
 
-    public async Task<SentinelCallToolResult<object>> Build(ToolCallReason reason, BuildVerifyLevel level = BuildVerifyLevel.fullBuild,
+    public async Task<SentinelCallToolResult<object>> Build(ToolCallReason reason, BuildVerifyLevel level = BuildVerifyLevel.fullBuildThrowaway,
         ToolScope scope = ToolScope.solution, string? scopeName = null, int maxDetails = 20,
         bool useScratchDir = false, bool includeOutput = false, bool includeWarnings = false,
         CancellationToken cancellationToken = default)
@@ -268,15 +270,19 @@ public class WorkspaceBuildTestImpl
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.BuildFailed, rateLimitError) };
             }
 
+            var isFullBuild = level is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway;
+
             // quickBuild file scope: the engine takes an already-resolved path, so resolve the wire form
-            // (solution-root-relative '/' or absolute) here. fullBuild ignores scope, project scope is a name.
-            if (level != BuildVerifyLevel.fullBuild && scope == ToolScope.file && !string.IsNullOrEmpty(scopeName))
+            // (solution-root-relative '/' or absolute) here. Full builds ignore scope, project scope is a name.
+            if (!isFullBuild && scope == ToolScope.file && !string.IsNullOrEmpty(scopeName))
             {
                 scopeName = _workspaceManager.ResolveFromWire(scopeName).Absolute;
             }
 
-            var result = level == BuildVerifyLevel.fullBuild
-                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails, useScratchDir)
+            // useScratchDir is obsolete: true with level=fullBuild means the throwaway level.
+            var fullBuildLevel = level == BuildVerifyLevel.fullBuild && useScratchDir ? BuildVerifyLevel.fullBuildThrowaway : level;
+            var result = isFullBuild
+                ? await _buildEngine.RunFullBuildAsync(cancellationToken, maxDetails, level: fullBuildLevel)
                 : await _buildEngine.RunQuickBuildAsync(scope, scopeName, maxDetails, cancellationToken);
 
             if (!result.TryGetData(out var buildResult))
@@ -334,7 +340,7 @@ public class WorkspaceBuildTestImpl
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.TestRunFailed, rateLimitError) };
             }
 
-            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, useScratchDir, environment: environment, cancellationToken: cancellationToken);
+            var result = await _testRunEngine.RunAsync(scope, scopeName, filter, resultsType, maxDetails, timeoutSeconds, summary, environment: environment, cancellationToken: cancellationToken);
 
             if (!result.TryGetData(out var testRunResult))
             {

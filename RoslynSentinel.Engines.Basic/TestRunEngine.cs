@@ -91,6 +91,10 @@ public class TestRunEngine
     /// <summary>Prefix of the stderr line `dotnet test` prints when a `[SetUpFixture]` `[OneTimeTearDown]` throws.</summary>
     public const string TearDownFailureSignaturePrefix = "TearDown failed for test fixture ";
 
+    /// <summary>Runs `dotnet test` per test project into this server instance's .roslynsentinel/build/&lt;instance&gt;/
+    /// artifacts directory (always; the projects' own bin/obj are not written) while holding the server-wide
+    /// <see cref="BuildGate"/> for the whole run. <paramref name="useScratchDir"/> is obsolete and ignored; it stays
+    /// so existing callers compile. (No [Obsolete] attribute: it would raise CS0618 at every caller for a no-op.)</summary>
     public async Task<EngineResultWrapper<TestRunResult>> RunAsync(
         ToolScope scope,
         string? scopeName,
@@ -177,34 +181,43 @@ public class TestRunEngine
         // its own process and TRX file, then aggregating here, is what makes counts trustworthy for
         // scope=solution.
         var solutionPath = _workspaceManager.SolutionPath;
-        string? scratchSolutionDirectory = null;
-        if (useScratchDir)
-        {
-            scratchSolutionDirectory = Path.GetDirectoryName(string.IsNullOrEmpty(solutionPath) ? targets[0].Path : solutionPath);
-        }
-        else
-        {
-            // A scratch run is isolated, so only a build writing to the repo's own obj/ and bin/ can collide.
-            var targetPaths = targets.Select(t => t.Path).ToList();
-            if (!string.IsNullOrEmpty(solutionPath))
-            {
-                targetPaths.Add(solutionPath);
-            }
+        var artifactsSolutionDirectory = Path.GetDirectoryName(string.IsNullOrEmpty(solutionPath) ? targets[0].Path : solutionPath)!;
 
-            var waitStart = DateTime.UtcNow;
-            var competing = await BuildIsolation.WaitForNoCompetingBuildAsync(targetPaths, BuildIsolation.DefaultMaxWait, cancellationToken);
-            if (competing.Count > 0)
-            {
-                return new EngineResultWrapper<TestRunResult>(EngineOutcome.Failure,
-                    error: new EngineError(BuildIsolation.DescribeCompetingBuilds(competing, DateTime.UtcNow - waitStart)));
-            }
+        // The gate is taken once for the whole run (not per project); RunOneProjectAsync never acquires it,
+        // so there is no nested acquisition. No competing-build probe: the run writes only its own
+        // instance directory, and in-server runs are serialised by the gate.
+        BuildGateLease gateLease;
+        try
+        {
+            gateLease = await BuildGate.Shared.AcquireAsync("RunTest", BuildGate.DefaultMaxWait, cancellationToken);
+        }
+        catch (BuildGateBusyException busy)
+        {
+            return new EngineResultWrapper<TestRunResult>(EngineOutcome.Success, new TestRunResult(
+                RunSucceeded: false,
+                ExitCode: -1,
+                TotalCount: 0,
+                PassedCount: 0,
+                FailedCount: 0,
+                SkippedCount: 0,
+                FailureSummary: [],
+                Results: [],
+                StdoutTail: null,
+                StderrTail: null,
+                Duration: DateTime.UtcNow - start,
+                Detail: busy.Message,
+                RunCompleted: false
+            ));
         }
 
         var projectResults = new List<(TestRunResult Result, string ProjectName)>();
-        foreach (var (name, path) in targets)
+        using (gateLease)
         {
-            var result = await RunOneProjectAsync(name, path, filter, timeoutSeconds, scratchSolutionDirectory, environment, cancellationToken);
-            projectResults.Add((result, name));
+            foreach (var (name, path) in targets)
+            {
+                var result = await RunOneProjectAsync(name, path, filter, timeoutSeconds, artifactsSolutionDirectory, environment, cancellationToken);
+                projectResults.Add((result, name));
+            }
         }
 
         var totalCount = projectResults.Sum(p => p.Result.TotalCount);
@@ -372,7 +385,7 @@ public class TestRunEngine
         string projectPath,
         string? filter,
         int timeoutSeconds,
-        string? scratchSolutionDirectory,
+        string artifactsSolutionDirectory,
         IReadOnlyDictionary<string, string>? environment,
         CancellationToken cancellationToken)
     {
@@ -401,7 +414,7 @@ public class TestRunEngine
             process.StartInfo.ArgumentList.Add("quiet");
             process.StartInfo.ArgumentList.Add("--logger");
             process.StartInfo.ArgumentList.Add($"trx;LogFileName={trxPath}");
-            // Caller env is applied first so useScratchDir isolation variables still win.
+            // Caller env is applied first so the instance-isolation ArtifactsPath argument still wins.
             if (environment is not null)
             {
                 foreach (var (key, value) in environment)
@@ -410,10 +423,7 @@ public class TestRunEngine
                     process.StartInfo.Environment[key] = value;
                 }
             }
-            if (scratchSolutionDirectory is not null)
-            {
-                BuildIsolation.ApplyScratchArtifactsPath(process.StartInfo, scratchSolutionDirectory);
-            }
+            BuildIsolation.ApplyArtifactsPath(process.StartInfo, artifactsSolutionDirectory);
             if (!string.IsNullOrEmpty(filter))
             {
                 process.StartInfo.ArgumentList.Add("--filter");

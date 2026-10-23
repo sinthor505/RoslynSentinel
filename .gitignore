@@ -57,3 +57,4 @@ PlanStepRunner/
 docs/known-build-warnings.Solution.txt
 *.tmp
 /.scratch
+/.roslynsentinel/build/

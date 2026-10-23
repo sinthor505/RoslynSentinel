@@ -148,8 +148,8 @@ public class WorkspaceHealthMiscImpl
 
             if (verify != BuildVerifyLevel.noBuild)
             {
-                var buildResult = verify == BuildVerifyLevel.fullBuild
-                    ? await _buildEngine.RunFullBuildAsync(cancellationToken)
+                var buildResult = verify is BuildVerifyLevel.fullBuild or BuildVerifyLevel.fullBuildThrowaway
+                    ? await _buildEngine.RunFullBuildAsync(cancellationToken, level: verify)
                     : await _buildEngine.RunQuickBuildAsync(ToolScope.solution, null, 50, cancellationToken);
                 if (buildResult.TryGetData(out var data))
                 {
