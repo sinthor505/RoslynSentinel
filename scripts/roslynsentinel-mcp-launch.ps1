@@ -5,6 +5,19 @@
     isolated build/process.
 
 .DESCRIPTION
+    TWO LAYOUTS - the legacy one is the default, the prod-instances one is OPT-IN.
+
+    Opt-in: the prod-instances layout (see "Prod-instances layout" below) is used only when the
+    environment variable ROSLYNSENTINEL_INSTANCES_ROOT is set (put it in the "env" block of the MCP
+    config), or this script is given -InstancesRoot <path>. With neither, everything below under
+    "Legacy layout" runs exactly as it always has. To make the default root
+    (%USERPROFILE%\RoslynSentinelInstances) apply when the variable is unset, flip the single switch
+    $UseDefaultInstancesRootWhenUnset at the top of roslynsentinel-instances-common.ps1 (default $false).
+    Rollback: unset the variable / drop the switch back to $false; nothing in the legacy layout is
+    touched by the prod layout. -ForceLegacy forces the legacy layout even when a root is configured
+    (used by roslynsentinel-mcp-launch-shim.ps1 as its fallback).
+
+    ---- Legacy layout ----
     Historically, C:\Users\Administrator\.mcp.json invoked
     bin-vscode\Advanced\RoslynSentinel.Server.Advanced.exe directly - one fixed path shared by every
     VS Code window on the machine. build.ps1's Invoke-VSCodeStdioRebuild kept that one binary fresh,
@@ -26,10 +39,11 @@
          collides with its own predecessor's folder either, so the sweep - not a same-key reuse - is
          the only cleanup path; a still-running predecessor (this window's old process, or another
          window's) simply gets swept on ITS next launch instead of blocking this one. A folder younger
-         than 15 seconds is skipped regardless of lock state, since several windows/tabs launching
-         near-simultaneously against a freshly-cleared bin-vscode\ can otherwise race: one window's
-         sweep deleting another's folder while its build is still in flight (confirmed 2026-09-18 via
-         a missing launch.log after a simultaneous 4-tab VS Code launch).
+         than the minimum sweep age ($minimumAgeForSweep, 3600 s; see the comment at its definition)
+         is skipped regardless of lock state, since several windows/tabs launching near-simultaneously
+         against a freshly-cleared bin-vscode\ can otherwise race: one window's sweep deleting
+         another's folder while its build is still in flight (confirmed 2026-09-18 via a missing
+         launch.log after a simultaneous 4-tab VS Code launch).
       3. Builds RoslynSentinel.Server.Advanced.csproj directly (not the .slnx - this already skips
          all Tests* projects) into bin-vscode\<instance-id>\Advanced, every launch, unconditionally -
          no mtime/staleness check. MSBuild's own incremental up-to-date check already makes a no-op
@@ -56,23 +70,58 @@
     of chasing a better key. McpServerStatus's serverBinaryPath (which embeds the instance-id) is how
     a session confirms which running instance it is actually talking to.
 
+    ---- Prod-instances layout (opt-in; plan_build_isolation_prod_instances_and_test_servers Step 3.3) ----
+    Root = the configured instances root; the dev repo = the checkout that holds the shim/this script
+    (-DevRepo, or the origin of <root>\source when this script runs from the prod clone):
+
+      <root>\source\          prod clone of the dev repo (git clone on first use, then
+                              git pull --ff-only origin <Branch> on every launch; -SkipSourceSync when the
+                              shim already did it). A failed pull keeps the current HEAD and is logged.
+      <root>\builds\<sha>\    immutable build of one commit: Advanced\ (the server) + 'complete' marker +
+                              'lastused' stamp. Shared read-only by every window on that commit.
+      <root>\instances\<id>\  --working-dir of one server process (logs, tool dumps, crash.log, marker).
+      <root>\wt\<token>\      throwaway git worktree used to build one commit.
+      <root>\launch-startup.log
+
+    On every launch: sync source -> HEAD sha -> if builds\<sha>\complete exists use it (fast path);
+    else build it in a throwaway worktree: `git worktree add --detach wt\<token> <sha>`,
+    `dotnet build ... -o builds\<sha>.<token>\Advanced -p:SourceRevisionId=<sha>` (the server reads the
+    sha back from AssemblyInformationalVersion), write 'complete', Rename-Item to builds\<sha> (first
+    rename wins; a loser deletes its own copy), `git worktree remove --force` + `git worktree prune`.
+    A failed build falls back to the newest 'complete' build with a loud warning in launch.log and
+    launch-startup.log (and one line on stderr). Then it sweeps and starts
+    builds\<sha>\Advanced\RoslynSentinel.Server.Advanced.exe with --working-dir=<root>\instances\<id>;
+    ROSLYNSENTINEL_INSTANCE_ID=<id> is exported to the server process (Build's throwaway output dir).
+    No copy per instance, no lock: concurrent windows on one commit produce ONE builds\<sha>.
+
+    Sweep (same single minimum age for everything, see $minimumAgeForSweep): instances\<id> whose
+    process is gone (matched on --working-dir in the Win32_Process command line, because the exe is
+    shared); builds\<sha> with no process whose ExecutablePath is under it (never the build in use or the
+    newest 'complete' one); abandoned builds\<sha>.<token> and wt\* leftovers; and the dev repo's
+    .roslynsentinel\build\<id> for dead instance ids.
+
+    Exit code 97 means "prod layout could not be set up, no server was started" (the shim falls back to
+    the legacy launcher on it); any other code is the server's own.
+
 .NOTES
     stdout/stderr must stay completely clean for the stdio JSON-RPC transport once the real server
     process is running - so every diagnostic this script itself emits goes to a log file, never to
-    the console. Two log files, split because instance ID derivation itself can fail (it did,
-    2026-09-18 - see the RandomNumberGenerator.Fill comment below):
-      - bin-vscode\launch-startup.log: one shared, append-only file across every launch (of every
-        instance). Written from the very first line the script executes, before an instance ID or
-        instance folder exists, through the moment control hands off to the built exe. This is the
-        file to check first for a launch that never got as far as producing an instance folder at
-        all - it logs the process ID, PSVersionTable, and every step up to instance ID derivation,
-        plus a full exception+stack trace for anything unhandled anywhere in the script (see the
-        top-level try/catch).
-      - bin-vscode\<instance-id>\launch.log: per-instance, one step per line (sweep, build start,
-        build result, launch) from the moment its instance ID is known onward.
+    the console (the only exception is a single stderr line for the prod-layout last-good-build
+    warning, since stderr is not part of the JSON-RPC stream). Two log files, split because instance ID
+    derivation itself can fail (it did, 2026-09-18 - see the RandomNumberGenerator.Fill comment below):
+      - launch-startup.log (legacy: bin-vscode\; prod: <root>\): one shared, append-only file across
+        every launch (of every instance). Written from the very first line the script executes, before
+        an instance ID or instance folder exists, through the moment control hands off to the built
+        exe. This is the file to check first for a launch that never got as far as producing an
+        instance folder at all - it logs the process ID, PSVersionTable, and every step up to instance
+        ID derivation, plus a full exception+stack trace for anything unhandled anywhere in the script
+        (see the top-level try/catch).
+      - <instance folder>\launch.log (legacy: bin-vscode\<instance-id>\; prod: <root>\instances\<id>\):
+        per-instance, one step per line (sweep, build start, build result, launch) from the moment its
+        instance ID is known onward.
 
     If VS Code never seems to launch this script at all (no entry appears in
-    bin-vscode\launch-startup.log, not even a "Script launched" line), the fault is usually one
+    launch-startup.log, not even a "Script launched" line), the fault is usually one
     level up: check C:\Users\Administrator\.mcp.json first. It invokes this script via
     powershell.exe -File plus a hand-edited JSON "args" array (--include-tools=... and the
     --replace-snippet-max-* flags) - a missing comma or a truncated flag there is invalid JSON, so
@@ -82,12 +131,37 @@
     If launch-startup.log DOES show "Script launched" but nothing (or very little) after it, the
     script itself is crashing early - read the rest of that file, including the last entry, which
     for an unhandled exception will be the full exception type/message/stack trace.
+
+    A cold prod-layout build (a commit with no builds\<sha> yet) takes longer than a legacy launch, once
+    per commit; raise "startup_timeout_sec" in the MCP config accordingly (the first window pays it,
+    the others reuse the result).
+
+    Runs under Windows PowerShell 5.1 (what the MCP config's powershell.exe is): no PowerShell 7-only syntax.
 #>
-[CmdletBinding()]
+# PositionalBinding = $false is REQUIRED: without it Windows PowerShell 5.1 binds the first passthrough server args
+# (--mode=..., --include-tools=...) positionally to the first named string parameter instead of
+# ServerArgs (confirmed with a splatted array; the server then starts with no --mode).
+[CmdletBinding(PositionalBinding = $false)]
 param(
+    # Opt-in prod-instances root (see .DESCRIPTION). Overrides ROSLYNSENTINEL_INSTANCES_ROOT.
+    [string]$InstancesRoot,
+
+    # Branch the prod clone tracks (prod layout only).
+    [string]$Branch = 'master',
+
+    # The dev repo (prod layout only). Default: the origin of <root>\source when this script runs from
+    # the prod clone, else the repo this script lives in.
+    [string]$DevRepo,
+
+    # Prod layout only: the caller (the shim) already cloned/pulled <root>\source; do not pull again.
+    [switch]$SkipSourceSync,
+
+    # Run the legacy layout even when an instances root is configured.
+    [switch]$ForceLegacy,
+
     # Captures all passthrough args (e.g. --include-tools=...) so PowerShell's normal named-parameter
-    # binding never tries to match them against declared parameters - this script declares none of
-    # its own, everything after the script path is forwarded verbatim to the real server exe.
+    # binding never tries to match them against declared parameters - everything after the named
+    # parameters above is forwarded verbatim to the real server exe.
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$ServerArgs
 )
@@ -113,23 +187,99 @@ if (-not (Test-Path -LiteralPath $repoMarkerProject)) {
     exit 1
 }
 
-$binVscodeRoot = Join-Path $repoRoot 'bin-vscode'
-New-Item -ItemType Directory -Path $binVscodeRoot -Force | Out-Null
+#region Layout decision (legacy vs opt-in prod-instances)
+# $prodRoot is $null for the legacy layout. NB: PowerShell variable names are case-insensitive, so it
+# must not be spelled like the $InstancesRoot parameter.
+$prodRoot = $null
+$commonScript = Join-Path $PSScriptRoot 'roslynsentinel-instances-common.ps1'
+if (Test-Path -LiteralPath $commonScript) {
+    . $commonScript
+    if (-not $ForceLegacy) { $prodRoot = Get-RoslynSentinelInstancesRoot -Explicit $InstancesRoot }
+}
+elseif (-not $ForceLegacy -and ($InstancesRoot -or $env:ROSLYNSENTINEL_INSTANCES_ROOT)) {
+    [Console]::Error.WriteLine("roslynsentinel-mcp-launch.ps1: an instances root is configured but $commonScript is missing; cannot use the prod-instances layout.")
+    exit 97
+}
+$prodMode = [bool]$prodRoot
+# Failure exit code before the server is started: 97 in the prod layout (the shim keys its fallback on
+# it), 1 in the legacy layout (unchanged).
+$setupFailureExitCode = if ($prodMode) { 97 } else { 1 }
+
+if ($prodMode) {
+    $sourceDir = Join-Path $prodRoot 'source'
+    $buildsRoot = Join-Path $prodRoot 'builds'
+    $wtRoot = Join-Path $prodRoot 'wt'
+    $instancesDirRoot = Join-Path $prodRoot 'instances'
+    try {
+        foreach ($d in @($prodRoot, $buildsRoot, $wtRoot, $instancesDirRoot)) {
+            New-Item -ItemType Directory -Path $d -Force | Out-Null
+        }
+    }
+    catch {
+        [Console]::Error.WriteLine("roslynsentinel-mcp-launch.ps1: cannot create the instances root '$prodRoot': $($_.Exception.Message)")
+        exit 97
+    }
+    $logRoot = $prodRoot
+}
+else {
+    $binVscodeRoot = Join-Path $repoRoot 'bin-vscode'
+    New-Item -ItemType Directory -Path $binVscodeRoot -Force | Out-Null
+    $logRoot = $binVscodeRoot
+}
+#endregion
 
 # A fixed, pre-instance log target so a crash before the instance ID is even derived (the exact
 # failure mode that hid the RandomNumberGenerator.Fill/.NET Framework bug on 2026-09-18 - the
 # script died ~430ms in, before $logPath below existed, so nothing was ever written to disk) still
 # leaves a trace. Appended to (not overwritten) since multiple launches share it; each entry is
 # timestamped so it reads like a history across launches, not a single-run log.
-$startupLogPath = Join-Path $binVscodeRoot 'launch-startup.log'
-function Write-StartupLog {
-    param([string]$Message)
-    Add-Content -Path $startupLogPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $Message"
+$startupLogPath = Join-Path $logRoot 'launch-startup.log'
+
+# Appends one timestamped line. In the prod layout a logging failure (several windows appending to the
+# same file at once can hit a sharing violation) must never abort a launch, so it is swallowed there;
+# the legacy layout keeps its original fail-loud behaviour.
+function Add-LogLine {
+    param([string]$Path, [string]$Message)
+    $line = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $Message"
+    if ($prodMode) {
+        try { Add-Content -Path $Path -Value $line -ErrorAction Stop } catch { }
+    }
+    else {
+        Add-Content -Path $Path -Value $line
+    }
 }
 
-Write-StartupLog "Script launched. PID=$PID, PSVersion=$($PSVersionTable.PSVersion), args=$($ServerArgs -join ' ')"
+function Write-StartupLog {
+    param([string]$Message)
+    Add-LogLine -Path $startupLogPath -Message $Message
+}
+
+$layoutDescription = if ($prodMode) { "prod-instances (root=$prodRoot, branch=$Branch)" } else { 'legacy (bin-vscode)' }
+Write-StartupLog "Script launched. PID=$PID, PSVersion=$($PSVersionTable.PSVersion), layout=$layoutDescription, args=$($ServerArgs -join ' ')"
 
 try {
+
+#region Dev repo
+# The checkout whose slnx a server started from its cwd should load, and whose path seeds the
+# instance-id hash. Legacy: this script's own repo (unchanged). Prod: -DevRepo, else the origin of the
+# prod clone when this script runs from it (the shim runs <root>\source\scripts\...), else this repo.
+if ($prodMode) {
+    if ($DevRepo) {
+        $devRepoRoot = [System.IO.Path]::GetFullPath($DevRepo).TrimEnd('\')
+    }
+    elseif ($repoRoot.TrimEnd('\') -ieq $sourceDir.TrimEnd('\')) {
+        $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $repoRoot, 'remote', 'get-url', 'origin')
+        if ($r.ExitCode -ne 0 -or -not $r.Output.Trim()) { throw "Cannot determine the dev repo (git remote get-url origin failed): $($r.Output)" }
+        $devRepoRoot = [System.IO.Path]::GetFullPath($r.Output.Trim()).TrimEnd('\')
+    }
+    else {
+        $devRepoRoot = $repoRoot
+    }
+}
+else {
+    $devRepoRoot = $repoRoot
+}
+#endregion
 
 #region Instance ID derivation
 # A fresh random token every launch - see .DESCRIPTION for why this replaced %VSCODE_PID% (which
@@ -156,8 +306,9 @@ $instanceToken = -join ($randomBytes | ForEach-Object { $_.ToString('x2') })
 
 # Short, filesystem-safe secondary key so the same C:\Users\Administrator\.mcp.json entry can't
 # collide across different clones of this repo on the same machine - a bare token alone wouldn't
-# distinguish which repo's server should be running.
-$normalizedRepoRoot = $repoRoot.TrimEnd('\').ToLowerInvariant()
+# distinguish which repo's server should be running. (Prod layout: hashed from the DEV repo, not the
+# prod clone, so the id prefix is the same whichever launcher copy ran.)
+$normalizedRepoRoot = $devRepoRoot.TrimEnd('\').ToLowerInvariant()
 # [System.Security.Cryptography.SHA256]::HashData is .NET 5+ only - not available under Windows
 # PowerShell 5.1's .NET Framework runtime, which is what C:\Users\Administrator\.mcp.json's
 # registered command actually runs under. Create()+ComputeHash works on both.
@@ -175,19 +326,43 @@ $repoHash = -join ($repoHashBytes[0..3] | ForEach-Object { $_.ToString('x2') })
 # but this script is invoked with $repoRoot derived fresh each time, so the ordering is cosmetic-only
 # and free to pick for readability).
 $instanceId = "$repoHash-$instanceToken"
-$instanceDir = Join-Path $binVscodeRoot $instanceId
-$outDir = Join-Path $instanceDir 'Advanced'
-New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+if ($prodMode) {
+    $instanceDir = Join-Path $instancesDirRoot $instanceId
+    New-Item -ItemType Directory -Path $instanceDir -Force | Out-Null
+}
+else {
+    $instanceDir = Join-Path $binVscodeRoot $instanceId
+    $outDir = Join-Path $instanceDir 'Advanced'
+    New-Item -ItemType Directory -Path $outDir -Force | Out-Null
+}
 
 $logPath = Join-Path $instanceDir 'launch.log'
 function Write-LaunchLog {
     param([string]$Message)
-    Add-Content -Path $logPath -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') $Message"
+    Add-LogLine -Path $logPath -Message $Message
 }
 
-Write-LaunchLog "Instance ID '$instanceId' derived from random token='$instanceToken', repoHash='$repoHash' (repo: $repoRoot)."
+Write-LaunchLog "Instance ID '$instanceId' derived from random token='$instanceToken', repoHash='$repoHash' (repo: $devRepoRoot, layout: $layoutDescription)."
 Write-StartupLog "Instance ID '$instanceId' derived OK -> per-instance log is $logPath (subsequent steps logged there, not here)."
 #endregion
+
+#region Sweep settings (shared by both layouts)
+# Minimum age before a folder is eligible for sweeping - ONE value for every sweep rule in both
+# layouts (instance folders, builds\<sha>, abandoned builds, wt\ leftovers, .roslynsentinel\build\<id>).
+# Without it, several VS Code windows/tabs launching near-simultaneously against a freshly-cleared
+# root can race: window A creates its instance folder and starts building, then window B launches
+# moments later, and B's sweep deletes A's folder out from under its still-running build - wasted work
+# and a silently lost instance, confirmed 2026-09-18 via a missing launch.log on one of two folders
+# after a simultaneous 4-tab VS Code launch. A cold prod-layout build can take minutes, so the margin is
+# an hour, not seconds; the cost is only that actually-stale (long-dead) folders are removed on a later
+# launch instead of the next one. ROSLYNSENTINEL_SWEEP_MIN_AGE_SECONDS overrides it (diagnostics/tests).
+$minimumAgeForSweep = [TimeSpan]::FromSeconds(3600)
+if ($env:ROSLYNSENTINEL_SWEEP_MIN_AGE_SECONDS -match '^\d+$') {
+    $minimumAgeForSweep = [TimeSpan]::FromSeconds([int]$env:ROSLYNSENTINEL_SWEEP_MIN_AGE_SECONDS)
+}
+#endregion
+
+if (-not $prodMode) {
 
 #region Sweep stale instance folders
 Write-LaunchLog "Sweeping for stale instance folders..."
@@ -195,17 +370,6 @@ Write-LaunchLog "Sweeping for stale instance folders..."
 # HTTP fallback copy) and http-<port>-<timestamp> (throwaway HTTP instances) never match this and are
 # left untouched without needing an explicit exclusion.
 $instanceFolderPattern = '^[0-9a-f]{8}-[0-9a-f]{8}$'
-
-# Minimum folder age before it's eligible for sweeping. Without this, several VS Code windows/tabs
-# launching near-simultaneously against a freshly-cleared bin-vscode\ can race: window A creates its
-# instance folder and starts building (7-8s typical per docs/current - see this script's own build
-# region), then window B launches moments later, and B's sweep deletes A's folder out from under its
-# still-running build - wasted work and a silently lost instance, confirmed 2026-09-18 via a missing
-# launch.log on one of two folders after a simultaneous 4-tab VS Code launch. A build never taking
-# anywhere near 15s makes this a safe margin without meaningfully delaying real cleanup of
-# actually-stale (long-dead) folders, which will simply get swept on a later launch instead.
-# Incr
-$minimumAgeForSweep = [TimeSpan]::FromSeconds(3600)
 
 # Every currently-running RoslynSentinel.Server.Advanced.exe's own module path, gathered once
 # before the sweep loop (one CIM/WMI query instead of one per candidate folder). A live process's
@@ -309,19 +473,260 @@ if ($buildExit -ne 0) {
 Write-LaunchLog "Build succeeded -> $exePath"
 #endregion
 
+}
+else {
+
+#region Prod layout: source sync, per-SHA build, sweep
+# Everything here keeps stdout untouched (native output is captured by Invoke-NativeCaptured).
+$exePath = $null
+
+# --- source clone: clone on first use, fast-forward on every launch (unless the shim just did) ---
+$sha = $null
+try {
+    if ($SkipSourceSync) {
+        $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $sourceDir, 'rev-parse', 'HEAD')
+        $sha = $r.Output.Trim()
+        if ($r.ExitCode -ne 0 -or $sha -notmatch '^[0-9a-f]{40}$') { throw "git rev-parse HEAD failed in '$sourceDir' (exit $($r.ExitCode)): $($r.Output)" }
+        Write-LaunchLog "Source: sync done by the caller; HEAD is $sha."
+    }
+    else {
+        $sync = Sync-RoslynSentinelSource -SourceDir $sourceDir -DevRepo $devRepoRoot -Branch $Branch -Log { param($m) Write-LaunchLog $m }
+        $sha = $sync.Sha
+    }
+}
+catch {
+    $sha = $null
+    $msg = "Source sync failed: $($_.Exception.Message)"
+    Write-LaunchLog $msg
+    Write-StartupLog "[$instanceId] $msg"
+}
+
+# Builds <sha> in a throwaway worktree of the prod clone and publishes it as builds\<sha> by rename.
+# Returns $true when builds\<sha>\complete exists afterwards (built here, or published first by a
+# racing launch), $false otherwise. Never throws.
+function Invoke-ProdBuild {
+    param([string]$Sha)
+
+    $final = Join-Path $buildsRoot $Sha
+    $buildTmp = Join-Path $buildsRoot "$Sha.$instanceToken"
+    $outTmp = Join-Path $buildTmp 'Advanced'
+    $wt = Join-Path $wtRoot $instanceToken
+    $worktreeAdded = $false
+    try {
+        Write-LaunchLog "Build starting for $Sha (worktree $wt -> $outTmp)..."
+        $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $sourceDir, 'worktree', 'add', '--detach', $wt, $Sha)
+        if ($r.ExitCode -ne 0) { throw "git worktree add failed (exit $($r.ExitCode)): $($r.Output)" }
+        $worktreeAdded = $true
+
+        $project = Join-Path $wt 'RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj'
+        # Same invocation as the legacy build (-c Debug -o <dir> --nologo -v quiet) plus the SHA stamp: the
+        # SDK appends '+<sha>' to AssemblyInformationalVersion, which the server reads for git-based staleness.
+        $r = Invoke-NativeCaptured -File 'dotnet' -Arguments @('build', $project, '-c', 'Debug', '-o', $outTmp, '--nologo', '-v', 'quiet', "-p:SourceRevisionId=$Sha")
+        if ($r.ExitCode -ne 0) {
+            $tail = (($r.Output -split "`r?`n") | Select-Object -Last 60) -join [Environment]::NewLine
+            throw "dotnet build FAILED (exit $($r.ExitCode)). Last 60 output lines:`n$tail"
+        }
+        if (-not (Test-Path -LiteralPath (Join-Path $outTmp 'RoslynSentinel.Server.Advanced.exe'))) {
+            throw "dotnet build reported success but $outTmp has no RoslynSentinel.Server.Advanced.exe."
+        }
+
+        Set-Content -LiteralPath (Join-Path $buildTmp 'complete') -Value "sha=$Sha builtBy=$instanceId at=$(Get-Date -Format 'yyyy-MM-ddTHH:mm:ss')"
+
+        $published = $false
+        for ($attempt = 1; $attempt -le 3 -and -not $published; $attempt++) {
+            try {
+                Rename-Item -LiteralPath $buildTmp -NewName $Sha -ErrorAction Stop
+                $published = $true
+                Write-LaunchLog "Build published as $final."
+            }
+            catch {
+                if (Test-Path -LiteralPath (Join-Path $final 'complete')) {
+                    Write-LaunchLog "Another launch published $final first; deleting own copy '$buildTmp'."
+                    Remove-Item -LiteralPath $buildTmp -Recurse -Force -ErrorAction SilentlyContinue
+                    return $true
+                }
+                # Transient (virus scanner / indexer holding a file): retry.
+                Write-LaunchLog "Publish rename attempt $attempt failed: $($_.Exception.Message)"
+                Start-Sleep -Seconds 1
+            }
+        }
+        if (-not $published) { throw "Could not rename '$buildTmp' to '$Sha' after 3 attempts." }
+        return $true
+    }
+    catch {
+        Write-LaunchLog "Build of $Sha FAILED: $($_.Exception.Message)"
+        Remove-Item -LiteralPath $buildTmp -Recurse -Force -ErrorAction SilentlyContinue
+        return $false
+    }
+    finally {
+        if ($worktreeAdded -or (Test-Path -LiteralPath $wt)) {
+            $r = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $sourceDir, 'worktree', 'remove', '--force', $wt)
+            if ($r.ExitCode -ne 0) {
+                Write-LaunchLog "git worktree remove failed (exit $($r.ExitCode)): $($r.Output) - deleting folder directly; the sweep prunes leftovers."
+                Remove-Item -LiteralPath $wt -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            $null = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $sourceDir, 'worktree', 'prune')
+        }
+    }
+}
+
+# --- choose the build: fast path, slow path, or last-good fallback ---
+$selectedBuildDir = $null
+if ($sha) {
+    $shaDir = Join-Path $buildsRoot $sha
+    if (Test-Path -LiteralPath (Join-Path $shaDir 'complete')) {
+        $selectedBuildDir = $shaDir
+        Write-LaunchLog "Fast path: builds\$sha is complete; skipping build."
+    }
+    elseif (Invoke-ProdBuild -Sha $sha) {
+        $selectedBuildDir = $shaDir
+    }
+}
+if (-not $selectedBuildDir) {
+    $newest = Get-NewestCompleteBuild -BuildsRoot $buildsRoot
+    if ($newest) {
+        $selectedBuildDir = $newest.FullName
+        $warning = "WARNING: could not produce a build for the current source HEAD (sha=$sha); falling back to the newest complete build $($newest.Name). This server is OLDER than the source; see the lines above for the reason."
+        Write-LaunchLog $warning
+        Write-StartupLog "[$instanceId] $warning"
+        [Console]::Error.WriteLine("roslynsentinel-mcp-launch.ps1: $warning")
+    }
+    else {
+        $msg = "No build for HEAD (sha=$sha) and no complete build to fall back to under $buildsRoot. Not launching."
+        Write-LaunchLog $msg
+        Write-StartupLog "[$instanceId] $msg"
+        exit 97
+    }
+}
+$exePath = Join-Path $selectedBuildDir 'Advanced\RoslynSentinel.Server.Advanced.exe'
+# Stamp the build as in use so another window's sweep (age is measured from this stamp) cannot remove it
+# between now and the server process starting.
+try { Set-Content -LiteralPath (Join-Path $selectedBuildDir 'lastused') -Value (Get-Date -Format 'yyyy-MM-ddTHH:mm:ss') } catch { }
+
+# Deletes $Path (a folder) after re-checking it lies strictly under $MustBeUnder and is not a reparse
+# point (Remove-Item -Recurse on a junction can follow it on Windows PowerShell 5.1). Returns $true when
+# the folder is gone afterwards.
+function Remove-SweepFolder {
+    param([string]$Path, [string]$MustBeUnder)
+
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return $true }
+    if (($Path.TrimEnd('\') -ieq $MustBeUnder.TrimEnd('\')) -or -not (Test-PathUnderRoot -Path $Path -Root $MustBeUnder)) {
+        Write-LaunchLog "Sweep: REFUSING to delete '$Path' - not strictly under '$MustBeUnder'. Treating as a bug and skipping."
+        return $false
+    }
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        Write-LaunchLog "Sweep: REFUSING to delete '$Path' - it is a reparse point."
+        return $false
+    }
+    Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction SilentlyContinue
+    return (-not (Test-Path -LiteralPath $Path))
+}
+
+#region Sweep (prod layout)
+try {
+    Write-LaunchLog "Sweep: starting (minimum age $([int]$minimumAgeForSweep.TotalSeconds)s)."
+    $procs = @(Get-RoslynSentinelServerProcesses)
+    Write-LaunchLog "Sweep: found $($procs.Count) live RoslynSentinel.Server.Advanced.exe process(es) on this machine."
+    $liveWorkingDirs = @($procs | Where-Object { $_.WorkingDir } | ForEach-Object { $_.WorkingDir })
+    $liveExePaths = @($procs | Where-Object { $_.ExecutablePath } | ForEach-Object { $_.ExecutablePath })
+    $liveInstanceIds = @($liveWorkingDirs | ForEach-Object { Split-Path $_ -Leaf })
+    $instanceFolderPattern = '^[0-9a-f]{8}-[0-9a-f]{8}$'
+    $swept = [System.Collections.Generic.List[string]]::new()
+    $skippedYoung = 0
+    $keptLive = 0
+    $now = Get-Date
+
+    # instances\<id> whose server process is gone.
+    Get-ChildItem -LiteralPath $instancesDirRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match $instanceFolderPattern -and $_.Name -ne $instanceId } |
+        ForEach-Object {
+            if (($now - $_.CreationTime) -lt $minimumAgeForSweep) { $skippedYoung++; return }
+            $folderPath = $_.FullName
+            if (@($liveWorkingDirs | Where-Object { $_ -ieq $folderPath }).Count -gt 0) { $keptLive++; return }
+            $staleMarker = Join-Path $folderPath 'stopped-by-script.marker'
+            if (Test-Path -LiteralPath $staleMarker) {
+                Write-LaunchLog "Sweep: instance '$($_.Name)' had a stopped-by-script marker (never consumed by a relaunch): $(Get-Content -LiteralPath $staleMarker -Raw -ErrorAction SilentlyContinue)"
+            }
+            if (Remove-SweepFolder -Path $folderPath -MustBeUnder $instancesDirRoot) { $swept.Add("instances\$($_.Name)") }
+            else { Write-LaunchLog "Sweep: instance '$($_.Name)' still present after delete attempt - left in place, will retry next launch." }
+        }
+
+    # builds\<sha> with no process running from it, plus abandoned builds\<sha>.<token> partials. The build
+    # this launch selected and the newest complete build (the "last good" fallback) are never swept.
+    $newestComplete = Get-NewestCompleteBuild -BuildsRoot $buildsRoot
+    Get-ChildItem -LiteralPath $buildsRoot -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            $folderPath = $_.FullName
+            if ($_.Name -match '^[0-9a-f]{40}$') {
+                if ($folderPath -ieq $selectedBuildDir) { return }
+                if ($newestComplete -and $folderPath -ieq $newestComplete.FullName) { return }
+                $stampFile = Join-Path $folderPath 'lastused'
+                $lastTouched = $_.CreationTime
+                if (Test-Path -LiteralPath $stampFile) {
+                    $stampTime = (Get-Item -LiteralPath $stampFile).LastWriteTime
+                    if ($stampTime -gt $lastTouched) { $lastTouched = $stampTime }
+                }
+                if (($now - $lastTouched) -lt $minimumAgeForSweep) { $skippedYoung++; return }
+                $prefix = $folderPath.TrimEnd('\') + '\'
+                if (@($liveExePaths | Where-Object { $_.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) }).Count -gt 0) { $keptLive++; return }
+                if (Remove-SweepFolder -Path $folderPath -MustBeUnder $buildsRoot) { $swept.Add("builds\$($_.Name)") }
+                else { Write-LaunchLog "Sweep: build '$($_.Name)' still present after delete attempt - left in place, will retry next launch." }
+            }
+            elseif ($_.Name -match '^[0-9a-f]{40}\.[0-9a-f]{8}$') {
+                if (($now - $_.CreationTime) -lt $minimumAgeForSweep) { $skippedYoung++; return }
+                if (Remove-SweepFolder -Path $folderPath -MustBeUnder $buildsRoot) { $swept.Add("builds\$($_.Name)") }
+            }
+        }
+
+    # wt\* worktree leftovers (a launch that died mid-build).
+    $prunedWorktrees = $false
+    Get-ChildItem -LiteralPath $wtRoot -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object {
+            if (($now - $_.CreationTime) -lt $minimumAgeForSweep) { $skippedYoung++; return }
+            $folderPath = $_.FullName
+            $null = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $sourceDir, 'worktree', 'remove', '--force', $folderPath)
+            if (Remove-SweepFolder -Path $folderPath -MustBeUnder $wtRoot) { $swept.Add("wt\$($_.Name)"); $prunedWorktrees = $true }
+        }
+    if ($prunedWorktrees) { $null = Invoke-NativeCaptured -File 'git' -Arguments @('-C', $sourceDir, 'worktree', 'prune') }
+
+    # The dev repo's .roslynsentinel\build\<id> (Build's throwaway output, keyed by ROSLYNSENTINEL_INSTANCE_ID)
+    # for instance ids with no live process.
+    $devBuildRoot = Join-Path $devRepoRoot '.roslynsentinel\build'
+    Get-ChildItem -LiteralPath $devBuildRoot -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match $instanceFolderPattern -and $_.Name -ne $instanceId -and ($liveInstanceIds -notcontains $_.Name) } |
+        ForEach-Object {
+            if (($now - $_.CreationTime) -lt $minimumAgeForSweep) { $skippedYoung++; return }
+            if (Remove-SweepFolder -Path $_.FullName -MustBeUnder $devBuildRoot) { $swept.Add(".roslynsentinel\build\$($_.Name)") }
+        }
+
+    $sweptDisplay = if ($swept.Count -gt 0) { " ($($swept -join ', '))" } else { '' }
+    Write-LaunchLog "Sweep: removed $($swept.Count) item(s)$sweptDisplay, kept $keptLive live, skipped $skippedYoung too-young."
+}
+catch {
+    # A sweep failure must never stop the server from starting.
+    Write-LaunchLog "Sweep: aborted by an error (ignored): $($_.Exception.Message)"
+}
+#endregion
+
+#endregion
+
+}
+
 #region Launch
 if (-not (Test-Path -LiteralPath $exePath)) {
     Write-LaunchLog "Build reported success but $exePath does not exist - refusing to launch."
-    exit 1
+    exit $setupFailureExitCode
 }
 
 $hasSolutionArg = $false
 foreach ($serverArg in $ServerArgs) {
     if ($serverArg -match '^--solution(=|$)') { $hasSolutionArg = $true }
 }
-$defaultSolution = Join-Path $repoRoot 'RoslynSentinel.slnx'
+# The solution a window opened inside the dev repo should load: always the DEV repo's, never the prod clone's.
+$defaultSolution = Join-Path $devRepoRoot 'RoslynSentinel.slnx'
 $cwd = (Get-Location).Path
-$repoRootNormalized = $repoRoot.TrimEnd('\')
+$repoRootNormalized = $devRepoRoot.TrimEnd('\')
 $cwdInRepo = ($cwd.TrimEnd('\') -ieq $repoRootNormalized) -or $cwd.StartsWith($repoRootNormalized + '\', [StringComparison]::OrdinalIgnoreCase)
 $launchArgs = @()
 foreach ($serverArg in $ServerArgs) {
@@ -335,7 +740,16 @@ else {
     Write-LaunchLog "Auto-load: not adding --solution (passed=$hasSolutionArg, cwd='$cwd', cwdInRepo=$cwdInRepo, slnxExists=$(Test-Path -LiteralPath $defaultSolution))."
 }
 
-Write-LaunchLog "Launching: $exePath --transport=stdio $($launchArgs -join ' ')"
+# Prod layout only: all per-process output goes under the instance folder, and the id is exported so the
+# server's Build/RunTest throwaway output dir (<dev repo>\.roslynsentinel\build\<id>) is keyed by it and
+# can be swept. Legacy launches set neither (unchanged).
+$extraLaunchArgs = @()
+if ($prodMode) {
+    $extraLaunchArgs = @("--working-dir=$instanceDir")
+    $env:ROSLYNSENTINEL_INSTANCE_ID = $instanceId
+}
+
+Write-LaunchLog "Launching: $exePath --transport=stdio $($extraLaunchArgs -join ' ') $($launchArgs -join ' ')"
 Write-StartupLog "Handing off to $exePath (instance '$instanceId') - further activity is in that instance's own launch.log, not here."
 
 # `&` (not Start-Process) is required here: this script IS the stdio JSON-RPC transport process VS
@@ -348,9 +762,10 @@ Write-StartupLog "Handing off to $exePath (instance '$instanceId') - further act
 # CreateNoWindow context, and the server correctly treats an apparently-closed stdin as the client
 # disconnecting. Getting stdio transport wrong here silently breaks every MCP connection, so this
 # reverts to the previously-working mechanism rather than risk it - the sweep's liveness check (see
-# above) instead scans for any process whose own module path is under a candidate instance folder,
-# which needs no cooperation from this launch step at all.
-& $exePath --transport=stdio @launchArgs
+# above) instead scans for any process whose own module path is under a candidate instance folder
+# (prod layout: whose command line carries the instance's --working-dir), which needs no cooperation
+# from this launch step at all.
+& $exePath --transport=stdio @extraLaunchArgs @launchArgs
 $serverExitCode = $LASTEXITCODE
 Write-LaunchLog "Server process exited with code $serverExitCode."
 exit $serverExitCode
@@ -358,7 +773,7 @@ exit $serverExitCode
 
 }
 catch {
-    # Catches anything unhandled above that isn't one of the deliberate `exit 1` early-outs (those
+    # Catches anything unhandled above that isn't one of the deliberate `exit` early-outs (those
     # already logged their own reason and return before reaching here). $logPath may or may not
     # exist yet depending on how early the failure was, so always write to the pre-instance log,
     # and also to the per-instance one if it's been created.
@@ -367,5 +782,5 @@ catch {
     if (Get-Command Write-LaunchLog -ErrorAction SilentlyContinue) {
         Write-LaunchLog $errorMessage
     }
-    exit 1
+    exit $setupFailureExitCode
 }

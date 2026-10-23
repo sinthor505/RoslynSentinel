@@ -31,7 +31,7 @@
 .PARAMETER Tool          Only report this tool name (exact, case-insensitive).
 .PARAMETER MinCount      Hide groups seen fewer than this many times. Default 1.
 .PARAMETER Since         Only transcript files modified on/after this date.
-.PARAMETER SchemaPath    A tool_list_all.json emitted by the server at startup (default: newest under the repo's bin-vscode).
+.PARAMETER SchemaPath    A tool_list_all.json emitted by the server at startup (default: newest under <instances root>\instances when the opt-in prod layout is configured, else under the repo).
                          Rejections are re-evaluated against the CURRENT schema: retired tools and parameters that are
                          valid now are dropped, and suggestions come from the current parameter list. Use -NoSchema to skip.
 .PARAMETER NoSchema      Report against the historical "accepts only" lists in the transcripts.
@@ -177,8 +177,23 @@ foreach ($g in $byFile) {
 $current = $null
 if (-not $NoSchema) {
     if (-not $SchemaPath) {
-        $SchemaPath = Get-ChildItem (Join-Path $PSScriptRoot '..') -Recurse -Filter tool_list_all.json -File -ErrorAction SilentlyContinue |
-            Where-Object FullName -notmatch 'Worktree' | Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
+        # Opt-in prod-instances layout: servers write tool_list_all.json into <root>\instances\<id>\ (their
+        # --working-dir). Look there first when the root is configured and exists; otherwise (or if nothing
+        # is found there) the legacy recursive search of the repo.
+        $commonScript = Join-Path $PSScriptRoot 'roslynsentinel-instances-common.ps1'
+        if (Test-Path -LiteralPath $commonScript) {
+            . $commonScript
+            $prodRoot = Get-RoslynSentinelInstancesRoot
+            $instancesDir = if ($prodRoot) { Join-Path $prodRoot 'instances' } else { $null }
+            if ($instancesDir -and (Test-Path -LiteralPath $instancesDir)) {
+                $SchemaPath = Get-ChildItem -LiteralPath $instancesDir -Recurse -Filter tool_list_all.json -File -ErrorAction SilentlyContinue |
+                    Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
+            }
+        }
+        if (-not $SchemaPath) {
+            $SchemaPath = Get-ChildItem (Join-Path $PSScriptRoot '..') -Recurse -Filter tool_list_all.json -File -ErrorAction SilentlyContinue |
+                Where-Object FullName -notmatch 'Worktree' | Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
+        }
     }
     if ($SchemaPath -and (Test-Path $SchemaPath)) {
         $current = @{}

@@ -34,6 +34,14 @@
       stopallhttp   - Same marker-then-kill treatment for the shared HTTP fallback copy.
       stopalltypes  - Both of the above.
 
+    OPT-IN PROD-INSTANCES LAYOUT: when ROSLYNSENTINEL_INSTANCES_ROOT is set (or the default-root switch in
+    roslynsentinel-instances-common.ps1 is flipped) status lists <root>\instances\<id> folders and the
+    stopall* actions find stdio servers by their --working-dir command-line argument (the exe is shared
+    by every window on a commit, so the exe path no longer identifies an instance) and write
+    stopped-by-script.marker into that working dir. With the variable unset everything behaves as
+    described above. The shared HTTP fallback copy is kept as is in both layouts (decision recorded at
+    $httpOutDir below); plan Part 4's LaunchTestInstance is the intended replacement.
+
     start/restart/build only ever touch the shared HTTP fallback copy under bin-vscode\Advanced.Http
     - not the Debug/Release flavor used by `dotnet test` / build.ps1's own lock-check region, and not
     the per-window stdio instance folders (those are only ever built/launched/torn down by the
@@ -77,14 +85,37 @@ param(
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
 
+# Opt-in prod-instances layout (see roslynsentinel-mcp-launch.ps1 / roslynsentinel-instances-common.ps1).
+# $prodRoot is $null in the legacy layout, which keeps every code path below exactly as it was.
+$prodRoot = $null
+$commonScript = Join-Path $PSScriptRoot 'roslynsentinel-instances-common.ps1'
+if (Test-Path -LiteralPath $commonScript) {
+    . $commonScript
+    $prodRoot = Get-RoslynSentinelInstancesRoot
+}
+$prodMode = [bool]$prodRoot
+$prodInstancesDir = if ($prodMode) { Join-Path $prodRoot 'instances' } else { $null }
+
 $binVscodeRoot = Join-Path $repoRoot 'bin-vscode'
 $instanceFolderPattern = '^[0-9a-f]{8}-[0-9a-f]{8}$'
+# DECISION (plan Step 3.3 item 6): the shared HTTP fallback copy is KEPT in both layouts, still built into
+# bin-vscode\Advanced.Http by this script's legacy recipe (Build-HttpCopy). Building it into
+# <root>\builds\ would mean either duplicating the launcher's worktree/rename/complete-marker logic here
+# or growing a build-only mode in the launcher, for a copy that is only a manual fallback "in case stdio
+# flakes". Plan Part 4 (LaunchTestInstance) is the place to supersede it; until then this keeps
+# bin-vscode\ alive only when someone runs restart/build here, never from a launch.
 $httpOutDir = Join-Path $repoRoot 'bin-vscode\Advanced.Http'
 $httpExe = Join-Path $httpOutDir 'RoslynSentinel.Server.Advanced.exe'
 
 function Get-StdioInstanceFolders {
     Get-ChildItem -LiteralPath $binVscodeRoot -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -match $instanceFolderPattern }
+}
+
+# Prod layout: the running servers whose --working-dir is under <root>\instances (the exe is shared by
+# every window on a commit, so the working dir - not the exe path - identifies an instance).
+function Get-ProdInstanceProcesses {
+    @(Get-RoslynSentinelServerProcesses | Where-Object { $_.WorkingDir -and (Test-PathUnderRoot -Path $_.WorkingDir -Root $prodInstancesDir) })
 }
 
 function Get-HttpCopyProcess {
@@ -187,22 +218,43 @@ function Build-HttpCopy {
 function Show-Status {
     Write-Host ""
     Write-Host "=== VS Code Advanced (stdio) per-window instances ===" -ForegroundColor Cyan
-    $instances = @(Get-StdioInstanceFolders)
-    if ($instances.Count -eq 0) {
-        Write-Host "None found under bin-vscode\ - no VS Code window has connected yet (each one is built/launched on demand by roslynsentinel-mcp-launch.ps1)." -ForegroundColor Yellow
+    if ($prodMode) {
+        Write-Host "Prod-instances layout, root $prodRoot" -ForegroundColor DarkGray
+        $liveProd = @(Get-ProdInstanceProcesses)
+        $prodFolders = @(Get-ChildItem -LiteralPath $prodInstancesDir -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match $instanceFolderPattern })
+        if ($prodFolders.Count -eq 0) {
+            Write-Host "None found under $prodInstancesDir - no window has launched in the prod layout yet." -ForegroundColor Yellow
+        }
+        foreach ($folder in $prodFolders) {
+            $live = @($liveProd | Where-Object { $_.WorkingDir -ieq $folder.FullName })
+            $liveDesc = if ($live.Count -gt 0) {
+                "running (PID $(($live | ForEach-Object { $_.ProcessId }) -join ', '), build $(Split-Path (Split-Path (Split-Path $live[0].ExecutablePath -Parent) -Parent) -Leaf))"
+            } else { "not running (swept by a later launch once old enough)" }
+            Write-Host "$($folder.Name): created $($folder.CreationTime), $liveDesc." -ForegroundColor Green
+        }
+        $buildFolders = @(Get-ChildItem -LiteralPath (Join-Path $prodRoot 'builds') -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^[0-9a-f]{40}$' })
+        Write-Host "$($buildFolders.Count) immutable build(s) under $(Join-Path $prodRoot 'builds')." -ForegroundColor DarkGray
     }
     else {
-        foreach ($instanceDir in $instances) {
-            $exe = Join-Path $instanceDir.FullName 'Advanced\RoslynSentinel.Server.Advanced.exe'
-            if (-not (Test-Path -LiteralPath $exe)) {
-                Write-Warning "$($instanceDir.Name): no exe at $exe (build may have failed - check its launch.log)."
-                continue
+        $instances = @(Get-StdioInstanceFolders)
+        if ($instances.Count -eq 0) {
+            Write-Host "None found under bin-vscode\ - no VS Code window has connected yet (each one is built/launched on demand by roslynsentinel-mcp-launch.ps1)." -ForegroundColor Yellow
+        }
+        else {
+            foreach ($instanceDir in $instances) {
+                $exe = Join-Path $instanceDir.FullName 'Advanced\RoslynSentinel.Server.Advanced.exe'
+                if (-not (Test-Path -LiteralPath $exe)) {
+                    Write-Warning "$($instanceDir.Name): no exe at $exe (build may have failed - check its launch.log)."
+                    continue
+                }
+                $mtime = (Get-Item -LiteralPath $exe).LastWriteTime
+                $running = Get-Process -Name 'RoslynSentinel.Server.Advanced' -ErrorAction SilentlyContinue |
+                    Where-Object { $_.Path -eq $exe }
+                $liveDesc = if ($running) { "running (PID $($running.Id -join ', '))" } else { "not running (VS Code will respawn on next tool call)" }
+                Write-Host "$($instanceDir.Name): built $mtime, $liveDesc." -ForegroundColor Green
             }
-            $mtime = (Get-Item -LiteralPath $exe).LastWriteTime
-            $running = Get-Process -Name 'RoslynSentinel.Server.Advanced' -ErrorAction SilentlyContinue |
-                Where-Object { $_.Path -eq $exe }
-            $liveDesc = if ($running) { "running (PID $($running.Id -join ', '))" } else { "not running (VS Code will respawn on next tool call)" }
-            Write-Host "$($instanceDir.Name): built $mtime, $liveDesc." -ForegroundColor Green
         }
     }
 
@@ -341,6 +393,27 @@ function Write-StoppedByScriptMarker {
 # rather than re-deriving it from Get-StdioInstanceFolders, so this also covers any stray process
 # whose folder no longer matches the instance-folder naming pattern.
 function Stop-AllStdioInstances {
+    if ($prodMode) {
+        # Prod layout: instances are found by --working-dir (the exe is shared), and the marker goes into
+        # that working dir, which is where the server reads and consumes it.
+        $prodProcs = Get-ProdInstanceProcesses
+        if ($prodProcs.Count -eq 0) {
+            Write-Host "No per-window stdio instances currently running (prod layout, root $prodRoot)." -ForegroundColor Yellow
+            return $true
+        }
+        foreach ($prodProc in $prodProcs) {
+            $markerPath = Write-StoppedByScriptMarker -InstanceRoot $prodProc.WorkingDir -Pid_ $prodProc.ProcessId
+            Write-Host "Stopping PID $($prodProc.ProcessId) ($($prodProc.WorkingDir)) - marker: $markerPath" -ForegroundColor Yellow
+            $proc = Get-Process -Id $prodProc.ProcessId -ErrorAction SilentlyContinue
+            if ($proc) {
+                $proc | Stop-Process -Force
+                Wait-ProcessExited -Process $proc
+            }
+        }
+        Write-Host "Stopped $($prodProcs.Count) stdio instance(s)." -ForegroundColor Green
+        return $true
+    }
+
     $procs = @(Get-Process -Name 'RoslynSentinel.Server.Advanced' -ErrorAction SilentlyContinue |
         Where-Object { $_.Path -and $_.Path -ne $httpExe -and (Split-Path (Split-Path $_.Path -Parent) -Leaf) -eq 'Advanced' })
 
@@ -371,6 +444,8 @@ function Stop-AllHttpInstances {
         return $true
     }
 
+    # TODO this writes the marker into the HTTP copy's exe folder, but the server reads <binDir>\..\stopped-by-script.marker
+    # when it has no --working-dir (and the HTTP copy is started without one), so the marker is probably never consumed.
     $markerPath = Write-StoppedByScriptMarker -InstanceRoot $httpOutDir -Pid_ $proc.Id
     Write-Host "Stopping PID $($proc.Id) ($httpOutDir) - marker: $markerPath" -ForegroundColor Yellow
     $proc | Stop-Process -Force

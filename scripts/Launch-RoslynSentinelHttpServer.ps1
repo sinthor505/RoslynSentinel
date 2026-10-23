@@ -8,7 +8,8 @@
     the current source into bin-vscode\http-<port>-<yyyyMMddHHmmss>. That folder name deliberately
     does NOT match the per-window stdio instance pattern (^[0-9a-f]{8}-[0-9a-f]{8}$), so the stdio
     launcher's sweep and roslynsentinel-vscode-control.ps1's instance listing never touch it.
-    bin-vscode/ is gitignored.
+    bin-vscode/ is gitignored. With the opt-in prod-instances layout active (env
+    ROSLYNSENTINEL_INSTANCES_ROOT set) the folder is <root>\http\http-<port>-<timestamp> instead.
 
     This script never stops or deletes anything: stop the server with Stop-Process -Id <pid> and
     delete the folder yourself (old http-* folders are listed as a hint). The shared HTTP fallback
@@ -60,8 +61,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path $PSScriptRoot -Parent
-$binRoot  = Join-Path $repoRoot 'bin-vscode'
-$outDir   = Join-Path $repoRoot ("bin-vscode\http-{0}-{1:yyyyMMddHHmmss}" -f $Port, (Get-Date))
+
+# Opt-in prod-instances layout (roslynsentinel-instances-common.ps1): with ROSLYNSENTINEL_INSTANCES_ROOT set,
+# throwaway builds go to <root>\http\ instead of <repo>\bin-vscode\ so bin-vscode\ is not recreated.
+# Unset = the legacy location, unchanged. Plan Part 4 (LaunchTestInstance) is meant to replace this script.
+$prodRoot = $null
+$commonScript = Join-Path $PSScriptRoot 'roslynsentinel-instances-common.ps1'
+if (Test-Path -LiteralPath $commonScript) {
+    . $commonScript
+    $prodRoot = Get-RoslynSentinelInstancesRoot
+}
+$binRoot  = if ($prodRoot) { Join-Path $prodRoot 'http' } else { Join-Path $repoRoot 'bin-vscode' }
+$outDir   = Join-Path $binRoot ("http-{0}-{1:yyyyMMddHHmmss}" -f $Port, (Get-Date))
 $project  = Join-Path $repoRoot 'RoslynSentinel.Server.Advanced\RoslynSentinel.Server.Advanced.csproj'
 $exe      = Join-Path $outDir 'RoslynSentinel.Server.Advanced.exe'
 
