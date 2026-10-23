@@ -12,9 +12,14 @@ DONE (verified in source and git log 2026-10-22):
 - **S0d** `4185e5d3` `ResultStatus.PartialFailure` and `FromFailureCount(failed, succeeded)`; `IOperationResult` exists and implementers have moved (`e1b1d499` comments).
 - **S1a** `ff0ac846` (Basic engine and Common, 30 catches) and `a2fa7263` (Advanced engine catches; lossy catches keep the `ToolException` code). Left as `// TODO` design decisions: `PersistentWorkspaceManager` write/delete loops, `OperationBlobWriter`, `ValidateAndApplyHelper` tool-boundary catches.
 
+S1 catch-and-convert removal DONE 2026-10-22 (commits b06e42c8, cf8e29c6, 7f0237b3, b01e43d1, 3851a4bb, 996cb220, 433c0a54): `MemberRefactoringEngine` (all single-target sites, ChangeAccessibility, the cascade's argument validation), `BasicRefactoringEngine` (summary comment, WrapInTryCatch/WrapInRegion snippet overloads), `AdvancedStructuralEngine.ConvertExpressionBody`, `MappingEngine.InvertAssignments`, `SemanticRefactoringEngine.WrapInUsing`, `StructuralRefinementEngine.SafeDeleteSymbol`. Each has a throw pin test. `CommentingEngine.CommentFileAsync` gained a per-item catch (loop rule); its test is missing (TODO).
+
+Left on purpose (each has a `// TODO throw-migration`): the three batch aggregators in `MemberRefactoringEngine` (`ApplyModifierBatchAsync`, `ApplyAttributeBatchAsync`, `ApplyBaseTypeBatchAsync`: they collect every per-index failure, all-or-nothing; they need a typed aggregate exception carrying per-item failures first); the cascade's unmatched-`callSiteFixups`-keys `Invalid(...)` result; the control-flow catches (`ConvertMembersToStaticAsync`, `IsDeclarationStillPresentAsync`). Found: the type-level not-found in `AddBaseType` carries no `Snippet` payload while member-level throws do.
+
 Do next, in order, one slice per dispatch (load `dispatch-implementer` and `dto-conventions` first; measure members and call sites with `explore-haiku` before briefing):
-1. **S1** on the 36 convert sites, `MemberRefactoringEngine` first (28 sites), starting with the shared `RequireDocument(solution, path)` helper (Q10).
-2. S2, S3, S4, S5 per section 5.
+1. The shared `RequireDocument(solution, path)` helper (Q10; `DocumentLookup.TryGetDocument(...).GetDocumentOrThrow()` in Common already exists and is a candidate base) and converting the about 115 `EditOutcome.DocumentNotFound` returns in slices (Member 27, LogicOptimization 15, BasicRefactoring 13, AdvancedStructural 10).
+2. The typed aggregate exception for batch failures, then the three aggregators and the cascade `Invalid` result.
+3. S2 (remaining failure-returning methods, `NoChange` producers), S3, S4, S5 per section 5. Four sibling tests still named `..._ResultCarriesNotFoundErrorCode` (ExtractMethod, ExtractConstantSafe, others) belong to engines whose methods return `MsAugmentResult.Fail` (S4).
 
 Decided 2026-10-21 (recommendations adopted; details in the numbered Open questions below):
 - **Q6b:** the member is `ErrorCode` (matches `ToolException.ErrorCode` and `ToolErrorCode`); if the wire `ResultError` field is named differently, implement explicitly so the wire name does not change.
