@@ -2893,11 +2893,11 @@ public class Processor
             [Test]
             public async Task BUG_53_EmptyProjectDoesNotCrash()
             {
-                // BUG-53: Empty project causes IndexOutOfRangeException
+                // BUG-53: Empty project causes IndexOutOfRangeException.
+                // Pins the typed throw: the missing file surfaces as ToolNotFoundException (ErrorCode NotFound), not an unexpected exception type.
                 SetSource("");
-                var result = await _refactoringEngine.FormatDocumentAsync("Empty.cs");
-                // TODO throw-migration: assert the typed exception once BasicRefactoringEngine throws
-                Assert.That(result, Is.Not.Null);
+                var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _refactoringEngine.FormatDocumentAsync("Empty.cs"));
+                Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
             }
 
             [Test]
@@ -3926,19 +3926,19 @@ namespace MyApp
         public void TearDown() => _workspaceManager?.Dispose();
         private QualityTools CreateTools() => new QualityTools(new TestingEngine(_workspaceManager), new ControlFlowEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), new DiagnosticEngine(_workspaceManager), new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
         [Test]
-        public async Task AddGuardClausesAsync_FileNotInWorkspace_ReturnsEmpty()
+        public async Task AddGuardClausesAsync_FileNotInWorkspace_ThrowsNotFound()
         {
-            var result = await _engine.AddGuardClausesAsync("nonexistent.cs", "Foo");
-            // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace (tool layer converts to exception)");
+            // Pins the typed throw (RequireDocument), not an empty result.
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AddGuardClausesAsync("nonexistent.cs", "Foo"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]
-        public async Task AddGuardClauses_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
+        public async Task AddGuardClauses_Tool_FileNotInWorkspace_ThrowsNotFound()
         {
-            var result = await _engine.AddGuardClausesAsync("nonexistent.cs", "Foo");
-            // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
+            // Engine throws the typed ToolNotFoundException directly; the tool layer does not convert it.
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AddGuardClausesAsync("nonexistent.cs", "Foo"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]

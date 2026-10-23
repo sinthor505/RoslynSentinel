@@ -499,4 +499,28 @@ public class LogicOptimizationNormalizeCharacterizationTests
             UntouchedLine,
             "}"));
     }
+
+    [Test]
+    public async Task SimplifyBooleanExpressions_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class Sample { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.SimplifyBooleanExpressionsAsync("Missing.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ExtensionToStatic_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public static class Ext { public static int Twice(this int x) => x * 2; }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ExtensionToStaticAsync("Missing.cs", "Twice"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ConvertForEachToFor_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class Sample { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ConvertForEachToForAsync("Missing.cs", 5));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

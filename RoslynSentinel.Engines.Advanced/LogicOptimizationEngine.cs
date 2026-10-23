@@ -25,16 +25,7 @@ public class LogicSimplificationEngine
     public async Task<DocumentEditResult> SimplifyBooleanExpressionsAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -64,16 +55,7 @@ public class LogicSimplificationEngine
     public async Task<DocumentEditResult> AddGuardClausesAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -135,16 +117,7 @@ public class LogicSimplificationEngine
     public async Task<DocumentEditResult> ConvertToNullCoalescingAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -184,16 +157,7 @@ public class LogicSimplificationEngine
     public async Task<DocumentEditResult> ConvertToSwitchAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -740,16 +704,7 @@ public class LogicSimplificationEngine
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == resolvedFilePath || d.FilePath == resolvedFilePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, resolvedFilePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -814,16 +769,7 @@ public class LogicSimplificationEngine
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, resolvedFilePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -893,16 +839,7 @@ public class LogicSimplificationEngine
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == resolvedFilePath || d.FilePath == resolvedFilePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, resolvedFilePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
@@ -934,16 +871,7 @@ public class LogicSimplificationEngine
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
-                FilePath = resolvedFilePath
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, resolvedFilePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
@@ -998,16 +926,7 @@ public class LogicSimplificationEngine
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == resolvedFilePath || d.FilePath == resolvedFilePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, resolvedFilePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -1098,16 +1017,7 @@ public class LogicSimplificationEngine
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == resolvedFilePath || d.FilePath == resolvedFilePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, resolvedFilePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -1171,16 +1081,7 @@ public class LogicSimplificationEngine
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == resolvedFilePath || d.FilePath == resolvedFilePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, resolvedFilePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)

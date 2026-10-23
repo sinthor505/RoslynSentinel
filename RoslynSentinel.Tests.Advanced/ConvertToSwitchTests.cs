@@ -702,4 +702,12 @@ public class ConvertToSwitchTests
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
         Assert.That(result.UpdatedText, Does.Contain("case 1:"), "Should handle inverted comparisons");
     }
+
+    [Test]
+    public async Task ConvertToSwitch_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _logicOptimizationEngine.ConvertToSwitchAsync("Missing.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }
