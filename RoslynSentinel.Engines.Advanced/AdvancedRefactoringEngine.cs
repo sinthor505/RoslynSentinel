@@ -235,16 +235,7 @@ public class AdvancedRefactoringEngine
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         // Find the class document
-        var classDocument = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (classDocument == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = $"// File '{filePath}' was not found in the loaded solution."
-            };
-        }
+        var classDocument = DocumentLookup.RequireDocument(solution, filePath);
 
         var classRoot = await classDocument.GetSyntaxRootAsync(cancellationToken);
         if (classRoot == null)

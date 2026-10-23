@@ -403,4 +403,12 @@ public class NegativeTest
         Assert.That(result, Does.Contain("* 2"), "Should inline negative number");
         Assert.That(result, Does.Not.Contain("var negative"), "Variable declaration should be removed");
     }
+
+    [Test]
+    public async Task ConvertPropertyToMethods_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _semanticRefactoringEngine.ConvertPropertyToMethodsAsync("Missing.cs", "Foo", "Name"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

@@ -171,16 +171,7 @@ public class SemanticRefactoringEngine
     public async Task<DocumentEditResult> ConvertPropertyToMethodsAsync(FilePathWrapper filePath, string className, string propertyName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            return new DocumentEditResult()
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                Message = "// ErrorDetails: File not found in the loaded solution.",
-                FilePath = filePath
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
@@ -222,12 +213,7 @@ public class SemanticRefactoringEngine
     public async Task<DocumentEditResult> WrapInUsingAsync(FilePathWrapper filePath, int startLine, int endLine, string disposalName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, Message = "// ErrorDetails: File not found in the loaded solution.", FilePath = filePath };
-        }
-
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         var span = Microsoft.CodeAnalysis.Text.TextSpan.FromBounds(sourceText.Lines[startLine - 1].Start, sourceText.Lines[endLine - 1].End);
@@ -249,12 +235,7 @@ public class SemanticRefactoringEngine
     public async Task<DocumentEditResult> WrapInUsingAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore, string? lineAfter, string disposalName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, Message = "// ErrorDetails: File not found in the loaded solution.", FilePath = filePath };
-        }
-
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)

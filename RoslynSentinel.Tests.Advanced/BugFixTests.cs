@@ -3998,19 +3998,17 @@ namespace MyApp
         public void TearDown() => _workspaceManager?.Dispose();
         private QualityTools CreateTools() => new QualityTools(_engine, new ControlFlowEngine(_workspaceManager), new AntiPatternEngine(_workspaceManager), new ThreadSafetyEngine(_workspaceManager), new DiagnosticEngine(_workspaceManager), new CodeStyleAnalysisEngine(_workspaceManager), new StackOverflowEngine(_workspaceManager), new MsToolAugmentEngine(_workspaceManager), _workspaceManager, NullLogger<QualityTools>.Instance);
         [Test]
-        public async Task AddBenchmarkStubAsync_FileNotInWorkspace_ReturnsEmpty()
+        public async Task AddBenchmarkStubAsync_MissingFile_ThrowsNotFound()
         {
-            var result = await _engine.AddBenchmarkStubAsync("nonexistent.cs", "MyClass", "MyMethod");
-            // TODO throw-migration: assert the typed exception once TestingEngine throws
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AddBenchmarkStubAsync("nonexistent.cs", "MyClass", "MyMethod"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]
-        public async Task AddBenchmarkStub_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
+        public async Task AddBenchmarkStub_Tool_MissingFile_ThrowsNotFound()
         {
-            var result = await _engine.AddBenchmarkStubAsync("nonexistent.cs", "MyClass", "MyMethod");
-            // TODO throw-migration: assert the typed exception once TestingEngine throws
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AddBenchmarkStubAsync("nonexistent.cs", "MyClass", "MyMethod"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]
@@ -4178,15 +4176,10 @@ namespace MyApp
         private AdvancedRefactoringTools CreateAdvancedTools() => new AdvancedRefactoringTools(_workspaceManager);
         [Test]
         [Category("AdvancedRefactoringEngine")] // sentinel:auto-category
-        public async Task SyncInterfaceToImplementationAsync_FileNotInWorkspace_ReturnsContent()
+        public async Task SyncInterfaceToImplementationAsync_MissingFile_ThrowsNotFound()
         {
-            // SyncInterfaceToImplementationAsync applies interface sync across the whole solution
-            // state. For a nonexistent file the engine returns DocumentNotFound rather than content.
-            var result = await _engine.SyncInterfaceToImplementationAsync("nonexistent.cs", "Ghost", "IGhost");
-            // The engine returns DocumentNotFound, so the file-not-found guard fires.
-            // TODO throw-migration: assert the typed exception once AdvancedRefactoringEngine throws
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound));
-            Assert.That(result, Is.Not.Null, "Engine returns DocumentNotFound for SyncInterface when file is not in workspace");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.SyncInterfaceToImplementationAsync("nonexistent.cs", "Ghost", "IGhost"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]

@@ -221,4 +221,12 @@ public class PocoEditNormalizeCharacterizationTests
             UntouchedLine,
             "}"));
     }
+
+    [Test]
+    public async Task DocumentPocoFields_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new DocumentationEngine(_workspaceManager).DocumentPocoFieldsAsync("Missing.cs", "Person"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

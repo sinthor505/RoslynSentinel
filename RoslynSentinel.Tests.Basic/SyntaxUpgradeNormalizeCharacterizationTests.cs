@@ -229,4 +229,20 @@ public class SyntaxUpgradeNormalizeCharacterizationTests
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(result.UpdatedText, Is.EqualTo(Build(eol, SpanExpected())));
     }
+
+    [Test]
+    public async Task UseFieldBackedProperties_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.UseFieldBackedPropertiesAsync("Missing.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task UpgradeToPrimaryConstructor_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.UpgradeToPrimaryConstructorAsync("Missing.cs", "Foo"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

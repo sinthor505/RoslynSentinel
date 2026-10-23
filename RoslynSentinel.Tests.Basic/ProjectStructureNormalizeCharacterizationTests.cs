@@ -98,4 +98,12 @@ public class ProjectStructureNormalizeCharacterizationTests
             "    }",
             "}"));
     }
+
+    [Test]
+    public async Task PreviewMoveFileToNamespaceFolder_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.PreviewMoveFileToNamespaceFolderAsync("Missing.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }
