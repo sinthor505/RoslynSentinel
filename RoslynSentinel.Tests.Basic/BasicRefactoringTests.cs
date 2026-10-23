@@ -744,6 +744,7 @@ public class MyClass
     [Test]
     public async Task FormatDocument_MissingFile_ThrowsNotFound()
     {
+        // NOTE: FormatDocumentAsync is dead code (no production caller; owner decision 2026-10-22). This test is kept as-is; do not re-investigate.
         SetSource(@"
 namespace N;
 public class Holder { }

@@ -113,7 +113,8 @@ public interface IOrderRepository
         SetSource(ControllerSource, "Orders.cs");
         var result = await _generationTools.GenerateHttpClientTool(reason: "test message", "Orders.cs", "OrdersController");
         Assert.That(result, Does.Contain($"\"Outcome\": {(int)EditOutcome.Modified}"), "Generation should report Modified");
-        // TODO GenerateHttpClient summary (ToJsonSummary) omits UpdatedText, so the generated OrdersClient source is unreachable from the tool result; assert it once the tool exposes it.
+        // DEFERRED (accepted 2026-10-22, finding #22): the tool returns ToJsonSummary(), which omits UpdatedText ([JsonIgnore] on EngineResultBase.UpdatedText).
+        // Left as-is on purpose until scheduled; do not re-raise in reviews.
     }
 
     [Test]
@@ -132,7 +133,8 @@ public interface IOrderRepository
     {
         // GenerateConstructorAsync takes only private or readonly FIELDS (CodeGenerationEngine.cs).
         // PocoSource's Order has auto-properties only and yields NoCandidatesFound, so this Order declares a field.
-        // TODO <engine ignores auto-properties?> a constructor generator normally takes properties too.
+        // DEFERRED (accepted 2026-10-22, finding #20): GenerateConstructor uses fields only and ignores auto-properties (CodeGenerationEngine filter).
+        // Left as-is on purpose until scheduled; do not re-raise in reviews.
         const string source = "public class Order { private readonly string _sku; public int OrderId { get; set; } }";
         SetSource(source, "Order.cs");
         var result = await _codeGenerationEngine.GenerateConstructorAsync("Order.cs", "Order");
@@ -332,7 +334,8 @@ public interface IOrderRepository
         SetSource(src, "Order.cs");
         var result = await _generationTools.InterpolateStringSafeTool(reason: "test message", "Order.cs", @"string.Format(""{0}""");
         Assert.That(result, Does.Contain($"\"Outcome\": {(int)EditOutcome.Modified}"), "Conversion should report Modified");
-        // TODO InterpolateString summary (ToJsonSummary) omits UpdatedText, so the converted $"..." text is unreachable from the tool result; assert it once the tool exposes it.
+        // DEFERRED (accepted 2026-10-22, finding #22): the tool returns ToJsonSummary(), which omits UpdatedText ([JsonIgnore] on EngineResultBase.UpdatedText).
+        // Left as-is on purpose until scheduled; do not re-raise in reviews.
     }
 
     [Test]

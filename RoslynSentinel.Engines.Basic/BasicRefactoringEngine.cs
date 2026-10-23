@@ -104,6 +104,8 @@ public class BasicRefactoringEngine
         _config = config;
     }
 
+    // DEAD CODE (owner decision 2026-10-22): FormatDocumentAsync has no production caller; it is kept only for tests.
+    // Do not re-investigate, re-raise in reviews, or delete it without the owner's go-ahead.
     public async Task<DocumentEditResult> FormatDocumentAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
     {
         // READCHOKEPOINT-CAST: _workspaceManager is ISolutionProvider-typed (40 construction sites

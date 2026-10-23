@@ -479,7 +479,8 @@ public class BatteryTwentyFourTests
         var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("NonExistent.cs");
         // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
         Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.DocumentNotFound));
-        // TODO message defect: DocumentNotFound message is the comment-style "// Document not found." with no file name; pin the real wording once fixed
+        // DEFERRED (accepted 2026-10-22, finding #24): engines return the text "// Document not found." as a result string instead of throwing a typed not-found exception; it is emitted at ~36 engine sites and is migrated with the throw-migration work.
+        // Left as-is on purpose until scheduled; do not re-raise in reviews.
         Assert.That(result.Message, Is.EqualTo("// Document not found."));
     }
 
@@ -503,7 +504,8 @@ public class BatteryTwentyFourTests
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("NonExistent.cs");
         // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
         Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.DocumentNotFound));
-        // TODO message defect: DocumentNotFound message is the comment-style "// Document not found." with no file name; pin the real wording once fixed
+        // DEFERRED (accepted 2026-10-22, finding #24): engines return the text "// Document not found." as a result string instead of throwing a typed not-found exception; it is emitted at ~36 engine sites and is migrated with the throw-migration work.
+        // Left as-is on purpose until scheduled; do not re-raise in reviews.
         Assert.That(result.Message, Is.EqualTo("// Document not found."));
     }
 
@@ -526,7 +528,8 @@ public class BatteryTwentyFourTests
         var result = await _modernizationEngine.ConvertToPatternAsync("NonExistent.cs");
         // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
         Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.DocumentNotFound));
-        // TODO message defect: DocumentNotFound message is the comment-style "// Document not found." with no file name; pin the real wording once fixed
+        // DEFERRED (accepted 2026-10-22, finding #24): engines return the text "// Document not found." as a result string instead of throwing a typed not-found exception; it is emitted at ~36 engine sites and is migrated with the throw-migration work.
+        // Left as-is on purpose until scheduled; do not re-raise in reviews.
         Assert.That(result.Message, Is.EqualTo("// Document not found."));
     }
 

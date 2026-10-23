@@ -534,7 +534,8 @@ public class DependencyEngineGapTests
         }
 
         // Either a valid empty result OR a graceful expected exception is acceptable
-        Assert.That(caughtEx, Is.InstanceOf<System.IO.FileNotFoundException>(), "In-memory project path does not exist on disk"); Assert.That(result, Is.Null); // TODO throw-migration: assert the typed exception once DependencyEngine throws (raw FileNotFoundException escapes for in-memory projects)
+        Assert.That(caughtEx, Is.InstanceOf<System.IO.FileNotFoundException>(), "In-memory project path does not exist on disk"); Assert.That(result, Is.Null); // DEFERRED (accepted 2026-10-22, finding #22): reads the project file from disk, so an in-memory project raises FileNotFoundException.
+        // Left as-is on purpose until scheduled (throw-migration); do not re-raise in reviews.
     }
 }
 

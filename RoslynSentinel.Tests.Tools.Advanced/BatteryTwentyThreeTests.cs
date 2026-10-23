@@ -349,7 +349,8 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
     {
         SetSource(QualitySource, "Quality.cs");
         var result = await _testingEngine.GenerateTestScaffoldAsync("Quality.cs", "QualityClass");
-        Assert.That(result.ClassName, Is.EqualTo("QualityClass")); Assert.That(result.TestClassName, Is.EqualTo("QualityClassTests")); Assert.That(result.Namespace, Is.EqualTo("TestProj.Tests")); Assert.That(result.Code, Does.Contain("class QualityClassTests")); // TODO scaffold Code emits xUnit/Moq usings for an NUnit test project; pinned as real output, decide the target framework
+        Assert.That(result.ClassName, Is.EqualTo("QualityClass")); Assert.That(result.TestClassName, Is.EqualTo("QualityClassTests")); Assert.That(result.Namespace, Is.EqualTo("TestProj.Tests")); Assert.That(result.Code, Does.Contain("class QualityClassTests")); // DEFERRED (accepted 2026-10-22, finding #20): GenerateTestScaffold always emits xUnit/Moq usings, even for an NUnit test project.
+        // Left as-is on purpose until scheduled; do not re-raise in reviews.
     }
 
     // --- AnalyzePathCoverage ---

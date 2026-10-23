@@ -367,7 +367,8 @@ public class BatteryTwentyTwoTests
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(result.UpdatedText, Does.Contain("[Description(\"Gets or sets the OrderId.\")]"));
-        // TODO DocumentPocoFieldsAsync annotates only properties; fields are ignored (RichSource Order.OrderId and CustomerName are fields)
+        // DEFERRED (accepted 2026-10-22, finding #20): DocumentPocoFields annotates properties only; plain fields are ignored.
+        // Left as-is on purpose until scheduled; do not re-raise in reviews.
     }
 
     // --- GenerateEqualityOverrides (via AnalysisEngine) ---

@@ -97,6 +97,8 @@ public class DependencyEngine
                 continue;
             }
 
+            // DEFERRED (accepted 2026-10-22, finding #22): reads the project file from disk, so an in-memory project raises FileNotFoundException.
+            // Left as-is on purpose until scheduled (throw-migration); do not re-raise in reviews.
             var xml = await File.ReadAllTextAsync(project.FilePath, cancellationToken);
             var matches = System.Text.RegularExpressions.Regex.Matches(xml, @"<PackageReference\s+Include=""([^""]+)""\s+Version=""([^""]+)""");
 

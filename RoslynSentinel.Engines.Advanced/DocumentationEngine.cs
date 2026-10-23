@@ -139,6 +139,8 @@ public class DocumentationEngine
             classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         }
 
+        // DEFERRED (accepted 2026-10-22, finding #20): only properties are annotated; plain fields are ignored.
+        // Left as-is on purpose until scheduled; do not re-raise in reviews.
         var properties = classNode!.Members.OfType<PropertyDeclarationSyntax>().ToList();
         var newClassNode = classNode.ReplaceNodes(properties, (oldProp, newProp) =>
         {

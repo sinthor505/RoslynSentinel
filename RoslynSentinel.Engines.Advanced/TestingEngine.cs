@@ -219,6 +219,8 @@ public class TestingEngine
         var sb = new StringBuilder();
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Threading.Tasks;");
+        // DEFERRED (accepted 2026-10-22, finding #20): GenerateTestScaffold always emits xUnit/Moq usings, even for an NUnit test project.
+        // Left as-is on purpose until scheduled; do not re-raise in reviews.
         sb.AppendLine("using Moq;");
         sb.AppendLine("using Xunit;");
         sb.AppendLine($"using {ns};");

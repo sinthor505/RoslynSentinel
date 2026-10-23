@@ -1294,6 +1294,8 @@ public class CodeTransformTools
                             return outcomeGuard;
                         }
 
+                        // DEFERRED (accepted 2026-10-22, finding #22): the generate_constructor success summary does not include the generated constructor text.
+                        // Left as-is on purpose until scheduled (throw-migration); do not re-raise in reviews.
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,

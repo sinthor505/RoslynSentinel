@@ -13,6 +13,8 @@ public record EngineResultBase : IOperationResult
     {
         get; init;
     } = EditOutcome.Unset;
+    // DEFERRED (accepted 2026-10-22, finding #22): UpdatedText is excluded from JSON summaries, so generate-style tools do not show the generated text.
+    // Left as-is on purpose until scheduled; do not re-raise in reviews.
     [JsonIgnore]
     public string? UpdatedText
     {

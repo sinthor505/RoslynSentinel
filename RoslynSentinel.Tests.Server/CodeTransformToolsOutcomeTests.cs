@@ -271,7 +271,8 @@ public class EmailService
         Assert.That(result.SuccessData, Is.TypeOf<string>());
         Assert.That((string)result.SuccessData!, Does.Contain("Outcome"));
         Assert.That((string)result.SuccessData!, Does.Not.Contain("already in the requested state"));
-        // TODO generate_constructor success summary does not show the generated constructor text (Changes is empty); assert the constructor signature once the summary shape is confirmed
+        // DEFERRED (accepted 2026-10-22, finding #22): the generate_constructor success summary does not show the generated constructor text.
+        // Left as-is on purpose until scheduled; do not re-raise in reviews.
     }
 
     [Test]

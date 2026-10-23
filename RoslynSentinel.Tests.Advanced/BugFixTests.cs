@@ -2884,6 +2884,7 @@ public class Processor
             public async Task BUG_52_NullDictionaryDoesNotCrash()
             {
                 // BUG-52: Null dictionary handling in coalescing operations
+                // NOTE: FormatDocumentAsync is dead code (no production caller; owner decision 2026-10-22). This test is kept as-is; do not re-investigate.
                 SetSource("var x = new Dictionary<string, int>(); var y = x ?? new();");
                 // Should not throw NullReferenceException
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
@@ -2895,6 +2896,7 @@ public class Processor
             {
                 // BUG-53: Empty project causes IndexOutOfRangeException.
                 // Pins the typed throw: the missing file surfaces as ToolNotFoundException (ErrorCode NotFound), not an unexpected exception type.
+                // NOTE: FormatDocumentAsync is dead code (no production caller; owner decision 2026-10-22). This test is kept as-is; do not re-investigate.
                 SetSource("");
                 var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _refactoringEngine.FormatDocumentAsync("Empty.cs"));
                 Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
@@ -2904,6 +2906,7 @@ public class Processor
             public async Task BUG_58_MalformedSyntaxDoesNotCrash()
             {
                 // BUG-58: Malformed syntax (double semicolon) causes parsing crash
+                // NOTE: FormatDocumentAsync is dead code (no production caller; owner decision 2026-10-22). This test is kept as-is; do not re-investigate.
                 SetSource("public class Foo { public void Bar() { Console.WriteLine(\"test\");; } }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
                 Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
@@ -2915,6 +2918,7 @@ public class Processor
             public async Task BUG_69_UnicodeCharactersDoNotCrash()
             {
                 // BUG-69: Unicode characters cause encoding errors
+                // NOTE: FormatDocumentAsync is dead code (no production caller; owner decision 2026-10-22). This test is kept as-is; do not re-investigate.
                 SetSource("// Comment with émojis 🎉 and spëcial çharacters\npublic class Tëst { }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
                 Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
@@ -2924,6 +2928,7 @@ public class Processor
             public async Task BUG_76_RecursiveMethodDoesNotCrash()
             {
                 // BUG-76: Recursive method analysis causes stack overflow
+                // NOTE: FormatDocumentAsync is dead code (no production caller; owner decision 2026-10-22). This test is kept as-is; do not re-investigate.
                 SetSource("public class Recursive { public int F(int n) => n <= 0 ? 0 : n + F(n - 1); }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
                 Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
@@ -2933,6 +2938,7 @@ public class Processor
             public async Task BUG_77_GenericConstraintsDoNotCrash()
             {
                 // BUG-77: Complex generic constraints cause type resolution errors
+                // NOTE: FormatDocumentAsync is dead code (no production caller; owner decision 2026-10-22). This test is kept as-is; do not re-investigate.
                 SetSource("public class G<T, U> where T : class where U : struct { public void M<V>(V item) where V : T { } }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
                 Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
@@ -2986,6 +2992,7 @@ public class Processor
             public async Task BUG_45_RefactoringProducesCorrectResult()
             {
                 // BUG-45: Refactoring produces wrong result silently
+                // NOTE: FormatDocumentAsync is dead code (no production caller; owner decision 2026-10-22). This test is kept as-is; do not re-investigate.
                 SetSource("public class Calculator { public int Add(int a, int b) => a + b; }");
                 var result = await _refactoringEngine.FormatDocumentAsync("Test.cs");
                 Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
@@ -3013,6 +3020,7 @@ public class Processor
             public async Task BUG_50_RefactoringSemanticsPreserved()
             {
                 // BUG-50: Refactoring breaks semantics silently
+                // NOTE: FormatDocumentAsync is dead code (no production caller; owner decision 2026-10-22). This test is kept as-is; do not re-investigate.
                 const string source = @"public class SemanticTest
         {
             public void Method()

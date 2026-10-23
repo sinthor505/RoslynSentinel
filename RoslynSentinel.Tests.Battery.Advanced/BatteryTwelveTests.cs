@@ -217,6 +217,7 @@ public class RefactoringEngineTests
     [Test]
     public async Task FormatDocument_UnknownFile_ReturnsEmptyString()
     {
+        // NOTE: FormatDocumentAsync is dead code (no production caller; owner decision 2026-10-22). This test is kept as-is; do not re-investigate.
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Code.cs", "public class C { }")]);
         _workspaceManager.SetTestSolution(solution);
@@ -230,6 +231,7 @@ public class RefactoringEngineTests
     [Test]
     public async Task FormatDocument_ValidFile_ReturnsFormattedText()
     {
+        // NOTE: FormatDocumentAsync is dead code (no production caller; owner decision 2026-10-22). This test is kept as-is; do not re-investigate.
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Code.cs", "public class C{void M(){var x=1;}}")]);
         _workspaceManager.SetTestSolution(solution);

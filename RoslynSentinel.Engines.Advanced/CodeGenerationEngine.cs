@@ -228,6 +228,8 @@ public class CodeGenerationEngine
             };
         }
 
+        // DEFERRED (accepted 2026-10-22, finding #20): constructor generation ignores auto-properties; only fields are used.
+        // Left as-is on purpose until the feature is scheduled; do not re-raise in reviews.
         var fields = classNode.Members
             .OfType<FieldDeclarationSyntax>()
             .Where(f => f.Modifiers.Any(m => m.IsKind(SyntaxKind.PrivateKeyword)) ||
