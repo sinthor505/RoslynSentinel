@@ -24,7 +24,7 @@ public class ServerStatusTools
 
     [McpServerTool(Name = "McpServerStatus")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, serverBinaryPath, serverPid, binaryStaleness = loaded assemblies with a newer build on disk), session-halt state, circuit breaker, loaded workspace (isFreshStartup = this server process has not loaded a solution yet, e.g. just restarted), active tool-mode resolution. " +
+    [Description("Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, serverBinaryPath, serverPid, buildSha, binaryStaleness = commits since buildSha touching server source, else loaded assemblies with a newer build on disk), session-halt state, circuit breaker, loaded workspace (isFreshStartup = this server process has not loaded a solution yet, e.g. just restarted), active tool-mode resolution. " +
         "Tools are gated per mode: before concluding a tool does not exist, call with toolListing=inactive." +
         " solutionLoadStatus = NotLoaded | Loading | Loaded | Failed; tool calls wait up to 30 s for a Loading solution." +
         " workspaceStale = a workspace reload failed and the loaded solution may not match disk (see reloadFailure; recover with LoadSolution forceReload: true); lastLoadFailure = text of the last failed load.")]
@@ -131,7 +131,9 @@ public class ServerStatusTools
             LastLoadFailure: _workspaceManager.LoadState.LastLoadFailure,
             // Where this process writes logs/crash.log/tool_list*.json (--working-dir, else the binary directory).
             WorkingDir: ServerInstancePaths.Current.WorkingDir,
-            WorkingDirExplicit: ServerInstancePaths.Current.IsExplicit
+            WorkingDirExplicit: ServerInstancePaths.Current.IsExplicit,
+            // Commit this binary was built from (null for an unstamped local build).
+            BuildSha: ServerBuildInfo.BuildSha
         )
         };
     }
@@ -227,7 +229,8 @@ public sealed record McpServerStatusResult(
     WorkspaceReloadFailure? ReloadFailure,
     string? LastLoadFailure,
     string? WorkingDir = null,
-    bool WorkingDirExplicit = false);
+    bool WorkingDirExplicit = false,
+    string? BuildSha = null);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this

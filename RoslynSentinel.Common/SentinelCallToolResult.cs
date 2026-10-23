@@ -29,13 +29,45 @@ public static class ServerBuildInfo
     /// kill the exact stale process by PID, rather than correlating binary path back to a live process by
     /// hand. Read from <see cref="Environment.ProcessId"/> -> a static property, no I/O, cannot fail.
     /// </summary>
-    public static readonly int Pid; static ServerBuildInfo()
+    public static readonly int Pid;
+    /// <summary>
+    /// Git commit the running binary was built from: the hex run after '+' in the entry assembly's
+    /// <c>AssemblyInformationalVersion</c> (the SDK appends it when <c>SourceRevisionId</c> is set at build time).
+    /// Null for an unstamped build (plain local <c>dotnet build</c>).
+    /// </summary>
+    public static readonly string? BuildSha;
+
+    static ServerBuildInfo()
     {
         var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
         Version = assembly.GetName().Version?.ToString() ?? "Unknown";
         BuildTimeUtc = File.Exists(assembly.Location) ? File.GetLastWriteTimeUtc(assembly.Location) : default;
         BinaryPath = assembly.Location;
         Pid = Environment.ProcessId;
+        BuildSha = ParseBuildSha(assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion);
+    }
+
+    /// <summary>
+    /// Extracts the commit sha from an informational version such as <c>1.0.0+abc1234</c> or
+    /// <c>1.0.0+&lt;40 hex&gt;.dirty</c>: the leading run of hex digits after the first '+', accepted only when it is
+    /// 7 to 40 characters long. Null when there is no '+' suffix or no such run.
+    /// </summary>
+    public static string? ParseBuildSha(string? informationalVersion)
+    {
+        var plus = informationalVersion?.IndexOf('+') ?? -1;
+        if (plus < 0)
+        {
+            return null;
+        }
+
+        var metadata = informationalVersion!.AsSpan(plus + 1);
+        var length = 0;
+        while (length < metadata.Length && char.IsAsciiHexDigit(metadata[length]))
+        {
+            length++;
+        }
+
+        return length is >= 7 and <= 40 ? metadata[..length].ToString() : null;
     }
 }
 

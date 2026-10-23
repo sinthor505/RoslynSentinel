@@ -752,6 +752,8 @@ public class PersistentWorkspaceManager : IDisposable, IWorkspaceManager, ISolut
 
                 // TODO an open that succeeds with zero projects still replaces a previously good solution (same as before this change); consider keeping the old one.
                 var solutionDirectory = Path.GetDirectoryName(solutionPath)!;
+                // The repo whose commits decide binary staleness is the loaded solution's, not the binary's location.
+                ServerBinaryStaleness.LoadedSolutionDirectory = solutionDirectory;
                 SetupWatcher(solutionDirectory);
                 SetupOutOfTreeWatchers(solutionDirectory);
 

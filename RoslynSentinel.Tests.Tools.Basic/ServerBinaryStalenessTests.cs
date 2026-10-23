@@ -92,6 +92,83 @@ public class ServerBinaryStalenessTests
             "A Release build must not flag a Debug-running server.");
     }
 
+    private const string Sha40 = "0123456789abcdef0123456789abcdef01234567";
+
+    [TestCase(null, null)]
+    [TestCase("", null)]
+    [TestCase("1.0.0", null)]
+    [TestCase("1.0.0+abc1234", "abc1234")]
+    [TestCase("1.0.0+" + Sha40, Sha40)]
+    [TestCase("1.0.0+" + Sha40 + ".dirty", Sha40)]
+    [TestCase("1.0.0+abc12", null)]
+    [TestCase("1.0.0+" + Sha40 + "a", null)]
+    [TestCase("1.0.0+build.5", null)]
+    public void ParseBuildSha_ReadsTheLeadingHexRunAfterPlus(string? informationalVersion, string? expected)
+    {
+        Assert.That(ServerBuildInfo.ParseBuildSha(informationalVersion), Is.EqualTo(expected));
+    }
+
+    private static string[] Hashes(string log) =>
+        [.. ServerBinaryStaleness.ParseGitLog(log, ServerBinaryStaleness.SourcePathPrefixes).Select(c => c.Hash)];
+
+    [Test]
+    public void ParseGitLog_DocsOnlyCommit_IsExcluded()
+    {
+        Assert.That(Hashes("abc1234\tDocs only\ndocs/a.md\nREADME.md\n\n"), Is.Empty);
+    }
+
+    [Test]
+    public void ParseGitLog_CommitTouchingCommon_IsIncludedWithHashAndSubject()
+    {
+        var commits = ServerBinaryStaleness.ParseGitLog(
+            "def5678\tFix common\nRoslynSentinel.Common/x.cs\n\n", ServerBinaryStaleness.SourcePathPrefixes);
+
+        Assert.That(commits, Is.EqualTo(new[] { new StaleCommit("def5678", "Fix common") }));
+    }
+
+    [Test]
+    public void ParseGitLog_MultiFileCommits_MatchOnAnyPathAndKeepLogOrder()
+    {
+        const string log =
+            "aaa1111\tMulti\ndocs/a.md\nRoslynSentinel.Tools.Basic/Y.cs\nRoslynSentinel.Engines.Basic/Z.cs\n\n"
+            + "bbb2222\tOther\ndocs/b.md\n\n"
+            + "ccc3333\tThird\nRoslynSentinel.Server.Basic/Q.cs"; // no trailing newline
+
+        Assert.That(Hashes(log), Is.EqualTo(new[] { "aaa1111", "ccc3333" }));
+    }
+
+    [Test]
+    public void ParseGitLog_TestAndScriptPaths_AreNotServerSource()
+    {
+        Assert.That(Hashes("abc1234\tTests\nRoslynSentinel.Tests.Tools.Basic/T.cs\nscripts/x.ps1\n\n"), Is.Empty);
+    }
+
+    [Test]
+    public void ParseGitLog_SubjectContainingATab_KeepsTheWholeSubject()
+    {
+        var commits = ServerBinaryStaleness.ParseGitLog(
+            "abc1234\tFix\tthing\nRoslynSentinel.Common/x.cs\n", ServerBinaryStaleness.SourcePathPrefixes);
+
+        Assert.That(commits.Single().Subject, Is.EqualTo("Fix\tthing"));
+    }
+
+    [Test]
+    public void ParseGitLog_BlankLinesCrlfAndPathlessCommits_AreTolerated()
+    {
+        const string log = "\r\nddd4444\tMerge with no files\r\n\r\n\r\neee5555\tReal\r\n\r\nRoslynSentinel.Common/a.cs\r\n\r\n";
+
+        Assert.That(Hashes(log), Is.EqualTo(new[] { "eee5555" }));
+        Assert.That(Hashes(string.Empty), Is.Empty);
+    }
+
+    [Test]
+    public void CheckNow_WithoutBuildSha_UsesTheLegacyBinScanNotGit()
+    {
+        var report = ServerBinaryStaleness.CheckNow(null, _root);
+
+        Assert.That(report.StaleCommits, Is.Null, "Only the git path fills StaleCommits; the legacy scan leaves it null.");
+    }
+
     [Test]
     public void EnumerateRepoBinaries_SkipsBinVscodeRefAndWorktreeFolders()
     {

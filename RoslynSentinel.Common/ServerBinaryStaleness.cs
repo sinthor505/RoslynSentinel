@@ -11,14 +11,22 @@ public sealed record LoadedBinary(string Name, string Path, Guid Mvid, string? C
 /// <summary>A loaded assembly for which a newer, different build exists in the repo's bin folders.</summary>
 public sealed record StaleAssembly(string Name, string LoadedPath, DateTime LoadedWriteTimeUtc, string NewerPath, DateTime NewerWriteTimeUtc);
 
-/// <summary>Result of comparing the server's loaded binaries to the builds found under the repo root.</summary>
-public sealed record ServerBinaryStalenessReport(bool IsStale, IReadOnlyList<StaleAssembly> StaleAssemblies, string? ScanRoot);
+/// <summary>A commit after the running binary's build sha that touches server source (hash is the abbreviated <c>%h</c>).</summary>
+public sealed record StaleCommit(string Hash, string Subject);
 
 /// <summary>
-/// Detects that the running server executes older binaries than a build sitting in the repo. A newer repo DLL
-/// counts only when its module version id (MVID) differs from the loaded one, so a rebuild with identical content
-/// is not a false alarm. Deterministic builds keep the MVID stable for unchanged content, which is why no
-/// per-build version stamp is needed.
+/// Result of comparing the running server to newer source. <paramref name="StaleAssemblies"/> is filled by the bin-folder
+/// MVID scan (unstamped binary); <paramref name="StaleCommits"/> is non-null only on the git path (stamped binary),
+/// where it lists the commits since the build sha that touch server source (empty when none).
+/// </summary>
+public sealed record ServerBinaryStalenessReport(bool IsStale, IReadOnlyList<StaleAssembly> StaleAssemblies, string? ScanRoot, IReadOnlyList<StaleCommit>? StaleCommits = null);
+
+/// <summary>
+/// Detects that the running server executes older code than the repo holds. Two paths:
+/// a binary stamped with its build sha (<see cref="ServerBuildInfo.BuildSha"/>) is stale when the loaded solution's
+/// repo has later commits touching server source (<see cref="EvaluateGit"/>); an unstamped binary falls back to scanning
+/// the repo's bin folders, where a newer DLL counts only when its module version id (MVID) differs from the loaded one,
+/// so a rebuild with identical content is not a false alarm.
 /// </summary>
 public static class ServerBinaryStaleness
 {
@@ -28,6 +36,37 @@ public static class ServerBinaryStaleness
     private static readonly object Gate = new();
     private static ServerBinaryStalenessReport? _cached;
     private static long _cachedAtTimestamp;
+    private static volatile bool _cacheInvalidated;
+    private static volatile string? _loadedSolutionDirectory;
+
+    /// <summary>Repo-relative path prefixes whose changes make a stamped binary stale (server source, not tests/docs).</summary>
+    internal static readonly string[] SourcePathPrefixes =
+    [
+        "RoslynSentinel.Common/",
+        "RoslynSentinel.Engines.",
+        "RoslynSentinel.Tools.",
+        "RoslynSentinel.Server.",
+    ];
+
+    private static readonly TimeSpan GitTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Directory of the currently loaded solution, set by the workspace manager when a load completes; null until then.
+    /// The git path uses it as the repo to inspect - the loaded solution's directory, not the binary's location,
+    /// because the server binary may live outside the repo (per-sha prod builds). Changing it drops the cached result.
+    /// </summary>
+    public static string? LoadedSolutionDirectory
+    {
+        get => _loadedSolutionDirectory;
+        set
+        {
+            if (!string.Equals(_loadedSolutionDirectory, value, StringComparison.Ordinal))
+            {
+                _loadedSolutionDirectory = value;
+                _cacheInvalidated = true;
+            }
+        }
+    }
 
     internal static List<LoadedBinary> GetLoadedBinaries() =>
         AppDomain.CurrentDomain.GetAssemblies()
@@ -150,9 +189,100 @@ public static class ServerBinaryStaleness
         return new ServerBinaryStalenessReport(stale.Count > 0, stale, scanRoot);
     }
 
-    /// <summary>Scans the repo now (uncached) and compares it to what this process has loaded. Never throws.</summary>
-    public static ServerBinaryStalenessReport CheckNow()
+    /// <summary>
+    /// Git path: lists commits in <c>&lt;buildSha&gt;..HEAD</c> of the repo containing <paramref name="solutionDirectory"/> that
+    /// touch a path under <see cref="SourcePathPrefixes"/>; stale iff there is at least one. An unknown sha, missing git,
+    /// timeout or a non-repo directory all yield "not stale" (the check is a diagnostic and must never throw).
+    /// </summary>
+    public static ServerBinaryStalenessReport EvaluateGit(string buildSha, string solutionDirectory)
     {
+        var notStale = new ServerBinaryStalenessReport(false, [], solutionDirectory, []);
+        try
+        {
+            // Hex only: also keeps a sha-looking argument from ever being read as a git option.
+            if (buildSha.Length is < 7 or > 40 || !buildSha.All(char.IsAsciiHexDigit) || !Directory.Exists(solutionDirectory))
+            {
+                return notStale;
+            }
+
+            // core.quotepath=false keeps non-ASCII paths unquoted; a trailing "--" ends the revision list.
+            var run = GitProcess.TryRun(
+                solutionDirectory, GitTimeout, "-c", "core.quotepath=false", "log", buildSha + "..HEAD", "--name-only", "--format=%h%x09%s", "--");
+            if (run is not { ExitCode: 0 })
+            {
+                return notStale;
+            }
+
+            var commits = ParseGitLog(run.Value.StdOut, SourcePathPrefixes);
+            return new ServerBinaryStalenessReport(commits.Count > 0, [], solutionDirectory, commits);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return notStale;
+        }
+    }
+
+    /// <summary>
+    /// Pure parser for <c>git log --name-only --format=%h%x09%s</c> output: a header line is <c>hash&lt;TAB&gt;subject</c>
+    /// (the subject may itself contain tabs), followed by its changed paths (git quotes any path holding a tab, so a
+    /// path line never contains one) and a blank line. Returns, in log order, the commits with at least one path that
+    /// starts with one of <paramref name="pathPrefixes"/> (ordinal, '/' separators).
+    /// </summary>
+    internal static IReadOnlyList<StaleCommit> ParseGitLog(string output, IReadOnlyList<string> pathPrefixes)
+    {
+        var commits = new List<StaleCommit>();
+        string? hash = null;
+        var subject = string.Empty;
+        var matched = false;
+
+        foreach (var rawLine in output.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (line.Length == 0)
+            {
+                continue;
+            }
+
+            var tab = line.IndexOf('\t');
+            if (tab >= 0)
+            {
+                if (hash is not null && matched)
+                {
+                    commits.Add(new StaleCommit(hash, subject));
+                }
+
+                hash = line[..tab];
+                subject = line[(tab + 1)..];
+                matched = false;
+            }
+            else if (hash is not null && !matched)
+            {
+                matched = pathPrefixes.Any(p => line.StartsWith(p, StringComparison.Ordinal));
+            }
+        }
+
+        if (hash is not null && matched)
+        {
+            commits.Add(new StaleCommit(hash, subject));
+        }
+
+        return commits;
+    }
+
+    /// <summary>Checks now (uncached) whether this process runs older code than the repo holds. Never throws.</summary>
+    public static ServerBinaryStalenessReport CheckNow() => CheckNow(ServerBuildInfo.BuildSha, LoadedSolutionDirectory);
+
+    /// <summary>
+    /// Dispatch: a stamped binary with a known loaded-solution directory uses the git path; anything else (no sha, or
+    /// no solution loaded yet) uses the bin-folder MVID scan so out-of-tool builds still register.
+    /// </summary>
+    internal static ServerBinaryStalenessReport CheckNow(string? buildSha, string? solutionDirectory)
+    {
+        if (buildSha is not null && solutionDirectory is not null)
+        {
+            return EvaluateGit(buildSha, solutionDirectory);
+        }
+
         string? root = null;
         try
         {
@@ -175,8 +305,9 @@ public static class ServerBinaryStaleness
         {
             lock (Gate)
             {
-                if (_cached is null || Stopwatch.GetElapsedTime(_cachedAtTimestamp) > CacheTtl)
+                if (_cached is null || _cacheInvalidated || Stopwatch.GetElapsedTime(_cachedAtTimestamp) > CacheTtl)
                 {
+                    _cacheInvalidated = false;
                     _cached = CheckNow();
                     _cachedAtTimestamp = Stopwatch.GetTimestamp();
                 }

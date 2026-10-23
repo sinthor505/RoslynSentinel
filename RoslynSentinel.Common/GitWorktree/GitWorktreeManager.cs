@@ -230,6 +230,7 @@ public sealed class GitWorktreeManager(
         // stdio MCP server (or a test host launched by one) is the live JSON-RPC pipe; a git child
         // holding that open can stall indefinitely. Same fix and rationale as GitImpl.RunGitAsync.
         process.StandardInput.Close();
+        // TODO stdout then stderr are read sequentially, which can deadlock on large stderr and has no timeout; GitProcess.TryRun drains both concurrently with a timeout - migrate RunGit onto it.
         var stdOut = process.StandardOutput.ReadToEnd();
         var stdErr = process.StandardError.ReadToEnd();
         process.WaitForExit();
