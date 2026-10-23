@@ -26,6 +26,8 @@ public class ServerHttp
         // ── Arg parsing ──────────────────────────────────────────────────────
         ServerStartupHelpers.ParseArgs(args, AllModes, out var modeArg, out var activeModes, out var solutionPath, out var baseRepoDirectory, out var includeTools, out var excludeTools, out var operatingMode);
         var port = ServerStartupHelpers.ParsePort(args, defaultPort: 5100);
+        var bind = ServerStartupHelpers.ParseBind(args);
+        var respawn = ServerStartupHelpers.ParseRespawn(args, "http");
         LlmOptions.Configure(args);
         ReplaceSnippetOptions.Configure(args);
         OrientationBreakerOptions.Configure(args);
@@ -68,9 +70,10 @@ public class ServerHttp
 
         builder.Logging.ClearProviders();
         ServerStartupHelpers.RegisterSerilogLoggerFactory(builder.Services);
-        builder.WebHost.ConfigureKestrel(opts => opts.ListenAnyIP(port));
+        // Loopback by default: the host has no authentication. --bind=any is for the control script's shared copy.
+        builder.WebHost.ConfigureKestrel(opts => ServerStartupHelpers.ConfigureHttpListener(opts, bind, port));
 
-        builder.Services.AddRoslynSentinelHostOptions(operatingMode);
+        builder.Services.AddRoslynSentinelHostOptions(operatingMode, HostTransport.Http, respawn);
         builder.Services.AddRoslynSentinelEnginesAdvanced();
         builder.Services.AddSingleton(new StoppedByScriptMarker(
             WasFound: stoppedByScriptDetails is not null, Details: stoppedByScriptDetails));
@@ -93,19 +96,21 @@ public class ServerHttp
         if (logger.IsEnabled(LogLevel.Information))
         {
             logger.LogInformation(
-                "RoslynSentinel Advanced HTTP Host starting. Port={Port} | Modes={Modes} | IncludeTools={IncludeTools} | ExcludeTools={ExcludeTools} | Log={Log}",
-                port, string.Join(", ", activeModes),
+                "RoslynSentinel Advanced HTTP Host starting. Port={Port} | Bind={Bind} | Respawn={Respawn} | Modes={Modes} | IncludeTools={IncludeTools} | ExcludeTools={ExcludeTools} | Log={Log}",
+                port, bind, respawn, string.Join(", ", activeModes),
                 includeTools.Count > 0 ? string.Join(", ", includeTools) : "(none)",
                 excludeTools.Count > 0 ? string.Join(", ", excludeTools) : "(none)",
                 logPath);
         }
 
-        Console.WriteLine($"[RoslynSentinel.Advanced.HttpHost] Listening on http://0.0.0.0:{port}/mcp | PID={Environment.ProcessId}");
-        Console.WriteLine($"[RoslynSentinel.Advanced.HttpHost] Log: {logPath}");
+        Console.WriteLine($"[RoslynSentinel.Advanced.HttpHost] PID={Environment.ProcessId} | Log: {logPath}");
 
         try
         {
-            await app.RunAsync().ConfigureAwait(false);
+            // StartAsync + WaitForShutdownAsync is what RunAsync does; split so the bound address (--port=0)
+            // can be read and printed as "listening: <url>" once Kestrel is actually listening.
+            await ServerStartupHelpers.StartHttpHostAndAnnounceAsync(app, logger).ConfigureAwait(false);
+            await app.WaitForShutdownAsync().ConfigureAwait(false);
         }
         finally
         {

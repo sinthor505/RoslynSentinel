@@ -9,10 +9,13 @@ namespace RoslynSentinel.Tools.Basic;
 public class AdminTools
 {
     private readonly IWorkspaceManager _workspaceManager;
+    private readonly RespawnPolicy _respawn;
 
-    public AdminTools(IWorkspaceManager workspaceManager)
+    /// <param name="hostOptions">Supplies the effective --respawn value for the StopServer text; null (tests) means Auto.</param>
+    public AdminTools(IWorkspaceManager workspaceManager, SentinelHostOptions? hostOptions = null)
     {
         _workspaceManager = workspaceManager;
+        _respawn = hostOptions?.Respawn ?? RespawnPolicy.Auto;
     }
 
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
@@ -167,7 +170,7 @@ public class AdminTools
      McpServerStopConfirmation? confirmServerStop = null,
      CancellationToken cancellationToken = default)
     {
-        return ControlServer(operation, confirmServerStop, ScheduleProcessExit, _workspaceManager.SolutionPath, cancellationToken);
+        return ControlServer(operation, confirmServerStop, ScheduleProcessExit, _workspaceManager.SolutionPath, _respawn, cancellationToken);
     }
 
     /// <summary>
@@ -179,6 +182,7 @@ public class AdminTools
         McpServerStopConfirmation? confirmServerStop,
         Action scheduleExit,
         string? loadedSolutionPath = null,
+        RespawnPolicy respawn = RespawnPolicy.Auto,
         CancellationToken cancellationToken = default)
     {
         _ = cancellationToken;
@@ -197,6 +201,13 @@ public class AdminTools
             }
 
             scheduleExit();
+            if (respawn == RespawnPolicy.None)
+            {
+                // --respawn=none (the HTTP default): no launcher or client restarts this process.
+                return "Stopping. This instance stays down: nothing will restart it, so there is no fresh instance to call LoadSolution on. "
+                    + "To get another test instance, call McpServerControl(operation: LaunchTestInstance) from your own session.";
+            }
+
             var loadHint = string.IsNullOrWhiteSpace(loadedSolutionPath)
                 ? "call LoadSolution with your solution path"
                 : $"call LoadSolution(solutionPath: \"{loadedSolutionPath}\")";

@@ -16,15 +16,17 @@ namespace RoslynSentinel.Server.Basic;
 public static class RoslynSentinelServiceExtensionsBasic
 {
     /// <summary>
-    /// Registers process-wide host settings (currently just <see cref="OperatingMode"/>). Call
+    /// Registers process-wide host settings (<see cref="OperatingMode"/>, <see cref="HostTransport"/>, <see cref="RespawnPolicy"/>). Call
     /// this <em>before</em> <see cref="AddRoslynSentinelEnginesBasic"/>, which TryAdds a
     /// Production-mode default for callers (chiefly the test assemblies) that never set one.
     /// </summary>
     public static IServiceCollection AddRoslynSentinelHostOptions(
         this IServiceCollection services,
-        OperatingMode operatingMode)
+        OperatingMode operatingMode,
+        HostTransport transport = HostTransport.Stdio,
+        RespawnPolicy respawn = RespawnPolicy.Auto)
     {
-        services.AddSingleton(new SentinelHostOptions { OperatingMode = operatingMode });
+        services.AddSingleton(new SentinelHostOptions { OperatingMode = operatingMode, Transport = transport, Respawn = respawn });
         return services;
     }
 

@@ -8,14 +8,17 @@ public class ServerStatusTools
     private readonly ActiveToolSurface _activeToolSurface;
     private readonly StoppedByScriptMarker _stoppedByScriptMarker;
     private readonly ToolsetService? _toolsets;
+    private readonly SentinelHostOptions? _hostOptions;
 
     /// <param name="toolsets">Present only in claude-lean, where McpToolsetControlTool can switch tools on at runtime.</param>
     public ServerStatusTools(
         IWorkspaceManager workspaceManager,
         ActiveToolSurface activeToolSurface,
         StoppedByScriptMarker stoppedByScriptMarker,
-        ToolsetService? toolsets = null)
+        ToolsetService? toolsets = null,
+        SentinelHostOptions? hostOptions = null)
     {
+        _hostOptions = hostOptions;
         _workspaceManager = workspaceManager;
         _activeToolSurface = activeToolSurface;
         _stoppedByScriptMarker = stoppedByScriptMarker;
@@ -133,7 +136,9 @@ public class ServerStatusTools
             WorkingDir: ServerInstancePaths.Current.WorkingDir,
             WorkingDirExplicit: ServerInstancePaths.Current.IsExplicit,
             // Commit this binary was built from (null for an unstamped local build).
-            BuildSha: ServerBuildInfo.BuildSha
+            BuildSha: ServerBuildInfo.BuildSha,
+            // Effective --respawn (auto | none): whether anything restarts this process after StopServer.
+            Respawn: (_hostOptions?.Respawn ?? RespawnPolicy.Auto).ToString().ToLowerInvariant()
         )
         };
     }
@@ -230,7 +235,8 @@ public sealed record McpServerStatusResult(
     string? LastLoadFailure,
     string? WorkingDir = null,
     bool WorkingDirExplicit = false,
-    string? BuildSha = null);
+    string? BuildSha = null,
+    string? Respawn = null);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this

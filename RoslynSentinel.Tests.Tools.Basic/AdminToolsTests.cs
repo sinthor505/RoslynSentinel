@@ -229,6 +229,55 @@ public class AdminToolsTests
     }
 
     [Test]
+    public void McpServerControlTool_WithoutConfirmation_RefusesRegardlessOfRespawn()
+    {
+        // The instance path reads the policy from SentinelHostOptions; an unconfirmed stop must still refuse
+        // (and so never schedule the real process exit) under respawn none.
+        var tools = new AdminTools(_workspaceManager, new SentinelHostOptions { Respawn = RespawnPolicy.None });
+
+        var result = tools.McpServerControlTool(
+            reason: "test message", operation: AdminTools.McpServerControlOperation.StopServer);
+
+        Assert.That(result, Does.StartWith("Refused"));
+    }
+
+    [Test]
+    public void ControlServer_StopWithRespawnAuto_KeepsTheVsCodeRespawnText()
+    {
+        var result = AdminTools.ControlServer(
+            AdminTools.McpServerControlOperation.StopServer,
+            AdminTools.McpServerStopConfirmation.ConfirmServerStop,
+            () => { },
+            loadedSolutionPath: @"C:\repo\My.slnx",
+            respawn: RespawnPolicy.Auto);
+
+        Assert.That(result, Is.EqualTo(
+            "Stopping. VS Code will rebuild the server binary and spawn a fresh instance on your next tool call. "
+            + "The fresh instance starts with no solution loaded: call LoadSolution(solutionPath: \"C:\\repo\\My.slnx\") before any other tool."));
+        Assert.That(result, Does.Not.Contain("LaunchTestInstance"));
+    }
+
+    [Test]
+    public void ControlServer_StopWithRespawnNone_SaysInstanceStaysDownAndNamesLaunchTestInstance()
+    {
+        var exitScheduled = false;
+
+        var result = AdminTools.ControlServer(
+            AdminTools.McpServerControlOperation.StopServer,
+            AdminTools.McpServerStopConfirmation.ConfirmServerStop,
+            () => exitScheduled = true,
+            loadedSolutionPath: @"C:\repo\My.slnx",
+            respawn: RespawnPolicy.None);
+
+        Assert.That(exitScheduled, Is.True);
+        Assert.That(result, Does.StartWith("Stopping."));
+        Assert.That(result, Does.Contain("stays down"));
+        Assert.That(result, Does.Contain("LaunchTestInstance"));
+        Assert.That(result, Does.Not.Contain("VS Code"), "none must not promise a VS Code respawn");
+        Assert.That(result, Does.Not.Contain("next tool call"));
+    }
+
+    [Test]
     public void McpServerControl_ConfirmParameter_IsOptionalSingleValueEnum()
     {
         // The guard must be visible in the emitted schema as a one-value enum, not a magic string.

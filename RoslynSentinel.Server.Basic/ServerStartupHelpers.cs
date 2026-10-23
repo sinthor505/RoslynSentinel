@@ -216,6 +216,92 @@ public static class ServerStartupHelpers
     /// <summary>Parses --transport (either "--transport=stdio|http" or "--transport stdio|http"); returns "stdio" if absent.</summary>
     public static string ParseTransport(string[] args) => GetArgValue(args, "--transport") ?? "stdio";
 
+    /// <summary>
+    /// Parses --bind (<c>loopback</c> | <c>any</c>, case-insensitive). Default and unknown value: Loopback. Same
+    /// convention as <see cref="ParseTransport"/> (no throw, no logging - Serilog is not configured yet at
+    /// parse time); an unknown value falls to the safe, narrower default.
+    /// </summary>
+    public static HttpBindScope ParseBind(string[] args) =>
+        string.Equals(GetArgValue(args, "--bind"), "any", StringComparison.OrdinalIgnoreCase)
+            ? HttpBindScope.Any
+            : HttpBindScope.Loopback;
+
+    /// <summary>
+    /// Parses --respawn (<c>auto</c> | <c>none</c>, case-insensitive). When absent or unknown the default follows
+    /// <paramref name="transport"/> (the value <see cref="ParseTransport"/> returned): http -> None, anything else
+    /// (stdio) -> Auto.
+    /// </summary>
+    public static RespawnPolicy ParseRespawn(string[] args, string transport)
+    {
+        var value = GetArgValue(args, "--respawn");
+        if (string.Equals(value, "auto", StringComparison.OrdinalIgnoreCase))
+        {
+            return RespawnPolicy.Auto;
+        }
+
+        if (string.Equals(value, "none", StringComparison.OrdinalIgnoreCase))
+        {
+            return RespawnPolicy.None;
+        }
+
+        return string.Equals(transport, "http", StringComparison.OrdinalIgnoreCase)
+            ? RespawnPolicy.None
+            : RespawnPolicy.Auto;
+    }
+
+    /// <summary>
+    /// Configures Kestrel's single listener for the HTTP hosts. <see cref="HttpBindScope.Loopback"/> (the default)
+    /// listens on 127.0.0.1 only: the host has no authentication, so reaching it from another machine must be an
+    /// explicit <c>--bind=any</c> choice (the control script's shared copy). <paramref name="port"/> 0 lets the OS
+    /// pick; read the result back with <see cref="StartHttpHostAndAnnounceAsync"/>.
+    /// </summary>
+    public static void ConfigureHttpListener(
+        Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions options, HttpBindScope bind, int port)
+    {
+        if (bind == HttpBindScope.Any)
+        {
+            options.ListenAnyIP(port);
+        }
+        else
+        {
+            options.Listen(System.Net.IPAddress.Loopback, port);
+        }
+    }
+
+    /// <summary>
+    /// Starts the already-mapped HTTP host (<c>StartAsync</c>, the first half of <c>RunAsync</c>), reads the
+    /// address Kestrel actually bound (this is what makes <c>--port=0</c> usable), prints
+    /// <c>listening: http://127.0.0.1:&lt;port&gt;/mcp</c> on stdout and to the log, and returns that URL. The caller then
+    /// awaits <c>WaitForShutdownAsync</c> so shutdown behaves as it did under <c>RunAsync</c>. Serilog also writes to
+    /// the console in HTTP mode, so the line is not the first one on stdout: a consumer scans for the
+    /// <c>listening: </c> prefix. A wildcard bound host (<c>[::]</c>/<c>0.0.0.0</c>, from <c>--bind=any</c>) is printed as
+    /// 127.0.0.1, which is reachable from this machine.
+    /// </summary>
+    public static async Task<string> StartHttpHostAndAnnounceAsync(
+        Microsoft.AspNetCore.Builder.WebApplication app, Microsoft.Extensions.Logging.ILogger logger)
+    {
+        await app.StartAsync().ConfigureAwait(false);
+
+        var server = app.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>();
+        var bound = server.Features.Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>()
+            ?.Addresses.FirstOrDefault();
+        if (bound is null || !Uri.TryCreate(bound.Replace("[::]", "localhost").Replace("0.0.0.0", "localhost"), UriKind.Absolute, out var uri))
+        {
+            throw new InvalidOperationException(
+                $"HTTP host started but reported no usable bound address (got '{bound ?? "(none)"}'); cannot print the listening URL.");
+        }
+
+        var host = uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ? "127.0.0.1" : uri.Host;
+        var url = $"{uri.Scheme}://{host}:{uri.Port}/mcp";
+        Console.WriteLine($"listening: {url}");
+        if (logger.IsEnabled(LogLevel.Information))
+        {
+            logger.LogInformation("listening: {Url} | PID={Pid}", url, Environment.ProcessId);
+        }
+
+        return url;
+    }
+
     // ── Fast-exit: --list-tools ───────────────────────────────────────────────
 
     /// <summary>

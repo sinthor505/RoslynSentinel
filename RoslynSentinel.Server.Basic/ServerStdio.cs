@@ -94,7 +94,7 @@ public class ServerStdio
 
         try
         {
-            builder.Services.AddRoslynSentinelHostOptions(operatingMode);
+            builder.Services.AddRoslynSentinelHostOptions(operatingMode, HostTransport.Stdio, ServerStartupHelpers.ParseRespawn(args, "stdio"));
             builder.Services.AddRoslynSentinelEnginesBasic();
             builder.Services.AddSingleton(new StoppedByScriptMarker(
                 WasFound: stoppedByScriptDetails is not null, Details: stoppedByScriptDetails));

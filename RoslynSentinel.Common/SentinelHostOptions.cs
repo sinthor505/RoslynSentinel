@@ -38,4 +38,35 @@ public enum OperatingMode
 public class SentinelHostOptions
 {
     public OperatingMode OperatingMode { get; init; } = OperatingMode.Production;
+
+    /// <summary>The transport this process serves (<c>--transport</c>). Default stdio, matching a bare <c>new SentinelHostOptions()</c>.</summary>
+    public HostTransport Transport { get; init; } = HostTransport.Stdio;
+
+    /// <summary>What happens after <c>McpServerControl(StopServer)</c> (<c>--respawn</c>). Default Auto = today's behaviour.</summary>
+    public RespawnPolicy Respawn { get; init; } = RespawnPolicy.Auto;
+}
+
+/// <summary>Transport a server process serves, from <c>--transport=stdio|http</c>.</summary>
+public enum HostTransport
+{
+    Stdio,
+    Http
+}
+
+/// <summary>
+/// Whether anything restarts this process after it stops (<c>--respawn=auto|none</c>). Auto: the MCP client
+/// (VS Code) respawns it on the next tool call. None: it stays down. Default follows the transport
+/// (stdio -> Auto, http -> None).
+/// </summary>
+public enum RespawnPolicy
+{
+    Auto,
+    None
+}
+
+/// <summary>Which interfaces the HTTP host listens on (<c>--bind=loopback|any</c>). Default Loopback.</summary>
+public enum HttpBindScope
+{
+    Loopback,
+    Any
 }
