@@ -740,4 +740,116 @@ public class MyClass
         Assert.That(regionIdx, Is.LessThan(runIdx), "#region should precede the method.");
         Assert.That(runIdx, Is.LessThan(endRegionIdx), "#endregion should follow the method.");
     }
+
+    [Test]
+    public async Task FormatDocument_MissingFile_ThrowsNotFound()
+    {
+        SetSource(@"
+namespace N;
+public class Holder { }
+", "Holder.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _basicRefactoringEngine.FormatDocumentAsync("Missing.cs"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ExtractConstant_MissingFile_ThrowsNotFound()
+    {
+        SetSource(@"
+namespace N;
+public class Holder { }
+", "Holder.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _basicRefactoringEngine.ExtractConstantAsync("Missing.cs", "1", "MyConst"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ExtractLocalVariable_MissingFile_ThrowsNotFound()
+    {
+        SetSource(@"
+namespace N;
+public class Holder { }
+", "Holder.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _basicRefactoringEngine.ExtractLocalVariableAsync("Missing.cs", "1 + 2"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task AddUsingDirective_MissingFile_ThrowsNotFound()
+    {
+        SetSource(@"
+namespace N;
+public class Holder { }
+", "Holder.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _basicRefactoringEngine.AddUsingDirectiveAsync("Missing.cs", "System.Text"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task RemoveUsingDirective_MissingFile_ThrowsNotFound()
+    {
+        SetSource(@"
+namespace N;
+public class Holder { }
+", "Holder.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _basicRefactoringEngine.RemoveUsingDirectiveAsync("Missing.cs", "System.Text"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task AddSummaryComment_MissingFile_ThrowsNotFound()
+    {
+        SetSource(@"
+namespace N;
+public class Holder { }
+", "Holder.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _basicRefactoringEngine.AddSummaryCommentAsync("Missing.cs", "Holder", "The holder."));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task WrapInTryCatch_MissingFile_ThrowsNotFound()
+    {
+        SetSource(@"
+namespace N;
+public class Holder { }
+", "Holder.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _basicRefactoringEngine.WrapInTryCatchAsync("Missing.cs", 1, 1));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task WrapInRegion_MissingFile_ThrowsNotFound()
+    {
+        SetSource(@"
+namespace N;
+public class Holder { }
+", "Holder.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _basicRefactoringEngine.WrapInRegionAsync("Missing.cs", 1, 1, "MyRegion"));
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }
