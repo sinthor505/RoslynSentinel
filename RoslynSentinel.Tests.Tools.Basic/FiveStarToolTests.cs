@@ -219,7 +219,7 @@ public class ExtractConstantSafeStrongTests
     // ── ErrorData cases ──────────────────────────────────────────────────────────
 
     [Test]
-    [Description("Snippet that doesn't appear in the file -> clean human-readable error")]
+    [Description("Snippet that doesn't appear in the file -> ToolNotFoundException with ErrorCode NotFound")]
     public async Task ExtractConstant_SnippetNotFound_ReturnsHelpfulError()
     {
         var tempFile = MakeTempFile();
@@ -232,30 +232,20 @@ public class ExtractConstantSafeStrongTests
                 }
                 """);
 
-            var result = await _engine.ExtractConstantSafeAsync(
-                tempFile, "\"DOES_NOT_EXIST_IN_FILE\"", "MissingConst");
-
-            Assert.That(!result.IsError, Is.False,
-                "Non-existent snippet must produce a failure");
-            Assert.That(result.Error, Is.Not.Null.And.Not.Empty,
-                "ErrorData message must be non-empty and human-readable");
-            // The error must be actionable, not a generic .NET exception dump
-            Assert.That(result.Error, Does.Not.Contain("StackTrace"),
-                "ErrorData must not expose a stack trace to the caller");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ExtractConstantSafeAsync(
+                tempFile, "\"DOES_NOT_EXIST_IN_FILE\"", "MissingConst"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
         finally { SafeDelete(tempFile); }
     }
 
     [Test]
-    [Description("File does not exist -> clean error, no throw")]
+    [Description("File does not exist -> ToolNotFoundException with ErrorCode NotFound")]
     public async Task ExtractConstant_FileNotFound_ReturnsHelpfulError()
     {
-        var result = await _engine.ExtractConstantSafeAsync(
-            @"C:\nonexistent\path\missing.cs", "\"any\"", "AnyConst");
-
-        Assert.That(!result.IsError, Is.False);
-        Assert.That(result.Error, Does.Contain("missing.cs"),
-            "ErrorData must mention the missing file name");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ExtractConstantSafeAsync(
+            @"C:\nonexistent\path\missing.cs", "\"any\"", "AnyConst"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -856,16 +846,12 @@ public class FormatDocumentSafeTests
     // ── ErrorData cases ──────────────────────────────────────────────────────────
 
     [Test]
-    [Description("File does not exist -> clean error, not throw")]
+    [Description("File does not exist -> ToolNotFoundException with ErrorCode NotFound")]
     public async Task FormatDocumentSafe_FileNotFound_ReturnsHelpfulError()
     {
-        var result = await _engine.FormatDocumentSafeAsync(
-            @"C:\nonexistent_rs_test\missing_rs.cs");
-
-        Assert.That(!result.IsError, Is.False,
-            "Missing file must produce a failure result");
-        Assert.That(result.Error, Does.Contain("missing_rs.cs").Or.Contain("nonexistent"),
-            "ErrorData must identify the missing path");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.FormatDocumentSafeAsync(
+            @"C:\nonexistent_rs_test\missing_rs.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

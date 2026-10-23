@@ -238,16 +238,12 @@ public class InternalOnly
     }
 
     [Test]
-    [Description("File not found returns Fail with a descriptive message")]
-    public async Task GenerateToStringSafe_FileNotFound_ReturnsFail()
+    [Description("File not found throws ToolNotFoundException with ErrorCode NotFound")]
+    public async Task GenerateToStringSafe_FileNotFound_ThrowsNotFound()
     {
-        var result = await _engine.GenerateToStringSafeAsync(
-            @"C:\does\not\exist.cs", "SomeType");
-
-        Assert.That(!result.IsError, Is.False,
-            "Should return Fail for a non-existent file");
-        Assert.That(result.Error, Does.Contain("exist.cs").Or.Contain("not"),
-            "ErrorData should reference the missing file");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.GenerateToStringSafeAsync(
+            @"C:\does\not\exist.cs", "SomeType"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -407,8 +403,8 @@ public class C
     }
 
     [Test]
-    [Description("contextSnippet that doesn't exist in the file returns Fail")]
-    public async Task ExtractMethod_SnippetNotFound_ReturnsFail()
+    [Description("contextSnippet that doesn't exist in the file throws ToolNotFoundException")]
+    public async Task ExtractMethod_SnippetNotFound_ThrowsNotFound()
     {
         const string source = @"
 public class C
@@ -420,26 +416,20 @@ public class C
 }";
         SetSource(source, "C.cs");
 
-        var result = await _engine.ExtractMethodSafeAsync(
-            "C.cs", "ExtractedMethod", "this snippet does not exist anywhere");
-
-        Assert.That(!result.IsError, Is.False,
-            "A snippet that cannot be found should return Fail");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ExtractMethodSafeAsync(
+            "C.cs", "ExtractedMethod", "this snippet does not exist anywhere"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
-    [Description("File not in the loaded solution returns Fail with a descriptive error")]
-    public async Task ExtractMethod_FileNotInSolution_ReturnsFail()
+    [Description("File not in the loaded solution throws ToolNotFoundException with ErrorCode NotFound")]
+    public async Task ExtractMethod_FileNotInSolution_ThrowsNotFound()
     {
         SetSource("public class C { }", "C.cs");
 
-        var result = await _engine.ExtractMethodSafeAsync(
-            @"C:\not\in\solution.cs", "NewMethod", "some code");
-
-        Assert.That(!result.IsError, Is.False,
-            "File not in solution should return Fail");
-        Assert.That(result.Error, Does.Contain("solution").Or.Contain("not found"),
-            "ErrorData should explain the file is not in the loaded solution");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ExtractMethodSafeAsync(
+            @"C:\not\in\solution.cs", "NewMethod", "some code"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

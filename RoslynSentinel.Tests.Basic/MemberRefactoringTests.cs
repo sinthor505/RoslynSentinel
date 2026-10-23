@@ -872,15 +872,13 @@ public class C
     }
 
     [Test]
-    public async Task ExtractMethod_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    public async Task ExtractMethod_SnippetMatchesNothing_ThrowsNotFound()
     {
         SetSource(SnippetMissSource, "ExtractMethodMiss.cs");
         var augmentEngine = new MsToolAugmentEngine(_workspaceManager);
 
-        var result = await augmentEngine.ExtractMethodSafeAsync("ExtractMethodMiss.cs", "Extracted", "no such text anywhere");
-
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await augmentEngine.ExtractMethodSafeAsync("ExtractMethodMiss.cs", "Extracted", "no such text anywhere"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -897,7 +895,7 @@ public class C
     }
 
     [Test]
-    public async Task ExtractConstantSafe_SnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    public async Task ExtractConstantSafe_SnippetMatchesNothing_ThrowsNotFound()
     {
         var path = Path.Combine(Path.GetTempPath(), $"extract-constant-miss-{Guid.NewGuid():N}.cs");
         await File.WriteAllTextAsync(path, SnippetMissSource);
@@ -905,10 +903,8 @@ public class C
         {
             var augmentEngine = new MsToolAugmentEngine(_workspaceManager);
 
-            var result = await augmentEngine.ExtractConstantSafeAsync(path, "no such text anywhere", "MyConst");
-
-            Assert.That(result.IsError, Is.True);
-            Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await augmentEngine.ExtractConstantSafeAsync(path, "no such text anywhere", "MyConst"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
         finally
         {

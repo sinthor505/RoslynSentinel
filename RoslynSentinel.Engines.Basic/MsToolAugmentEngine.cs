@@ -98,11 +98,7 @@ public class MsToolAugmentEngine
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (doc == null)
-        {
-            return MsAugmentResult.Fail($"File not found: {filePath}", ToolErrorCode.NotFound);
-        }
+        var doc = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await doc.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -442,11 +438,7 @@ public class MsToolAugmentEngine
         FilePathWrapper filePath, string contextSnippet, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (doc == null)
-        {
-            return MsAugmentResult.Fail($"File not found: {filePath}", ToolErrorCode.NotFound);
-        }
+        var doc = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await doc.GetSyntaxRootAsync(cancellationToken);
         var text = await doc.GetTextAsync(cancellationToken);
@@ -457,9 +449,7 @@ public class MsToolAugmentEngine
         }
 
         // Find the string.Format invocation
-        SnippetMatch snippetMatch;
-        try { snippetMatch = SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter); }
-        catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message, ex.ErrorCode); }
+        var snippetMatch = SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter);
 
         var invocation = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(snippetMatch.Start, snippetMatch.Length))
             .AncestorsAndSelf()
@@ -589,7 +579,7 @@ public class MsToolAugmentEngine
         FilePathWrapper filePath, bool writeToFile = true, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var doc = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new InvalidOperationException($"File not found: {filePath}");
+        var doc = DocumentLookup.RequireDocument(solution, filePath);
         var root = (await doc.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax)!;
         var original = root.Usings;
         int originalCount = original.Count;
@@ -746,8 +736,7 @@ public class MsToolAugmentEngine
     public async Task<MsAugmentResult> FormatDocumentSafeAsync(
         FilePathWrapper filePath, bool preview = true, CancellationToken cancellationToken = default)
     {
-        var (source, readError) = await ReadSourceAsync(filePath, cancellationToken);
-        if (source == null) { return MsAugmentResult.Fail($"Could not read file '{filePath}': {readError}"); }
+        var source = await ReadSourceAsync(filePath, cancellationToken);
 
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
         var root = await tree.GetRootAsync(cancellationToken);
@@ -810,12 +799,7 @@ public class MsToolAugmentEngine
         string? lineBefore = null, string? lineAfter = null,
         CancellationToken cancellationToken = default)
     {
-        var (source, readError) = await ReadSourceAsync(filePath, cancellationToken);
-        if (source == null)
-        {
-            return new ForeachLinqAnalysis(false, "", 0,
-                $"Could not read file: {readError}", "Cannot analyze.");
-        }
+        var source = await ReadSourceAsync(filePath, cancellationToken);
 
         var sourceText = SourceText.From(source);
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
@@ -1116,16 +1100,13 @@ public class MsToolAugmentEngine
             return MsAugmentResult.Fail($"'{constantName}' is not a valid C# identifier.", ToolErrorCode.InvalidArgument);
         }
 
-        var (source, readError) = await ReadSourceAsync(filePath, cancellationToken);
-        if (source == null) { return MsAugmentResult.Fail($"Could not read file '{filePath}': {readError}"); }
+        var source = await ReadSourceAsync(filePath, cancellationToken);
 
         var sourceText = SourceText.From(source);
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
         var root = await tree.GetRootAsync(cancellationToken);
 
-        SnippetMatch snippetMatch;
-        try { snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter); }
-        catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message, ex.ErrorCode); }
+        var snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter);
 
         // Find the nearest literal expression at or near the snippet position
         var node = root.FindNode(new TextSpan(snippetMatch.Start, snippetMatch.Length));
@@ -1260,8 +1241,7 @@ public class MsToolAugmentEngine
         FilePathWrapper filePath, string typeName, IList<string>? members = null,
         CancellationToken cancellationToken = default)
     {
-        var (source, readError) = await ReadSourceAsync(filePath, cancellationToken);
-        if (source == null) { return MsAugmentResult.Fail($"Could not read '{filePath}': {readError}"); }
+        var source = await ReadSourceAsync(filePath, cancellationToken);
 
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
         var root = await tree.GetRootAsync(cancellationToken);
@@ -1463,13 +1443,7 @@ public class MsToolAugmentEngine
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var doc = solution.GetDocumentIdsWithFilePath(filePath)
-            .Select(solution.GetDocument)
-            .FirstOrDefault();
-        if (doc == null)
-        {
-            return MsAugmentResult.Fail($"File not found in solution: {filePath}");
-        }
+        var doc = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await doc.GetSyntaxRootAsync(cancellationToken);
         var model = await doc.GetSemanticModelAsync(cancellationToken);
@@ -1519,9 +1493,7 @@ public class MsToolAugmentEngine
         }
         else
         {
-            SnippetMatch snippetMatch;
-            try { snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter); }
-            catch (ToolException ex) { return MsAugmentResult.Fail(ex.Message, ex.ErrorCode); }
+            var snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter);
 
             var SelectionSpan = new TextSpan(snippetMatch.Start, snippetMatch.Length);
             var node = root.FindNode(SelectionSpan);
@@ -1868,9 +1840,9 @@ public class MsToolAugmentEngine
     /// <summary>
     /// Reads the source text for a file: the loaded workspace document first (in sync with the
     /// workspace and works for in-memory documents), then disk for files not loaded in the solution.
-    /// Returns the raw read error message (not a tool result) so each caller keeps its own error wording.
+    /// Throws ToolNotFoundException when the file is neither loaded in the solution nor on disk; other IO errors propagate.
     /// </summary>
-    private async Task<(string? Source, string? ReadError)> ReadSourceAsync(
+    private async Task<string> ReadSourceAsync(
         FilePathWrapper filePath, CancellationToken cancellationToken)
     {
         Solution? currentSolution;
@@ -1890,16 +1862,14 @@ public class MsToolAugmentEngine
         if (wsDoc != null)
         {
             var wsText = await wsDoc.GetTextAsync(cancellationToken);
-            return (wsText.ToString(), null);
+            return wsText.ToString();
         }
 
-        try
+        if (!File.Exists(filePath))
         {
-            return (await File.ReadAllTextAsync(filePath, cancellationToken), null);
+            throw new ToolNotFoundException($"File not found: {filePath}");
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            return (null, ex.Message);
-        }
+
+        return await File.ReadAllTextAsync(filePath, cancellationToken);
     }
 }
