@@ -32,16 +32,7 @@ public class MappingEngine
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var compilation = await document.Project.GetCompilationAsync(cancellationToken);
 
@@ -190,17 +181,7 @@ public class MappingEngine
     public async Task<DocumentEditResult> InvertAssignmentsAsync(FilePathWrapper filePath, int startLine, int endLine, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
-
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         var span = Microsoft.CodeAnalysis.Text.TextSpan.FromBounds(sourceText.Lines[startLine - 1].Start, sourceText.Lines[endLine - 1].End);
@@ -238,17 +219,7 @@ public class MappingEngine
     public async Task<DocumentEditResult> InvertAssignmentsAsync(FilePathWrapper filePath, string contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
-        }
-
+        var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)

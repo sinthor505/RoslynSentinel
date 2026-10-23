@@ -207,4 +207,20 @@ public class TargetModel
         Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(ex.Message, Is.Not.Empty);
     }
+
+    [Test]
+    public async Task GenerateMapping_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.GenerateMappingAsync("Missing.cs", "SourceDto", "DestEntity"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task InvertAssignments_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.InvertAssignmentsAsync("Missing.cs", 5, 6));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

@@ -791,4 +791,28 @@ public class SomeClass { }", "SomeClass.cs");
             Assert.That(result.UpdatedText, Does.Not.Contain("\r"), "Generated line breaks must be LF on this platform.");
         }
     }
+
+    [Test]
+    public async Task GenerateConstructor_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _codeGenerationEngine.GenerateConstructorAsync("Missing.cs", "Widget"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ImplementInterface_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _codeGenerationEngine.ImplementInterfaceAsync("Missing.cs", "Widget", "IWidget"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task InterpolateString_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _codeGenerationEngine.InterpolateStringAsync("Missing.cs", "string.Format(\"x\", 1)"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

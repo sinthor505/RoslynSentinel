@@ -41,10 +41,10 @@ public class ApiGenerationEngineTests
 
 
     [Test]
-    public async Task AddValidationToPoco_UnknownFile_ReportsWithoutThrowing()
+    public async Task AddValidationToPoco_MissingFile_ThrowsNotFound()
     {
-        var result = await _engine.AddValidationToPocoAsync("NoSuchFile.cs", "PersonDto");
-        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified), "Engines report not-found through Outcome instead of throwing.");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AddValidationToPocoAsync("NoSuchFile.cs", "PersonDto"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
 
@@ -118,14 +118,12 @@ public class OrdersController
 
 
     [Test]
-    public async Task GenerateHttpClient_FileNotFound_ReturnsEmpty()
+    public async Task GenerateHttpClient_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C { }", "Test.cs");
 
-        var result = await _engine.GenerateHttpClientForControllerAsync("Missing.cs", "MyController");
-
-        // TODO throw-migration: assert the typed exception once ApiGenerationEngine throws
-        Assert.That(result.UpdatedText, Is.Null, "Should return null when file not found");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.GenerateHttpClientForControllerAsync("Missing.cs", "MyController"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
 

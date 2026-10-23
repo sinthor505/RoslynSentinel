@@ -192,17 +192,7 @@ public class CodeGenerationEngine
     public async Task<DocumentEditResult> GenerateConstructorAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: File '{filePath}' not found."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
@@ -876,17 +866,7 @@ public class CodeGenerationEngine
     public async Task<DocumentEditResult> ImplementInterfaceAsync(FilePathWrapper filePath, string className, string interfaceName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: File '{filePath}' not found in solution."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -1032,17 +1012,7 @@ public class CodeGenerationEngine
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: File '{filePath}' not found in solution."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -1260,17 +1230,7 @@ public class CodeGenerationEngine
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: File '{filePath}' not found in solution."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
