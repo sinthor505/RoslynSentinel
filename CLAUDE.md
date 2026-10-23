@@ -205,7 +205,10 @@ Rebuilding does not change the running server; it is stale until restarted. Afte
 source, run `Build(fullBuild)` and restart your own instance
 (`McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)`, then `LoadSolution`)
 with no subagent mid-operation. `"isServerBinaryStale": true` in a response means a newer DLL exists.
-`LoadSolution` changes which files are analyzed, not which binary runs. Details:
+`LoadSolution` changes which files are analyzed, not which binary runs. `Build` defaults to a throwaway
+output (`.roslynsentinel/build/<instance>/`); only `fullBuild` updates the shared `bin/`. To live-test
+uncommitted server changes, `Build` then `McpServerControl(operation: LaunchTestInstance)`; stop it with
+`StopTestInstance`. Details:
 `docs/current/references/reference_live_server_freshness.md`.
 
 Compare test results with the baselines (`docs/known-failing-tests.{Basic,Advanced,Solution}.txt`,

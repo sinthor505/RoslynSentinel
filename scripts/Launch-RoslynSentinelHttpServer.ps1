@@ -15,8 +15,9 @@
     delete the folder yourself (old http-* folders are listed as a hint). The shared HTTP fallback
     copy (bin-vscode\Advanced.Http) is managed by roslynsentinel-vscode-control.ps1, not here.
 
-    The server listens on all interfaces (Kestrel ListenAnyIP, RoslynSentinel.Server.Advanced/ServerHttp.cs)
-    with no authentication.
+    This script is for humans (manual testing, curl). Agent sessions use
+    McpServerControl(operation: LaunchTestInstance) instead. The server binds loopback only (the
+    --bind=loopback default) and has no authentication.
 
 .PARAMETER Mode
     Server --mode value. Default: all.
@@ -81,7 +82,7 @@ if ($Tools)        { $serverArgs += "--include-tools=$Tools" }
 if ($ExcludeTools) { $serverArgs += "--exclude-tools=$ExcludeTools" }
 if ($Solution)     { $serverArgs += "--solution=$Solution" }
 
-Write-Host "Note: the server listens on all interfaces (Kestrel ListenAnyIP) with no authentication." -ForegroundColor Yellow
+Write-Host "Note: the server binds loopback only (127.0.0.1) with no authentication." -ForegroundColor Yellow
 
 if ($DryRun) {
     Write-Host "DryRun: nothing built or started."
@@ -122,7 +123,7 @@ $proc = Start-Process -FilePath $exe -ArgumentList $serverArgs -WindowStyle Hidd
 function Test-Reachable {
     try {
         $body = '{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"launcher-probe","version":"1.0"}}}'
-        $r = Invoke-WebRequest -Uri "http://localhost:$Port/mcp" -Method Post `
+        $r = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/mcp" -Method Post `
             -Headers @{ 'Content-Type' = 'application/json'; 'Accept' = 'application/json, text/event-stream' } `
             -Body $body -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
         return $true
@@ -148,12 +149,12 @@ if (-not $up) {
         Get-Content -LiteralPath $stderrLog -ErrorAction SilentlyContinue | Select-Object -Last 30 | ForEach-Object { Write-Host "  $_" }
     }
     else {
-        Write-Warning "Server (PID $($proc.Id)) did not answer on http://localhost:$Port/mcp within 60 s. Logs: $stdoutLog, $stderrLog"
+        Write-Warning "Server (PID $($proc.Id)) did not answer on http://127.0.0.1:$Port/mcp within 60 s. Logs: $stdoutLog, $stderrLog"
     }
     exit 1
 }
 
-Write-Host "Started PID $($proc.Id) at http://localhost:$Port/mcp" -ForegroundColor Green
+Write-Host "Started PID $($proc.Id) at http://127.0.0.1:$Port/mcp" -ForegroundColor Green
 Write-Host "Output dir : $outDir"
 Write-Host "Logs       : $stdoutLog ; $stderrLog"
 Write-Host "Stop with  : Stop-Process -Id $($proc.Id)"

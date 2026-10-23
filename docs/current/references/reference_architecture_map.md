@@ -41,8 +41,13 @@ hold engines and the workspace manager directly (e.g. `WholeFileWriteTools`).
    then `AddRoslynSentinelToolsBasic/Advanced` (tool classes + request filters).
 6. `SmokeResolveToolTypes`, `WarmupAndAutoLoad*` (MSBuildLocator warm-up, optional solution load).
 7. `ConsoleMode.WriteStartupDump` writes `tool_list_<mode>.json` and `tool_list_simple_<mode>.json`
-   (and `WriteMethodInventory`) into `AppDomain.CurrentDomain.BaseDirectory`, i.e. the server's
-   bin folder, not the repo.
+   into `ServerInstancePaths.Current.WorkingDir`.
+
+Other startup args (own parsers in `ServerStartupHelpers`, not `ParseArgs`): `--transport=stdio|http`,
+`--port=N` (0 = OS-assigned; the HTTP host prints `listening: http://127.0.0.1:<port>/mcp`, not first on
+stdout), `--bind=loopback|any` (default loopback), `--respawn=auto|none` (default: stdio auto, http none;
+selects the `StopServer` text), `--log-dir`, and `--working-dir=<path>` (`Common/ServerInstancePaths`: logs,
+`crash.log`, tool dumps, `stopped-by-script.marker`; default = the binary folder, marker in its parent).
 
 ### Tool registration: three places, none sufficient alone
 

@@ -160,7 +160,7 @@ function Test-HttpCopyReachable {
     # check (and its prompt) entirely - this function only ever reads .StatusCode, so the richer
     # parsing was never actually needed.
     try {
-        $response = Invoke-WebRequest -Uri "http://localhost:$VSCodePort/mcp" -Method Post `
+        $response = Invoke-WebRequest -Uri "http://127.0.0.1:$VSCodePort/mcp" -Method Post `
             -Headers @{ 'Content-Type' = 'application/json'; 'Accept' = 'application/json, text/event-stream' } `
             -Body '{"jsonrpc":"2.0","id":0,"method":"ping"}' -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
         return $true, "HTTP $($response.StatusCode)"
@@ -278,11 +278,11 @@ function Show-Status {
     # way a bare `status` call landing in that narrow window shouldn't report a false failure.
     $reachable, $detail = Wait-HttpCopyReachable -TimeoutMs 3000
     if ($reachable) {
-        Write-Host "Reachable at http://localhost:$VSCodePort/mcp ($detail)." -ForegroundColor Green
+        Write-Host "Reachable at http://127.0.0.1:$VSCodePort/mcp ($detail)." -ForegroundColor Green
         return $true
     }
     else {
-        Write-Warning "Process is running but not reachable at http://localhost:$VSCodePort/mcp ($detail). Try '.\roslynsentinel-vscode-control.ps1 restart'."
+        Write-Warning "Process is running but not reachable at http://127.0.0.1:$VSCodePort/mcp ($detail). Try '.\roslynsentinel-vscode-control.ps1 restart'."
         return $false
     }
 }
