@@ -204,12 +204,7 @@ public class StructuralRefinementEngine
         }
         else
         {
-            SnippetMatch snippetMatch;
-            try { snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter); }
-            catch (ToolException ex)
-            {
-                return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = ex.Message, ErrorCode = ex.ErrorCode };
-            }
+            SnippetMatch snippetMatch = SnippetLookup.ResolveOrThrow(sourceText, contextSnippet, lineBefore, lineAfter);
 
             target = candidates.FirstOrDefault(c => c.Span.Contains(snippetMatch.Start))
                 ?? candidates.FirstOrDefault(c => new TextSpan(snippetMatch.Start, snippetMatch.Length).OverlapsWith(c.Span));

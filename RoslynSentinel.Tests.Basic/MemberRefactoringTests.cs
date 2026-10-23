@@ -771,15 +771,16 @@ public class C
     }
 
     [Test]
-    public async Task SafeDeleteSymbol_ContextSnippetMatchesNothing_ResultCarriesNotFoundErrorCode()
+    public async Task SafeDeleteSymbol_ContextSnippetMatchesNothing_ThrowsNotFound()
     {
         SetSource(DuplicateTypeSource, "SafeDeleteMiss.cs");
         var refinementEngine = new StructuralRefinementEngine(_workspaceManager, new SentinelConfiguration());
 
-        var result = await refinementEngine.SafeDeleteSymbolAsync("SafeDeleteMiss.cs", "Dup", "no such text anywhere", null, null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await refinementEngine.SafeDeleteSymbolAsync("SafeDeleteMiss.cs", "Dup", "no such text anywhere", null, null));
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
     }
 
     [Test]
