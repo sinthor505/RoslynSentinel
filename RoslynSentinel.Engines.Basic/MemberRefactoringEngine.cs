@@ -337,18 +337,10 @@ public class MemberRefactoringEngine
 
         if (nullDefault && defaultValue != null)
         {
-            return Invalid("nullDefault and defaultValue are mutually exclusive - pass only one.");
+            throw new ToolInvalidArgumentException("nullDefault and defaultValue are mutually exclusive - pass only one.");
         }
 
-        CallSiteFixupMap fixupMap;
-        try
-        {
-            fixupMap = CallSiteFixupMap.Parse(callSiteFixups, _workspaceManager.GetSolutionRoot());
-        }
-        catch (ToolInvalidArgumentException ex)
-        {
-            return Invalid(ex.Message);
-        }
+        var fixupMap = CallSiteFixupMap.Parse(callSiteFixups, _workspaceManager.GetSolutionRoot());
 
         var badValues = callSiteFixups
             .Select(kv => (Key: kv.Key, Value: (kv.Value ?? string.Empty).Trim()))
@@ -357,7 +349,7 @@ public class MemberRefactoringEngine
             .ToList();
         if (badValues.Count > 0)
         {
-            return Invalid($"{badValues.Count} callSiteFixups value(s) are not a valid C# argument expression: {string.Join(", ", badValues.Take(5))}. Each value is the expression passed for '{paramName}' at that call site, e.g. \"config\" or \"new SentinelConfiguration()\". No changes were made.");
+            throw new ToolInvalidArgumentException($"{badValues.Count} callSiteFixups value(s) are not a valid C# argument expression: {string.Join(", ", badValues.Take(5))}. Each value is the expression passed for '{paramName}' at that call site, e.g. \"config\" or \"new SentinelConfiguration()\". No changes were made.");
         }
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -1064,7 +1056,7 @@ public class MemberRefactoringEngine
                 }
                 resolvedTargets[edit.Index] = target;
             }
-            catch (ToolException ex)
+            catch (ToolException ex) // TODO throw-migration: batch aggregator collects every per-index failure (all-or-nothing, no partial write); needs a typed aggregate exception carrying per-item failures before it can throw (proposal_throw_typed_exceptions_not_failure_results S1)
             {
                 errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
                 errorCodes.Add(ex.ErrorCode);
@@ -1641,7 +1633,7 @@ public class MemberRefactoringEngine
                 }
                 resolvedTargets[edit.Index] = targetNode;
             }
-            catch (ToolException ex)
+            catch (ToolException ex) // TODO throw-migration: batch aggregator, see ApplyModifierBatchAsync
             {
                 errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
                 errorCodes.Add(ex.ErrorCode);
@@ -1806,23 +1798,10 @@ public class MemberRefactoringEngine
 
         var sourceText = await document.GetTextAsync(cancellationToken);
         MemberDeclarationSyntax? target = null;
-        try
-        {
-            var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
-                .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
-            target = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
-        }
-        catch (ToolException ex)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = ex.Message,
-                ErrorCode = ex.ErrorCode
-            };
-        }
+        var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(SyntaxTargetResolver.ResolveCandidates(root, sourceText, targetName, cancellationToken)
+            .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum or CandidateKind.EnumMember)).ToList());
+        target = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
 
         if (target == null)
         {
@@ -5570,7 +5549,7 @@ public class MemberRefactoringEngine
                 }
                 resolvedTargets[edit.Index] = container;
             }
-            catch (ToolException ex)
+            catch (ToolException ex) // TODO throw-migration: batch aggregator, see ApplyModifierBatchAsync
             {
                 errors.Add($"batchEdits[{edit.Index}] ({edit.TypeName}): {ex.Message}");
                 errorCodes.Add(ex.ErrorCode);

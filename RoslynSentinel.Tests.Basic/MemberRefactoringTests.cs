@@ -2069,6 +2069,25 @@ public class Calc
         Assert.That(text, Does.Not.Contain("\r\n"), "An LF-dominant file must not gain any stray CRLF line endings.");
     }
 
+    [Test]
+    public async Task ChangeAccessibility_SnippetMatchesNothing_ThrowsNotFound()
+    {
+        SetSource(@"
+public class Calc
+{
+    public int Add(int a, int b) => a + b;
+}
+", "Calc.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ChangeAccessibilityAsync("Calc.cs", "Add", AccessibilityLevel.@private, contextSnippet: "NoSuchSnippetAnywhere");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Is.Not.Empty);
+    }
+
     // AddModifierAsync / RemoveModifierAsync
     // ══════════════════════════════════════════════════════════════
 
@@ -2793,6 +2812,63 @@ public class Service
 
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(ex.Message, Is.Not.Empty);
+    }
+
+    [Test]
+    public async Task AddConstructorParameterWithCallSites_NullDefaultAndDefaultValue_ThrowsInvalidArgument()
+    {
+        SetSource(@"
+public class Service
+{
+    public Service(int count) { }
+}
+", "Service.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () =>
+        {
+            await _memberRefactoringEngine.AddConstructorParameterWithCallSitesAsync("Service.cs", "Service", "limit", "int", new Dictionary<string, string>(), defaultValue: "0", nullDefault: true);
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(ex.Message, Does.Contain("mutually exclusive"));
+    }
+
+    [Test]
+    public async Task AddConstructorParameterWithCallSites_InvalidCallSiteFixupExpression_ThrowsInvalidArgument()
+    {
+        SetSource(@"
+public class Service
+{
+    public Service(int count) { }
+}
+", "Service.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () =>
+        {
+            await _memberRefactoringEngine.AddConstructorParameterWithCallSitesAsync("Service.cs", "Service", "limit", "int", new Dictionary<string, string> { ["Service.cs:5"] = "(((" });
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(ex.Message, Does.Contain("not a valid C# argument expression"));
+    }
+
+    [Test]
+    public async Task AddConstructorParameterWithCallSites_MalformedCallSiteFixupKey_ThrowsInvalidArgument()
+    {
+        SetSource(@"
+public class Service
+{
+    public Service(int count) { }
+}
+", "Service.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () =>
+        {
+            await _memberRefactoringEngine.AddConstructorParameterWithCallSitesAsync("Service.cs", "Service", "limit", "int", new Dictionary<string, string> { ["Service.cs"] = "this" });
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(ex.Message, Does.Contain("unusable"));
     }
 
     [Test]
