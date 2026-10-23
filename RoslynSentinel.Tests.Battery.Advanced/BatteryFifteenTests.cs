@@ -81,10 +81,10 @@ public class CodeFlowEngineTests
     [TearDown]
     public void TearDown() => _mgr?.Dispose();
     [Test]
-    public async Task ReduceBlockDepth_UnknownFile_ReturnsErrorComment()
+    public async Task ReduceBlockDepth_MissingFile_ThrowsNotFound()
     {
-        var result = await new LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("NoSuchFile.cs", "Process");
-        Assert.That(result.Message, Does.StartWith("// ErrorDetails:"), "unknown file should return an error comment string");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("NoSuchFile.cs", "Process"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

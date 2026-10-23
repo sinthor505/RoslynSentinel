@@ -258,11 +258,11 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     [Test]
     [Category("AsyncOptimizationEngine")] // sentinel:auto-category
-    public async Task ConvertToAsyncEnumerable_NonExistentFile_ReportsNotFound()
+    public async Task ConvertToAsyncEnumerable_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync("NonExistent.cs", "GetData");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound)); // TODO throw-migration: assert the typed exception once AsyncOptimizationEngine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync("NonExistent.cs", "GetData"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- AddCancellationTokenToMethod---

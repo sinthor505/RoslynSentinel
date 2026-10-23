@@ -1105,198 +1105,176 @@ public class AsyncOptimizationEngine
         IProgress<EngineProgress>? progress = default,
         CancellationToken cancellationToken = default)
     {
-        try
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = DocumentLookup.RequireDocument(solution, filePath);
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
         {
-            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-            if (document == null)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.DocumentNotFound,
-                    FilePath = filePath,
-                    Message = $"// ErrorDetails: File '{filePath}' not found."
-                };
-            }
-
-            var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.SourceInvalid,
-                    FilePath = filePath,
-                    Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
-                };
-            }
-
-            var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName);
-            if (methodNode == null)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// ErrorDetails: Method '{methodName}' not found."
-                };
-            }
-
-            var returnTypeStr = methodNode.ReturnType.ToString().Trim();
-
-            if (returnTypeStr.StartsWith("IAsyncEnumerable<"))
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.AlreadyInTargetState,
-                    UpdatedText = root.ToFullString(),
-                    FilePath = filePath,
-                    Message = "// Method already returns IAsyncEnumerable."
-                };
-            }
-
-            string? innerType = null;
-            if (returnTypeStr.StartsWith("Task<List<") && returnTypeStr.EndsWith(">>"))
-            {
-                innerType = returnTypeStr.Substring(10, returnTypeStr.Length - 12);
-            }
-            else if (returnTypeStr.StartsWith("Task<IEnumerable<") && returnTypeStr.EndsWith(">>"))
-            {
-                innerType = returnTypeStr.Substring(17, returnTypeStr.Length - 19);
-            }
-            else if (returnTypeStr.StartsWith("List<") && returnTypeStr.EndsWith(">"))
-            {
-                innerType = returnTypeStr.Substring(5, returnTypeStr.Length - 6);
-            }
-            else if (returnTypeStr.StartsWith("IEnumerable<") && returnTypeStr.EndsWith(">"))
-            {
-                innerType = returnTypeStr.Substring(12, returnTypeStr.Length - 13);
-            }
-
-            if (innerType == null)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.CannotEdit,
-                    FilePath = filePath,
-                    Message = $"// ErrorDetails: Return type '{returnTypeStr}' is not supported. Method must return Task<List<T>>, Task<IEnumerable<T>>, or List<T>."
-                };
-            }
-
-            var newReturnType = SyntaxFactory.ParseTypeName($"IAsyncEnumerable<{innerType}>");
-            var newMethod = methodNode.WithReturnType(newReturnType.WithTrailingTrivia(SyntaxFactory.Space));
-
-            if (!newMethod.Modifiers.Any(SyntaxKind.AsyncKeyword))
-            {
-                newMethod = newMethod.AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
-            }
-
-            var hasCt = newMethod.ParameterList.Parameters
-            .Any(p => p.Type?.ToString().Contains("CancellationToken") == true);
-            if (!hasCt)
-            {
-                var ctParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("ct"))
-                    .WithType(SyntaxFactory.ParseTypeName("CancellationToken "))
-                    .WithDefault(SyntaxFactory.EqualsValueClause(
-                        SyntaxFactory.LiteralExpression(SyntaxKind.DefaultLiteralExpression)));
-                newMethod = newMethod.AddParameterListParameters(ctParam);
-            }
-
-            if (methodNode.Body != null)
-            {
-                string? resultsVar = null;
-                foreach (var stmt in methodNode.Body.Statements)
-                {
-                    if (stmt is LocalDeclarationStatementSyntax ld)
-                    {
-                        foreach (var v in ld.Declaration.Variables)
-                        {
-                            var initStr = v.Initializer?.Value.ToString() ?? "";
-                            if (initStr.Contains($"List<{innerType}>") || initStr.Contains("new()") ||
-                                initStr.Contains("new List"))
-                            {
-                                resultsVar = v.Identifier.Text;
-                            }
-                        }
-                    }
-                }
-
-                var newStatements = new List<StatementSyntax>();
-
-                if (resultsVar != null)
-                {
-                    foreach (var stmt in methodNode.Body.Statements)
-                    {
-                        if (stmt is LocalDeclarationStatementSyntax ld &&
-                            ld.Declaration.Variables.Any(v => v.Identifier.Text == resultsVar))
-                        {
-                            continue;
-                        }
-
-                        if (stmt is ReturnStatementSyntax ret &&
-                        ret.Expression?.ToString().Contains(resultsVar) == true)
-                        {
-                            continue;
-                        }
-
-                        if (stmt is ExpressionStatementSyntax exprStmt &&
-                        exprStmt.Expression is InvocationExpressionSyntax invStmt &&
-                        invStmt.Expression is MemberAccessExpressionSyntax maStmt &&
-                        maStmt.Expression.ToString() == resultsVar &&
-                        maStmt.Name.Identifier.Text == "Add" &&
-                        invStmt.ArgumentList.Arguments.Count == 1)
-                        {
-                            newStatements.Add(SyntaxFactory.YieldStatement(
-                                SyntaxKind.YieldReturnStatement,
-                                invStmt.ArgumentList.Arguments[0].Expression));
-                        }
-                        else
-                        {
-                            newStatements.Add(stmt);
-                        }
-                    }
-                }
-                else
-                {
-                    foreach (var stmt in methodNode.Body.Statements)
-                    {
-                        if (stmt is ReturnStatementSyntax)
-                        {
-                            continue;
-                        }
-
-                        newStatements.Add(stmt);
-                    }
-                    newStatements.Add(SyntaxFactory.YieldStatement(SyntaxKind.YieldBreakStatement));
-                }
-
-                newMethod = newMethod.WithBody(SyntaxFactory.Block(newStatements));
-            }
-
-            // The signature and body are rebuilt from factory nodes: keep the original method's outer trivia and
-            // annotate the whole method for the formatter.
-            newMethod = newMethod
-                .WithLeadingTrivia(methodNode.GetLeadingTrivia())
-                .WithTrailingTrivia(methodNode.GetTrailingTrivia())
-                .WithAdditionalAnnotations(Formatter.Annotation);
-            var newRoot = root.ReplaceNode(methodNode, newMethod);
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.Modified,
-                UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
-                FilePath = filePath
+                Outcome = EditOutcome.SourceInvalid,
+                FilePath = filePath,
+                Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
             };
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+
+        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+        .FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (methodNode == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// ErrorDetails: Method '{methodName}' not found."
+            };
+        }
+
+        var returnTypeStr = methodNode.ReturnType.ToString().Trim();
+
+        if (returnTypeStr.StartsWith("IAsyncEnumerable<"))
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.AlreadyInTargetState,
+                UpdatedText = root.ToFullString(),
+                FilePath = filePath,
+                Message = "// Method already returns IAsyncEnumerable."
+            };
+        }
+
+        string? innerType = null;
+        if (returnTypeStr.StartsWith("Task<List<") && returnTypeStr.EndsWith(">>"))
+        {
+            innerType = returnTypeStr.Substring(10, returnTypeStr.Length - 12);
+        }
+        else if (returnTypeStr.StartsWith("Task<IEnumerable<") && returnTypeStr.EndsWith(">>"))
+        {
+            innerType = returnTypeStr.Substring(17, returnTypeStr.Length - 19);
+        }
+        else if (returnTypeStr.StartsWith("List<") && returnTypeStr.EndsWith(">"))
+        {
+            innerType = returnTypeStr.Substring(5, returnTypeStr.Length - 6);
+        }
+        else if (returnTypeStr.StartsWith("IEnumerable<") && returnTypeStr.EndsWith(">"))
+        {
+            innerType = returnTypeStr.Substring(12, returnTypeStr.Length - 13);
+        }
+
+        if (innerType == null)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = $"// ErrorDetails: {ex.Message}",
-                ErrorCode = (ex as ToolException)?.ErrorCode
+                Message = $"// ErrorDetails: Return type '{returnTypeStr}' is not supported. Method must return Task<List<T>>, Task<IEnumerable<T>>, or List<T>."
             };
         }
+
+        var newReturnType = SyntaxFactory.ParseTypeName($"IAsyncEnumerable<{innerType}>");
+        var newMethod = methodNode.WithReturnType(newReturnType.WithTrailingTrivia(SyntaxFactory.Space));
+
+        if (!newMethod.Modifiers.Any(SyntaxKind.AsyncKeyword))
+        {
+            newMethod = newMethod.AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
+        }
+
+        var hasCt = newMethod.ParameterList.Parameters
+        .Any(p => p.Type?.ToString().Contains("CancellationToken") == true);
+        if (!hasCt)
+        {
+            var ctParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier("ct"))
+                .WithType(SyntaxFactory.ParseTypeName("CancellationToken "))
+                .WithDefault(SyntaxFactory.EqualsValueClause(
+                    SyntaxFactory.LiteralExpression(SyntaxKind.DefaultLiteralExpression)));
+            newMethod = newMethod.AddParameterListParameters(ctParam);
+        }
+
+        if (methodNode.Body != null)
+        {
+            string? resultsVar = null;
+            foreach (var stmt in methodNode.Body.Statements)
+            {
+                if (stmt is LocalDeclarationStatementSyntax ld)
+                {
+                    foreach (var v in ld.Declaration.Variables)
+                    {
+                        var initStr = v.Initializer?.Value.ToString() ?? "";
+                        if (initStr.Contains($"List<{innerType}>") || initStr.Contains("new()") ||
+                            initStr.Contains("new List"))
+                        {
+                            resultsVar = v.Identifier.Text;
+                        }
+                    }
+                }
+            }
+
+            var newStatements = new List<StatementSyntax>();
+
+            if (resultsVar != null)
+            {
+                foreach (var stmt in methodNode.Body.Statements)
+                {
+                    if (stmt is LocalDeclarationStatementSyntax ld &&
+                        ld.Declaration.Variables.Any(v => v.Identifier.Text == resultsVar))
+                    {
+                        continue;
+                    }
+
+                    if (stmt is ReturnStatementSyntax ret &&
+                    ret.Expression?.ToString().Contains(resultsVar) == true)
+                    {
+                        continue;
+                    }
+
+                    if (stmt is ExpressionStatementSyntax exprStmt &&
+                    exprStmt.Expression is InvocationExpressionSyntax invStmt &&
+                    invStmt.Expression is MemberAccessExpressionSyntax maStmt &&
+                    maStmt.Expression.ToString() == resultsVar &&
+                    maStmt.Name.Identifier.Text == "Add" &&
+                    invStmt.ArgumentList.Arguments.Count == 1)
+                    {
+                        newStatements.Add(SyntaxFactory.YieldStatement(
+                            SyntaxKind.YieldReturnStatement,
+                            invStmt.ArgumentList.Arguments[0].Expression));
+                    }
+                    else
+                    {
+                        newStatements.Add(stmt);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var stmt in methodNode.Body.Statements)
+                {
+                    if (stmt is ReturnStatementSyntax)
+                    {
+                        continue;
+                    }
+
+                    newStatements.Add(stmt);
+                }
+                newStatements.Add(SyntaxFactory.YieldStatement(SyntaxKind.YieldBreakStatement));
+            }
+
+            newMethod = newMethod.WithBody(SyntaxFactory.Block(newStatements));
+        }
+
+        // The signature and body are rebuilt from factory nodes: keep the original method's outer trivia and
+        // annotate the whole method for the formatter.
+        newMethod = newMethod
+            .WithLeadingTrivia(methodNode.GetLeadingTrivia())
+            .WithTrailingTrivia(methodNode.GetTrailingTrivia())
+            .WithAdditionalAnnotations(Formatter.Annotation);
+        var newRoot = root.ReplaceNode(methodNode, newMethod);
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            UpdatedText = await FormatAnnotatedTextAsync(document, newRoot, cancellationToken),
+            FilePath = filePath
+        };
     }
 
     public async Task<DocumentEditResult> AddCancellationTokenToMethodAsync(

@@ -1296,100 +1296,78 @@ public class LogicSimplificationEngine
     /// </summary>
     public async Task<DocumentEditResult> ReduceBlockDepthAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-            if (document == null)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.DocumentNotFound,
-                    FilePath = filePath,
-                    Message = $"// ErrorDetails: File '{filePath}' not found."
-                };
-            }
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
-            var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.CannotEdit,
-                    FilePath = filePath,
-                    Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
-                };
-            }
-
-            var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-            if (methodNode == null || methodNode.Body == null)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// ErrorDetails: Method '{methodName}' not found or has no body."
-                };
-            }
-
-            // Look for: 
-            // void Method() { 
-            //     if (condition) { 
-            //         /* logic */ 
-            //     } 
-            // }
-            // To convert to:
-            // void Method() {
-            //     if (!condition) return;
-            //     /* logic */
-            // }
-            if (methodNode.Body.Statements.Count == 1 && methodNode.Body.Statements[0] is IfStatementSyntax ifStmt)
-            {
-                if (ifStmt.Else == null) // Must not have an else
-                {
-                    var invertedCondition = SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(ifStmt.Condition));
-                    var earlyReturn = SyntaxFactory.IfStatement(invertedCondition, SyntaxFactory.ReturnStatement());
-                    var newStatements = new List<StatementSyntax>
-                    {
-                        earlyReturn
-                    };
-                    if (ifStmt.Statement is BlockSyntax block)
-                    {
-                        newStatements.AddRange(block.Statements);
-                    }
-                    else
-                    {
-                        newStatements.Add(ifStmt.Statement);
-                    }
-
-                    var newBody = SyntaxFactory.Block(newStatements);
-                    var newMethodNode = methodNode.WithBody(newBody);
-                    return new DocumentEditResult
-                    {
-                        Outcome = EditOutcome.Modified,
-                        UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, methodNode, newMethodNode, cancellationToken),
-                        FilePath = filePath
-                    };
-                }
-            }
-
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotOptimize,
-                FilePath = filePath,
-                Message = "// Info: No optimization could be safely applied.",
-                UpdatedText = root.ToFullString()
-            };
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
         {
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.CannotEdit,
                 FilePath = filePath,
-                Message = $"// ErrorDetails: {ex.Message}",
-                ErrorCode = (ex as ToolException)?.ErrorCode
+                Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
             };
         }
+
+        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (methodNode == null || methodNode.Body == null)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.TargetNotFound,
+                FilePath = filePath,
+                Message = $"// ErrorDetails: Method '{methodName}' not found or has no body."
+            };
+        }
+
+        // Look for: 
+        // void Method() { 
+        //     if (condition) { 
+        //         /* logic */ 
+        //     } 
+        // }
+        // To convert to:
+        // void Method() {
+        //     if (!condition) return;
+        //     /* logic */
+        // }
+        if (methodNode.Body.Statements.Count == 1 && methodNode.Body.Statements[0] is IfStatementSyntax ifStmt)
+        {
+            if (ifStmt.Else == null) // Must not have an else
+            {
+                var invertedCondition = SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(ifStmt.Condition));
+                var earlyReturn = SyntaxFactory.IfStatement(invertedCondition, SyntaxFactory.ReturnStatement());
+                var newStatements = new List<StatementSyntax>
+                {
+                    earlyReturn
+                };
+                if (ifStmt.Statement is BlockSyntax block)
+                {
+                    newStatements.AddRange(block.Statements);
+                }
+                else
+                {
+                    newStatements.Add(ifStmt.Statement);
+                }
+
+                var newBody = SyntaxFactory.Block(newStatements);
+                var newMethodNode = methodNode.WithBody(newBody);
+                return new DocumentEditResult
+                {
+                    Outcome = EditOutcome.Modified,
+                    UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, methodNode, newMethodNode, cancellationToken),
+                    FilePath = filePath
+                };
+            }
+        }
+
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.CannotOptimize,
+            FilePath = filePath,
+            Message = "// Info: No optimization could be safely applied.",
+            UpdatedText = root.ToFullString()
+        };
     }
 }

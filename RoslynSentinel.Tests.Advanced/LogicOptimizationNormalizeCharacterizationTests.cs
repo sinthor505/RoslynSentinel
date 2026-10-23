@@ -523,4 +523,12 @@ public class LogicOptimizationNormalizeCharacterizationTests
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ConvertForEachToForAsync("Missing.cs", 5));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
+
+    [Test]
+    public async Task ReduceBlockDepth_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ReduceBlockDepthAsync("Missing.cs", "Foo"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

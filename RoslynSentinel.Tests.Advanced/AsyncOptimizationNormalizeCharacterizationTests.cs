@@ -654,4 +654,12 @@ public class AsyncOptimizationNormalizeCharacterizationTests
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.RewriteObsoleteCallsInAsyncMethodAsync("Missing.cs", "Foo"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
+
+    [Test]
+    public async Task ConvertToAsyncEnumerable_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ConvertToAsyncEnumerableAsync("Missing.cs", "Foo"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

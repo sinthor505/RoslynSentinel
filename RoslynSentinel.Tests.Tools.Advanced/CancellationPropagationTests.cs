@@ -63,12 +63,11 @@ public class CancellationPropagationTests
     // Deliberately no SetSource: GetSolutionAsync throws SolutionNotLoadedException inside the try.
     [Test]
     [Category("AsyncOptimizationEngine")] // sentinel:auto-category
-    public async Task ConvertToAsyncEnumerable_ToolExceptionInsideTry_KeepsErrorCode()
+    public async Task ConvertToAsyncEnumerable_SolutionNotLoaded_Throws()
     {
-        var result = await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync("C.cs", "GetNames");
+        var ex = await Assert.ThrowsAsync<SolutionNotLoadedException>(async () => await _asyncOptimizationEngine.ConvertToAsyncEnumerableAsync("C.cs", "GetNames"));
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
     }
 
     [Test]
@@ -86,11 +85,10 @@ public class CancellationPropagationTests
 
     [Test]
     [Category("LogicOptimizationEngine")] // sentinel:auto-category
-    public async Task ReduceBlockDepth_ToolExceptionInsideTry_KeepsErrorCode()
+    public async Task ReduceBlockDepth_SolutionNotLoaded_Throws()
     {
-        var result = await _logicOptimizationEngine.ReduceBlockDepthAsync("C.cs", "M");
+        var ex = await Assert.ThrowsAsync<SolutionNotLoadedException>(async () => await _logicOptimizationEngine.ReduceBlockDepthAsync("C.cs", "M"));
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
     }
 }
