@@ -284,8 +284,14 @@ Rejected alternatives, and why:
 - Change: `--port=0` binds an OS-assigned port and prints the bound URL to stdout as the first
   line (`listening: http://127.0.0.1:<port>/mcp`) and to the log; `--bind=loopback|any`, default
   `loopback` (the current all-interfaces, no-auth default is a finding in its own right; keep `any`
-  available for the control script's shared copy). `StopServer` success text no longer claims VS
-  Code will relaunch; it says the client's launcher decides.
+  available for the control script's shared copy). `StopServer` success text states the respawn
+  behaviour affirmatively, chosen by a new `--respawn=auto|none` startup arg whose default follows
+  the transport: stdio -> `auto` (the text stays as today: VS Code respawns the server on the next
+  tool call and the launcher builds it fresh, nothing for the agent to do), http -> `none` (the text
+  says this instance stays down and, for a test instance, names `LaunchTestInstance` as the way to
+  start another). Never a neutral "the client decides": that sends a model looking for scripts or
+  launching the binary by hand. The test-instance launcher (Step 4.2) passes `--respawn=none`
+  explicitly; `McpServerStatus` reports the effective value.
 - Done when: tests for `ParsePort("--port=0")` and the bind option; a manual start with `--port=0`
   prints a usable URL.
 
