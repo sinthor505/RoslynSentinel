@@ -638,4 +638,20 @@ public class AsyncOptimizationNormalizeCharacterizationTests
             UntouchedLine,
             "}"));
     }
+
+    [Test]
+    public async Task AddCancellationTokenToMethod_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AddCancellationTokenToMethodAsync("Missing.cs", "Foo"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task RewriteObsoleteCallsInAsyncMethod_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.RewriteObsoleteCallsInAsyncMethodAsync("Missing.cs", "Foo"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

@@ -420,11 +420,11 @@ public class Math
 
     [Test]
     [Category("AntiPatternEngine")] // sentinel:auto-category
-    public async Task GenerateCallTree_ReturnsNotFound_ForMissingFile()
+    public async Task GenerateCallTree_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C { }", "C.cs");
-        var tree = await _antiPatternEngine.GenerateCallTreeAsync("Missing.cs", "Foo");
-        Assert.That(tree.Message, Does.Contain("not found").Or.Contain("File"), "Missing file should produce an error message, not an exception.");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _antiPatternEngine.GenerateCallTreeAsync("Missing.cs", "Foo"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -1110,4 +1110,13 @@ public class C
     }
 
     public AntiPatternEngine _antiPatternEngine;
+
+    [Test]
+    [Category("AntiPatternEngine")] // sentinel:auto-category
+    public async Task GenerateEqualityOverrides_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }", "C.cs");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _antiPatternEngine.GenerateEqualityOverridesAsync("Missing.cs", "Foo"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

@@ -301,4 +301,12 @@ public class Service
         Assert.That(result.UpdatedText, Does.Contain("CancellationToken"),
             "Generated async overload should include a CancellationToken parameter.");
     }
+
+    [Test]
+    public async Task OptimizeIndependentAwaits_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }", "C.cs");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.OptimizeIndependentAwaitsAsync("Missing.cs", "Foo"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

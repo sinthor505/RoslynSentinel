@@ -147,11 +147,7 @@ public class AsyncOptimizationEngine
     public async Task<DocumentEditResult> OptimizeIndependentAwaitsAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, Message = "// ErrorDetails: File not found in the loaded solution.", FilePath = filePath };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
@@ -857,23 +853,14 @@ public class AsyncOptimizationEngine
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var documentId = solution.GetDocumentIdsWithFilePath(filePath).FirstOrDefault();
-        if (documentId == null)
-        {
-            return new DocumentEditResult(EditOutcome.DocumentNotFound, filePath);
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         // When caller supplies in-memory text (e.g. first-time bridge flow), overlay it on
         // the workspace document so Roslyn compiles the right content for the semantic model.
         if (sourceText != null)
         {
-            solution = solution.WithDocumentText(documentId, SourceText.From(sourceText));
-        }
-
-        var document = solution.GetDocument(documentId);
-        if (document == null)
-        {
-            return new DocumentEditResult(EditOutcome.DocumentNotFound, filePath);
+            solution = solution.WithDocumentText(document.Id, SourceText.From(sourceText));
+            document = solution.GetDocument(document.Id)!;
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -1319,16 +1306,7 @@ public class AsyncOptimizationEngine
         CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-        if (document == null)
-        {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// ErrorDetails: File not found in the loaded solution."
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
@@ -3048,19 +3026,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var result = new PropagateCtResult { MethodName = methodName };
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.GetDocumentIdsWithFilePath(filePath)
-                               .Select(solution.GetDocument)
-                               .FirstOrDefault();
-        if (document == null)
-        {
-            result.Error = $"File '{filePath}' not found in the loaded solution.";
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = result.Error
-            };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
