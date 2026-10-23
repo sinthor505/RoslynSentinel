@@ -405,27 +405,10 @@ public class SymbolNavigationEngine
     {
         // READCHOKEPOINT-CAST: see LocateSymbolAsync above for rationale (production-caller cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents)
-            .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return ErrorHoverInfo($"File not found: '{filePath}'");
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         // Primary: use GetDeclaredSymbol/GetSymbolInfo (declaration-based -> more reliable for class/method/property lookups)
-        ISymbol? symbol = null;
-        try
-        {
-            symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
-        }
-        catch (ToolException ex)
-        {
-            // Any snippet failure (no match, several matches, malformed lineBefore/lineAfter) is reported with the
-            // lookup's own message, which lists the file's candidates. The old filter on the message text
-            // ("matched" / "No match") is gone: it coupled this catch to wording the candidate-listing messages
-            // do not promise, and the fallthrough it guarded only re-threw the same failure below.
-            return ErrorHoverInfo(ex.Message);
-        }
+        ISymbol? symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
         // Fallback: position-based lookup using SymbolFinder (handles usage sites)
         if (symbol == null)
@@ -2596,11 +2579,7 @@ public class SymbolNavigationEngine
     {
         // READCHOKEPOINT-CAST: see LocateSymbolAsync above for rationale (production-caller cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return (EditOutcome.DocumentNotFound, "// Document not found.", []);
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -2612,16 +2591,8 @@ public class SymbolNavigationEngine
         var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, containerName, cancellationToken)
             .Where(c => c.Kind is CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)
             .ToList();
-        BaseTypeDeclarationSyntax? containerNode;
-        try
-        {
-            containerNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
-        }
-        catch (ToolException ex)
-        {
-            return (EditOutcome.CannotEdit, ex.Message, []);
-        }
+        var containerNode = SyntaxTargetResolver.ResolveBySnippetOrThrow(typeCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (c, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(c, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
 
         if (containerNode is EnumDeclarationSyntax enumDecl)
         {
@@ -2685,17 +2656,15 @@ public class SymbolNavigationEngine
     /// Same result as GetMemberSourceAsync without a sink. When the result is an Ambiguous error, the sink
     /// (if not null) receives the structured candidates (AmbiguousCandidate) that the error message describes.
     /// </summary>
+    // TODO throw-migration: remove the sink overload once RefactoringStructuralImpl and WorkspaceFileEditImpl stop passing a sink
+    [Obsolete("Ambiguity now throws ToolAmbiguousMatchException carrying Candidates; use the overload without a sink")]
     public async Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName, string? contextSnippet, string? lineBefore, string? lineAfter, List<AmbiguousCandidate>? ambiguousCandidates, CancellationToken cancellationToken = default)
     {
         const int MaxSourceLines = 200;
 
         // READCHOKEPOINT-CAST: see LocateSymbolAsync above for rationale (production-caller cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return (EditOutcome.DocumentNotFound, "// Document not found.", ToolErrorCode.NotFound, null);
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -2715,45 +2684,28 @@ public class SymbolNavigationEngine
             if (allNameCandidates.Count > 0)
             {
                 var kindNames = string.Join(", ", allNameCandidates.Select(c => c.Kind).Distinct());
-                return (EditOutcome.CannotEdit,
+                throw new ToolTargetIneligibleException(
                     $"'{memberName}' is a type-level declaration ({kindNames}). Member source only supports class-level members " +
-                    "(methods, properties, fields, constructors, events, indexers) and enum members; use ReadFile or GetFileOutline for a whole type.",
-                    ToolErrorCode.TargetIneligible, null);
+                    "(methods, properties, fields, constructors, events, indexers) and enum members; use ReadFile or GetFileOutline for a whole type.");
             }
 
-            return (EditOutcome.TargetNotFound, $"Member '{memberName}' not found", ToolErrorCode.NotFound, null);
+            throw new ToolNotFoundException($"Member '{memberName}' not found");
         }
 
         // ResolveBySnippetOrThrow returns the first candidate when no snippet is given. That is
         // acceptable for a write that a later precheck guards, but a read would silently return
         // the wrong overload, so an unresolved multi-candidate set is reported instead.
-        SyntaxNodeCandidate? resolved;
-        try
+        if (contextSnippet == null && memberCandidates.Count > 1)
         {
-            if (contextSnippet == null && memberCandidates.Count > 1)
-            {
-                throw new ToolAmbiguousMatchException(SyntaxTargetResolver.BuildHintForCandidates(memberCandidates, [], "ambiguous"), SyntaxTargetResolver.BuildDeclarationCandidates(memberCandidates, sourceText, document.FilePath ?? string.Empty));
-            }
-
-            resolved = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
-                (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode), filePath: document.FilePath ?? string.Empty);
+            throw new ToolAmbiguousMatchException(SyntaxTargetResolver.BuildHintForCandidates(memberCandidates, [], "ambiguous"), SyntaxTargetResolver.BuildDeclarationCandidates(memberCandidates, sourceText, document.FilePath ?? string.Empty));
         }
-        catch (ToolException ex)
-        {
-            // ResolveBySnippetOrThrow throws ToolNotFoundException (snippet matched nothing) or
-            // ToolAmbiguousMatchException (2+ snippet matches, or the match fell outside every candidate);
-            // the exception carries its own error code.
-            if (ex is ToolAmbiguousMatchException { Candidates.Count: > 0 } amb && ambiguousCandidates != null)
-            {
-                ambiguousCandidates.AddRange(amb.Candidates);
-            }
 
-            return (EditOutcome.CannotEdit, ex.Message, ex.ErrorCode, null);
-        }
+        var resolved = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,
+            (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode), filePath: document.FilePath ?? string.Empty);
 
         if (resolved == null)
         {
-            return (EditOutcome.TargetNotFound, $"Member '{memberName}' not found", ToolErrorCode.NotFound, null);
+            throw new ToolNotFoundException($"Member '{memberName}' not found");
         }
 
         var member = resolved.Node;

@@ -287,12 +287,8 @@ public enum ToolScope
     {
         SetSource("public class Holder { public int A; }", "MemberSourceMissing.cs");
 
-        var (outcome, message, errorCode, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceMissing.cs", "DoesNotExist");
-
-        Assert.That(outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-        Assert.That(errorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(message, Does.Contain("Member 'DoesNotExist' not found"));
-        Assert.That(info, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceMissing.cs", "DoesNotExist"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -308,17 +304,14 @@ public enum ToolScope
             """;
         SetSource(source, "MemberSourceOverload.cs");
 
-        var (outcome, message, errorCode, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceOverload.cs", "Run");
-
-        Assert.That(outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(errorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
-        Assert.That(message, Does.Contain("2 candidates"));
-        Assert.That(info, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceOverload.cs", "Run"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.Candidates, Has.Count.EqualTo(2));
     }
 
     [Test]
     [Category("SymbolNavigationEngine")] // sentinel:auto-category
-    public async Task GetMemberSource_OverloadsWithSink_FillsOneStructuredCandidatePerOverload()
+    public async Task GetMemberSource_Overloads_ThrowsAmbiguousWithOneCandidatePerOverload()
     {
         var source = """
             public class Holder
@@ -329,18 +322,12 @@ public enum ToolScope
             """;
         SetSource(source, "MemberSourceSink.cs");
 
-        var candidates = new List<AmbiguousCandidate>();
-        var (outcome, message, errorCode, info) = await _symbolNavigationEngine.GetMemberSourceAsync(
-            "MemberSourceSink.cs", "Run", containerName: null, contextSnippet: null, lineBefore: null, lineAfter: null,
-            ambiguousCandidates: candidates);
-
-        Assert.That(outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(errorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
-        Assert.That(info, Is.Null);
-        Assert.That(candidates, Has.Count.EqualTo(2), message);
-        Assert.That(candidates.All(c => c.Counted), Is.True);
-        Assert.That(candidates.All(c => !string.IsNullOrEmpty(c.ContextSnippet)), Is.True);
-        Assert.That(candidates.All(c => c.Line > 0), Is.True);
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () => await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceSink.cs", "Run"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.Candidates, Has.Count.EqualTo(2));
+        Assert.That(ex.Candidates.All(c => c.Counted), Is.True);
+        Assert.That(ex.Candidates.All(c => !string.IsNullOrEmpty(c.ContextSnippet)), Is.True);
+        Assert.That(ex.Candidates.All(c => c.Line > 0), Is.True);
     }
 
     [Test]
@@ -914,15 +901,12 @@ public class C
 
     [Test]
     [Category("SymbolNavigationEngine")] // sentinel:auto-category
-    public async Task GetMemberSource_SnippetMatchesNothing_ReturnsNotFoundErrorCode()
+    public async Task GetMemberSource_SnippetMatchesNothing_ThrowsNotFound()
     {
         SetSource(OverloadedRunSource, "MemberSourceSnippetMiss.cs");
 
-        var (outcome, _, errorCode, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceSnippetMiss.cs", "Run", contextSnippet: "public void Run(double d)");
-
-        Assert.That(outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(errorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(info, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceSnippetMiss.cs", "Run", contextSnippet: "public void Run(double d)"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -942,11 +926,8 @@ public class C
     {
         SetSource("namespace A { public class Dup { } }\nnamespace B { public enum Dup { X } }\n", "DupContainersMembers.cs");
 
-        var (outcome, message, members) = await _symbolNavigationEngine.GetContainerMembersAsync("DupContainersMembers.cs", "Dup", contextSnippet: "no such text anywhere");
-
-        Assert.That(outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(message, Does.Contain("no such text anywhere"));
-        Assert.That(members, Is.Empty);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _symbolNavigationEngine.GetContainerMembersAsync("DupContainersMembers.cs", "Dup", contextSnippet: "no such text anywhere"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -955,12 +936,8 @@ public class C
     {
         SetSource("public class Holder { public int A; }", "MemberSourceType.cs");
 
-        var (outcome, message, errorCode, info) = await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceType.cs", "Holder");
-
-        Assert.That(outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(errorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        Assert.That(message, Does.Contain("ReadFile or GetFileOutline"));
-        Assert.That(info, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _symbolNavigationEngine.GetMemberSourceAsync("MemberSourceType.cs", "Holder"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
     }
 
     [Test]
