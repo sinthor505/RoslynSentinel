@@ -75,11 +75,10 @@ public class GranularRefactoringEngineTests
     [TearDown]
     public void TearDown() => _mgr?.Dispose();
     [Test]
-    public async Task InlineField_UnknownFile_ReturnsEmptyString()
+    public async Task InlineField_MissingFile_ThrowsNotFound()
     {
-        var result = await new StructuralRefactoringEngine(_mgr).InlineFieldAsync("NoSuchFile.cs", "_field");
-        // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
-        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_mgr).InlineFieldAsync("NoSuchFile.cs", "_field"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

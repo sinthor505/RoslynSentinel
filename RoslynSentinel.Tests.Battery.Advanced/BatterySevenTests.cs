@@ -415,13 +415,12 @@ public class MathHelper
     }
 
     [Test]
-    public async Task AddRemoveParamsAsync_UnknownFile_ReturnsEmpty()
+    public async Task AddRemoveParamsAsync_MissingFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        // TODO throw-migration: assert the typed exception once MemberRefactoringEngine throws
-        var result = await _memberRefactoringEngine.AddRemoveParamsAsync("NoFile.cs", "Foo");
-        Assert.That(result.UpdatedText, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _memberRefactoringEngine.AddRemoveParamsAsync("NoFile.cs", "Foo"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     private static readonly string SimpleSource = Sources.Order;

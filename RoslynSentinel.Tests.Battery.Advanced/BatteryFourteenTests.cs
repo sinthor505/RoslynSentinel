@@ -33,12 +33,12 @@ public class AdvancedLogicEngineTests
     }
 
     [Test]
-    public async Task ConvertIfToSwitchExpression_UnknownFile_ReturnsEmptyString()
+    public async Task ConvertIfToSwitchExpression_MissingFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-        var result = await new LogicSimplificationEngine(_mgr).ConvertIfToSwitchExpressionAsync("NoSuchFile.cs", "GetValue");
-        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText"); // TODO throw-migration: assert the typed exception once the syntax-modernization engine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new LogicSimplificationEngine(_mgr).ConvertIfToSwitchExpressionAsync("NoSuchFile.cs", "GetValue"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -122,12 +122,12 @@ public class AdvancedStructuralEngineTests
     [TearDown]
     public void TearDown() => _mgr?.Dispose();
     [Test]
-    public async Task ConvertAbstractClassToInterface_UnknownFile_ReturnsEmptyString()
+    public async Task ConvertAbstractClassToInterface_MissingFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _mgr.SetTestSolution(solution);
-        var result = await _engine.ConvertAbstractClassToInterfaceAsync("NoSuchFile.cs", "MyBase");
-        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText"); // TODO throw-migration: assert the typed exception once the abstract-class conversion engine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ConvertAbstractClassToInterfaceAsync("NoSuchFile.cs", "MyBase"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

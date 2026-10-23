@@ -144,13 +144,11 @@ public interface IOrderRepository
 
     [Test]
     [Category("CodeGenerationEngine")] // sentinel:auto-category
-    public async Task GenerateConstructor_NonExistentFile_ReturnsDocumentNotFound()
+    public async Task GenerateConstructor_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _codeGenerationEngine.GenerateConstructorAsync("NonExistent.cs", "Order");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound));
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
-        // TODO throw-migration: assert the typed exception once the engine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _codeGenerationEngine.GenerateConstructorAsync("NonExistent.cs", "Order"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- GenerateToString ---
@@ -258,13 +256,11 @@ public interface IOrderRepository
 
     [Test]
     [Category("ApiGenerationEngine")] // sentinel:auto-category
-    public async Task AddValidationToPoco_NonExistentFile_ReturnsDocumentNotFound()
+    public async Task AddValidationToPoco_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _apiGenerationEngine.AddValidationToPocoAsync("NonExistent.cs", "Order");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound));
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
-        // TODO throw-migration: assert the typed exception once the engine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _apiGenerationEngine.AddValidationToPocoAsync("NonExistent.cs", "Order"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- ImplementInterfaceSafe ---
@@ -298,11 +294,11 @@ public interface IOrderRepository
 
     [Test]
     [Category("CodeGenerationEngine")] // sentinel:auto-category
-    public async Task ImplementInterfaceSafe_NonExistentFile_ReturnsDocumentNotFound()
+    public async Task ImplementInterfaceSafe_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _codeGenerationEngine.ImplementInterfaceAsync("NonExistent.cs", "Order", "IOrderRepository");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _codeGenerationEngine.ImplementInterfaceAsync("NonExistent.cs", "Order", "IOrderRepository"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -316,13 +312,11 @@ public interface IOrderRepository
 
     [Test]
     [Category("CodeGenerationEngine")] // sentinel:auto-category
-    public async Task ConvertPropertySafe_NonExistentFile_ReturnsDocumentNotFound()
+    public async Task ConvertPropertySafe_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _codeGenerationEngine.ConvertPropertySafeAsync("NonExistent.cs", "OrderId", "ToFullProperty");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound));
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
-        // TODO throw-migration: assert the typed exception once the engine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _codeGenerationEngine.ConvertPropertySafeAsync("NonExistent.cs", "OrderId", "ToFullProperty"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- InterpolateStringSafeTool ---

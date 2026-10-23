@@ -30,11 +30,10 @@ public class LogicOptimizationEngineTests
     public void TearDown() => _mgr?.Dispose();
 
     [Test]
-    public async Task ConvertToNullCoalescing_UnknownFile_ReturnsEmptyString()
+    public async Task ConvertToNullCoalescing_MissingFile_ThrowsNotFound()
     {
-        // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
-        var result = await _engine.ConvertToNullCoalescingAsync("NoSuchFile.cs");
-        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ConvertToNullCoalescingAsync("NoSuchFile.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -62,19 +61,17 @@ public class Guard
     }
 
     [Test]
-    public async Task AddGuardClauses_UnknownFile_ReturnsEmptyString()
+    public async Task AddGuardClauses_MissingFile_ThrowsNotFound()
     {
-        // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
-        var result = await _engine.AddGuardClausesAsync("NoSuchFile.cs", "DoWork");
-        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText for AddGuardClauses");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.AddGuardClausesAsync("NoSuchFile.cs", "DoWork"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
-    public async Task SimplifyBooleanExpressions_UnknownFile_ReturnsEmptyString()
+    public async Task SimplifyBooleanExpressions_MissingFile_ThrowsNotFound()
     {
-        // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
-        var result = await _engine.SimplifyBooleanExpressionsAsync("NoSuchFile.cs");
-        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText for SimplifyBooleanExpressions");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.SimplifyBooleanExpressionsAsync("NoSuchFile.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 }
 

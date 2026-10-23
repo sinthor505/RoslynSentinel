@@ -473,15 +473,13 @@ public class BatteryTwentyFourTests
 
     [Test]
     [Category("LogicSimplificationEngine")] // sentinel:auto-category
-    public async Task ConvertToNullCoalescing_NonExistentFile_ReportsNotFound()
+    public async Task ConvertToNullCoalescing_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _logicOptimizationEngine.ConvertToNullCoalescingAsync("NonExistent.cs");
-        // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.DocumentNotFound));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _logicOptimizationEngine.ConvertToNullCoalescingAsync("NonExistent.cs"));
         // DEFERRED (accepted 2026-10-22, finding #24): engines return the text "// Document not found." as a result string instead of throwing a typed not-found exception; it is emitted at ~36 engine sites and is migrated with the throw-migration work.
         // Left as-is on purpose until scheduled; do not re-raise in reviews.
-        Assert.That(result.Message, Is.EqualTo("// Document not found."));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- ConvertToSwitch ---
@@ -498,15 +496,13 @@ public class BatteryTwentyFourTests
 
     [Test]
     [Category("LogicSimplificationEngine")] // sentinel:auto-category
-    public async Task ConvertToSwitch_NonExistentFile_ReportsNotFound()
+    public async Task ConvertToSwitch_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _logicOptimizationEngine.ConvertToSwitchAsync("NonExistent.cs");
-        // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.DocumentNotFound));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _logicOptimizationEngine.ConvertToSwitchAsync("NonExistent.cs"));
         // DEFERRED (accepted 2026-10-22, finding #24): engines return the text "// Document not found." as a result string instead of throwing a typed not-found exception; it is emitted at ~36 engine sites and is migrated with the throw-migration work.
         // Left as-is on purpose until scheduled; do not re-raise in reviews.
-        Assert.That(result.Message, Is.EqualTo("// Document not found."));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- ConvertToPattern ---
@@ -522,15 +518,13 @@ public class BatteryTwentyFourTests
 
     [Test]
     [Category("SyntaxModernizationEngine")] // sentinel:auto-category
-    public async Task ConvertToPattern_NonExistentFile_ReportsNotFound()
+    public async Task ConvertToPattern_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _modernizationEngine.ConvertToPatternAsync("NonExistent.cs");
-        // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
-        Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.DocumentNotFound));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _modernizationEngine.ConvertToPatternAsync("NonExistent.cs"));
         // DEFERRED (accepted 2026-10-22, finding #24): engines return the text "// Document not found." as a result string instead of throwing a typed not-found exception; it is emitted at ~36 engine sites and is migrated with the throw-migration work.
         // Left as-is on purpose until scheduled; do not re-raise in reviews.
-        Assert.That(result.Message, Is.EqualTo("// Document not found."));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

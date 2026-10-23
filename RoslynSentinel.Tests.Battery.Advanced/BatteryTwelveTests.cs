@@ -45,16 +45,14 @@ public class CodeStyleEngineTests
     }
 
     [Test]
-    public async Task ConvertPropertyToMethods_UnknownFile_ReturnsEmptyString()
+    public async Task ConvertPropertyToMethods_MissingFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Entity.cs", "public class Entity { public string Name { get; set; } }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _engine.ConvertPropertyToMethodsAsync("DoesNotExist.cs", "Name");
-
-        // TODO throw-migration: assert the typed exception once CodeStyleEngine throws
-        Assert.That(result.UpdatedText, Is.Null, "Unknown file should return null UpdatedText");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ConvertPropertyToMethodsAsync("DoesNotExist.cs", "Name"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -165,17 +163,14 @@ public class ModernizationEngineTests
     }
 
     [Test]
-    public async Task ClassToRecord_UnknownFile_ReportsWithoutThrowing()
+    public async Task ClassToRecord_MissingFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Dto.cs", "public class Point { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _engine.ClassToRecordAsync("DoesNotExist.cs", "Point");
-
-        // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound),
-            "Engines report not-found through Outcome instead of throwing.");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ClassToRecordAsync("DoesNotExist.cs", "Point"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -215,17 +210,15 @@ public class RefactoringEngineTests
     public void TearDown() => _workspaceManager?.Dispose();
 
     [Test]
-    public async Task FormatDocument_UnknownFile_ReturnsEmptyString()
+    public async Task FormatDocument_MissingFile_ThrowsNotFound()
     {
         // NOTE: FormatDocumentAsync is dead code (no production caller; owner decision 2026-10-22). This test is kept as-is; do not re-investigate.
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("Code.cs", "public class C { }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _engine.FormatDocumentAsync("DoesNotExist.cs");
-
-        // TODO throw-migration: assert the typed exception once BasicRefactoringEngine throws
-        Assert.That(result.UpdatedText, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.FormatDocumentAsync("DoesNotExist.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

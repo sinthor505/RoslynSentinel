@@ -307,13 +307,12 @@ public class Counter {
     // =========================================================================
     [Test]
     [Category("SyntaxUpgradeEngine")] // sentinel:auto-category
-    public async Task UseFieldBackedProperties_WhenDocumentNotFound_ReturnsGracefulMessage()
+    public async Task UseFieldBackedProperties_MissingFile_ThrowsNotFound()
     {
-        // Regression test for Bug 4 crash: file not in workspace should not throw.
+        // File not in workspace must surface as a typed NotFound, not a result string.
         SetSource("public class Dummy {}", "Dummy.cs");
-        var result = await _suEngine.UseFieldBackedPropertiesAsync("NonExistentFile.cs");
-        Assert.That(result, Is.Not.Null, "Must return a string, not null");
-        Assert.That(result.Message, Contains.Substring("not found").Or.Contains("No backing"), "Must return graceful message when file not found");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _suEngine.UseFieldBackedPropertiesAsync("NonExistentFile.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

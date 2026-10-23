@@ -144,10 +144,10 @@ public class CodeHealingEngineTests
     [TearDown]
     public void TearDown() => _mgr?.Dispose();
     [Test]
-    public async Task FixThreadSleep_UnknownFile_ReturnsEmptyString()
+    public async Task FixThreadSleep_MissingFile_ThrowsNotFound()
     {
-        var result = await _engine.FixThreadSleepAsync("NoSuchFile.cs");
-        Assert.That(result.UpdatedText, Is.Null, "unknown file should return null UpdatedText"); // TODO throw-migration: assert the typed exception once the thread-sleep engine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.FixThreadSleepAsync("NoSuchFile.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

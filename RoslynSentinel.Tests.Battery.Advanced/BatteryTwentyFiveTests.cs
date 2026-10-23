@@ -43,13 +43,12 @@ public class Calc {
     }
 
     [Test]
-    public async Task ConvertIfToSwitchStatementAsync_UnknownFile_ReturnsEmpty()
+    public async Task ConvertIfToSwitchStatementAsync_MissingFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertIfToSwitchStatementAsync("NoSuchFile.cs", "Foo");
-        // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
-        Assert.That(result.UpdatedText, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new LogicSimplificationEngine(_workspaceManager).ConvertIfToSwitchStatementAsync("NoSuchFile.cs", "Foo"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -392,13 +391,12 @@ public class Slicer {
     }
 
     [Test]
-    public async Task UseIndexFromEndAsync_UnknownFile_ReturnsEmpty()
+    public async Task UseIndexFromEndAsync_MissingFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.UseIndexFromEndAsync("NoSuchFile.cs");
-        // TODO throw-migration: assert the typed exception once CodeStyleEngine throws
-        Assert.That(result.UpdatedText, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.UseIndexFromEndAsync("NoSuchFile.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 }
 
@@ -617,13 +615,12 @@ public class GranularRefactoringEngineGapTests
     }
 
     [Test]
-    public async Task RunMicroRefactoringAsync_UnknownFile_ReturnsEmpty()
+    public async Task RunMicroRefactoringAsync_MissingFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("NoFile.cs", "r1", 1);
-        // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
-        Assert.That(result.UpdatedText, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("NoFile.cs", "r1", 1));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -637,13 +634,12 @@ public class GranularRefactoringEngineGapTests
     }
 
     [Test]
-    public async Task InlineParameterAsync_UnknownFile_ReturnsEmpty()
+    public async Task InlineParameterAsync_MissingFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new StructuralRefactoringEngine(_workspaceManager).InlineParameterAsync("NoFile.cs", "Foo", "bar");
-        // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
-        Assert.That(result.UpdatedText, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).InlineParameterAsync("NoFile.cs", "Foo", "bar"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -657,13 +653,12 @@ public class GranularRefactoringEngineGapTests
     }
 
     [Test]
-    public async Task ConvertMethodToIndexerAsync_UnknownFile_ReturnsEmpty()
+    public async Task ConvertMethodToIndexerAsync_MissingFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertMethodToIndexerAsync("NoFile.cs", "Get");
-        // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
-        Assert.That(result.UpdatedText, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertMethodToIndexerAsync("NoFile.cs", "Get"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
@@ -753,13 +748,12 @@ public class Cache {
     }
 
     [Test]
-    public async Task ConvertIndexerToMethodAsync_UnknownFile_ReturnsEmpty()
+    public async Task ConvertIndexerToMethodAsync_MissingFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _basicRefactoringEngine.ConvertIndexerToMethodAsync("NoFile.cs");
-        // TODO throw-migration: assert the typed exception once BasicRefactoringEngine throws
-        Assert.That(result.UpdatedText, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _basicRefactoringEngine.ConvertIndexerToMethodAsync("NoFile.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
 
@@ -1011,12 +1005,12 @@ public class Router {
     }
 
     [Test]
-    public async Task UseFieldBackedPropertiesAsync_UnknownFile_ReturnsFriendlyMessage()
+    public async Task UseFieldBackedProperties_MissingFile_ThrowsNotFound()
     {
-        // Bug 4b fix: engine returns a comment message instead of empty string when file not found
+        // File not in workspace must surface as a typed NotFound, not a result string.
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.UseFieldBackedPropertiesAsync("NoFile.cs");
-        Assert.That(result.Message, Does.Contain("not found").Or.Contain("not in workspace"));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.UseFieldBackedPropertiesAsync("NoFile.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 }

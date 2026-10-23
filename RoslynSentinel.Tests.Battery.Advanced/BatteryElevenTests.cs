@@ -43,12 +43,12 @@ public class ImmutabilityEngineTests
     }
 
     [Test]
-    public async Task MakeClassImmutable_UnknownFile_ReturnsEmptyString()
+    public async Task MakeClassImmutable_MissingFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class Other {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("DoesNotExist.cs", "Entity");
-        Assert.That(result.UpdatedText, Is.Null, "Unknown file should return null UpdatedText, not throw"); // TODO throw-migration: assert the typed exception once the immutability engine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("DoesNotExist.cs", "Entity"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 }
 

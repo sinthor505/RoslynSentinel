@@ -150,11 +150,11 @@ public class QualityClass
 
     [Test]
     [Category("LogicSimplificationEngine")] // sentinel:auto-category
-    public async Task AddGuardClauses_NonExistentFile_ReportsNotFound()
+    public async Task AddGuardClauses_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _logicOptimizationEngine.AddGuardClausesAsync("NonExistent.cs", "Process");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound)); // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _logicOptimizationEngine.AddGuardClausesAsync("NonExistent.cs", "Process"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- AddBenchmarkStub ---
@@ -169,11 +169,11 @@ public class QualityClass
 
     [Test]
     [Category("TestingEngine")] // sentinel:auto-category
-    public async Task AddBenchmarkStub_NonExistentFile_ReportsNotFound()
+    public async Task AddBenchmarkStub_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _testingEngine.AddBenchmarkStubAsync("NonExistent.cs", "C", "M");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound)); // TODO throw-migration: assert the typed exception once TestingEngine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _testingEngine.AddBenchmarkStubAsync("NonExistent.cs", "C", "M"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- AddConfigureAwaitFalse ---
@@ -277,11 +277,11 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     [Test]
     [Category("AsyncOptimizationEngine")] // sentinel:auto-category
-    public async Task AddCancellationTokenToMethod_NonExistentFile_ReportsNotFound()
+    public async Task AddCancellationTokenToMethod_MissingFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("NonExistent.cs", "WorkAsync");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound)); // TODO throw-migration: assert the typed exception once AsyncOptimizationEngine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync("NonExistent.cs", "WorkAsync"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // --- MakeMethodThreadSafe---

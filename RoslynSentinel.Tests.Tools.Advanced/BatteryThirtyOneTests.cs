@@ -297,13 +297,11 @@ public class MyList {
     }
 
     [Test]
-    public async Task ConvertMethodToIndexer_UnknownFile_ReturnsEmpty()
+    public async Task ConvertMethodToIndexer_MissingFile_ThrowsNotFound()
     {
         SetSource("public class X {}", "Known.cs");
-        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("unknown_file.cs", "Get");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.DocumentNotFound), "Unknown file should report DocumentNotFound");
-        Assert.That(result.UpdatedText, Is.Null, "File not found should return null UpdatedText");
-        // TODO throw-migration: assert the typed exception once the engine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _advancedStructuralEngine.ConvertMethodToIndexerAsync("unknown_file.cs", "Get"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
