@@ -550,10 +550,9 @@ public class RefactoringStructuralImpl
             {
                 if (!string.IsNullOrEmpty(memberName))
                 {
-                    var ambiguousCandidates = new List<AmbiguousCandidate>();
-                    var (sourceOutcome, sourceMessage, sourceErrorCode, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, ambiguousCandidates, cancellationToken);
+                    var (sourceOutcome, sourceMessage, sourceErrorCode, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                     if (sourceOutcome != EditOutcome.Modified || source is null)
-                        return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(sourceErrorCode ?? RefactoringToolHelpers.ErrorCodeFor(sourceOutcome), $"Member: {sourceMessage}", StructuredDetail: ToolErrorMapper.ToStructuredDetail(ambiguousCandidates)) };
+                        return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(sourceErrorCode ?? RefactoringToolHelpers.ErrorCodeFor(sourceOutcome), $"Member: {sourceMessage}") };
                     return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source) };
                 }
 

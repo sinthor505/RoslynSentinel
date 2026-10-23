@@ -2649,16 +2649,7 @@ public class SymbolNavigationEngine
     /// 200 lines; past the cap Source is the first 200 lines, IsComplete is false, and EndLine is
     /// still the member's real last line so a follow-up ReadFile is one precise call.
     /// </summary>
-    public Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
-        => GetMemberSourceAsync(filePath, memberName, containerName, contextSnippet, lineBefore, lineAfter, null, cancellationToken);
-
-    /// <summary>
-    /// Same result as GetMemberSourceAsync without a sink. When the result is an Ambiguous error, the sink
-    /// (if not null) receives the structured candidates (AmbiguousCandidate) that the error message describes.
-    /// </summary>
-    // TODO throw-migration: remove the sink overload once RefactoringStructuralImpl and WorkspaceFileEditImpl stop passing a sink
-    [Obsolete("Ambiguity now throws ToolAmbiguousMatchException carrying Candidates; use the overload without a sink")]
-    public async Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName, string? contextSnippet, string? lineBefore, string? lineAfter, List<AmbiguousCandidate>? ambiguousCandidates, CancellationToken cancellationToken = default)
+    public async Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
         const int MaxSourceLines = 200;
 
