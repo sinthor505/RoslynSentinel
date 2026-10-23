@@ -1,6 +1,6 @@
 # Plan: isolate concurrent builds per server instance, move prod instances out of the repo with git-based staleness, and launch HTTP test instances from McpServerControl
 
-**Status:** DRAFT 2026-10-23. Four independently shippable parts; one fresh session per part.
+**Status:** DONE 2026-10-23 (commits 3b073b4e, 60595073, 9844baf0, 4616131c, 9b22cf2a, ecdfb0fd, a71673ac, c8dacae8). All four parts landed in one session. Deviations: the Part 3.3 launcher is OPT-IN (set ROSLYNSENTINEL_INSTANCES_ROOT or flip $UseDefaultInstancesRootWhenUnset in scripts/roslynsentinel-instances-common.ps1) so live windows were not switched; WriteMethodInventory was deleted (dead output) instead of relocated; LaunchTestInstance refuses solutions without a RoslynSentinel.Server.Advanced project; the stateless HTTP endpoint needs both Accept values and always replies as SSE; the gate is tested directly (no fake process runner exists).
 
 ## Problem
 
