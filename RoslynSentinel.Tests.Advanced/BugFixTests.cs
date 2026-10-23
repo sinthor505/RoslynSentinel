@@ -4112,19 +4112,17 @@ namespace MyApp
         public void TearDown() => _workspaceManager?.Dispose();
         private ModernizationTools CreateTools() => new ModernizationTools(new SyntaxModernizationEngine(_workspaceManager, _config), new SyntaxUpgradeEngine(_workspaceManager, _config), new LogicSimplificationEngine(_workspaceManager), new CodeStyleEngine(_workspaceManager, _config), new CodeHealingEngine(_workspaceManager, _config), new LogicSimplificationEngine(_workspaceManager), new IDEStyleEngine(_workspaceManager), new AsyncOptimizationEngine(_workspaceManager), _workspaceManager, _config, NullLogger<ModernizationTools>.Instance);
         [Test]
-        public async Task MakeClassImmutableAsync_FileNotInWorkspace_ReturnsEmpty()
+        public async Task MakeClassImmutableAsync_MissingFile_ThrowsNotFound()
         {
-            var result = await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("nonexistent.cs", "MyClass");
-            // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine should return empty for a file not in the workspace");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("nonexistent.cs", "MyClass"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]
-        public async Task MakeClassImmutable_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
+        public async Task MakeClassImmutable_Tool_MissingFile_ThrowsNotFound()
         {
-            var result = await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("nonexistent.cs", "MyClass");
-            // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty for a file not in the workspace (tool layer converts to exception)");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("nonexistent.cs", "MyClass"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]

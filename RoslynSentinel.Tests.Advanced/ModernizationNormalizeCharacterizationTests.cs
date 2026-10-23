@@ -319,4 +319,28 @@ public class ModernizationNormalizeCharacterizationTests
             UntouchedLine,
             "}"));
     }
+
+    [Test]
+    public async Task ClassToRecord_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ClassToRecordAsync("Missing.cs", "Person"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ConvertMethodToExpressionBody_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ConvertMethodToExpressionBodyAsync("Missing.cs", "Twice"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task UseSpanForParsing_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.UseSpanForParsingAsync("Missing.cs", "Cut"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

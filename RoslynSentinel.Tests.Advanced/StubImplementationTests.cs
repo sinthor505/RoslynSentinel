@@ -311,12 +311,11 @@ class C {
 
     [Test]
     [Category("SyntaxModernizationEngine")] // sentinel:auto-category
-    public async Task UseThrowExpressions_UnknownFile_ReturnsEmpty()
+    public async Task UseThrowExpressions_MissingFile_ThrowsNotFound()
     {
         SetSource("class C {}");
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Missing.cs");
-        // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
-        Assert.That(result.UpdatedText, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Missing.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // ══════════════════════════════════════════════════════════════

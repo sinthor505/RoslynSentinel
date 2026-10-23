@@ -528,4 +528,20 @@ public class CodeHealingStyleNormalizeCharacterizationTests
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _style.UseIndexFromEndAsync("Missing.cs"));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
+
+    [Test]
+    public async Task FixThreadSleep_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _healing.FixThreadSleepAsync("Missing.cs"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task AddRetryPolicy_MissingFile_ThrowsNotFound()
+    {
+        SetSource("public class C { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _healing.AddRetryPolicyAsync("Missing.cs", 0, 0, 3));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }
