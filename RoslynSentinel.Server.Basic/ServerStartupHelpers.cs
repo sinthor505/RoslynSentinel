@@ -429,29 +429,28 @@ public static class ServerStartupHelpers
 
     /// <summary>
     /// Resolves the effective log directory: <paramref name="logDirectory"/> when supplied
-    /// (creating it if missing), otherwise the historical default of
-    /// <c>AppDomain.CurrentDomain.BaseDirectory\logs</c>.
+    /// otherwise <see cref="ServerInstancePaths.LogsDir"/> (the working directory's <c>logs</c> folder;
+    /// the binary directory unless <c>--working-dir</c> was given). Created if missing.
     /// </summary>
     private static string ResolveLogDirectory(string? logDirectory)
     {
-        if (string.IsNullOrWhiteSpace(logDirectory))
-        {
-            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
-        }
-
-        Directory.CreateDirectory(logDirectory);
-        return logDirectory;
+        var resolved = string.IsNullOrWhiteSpace(logDirectory)
+            ? ServerInstancePaths.Current.LogsDir
+            : logDirectory;
+        Directory.CreateDirectory(resolved);
+        return resolved;
     }
 
     /// <summary>
-    /// Inserts a yyyyMMdd-HHmmss timestamp before the file extension so each server restart
-    /// starts a fresh log file instead of appending to (or day-rolling into) a shared one.
+    /// Inserts a yyyyMMdd-HHmmss timestamp and the process id before the file extension so each server
+    /// start gets a fresh log file (server-&lt;stamp&gt;-&lt;pid&gt;.log), even for two instances started
+    /// within the same second.
     /// </summary>
     private static string TimestampedLogFileName(string logFileName)
     {
         var extension = Path.GetExtension(logFileName);
         var stem = Path.GetFileNameWithoutExtension(logFileName);
-        return $"{stem}-{DateTime.Now:yyyyMMdd-HHmmss}{extension}";
+        return $"{stem}-{DateTime.Now:yyyyMMdd-HHmmss}-{Environment.ProcessId}{extension}";
     }
 
     // ── Crash handlers ────────────────────────────────────────────────────────
@@ -494,8 +493,8 @@ public static class ServerStartupHelpers
     // ── Stopped-by-script marker ──────────────────────────────────────────────
 
     /// <summary>
-    /// Checks this instance's own root folder (one level above <see
-    /// cref="AppDomain.CurrentDomain"/>'s BaseDirectory, e.g. bin-vscode\<instance-id>\ for a
+    /// Checks <see cref="ServerInstancePaths.StopMarkerPath"/> (with --working-dir: inside the working
+    /// directory; otherwise one level above the binary directory, e.g. bin-vscode\<instance-id>\ for a
     /// per-window stdio build whose exe lives in ...\Advanced\) for a marker file left by
     /// roslynsentinel-vscode-control.ps1's stopallstdio/stopallhttp/stopalltypes actions, which write
     /// it immediately before calling Stop-Process on this exact process. Consumed (read then deleted)
@@ -511,7 +510,7 @@ public static class ServerStartupHelpers
     {
         try
         {
-            var markerPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "stopped-by-script.marker");
+            var markerPath = ServerInstancePaths.Current.StopMarkerPath;
             if (!File.Exists(markerPath))
             {
                 return null;

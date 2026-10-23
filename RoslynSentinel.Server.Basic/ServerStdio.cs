@@ -121,8 +121,7 @@ public class ServerStdio
                     activeModes, ToolClassRegistry.BasicModeToToolClasses, includeTools, excludeTools));
 
             host.Services.WarmupAndAutoLoadBasic(solutionPath, logger, baseRepoDirectory);
-            ConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
-            ConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
+            ConsoleMode.WriteStartupDump(host.Services, modeArg);
             ServerStartupHelpers.LogStartup<ServerStdio>(logger, logPath, activeModes, modeArg, includeTools, excludeTools, operatingMode);
 
             try

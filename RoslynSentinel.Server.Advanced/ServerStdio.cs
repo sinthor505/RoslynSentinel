@@ -132,8 +132,7 @@ namespace RoslynSentinel.Server.Advanced
                         activeModes, ToolClassRegistry.AdvancedModeToToolClasses, includeTools, excludeTools));
 
                 host.Services.WarmupAndAutoLoadAdvanced(solutionPath, logger, baseRepoDirectory);
-                ConsoleMode.WriteStartupDump(host.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
-                ConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
+                ConsoleMode.WriteStartupDump(host.Services, modeArg);
                 ServerStartupHelpers.LogStartup<ServerStdio>(logger, logPath, activeModes, modeArg, includeTools, excludeTools, operatingMode);
 
                 try

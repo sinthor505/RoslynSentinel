@@ -565,15 +565,18 @@ public static class ConsoleMode
 
     /// <summary>
     /// Writes tool_list.json (full MCP payload) and tool_list_simple.json (names only)
-    /// to <paramref name="outputDir"/> on every server startup. Delegates extraction to
+    /// to <see cref="ServerInstancePaths.WorkingDir"/> on every server startup. Delegates extraction to
     /// <see cref="ExtractToolManifest"/> -> the same routine <see cref="ListTools"/> uses -> so the
     /// two can never independently drift.
     /// NOT an [McpServerTool] -> internal diagnostic output only.
     /// </summary>
-    public static void WriteStartupDump(IServiceProvider services, string outputDir, string modeArg)
+    public static void WriteStartupDump(IServiceProvider services, string modeArg)
     {
         try
         {
+            var outputDir = ServerInstancePaths.Current.WorkingDir;
+            Directory.CreateDirectory(outputDir);
+
             var modeSuffix = "_" + modeArg.ToLowerInvariant()
                                          .Replace(", ", "_")
                                          .Replace(",", "_")
@@ -629,159 +632,4 @@ public static class ConsoleMode
             Console.Error.WriteLine($"[StartupDump] Failed to write tool list: {ex.Message}");
         }
     }
-
-    // ─── Method inventory dump ─────────────────────────────────────────────
-
-    /// <summary>
-    /// Writes <c>all_methods.csv</c> and <c>engine_methods.json</c> to the solution root
-    /// on every server startup, replacing any hand-maintained copies.
-    /// Reflects over every concrete class in the assembly to produce an up-to-date
-    /// inventory of public instance methods -> no manual editing required.
-    /// NOT an [McpServerTool] -> internal diagnostic output only.
-    /// </summary>
-    public static void WriteMethodInventory(string outputDir, string modeArg)
-    {
-        try
-        {
-            var modeSuffix = "_" + modeArg.ToLowerInvariant()
-                                         .Replace(", ", "_")
-                                         .Replace(",", "_")
-                                         .Replace(" ", "_");
-
-            var solutionRoot = FindSolutionRoot(outputDir) ?? outputDir;
-            var inventoryDir = solutionRoot;
-
-            // Scan all loaded RoslynSentinel.Server.* assemblies so both Basic and Advanced
-            // types are captured regardless of which server entry point is running.
-            var types = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => a.GetName().Name?.StartsWith("RoslynSentinel.Server", StringComparison.Ordinal) == true)
-                .SelectMany(a => { try { return a.GetTypes(); } catch { return []; } })
-                .Where(t => t.IsClass
-                         && !t.IsAbstract
-                         && !t.IsGenericTypeDefinition
-                         && t.Namespace?.StartsWith("RoslynSentinel.Server.", StringComparison.Ordinal) == true
-                         && !t.Name.Contains('<'))
-                .OrderBy(t => t.Name)
-                .ToList();
-
-            var csvLines = new List<string> { "\"Engine\",\"Line\",\"Method\"" };
-            var jsonEntries = new Dictionary<string, List<object>>();
-
-            foreach (var type in types)
-            {
-                var methods = type
-                    .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-                    .Where(m => !m.IsSpecialName)
-                    .OrderBy(m => m.MetadataToken)
-                    .ToList();
-
-                if (methods.Count == 0)
-                {
-                    continue;
-                }
-
-                var jsonMethods = new List<object>();
-                foreach (var method in methods)
-                {
-                    var sig = BuildMethodSignature(method);
-                    var returnType = ExtractInnerReturnType(method.ReturnType);
-                    var sigTrunc = sig.Length > 120 ? sig[..120] : sig;
-
-                    csvLines.Add($"\"{type.Name}\",\"{EscapeCsvField(sigTrunc)}\",\"{method.Name}\"");
-                    jsonMethods.Add(new { ReturnType = returnType, Signature = sig, Name = method.Name });
-                }
-
-                jsonEntries[type.Name] = jsonMethods;
-            }
-
-            var encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-
-            File.WriteAllText(
-                Path.Combine(inventoryDir, $"all_methods{modeSuffix}.csv"),
-                string.Join(Environment.NewLine, csvLines) + Environment.NewLine,
-                encoding);
-
-            File.WriteAllText(
-                Path.Combine(inventoryDir, $"engine_methods{modeSuffix}.json"),
-                JsonSerializer.Serialize(jsonEntries, PrettyJson),
-                encoding);
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"[MethodInventory] Failed to write method inventory: {ex.Message}");
-        }
-    }
-
-    private static string? FindSolutionRoot(string startDir)
-    {
-        var dir = new DirectoryInfo(startDir);
-        while (dir is not null)
-        {
-            if (dir.GetFiles("Directory.Build.props").Length > 0)
-            {
-                return dir.FullName;
-            }
-
-            dir = dir.Parent;
-        }
-        return null;
-    }
-
-    private static string BuildMethodSignature(MethodInfo method)
-    {
-        var isAsync = method.GetCustomAttribute<AsyncStateMachineAttribute>() is not null;
-        var asyncMod = isAsync ? "async " : "";
-        var returnType = FriendlyType(method.ReturnType);
-        var @params = string.Join(", ", method.GetParameters().Select(BuildParamString));
-        return $"public {asyncMod}{returnType} {method.Name}({@params})";
-    }
-
-    private static string BuildParamString(ParameterInfo p)
-    {
-        var typeName = FriendlyType(p.ParameterType);
-        var name = p.Name ?? "_";
-        if (!p.HasDefaultValue)
-        {
-            return $"{typeName} {name}";
-        }
-
-        var defStr = p.DefaultValue switch
-        {
-            null => "null",
-            string s => $"\\{s}\\",
-            bool b => b ? "true" : "false",
-            var other => other?.ToString() ?? "null",
-        };
-        return $"{typeName} {name} = {defStr}";
-    }
-
-    private static string ExtractInnerReturnType(Type returnType)
-    {
-        if (returnType.IsGenericType
-            && returnType.GetGenericTypeDefinition() == typeof(Task<>))
-        {
-            return FriendlyType(returnType.GetGenericArguments()[0]);
-        }
-
-        if (returnType == typeof(Task) || returnType == typeof(void))
-        {
-            return "void";
-        }
-
-        return FriendlyType(returnType);
-    }
-
-    private static string FriendlyType(Type type)
-    {
-        if (!type.IsGenericType)
-        {
-            return type.Name;
-        }
-
-        var outer = type.Name[..type.Name.IndexOf('`')];
-        var args = string.Join(", ", type.GetGenericArguments().Select(FriendlyType));
-        return $"{outer}<{args}>";
-    }
-
-    private static string EscapeCsvField(string s) => s.Replace("\"", "\"\"");
 }

@@ -88,8 +88,7 @@ public class ServerHttp
                         .CreateLogger("RoslynSentinel.HttpHost.Advanced");
 
         app.Services.WarmupAndAutoLoadAdvanced(solutionPath, logger, baseRepoDirectory);
-        ConsoleMode.WriteStartupDump(app.Services, AppDomain.CurrentDomain.BaseDirectory, modeArg);
-        ConsoleMode.WriteMethodInventory(AppDomain.CurrentDomain.BaseDirectory, modeArg);
+        ConsoleMode.WriteStartupDump(app.Services, modeArg);
 
         if (logger.IsEnabled(LogLevel.Information))
         {

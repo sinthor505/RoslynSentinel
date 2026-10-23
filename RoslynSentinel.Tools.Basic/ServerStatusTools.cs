@@ -128,7 +128,10 @@ public class ServerStatusTools
             AllDeclaredTools: allDeclaredTools,
             WorkspaceStale: reloadFailure is not null,
             ReloadFailure: reloadFailure,
-            LastLoadFailure: _workspaceManager.LoadState.LastLoadFailure
+            LastLoadFailure: _workspaceManager.LoadState.LastLoadFailure,
+            // Where this process writes logs/crash.log/tool_list*.json (--working-dir, else the binary directory).
+            WorkingDir: ServerInstancePaths.Current.WorkingDir,
+            WorkingDirExplicit: ServerInstancePaths.Current.IsExplicit
         )
         };
     }
@@ -222,7 +225,9 @@ public sealed record McpServerStatusResult(
     IReadOnlyCollection<McpServerStatusDeclaredTool> AllDeclaredTools,
     bool WorkspaceStale,
     WorkspaceReloadFailure? ReloadFailure,
-    string? LastLoadFailure);
+    string? LastLoadFailure,
+    string? WorkingDir = null,
+    bool WorkingDirExplicit = false);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this
