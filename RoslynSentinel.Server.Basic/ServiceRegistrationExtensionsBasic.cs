@@ -76,6 +76,7 @@ public static class RoslynSentinelServiceExtensionsBasic
         services.AddSingleton<SymbolNavigationEngine>();
         services.AddSingleton<SyntaxUpgradeEngine>();
         services.AddSingleton<TestRunEngine>();
+        services.AddSingleton<TestInstanceLauncher>();
         services.AddSingleton<ThreadSafetyEngine>();
         services.AddSingleton<ValidationEngine>();
         services.TryAddSingleton(new StoppedByScriptMarker(WasFound: false, Details: null));

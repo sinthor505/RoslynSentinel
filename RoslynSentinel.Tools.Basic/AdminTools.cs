@@ -1,5 +1,7 @@
 using System.ComponentModel;
 
+using RoslynSentinel.Engines.Basic;
+
 namespace RoslynSentinel.Tools.Basic;
 
 // Operator-adjacent tools: ExternalFileDriftTool (status/list/acknowledge external-change state and
@@ -10,12 +12,25 @@ public class AdminTools
 {
     private readonly IWorkspaceManager _workspaceManager;
     private readonly RespawnPolicy _respawn;
+    private readonly TestInstanceLauncher _testInstances;
+    private readonly ActiveToolSurface? _activeToolSurface;
+
+    // Property names are the wire contract: camelCase, nulls omitted.
+    private static readonly System.Text.Json.JsonSerializerOptions TestInstanceJson = new(SharedJsonOptions.Default)
+    {
+        PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+    };
 
     /// <param name="hostOptions">Supplies the effective --respawn value for the StopServer text; null (tests) means Auto.</param>
-    public AdminTools(IWorkspaceManager workspaceManager, SentinelHostOptions? hostOptions = null)
+    /// <param name="testInstances">Owns the test-instance registry; null (tests) builds a private one.</param>
+    /// <param name="activeToolSurface">Supplies this server's --mode string, the default mode of a launched test instance; null means claude-lean.</param>
+    public AdminTools(IWorkspaceManager workspaceManager, SentinelHostOptions? hostOptions = null, TestInstanceLauncher? testInstances = null, ActiveToolSurface? activeToolSurface = null)
     {
         _workspaceManager = workspaceManager;
         _respawn = hostOptions?.Respawn ?? RespawnPolicy.Auto;
+        _testInstances = testInstances ?? new TestInstanceLauncher(workspaceManager, new BuildEngine(workspaceManager));
+        _activeToolSurface = activeToolSurface;
     }
 
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
@@ -147,7 +162,10 @@ public class AdminTools
     public enum McpServerControlOperation
     {
         GetServerStatus,
-        StopServer
+        StopServer,
+        LaunchTestInstance,
+        StopTestInstance,
+        ListTestInstances
     }
 
     /// <summary>
@@ -160,17 +178,91 @@ public class AdminTools
         ConfirmServerStop
     }
 
+    private static string TestInstanceError(ResultError error) =>
+    System.Text.Json.JsonSerializer.Serialize(new
+    {
+        isError = true,
+        errorData = error
+    }, TestInstanceJson);
+
+    /// <summary>
+    /// LaunchTestInstance / StopTestInstance / ListTestInstances. Returns JSON text: the launch payload, a
+    /// stopped/instances list, or <c>{ isError, errorData }</c> carrying a <see cref="ResultError"/>. Public so tests
+    /// can drive it without a tool-call round trip.
+    /// </summary>
+    public async Task<string> ControlTestInstancesAsync(
+        McpServerControlOperation operation, TestInstanceBuildMode? build, string? mode, string? includeTools, int? pid, CancellationToken cancellationToken)
+    {
+        try
+        {
+            switch (operation)
+            {
+                case McpServerControlOperation.LaunchTestInstance:
+                    var effectiveMode = !string.IsNullOrWhiteSpace(mode)
+                        ? mode.Trim()
+                        : string.IsNullOrWhiteSpace(_activeToolSurface?.ModeArg) ? "claude-lean" : _activeToolSurface!.ModeArg;
+                    var launched = await _testInstances.LaunchAsync(build ?? TestInstanceBuildMode.Auto, effectiveMode, includeTools, cancellationToken);
+                    return System.Text.Json.JsonSerializer.Serialize(launched, TestInstanceJson);
+
+                case McpServerControlOperation.StopTestInstance:
+                    var stopped = _testInstances.Stop(pid);
+                    return System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        stopped,
+                        note = stopped.Count == 0 ? "No test instances were running." : $"Stopped {stopped.Count} test instance(s).",
+                    }, TestInstanceJson);
+
+                case McpServerControlOperation.ListTestInstances:
+                    var instances = _testInstances.List();
+                    return System.Text.Json.JsonSerializer.Serialize(new
+                    {
+                        instances,
+                        note = instances.Count == 0 ? "No test instances are running. Start one with McpServerControl(operation: LaunchTestInstance)." : null,
+                    }, TestInstanceJson);
+
+                default:
+                    return $"Unknown operation '{operation}'.";
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ToolException ex)
+        {
+            return TestInstanceError(ToolErrorMapper.ToResultError(ex, _workspaceManager, $"McpServerControl {operation}"));
+        }
+        catch (Exception ex)
+        {
+            // Never leak the raw exception text or a stack trace: name the type only.
+            return TestInstanceError(new ResultError(ToolErrorCode.Exception, $"McpServerControl {operation} failed unexpectedly ({ex.GetType().Name}). Check the server log for details."));
+        }
+    }
+
     [McpServerTool(Name = "McpServerControl")]
     [Produces(DataTag.ResultOnly)]
-    [Description("Operator-only control of this server process. operation=GetServerStatus reports the running process. operation=StopServer exits the process and is refused unless confirmServerStop=ConfirmServerStop is also passed.")]
-    public string McpServerControlTool(
+    [Description("Operator control. StopServer needs confirmServerStop. LaunchTestInstance starts an HTTP copy of the working tree, returns url and request snippets (build Auto rebuilds only if sources changed). StopTestInstance stops pid or all. ListTestInstances lists.")]
+    public async Task<string> McpServerControlTool(
      [Description(ToolParams.Reason)] ToolCallReason reason,
      McpServerControlOperation operation,
-     [Description("Required with operation=StopServer; only value: ConfirmServerStop.")]
      McpServerStopConfirmation? confirmServerStop = null,
+     TestInstanceBuildMode? build = null,
+     string? mode = null,
+     string? includeTools = null,
+     int? pid = null,
      CancellationToken cancellationToken = default)
     {
-        return ControlServer(operation, confirmServerStop, ScheduleProcessExit, _workspaceManager.SolutionPath, _respawn, cancellationToken);
+        if (operation is McpServerControlOperation.LaunchTestInstance or McpServerControlOperation.StopTestInstance or McpServerControlOperation.ListTestInstances)
+        {
+            return await ControlTestInstancesAsync(operation, build, mode, includeTools, pid, cancellationToken);
+        }
+
+        // Children are killed before the delayed exit so a stopped server never leaves test instances behind.
+        return ControlServer(operation, confirmServerStop, () =>
+        {
+            _testInstances.KillAll();
+            ScheduleProcessExit();
+        }, _workspaceManager.SolutionPath, _respawn, cancellationToken);
     }
 
     /// <summary>
@@ -215,7 +307,7 @@ public class AdminTools
                 + $"The fresh instance starts with no solution loaded: {loadHint} before any other tool.";
         }
 
-        return $"Unknown operation '{operation}'. Valid operations: GetServerStatus, StopServer.";
+        return $"Unknown operation '{operation}'. Valid operations: GetServerStatus, StopServer, LaunchTestInstance, StopTestInstance, ListTestInstances.";
     }
 
     private static void ScheduleProcessExit()

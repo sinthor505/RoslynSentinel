@@ -157,9 +157,9 @@ public class AdminToolsTests
     // exit action, so these tests never call Environment.Exit on the test host.
 
     [Test]
-    public void McpServerControl_GetServerStatus_ReportsRunning()
+    public async Task McpServerControl_GetServerStatus_ReportsRunning()
     {
-        var result = _tools.McpServerControlTool(reason: "test message", operation: AdminTools.McpServerControlOperation.GetServerStatus);
+        var result = await _tools.McpServerControlTool(reason: "test message", operation: AdminTools.McpServerControlOperation.GetServerStatus);
         Assert.That(result, Does.StartWith("Running."));
     }
 
@@ -229,13 +229,13 @@ public class AdminToolsTests
     }
 
     [Test]
-    public void McpServerControlTool_WithoutConfirmation_RefusesRegardlessOfRespawn()
+    public async Task McpServerControlTool_WithoutConfirmation_RefusesRegardlessOfRespawn()
     {
         // The instance path reads the policy from SentinelHostOptions; an unconfirmed stop must still refuse
         // (and so never schedule the real process exit) under respawn none.
         var tools = new AdminTools(_workspaceManager, new SentinelHostOptions { Respawn = RespawnPolicy.None });
 
-        var result = tools.McpServerControlTool(
+        var result = await tools.McpServerControlTool(
             reason: "test message", operation: AdminTools.McpServerControlOperation.StopServer);
 
         Assert.That(result, Does.StartWith("Refused"));

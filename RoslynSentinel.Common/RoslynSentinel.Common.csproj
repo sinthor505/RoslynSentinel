@@ -24,6 +24,8 @@
 	<ItemGroup>
 		<InternalsVisibleTo Include="RoslynSentinel.Tests" />
 			<InternalsVisibleTo Include="RoslynSentinel.Tests.Tools.Basic" />
+			<!-- TestInstanceLauncher runs git (GitProcess) for the build-source stamp. -->
+			<InternalsVisibleTo Include="RoslynSentinel.Engines.Basic" />
 	</ItemGroup>
 
 </Project>

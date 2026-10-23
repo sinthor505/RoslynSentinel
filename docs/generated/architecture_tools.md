@@ -64,7 +64,7 @@
 | Class | Tool name | Modes | Breaker | Summary |
 |-------|-----------|-------|---------|---------|
 | AdminTools | ExternalFileDrift | Admin, Claude, claude-lean | Allowed | Inspect and clear external file drift: a tracked file changed on disk outside this server. |
-| AdminTools | McpServerControl | Admin, Claude, claude-lean | - | Operator-only control of this server process. operation=GetServerStatus reports the running process.... |
+| AdminTools | McpServerControl | Admin, Claude, claude-lean | - | Operator control. |
 | DeclarationTools | Declaration | claude-lean (on demand) | - | Changes a declaration's modifier, accessibility, attribute or base type. |
 | DocumentationTools | ProjectDoc | Claude, claude-lean (on demand), Workspace | - | Reads, writes, appends, or lists project doc files under docs/. |
 | GitRemoteTools | GitRemote | Claude, claude-lean (on demand), Workspace | - | Git branch, checkout, push, fetch, pull, tag, stash and worktree. status, log, diff, commit, stage and the rest are... |
