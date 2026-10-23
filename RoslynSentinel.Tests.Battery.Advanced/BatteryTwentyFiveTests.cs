@@ -153,9 +153,9 @@ public class Guard {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Guard.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _antiPatternEngine.DetectUnreachableCodeAsync("Guard.cs", "Method");
-        // TODO engine reports 'Unreachable code detected' without naming the unreachable statement 'int x'
         Assert.That(result, Has.Count.EqualTo(1));
-        Assert.That(result, Has.Some.Contains("Unreachable code"));
+        Assert.That(result[0], Does.Contain("int x"));
+        Assert.That(result[0], Does.Contain("line 5"));
     }
 
     [Test]
@@ -298,13 +298,15 @@ public class AntiPatternEngineGapTests
         var source = @"
 using System.Threading.Tasks;
 public class Service {
-    public async Task DoWorkAsync() { await System.Threading.Tasks.Task.Delay(10); }
+    static Task Inner(System.Threading.CancellationToken ct = default) => Task.CompletedTask;
+    public async Task DoWorkAsync() { await Inner(); }
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.FindMissingCancellationTokensAsync(filePath: "Service.cs");
-        // TODO engine does not flag async method 'DoWorkAsync' without a CancellationToken (returns no findings)
-        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Has.Count.EqualTo(1));
+        Assert.That(result[0].MethodName, Is.EqualTo("DoWorkAsync"));
+        Assert.That(result[0].CalleesAcceptingToken, Does.Contain("Inner"));
     }
 
     [Test]
@@ -320,8 +322,10 @@ public class Service {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.AnalyzeExceptionHandlingAsync("Service.cs");
-        // TODO assert ExceptionHandlingFinding members for the empty catch (engine returns two findings)
         Assert.That(result, Has.Count.EqualTo(2));
+        Assert.That(result.Select(f => f.Pattern), Is.EquivalentTo(new[] { "CatchAll", "SwallowedException" }));
+        Assert.That(result.All(f => f.Severity == "High"), Is.True);
+        Assert.That(result.Single(f => f.Pattern == "SwallowedException").Description, Does.Contain("Empty catch"));
     }
 }
 

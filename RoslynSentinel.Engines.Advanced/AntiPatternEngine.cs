@@ -2754,7 +2754,7 @@ public class AntiPatternEngine
         }
 
         var diagnostics = semanticModel.GetDiagnostics(method.Span, cancellationToken);
-        return diagnostics.Where(d => d.Id == "CS0162").Select(d => $"Unreachable code: {d.GetMessage()}").ToList();
+        return diagnostics.Where(d => d.Id == "CS0162").Select(d => $"Unreachable code at line {d.Location.GetLineSpan().StartLinePosition.Line + 1}: {string.Join(" ", (root.FindNode(d.Location.SourceSpan).AncestorsAndSelf().OfType<StatementSyntax>().FirstOrDefault()?.ToString() ?? string.Empty).Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)).Trim()}").ToList();
     }
 
     private bool HasCycle(ProjectId current, HashSet<ProjectId> visited, List<ProjectId> path, Dictionary<ProjectId, Project> projects)
