@@ -615,4 +615,40 @@ public class AdvancedStructuralNormalizeCharacterizationTests
                 ""));
         });
     }
+
+    [Test]
+    public async Task ConvertAbstractClassToInterface_MissingFile_ThrowsNotFound()
+    {
+        SetSources(("Test.cs", "abstract class Animal { public abstract void Speak(); }"));
+        // Pins the typed throw (RequireDocument), not an empty result.
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ConvertAbstractClassToInterfaceAsync("nonexistent.cs", "Animal"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task InlineField_MissingFile_ThrowsNotFound()
+    {
+        SetSources(("Service.cs", "class Service { private int _config = 1; }"));
+        // Pins the typed throw (RequireDocument), not an empty result.
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.InlineFieldAsync("nonexistent.cs", "_config"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task IntroduceVariable_MissingFile_ThrowsNotFound()
+    {
+        SetSources(("C.cs", "class C { int M() => 6 * 7; }"));
+        // Pins the typed throw (RequireDocument), not an empty result.
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.IntroduceVariableAsync("nonexistent.cs", "6 * 7", "product"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task ConvertMethodToIndexer_MissingFile_ThrowsNotFound()
+    {
+        SetSources(("C.cs", "class C { int GetX() => 1; }"));
+        // Pins the typed throw (RequireDocument), not an empty result.
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ConvertMethodToIndexerAsync("nonexistent.cs", "GetX"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
 }

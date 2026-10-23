@@ -4197,22 +4197,19 @@ namespace MyApp
         }
 
         [Test]
-        public async Task ConvertExpressionBodyAsync_FileNotInWorkspace_ReturnsEmpty()
+        public async Task ConvertExpressionBodyAsync_FileNotInWorkspace_ThrowsNotFound()
         {
-            // ConvertExpressionBodyAsync returns "" when the file is not found in the workspace,
-            // which the tool layer converts to InvalidOperationException (verified by the
-            // passing ConvertExpressionBody_Tool test).
-            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
-            // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty string when file is not in the workspace");
+            // Pins the typed throw (RequireDocument), not an empty result.
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
 
         [Test]
-        public async Task ConvertExpressionBody_Tool_FileNotInWorkspace_ThrowsInvalidOperationException()
+        public async Task ConvertExpressionBody_Tool_FileNotInWorkspace_ThrowsNotFound()
         {
-            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody");
-            // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "Engine returns empty string when file is not in the workspace");
+            // Pins the typed throw (RequireDocument), not an empty result.
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("nonexistent.cs", "MyMethod", "ToBlockBody"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         }
     }
 }

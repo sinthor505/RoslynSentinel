@@ -434,12 +434,12 @@ class C {
 
     [Test]
     [Category("StructuralRefactoringEngine")] // sentinel:auto-category
-    public async Task RunMicroRefactoring_UnknownFile_ReturnsEmpty()
+    public async Task RunMicroRefactoring_UnknownFile_ThrowsNotFound()
     {
         SetSource("class C { void M() {} }");
-        var result = await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("NoFile.cs", "type-to-var", 1);
-        // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
-        Assert.That(result.UpdatedText, Is.Null);
+        // Pins the typed throw (RequireDocument), not an empty result.
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).RunMicroRefactoringAsync("NoFile.cs", "type-to-var", 1));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     // ══════════════════════════════════════════════════════════════
