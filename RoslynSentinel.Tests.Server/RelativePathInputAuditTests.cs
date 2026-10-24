@@ -226,9 +226,10 @@ public class RelativePathInputAuditTests
             ["symbolName"] = "AuditTarget",
         });
 
-        // AuditTarget has a usage, so the tool refuses with CannotEdit; reaching that refusal proves the path resolved.
-        Assert.That(text, Does.Contain("CannotEdit"),
-            $"DeleteUnusedSymbol did not reach the CannotEdit refusal: {text}");
+        // AuditTarget has a usage, so the tool refuses with errorCode TargetIneligible; reaching that refusal proves the path resolved.
+        Assert.That(result.IsError, Is.True, $"DeleteUnusedSymbol should refuse a symbol with usages: {text}");
+        Assert.That(text, Does.Contain("\"errorCode\":\"TargetIneligible\""),
+            $"DeleteUnusedSymbol did not reach the TargetIneligible refusal: {text}");
     }
 
     // Row 7: GetDiagnosticsTool with relative file path (scope=file)

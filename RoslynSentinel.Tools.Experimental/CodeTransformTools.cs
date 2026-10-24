@@ -85,15 +85,6 @@ public class CodeTransformTools
                 case "add_braces":
                     {
                         var r = await _syntaxUpgradeEngine.AddBracesAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No brace-less control flow statements found in '{resolvedFilePath}'. File already uses braces consistently."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
@@ -104,15 +95,6 @@ public class CodeTransformTools
                 case "cleanup_implicit_spans":
                     {
                         var r = await _syntaxUpgradeEngine.CleanupImplicitSpansAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No implicit Span/Memory conversion patterns found in '{resolvedFilePath}'."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
@@ -123,15 +105,6 @@ public class CodeTransformTools
                 case "convert_to_null_coalescing":
                     {
                         var r = await _logicOptimizationEngine.ConvertToNullCoalescingAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No null-check patterns eligible for ??/??= conversion found in '{resolvedFilePath}'."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
@@ -142,7 +115,7 @@ public class CodeTransformTools
                 case "convert_to_pattern":
                     {
                         var r = await _modernizationEngine.ConvertToPatternAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (r.Outcome != EditOutcome.Modified)
                         {
                             return new SentinelCallToolResult<object>()
                             {
@@ -161,7 +134,7 @@ public class CodeTransformTools
                 case "convert_to_switch":
                     {
                         var r = await _logicOptimizationEngine.ConvertToSwitchAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (r.Outcome != EditOutcome.Modified)
                         {
                             return new SentinelCallToolResult<object>()
                             {
@@ -180,7 +153,7 @@ public class CodeTransformTools
                 case "fix_mismatched_namespaces":
                     {
                         var r = await _solutionStructureEngine.FixMismatchedNamespacesAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (r.Outcome != EditOutcome.Modified)
                         {
                             return new SentinelCallToolResult<object>()
                             {
@@ -201,15 +174,6 @@ public class CodeTransformTools
                         try
                         {
                             var r = await _codeHealingEngine.FixThreadSleepAsync(resolvedFilePath, cancellationToken);
-                            if (string.IsNullOrEmpty(r.UpdatedText))
-                            {
-                                return new SentinelCallToolResult<object>()
-                                {
-                                    IsError = false,
-                                    SuccessData = $"No Thread.Sleep calls eligible for async conversion found in '{resolvedFilePath}'."
-                                };
-                            }
-
                             return new SentinelCallToolResult<object>()
                             {
                                 IsError = false,
@@ -244,15 +208,6 @@ public class CodeTransformTools
                 case "generate_xml_documentation_stubs":
                     {
                         var r = await _documentationEngine.GenerateXmlDocumentationStubsAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No undocumented public members found in '{resolvedFilePath}'. File already has XML doc stubs."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
@@ -263,7 +218,7 @@ public class CodeTransformTools
                 case "optimize_task_wait":
                     {
                         var result3 = await _advancedRefactoringEngine.OptimizeTaskWaitAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result3.UpdatedText))
+                        if (result3.Outcome != EditOutcome.Modified)
                         {
                             return new SentinelCallToolResult<object>()
                             {
@@ -289,7 +244,7 @@ public class CodeTransformTools
                 case "add_configure_await_false":
                     {
                         var result5 = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync(resolvedFilePath, libraryMode, cancellationToken: cancellationToken);
-                        if (string.IsNullOrEmpty(result5.UpdatedText))
+                        if (result5.Outcome != EditOutcome.Modified)
                         {
                             return new SentinelCallToolResult<object>()
                             {
@@ -301,14 +256,14 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(result5.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(result5.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
                 case "remove_configure_await_false":
                     {
                         var result6 = await _asyncOptimizationEngine.RemoveConfigureAwaitFalseAsync(resolvedFilePath, cancellationToken: cancellationToken);
-                        if (string.IsNullOrEmpty(result6.UpdatedText))
+                        if (result6.Outcome != EditOutcome.Modified)
                         {
                             return new SentinelCallToolResult<object>()
                             {
@@ -320,22 +275,13 @@ public class CodeTransformTools
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(result6.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(result6.UpdatedText!, false, false, resolvedFilePath)
                         };
                     }
 
                 case "simplify_boolean_expressions":
                     {
                         var result7 = await _logicOptimizationEngine.SimplifyBooleanExpressionsAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result7.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No boolean expressions eligible for simplification found in '{resolvedFilePath}'."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
@@ -346,7 +292,7 @@ public class CodeTransformTools
                 case "simplify_member_access":
                     {
                         var result8 = await _ideStyleEngine.SimplifyMemberAccessAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result8.UpdatedText))
+                        if (result8.Outcome != EditOutcome.Modified)
                         {
                             return new SentinelCallToolResult<object>()
                             {
@@ -365,15 +311,6 @@ public class CodeTransformTools
                 case "simplify_verbosity":
                     {
                         var result9 = await _codeStyleEngine.SimplifyVerbosityAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result9.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No verbose patterns found to simplify in '{resolvedFilePath}'."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
@@ -403,15 +340,6 @@ public class CodeTransformTools
                 case "upgrade_pattern_matching":
                     {
                         var result10 = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result10.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No type-check/cast patterns eligible for modern pattern matching found in '{resolvedFilePath}'."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
@@ -422,15 +350,6 @@ public class CodeTransformTools
                 case "upgrade_thread_safety":
                     {
                         var result11 = await _codeStyleEngine.FixDangerousLockAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result11.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No dangerous lock patterns found in '{resolvedFilePath}'."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
@@ -441,7 +360,7 @@ public class CodeTransformTools
                 case "upgrade_to_file_scoped_namespace":
                     {
                         var result12 = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result12.UpdatedText))
+                        if (result12.Outcome != EditOutcome.Modified)
                         {
                             return new SentinelCallToolResult<object>()
                             {
@@ -460,15 +379,6 @@ public class CodeTransformTools
                 case "upgrade_to_modern_guards":
                     {
                         var result13 = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result13.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No legacy null/argument guard patterns found in '{resolvedFilePath}'. File already uses modern guards."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
@@ -479,15 +389,6 @@ public class CodeTransformTools
                 case "use_field_backed_properties":
                     {
                         var result14 = await _syntaxUpgradeEngine.UseFieldBackedPropertiesAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result14.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No auto-properties eligible for field-backed conversion found in '{resolvedFilePath}'."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
@@ -498,15 +399,6 @@ public class CodeTransformTools
                 case "use_index_from_end":
                     {
                         var result15 = await _codeStyleEngine.UseIndexFromEndAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result15.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No array/list indexing patterns eligible for index-from-end (^n) syntax found in '{resolvedFilePath}'."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,
@@ -517,15 +409,6 @@ public class CodeTransformTools
                 case "use_time_provider":
                     {
                         var result16 = await _codeStyleEngine.UseTimeProviderAsync(resolvedFilePath, cancellationToken);
-                        if (string.IsNullOrEmpty(result16.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                IsError = false,
-                                SuccessData = $"No DateTime.Now/UtcNow calls found to replace with ITimeProvider in '{resolvedFilePath}'."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,

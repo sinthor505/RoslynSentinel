@@ -166,7 +166,7 @@ public class RefactoringToolHelpersTests
     [Test]
     public void GuardEngineResult_NothingToDo_ErrorHandling_PlainFileInUpdatedTextIsNotQuotedAsAReason()
     {
-        // ConvertStaticToExtension: TargetNotFound with the unchanged file as UpdatedText.
+        // ConvertStaticToExtension: NoCandidatesFound with the unchanged file as UpdatedText.
         var result = Guard(Edit(EditOutcome.NoCandidatesFound, "// Copyright header\nclass Secret { }"), NoOpHandling.Error(ErrorLead));
 
         Assert.That(result!.IsError, Is.True);
