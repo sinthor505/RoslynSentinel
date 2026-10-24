@@ -1,6 +1,6 @@
 # Plan: Search(mode: text) scans every project, filters the view, and hints on zero hits
 
-**Status:** IN PROGRESS 2026-10-24. Approved in session; slice 1 dispatched, slices 2-3 pending.
+**Status:** IMPLEMENTED 2026-10-24. Steps 1-3 built and verified live in 7a65efa0 (original failing call now returns matches; glob-miss and dotted-prefix hints and the de-duplicated error confirmed on a restarted server).
 
 ## Problem
 A `Search(mode: text, fileGlob: 'RoslynSentinel.Tests*/**/*.cs')` call returned `isError: true`,
