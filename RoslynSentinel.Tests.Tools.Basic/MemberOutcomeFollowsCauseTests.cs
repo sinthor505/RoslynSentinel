@@ -90,7 +90,7 @@ public class MemberOutcomeFollowsCauseTests
     }
 
     [Test]
-    public async Task Member_Replace_EnumMemberInvalidValue_ReturnsTargetIneligibleAndWritesNothingAsync()
+    public async Task Member_Replace_EnumMemberInvalidValue_ReturnsInvalidArgumentAndWritesNothingAsync()
     {
         using var workspace = InMemoryWorkspace.Create((FixtureRelativePath, FixtureSource));
         var tools = new RefactoringStructuralTools(BuildStructuralImpl(workspace.Manager));
@@ -106,7 +106,7 @@ public class MemberOutcomeFollowsCauseTests
         Assert.Multiple(() =>
         {
             Assert.That(result.IsError, Is.True, "a CannotEdit engine outcome must be an error, not a success");
-            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+            Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
         });
         Assert.That(workspace.ReadText(FixtureRelativePath), Is.EqualTo(before), "a failed replace must not write");
     }

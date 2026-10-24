@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Basic;
 
@@ -325,17 +326,18 @@ public class Caller
     }
 
     [Test]
-    public async Task AddConstructorParameter_CallSiteFixups_ExactKeyMatchingNoSite_IsInvalidArgumentListingRealKeys()
+    public async Task AddConstructorParameter_CallSiteFixups_ExactKeyMatchingNoSite_ThrowsInvalidArgumentListingRealKeys()
     {
         SetFiles(("Svc.cs", SvcSource), ("Caller.cs", SimpleCaller));
         var realLine = LineOf(SimpleCaller, "new Svc(1)");
 
-        var result = await CascadeAsync("Svc", new() { [$"Caller.cs:{realLine + 40}"] = "cfg", ["*"] = "cfg" });
+        var ex = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () =>
+        {
+            await CascadeAsync("Svc", new() { [$"Caller.cs:{realLine + 40}"] = "cfg", ["*"] = "cfg" });
+        });
 
-        Assert.That(result.InvalidArgumentMessage, Is.Not.Null);
-        Assert.That(result.InvalidArgumentMessage, Does.Contain($"Caller.cs:{realLine + 40}"));
-        Assert.That(result.InvalidArgumentMessage, Does.Contain($"Caller.cs:{realLine}"), "The error must name the real site keys so the caller can recover.");
-        Assert.That(result.Changes, Is.Empty);
+        Assert.That(ex.Message, Does.Contain($"Caller.cs:{realLine + 40}"));
+        Assert.That(ex.Message, Does.Contain($"Caller.cs:{realLine}"), "The error must name the real site keys so the caller can recover.");
     }
 
     [Test]

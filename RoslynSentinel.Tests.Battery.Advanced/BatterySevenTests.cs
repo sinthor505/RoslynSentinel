@@ -347,7 +347,7 @@ public class Counter
     }
 
     [Test]
-    public async Task ConvertMethodToProperty_MethodWithParameters_ReturnsUnchanged()
+    public async Task ConvertMethodToProperty_MethodWithParameters_ThrowsTargetIneligible()
     {
         const string source = @"
 public class Calculator
@@ -355,10 +355,11 @@ public class Calculator
     public int Add(int a, int b) { return a + b; }
 }";
         SetSource(source);
-        var result = await _memberRefactoringEngine.ConvertMethodToPropertyAsync("Test.cs", "Add");
-        // Methods with parameters cannot be converted -> source returned unchanged
-        Assert.That(result.UpdatedText, Does.Contain("Add(int a, int b)"), "Parameterized method should remain unchanged");
-        Assert.That(result.UpdatedText, Does.Not.Contain("Add =>"), "Should not produce arrow property for parameterized method");
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _memberRefactoringEngine.ConvertMethodToPropertyAsync("Test.cs", "Add");
+        });
+        Assert.That(ex.Message, Does.Contain("methods with parameters cannot become properties"));
     }
 
     [Test]

@@ -150,7 +150,7 @@ public class Animal
             "this is the exact defect from docs/current/blockers/blocking_error_member_replace_strips_blank_line_between_adjacent_members.md.");
     }
     [Test]
-    public async Task AddMember_ToEnum_RejectsInsteadOfSilentNoOp()
+    public async Task AddMember_ToEnum_ThrowsTargetIneligible()
     {
         SetSource(@"
 public enum ToolScope
@@ -159,13 +159,13 @@ public enum ToolScope
 }
 ", "ToolScope.cs");
 
-        var result = await _memberRefactoringEngine.AddMemberAsync("ToolScope.cs", "ToolScope", "reproScratchMarker");
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _memberRefactoringEngine.AddMemberAsync("ToolScope.cs", "ToolScope", "reproScratchMarker");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit),
-            "Enum containers must be rejected loudly, not silently return the container unchanged " +
-            "while reporting Modified (see docs/current/issue_member_add_silent_persistence.md).");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "No text should be produced for a rejected edit.");
-        Assert.That(result.Message, Does.Contain("ModifyEnumAsync"), "ErrorData should point at the enum-shaped tool.");
+        Assert.That(ex!.Message, Does.Contain("Cannot add a member to enum"), "Enum containers must be rejected loudly, not silently returned unchanged.");
+        Assert.That(ex.Message, Does.Contain("ModifyEnum"), "The exception should point at the enum-shaped tool.");
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1049,14 +1049,17 @@ public class C
     }
 
     [Test]
-    public async Task AddEnumMember_DuplicateName_ReturnsErrorWithoutText()
+    public async Task AddEnumMember_DuplicateName_ThrowsTargetIneligible()
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");
 
-        var result = await _memberRefactoringEngine.AddEnumMemberAsync("ToolScope.cs", "ToolScope", "project");
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _memberRefactoringEngine.AddEnumMemberAsync("ToolScope.cs", "ToolScope", "project");
+        });
 
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
-        Assert.That(result.Message, Does.Contain("project"));
+        Assert.That(ex!.Message, Does.Contain("already has a member named"));
+        Assert.That(ex.Message, Does.Contain("project"));
     }
 
     [Test]
@@ -1072,18 +1075,20 @@ public class C
     }
 
     [Test]
-    public async Task RemoveEnumMember_NotFound_ReturnsErrorWithoutText()
+    public async Task RemoveEnumMember_NotFound_ThrowsNotFound()
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");
 
-        var result = await _memberRefactoringEngine.RemoveEnumMemberAsync("ToolScope.cs", "ToolScope", "nonexistent");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveEnumMemberAsync("ToolScope.cs", "ToolScope", "nonexistent");
+        });
 
-        // TODO throw-migration: assert the typed exception once MemberRefactoringEngine throws
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        Assert.That(ex!.Message, Does.Contain("not found in enum"));
     }
 
     [Test]
-    public async Task RemoveEnumMember_LastMember_RefusesWithCannotRemove()
+    public async Task RemoveEnumMember_LastMember_ThrowsTargetIneligible()
     {
         SetSource(@"
 public enum Singleton
@@ -1092,10 +1097,12 @@ public enum Singleton
 }
 ", "Singleton.cs");
 
-        var result = await _memberRefactoringEngine.RemoveEnumMemberAsync("Singleton.cs", "Singleton", "only");
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveEnumMemberAsync("Singleton.cs", "Singleton", "only");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotRemove));
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        Assert.That(ex!.Message, Does.Contain("no members"));
     }
 
     [Test]
@@ -1112,14 +1119,16 @@ public enum Singleton
     }
 
     [Test]
-    public async Task ReplaceEnumMember_NotFound_ReturnsErrorWithoutText()
+    public async Task ReplaceEnumMember_NotFound_ThrowsNotFound()
     {
         SetSource(ToolScopeEnumSource, "ToolScope.cs");
 
-        var result = await _memberRefactoringEngine.ReplaceEnumMemberAsync("ToolScope.cs", "ToolScope", "nonexistent", "workspace");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ReplaceEnumMemberAsync("ToolScope.cs", "ToolScope", "nonexistent", "workspace");
+        });
 
-        // TODO throw-migration: assert the typed exception once MemberRefactoringEngine throws
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        Assert.That(ex!.Message, Does.Contain("not found in enum"));
     }
 
     [Test]
@@ -1212,7 +1221,7 @@ public class Widget { }
     }
 
     [Test]
-    public async Task AddTopLevelType_MultipleNamespaces_RequiresNamespaceNameDisambiguation()
+    public async Task AddTopLevelType_MultipleNamespaces_ThrowsNotFound()
     {
         SetSource(@"
 namespace MyApp.First
@@ -1226,11 +1235,15 @@ namespace MyApp.Second
 }
 ", "Widget.cs");
 
-        var result = await _memberRefactoringEngine.AddTopLevelTypeAsync("Widget.cs", "public class Gadget { }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.AddTopLevelTypeAsync("Widget.cs", "public class Gadget { }");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-        Assert.That(result.Message, Does.Contain("MyApp.First"));
-        Assert.That(result.Message, Does.Contain("MyApp.Second"));
+        Assert.That(ex!.Message, Does.Contain("2 namespaces"));
+        Assert.That(ex.Message, Does.Contain("namespaceName"));
+        Assert.That(ex.Message, Does.Contain("MyApp.First"));
+        Assert.That(ex.Message, Does.Contain("MyApp.Second"));
     }
 
     [Test]
@@ -1255,7 +1268,7 @@ namespace MyApp.Second
     }
 
     [Test]
-    public async Task AddTopLevelType_NotATypeDeclaration_ReturnsSourceInvalid()
+    public async Task AddTopLevelType_NotATypeDeclaration_ThrowsInvalidArgument()
     {
         SetSource(@"
 namespace MyApp;
@@ -1263,10 +1276,12 @@ namespace MyApp;
 public class Widget { }
 ", "Widget.cs");
 
-        var result = await _memberRefactoringEngine.AddTopLevelTypeAsync("Widget.cs", "public string Foo() => \"bar\";");
+        var ex = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () =>
+        {
+            await _memberRefactoringEngine.AddTopLevelTypeAsync("Widget.cs", "public string Foo() => \"bar\";");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.SourceInvalid));
-        Assert.That(result.Message, Does.Contain("did not parse as a type declaration"));
+        Assert.That(ex!.Message, Does.Contain("did not parse as a type declaration"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1329,16 +1344,18 @@ public enum Color
     }
 
     [Test]
-    public async Task ModifyEnum_GracefulFallback_WhenEnumNotFound()
+    public async Task ModifyEnum_GracefulFallback_ThrowsNotFound()
     {
         SetSource(@"
 public class Foo { }
 ", "Foo.cs");
 
-        var result = await _memberRefactoringEngine.ModifyEnumAsync("Foo.cs", "NonExistentEnum", "SomeValue");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ModifyEnumAsync("Foo.cs", "NonExistentEnum", "SomeValue");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty, "No text should be produced when the target enum doesn't exist.");
+        Assert.That(ex!.Message, Does.Contain("enum 'NonExistentEnum' not found"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -1403,7 +1420,7 @@ public class Widget
     }
 
     [Test]
-    public async Task InsertMemberAfter_OnEnum_RejectsInsteadOfSilentNoOp()
+    public async Task InsertMemberAfter_OnEnum_ThrowsTargetIneligible()
     {
         SetSource(@"
 public enum ToolScope
@@ -1412,12 +1429,14 @@ public enum ToolScope
 }
 ", "ToolScope.cs");
 
-        var result = await _memberRefactoringEngine.InsertMemberAfterAsync("ToolScope.cs", "ToolScope", "file", "reproScratchMarker");
+        // Enum containers fall back to AddMemberAsync, which throws rather than silently no-op.
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _memberRefactoringEngine.InsertMemberAfterAsync("ToolScope.cs", "ToolScope", "file", "reproScratchMarker");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit),
-            "Enum containers aren't TypeDeclarationSyntax, so this falls back to AddMemberAsync, which " +
-            "must reject rather than silently no-op (see docs/current/issue_member_add_silent_persistence.md).");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        Assert.That(ex!.Message, Does.Contain("Cannot add a member to enum"));
+        Assert.That(ex.Message, Does.Contain("ModifyEnum"));
     }
     [Test]
     public async Task InsertMemberAfter_PreservesBlankLineAndSiblingMembers()
@@ -1525,7 +1544,7 @@ public class Logger
     }
 
     [Test]
-    public async Task InsertMemberBefore_OnEnum_RejectsInsteadOfSilentNoOp()
+    public async Task InsertMemberBefore_OnEnum_ThrowsTargetIneligible()
     {
         SetSource(@"
 public enum ToolScope
@@ -1534,12 +1553,14 @@ public enum ToolScope
 }
 ", "ToolScope.cs");
 
-        var result = await _memberRefactoringEngine.InsertMemberBeforeAsync("ToolScope.cs", "ToolScope", "solution", "reproScratchMarker");
+        // Enum containers fall back to AddMemberAsync, which throws rather than silently no-op.
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _memberRefactoringEngine.InsertMemberBeforeAsync("ToolScope.cs", "ToolScope", "solution", "reproScratchMarker");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit),
-            "Enum containers aren't TypeDeclarationSyntax, so this falls back to AddMemberAsync, which " +
-            "must reject rather than silently no-op (see docs/current/issue_member_add_silent_persistence.md).");
-        Assert.That(result.UpdatedText, Is.Null.Or.Empty);
+        Assert.That(ex!.Message, Does.Contain("Cannot add a member to enum"));
+        Assert.That(ex.Message, Does.Contain("ModifyEnum"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -2684,14 +2705,17 @@ public class C
     }
 
     [Test]
-    public async Task ReplaceMember_WholeClassOverSameNamedConstructor_IsRefused()
+    public async Task ReplaceMember_WholeClassOverSameNamedConstructor_ThrowsInvalidArgument()
     {
         SetSource("namespace N { public class Foo { public Foo() { } } }", "C.cs");
 
-        var result = await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public class Foo { }", containerName: "N");
+        var ex = await Assert.ThrowsAsync<ToolInvalidArgumentException>(async () =>
+        {
+            await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public class Foo { }", containerName: "N");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.SourceInvalid));
-        Assert.That(result.Message, Does.Contain("ReplaceSnippet"));
+        Assert.That(ex!.Message, Does.Contain("declares a type"));
+        Assert.That(ex.Message, Does.Contain("ReplaceSnippet"));
     }
 
     [Test]
@@ -2748,31 +2772,33 @@ public class C
     }
 
     [Test]
-    public async Task AddMember_UnknownContainer_ListsTheTypesTheFileActuallyDeclaresAsync()
+    public async Task AddMember_UnknownContainer_ThrowsNotFoundListingDeclaredTypes()
     {
         // The old message was the literal "// Container not found." -> no names, and prefixed as if
         // it were a line of code. Listing what's available is what lets the caller correct itself
         // in one turn instead of guessing, and immediately reveals a wrong-file mistake.
-        var result = await _memberRefactoringEngine.AddMemberAsync(
-            _workspaceManager.ResolveFromWire("Wrappers.cs"),
-            "NoSuchType",
-            "public int Added { get; set; }");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.AddMemberAsync(
+                _workspaceManager.ResolveFromWire("Wrappers.cs"),
+                "NoSuchType",
+                "public int Added { get; set; }");
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
         Assert.Multiple(() =>
         {
-            Assert.That(result.Message, Does.Contain("NoSuchType"), "must name what was asked for");
-            Assert.That(result.Message, Does.Contain("EngineResultWrapper"));
-            Assert.That(result.Message, Does.Contain("PairWrapper"));
-            Assert.That(result.Message, Does.Contain("PlainType"));
-            Assert.That(result.Message, Does.Not.StartWith("//"),
+            Assert.That(ex!.Message, Does.Contain("No type named 'NoSuchType'"), "must name what was asked for");
+            Assert.That(ex.Message, Does.Contain("EngineResultWrapper"));
+            Assert.That(ex.Message, Does.Contain("PairWrapper"));
+            Assert.That(ex.Message, Does.Contain("PlainType"));
+            Assert.That(ex.Message, Does.Not.StartWith("//"),
                 "this is an error message, not a line of code");
         });
     }
 
     // ── Bug 60: RemoveMember -> Doesn't Check for Usages ───────────────────────
     [Test]
-    public async Task BUG_60_RemoveMember_ChecksUsagesBeforeRemoving()
+    public async Task BUG_60_RemoveMember_ChecksUsagesBeforeRemoving_ThrowsTargetIneligible()
     {
         const string code = @"
 public class Helper
@@ -2785,18 +2811,19 @@ public class Helper
     }
 }";
         SetSource(code, "Helper.cs");
-        var result = await _memberRefactoringEngine.RemoveMemberAsync("Helper.cs", "GetName");
-        // Should error or return unchanged because GetName is used
-        Assert.That(result, Is.Not.Null, "Should return a result");
-        // TODO throw-migration: assert the typed exception (not Outcome == CannotRemove) once MemberRefactoringEngine throws
-        Assert.That(result.Message, Does.Contain("usages"), "Should error when trying to remove a used member");
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveMemberAsync("Helper.cs", "GetName");
+        });
+        Assert.That(ex!.Message, Does.Contain("Cannot remove member 'GetName'"), "Should refuse to remove a used member");
+        Assert.That(ex.Message, Does.Contain("usages"));
     }
 
     // ────────────────────────────────────────────────────────────────────────────
     // BUG-60: RemoveMember -> Validates Usages Before Removal
     // ────────────────────────────────────────────────────────────────────────────
     [Test]
-    public async Task BUG_60_RemoveMember_ErrorsWhenMemberIsUsed()
+    public async Task BUG_60_RemoveMember_ErrorsWhenMemberIsUsed_ThrowsTargetIneligible()
     {
         const string code = @"
             public class Helper
@@ -2811,10 +2838,13 @@ public class Helper
         SetSource(code);
         var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
-        var result = await _memberRefactoringEngine.RemoveMemberAsync(filePath, "GetName");
-        // Should error because GetName is used in UseHelper
-        // TODO throw-migration: assert the typed exception (not Outcome == CannotRemove) once MemberRefactoringEngine throws
-        Assert.That(result.Message, Does.Contain("usages"), "Should error when trying to remove a used member");
+        // Should refuse because GetName is used in UseHelper
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveMemberAsync(filePath, "GetName");
+        });
+        Assert.That(ex!.Message, Does.Contain("Cannot remove member 'GetName'"), "Should refuse to remove a used member");
+        Assert.That(ex.Message, Does.Contain("usages"));
     }
 
     [Test]

@@ -173,12 +173,8 @@ public class MemberRefactoringEngine
 
         if (classNode is not ClassDeclarationSyntax classDecl)
         {
-            return (null, new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: class not found."
-            });
+            // TODO: the Error tuple slot is now always null; drop it once AddConstructorParameterWithCallSitesAsync stops destructuring it.
+            throw new ToolNotFoundException("Cannot edit: class not found.", "class", className);
         }
 
         return (classDecl, null);
@@ -188,12 +184,7 @@ public class MemberRefactoringEngine
     {
         if (nullDefault && defaultValue != null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: nullDefault and defaultValue are mutually exclusive - pass only one."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: nullDefault and defaultValue are mutually exclusive - pass only one.");
         }
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -214,12 +205,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         var (classDecl, resolveError) = ResolveAddConstructorTargetClass(root, sourceText, filePath, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
@@ -320,12 +306,6 @@ public class MemberRefactoringEngine
     /// </summary>
     public async Task<AddConstructorParameterCascadeResult> AddConstructorParameterWithCallSitesAsync(FilePathWrapper filePath, string className, string paramName, string paramType, Dictionary<string, string> callSiteFixups, string? fieldName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? defaultValue = null, bool nullDefault = false, CancellationToken cancellationToken = default)
     {
-        AddConstructorParameterCascadeResult Failed(EditOutcome outcome, string message) =>
-            new(new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message }, new Dictionary<FilePathWrapper, string>(), [], null, 0, 0);
-
-        AddConstructorParameterCascadeResult Invalid(string message) =>
-            new(new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = message }, new Dictionary<FilePathWrapper, string>(), [], message, 0, 0);
-
         if (nullDefault && defaultValue != null)
         {
             throw new ToolInvalidArgumentException("nullDefault and defaultValue are mutually exclusive - pass only one.");
@@ -348,7 +328,7 @@ public class MemberRefactoringEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return Failed(EditOutcome.DocumentNotFound, "// Document not found.");
+            throw new ToolNotFoundException("Document not found.", "document", filePath);
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -356,7 +336,7 @@ public class MemberRefactoringEngine
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (root == null || sourceText == null || semanticModel == null)
         {
-            return Failed(EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.");
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         var (classDecl, resolveError) = ResolveAddConstructorTargetClass(root, sourceText, filePath, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
@@ -368,7 +348,7 @@ public class MemberRefactoringEngine
         var targetCtorDecl = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
         if (targetCtorDecl != null && targetCtorDecl.Modifiers.Any(SyntaxKind.StaticKeyword))
         {
-            return Failed(EditOutcome.CannotEdit, $"// Cannot edit: the first constructor of '{className}' is static, so call sites cannot be located.");
+            throw new ToolTargetIneligibleException($"the first constructor of '{className}' is static, so call sites cannot be located.");
         }
 
         var classSymbol = semanticModel.GetDeclaredSymbol(classDecl, cancellationToken) as INamedTypeSymbol;
@@ -377,7 +357,7 @@ public class MemberRefactoringEngine
             : classSymbol?.InstanceConstructors.FirstOrDefault(c => c.IsImplicitlyDeclared && c.Parameters.Length == 0);
         if (targetCtor == null)
         {
-            return Failed(EditOutcome.CannotEdit, $"// Cannot edit: could not resolve the constructor symbol of '{className}' to locate its call sites.");
+            throw new ToolTargetIneligibleException($"could not resolve the constructor symbol of '{className}' to locate its call sites.");
         }
 
         var sites = await ConstructorCallSiteFinder.FindAsync(solution, targetCtor, cancellationToken);
@@ -387,7 +367,7 @@ public class MemberRefactoringEngine
         {
             const int maxShown = 20;
             var realKeys = sites.Select(s => $"{s.FilePath}:{s.Line}").Distinct().ToList();
-            return Invalid($"{unmatchedKeys.Count} callSiteFixups key(s) match no call site of '{className}' constructor: {string.Join(", ", unmatchedKeys.Take(maxShown))}. "
+            throw new ToolInvalidArgumentException($"{unmatchedKeys.Count} callSiteFixups key(s) match no call site of '{className}' constructor: {string.Join(", ", unmatchedKeys.Take(maxShown))}. "
                 + (realKeys.Count == 0
                     ? "No call sites were found. "
                     : $"The call sites found are: {string.Join(", ", realKeys.Take(maxShown))}{(realKeys.Count > maxShown ? $" (+{realKeys.Count - maxShown} more)" : string.Empty)}. ")
@@ -465,12 +445,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         BaseTypeDeclarationSyntax? classNode;
@@ -482,24 +457,14 @@ public class MemberRefactoringEngine
 
         if (classNode == null || classNode is not ClassDeclarationSyntax classDecl)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: class not found."
-            };
+            throw new ToolNotFoundException("Cannot edit: class not found.", "class", className);
         }
 
         var ctor = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
         var targetParam = ctor?.ParameterList.Parameters.FirstOrDefault(p => p.Identifier.Text == paramName);
         if (ctor == null || targetParam == null || ctor.Body == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Constructor parameter '{paramName}' not found on '{className}'."
-            };
+            throw new ToolNotFoundException($"Constructor parameter '{paramName}' not found on '{className}'.", "parameter", paramName);
         }
 
         // Locate the `<field> = <paramName>;` assignment this parameter feeds, so we know which
@@ -658,12 +623,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Cannot edit: cannot parse file."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: cannot parse file.");
         }
 
         BaseTypeDeclarationSyntax? enumNode = null;
@@ -675,12 +635,7 @@ public class MemberRefactoringEngine
 
         if (enumNode == null || enumNode is not EnumDeclarationSyntax)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Cannot edit: enum '{enumName}' not found."
-            };
+            throw new ToolNotFoundException($"Cannot edit: enum '{enumName}' not found.", "enum", enumName);
         }
 
         var enumDecl = (EnumDeclarationSyntax)enumNode;
@@ -688,12 +643,7 @@ public class MemberRefactoringEngine
         var parsedValues = DelimitedListParser.ParseStringOrJsonArrayToList(values, out var valuesError);
         if (valuesError != null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Cannot edit: {valuesError}"
-            };
+            throw new ToolInvalidArgumentException($"Cannot edit: {valuesError}");
         }
 
         foreach (var raw in parsedValues!)
@@ -710,12 +660,7 @@ public class MemberRefactoringEngine
             var valueText = token[(eq + 1)..].Trim();
             if (!int.TryParse(valueText, out var explicitValue))
             {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.CannotEdit,
-                    FilePath = filePath,
-                    Message = $"// Cannot edit: '{valueText}' in '{token}' is not a valid integer explicit value."
-                };
+                throw new ToolInvalidArgumentException($"Cannot edit: '{valueText}' in '{token}' is not a valid integer explicit value.");
             }
 
             requested.Add((name, explicitValue));
@@ -723,23 +668,13 @@ public class MemberRefactoringEngine
 
         if (requested.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: values must contain at least one member name."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: values must contain at least one member name.");
         }
 
         var duplicates = requested.GroupBy(r => r.Name, StringComparer.Ordinal).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
         if (duplicates.Count > 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Cannot edit: duplicate member name(s) in values: {string.Join(", ", duplicates)}."
-            };
+            throw new ToolInvalidArgumentException($"Cannot edit: duplicate member name(s) in values: {string.Join(", ", duplicates)}.");
         }
 
         var existingMembers = enumDecl.Members.ToList();
@@ -758,6 +693,7 @@ public class MemberRefactoringEngine
             {
                 Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
+                UpdatedText = sourceText.ToString(),
                 Message = "// No change: requested values already match the current member list and order."
             };
         }
@@ -789,12 +725,7 @@ public class MemberRefactoringEngine
         var valueCollisions = effectiveValues.GroupBy(v => v.Value).Where(g => g.Count() > 1).Select(g => $"{string.Join(" and ", g.Select(m => m.Name))} both = {g.Key}").ToList();
         if (valueCollisions.Count > 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Cannot edit: this would produce duplicate enum values ({string.Join("; ", valueCollisions)}). " + "Pass an explicit '=N' for the member(s) whose value must change to avoid the collision."
-            };
+            throw new ToolInvalidArgumentException($"Cannot edit: this would produce duplicate enum values ({string.Join("; ", valueCollisions)}). " + "Pass an explicit '=N' for the member(s) whose value must change to avoid the collision.");
         }
 
         var newEnumNode = enumDecl.WithMembers(SyntaxFactory.SeparatedList(newMembers));
@@ -840,6 +771,7 @@ public class MemberRefactoringEngine
         var (outcome, message, existing) = await _symbolNavigationEngine.GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
         if (outcome != EditOutcome.Modified)
         {
+            // TODO throw-migration: GetContainerMembersAsync still returns an outcome tuple (null/tuple getter slice)
             return new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message ?? $"// Cannot edit: enum '{enumName}' not found." };
         }
 
@@ -847,12 +779,7 @@ public class MemberRefactoringEngine
         var newName = newToken.Split('=')[0].Trim();
         if (existing.Any(m => m.Name == newName))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Cannot edit: enum '{enumName}' already has a member named '{newName}'. Use operation 'replace' to change it."
-            };
+            throw new ToolTargetIneligibleException($"Cannot edit: enum '{enumName}' already has a member named '{newName}'. Use operation 'replace' to change it.");
         }
 
         var names = existing.Select(m => m.Signature).ToList();
@@ -861,7 +788,7 @@ public class MemberRefactoringEngine
             var idx = existing.FindIndex(m => m.Name == afterMemberName);
             if (idx < 0)
             {
-                return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, FilePath = filePath, Message = $"// Cannot edit: member '{afterMemberName}' not found in enum '{enumName}'." };
+                throw new ToolNotFoundException($"Cannot edit: member '{afterMemberName}' not found in enum '{enumName}'.", "enum member", afterMemberName);
             }
 
             names.Insert(idx + 1, newToken);
@@ -871,7 +798,7 @@ public class MemberRefactoringEngine
             var idx = existing.FindIndex(m => m.Name == beforeMemberName);
             if (idx < 0)
             {
-                return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, FilePath = filePath, Message = $"// Cannot edit: member '{beforeMemberName}' not found in enum '{enumName}'." };
+                throw new ToolNotFoundException($"Cannot edit: member '{beforeMemberName}' not found in enum '{enumName}'.", "enum member", beforeMemberName);
             }
 
             names.Insert(idx, newToken);
@@ -894,18 +821,19 @@ public class MemberRefactoringEngine
         var (outcome, message, existing) = await _symbolNavigationEngine.GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
         if (outcome != EditOutcome.Modified)
         {
+            // TODO throw-migration: GetContainerMembersAsync still returns an outcome tuple (null/tuple getter slice)
             return new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message ?? $"// Cannot edit: enum '{enumName}' not found." };
         }
 
         if (!existing.Any(m => m.Name == memberName))
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, FilePath = filePath, Message = $"// Cannot edit: member '{memberName}' not found in enum '{enumName}'." };
+            throw new ToolNotFoundException($"Cannot edit: member '{memberName}' not found in enum '{enumName}'.", "enum member", memberName);
         }
 
         var names = existing.Where(m => m.Name != memberName).Select(m => m.Signature).ToList();
         if (names.Count == 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotRemove, FilePath = filePath, Message = $"// Cannot edit: removing '{memberName}' would leave enum '{enumName}' with no members." };
+            throw new ToolTargetIneligibleException($"Cannot edit: removing '{memberName}' would leave enum '{enumName}' with no members.");
         }
 
         return await ModifyEnumAsync(filePath, enumName, string.Join(",", names), contextSnippet, lineBefore, lineAfter, cancellationToken);
@@ -921,13 +849,14 @@ public class MemberRefactoringEngine
         var (outcome, message, existing) = await _symbolNavigationEngine.GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
         if (outcome != EditOutcome.Modified)
         {
+            // TODO throw-migration: GetContainerMembersAsync still returns an outcome tuple (null/tuple getter slice)
             return new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message ?? $"// Cannot edit: enum '{enumName}' not found." };
         }
 
         var idx = existing.FindIndex(m => m.Name == memberName);
         if (idx < 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, FilePath = filePath, Message = $"// Cannot edit: member '{memberName}' not found in enum '{enumName}'." };
+            throw new ToolNotFoundException($"Cannot edit: member '{memberName}' not found in enum '{enumName}'.", "enum member", memberName);
         }
 
         var names = existing.Select(m => m.Signature).ToList();
@@ -1286,12 +1215,7 @@ public class MemberRefactoringEngine
     {
         if (nullDefault && defaultValue != null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: nullDefault and defaultValue are mutually exclusive - pass only one."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: nullDefault and defaultValue are mutually exclusive - pass only one.");
         }
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -1302,12 +1226,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         MemberDeclarationSyntax? memberNode;
@@ -1318,22 +1237,12 @@ public class MemberRefactoringEngine
 
         if (memberNode is not MethodDeclarationSyntax methodDecl)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Cannot edit: method '{methodName}' not found."
-            };
+            throw new ToolNotFoundException($"Cannot edit: method '{methodName}' not found.", "method", methodName);
         }
 
         if (methodDecl.ParameterList.Parameters.Any(p => p.Identifier.Text == paramName))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Cannot edit: '{methodName}' already has a parameter named '{paramName}'."
-            };
+            throw new ToolTargetIneligibleException($"Cannot edit: '{methodName}' already has a parameter named '{paramName}'.");
         }
 
         var newParam = SyntaxFactory.Parameter(SyntaxFactory.Identifier(paramName)).WithType(SyntaxFactory.ParseTypeName(paramType).WithTrailingTrivia(SyntaxFactory.Space));
@@ -1379,12 +1288,7 @@ public class MemberRefactoringEngine
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (root == null || sourceText == null || semanticModel == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root or semantic model not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root or semantic model not found.");
         }
 
         MemberDeclarationSyntax? memberNode;
@@ -1395,34 +1299,19 @@ public class MemberRefactoringEngine
 
         if (memberNode is not MethodDeclarationSyntax methodDecl)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Cannot edit: method '{methodName}' not found."
-            };
+            throw new ToolNotFoundException($"Cannot edit: method '{methodName}' not found.", "method", methodName);
         }
 
         var parameters = methodDecl.ParameterList.Parameters;
         if (parameters.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Cannot edit: '{methodName}' has no parameters."
-            };
+            throw new ToolNotFoundException($"Cannot edit: '{methodName}' has no parameters.", "parameter", paramName);
         }
 
         var lastParam = parameters[^1];
         if (lastParam.Identifier.Text != paramName)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotRemove,
-                FilePath = filePath,
-                Message = $"// Cannot remove '{paramName}': MethodSignature(remove) only supports the last parameter (currently '{lastParam.Identifier.Text}') - removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely."
-            };
+            throw new ToolTargetIneligibleException($"Cannot remove '{paramName}': MethodSignature(remove) only supports the last parameter (currently '{lastParam.Identifier.Text}') - removing an earlier parameter would require reordering every call site's remaining positional arguments, which cannot always be done safely.");
         }
 
         var targetParamCount = parameters.Count;
@@ -1474,23 +1363,13 @@ public class MemberRefactoringEngine
                     var invocation = token.Parent?.AncestorsAndSelf().OfType<InvocationExpressionSyntax>().FirstOrDefault(i => i.Expression.Span.Contains(span));
                     if (invocation == null)
                     {
-                        return new DocumentEditResult
-                        {
-                            Outcome = EditOutcome.CannotRemove,
-                            FilePath = filePath,
-                            Message = $"// Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} is not a simple invocation expression (e.g. method group or delegate conversion) - cannot safely update it."
-                        };
+                        throw new ToolTargetIneligibleException($"Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} is not a simple invocation expression (e.g. method group or delegate conversion) - cannot safely update it.");
                     }
 
                     var args = invocation.ArgumentList.Arguments;
                     if (args.Any(a => a.NameColon != null))
                     {
-                        return new DocumentEditResult
-                        {
-                            Outcome = EditOutcome.CannotRemove,
-                            FilePath = filePath,
-                            Message = $"// Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} uses named arguments - cannot safely update it."
-                        };
+                        throw new ToolTargetIneligibleException($"Cannot remove '{paramName}': call site at {refDoc.FilePath}:{refLineNumber} uses named arguments - cannot safely update it.");
                     }
 
                     if (args.Count != targetParamCount)
@@ -1734,12 +1613,7 @@ public class MemberRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -1751,12 +1625,7 @@ public class MemberRefactoringEngine
 
         if (target == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: target not found."
-            };
+            throw new ToolNotFoundException("Cannot edit: target not found.", "member", targetName);
         }
 
         SyntaxKind[] newKinds = accessibility switch
@@ -1798,12 +1667,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         MemberDeclarationSyntax? target = null;
@@ -1814,12 +1678,7 @@ public class MemberRefactoringEngine
 
         if (target == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: target not found."
-            };
+            throw new ToolNotFoundException("Cannot edit: target not found.", "member", targetName);
         }
 
         var kind = SyntaxFacts.GetKeywordKind(modifier);
@@ -1859,12 +1718,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         MemberDeclarationSyntax? target = null;
@@ -1875,12 +1729,7 @@ public class MemberRefactoringEngine
 
         if (target == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: target not found."
-            };
+            throw new ToolNotFoundException("Cannot edit: target not found.", "member", targetName);
         }
 
         var kind = SyntaxFacts.GetKeywordKind(modifier);
@@ -1918,12 +1767,7 @@ public class MemberRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: invalid member source."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: invalid member source.");
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -1938,12 +1782,7 @@ public class MemberRefactoringEngine
         var attrList = snippet.DescendantNodes().OfType<AttributeListSyntax>().FirstOrDefault();
         if (attrList == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: invalid attribute source."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: invalid attribute source.");
         }
 
         // Try member first, then type declaration
@@ -1972,12 +1811,7 @@ public class MemberRefactoringEngine
 
         if (targetNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: target not found."
-            };
+            throw new ToolNotFoundException("Cannot edit: target not found.", "member", targetName);
         }
 
         // Insert only the attribute list as a text edit: replacing the target node and formatting it would re-format
@@ -1987,7 +1821,7 @@ public class MemberRefactoringEngine
         var updatedText = AttributeTextEditBuilder.TryApply(sourceText, [addEdit], out var applyError);
         if (updatedText == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = applyError ?? "Attribute edit could not be applied." };
+            throw new ToolTargetIneligibleException(applyError ?? "Attribute edit could not be applied.");
         }
 
         return new DocumentEditResult
@@ -2008,12 +1842,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: invalid syntax root."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: invalid syntax root.");
         }
 
         // Parse new attribute
@@ -2027,12 +1856,7 @@ public class MemberRefactoringEngine
         var newAttrList = snippet.DescendantNodes().OfType<AttributeListSyntax>().FirstOrDefault();
         if (newAttrList == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: invalid new attribute source."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: invalid new attribute source.");
         }
 
         var newAttr = newAttrList.Attributes.First();
@@ -2057,12 +1881,7 @@ public class MemberRefactoringEngine
 
         if (targetNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: target not found."
-            };
+            throw new ToolNotFoundException("Cannot edit: target not found.", "member", targetName);
         }
 
         // Find the attribute by name within the target's attribute lists
@@ -2070,12 +1889,7 @@ public class MemberRefactoringEngine
         AttributeSyntax? oldAttr = attrLists.SelectMany(al => al.Attributes).FirstOrDefault(a => GetAttributeName(a) == oldAttributeName);
         if (oldAttr == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Cannot edit: attribute '{oldAttributeName}' not found on target."
-            };
+            throw new ToolNotFoundException($"Cannot edit: attribute '{oldAttributeName}' not found on target.", "attribute", oldAttributeName);
         }
 
         return new DocumentEditResult
@@ -2123,12 +1937,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         var attrCore = attributeName.EndsWith("Attribute") ? attributeName[..^9] : attributeName;
@@ -2155,12 +1964,7 @@ public class MemberRefactoringEngine
 
         if (memberTarget == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: target not found."
-            };
+            throw new ToolNotFoundException("Cannot edit: target not found.", "member", targetName);
         }
 
         var newAttrLists = memberTarget.AttributeLists.Select(al => al.WithAttributes(SyntaxFactory.SeparatedList(al.Attributes.Where(a => !AttrMatches(a))))).Where(al => al.Attributes.Count > 0).ToList();
@@ -2183,12 +1987,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not parse file."
-            };
+            throw new ToolInvalidArgumentException("Could not parse file.");
         }
 
         BaseTypeDeclarationSyntax? container = null;
@@ -2200,12 +1999,7 @@ public class MemberRefactoringEngine
 
         if (container == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = SyntaxTargetResolver.BuildContainerNotFoundMessage(root, containerName)
-            };
+            throw new ToolNotFoundException(SyntaxTargetResolver.BuildContainerNotFoundMessage(root, containerName), "type", containerName);
         }
 
         if (container is not TypeDeclarationSyntax typeDecl)
@@ -2218,24 +2012,14 @@ public class MemberRefactoringEngine
         var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
         if (newMember == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Cannot edit: invalid member source."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: invalid member source.");
         }
 
         var trailingIssue = DetectMultipleMemberDeclarations(newMemberSource, "addMember")
             ?? DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
         if (trailingIssue != null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = $"// newMemberSource is invalid: {trailingIssue}"
-            };
+            throw new ToolInvalidArgumentException($"newMemberSource is invalid: {trailingIssue}");
         }
 
         var insertedDescription = DescribeParsedMember(newMember);
@@ -2263,12 +2047,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not parse file."
-            };
+            throw new ToolInvalidArgumentException("Could not parse file.");
         }
 
         BaseTypeDeclarationSyntax? container = null;
@@ -2280,12 +2059,7 @@ public class MemberRefactoringEngine
 
         if (container == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = SyntaxTargetResolver.BuildContainerNotFoundMessage(root, containerName)
-            };
+            throw new ToolNotFoundException(SyntaxTargetResolver.BuildContainerNotFoundMessage(root, containerName), "type", containerName);
         }
 
         if (container is not TypeDeclarationSyntax typeDecl)
@@ -2298,24 +2072,14 @@ public class MemberRefactoringEngine
         var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
         if (newMember == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Cannot edit: invalid member source."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: invalid member source.");
         }
 
         var trailingIssue = DetectMultipleMemberDeclarations(newMemberSource, "addMember")
             ?? DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
         if (trailingIssue != null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = $"// newMemberSource is invalid: {trailingIssue}"
-            };
+            throw new ToolInvalidArgumentException($"newMemberSource is invalid: {trailingIssue}");
         }
 
         var insertedDescription = DescribeParsedMember(newMember);
@@ -2433,12 +2197,7 @@ public class MemberRefactoringEngine
         var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
         if (container == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: container not found."
-            };
+            throw new ToolNotFoundException("Cannot edit: container not found.", "type", containerName);
         }
 
         static int CategoryOf(MemberDeclarationSyntax m) => m switch
@@ -2476,12 +2235,7 @@ public class MemberRefactoringEngine
     {
         if (!(_config ?? new SentinelConfiguration()).IsFeatureEnabled("AddRemoveParams"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature is disabled."
-            };
+            throw new ToolFeatureDisabledException("AddRemoveParams");
         }
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -2492,12 +2246,7 @@ public class MemberRefactoringEngine
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null || !method.ParameterList.Parameters.Any())
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Method not found or has no parameters."
-            };
+            throw new ToolNotFoundException("Method not found or has no parameters.", "method", methodName);
         }
 
         var lastParam = method.ParameterList.Parameters.Last();
@@ -2529,12 +2278,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not parse file."
-            };
+            throw new ToolInvalidArgumentException("Could not parse file.");
         }
 
         SyntaxNode? member;
@@ -2550,12 +2294,7 @@ public class MemberRefactoringEngine
 
         if (member == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Member not found."
-            };
+            throw new ToolNotFoundException("Member not found.", "member", memberName);
         }
 
         // Must run before the ContainsDiagnostics check below: a multi-member source always has
@@ -2564,46 +2303,26 @@ public class MemberRefactoringEngine
         var multipleMembersIssue = DetectMultipleMemberDeclarations(newSource, "replace", memberName);
         if (multipleMembersIssue != null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = $"// {multipleMembersIssue}"
-            };
+            throw new ToolInvalidArgumentException(multipleMembersIssue);
         }
 
         var newMember = SyntaxFactory.ParseMemberDeclaration(newSource);
         if (newMember == null || newMember.ContainsDiagnostics)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// newMemberSource is not a valid member declaration. Provide the full member (signature + body, e.g. 'private decimal Foo() { ... }'), " +
-                    "not just a statement or method body fragment."
-            };
+            throw new ToolInvalidArgumentException("newMemberSource is not a valid member declaration. Provide the full member (signature + body, e.g. 'private decimal Foo() { ... }'), " +
+                "not just a statement or method body fragment.");
         }
 
         var trailingIssue = DetectTrailingUnparsedDeclaration(newSource, newMember);
         if (trailingIssue != null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = $"// newMemberSource is invalid: {trailingIssue}"
-            };
+            throw new ToolInvalidArgumentException($"newMemberSource is invalid: {trailingIssue}");
         }
 
         // A type declaration written over a non-type target (e.g. a same-named constructor) would produce CS0542; refuse it.
         if (newMember is BaseTypeDeclarationSyntax && member is not BaseTypeDeclarationSyntax)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// newMemberSource declares a type, but Member(replace) replaces members, not types. To replace a type use ReplaceSnippet or ApplyDiff."
-            };
+            throw new ToolInvalidArgumentException("newMemberSource declares a type, but Member(replace) replaces members, not types. To replace a type use ReplaceSnippet or ApplyDiff.");
         }
 
         var replacedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, member, newMember, cancellationToken);
@@ -2613,7 +2332,8 @@ public class MemberRefactoringEngine
             {
                 Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
-                Message = $"// No change: the member already matches the requested declaration ({DescribeParsedMember(newMember)})."
+                Message = $"// No change: the member already matches the requested declaration ({DescribeParsedMember(newMember)}).",
+                UpdatedText = root.ToFullString()
             };
         }
 
@@ -2637,12 +2357,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Cannot parse file."
-            };
+            throw new ToolInvalidArgumentException("Cannot parse file.");
         }
 
         BaseTypeDeclarationSyntax? container = null;
@@ -2654,24 +2369,14 @@ public class MemberRefactoringEngine
 
         if (container == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = SyntaxTargetResolver.BuildContainerNotFoundMessage(root, containerName)
-            };
+            throw new ToolNotFoundException(SyntaxTargetResolver.BuildContainerNotFoundMessage(root, containerName), "type", containerName);
         }
 
         if (container is EnumDeclarationSyntax)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Cannot add a member to enum \"{containerName}\" via AddMember: enum members " +
-                          "are not MemberDeclarationSyntax and use comma-separated syntax, not this method's " +
-                          "member grammar. Use ModifyEnumAsync instead."
-            };
+            throw new ToolTargetIneligibleException($"Cannot add a member to enum \"{containerName}\" via AddMember: enum members " +
+                "are not MemberDeclarationSyntax and use comma-separated syntax, not this method's " +
+                "member grammar. Use ModifyEnumAsync instead.");
         }
 
         if (container is not TypeDeclarationSyntax typeContainer)
@@ -2685,24 +2390,14 @@ public class MemberRefactoringEngine
         var newMember = SyntaxFactory.ParseMemberDeclaration(newMemberSource);
         if (newMember == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Failed to parse new member."
-            };
+            throw new ToolInvalidArgumentException("Failed to parse new member.");
         }
 
         var trailingIssue = DetectMultipleMemberDeclarations(newMemberSource, "addMember")
             ?? DetectTrailingUnparsedDeclaration(newMemberSource, newMember);
         if (trailingIssue != null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = $"// newMemberSource is invalid: {trailingIssue}"
-            };
+            throw new ToolInvalidArgumentException($"newMemberSource is invalid: {trailingIssue}");
         }
 
         var addedDescription = DescribeParsedMember(newMember);
@@ -2734,34 +2429,19 @@ public class MemberRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Cannot parse file."
-            };
+            throw new ToolInvalidArgumentException("Cannot parse file.");
         }
 
         var newType = SyntaxFactory.ParseMemberDeclaration(newTypeSource);
         if (newType is not BaseTypeDeclarationSyntax)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = newType == null ? "// Failed to parse new type." : "// newTypeSource did not parse as a type declaration (enum/class/record/struct/interface)."
-            };
+            throw new ToolInvalidArgumentException(newType == null ? "Failed to parse new type." : "newTypeSource did not parse as a type declaration (enum/class/record/struct/interface).");
         }
 
         var trailingIssue = DetectTrailingUnparsedDeclaration(newTypeSource, newType);
         if (trailingIssue != null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = $"// newTypeSource is invalid: {trailingIssue}"
-            };
+            throw new ToolInvalidArgumentException($"newTypeSource is invalid: {trailingIssue}");
         }
 
         //newType = newType.WithAddedByComment("AddTopLevelType");
@@ -2773,12 +2453,7 @@ public class MemberRefactoringEngine
             targetNamespace = namespaces.FirstOrDefault(n => n.Name.ToString() == namespaceName);
             if (targetNamespace == null)
             {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// Namespace '{namespaceName}' not found. Available: {string.Join(", ", namespaces.Select(n => n.Name.ToString()))}."
-                };
+                throw new ToolNotFoundException($"Namespace '{namespaceName}' not found. Available: {string.Join(", ", namespaces.Select(n => n.Name.ToString()))}.", "namespace", namespaceName);
             }
         }
         else if (namespaces.Count <= 1)
@@ -2787,12 +2462,7 @@ public class MemberRefactoringEngine
         }
         else
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// File has {namespaces.Count} namespaces ({string.Join(", ", namespaces.Select(n => n.Name.ToString()))}); pass namespaceName to disambiguate."
-            };
+            throw new ToolNotFoundException($"File has {namespaces.Count} namespaces ({string.Join(", ", namespaces.Select(n => n.Name.ToString()))}); pass namespaceName to disambiguate.", "namespace");
         }
 
         if (targetNamespace != null)
@@ -2836,12 +2506,7 @@ public class MemberRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not parse file."
-            };
+            throw new ToolInvalidArgumentException("Could not parse file.");
         }
 
         SyntaxNode? member;
@@ -2901,25 +2566,15 @@ public class MemberRefactoringEngine
                 }
 
                 var kindNames = string.Join(", ", typeKindCandidatesForHint.Select(c => c.Kind).Distinct());
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// '{memberName}' is a type-level declaration ({kindNames}), not a class member. " +
-                        "Member(remove) only removes class-level members (methods, properties, fields, constructors, " +
-                        "events, indexers) -- it does not support removing type declarations (classes, interfaces, " +
-                        "structs, records, enums, or enum members), and skipPrecheck does not change this. " +
-                        "To remove an unreferenced type declaration, use DeleteUnusedSymbol. If it still has callers, update or remove those callers first and then use DeleteUnusedSymbol; " +
-                        "edit the file's raw text with ReplaceSnippet or ApplyDiff only as a last resort."
-                };
+                throw new ToolNotFoundException($"'{memberName}' is a type-level declaration ({kindNames}), not a class member. " +
+                    "Member(remove) only removes class-level members (methods, properties, fields, constructors, " +
+                    "events, indexers) -- it does not support removing type declarations (classes, interfaces, " +
+                    "structs, records, enums, or enum members), and skipPrecheck does not change this. " +
+                    "To remove an unreferenced type declaration, use DeleteUnusedSymbol. If it still has callers, update or remove those callers first and then use DeleteUnusedSymbol; " +
+                    "edit the file's raw text with ReplaceSnippet or ApplyDiff only as a last resort.", "member", memberName);
             }
 
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Member not found."
-            };
+            throw new ToolNotFoundException("Member not found.", "member", memberName);
         }
 
         // Check for usages using SymbolFinder before removing
@@ -2933,12 +2588,7 @@ public class MemberRefactoringEngine
                 var usageCount = references.Sum(r => r.Locations.Count());
                 if (usageCount > 0)
                 {
-                    return new DocumentEditResult
-                    {
-                        Outcome = EditOutcome.CannotRemove,
-                        FilePath = filePath,
-                        Message = $"// ERROR: Cannot remove member '{memberName}' - it has {usageCount} usages in the solution.\n{root!.ToFullString()}"
-                    };
+                    throw new ToolTargetIneligibleException($"Cannot remove member '{memberName}' - it has {usageCount} usages in the solution.");
                 }
             }
         }
@@ -4406,12 +4056,7 @@ public class MemberRefactoringEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
+            throw new ToolNotFoundException("Document not found.", "document");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -4447,21 +4092,15 @@ public class MemberRefactoringEngine
 
         if (methodNode != null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = "// Could not convert method to property: methods with parameters cannot become properties.",
-                UpdatedText = root!.ToFullString()
-            };
+            throw new ToolTargetIneligibleException("Could not convert method to property: methods with parameters cannot become properties.");
         }
 
-        return new DocumentEditResult
+        if (methodNode == null)
         {
-            Outcome = EditOutcome.CannotEdit,
-            FilePath = filePath,
-            Message = "// Could not convert method to property."
-        };
+            throw new ToolNotFoundException("Method not found.", "method", methodName);
+        }
+
+        throw new ToolTargetIneligibleException("Could not convert method to property: the method body must be a single return statement or an expression body.");
     }
 
     /// <summary>
@@ -4473,26 +4112,21 @@ public class MemberRefactoringEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
+            throw new ToolNotFoundException("Document not found.", "document");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
 
-        if (methodNode == null || methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
+        if (methodNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Method not found or already static."
-            };
+            throw new ToolNotFoundException("Method not found.", "method", methodName);
+        }
+
+        if (methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
+        {
+            throw new ToolTargetIneligibleException("Method is already static.");
         }
 
         // Check for instance access
@@ -4518,12 +4152,7 @@ public class MemberRefactoringEngine
             };
         }
 
-        return new DocumentEditResult
-        {
-            Outcome = EditOutcome.CannotEdit,
-            FilePath = filePath,
-            Message = "// Method accesses instance members and cannot be made static."
-        };
+        throw new ToolTargetIneligibleException("Method accesses instance members and cannot be made static.");
     }
 
     public async Task<ExtractMethodResult> ExtractMethodAsync(FilePathWrapper filePath, int startLine, string startLineText, int endLine, string endLineText, string newMethodName, CancellationToken cancellationToken = default)
@@ -5213,12 +4842,7 @@ public class MemberRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found.");
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -5231,12 +4855,7 @@ public class MemberRefactoringEngine
 
         if (container == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: type not found."
-            };
+            throw new ToolNotFoundException("Type not found.", "type", typeName);
         }
 
         // Idempotency check
@@ -5270,12 +4889,7 @@ public class MemberRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found.");
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -5288,12 +4902,7 @@ public class MemberRefactoringEngine
 
         if (container == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: type not found."
-            };
+            throw new ToolNotFoundException("Type not found.", "type", typeName);
         }
 
         if (container.BaseList == null)
@@ -5302,7 +4911,8 @@ public class MemberRefactoringEngine
             {
                 Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
-                Message = "// Cannot edit: base type not found."
+                Message = "// Cannot edit: base type not found.",
+                UpdatedText = root.ToFullString()
             };
         }
 

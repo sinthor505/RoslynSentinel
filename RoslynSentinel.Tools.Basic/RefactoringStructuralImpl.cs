@@ -576,8 +576,18 @@ public class RefactoringStructuralImpl
                 var replaceEnumName = await _symbolNavigationEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (replaceEnumName != null)
                 {
-                    var enumReplaced = await _memberRefactoringEngine.ReplaceEnumMemberAsync(filePathResolved, replaceEnumName, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                    if (RefactoringToolHelpers.RequireUpdatedText(enumReplaced, "Member", filePathResolved, recoveryHint: $"Retry using ModifyEnum(enumName: \"{replaceEnumName}\", values: ...) directly with the full desired member list if this keeps failing.") is { } enumReplaceError)
+                    var enumReplaceHint = $"Retry using ModifyEnum(enumName: \"{replaceEnumName}\", values: ...) directly with the full desired member list if this keeps failing.";
+                    DocumentEditResult enumReplaced;
+                    try
+                    {
+                        enumReplaced = await _memberRefactoringEngine.ReplaceEnumMemberAsync(filePathResolved, replaceEnumName, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    }
+                    catch (ToolException toolEx)
+                    {
+                        var mappedError = ToolErrorMapper.ToResultError(toolEx, _workspaceManager, "Member");
+                        return new SentinelCallToolResult<object> { IsError = true, ErrorData = mappedError with { Message = $"{mappedError.Message} {enumReplaceHint}" } };
+                    }
+                    if (RefactoringToolHelpers.RequireUpdatedText(enumReplaced, "Member", filePathResolved, recoveryHint: enumReplaceHint) is { } enumReplaceError)
                         return enumReplaceError;
 
                     var enumReplaceChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumReplaced.UpdatedText! };
@@ -648,8 +658,18 @@ public class RefactoringStructuralImpl
                 var removeEnumName = await _symbolNavigationEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (removeEnumName != null)
                 {
-                    var enumRemoved = await _memberRefactoringEngine.RemoveEnumMemberAsync(filePathResolved, removeEnumName, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                    if (RefactoringToolHelpers.RequireUpdatedText(enumRemoved, "Member", filePathResolved, recoveryHint: $"Retry using ModifyEnum(enumName: \"{removeEnumName}\", values: ...) directly with the full desired member list if this keeps failing.") is { } enumRemoveError)
+                    var enumRemoveHint = $"Retry using ModifyEnum(enumName: \"{removeEnumName}\", values: ...) directly with the full desired member list if this keeps failing.";
+                    DocumentEditResult enumRemoved;
+                    try
+                    {
+                        enumRemoved = await _memberRefactoringEngine.RemoveEnumMemberAsync(filePathResolved, removeEnumName, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    }
+                    catch (ToolException toolEx)
+                    {
+                        var mappedError = ToolErrorMapper.ToResultError(toolEx, _workspaceManager, "Member");
+                        return new SentinelCallToolResult<object> { IsError = true, ErrorData = mappedError with { Message = $"{mappedError.Message} {enumRemoveHint}" } };
+                    }
+                    if (RefactoringToolHelpers.RequireUpdatedText(enumRemoved, "Member", filePathResolved, recoveryHint: enumRemoveHint) is { } enumRemoveError)
                         return enumRemoveError;
 
                     var enumRemoveChanges = new Dictionary<FilePathWrapper, string> { [filePathResolved] = enumRemoved.UpdatedText! };
@@ -752,8 +772,18 @@ public class RefactoringStructuralImpl
                 if (position != null && afterName == null && beforeName == null && position != "end")
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
 
-                var enumAdded = await _memberRefactoringEngine.AddEnumMemberAsync(filePathResolved, containerName, newMemberSource!, afterName, beforeName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                var enumAddError = RefactoringToolHelpers.RequireUpdatedText(enumAdded, "Member", filePathResolved, recoveryHint: $"Retry using ModifyEnum(enumName: \"{containerName}\", values: ...) directly with the full desired member list if this keeps failing.");
+                var enumAddHint = $"Retry using ModifyEnum(enumName: \"{containerName}\", values: ...) directly with the full desired member list if this keeps failing.";
+                DocumentEditResult enumAdded;
+                try
+                {
+                    enumAdded = await _memberRefactoringEngine.AddEnumMemberAsync(filePathResolved, containerName, newMemberSource!, afterName, beforeName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                }
+                catch (ToolException toolEx)
+                {
+                    var mappedError = ToolErrorMapper.ToResultError(toolEx, _workspaceManager, "Member");
+                    return new SentinelCallToolResult<object> { IsError = true, ErrorData = mappedError with { Message = $"{mappedError.Message} {enumAddHint}" } };
+                }
+                var enumAddError = RefactoringToolHelpers.RequireUpdatedText(enumAdded, "Member", filePathResolved, recoveryHint: enumAddHint);
                 if (enumAddError is not null)
                     return enumAddError;
 

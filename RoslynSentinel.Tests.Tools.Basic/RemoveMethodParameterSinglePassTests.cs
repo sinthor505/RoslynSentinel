@@ -157,7 +157,7 @@ public class RemoveMethodParameterSinglePassTests
     }
 
     [Test]
-    public async Task MethodGroupArgument_IsRefusedNotMisEditedAsync()
+    public async Task MethodGroupArgument_ThrowsTargetIneligibleAndDoesNotMisEdit()
     {
         const string source = """
             namespace N;
@@ -172,12 +172,18 @@ public class RemoveMethodParameterSinglePassTests
             }
             """;
 
-        var (result, workspace) = await RemoveAsync((TargetPath, source));
-        using (workspace)
+        using var workspace = InMemoryWorkspace.Create((TargetPath, source));
+        var engine = BuildEngine(workspace.Manager);
+        var path = workspace.Manager.ResolveFromWire(workspace.PathOf(TargetPath));
+        var before = workspace.ReadText(TargetPath);
+
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
         {
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotRemove), result.Message);
-            Assert.That(result.Message, Does.Contain("not a simple invocation expression"));
-        }
+            await engine.RemoveMethodParameterAsync(path, "Compute", "second");
+        });
+        Assert.That(ex.Message, Does.Contain("Cannot remove 'second': call site at"));
+        Assert.That(ex.Message, Does.Contain("is not a simple invocation expression"));
+        Assert.That(workspace.ReadText(TargetPath), Is.EqualTo(before), "a refused removal must not write");
     }
 
     [Test]
