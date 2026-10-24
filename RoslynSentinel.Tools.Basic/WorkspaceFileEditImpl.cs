@@ -314,10 +314,9 @@ public class WorkspaceFileEditImpl
             }
             try
             {
-                var (sourceOutcome, sourceMessage, sourceErrorCode, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, null, null, null, cancellationToken);
-                if (sourceOutcome != EditOutcome.Modified || source is null)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(sourceErrorCode ?? RefactoringToolHelpers.ErrorCodeFor(sourceOutcome), $"ReadFile: {sourceMessage}") };
-                return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source) };
+                // GetMemberSourceAsync throws on failure and returns Modified with a non-null source.
+                var (_, _, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, null, null, null, cancellationToken);
+                return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source!) };
             }
             catch (Exception ex)
             {

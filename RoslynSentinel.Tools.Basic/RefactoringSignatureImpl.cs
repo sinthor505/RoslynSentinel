@@ -199,20 +199,11 @@ public class RefactoringSignatureImpl
             if (operation == AddRemoveViewAction.add)
             {
                 updated = await _memberRefactoringEngine.AddMethodParameterAsync(filePathResolved, methodName, paramName, paramType!, defaultValue, contextSnippet, lineBefore, lineAfter, cancellationToken, nullDefault);
-                if (RefactoringToolHelpers.RequireUpdatedText(updated, "MethodSignature", filePathResolved) is { } addGuardResult)
-                    return addGuardResult;
                 changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
             }
             else
             {
                 updated = await _memberRefactoringEngine.RemoveMethodParameterAsync(filePathResolved, methodName, paramName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (updated.Outcome == EditOutcome.CannotRemove)
-                {
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"MethodSignature: {updated.Message}") };
-                }
-
-                if (RefactoringToolHelpers.RequireUpdatedText(updated, "MethodSignature", filePathResolved) is { } removeGuardResult)
-                    return removeGuardResult;
                 changes = updated.Changes;
             }
 
@@ -295,9 +286,6 @@ public class RefactoringSignatureImpl
                         Validated: false)
                 };
             }
-
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ChangeAccessibility", filePathResolved) is { } guardResult)
-                return RefactoringToolHelpers.ToSummaryResult(guardResult);
 
             var accessibilityKeyword = accessibility switch
             {
