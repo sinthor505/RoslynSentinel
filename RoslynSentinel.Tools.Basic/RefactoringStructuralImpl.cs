@@ -243,13 +243,7 @@ public class RefactoringStructuralImpl
                 engineErrorCodes.Add(ex.ErrorCode);
                 continue;
             }
-            if (string.IsNullOrEmpty(updated.UpdatedText))
-            {
-                perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
-                continue;
-            }
-
-            finalContents[filePathResolved] = updated.UpdatedText;
+            finalContents[filePathResolved] = updated.UpdatedText!; // TODO S4: UpdatedText becomes non-nullable
             touchedFiles.Add(filePathResolved);
         }
 
@@ -380,12 +374,6 @@ public class RefactoringStructuralImpl
                 engineErrorCodes.Add(ex.ErrorCode);
                 continue;
             }
-            if (string.IsNullOrEmpty(updated.UpdatedText))
-            {
-                perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
-                continue;
-            }
-
             // Never trust the number of batchEdits submitted: only the engine knows which ones changed text.
             if (updated.AppliedEditIndexes is null)
             {
@@ -403,7 +391,7 @@ public class RefactoringStructuralImpl
                 continue;
             }
 
-            finalContents[filePathResolved] = updated.UpdatedText;
+            finalContents[filePathResolved] = updated.UpdatedText!; // TODO S4: UpdatedText becomes non-nullable
             touchedFiles.Add(filePathResolved);
         }
 
@@ -514,13 +502,7 @@ public class RefactoringStructuralImpl
                 engineErrorCodes.Add(ex.ErrorCode);
                 continue;
             }
-            if (string.IsNullOrEmpty(updated.UpdatedText))
-            {
-                perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
-                continue;
-            }
-
-            finalContents[filePathResolved] = updated.UpdatedText;
+            finalContents[filePathResolved] = updated.UpdatedText!; // TODO S4: UpdatedText becomes non-nullable
             touchedFiles.Add(filePathResolved);
         }
 
@@ -619,13 +601,7 @@ public class RefactoringStructuralImpl
                 var result = await _memberRefactoringEngine.ReplaceMemberAsync(filePathResolved, memberName, newMemberSource, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
                 if (result.Outcome == EditOutcome.AlreadyInTargetState && RefactoringToolHelpers.RequireUpdatedText(result, "Member", filePathResolved) is { } replaceAlreadyInStateResult)
                     return replaceAlreadyInStateResult;
-                if (string.IsNullOrEmpty(result.UpdatedText))
-                {
-                    string errorReason = $"Member: no changes produced for '{memberName}' in '{filePathResolved}' ({result.Outcome}). {result.Message}";
-                    return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(RefactoringToolHelpers.ErrorCodeFor(result), errorReason, StructuredDetail: ToolErrorMapper.ToStructuredDetail(result.Candidates)) };
-                }
-
-                var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText };
+                var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText! }; // TODO S4: UpdatedText becomes non-nullable
                 var apply = await ValidateAndApplyAsync(changes, $"Replace member '{memberName}'.", "Member", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
                 if (apply.Error is not null)
                     return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };
@@ -1393,11 +1369,6 @@ public class RefactoringStructuralImpl
             var result = await _structuralRefinementEngine.SyncTypeAndFilenameAsync(filePathResolved, targetTypeName, cancellationToken);
             if (result.Outcome == EditOutcome.AlreadyInTargetState)
                 return RefactoringToolHelpers.RequireUpdatedText(result, "SyncTypeAndFilename", filePathResolved)!;
-
-            if (result.Outcome != EditOutcome.Modified || result.Changes.Count == 0)
-            {
-                return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"SyncTypeAndFilename: no change produced for '{filePathResolved}' ({result.Outcome}). {result.Message}") };
-            }
 
             var (newPath, content) = result.Changes.First();
             if (File.Exists(newPath))
