@@ -700,16 +700,12 @@ public class BasicRefactoringEngine
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
-            return new Dictionary<FilePathWrapper, string>();
+            throw new ToolFeatureDisabledException("MoveTypeToFile");
         }
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new Dictionary<FilePathWrapper, string>();
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         return await MoveAllTypesToFilesForDocumentAsync(document, cancellationToken);
     }
@@ -718,7 +714,7 @@ public class BasicRefactoringEngine
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
-            return new Dictionary<FilePathWrapper, string>();
+            throw new ToolFeatureDisabledException("MoveTypeToFile");
         }
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -740,7 +736,7 @@ public class BasicRefactoringEngine
     {
         if (!_config.IsFeatureEnabled("MoveTypeToFile"))
         {
-            return new Dictionary<FilePathWrapper, string>();
+            throw new ToolFeatureDisabledException("MoveTypeToFile");
         }
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -761,7 +757,7 @@ public class BasicRefactoringEngine
     {
         if (!_config.IsFeatureEnabled("ExtractInterface"))
         {
-            return new Dictionary<FilePathWrapper, string>();
+            throw new ToolFeatureDisabledException("ExtractInterface");
         }
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -771,7 +767,7 @@ public class BasicRefactoringEngine
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return new Dictionary<FilePathWrapper, string>();
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'.", "class", className);
         }
 
         // Extract public instance methods (exclude static, constructors)

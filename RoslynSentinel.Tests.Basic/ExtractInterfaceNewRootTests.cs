@@ -46,6 +46,17 @@ public class ExtractInterfaceNewRootTests
     }
 
     [Test]
+    public async Task ExtractInterface_MissingClass_ThrowsNotFound()
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Source.cs", "namespace N;\npublic class Order { }\n")]);
+        _workspaceManager.SetTestSolution(solution);
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _engine.ExtractInterfaceAsync("Source.cs", "Missing", "IMissing"));
+        Assert.That(ex!.MissingTargetName, Is.EqualTo("Missing"));
+    }
+
+    [Test]
     public async Task ExtractInterface_LfDocument_FileScopedNamespace_ProducesExactInterfaceFile()
     {
         const string source = "using System;\nusing System.Collections.Generic;\n\nnamespace MyApp.Services;\n\npublic class OrderService\n{\n    public List<string> GetOrders() => new();\n    public int Count { get; set; }\n    public void ProcessOrder(string id) { }\n}\n";

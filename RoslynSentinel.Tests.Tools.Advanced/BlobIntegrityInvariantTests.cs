@@ -110,11 +110,17 @@ public class BlobIntegrityInvariantTests
     [Test]
     public async Task ExtractMembers_IssuedChangeIdResolvesToABlobAsync()
     {
-        var typeName = await FindATypeNameAsync();
+        // Seed a class of its own: _targetFile (OrderLine.cs) declares no class, so ExtractMembers has nothing to extract from it.
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var className = $"BlobExtractProbe{suffix}";
+        var relativePath = Path.Combine("ContosoOrders.Core", $"BlobExtractProbe{suffix}.cs");
+        await _fixture.AddFileToSolution(_workspaceManager, relativePath,
+            $"public class {className} {{ public int Value() {{ return 1; }} public void Run() {{ }} }}\n");
+        var probePath = Path.Combine(_fixture.SolutionDirectory, relativePath);
 
         var result = await _advancedRefactoringTools.ExtractMembersTool(
-            reason: "test message", _targetFile, typeName, ExtractAsType.@interface,
-            newTypeName: "IExtractedForTest", dryRun: false);
+            reason: "test message", probePath, className, ExtractAsType.@interface,
+            newTypeName: $"IExtractedForTest{suffix}", dryRun: false);
 
         AssertChangeIdIsRedeemable(result, "ExtractMembers");
     }

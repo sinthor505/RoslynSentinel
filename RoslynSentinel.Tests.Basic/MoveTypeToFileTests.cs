@@ -168,6 +168,21 @@ public class Gamma { }
     }
 
     [Test]
+    public async Task MoveAllTypesToFilesAsync_MissingFile_ThrowsNotFound()
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("DummyApp", new[] {
+            ("Bundle.cs", @"
+namespace App;
+public class Alpha { }
+")
+        });
+        _workspaceManager.SetTestSolution(solution);
+
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _refactoringEngine.MoveAllTypesToFilesAsync("Missing.cs"));
+    }
+
+    [Test]
     public async Task MoveTypeToFile_ReturnsNonEmptyContent_ForBothFiles()
     {
         // This test directly verifies the content previews that the MCP tool exposes.
