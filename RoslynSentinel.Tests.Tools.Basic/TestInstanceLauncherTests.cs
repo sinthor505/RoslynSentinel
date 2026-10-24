@@ -208,6 +208,56 @@ public class TestInstanceLauncherTests
         Assert.That(path, Is.EqualTo(Path.Combine(solution, ".roslynsentinel", "test-instances", "4242-3")));
     }
 
+    // ---- child instance id and output copy ----
+
+    [Test]
+    public void ResolveChildInstanceId_UsesParentPidAndWorkingDirLeaf()
+    {
+        var workingDir = Path.Combine(_dir, "test-instances", "3");
+
+        var id = TestInstanceLauncher.ResolveChildInstanceId(4242, workingDir);
+
+        Assert.That(id, Is.EqualTo("test-4242-3"));
+    }
+
+    [Test]
+    public void ResolveChildInstanceId_DiffersFromTheParentInstanceId()
+    {
+        var id = TestInstanceLauncher.ResolveChildInstanceId(4242, Path.Combine(_dir, "test-instances", "3"));
+
+        Assert.That(id, Is.Not.EqualTo(BuildIsolation.ResolveInstanceId()));
+        Assert.That(id, Does.Contain("test-"));
+    }
+
+    [Test]
+    public void CopyServerOutput_CopiesFilesIntoServerSubfolderAsRealCopies()
+    {
+        var source = Path.Combine(_dir, "bin");
+        Directory.CreateDirectory(Path.Combine(source, "nested"));
+        File.WriteAllText(Path.Combine(source, "RoslynSentinel.Server.Advanced.dll"), "top");
+        File.WriteAllText(Path.Combine(source, "nested", "Engine.dll"), "nested");
+        var workingDir = Path.Combine(_dir, "wd");
+        Directory.CreateDirectory(workingDir);
+
+        var copied = TestInstanceLauncher.CopyServerOutput(source, workingDir);
+
+        Assert.That(copied, Is.EqualTo(Path.Combine(workingDir, "server")));
+        Assert.That(copied, Is.Not.EqualTo(source));
+        Assert.That(File.ReadAllText(Path.Combine(copied, "RoslynSentinel.Server.Advanced.dll")), Is.EqualTo("top"));
+        Assert.That(File.ReadAllText(Path.Combine(copied, "nested", "Engine.dll")), Is.EqualTo("nested"));
+    }
+
+    [Test]
+    public void CopyServerOutput_MissingSource_ReturnsSourceUnchanged()
+    {
+        var missing = Path.Combine(_dir, "missing");
+
+        var copied = TestInstanceLauncher.CopyServerOutput(missing, Path.Combine(_dir, "wd"));
+
+        Assert.That(copied, Is.EqualTo(missing));
+        Assert.That(Directory.Exists(Path.Combine(_dir, "wd", "server")), Is.False);
+    }
+
     // ---- howToCall ----
 
     [Test]

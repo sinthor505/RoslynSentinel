@@ -83,6 +83,36 @@ public sealed class TestInstanceLauncher
         return await LaunchFromOutputAsync(solutionPath!, outputDirectory, mode, includeTools, source, cancellationToken);
     }
 
+    /// <summary>Instance id for a test-instance child: <c>test-{parentPid}-{working dir leaf}</c>. Gives the child its own
+    /// .roslynsentinel/build/{id}/ so its builds never share obj/bin with the parent.</summary>
+    public static string ResolveChildInstanceId(int parentProcessId, string workingDirectory)
+    {
+        var leaf = Path.GetFileName(workingDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        return BuildIsolation.SanitizeInstanceId($"test-{parentProcessId}-{leaf}") ?? $"test-{parentProcessId}";
+    }
+
+    /// <summary>Copies <paramref name="sourceDirectory"/> recursively into the <c>server</c> folder under
+    /// <paramref name="workingDirectory"/> and returns that copy. A real copy, not hard links: a running exe or dll
+    /// locks the parent's bin and, through hard links, its obj files. A missing source is returned unchanged so the
+    /// caller's NotFound path still applies.</summary>
+    public static string CopyServerOutput(string sourceDirectory, string workingDirectory)
+    {
+        if (!Directory.Exists(sourceDirectory))
+        {
+            return sourceDirectory;
+        }
+
+        var destination = Path.Combine(workingDirectory, "server");
+        foreach (var sourceFile in Directory.EnumerateFiles(sourceDirectory, "*", SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(destination, Path.GetRelativePath(sourceDirectory, sourceFile));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(sourceFile, target, overwrite: true);
+        }
+
+        return destination;
+    }
+
     /// <summary>Starts the server from an existing build output and waits until it answers <c>initialize</c>.
     /// Public so an end-to-end test can launch from any built output without a loaded workspace.</summary>
     public async Task<LaunchedTestInstance> LaunchFromOutputAsync(
@@ -90,9 +120,10 @@ public sealed class TestInstanceLauncher
         TestInstanceBuildSource buildSource, CancellationToken cancellationToken)
     {
         var solutionDirectory = Path.GetDirectoryName(solutionPath)!;
-        var (fileName, firstArgument, exePath) = ResolveExecutable(serverOutputDirectory);
-
         var workingDirectory = CreateInstanceWorkingDirectory(solutionDirectory);
+        // TODO delete <workingDirectory>\server when the instance is stopped (KillHandle/Stop); today the copy stays until the instances dir is swept.
+        var copiedDirectory = CopyServerOutput(serverOutputDirectory, workingDirectory);
+        var (fileName, firstArgument, exePath) = ResolveExecutable(copiedDirectory);
         var stdoutPath = Path.Combine(workingDirectory, "stdout.txt");
         var stderrPath = Path.Combine(workingDirectory, "stderr.txt");
         var logPaths = new TestInstanceLogPaths(stdoutPath, stderrPath, Path.Combine(workingDirectory, "logs"));
@@ -120,6 +151,8 @@ public sealed class TestInstanceLauncher
         {
             startInfo.EnvironmentVariables.Remove(variable);
         }
+
+        startInfo.EnvironmentVariables[BuildIsolation.InstanceIdEnvironmentVariable] = ResolveChildInstanceId(Environment.ProcessId, workingDirectory);
 
         var stdout = new OutputCapture(stdoutPath);
         var stderr = new OutputCapture(stderrPath);
