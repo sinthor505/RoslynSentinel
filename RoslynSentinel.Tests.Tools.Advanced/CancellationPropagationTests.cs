@@ -71,6 +71,20 @@ public class CancellationPropagationTests
     }
 
     [Test]
+    [Category("AsyncOptimizationEngine")] // sentinel:auto-category
+    public async Task PropagateCancellationTokenInMethod_ForwardsToken_ReturnsUpdatedText()
+    {
+        SetSource(
+            "using System.Threading; using System.Threading.Tasks; public class C { public async Task FooAsync(CancellationToken ct) { await BarAsync(); } public Task BarAsync() => Task.CompletedTask; public Task BarAsync(CancellationToken ct) => Task.CompletedTask; }",
+            "C.cs");
+
+        var result = await _asyncOptimizationEngine.PropagateCancellationTokenInMethodAsync("C.cs", "FooAsync");
+
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
+        Assert.That(result.UpdatedText, Does.Contain("BarAsync(ct)"));
+    }
+
+    [Test]
     [Category("LogicOptimizationEngine")] // sentinel:auto-category
     public async Task ReduceBlockDepth_CancelledToken_PropagatesOperationCanceledException()
     {

@@ -1479,12 +1479,8 @@ public class AsyncifyTools
                     if (propagateCancellationTokens)
                     {
                         var asyncMethod = methodName + "Async";
-                        var propagationResult = await _asyncOptimizationEngine
-                            .PropagateCancellationTokenInMethodAsync(target.FilePath, asyncMethod, progress: progress, cancellationToken: cancellationToken);
-                        if (!string.IsNullOrEmpty(propagationResult.UpdatedText))
-                        {
-                            updatedSource = propagationResult.UpdatedText;
-                        }
+                        var (propagatedSource, _) = await _asyncOptimizationEngine.PropagateCancellationTokenInSourceAsync(updatedSource!, target.FilePath, asyncMethod, progress, cancellationToken);
+                        updatedSource = propagatedSource;
                     }
 
                     var bridgeValidation = await _validationEngine.ValidateChangesAsync(
@@ -3020,10 +3016,8 @@ public class AsyncifyTools
                 if (input.PropagateCancellationTokens)
                 {
                     var asyncMethod = candidate.MethodName + "Async";
-                    var propagationResult = await _asyncOptimizationEngine
-                        .PropagateCancellationTokenInMethodAsync(candidate.FilePath, asyncMethod, progress: progress, cancellationToken: state.InnerToken);
-                    if (!string.IsNullOrEmpty(propagationResult.UpdatedText))
-                        updatedSource = propagationResult.UpdatedText;
+                    var (propagatedSource, _) = await _asyncOptimizationEngine.PropagateCancellationTokenInSourceAsync(updatedSource!, candidate.FilePath, asyncMethod, progress, state.InnerToken);
+                    updatedSource = propagatedSource;
                 }
 
                 var applyResult3a = await _workspaceManager.ApplyProposedChangesAsync(
@@ -3515,12 +3509,8 @@ public class AsyncifyTools
                 if (propagateCancellationTokens)
                 {
                     var asyncMethod = methodName + "Async";
-                    var propagationResult = await _asyncOptimizationEngine
-                        .PropagateCancellationTokenInMethodAsync(filePath, asyncMethod, progress: progress, cancellationToken: cancellationToken);
-                    if (!string.IsNullOrEmpty(propagationResult.UpdatedText))
-                    {
-                        updatedSource = propagationResult.UpdatedText;
-                    }
+                    var (propagatedSource, _) = await _asyncOptimizationEngine.PropagateCancellationTokenInSourceAsync(updatedSource!, filePath, asyncMethod, progress, cancellationToken);
+                    updatedSource = propagatedSource;
                 }
 
                 var handlerToAsyncValidation = await _validationEngine.ValidateChangesAsync(

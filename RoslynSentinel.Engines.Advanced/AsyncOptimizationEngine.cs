@@ -3192,7 +3192,8 @@ internal sealed class MigrationCandidateAttribute : Attribute
         {
             Outcome = EditOutcome.Modified,
             FilePath = filePath,
-            Message = "Call sites updated successfully."
+            Message = "Call sites updated successfully.",
+            UpdatedText = newRoot.ToFullString()
         };
     }
 
