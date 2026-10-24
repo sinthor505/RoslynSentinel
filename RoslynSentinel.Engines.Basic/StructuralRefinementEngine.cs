@@ -97,7 +97,7 @@ public class StructuralRefinementEngine
     {
         if (!_config.IsFeatureEnabled("DeleteUnusedSymbol"))
         {
-            return DocumentEditResult.FeatureDisabled(filePath);
+            throw new ToolFeatureDisabledException("DeleteUnusedSymbol");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -244,7 +244,7 @@ public class StructuralRefinementEngine
     {
         if (!_config.IsFeatureEnabled("DeleteUnusedSymbol"))
         {
-            return DocumentEditResult.FeatureDisabled(filePath);
+            throw new ToolFeatureDisabledException("DeleteUnusedSymbol");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
