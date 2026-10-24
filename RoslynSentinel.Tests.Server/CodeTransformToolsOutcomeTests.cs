@@ -311,4 +311,17 @@ public class Counter
         Assert.That(result.ErrorData.Message, Does.Contain("Convert it manually or remove the base class first"));
         Assert.That(result.ErrorData.Message, Does.Not.Contain("   at "), "no stack trace in the tool result");
     }
+
+    // A class with no ILogger.Log calls makes the engine return NoCandidatesFound with the unchanged, non-empty file
+    // text. The tool must report that as its own success message, not as a transformed source.
+    [Test]
+    public async Task ConvertToSourceGeneratedLogging_NoLogCalls_ToolResultIsTheNoCallsSuccessMessage()
+    {
+        var path = SetSource("L.cs", "public class L\n{\n    public void M() { }\n}");
+
+        var result = await _tools.ApplyClassCodeTransform("outcome test", path, "L", "convert_to_source_generated_logging");
+
+        Assert.That(result.IsError, Is.False);
+        Assert.That(result.SuccessData?.ToString(), Does.Contain("No ILogger.Log calls found"));
+    }
 }

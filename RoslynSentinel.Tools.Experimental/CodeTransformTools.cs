@@ -890,7 +890,7 @@ public class CodeTransformTools
                 case "convert_to_source_generated_logging":
                     {
                         var r = await _modernizationEngine.ConvertToSourceGeneratedLoggingAsync(resolvedFilePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
+                        if (r.Outcome == EditOutcome.NoCandidatesFound)
                         {
                             return new SentinelCallToolResult<object>
                             {
