@@ -840,5 +840,49 @@ public class AttributedTarget { }
         Assert.That(sites, Is.Not.Null.And.Count.EqualTo(1));
     }
 
+    [Test]
+    [Category("SymbolRelationshipTools")]
+    public async Task QuerySymbolRelationships_AttributeUsages_IncludeTestsFalse_HidesTestHitAndNamesIt()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "AttrUsagesIncludeTests_" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(dir, "AppProj"));
+            Directory.CreateDirectory(Path.Combine(dir, "TestsProj"));
+            var appCsproj = Path.Combine(dir, "AppProj", "AppProj.csproj");
+            var testCsproj = Path.Combine(dir, "TestsProj", "TestsProj.csproj");
+            File.WriteAllText(appCsproj, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
+            File.WriteAllText(testCsproj, "<Project Sdk=\"Microsoft.NET.Sdk\"><ItemGroup><PackageReference Include=\"Microsoft.NET.Test.Sdk\" Version=\"18.10.1\" /></ItemGroup></Project>");
+
+            var solution = TestSolutionBuilder.CreateSolutionWithProject("AppProj", appCsproj,
+                [("App.cs", "public class ProbeAttribute : System.Attribute { }\n[Probe]\npublic class AppTarget { }\n", Path.Combine(dir, "AppProj", "App.cs"))]);
+            var testProjectId = ProjectId.CreateNewId();
+            solution = solution.AddProject(ProjectInfo.Create(testProjectId, VersionStamp.Default, "TestsProj", "TestsProj", LanguageNames.CSharp)
+                    .WithFilePath(testCsproj))
+                .AddDocument(DocumentId.CreateNewId(testProjectId, "Tests.cs"), "Tests.cs",
+                    Microsoft.CodeAnalysis.Text.SourceText.From("[Probe]\npublic class TestTarget { }\n"), filePath: Path.Combine(dir, "TestsProj", "Tests.cs"));
+            _workspaceManager.SetTestSolution(solution);
+
+            var impl = new SymbolRelationshipImpl(_discoveryEngine, _symbolNavigationEngine, _workspaceManager, NullLogger<SymbolRelationshipImpl>.Instance);
+
+            var hidden = await impl.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages, includeTests: false);
+            Assert.That(hidden.IsError, Is.False, hidden.ErrorData?.Message);
+            var hiddenSites = (hidden.SuccessData as System.Collections.IEnumerable)?.Cast<AttributeUsageSite>().ToList();
+            Assert.That(hiddenSites, Is.Not.Null.And.Count.EqualTo(1));
+            Assert.That(hiddenSites![0].ProjectName, Is.EqualTo("AppProj"));
+            Assert.That(hidden.StatusMessage, Does.Contain("hidden because includeTests is false").And.Contain("includeTests: true"));
+
+            var all = await impl.QuerySymbolRelationships(reason: "test message", "Probe", FindUsagesSearchKind.attributeUsages, includeTests: true);
+            Assert.That(all.IsError, Is.False, all.ErrorData?.Message);
+            var allSites = (all.SuccessData as System.Collections.IEnumerable)?.Cast<AttributeUsageSite>().ToList();
+            Assert.That(allSites, Is.Not.Null.And.Count.EqualTo(2));
+            Assert.That(allSites!.Select(s => s.ProjectName), Is.EquivalentTo(new[] { "AppProj", "TestsProj" }));
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
     public AntiPatternEngine _antiPatternEngine;
 }

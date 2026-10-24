@@ -81,7 +81,7 @@ public class SearchSolutionTextRecoveryHintTests
         Assert.That(result.IsError, Is.False);
         Assert.That(result.TotalRecords, Is.EqualTo(0));
         Assert.That(result.StatusMessage, Does.Contain(expected));
-        Assert.That(result.WarningDetails, Is.EqualTo(expected));
+        Assert.That(result.WarningDetails, Is.Null, "the recovery hint is in StatusMessage only");
         var payload = (TextSearchResult)result.SuccessData!;
         Assert.That(payload.LiteralResults, Is.Empty, "relaxed matches are advice only, never hits");
         Assert.That(payload.RegexResults, Is.Empty, "relaxed matches are advice only, never hits");

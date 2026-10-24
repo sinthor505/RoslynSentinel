@@ -1,7 +1,7 @@
 // Coverage for the includeTests parameter of WorkspaceReadNavigationImpl.ListAllTool.
 // With includeTests: false and no projectName, declarations of projects whose .csproj references
-// Microsoft.NET.Test.Sdk (TestProjectDetector.IsTestProject) are skipped and the StatusMessage says how
-// many were excluded. An explicit projectName naming a test project always lists it.
+// Microsoft.NET.Test.Sdk (TestProjectDetector.IsTestProject) are hidden and the StatusMessage says how
+// many were hidden. An explicit projectName naming a test project always lists it.
 
 using System.IO;
 
@@ -25,9 +25,9 @@ public class ListAllIncludeTestsTests
     private const string PlainCsproj =
         "<Project Sdk=\"Microsoft.NET.Sdk\">\n  <ItemGroup>\n    <PackageReference Include=\"Newtonsoft.Json\" Version=\"13.0.3\" />\n  </ItemGroup>\n</Project>\n";
 
-    private const string TestsSource = "public class UnitTest1 { public void TestMethod_InTestProject() { } }";
-    private const string AppSource = "public class App { public void Run_InAppProject() { } }";
-    private const string ExclusionPhrase = "test project(s) were excluded";
+    private const string TestsSource = "public class UnitTest1 { public void TestMethod_InTestProject() { } } public class SharedName { }";
+    private const string AppSource = "public class App { public void Run_InAppProject() { } } public class SharedName { }";
+    private const string ExclusionPhrase = "hidden because includeTests is false";
     private const string IncludeTestsHint = "includeTests: true";
 
     private string _dir = string.Empty;
@@ -143,5 +143,23 @@ public class ListAllIncludeTestsTests
         Assert.That(result.TotalRecords, Is.EqualTo(0));
         Assert.That(StatusOf(result), Does.Contain(ExclusionPhrase));
         Assert.That(StatusOf(result), Does.Contain(IncludeTestsHint));
+    }
+
+    [Test]
+    public async Task IncludeTestsFalse_NameInBothProjects_ReturnsOnlyAppEntryAndNamesTheTestProject()
+    {
+        var hidden = await _impl.ListAll(reason: "test message", kind: ListAllKind.@class, nameFilter: "SharedName", includeTests: false);
+
+        Assert.That(hidden.IsError, Is.False);
+        Assert.That(EntriesOf(hidden).Count, Is.EqualTo(1), "only the non-test project's SharedName may be listed");
+        Assert.That(StatusOf(hidden), Does.Contain("TestsProj"), "the status message must name the hidden test project");
+        Assert.That(StatusOf(hidden), Does.Contain(ExclusionPhrase));
+        Assert.That(StatusOf(hidden), Does.Contain(IncludeTestsHint));
+
+        var shown = await _impl.ListAll(reason: "test message", kind: ListAllKind.@class, nameFilter: "SharedName", includeTests: true);
+
+        Assert.That(shown.IsError, Is.False);
+        Assert.That(EntriesOf(shown).Count, Is.EqualTo(2), "includeTests: true must also list the test project's SharedName");
+        Assert.That(StatusOf(shown), Does.Not.Contain(ExclusionPhrase));
     }
 }

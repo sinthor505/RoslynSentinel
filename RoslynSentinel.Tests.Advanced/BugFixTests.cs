@@ -1747,6 +1747,69 @@ public class Consumer
             Assert.That(results[0].CallerMethod, Is.EqualTo("Make"));
         }
 
+        // -- RecordParameter: an indented positional-record contextSnippet maps to the synthesized property and finds its reader --
+        [Test]
+        public async Task FindCallersAsync_RecordParameter_IndentedSnippet_ResolvesToPropertyAndFindsReference()
+        {
+            const string src = @"public record Item(
+    int Id,
+    string? Detail = null);
+public class Reader
+{
+    string Read(Item i) => i.Detail ?? string.Empty;
+}";
+            SetSource(src, "Item.cs");
+            var results = await _navigationEngine.FindCallersAsync("Item.cs", "Detail", contextSnippet: "    string? Detail = null");
+            Assert.That(results, Is.Not.Empty, "Reader.Read reads Item.Detail, so at least one caller must be reported");
+            Assert.That(results.Select(r => r.CallerMethod), Does.Contain("Read"));
+        }
+
+        // -- RecordParameter: the same positional-record lookup with a trimmed contextSnippet resolves identically --
+        [Test]
+        public async Task FindCallersAsync_RecordParameter_TrimmedSnippet_Resolves()
+        {
+            const string src = @"public record Item(
+    int Id,
+    string? Detail = null);
+public class Reader
+{
+    string Read(Item i) => i.Detail ?? string.Empty;
+}";
+            SetSource(src, "Item.cs");
+            var results = await _navigationEngine.FindCallersAsync("Item.cs", "Detail", contextSnippet: "string? Detail = null");
+            Assert.That(results, Is.Not.Empty, "Reader.Read reads Item.Detail, so at least one caller must be reported");
+            Assert.That(results.Select(r => r.CallerMethod), Does.Contain("Read"));
+        }
+
+        // -- RecordParameter: with no contextSnippet, a positional record parameter name resolves to its property by name --
+        [Test]
+        public async Task FindCallersAsync_RecordParameter_NoSnippet_ResolvesByName()
+        {
+            const string src = @"public record Item(
+    int Id,
+    string? Detail = null);
+public class Reader
+{
+    string Read(Item i) => i.Detail ?? string.Empty;
+}";
+            SetSource(src, "Item.cs");
+            var results = await _navigationEngine.FindCallersAsync("Item.cs", "Detail", contextSnippet: null);
+            Assert.That(results, Is.Not.Empty, "Reader.Read reads Item.Detail, so at least one caller must be reported");
+            Assert.That(results.Select(r => r.CallerMethod), Does.Contain("Read"));
+        }
+
+        // -- RecordParameter control: a class constructor parameter snippet is not mapped to a property and still resolves --
+        [Test]
+        public async Task FindCallersAsync_ClassConstructorParameter_RecordParameterControl_StillResolvesToParameterNotProperty()
+        {
+            const string src = @"public class Box
+{
+    public Box(int size) { }
+}";
+            SetSource(src, "Box.cs");
+            await Assert.DoesNotThrowAsync(async () => await _navigationEngine.FindCallersAsync("Box.cs", "size", contextSnippet: "int size"));
+        }
+
         // -- Fix B1: a type with only constructors resolves to the type (constructors are not a competing candidate) --
         [Test]
         public async Task FindCallers_ByName_TypeWithConstructors_ResolvesToType()

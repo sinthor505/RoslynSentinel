@@ -1,6 +1,6 @@
 # Finding: a contextSnippet on a positional record parameter does not resolve, and the error does not say why
 
-**Status:** OPEN 2026-10-24. Fix not decided; a `// TODO` marks the spot in `SnippetSymbolLocator`.
+**Status:** FIXED 2026-10-24. Locator skips snippet indentation and maps a positional-record parameter to its property; FindCallers resolves a record parameter by name and the message lists it. Remaining: the by-name path inside FindImplementations (`SymbolNavigationEngine` ~1808/1903) and `DescribeNameOnlyCandidates` still ignore record parameters (`// TODO` in `SnippetSymbolLocator`).
 
 ## Context
 While sizing a change to `ResultError.Detail`, `Search(mode: references, query: "Detail",

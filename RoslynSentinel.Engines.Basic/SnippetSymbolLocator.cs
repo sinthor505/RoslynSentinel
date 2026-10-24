@@ -40,19 +40,52 @@ public static class SnippetSymbolLocator
             return null;
         }
 
-        var pos = SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter).Start;
+        var pos = SkipLeadingWhitespace(text, SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter).Start);
         var node = root.FindNode(new TextSpan(pos, 0));
 
-        // TODO a snippet on a positional record parameter (e.g. "string? Detail = null,") resolves to null
-        // (suspected: FindNode lands on the ParameterList when the snippet has leading indentation) and, even when
-        // it hits the ParameterSyntax, returns the IParameterSymbol, not the synthesized property that references
-        // bind to. The failure message also omits record parameters from its candidate list
+        // TODO the failure message omits record parameters from its candidate list
         // (SymbolNavigationEngine.DescribeNameOnlyCandidates filters to MemberDeclarationSyntax).
-        return model.GetDeclaredSymbol(node, cancellationToken)
+        return MapRecordParameterToProperty(model.GetDeclaredSymbol(node, cancellationToken)
                ?? model.GetSymbolInfo(node, cancellationToken).Symbol
                ?? node.DescendantNodes().OfType<VariableDeclaratorSyntax>()
                       .Select(v => model.GetDeclaredSymbol(v, cancellationToken))
-                      .FirstOrDefault(s => s != null);
+                      .FirstOrDefault(s => s != null));
+    }
+
+    /// <summary>
+    /// Advances pos past leading spaces and tabs so a snippet that starts in the indentation of its line still
+    /// resolves to the declaration on that line. Never moves past the end of the line.
+    /// </summary>
+    private static int SkipLeadingWhitespace(SourceText text, int pos)
+    {
+        while (pos < text.Length && (text[pos] == ' ' || text[pos] == '\t'))
+        {
+            pos++;
+        }
+
+        return pos;
+    }
+
+    /// <summary>
+    /// Maps a positional record parameter to the synthesized property that references bind to. Any other symbol
+    /// (primary-constructor parameters of classes and structs, explicit constructor parameters, non-parameters) is
+    /// returned unchanged.
+    /// </summary>
+    private static ISymbol? MapRecordParameterToProperty(ISymbol? s)
+    {
+        if (s is not IParameterSymbol p)
+        {
+            return s;
+        }
+
+        var syntax = p.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        if (syntax is not ParameterSyntax { Parent: ParameterListSyntax { Parent: RecordDeclarationSyntax } })
+        {
+            return s;
+        }
+
+        var containingType = p.ContainingType ?? p.ContainingSymbol?.ContainingType;
+        return containingType?.GetMembers(p.Name).OfType<IPropertySymbol>().FirstOrDefault() ?? s;
     }
 
     /// <summary>
@@ -114,7 +147,7 @@ public static class SnippetSymbolLocator
             return null;
         }
 
-        var pos = SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter).Start;
+        var pos = SkipLeadingWhitespace(text, SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter).Start);
         var node = root.FindNode(new TextSpan(pos, 0));
         foreach (var declaration in FindHeaderDeclarations(node, pos))
         {
@@ -126,6 +159,7 @@ public static class SnippetSymbolLocator
                 _ => model.GetDeclaredSymbol(declaration, cancellationToken),
             };
 
+            declared = MapRecordParameterToProperty(declared);
             if (declared != null && Matches(declared, segment))
             {
                 return declared;

@@ -1491,7 +1491,7 @@ public class SymbolNavigationEngine
             if (root == null || model == null)
             {
                 throw new InvalidOperationException(
-                    $"FindCallers: could not obtain a syntax tree/semantic model for '{filePath}'. " +
+                    $"could not obtain a syntax tree/semantic model for '{filePath}'. " +
                     "This is NOT a confirmed zero-references result - the lookup never ran.");
             }
 
@@ -1513,12 +1513,20 @@ public class SymbolNavigationEngine
 
             if (contextSnippet != null)
             {
-                symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, symbolName, lineBefore, lineAfter, cancellationToken) ?? throw new ToolNotFoundException(
-                        $"FindCallers: contextSnippet did not resolve to a symbol in '{filePath}'. " +
+                symbol = await SnippetSymbolLocator.FindSymbolAtSnippetAsync(document, contextSnippet, symbolName, lineBefore, lineAfter, cancellationToken);
+                if (symbol == null)
+                {
+                    var positionalRecord = FindPositionalRecordProperty(model, root, symbolName);
+                    throw new ToolNotFoundException(
+                        $"contextSnippet did not resolve to a symbol in '{filePath}'. " +
                         $"This is NOT a confirmed zero-references result for '{symbolName}' - the lookup " +
                         "never ran. " + DescribeNameOnlyCandidates(decls, symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output, " +
-                        "or omit contextSnippet if the symbolName is unambiguous in this file.");
+                        "or omit contextSnippet if the symbolName is unambiguous in this file." +
+                        (positionalRecord != null
+                            ? $" '{symbolName}' is a positional parameter of record {positionalRecord.ContainingType.Name}; point contextSnippet at that line or omit it to resolve the property by name."
+                            : string.Empty));
+                }
             }
             else
             {
@@ -1537,10 +1545,11 @@ public class SymbolNavigationEngine
                             .FirstOrDefault(s => s != null);
                 }
 
+                symbol ??= FindPositionalRecordProperty(model, root, symbolName);
                 if (symbol == null)
                 {
                     throw new ToolNotFoundException(
-                        $"FindCallers: symbolName '{symbolName}' was not found declared in '{filePath}'. " +
+                        $"symbolName '{symbolName}' was not found declared in '{filePath}'. " +
                         "This is NOT a confirmed zero-references result - the lookup never ran. Verify the " +
                         "name against GetFileOutline, or omit filePath to search by name across the solution.");
                 }
@@ -1632,7 +1641,7 @@ public class SymbolNavigationEngine
                     // traced in docs/current/blockers/resolved/blocking_error_member_replace_containername_regression_setup_overload.md's
                     // investigation, reproduced here in the solution-wide by-name path.
                     throw new ToolNotFoundException(
-                        $"FindCallers: contextSnippet did not resolve to a symbol for symbolName " +
+                        $"contextSnippet did not resolve to a symbol for symbolName " +
                         $"'{symbolName}' in any of the {memberMatches.Count} candidate location(s) found " +
                         "across the solution. This is NOT a confirmed zero-references result - the lookup " +
                         "never ran. " + DescribeCandidateLocations(memberMatches) + DescribeTypeMatchHint(allMatches, symbolName) +
@@ -1666,7 +1675,7 @@ public class SymbolNavigationEngine
         {
             var nearMissHint = await DescribeNearMissCandidatesAsync(solution, symbolName, cancellationToken);
             throw new ToolNotFoundException(
-                $"FindCallers: symbolName '{symbolName}' could not be resolved anywhere in the solution" +
+                $"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                 (contextSnippet != null ? " with the supplied contextSnippet" : "") + ". " +
                 "This is NOT a confirmed zero-references result - the lookup never ran. " + nearMissHint +
                 "Verify the name via Search(mode: symbol)/GetFileOutline before treating this as evidence the symbol is unused.");
@@ -1752,6 +1761,26 @@ public class SymbolNavigationEngine
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Finds the synthesized property for a positional record parameter (e.g. `Detail` in
+    /// `record R(string Detail)`). Such parameters are not MemberDeclarationSyntax, so the
+    /// declaration-based lookup cannot see them. Returns null when no positional record
+    /// parameter of that name exists in the file.
+    /// </summary>
+    private static IPropertySymbol? FindPositionalRecordProperty(SemanticModel model, SyntaxNode root, string name)
+    {
+        var record = root.DescendantNodes().OfType<ParameterSyntax>()
+            .Where(p => p.Identifier.ValueText == name && p.Parent is ParameterListSyntax { Parent: RecordDeclarationSyntax })
+            .Select(p => (RecordDeclarationSyntax)p.Parent!.Parent!)
+            .FirstOrDefault();
+        if (record == null || model.GetDeclaredSymbol(record) is not INamedTypeSymbol recordSymbol)
+        {
+            return null;
+        }
+
+        return recordSymbol.GetMembers(name).OfType<IPropertySymbol>().FirstOrDefault();
     }
 
     /// <summary>
@@ -2644,13 +2673,15 @@ public class SymbolNavigationEngine
     /// leading indentation; later lines keep the file's own). Supports class-level members and enum
     /// members; whole types are refused (TargetIneligible) because ReadFile / GetFileOutline serve
     /// that. Resolution mirrors Member(remove)/Member(replace): by name, narrowed by containerName,
-    /// then contextSnippet/lineBefore/lineAfter. Unlike remove/replace, an overloaded name with no
+    /// then contextSnippet/lineBefore/lineAfter. With requireContainerMatch a containerName that matches
+    /// no candidate is refused (NotFound, listing the types that declare the member) instead of ignored;
+    /// without it the lenient fallback applies. Unlike remove/replace, an overloaded name with no
     /// contextSnippet is reported as Ambiguous rather than silently resolved to the first overload,
     /// since a read that returns the wrong overload is worse than an error. Output is capped at
     /// 200 lines; past the cap Source is the first 200 lines, IsComplete is false, and EndLine is
     /// still the member's real last line so a follow-up ReadFile is one precise call.
     /// </summary>
-    public async Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
+    public async Task<(EditOutcome Outcome, string? Message, string? ErrorCode, MemberSourceInfo? Source)> GetMemberSourceAsync(FilePathWrapper filePath, string memberName, string? containerName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, bool requireContainerMatch = false, CancellationToken cancellationToken = default)
     {
         const int MaxSourceLines = 200;
 
@@ -2669,7 +2700,22 @@ public class SymbolNavigationEngine
         var memberCandidates = SyntaxTargetResolver.PreferNonInterfaceMember(allNameCandidates
             .Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum))
             .ToList());
-        memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
+        if (requireContainerMatch && !string.IsNullOrWhiteSpace(containerName))
+        {
+            // Deliberate deviation from the lenient filter below: a named container that holds no candidate is refused, not ignored.
+            var narrowed = SyntaxTargetResolver.FilterByContainingTypeStrict(memberCandidates, containerName);
+            if (narrowed.Count == 0 && (memberCandidates.Count > 0 || allNameCandidates.Count == 0))
+            {
+                var (message, candidates) = SyntaxTargetResolver.BuildContainerMissDetail(root, sourceText, memberName, containerName, document.FilePath ?? string.Empty, "ReadFile(filePath: '{file}', memberName: '{member}', containerName: '{container}')", methodsOnly: false);
+                throw new ToolNotFoundException(message, "member", memberName, candidates: candidates);
+            }
+
+            memberCandidates = narrowed;
+        }
+        else
+        {
+            memberCandidates = SyntaxTargetResolver.FilterByContainingType(memberCandidates, containerName);
+        }
 
         if (memberCandidates.Count == 0)
         {
@@ -2682,14 +2728,6 @@ public class SymbolNavigationEngine
             }
 
             throw new ToolNotFoundException($"Member '{memberName}' not found");
-        }
-
-        // ResolveBySnippetOrThrow returns the first candidate when no snippet is given. That is
-        // acceptable for a write that a later precheck guards, but a read would silently return
-        // the wrong overload, so an unresolved multi-candidate set is reported instead.
-        if (contextSnippet == null && memberCandidates.Count > 1)
-        {
-            throw new ToolAmbiguousMatchException(SyntaxTargetResolver.BuildHintForCandidates(memberCandidates, [], "ambiguous"), SyntaxTargetResolver.BuildDeclarationCandidates(memberCandidates, sourceText, document.FilePath ?? string.Empty));
         }
 
         var resolved = SyntaxTargetResolver.ResolveBySnippetOrThrow(memberCandidates, sourceText, contextSnippet, lineBefore, lineAfter,

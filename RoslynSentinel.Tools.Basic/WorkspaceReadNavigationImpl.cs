@@ -199,9 +199,65 @@ public class WorkspaceReadNavigationImpl
         return new ResultError("MethodNotFound", string.Join(" ", parts));
     }
 
+    /// <summary>Name of the nearest enclosing class, struct, record or interface of <paramref name="member"/>, or null when there is none.</summary>
+    private static string? GetNearestTypeName(SyntaxNode member) => member.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text;
+
+    /// <summary>
+    /// Builds the Ambiguous error for GetMethodSource when a name is still declared more than once after the container
+    /// filter, name match and interface rule. Lists each candidate (containing type, signature, line range, capped at 10)
+    /// and names retries that work: <c>containerName</c> only for types with exactly one candidate (at most 3), and
+    /// <c>ReadFile</c> with the first candidate's real line range.
+    /// </summary>
+    internal static ResultError BuildAmbiguousMethodError(IReadOnlyList<BaseMethodDeclarationSyntax> matches, string methodName, string? containerName, string requestedFilePath)
+    {
+        const int candidateCap = 10;
+        var entries = matches.Select(m =>
+        {
+            var span = m.GetLocation().GetLineSpan();
+            return (Method: m, Type: GetNearestTypeName(m), Signature: BuildSignature(m), Start: span.StartLinePosition.Line + 1, End: span.EndLinePosition.Line + 1);
+        }).ToList();
+
+        var candidates = entries.Take(candidateCap).Select(e => new AmbiguousCandidate(
+            FilePath: requestedFilePath,
+            Line: e.Start,
+            Kind: e.Method is ConstructorDeclarationSyntax ? "constructor" : "method",
+            Signature: e.Signature,
+            ContainingType: e.Type ?? string.Empty,
+            ContextSnippet: e.Method.ToString().Split('\n')[0].Trim(),
+            LineBefore: null,
+            Counted: true)).ToList();
+
+        var listed = entries.Take(candidateCap).Select((e, i) =>
+            $"{i + 1}. {(e.Type is null ? "" : e.Type + ".")}{Regex.Replace(e.Signature, @"\s+", " ")} - lines {e.Start}-{e.End}");
+        var more = entries.Count > candidateCap ? $" (+{entries.Count - candidateCap} more)" : "";
+        var narrowed = string.IsNullOrWhiteSpace(containerName) ? "" : $", narrowed to type '{containerName}'";
+        var parts = new List<string>
+        {
+            $"Method or constructor '{methodName}' is declared {entries.Count} times in '{requestedFilePath}' (searched the whole file{narrowed}). " +
+            $"GetMethodSource never picks one for you. Candidates: {string.Join("; ", listed)}{more}."
+        };
+
+        var singleCandidateTypes = entries.Where(e => e.Type is not null)
+            .GroupBy(e => e.Type!, StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() == 1)
+            .Select(g => g.Key)
+            .Take(3)
+            .ToList();
+        if (singleCandidateTypes.Count > 0)
+        {
+            var retries = singleCandidateTypes.Select(t => $"GetMethodSource(filePath: '{requestedFilePath}', methodName: '{methodName}', containerName: '{t}')");
+            parts.Add($"To choose a type, retry {string.Join(" or ", retries)}.");
+        }
+
+        parts.Add($"To choose between overloads, read the exact lines: ReadFile(filePath: '{requestedFilePath}', startLine: {entries[0].Start}, endLine: {entries[0].End}).");
+
+        return new ResultError(ToolErrorCode.Ambiguous, string.Join(" ", parts), null, ToolErrorMapper.ToStructuredDetail(candidates));
+    }
+
     public async Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSource(
         ToolCallReason reason,
         string filePath, string methodName,
+        string? containerName = null,
         CancellationToken cancellationToken = default)
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
@@ -232,15 +288,57 @@ public class WorkspaceReadNavigationImpl
             // Constructors are ConstructorDeclarationSyntax, not MethodDeclarationSyntax, but callers
             // naturally pass the class name for "give me the source of its constructor" -> resolve
             // both node kinds under the shared BaseMethodDeclarationSyntax base.
-            var method = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault(m => GetMethodOrCtorName(m).Equals(methodName, StringComparison.Ordinal)) ?? root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>().FirstOrDefault(m => GetMethodOrCtorName(m).Equals(methodName, StringComparison.OrdinalIgnoreCase));
-            if (method == null)
+            // containerName is optional on purpose: every existing call names a method that is unique in its file and
+            // passes no container, so a mandatory parameter would break them. The first match is never returned when
+            // several remain; the Ambiguous error lists every candidate and the retry that picks one.
+            var hasContainer = !string.IsNullOrWhiteSpace(containerName);
+            var declared = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>().ToList();
+            var inScope = hasContainer
+                ? declared.Where(m => SyntaxTargetResolver.ContainingTypeMatches(GetNearestTypeName(m), containerName!)).ToList()
+                : declared;
+            var matches = inScope.Where(m => GetMethodOrCtorName(m).Equals(methodName, StringComparison.Ordinal)).ToList();
+            if (matches.Count == 0)
+            {
+                matches = inScope.Where(m => GetMethodOrCtorName(m).Equals(methodName, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            // Interface rule: a declaration in an interface yields to implementations (mirrors SyntaxTargetResolver.PreferNonInterfaceMember).
+            if (matches.Count > 1 && matches.Any(m => m.Parent is InterfaceDeclarationSyntax) && matches.Any(m => m.Parent is not InterfaceDeclarationSyntax))
+            {
+                matches = matches.Where(m => m.Parent is not InterfaceDeclarationSyntax).ToList();
+            }
+
+            if (matches.Count == 0)
+            {
+                if (!hasContainer)
+                {
+                    return new SentinelCallToolResult<MethodSourceResult, ResultError>()
+                    {
+                        IsError = true,
+                        ErrorData = await BuildMethodNotFoundErrorAsync(solution, root, methodName, filePathResolved, _workspaceManager.GetSolutionRoot(), cancellationToken)
+                    };
+                }
+
+                var sourceText = await document.GetTextAsync(cancellationToken);
+                var (missMessage, missCandidates) = SyntaxTargetResolver.BuildContainerMissDetail(root, sourceText, methodName, containerName!, filePathResolved,
+                    retryCallTemplate: "GetMethodSource(filePath: '{file}', methodName: '{member}', containerName: '{container}')", methodsOnly: true);
+                return new SentinelCallToolResult<MethodSourceResult, ResultError>()
+                {
+                    IsError = true,
+                    ErrorData = new ResultError("MethodNotFound", missMessage, null, ToolErrorMapper.ToStructuredDetail(missCandidates))
+                };
+            }
+
+            if (matches.Count > 1)
             {
                 return new SentinelCallToolResult<MethodSourceResult, ResultError>()
                 {
                     IsError = true,
-                    ErrorData = await BuildMethodNotFoundErrorAsync(solution, root, methodName, filePathResolved, _workspaceManager.GetSolutionRoot(), cancellationToken)
+                    ErrorData = BuildAmbiguousMethodError(matches, methodName, containerName, filePathResolved)
                 };
             }
+
+            var method = matches[0];
 
             var methodSource = method.ToFullString();
             var methodBytes = System.Text.Encoding.UTF8.GetByteCount(methodSource);
@@ -451,21 +549,12 @@ public class WorkspaceReadNavigationImpl
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
             var projects = solution.Projects.AsEnumerable();
-            var excludedTestProjectCount = 0;
             if (!string.IsNullOrEmpty(projectName))
             {
                 projects = projects.Where(p => string.Equals(p.Name, projectName, StringComparison.OrdinalIgnoreCase));
             }
-            else if (!includeTests)
-            {
-                var allProjects = projects.ToList();
-                var keptProjects = allProjects.Where(p => !TestProjectDetector.IsTestProject(p)).ToList();
-                excludedTestProjectCount = allProjects.Count - keptProjects.Count;
-                projects = keptProjects;
-            }
-            var exclusionNote = excludedTestProjectCount > 0
-                ? $"{excludedTestProjectCount} test project(s) were excluded because includeTests is false; pass includeTests: true to include them."
-                : null;
+            var hideTestProjects = string.IsNullOrEmpty(projectName) && !includeTests;
+            var hiddenByProject = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             var kindFilter = kind switch
@@ -479,6 +568,7 @@ public class WorkspaceReadNavigationImpl
             var allMatches = maxItems is null ? null : new List<(string FilePath, string ProjectName)>();
             foreach (var project in projects)
             {
+                var isHiddenTestProject = hideTestProjects && TestProjectDetector.IsTestProject(project);
                 foreach (var document in project.Documents)
                 {
                     if (string.IsNullOrEmpty(document.FilePath))
@@ -511,6 +601,17 @@ public class WorkspaceReadNavigationImpl
                             }
                         }
 
+                        if (isHiddenTestProject)
+                        {
+                            hiddenByProject.TryGetValue(project.Name, out var hiddenSoFar);
+                            if (hiddenSoFar < HiddenTestMatchCapPerProject)
+                            {
+                                hiddenByProject[project.Name] = hiddenSoFar + 1;
+                            }
+
+                            continue;
+                        }
+
                         totalMatches++;
                         allMatches?.Add((document.FilePath, project.Name));
                         if (maxItems is null || entries.Count < maxItems.Value)
@@ -520,6 +621,10 @@ public class WorkspaceReadNavigationImpl
                     }
                 }
             }
+
+            var hiddenTestHint = hiddenByProject.Count == 0
+                ? null
+                : BuildHiddenTestMatchHint(hiddenByProject, hasVisibleHits: totalMatches > 0);
 
             var result = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
                 entries,
@@ -537,7 +642,7 @@ public class WorkspaceReadNavigationImpl
                     TotalRecords = totalMatches,
                     HasMoreData = true,
                     ListSummary = summary,
-                    StatusMessage = exclusionNote,
+                    StatusMessage = hiddenTestHint,
                     WarningDetails = $"Truncated: showing the first {entries.Count} of {totalMatches} matching declarations (cap {maxItems}), spread over {summary.FileCount} files and {summary.ByProject!.Count} projects - listSummary.byProject and listSummary.byFile (top {summary.ByFile.Count} files, {summary.TruncatedFileCount} more files not shown) count ALL matches, use them to pick where to look. Narrow with query (name filter) or projectName, or use mode: symbol. For all callers/implementations of a symbol use Search(mode: references) or QuerySymbolRelationships; for orientation use ListAll or GetFileOutline."
                 };
             }
@@ -547,11 +652,11 @@ public class WorkspaceReadNavigationImpl
                 return result with
                 {
                     TotalRecords = 0,
-                    StatusMessage = $"No {(kindFilter ?? "declaration")} named '{nameFilter}' found ({(exactMatch ? "exact" : "substring")} match). Use mode: symbol to search every kind at once" + (exactMatch ? ", or pass exactMatch: false for a substring match." : ".") + (exclusionNote is null ? string.Empty : " " + exclusionNote)
+                    StatusMessage = $"No {(kindFilter ?? "declaration")} named '{nameFilter}' found ({(exactMatch ? "exact" : "substring")} match). Use mode: symbol to search every kind at once" + (exactMatch ? ", or pass exactMatch: false for a substring match." : ".") + (hiddenTestHint is null ? string.Empty : " " + hiddenTestHint)
                 };
             }
 
-            return result with { TotalRecords = totalMatches, StatusMessage = exclusionNote };
+            return result with { TotalRecords = totalMatches, StatusMessage = hiddenTestHint };
         }
         catch (Exception ex)
         {
@@ -998,6 +1103,8 @@ public class WorkspaceReadNavigationImpl
 
             if (literalResults.Count == 0 && regexResults.Count == 0)
             {
+                // The recovery pass runs only here (empty visible result), never during the main scan.
+                var recoveryHint = await BuildRecoveryHintAsync(solution, documentsToScan, pattern, fileGlob, includeTests, effectiveIncludeTests, globMatchedDocCount, solutionRoot, cancellationToken);
                 if (!string.IsNullOrEmpty(fileGlob) && globMatchedDocCount == 0)
                 {
                     // A glob that matches no document in any project is an empty answer, not a failure.
@@ -1028,18 +1135,23 @@ public class WorkspaceReadNavigationImpl
                 }
                 else
                 {
-                    warnings.Add(
-                        $"No matches were found for '{pattern}' as either a literal substring or a regex pattern. Try adjusting the search pattern. Matching is case-insensitive and per line, over C# source files only; a|b alternation is supported. The text may have been reworded, so search for a shorter distinctive fragment, or search each alternative separately. " +
-                        "If you were searching for a known symbol by name, use Search with mode: symbol instead (semantic lookup, not text matching). " +
-                        "Use ListAll to browse the solution's structure, ProjectDoc to read plan/handoff/documentation files directly, or " +
-                        "GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
+                    if (hiddenHint.Length > 0 || recoveryHint != null)
+                    {
+                        warnings.Add($"No matches were found for '{pattern}' (case-insensitive, per line, C# files only).");
+                    }
+                    else
+                    {
+                        warnings.Add(
+                            $"No matches were found for '{pattern}' as either a literal substring or a regex pattern. Try adjusting the search pattern. Matching is case-insensitive and per line, over C# source files only; a|b alternation is supported. The text may have been reworded, so search for a shorter distinctive fragment, or search each alternative separately. " +
+                            "If you were searching for a known symbol by name, use Search with mode: symbol instead (semantic lookup, not text matching). " +
+                            "Use ListAll to browse the solution's structure, ProjectDoc to read plan/handoff/documentation files directly, or " +
+                            "GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
+                    }
                     if (hiddenHint.Length > 0)
                     {
                         warnings.Add(hiddenHint);
                     }
                 }
-                // The recovery pass runs only here (empty visible result), never during the main scan.
-                var recoveryHint = await BuildRecoveryHintAsync(solution, documentsToScan, pattern, fileGlob, includeTests, effectiveIncludeTests, globMatchedDocCount, solutionRoot, cancellationToken);
                 if (recoveryHint != null)
                 {
                     warnings.Add(recoveryHint);
@@ -1054,7 +1166,7 @@ public class WorkspaceReadNavigationImpl
                     workspaceVersion: _workspaceManager.WorkspaceVersion,
                     statusMessage: string.Join(" ", warnings),
                     cancellationToken: cancellationToken);
-                return emptyResult with { IsError = false, WarningDetails = recoveryHint, Findings = justTripped ? new[] { new Finding("OrientationBreaker", string.Join(" ", warnings), FindingSeverity.Warning) } : Array.Empty<Finding>() };
+                return emptyResult with { IsError = false, WarningDetails = null, Findings = justTripped ? new[] { new Finding("OrientationBreaker", string.Join(" ", warnings), FindingSeverity.Warning) } : Array.Empty<Finding>() };
             }
             else if (totalResultCount >= maxResults)
             {

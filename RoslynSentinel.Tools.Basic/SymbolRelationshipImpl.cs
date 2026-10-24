@@ -31,19 +31,27 @@ public class SymbolRelationshipImpl
         _logger = logger;
     }
 
-    private async Task<List<object>> RunRelationshipQueryAsync(FindUsagesSearchKind searchKind, string name, string? projectName, string filePath, bool sortByFrequency, bool includeTests, string? hasAttribute, CancellationToken cancellationToken)
+    private async Task<List<object>> RunRelationshipQueryAsync(FindUsagesSearchKind searchKind, string name, string? projectName, string filePath, bool sortByFrequency, bool includeTests, string? hasAttribute, List<string> hiddenTestProjects, CancellationToken cancellationToken)
     {
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
+        // attributeUsages with includeTests false and no project/file scope is a view filter: scan every
+        // document, then drop test-project hits here and record their project names in hiddenTestProjects.
+        var hideTestHits = searchKind == FindUsagesSearchKind.attributeUsages && !includeTests && string.IsNullOrEmpty(projectName) && string.IsNullOrEmpty(filePath);
         object result = searchKind switch
         {
             FindUsagesSearchKind.implementorsOf => await _symbolNavigationEngine.FindAllImplementationsAsync(name, projectName, cancellationToken),
-            FindUsagesSearchKind.attributeUsages => await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePathResolved, includeTests: includeTests, hasAttribute: hasAttribute, cancellationToken: cancellationToken),
+            FindUsagesSearchKind.attributeUsages => await _discoveryEngine.FindAttributeUsagesAsync(name, projectName, filePathResolved, includeTests: includeTests || hideTestHits, hasAttribute: hasAttribute, cancellationToken: cancellationToken),
             FindUsagesSearchKind.objectCreations => await _discoveryEngine.FindObjectCreationSitesAsync(name, filePathResolved, projectName, sortByFrequency, cancellationToken),
             FindUsagesSearchKind.extensionsFor => await _symbolNavigationEngine.FindExtensionMethodsAsync(name, projectName, cancellationToken),
             FindUsagesSearchKind.typesWithAttribute => await _discoveryEngine.FindTypesByAttributeAsync(name, includeTests, projectName, cancellationToken),
             FindUsagesSearchKind.methodsByReturnType => await _discoveryEngine.FindMethodsByReturnTypeAsync(name, cancellationToken),
             _ => throw new ArgumentOutOfRangeException(nameof(searchKind), searchKind, "Unhandled searchKind.")
         };
+        if (hideTestHits)
+        {
+            var testDocProjects = await BuildTestDocumentMapAsync(filePathResolved.Absolute, cancellationToken);
+            result = ExcludeTestHits((List<AttributeUsageSite>)result, s => s.FilePath.Absolute, testDocProjects, hiddenTestProjects);
+        }
         // Every FindUsagesSearchKind backing method returns some IEnumerable<T> -> normalize to
         // List<object> so broaden-on-empty can report a count and label results uniformly
         // regardless of which kind produced them.
@@ -69,10 +77,16 @@ public class SymbolRelationshipImpl
                 }
             }
 
-            var results = await RunRelationshipQueryAsync(searchKind, name, projectName, filePathResolved, sortByFrequency, includeTests, hasAttribute, cancellationToken);
+            var hiddenTestProjects = new List<string>();
+            var results = await RunRelationshipQueryAsync(searchKind, name, projectName, filePathResolved, sortByFrequency, includeTests, hasAttribute, hiddenTestProjects, cancellationToken);
             if (results.Count > 0)
             {
-                return await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(results, _workspaceManager.GetSolutionRoot(), nameof(FindUsagesSearchKind), ResultWrapperType.SymbolRelationshipResultList, totalRecords: results.Count, cancellationToken: cancellationToken);
+                var listResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(results, _workspaceManager.GetSolutionRoot(), nameof(FindUsagesSearchKind), ResultWrapperType.SymbolRelationshipResultList, totalRecords: results.Count, cancellationToken: cancellationToken);
+                if (hiddenTestProjects.Count == 0)
+                {
+                    return listResult;
+                }
+                return listResult with { StatusMessage = HiddenTestHitsHint(hiddenTestProjects).TrimStart() };
             }
 
             if (!string.IsNullOrWhiteSpace(hasAttribute))
@@ -97,7 +111,7 @@ public class SymbolRelationshipImpl
             {
                 try
                 {
-                    var otherResults = await RunRelationshipQueryAsync(otherKind, name, projectName, filePathResolved, sortByFrequency, includeTests, null, cancellationToken);
+                    var otherResults = await RunRelationshipQueryAsync(otherKind, name, projectName, filePathResolved, sortByFrequency, includeTests, null, new List<string>(), cancellationToken);
                     if (otherResults.Count > 0)
                     {
                         broadened[otherKind.ToString()] = otherResults;
@@ -114,7 +128,7 @@ public class SymbolRelationshipImpl
             {
                 // Only claim a global miss when the whole solution was searched; a narrowed scope
                 // (test projects excluded, or a single project) must say what was actually covered.
-                var scopeNote = includeTests && string.IsNullOrEmpty(projectName) ? "This is a trustworthy 'not found anywhere' signal, not an error." : "Searched scope: " + (string.IsNullOrEmpty(projectName) ? "non-test projects only" : $"project '{projectName}'" + (includeTests ? string.Empty : " (non-test)")) + (includeTests ? string.Empty : "; pass includeTests: true to include test projects") + ". This is NOT a 'not found anywhere' signal.";
+                var scopeNote = includeTests && string.IsNullOrEmpty(projectName) ? "This is a trustworthy 'not found anywhere' signal, not an error." : "Searched scope: " + (string.IsNullOrEmpty(projectName) ? "non-test projects only" : $"project '{projectName}'" + (includeTests ? string.Empty : " (non-test)")) + (includeTests ? string.Empty : "; pass includeTests: true to include test projects") + ". This is NOT a 'not found anywhere' signal." + HiddenTestHitsHint(hiddenTestProjects) + "";
                 return new SentinelCallToolResult<object>
                 {
                     IsError = false,
@@ -242,6 +256,17 @@ public class SymbolRelationshipImpl
         }
         int projects = droppedProjectNames.Distinct(StringComparer.OrdinalIgnoreCase).Count();
         return $" {droppedProjectNames.Count} reference(s) in {projects} test project(s) excluded because includeTests is false; pass includeTests: true (needed for blast-radius checks).";
+    }
+
+    // Hint for attributeUsages hits hidden by includeTests: false. Leading space so it appends to a status message.
+    private static string HiddenTestHitsHint(List<string> hiddenTestProjects)
+    {
+        if (hiddenTestProjects.Count == 0)
+        {
+            return string.Empty;
+        }
+        var perProject = hiddenTestProjects.GroupBy(p => p, StringComparer.OrdinalIgnoreCase).Select(g => $"{g.Key} {g.Count()}");
+        return $" +{hiddenTestProjects.Count} more in test projects ({string.Join(", ", perProject)}), hidden because includeTests is false - rerun with includeTests: true to include them.";
     }
 
     public async Task<SentinelCallToolResult<object>> FindReferences(ToolCallReason reason, string symbolName, FindReferencesKind kind, string? filePath = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, bool includeTests = true, CancellationToken cancellationToken = default)
