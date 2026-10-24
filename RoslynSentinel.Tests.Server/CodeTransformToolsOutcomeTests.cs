@@ -127,22 +127,23 @@ public class Counter
 
         var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Twice", "convert_static_to_extension");
 
-        Assert.That(result.IsError, Is.True, "the engine returns TargetNotFound with the unchanged file as UpdatedText");
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        // The engine throws ToolTargetIneligibleException; the tool maps it to an IsError result.
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
         Assert.That(result.ErrorData!.Message, Does.Contain("The method must be static and have at least one parameter to become the 'this' parameter."));
     }
 
-    // (b) A tool whose own pre-guard branch was a SUCCESS keeps that exact success message when the engine finds
-    // nothing to do; "nothing to do" is not turned into an error.
+    // The engine throws ToolNotFoundException for a missing method; the tool maps it to an IsError result.
     [Test]
-    public async Task AddGuardClauses_MethodNotFound_StaysASuccessWithTheToolsMessage()
+    public async Task AddGuardClauses_MethodNotFound_IsNotFoundError()
     {
         var path = SetSource("Counter.cs", CounterWithoutTargetMethod);
 
         var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Missing", "add_guard_clauses");
 
-        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
-        Assert.That(result.SuccessData, Is.EqualTo($"No parameters eligible for guard clause insertion found in 'Missing' in '{path}'."));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.Contain("Method or body not found"));
     }
 
     [Test]

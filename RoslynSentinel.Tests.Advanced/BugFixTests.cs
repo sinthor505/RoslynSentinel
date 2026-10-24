@@ -3948,25 +3948,24 @@ namespace MyApp
         }
 
         [Test]
-        public async Task AddGuardClausesAsync_MethodNotInFile_ReturnsOriginalContent()
+        public async Task AddGuardClausesAsync_MethodNotInFile_ThrowsNotFound()
         {
-            // When the file exists but the method doesn't, the engine reports TargetNotFound
-            // with no UpdatedText (not an unchanged file); unlike file-not-found, no IO error.
-            var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
-            // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-            Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target method is not found - no changes needed");
+            // When the file exists but the method doesn't, the engine throws ToolNotFoundException
+            // (ErrorCode NotFound) instead of returning a TargetNotFound result.
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+                await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod"));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+            Assert.That(ex.Message, Does.Contain("Method or body not found"));
         }
 
         [Test]
-        public async Task AddGuardClauses_Tool_MethodNotFound_DoesNotThrow()
+        public async Task AddGuardClauses_Tool_MethodNotFound_ThrowsNotFound()
         {
-            // When the engine reports TargetNotFound with no UpdatedText, the tool
-            // the tool returns the TargetNotFound outcome rather than throwing -> only file-not-found triggers IOE.
-            var result = await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod");
-            // TODO throw-migration: assert the typed exception once LogicSimplificationEngine throws
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-            Assert.That(result, Is.Not.Null, "Engine returns TargetNotFound (not an exception) when target method is not found");
+            // The engine throws ToolNotFoundException (ErrorCode NotFound) when the target method is missing.
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+                await _engine.AddGuardClausesAsync("Stub.cs", "NonExistentMethod"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+            Assert.That(ex.Message, Does.Contain("Method or body not found"));
         }
     }
 

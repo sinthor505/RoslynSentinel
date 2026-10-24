@@ -108,7 +108,7 @@ public class Processor
     }
 
     [Test]
-    public async Task ReduceBlockDepth_MethodWithNoOptimizableIf_ReturnsUnchanged()
+    public async Task ReduceBlockDepth_MethodWithNoOptimizableIf_ThrowsTargetIneligible()
     {
         const string source = @"
 public class Logger
@@ -120,9 +120,11 @@ public class Logger
     }
 }";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Logger.cs", source)]));
-        var result = await new LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("Logger.cs", "Log");
-        Assert.That(result.UpdatedText!, Does.Not.StartWith("// ErrorDetails:"), "should return source, not error comment");
-        Assert.That(result.UpdatedText, Does.Contain("Log"), "method name should still appear");
+        // The engine throws ToolTargetIneligibleException (ErrorCode TargetIneligible) when there is no nested if to flatten.
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+            await new LogicSimplificationEngine(_mgr).ReduceBlockDepthAsync("Logger.cs", "Log"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(ex.Message, Does.Contain("cannot have its block depth reduced"));
     }
 }
 

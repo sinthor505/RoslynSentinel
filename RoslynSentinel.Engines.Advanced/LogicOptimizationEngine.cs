@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
+using RoslynSentinel.Common;
 // Deliberate exception to the explicit RoslynFormattingHelper.X call style: the shared FormatAnnotatedTextAsync
 // (whitespace slice D2) replaced a private copy this file calls many times; the static import keeps those call sites.
 using static RoslynSentinel.Common.RoslynFormattingHelper;
@@ -30,12 +31,7 @@ public class LogicSimplificationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found.");
         }
 
         var rewriter = new BooleanSimplifierRewriter();
@@ -58,16 +54,21 @@ public class LogicSimplificationEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method == null || method.Body == null || semanticModel == null)
+        if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Method or body not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found.");
+        }
+
+        var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
+        if (semanticModel == null)
+        {
+            throw new ToolInvalidArgumentException("Semantic model not found.");
+        }
+
+        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (method == null || method.Body == null)
+        {
+            throw new ToolNotFoundException("Method or body not found.", "method", methodName);
         }
 
         var guards = new List<StatementSyntax>();
@@ -122,12 +123,7 @@ public class LogicSimplificationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found.");
         }
 
         var rewriter = new NullCoalescingRewriter();
@@ -162,12 +158,7 @@ public class LogicSimplificationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found.");
         }
 
         var rewriter = new SwitchConversionRewriter();
@@ -709,44 +700,24 @@ public class LogicSimplificationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
+            throw new ToolInvalidArgumentException($"Could not read the syntax tree for '{filePath}'.");
         }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
+            throw new ToolNotFoundException($"Method '{methodName}' was not found in '{filePath}'.", "method", methodName);
         }
 
         var ifStmt = method.DescendantNodes().OfType<IfStatementSyntax>().FirstOrDefault();
         if (ifStmt == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
+            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' contains no if statement to convert.");
         }
 
         if (!TryExtractIfChainBranches(ifStmt, out var condVar, out var branches, out var defaultResult))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException($"The if statement in method '{methodName}' in '{filePath}' is not an if/else-if chain that returns a value on each branch, so it cannot become a switch expression.");
         }
 
         var arms = branches.Select(b => SyntaxFactory.SwitchExpressionArm(SyntaxFactory.ConstantPattern(b.Pattern), b.Result)).ToList();
@@ -774,44 +745,24 @@ public class LogicSimplificationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
+            throw new ToolInvalidArgumentException($"Could not read the syntax tree for '{filePath}'.");
         }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
+            throw new ToolNotFoundException($"Method '{methodName}' was not found in '{filePath}'.", "method", methodName);
         }
 
         var ifStmt = method.DescendantNodes().OfType<IfStatementSyntax>().FirstOrDefault();
         if (ifStmt == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
+            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' contains no if statement to convert.");
         }
 
         if (!TryExtractIfChainBranches(ifStmt, out var condVar, out var branches, out var defaultResult))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException($"The if statement in method '{methodName}' in '{filePath}' is not an if/else-if chain that returns a value on each branch, so it cannot become a switch statement.");
         }
 
         var sections = new List<SwitchSectionSyntax>();
@@ -843,6 +794,14 @@ public class LogicSimplificationEngine
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (methodNode == null)
+        {
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'.", "method", methodName);
+        }
+        if (!methodNode.ParameterList.Parameters.Any())
+        {
+            throw new ToolTargetIneligibleException($"Method '{methodName}' has no parameters, so it is not an extension method.");
+        }
         if (methodNode != null && methodNode.ParameterList.Parameters.Any())
         {
             var firstParam = methodNode.ParameterList.Parameters[0];
@@ -859,12 +818,7 @@ public class LogicSimplificationEngine
             }
         }
 
-        return new DocumentEditResult
-        {
-            Outcome = EditOutcome.TargetNotFound,
-            UpdatedText = root?.ToFullString() ?? "",
-            FilePath = filePath
-        };
+        throw new ToolTargetIneligibleException($"Method '{methodName}' is already a static (non-extension) method.");
     }
 
     public async Task<DocumentEditResult> ConvertStaticToExtensionAsync(string filePath, string methodName, CancellationToken cancellationToken = default)
@@ -875,6 +829,14 @@ public class LogicSimplificationEngine
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (methodNode == null)
+        {
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'.", "method", methodName);
+        }
+        if (!methodNode.ParameterList.Parameters.Any())
+        {
+            throw new ToolTargetIneligibleException($"Method '{methodName}' has no parameters, so it cannot become an extension method. The method must be static and have at least one parameter to become the 'this' parameter.");
+        }
         if (methodNode != null && methodNode.ParameterList.Parameters.Any())
         {
             var firstParam = methodNode.ParameterList.Parameters[0];
@@ -914,12 +876,7 @@ public class LogicSimplificationEngine
             }
         }
 
-        return new DocumentEditResult
-        {
-            Outcome = EditOutcome.TargetNotFound,
-            UpdatedText = root?.ToFullString() ?? "",
-            FilePath = filePath
-        };
+        throw new ToolTargetIneligibleException($"Method '{methodName}' is already an extension method. The method must be static and have at least one parameter to become the 'this' parameter.");
     }
 
     public async Task<DocumentEditResult> ConvertForEachToForAsync(string filePath, int line, CancellationToken cancellationToken = default)
@@ -931,23 +888,13 @@ public class LogicSimplificationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
+            throw new ToolInvalidArgumentException($"Could not read the syntax tree for '{filePath}'.");
         }
 
         var forEach = root.DescendantNodes().OfType<ForEachStatementSyntax>().FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
         if (forEach == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root.ToFullString(),
-                FilePath = filePath
-            };
+            throw new ToolNotFoundException($"No foreach statement starts at line {line} in '{filePath}'.");
         }
 
         var collection = forEach.Expression;
@@ -1022,45 +969,25 @@ public class LogicSimplificationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
+            throw new ToolInvalidArgumentException($"Could not read the syntax tree for '{filePath}'.");
         }
 
         var forStmt = root.DescendantNodes().OfType<ForStatementSyntax>().FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
         if (forStmt == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root.ToFullString(),
-                FilePath = filePath
-            };
+            throw new ToolNotFoundException($"No for statement starts at line {line} in '{filePath}'.");
         }
 
         if (forStmt.Declaration == null || forStmt.Declaration.Variables.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root.ToFullString(),
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException($"The for statement at line {line} in '{filePath}' has no index variable declaration, so it cannot become a foreach.");
         }
 
         var indexVar = forStmt.Declaration.Variables[0].Identifier.Text;
         // Extract collection from condition: i < arr.Length or i < arr.Count
         if (forStmt.Condition is not BinaryExpressionSyntax condBin || condBin.Right is not MemberAccessExpressionSyntax memberAccess || (memberAccess.Name.Identifier.Text != "Length" && memberAccess.Name.Identifier.Text != "Count"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root.ToFullString(),
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException($"The for statement at line {line} in '{filePath}' must test 'index < collection.Length' or 'index < collection.Count' to become a foreach.");
         }
 
         var collectionStr = memberAccess.Expression.ToString();
@@ -1086,76 +1013,41 @@ public class LogicSimplificationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                UpdatedText = null,
-                FilePath = filePath
-            };
+            throw new ToolInvalidArgumentException($"Could not read the syntax tree for '{filePath}'.");
         }
 
         var whileStmt = root.DescendantNodes().OfType<WhileStatementSyntax>().FirstOrDefault(n => n.GetLocation().GetLineSpan().StartLinePosition.Line + 1 == line);
         if (whileStmt == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root.ToFullString(),
-                FilePath = filePath
-            };
+            throw new ToolNotFoundException($"No while loop found at line {line} in '{filePath}'.");
         }
 
         if (whileStmt.Condition is not BinaryExpressionSyntax condBin || condBin.Left is not IdentifierNameSyntax counterIdent)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root.ToFullString(),
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException($"The while loop at line {line} in '{filePath}' must have a condition of the form 'counter <op> expression' to be converted to a for loop.");
         }
 
         var counterName = counterIdent.Identifier.Text;
         if (whileStmt.Parent is not BlockSyntax parentBlock)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root.ToFullString(),
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException($"The while loop at line {line} in '{filePath}' is not directly inside a block, so it cannot be converted to a for loop.");
         }
 
         var whileIndex = parentBlock.Statements.IndexOf(whileStmt);
         if (whileIndex <= 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root.ToFullString(),
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException($"The while loop at line {line} in '{filePath}' has no preceding statement to supply the loop counter '{counterName}'.");
         }
 
         var prevStmt = parentBlock.Statements[whileIndex - 1];
         if (prevStmt is not LocalDeclarationStatementSyntax localDecl || localDecl.Declaration.Variables.Count == 0 || localDecl.Declaration.Variables[0].Identifier.Text != counterName)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root.ToFullString(),
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException($"The statement before the while loop at line {line} in '{filePath}' must declare the loop counter '{counterName}' as its first variable.");
         }
 
         if (whileStmt.Statement is not BlockSyntax whileBody)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root.ToFullString(),
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException($"The while loop at line {line} in '{filePath}' must have a block body to be converted to a for loop.");
         }
 
         ExpressionStatementSyntax? incrementStmt = null;
@@ -1170,12 +1062,7 @@ public class LogicSimplificationEngine
 
         if (incrementStmt == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root.ToFullString(),
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException($"The while loop at line {line} in '{filePath}' has no '{counterName}++;' statement in its body to become the for loop incrementor.");
         }
 
         var newBody = whileBody.WithStatements(whileBody.Statements.Remove(incrementStmt));
@@ -1302,23 +1189,13 @@ public class LogicSimplificationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
-            };
+            throw new ToolInvalidArgumentException($"Could not read the syntax tree for '{filePath}'.");
         }
 
         var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null || methodNode.Body == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Method '{methodName}' not found or has no body."
-            };
+            throw new ToolNotFoundException($"Method '{methodName}' not found or has no body in '{filePath}'.", "method", methodName);
         }
 
         // Look for: 
@@ -1362,12 +1239,6 @@ public class LogicSimplificationEngine
             }
         }
 
-        return new DocumentEditResult
-        {
-            Outcome = EditOutcome.CannotOptimize,
-            FilePath = filePath,
-            Message = "// Info: No optimization could be safely applied.",
-            UpdatedText = root.ToFullString()
-        };
+        throw new ToolTargetIneligibleException($"Method '{methodName}' in '{filePath}' cannot have its block depth reduced: its body must be a single 'if' statement without an 'else'.");
     }
 }

@@ -344,9 +344,9 @@ public class Processor {
     }
 
     [Test]
-    public async Task ConvertWhileToFor_InvalidLine_ReturnsUnchanged()
+    public async Task ConvertWhileToFor_InvalidLine_ThrowsNotFound()
     {
-        // Line with no while statement -> returns original source unchanged
+        // Line with no while statement -> engine throws ToolNotFoundException ("No while loop found at line").
         const string source = @"
 public class Safe {
     public void Run() {
@@ -356,14 +356,15 @@ public class Safe {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Safe.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Safe.cs", 5);
-        Assert.That(result.UpdatedText, Does.Not.Contain("for ("), "When no while is found, no for-loop must be emitted.");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Safe.cs", 5));
+        Assert.That(ex.Message, Does.Contain("No while loop found at line"));
     }
 
     [Test]
-    public async Task ConvertWhileToFor_NoInitDeclaration_ReturnsUnchanged()
+    public async Task ConvertWhileToFor_NoInitDeclaration_ThrowsTargetIneligible()
     {
-        // While loop without a preceding counter declaration -> cannot convert safely
+        // While loop without a preceding counter declaration -> engine throws ToolTargetIneligibleException
         const string source = @"
 public class Streamer {
     public void Run(int start) {
@@ -372,9 +373,9 @@ public class Streamer {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Streamer.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Streamer.cs", 4);
-        // Without a local declaration as the previous statement, engine returns unchanged
-        Assert.That(result.UpdatedText, Does.Contain("while"), "no-init while loop must stay a while loop");
-        Assert.That(result.UpdatedText, Does.Not.Contain("for ("), "no-init while loop must not be converted to for");
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+            await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Streamer.cs", 4));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(ex.Message, Does.Contain("has no preceding statement"));
     }
 }
