@@ -155,6 +155,9 @@ or turn number; unverified causes are hypotheses. Load the `failure-analysis` sk
   nothing); `TestDelegate`/`AsyncTestDelegate` are gone. See `docs/current/references/reference_nunit5_test_conventions.md`.
 - Never leak raw exceptions, stack traces or internal paths into a tool's `ResultError`; catch at the
   tool boundary and return a structured, actionable error.
+- A not-found/zero-result error must rule out scope, name-shape, container and kind mistakes before
+  claiming absence, state what was searched and name the next call:
+  [reference_not_found_recovery_ladder.md](docs/current/references/reference_not_found_recovery_ladder.md).
 - An unhandled `CS####` during automated work gets a `docs/current/blockers/` writeup immediately.
 - `docs/current/TODO.md` is open-items-only; resolved entries go to `CLOSED.md`. A finished plan,
   proposal or finding gets its Status line updated and moves to its folder's `closed/`.
