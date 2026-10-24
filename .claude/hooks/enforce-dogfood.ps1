@@ -19,9 +19,12 @@
 # FAIL-OPEN BY DESIGN: if this hook itself errors, it must never block the session.
 # A broken guardrail that halts all work is worse than no guardrail.
 #
-# KNOWN LIMITATION: git and .cs detection is a regex over the command line, so a script
-# that merely *contains* a covered git command as text (a test fixture, an echo, a quoted
-# single-line literal) is blocked too. PowerShell here-string and bash heredoc BODIES are
+# KNOWN LIMITATION: git detection is a regex over the command line, so a script that merely
+# *contains* a covered git command as text (a test fixture, an echo, a quoted single-line
+# literal) is blocked too. .cs detection is token-based (Test-CsPathToken): only a path-shaped
+# .cs token counts (`src/Foo.cs`, `'src/Foo.cs'`, `**/*.cs`), not a name inside prose
+# (`see Foo.cs`, `Foo.cs:12`); the residual false positive is a bare path-shaped literal such as
+# `.Replace('Foo.cs','Bar.cs')` in a non-.cs write - use the DeliberateHookBypass keyword. PowerShell here-string and bash heredoc BODIES are
 # stripped before scanning (Remove-HereStrings), so prose appended to a doc that way is fine.
 # Put other such content in a file rather than on the command line - see
 # enforce-dogfood.Tests.ps1, which exists in file form for exactly this reason.
@@ -30,8 +33,7 @@
 #   - Read on an in-repo .cs path -> ReadFile / GetFileOutline / GetMethodSource / Search.
 #   - Grep on a .cs path/glob or an obviously C#-symbol-shaped pattern -> Search/FindReferences.
 #   - Bash/PowerShell text search, read or stream edit (grep/rg/Select-String/cat/Get-Content/
-#     sed...) naming a .cs file or glob -> Search/ReadFile/GetMethodSource. Same whole-command
-#     regex limitation as git detection above.
+#     sed...) naming a .cs file or glob (path-shaped token, see above) -> Search/ReadFile/GetMethodSource.
 #   - Bash/PowerShell WRITES to a .cs file (Set-Content/Out-File/Copy-Item/Move-Item/tee/cp/mv,
 #     [IO.File]::WriteAll*, or a > redirect to a .cs target) -> Member/ReplaceSnippet/WriteFile/...
 #   - Agent dispatch of `implementer` (depth lane) or `implementer-sweep` (sweep lane): slice-contract
@@ -113,6 +115,57 @@ function Remove-HereStrings([string]$cmd) {
     $cmd = [regex]::Replace($cmd, '@"[ \t]*\r?\n.*?\r?\n"@', '""', $o)
     $cmd = [regex]::Replace($cmd, '<<-?\s*[''"]?(\w+)[''"]?[^\r\n]*\r?\n.*?\r?\n\s*\1\b', '', $o)
     return $cmd
+}
+
+# True only when the command contains a PATH-SHAPED .cs token: a whole unquoted token or a whole
+# quoted literal whose entire content looks like a path/glob ending in .cs (no spaces, nothing after
+# .cs). A .cs name that appears only inside prose ('see Foo.cs', 'Foo.cs:12', '(Foo.cs)') does not
+# count, so `WriteAllText('docs/x.md', $t.Replace('Foo.cs:1','x'))` is no longer mistaken for a C# write.
+# Tokenising is quote-aware: split on whitespace ; | & ( ) { } , = @ outside quotes; a quoted literal is
+# one token (quotes stripped). The content of a quoted literal right after -c/-Command/-lc//c (a nested
+# shell command line) is scanned recursively, because that is a command, not prose.
+# `--include=*.cs` -> `*.cs`, `$p='src/Foo.cs'` -> `src/Foo.cs`, `**/*.cs`, `-Path:src\Foo.cs` all count.
+# -QuotedNeedsDir (reader rule only): a QUOTED literal must also contain a / \ or * to count, because a
+# quoted bare name is usually the search pattern (`Select-String 'Foo.cs'`); unquoted tokens always count.
+# Residual false positive (writer rule): a bare path-shaped literal (`.Replace('Foo.cs','Bar.cs')`) still counts.
+function Test-CsPathToken([string]$scan, [switch]$QuotedNeedsDir, [int]$depth = 0) {
+    if (-not $scan) { return $false }
+    $pathShaped = '^[\w.\\/:~$*-]+\.cs$'
+    $seps = " `t`r`n;|&(){},=@"
+    $prev = ''
+    $tok = New-Object System.Text.StringBuilder
+    $i = 0
+    $n = $scan.Length
+    while ($i -le $n) {
+        $ch = if ($i -lt $n) { $scan[$i] } else { [char]10 }
+        if ($i -lt $n -and ($ch -eq [char]39 -or $ch -eq [char]34)) {
+            $end = $scan.IndexOf($ch, $i + 1)
+            if ($end -gt $i) {
+                # A quote glued to a token (`--path="x.cs"`) starts a fresh token; flush what precedes it.
+                if ($tok.Length -gt 0) { if ($tok.ToString() -match $pathShaped) { return $true }; $prev = $tok.ToString().ToLowerInvariant(); [void]$tok.Clear() }
+                $content = $scan.Substring($i + 1, $end - $i - 1)
+                if ($content -match $pathShaped -and (-not $QuotedNeedsDir -or $content -match '[\\/*]')) { return $true }
+                if ($depth -lt 3 -and $prev -in @('-c', '-lc', '-ic', '-command', '-cmd', '/c', '-encodedcommand') -and (Test-CsPathToken $content -QuotedNeedsDir:$QuotedNeedsDir -depth ($depth + 1))) { return $true }
+                $prev = $content.ToLowerInvariant()
+                $i = $end + 1
+                continue
+            }
+            # Unterminated quote (an apostrophe in prose): treat it as an ordinary character.
+            $i++
+            continue
+        }
+        if ($i -ge $n -or $seps.IndexOf($ch) -ge 0) {
+            if ($tok.Length -gt 0) {
+                $t = $tok.ToString()
+                if ($t -match $pathShaped) { return $true }
+                $prev = $t.ToLowerInvariant()
+                [void]$tok.Clear()
+            }
+        }
+        else { [void]$tok.Append($ch) }
+        $i++
+    }
+    return $false
 }
 
 function Get-InlineBypassReason([string]$text) {
@@ -580,7 +633,7 @@ positive if the referenced name already exists elsewhere in the file. Proceeding
         # .csproj/.cshtml. Listing alone (Get-ChildItem *.cs for mtimes) is left alone: there is
         # no MCP equivalent and it reads no content. Harness worktrees stay exempt.
         $csReaders = 'grep|egrep|fgrep|rg|ag|ack|findstr|Select-String|sls|cat|type|Get-Content|gc|head|tail|less|more|sed|awk'
-        if ($scan -match '\.cs\b' -and $command -notmatch '[\\/]Worktree[\\/]' -and
+        if ((Test-CsPathToken $scan -QuotedNeedsDir) -and $command -notmatch '[\\/]Worktree[\\/]' -and
             $scan -match "(^|[;&|(\r\n]\s*|\bxargs\s+)($csReaders)(\s|$)") {
             $which = $Matches[2]
             Exit-IfBypassed "$command`n$([string]$toolInput.description)" $null
@@ -599,21 +652,25 @@ Shell text tools only see raw text. Use the RoslynSentinel tools instead:
 If no MCP tool covers what you need, or the right one is broken, that is a
 BLOCKING finding: stop, write docs/current/blockers/blocking_error_<slug>.md,
 and end the turn. Do not reword the command to get past this hook.
+
+For docs, notes or scratchpad output use the Edit/Write tool on the non-.cs file; the hook allows that. Do not reword the command to get past this hook.
 "@
         }
 
-        # --- shell writes/moves of C# ----------------------------------------------------
+        # --- shell writes/moves of C#----------------------------------------------------
         # The Edit/Write rule above covers only the built-in tools; a shell writer is the same
         # policy violation by another route (implementers wrote C# via Set-Content / here-strings).
         # Deny, on the here-string-stripped $scan, when the command names a .cs file AND has a
         # writer verb at a command position, a .NET file-write call, or a redirection to a .cs
-        # target. Known false positive: a writer verb with a .cs name mentioned only as text
-        # (e.g. `Set-Content notes.md 'Foo.cs'`) - use the DeliberateHookBypass keyword for that.
-        # \.cs\b does not match .csproj/.cshtml. Harness worktrees stay exempt.
+        # target. "Names a .cs file" means a PATH-SHAPED token (Test-CsPathToken), so a .cs name inside
+        # prose (`Set-Content notes.md "see Foo.cs"`, `.Replace('Foo.cs:1','x')`) does not trip it.
+        # Residual false positive: a bare path-shaped literal as text (`Set-Content notes.md 'Foo.cs'`,
+        # `.Replace('Foo.cs','Bar.cs')`) - use the DeliberateHookBypass keyword for that.
+        # .csproj/.cshtml never match. Harness worktrees stay exempt.
         $csWriters = 'Set-Content|Add-Content|Out-File|Copy-Item|Move-Item|Rename-Item|New-Item|tee|cp|mv|copy|move|ren|sc|ac'
         $csWriteApis = '\b(WriteAllText|WriteAllLines|WriteAllBytes|AppendAllText|AppendAllLines)\b'
         $csRedirect = '>{1,2}\s*["'']?[^\s"''|;&]*\.cs\b'
-        if ($scan -match '\.cs\b' -and $command -notmatch '[\\/]Worktree[\\/]' -and
+        if ((Test-CsPathToken $scan) -and $command -notmatch '[\\/]Worktree[\\/]' -and
             ($scan -match "(^|[;&|(\r\n]\s*)($csWriters)(\s|$)" -or $scan -match $csWriteApis -or $scan -match $csRedirect)) {
             Exit-IfBypassed "$command`n$([string]$toolInput.description)" $null
             DenyBypassable @"
@@ -632,6 +689,8 @@ C# writes go through the RoslynSentinel MCP tools, not the shell. Use the one th
 If the right tool has no equivalent operation (for example repairing line endings or a BOM),
 that is a finding to report - stop, write docs/current/blockers/blocking_error_<slug>.md, and
 end the turn. It is not something to do by shell. Do not reword the command to get past this hook.
+
+For docs, notes or scratchpad output use the Edit/Write tool on the non-.cs file; the hook allows that. Do not reword the command to get past this hook.
 "@
         }
 

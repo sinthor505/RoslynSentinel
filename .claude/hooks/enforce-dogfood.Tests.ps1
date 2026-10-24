@@ -258,6 +258,46 @@ $cases = @(
     @{ n = 'journal write naming .cs and Set-Content'; want = 'allow'
        p = @{ tool_name = 'PowerShell'; tool_input = @{ command = "Add-Content -LiteralPath '.claude/journal/2026-10-01_aaaabbbb.md' -Value '- 18:41 - hook: Set-Content to Foo.cs was blocked'" } } }
 
+    # --- path-shaped .cs token (Test-CsPathToken): prose that merely names a .cs file is not a C# target ---
+    @{ n = 'tok: WriteAllText md with Replace of Foo.cs:N prose'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '[IO.File]::WriteAllText(''docs/x.md'', $t.Replace(''Foo.cs:1'',''Foo.cs:2''))' } } }
+    @{ n = 'tok: WriteAllText via $p md with Replace of (Foo.cs)'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '$p=''docs/x.md''; $t=$t.Replace("(Foo.cs)","(Bar.cs)"); [IO.File]::WriteAllText($p,$t)' } } }
+    @{ n = 'tok: Set-Content md "see Foo.cs"'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Set-Content docs/x.md "see Foo.cs"' } } }
+    @{ n = 'tok: Select-String of md for Foo.cs text'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-Content x.md | Select-String ''Foo.cs''' } } }
+    @{ n = 'tok: WriteAllText 3-part file:line prose'; want = 'allow'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '[IO.File]::WriteAllText($p,$t.Replace(''SymbolNavigationEngine.cs:2679-2680'',''x''))' } } }
+    @{ n = 'tok: WriteAllText to quoted src/Foo.cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '[IO.File]::WriteAllText(''src/Foo.cs'', $t)' } } }
+    @{ n = 'tok: WriteAllText via $p=src/Foo.cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '$p=''src/Foo.cs''; [IO.File]::WriteAllText($p,$t)' } } }
+    @{ n = 'tok: Set-Content unquoted src/Foo.cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Set-Content src/Foo.cs ''x''' } } }
+    @{ n = 'tok: Set-Content quoted src/Foo.cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Set-Content ''src/Foo.cs'' ''x''' } } }
+    @{ n = 'tok: pipe to Out-File src/Foo.cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '''x'' | Out-File src/Foo.cs' } } }
+    @{ n = 'tok: echo redirect to src/Foo.cs'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'echo x > src/Foo.cs' } } }
+    @{ n = 'tok: Select-String against src/Foo.cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Select-String foo src/Foo.cs' } } }
+    @{ n = 'tok: Get-Content double-quoted src\Foo.cs'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = 'Get-Content "src\Foo.cs"' } } }
+    @{ n = 'tok: grep --include=*.cs glob'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'grep -rn foo --include=*.cs .' } } }
+    @{ n = 'tok: rg ** /*.cs glob'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'rg foo -g **/*.cs' } } }
+    @{ n = 'tok: WriteAllText unknown path plus a named .cs file'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '[IO.File]::WriteAllText($unknown, $t); Get-Item src/Foo.cs' } } }
+    @{ n = 'tok: nested pwsh -Command naming a .cs write'; want = 'DENY'
+       p = @{ tool_name = 'Bash'; tool_input = @{ command = 'powershell -Command "[IO.File]::WriteAllText(''src/Foo.cs'', $t)"' } } }
+    @{ n = 'tok: bare path-shaped Replace literal in md write (residual FP)'; want = 'DENY'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '[IO.File]::WriteAllText($p,$t.Replace(''Foo.cs'',''Bar.cs''))' } } }
+    @{ n = 'tok: residual FP + bypass keyword'; want = 'allow'; fx = 'tok'
+       p = @{ tool_name = 'PowerShell'; tool_input = @{ command = '[IO.File]::WriteAllText($p,$t.Replace(''Foo.cs'',''Bar.cs'')) # DeliberateHookBypass: prose rename in a md file' } } }
+
     # --- non-C# and harness clones: allow ---
     @{ n = 'Edit .md'; want = 'allow'
        p = @{ tool_name = 'Edit'; tool_input = @{ file_path = "$repo\CLAUDE.md" } } }
