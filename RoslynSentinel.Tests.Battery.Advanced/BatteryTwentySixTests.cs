@@ -757,18 +757,18 @@ public class ImmutabilityGotchaTests
     }
 
     [Test]
-    public async Task MakeClassImmutable_UnknownClassName_ReturnsOriginalCodeNotEmpty()
+    public async Task MakeClassImmutable_UnknownClassName_ThrowsNotFound()
     {
-        // When the class name is not found the engine does: return root?.ToFullString() ?? ""
-        // That means the ENTIRE original source is returned -> not null, not empty.
+        // An unknown class name is a typed NotFound failure, not a returned result.
         const string source = """
             public class RealClass { public string Name { get; set; } = ""; }
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Real.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Real.cs", "NonExistent");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Unknown class name must return the original file content, not null or empty.");
-        Assert.That(result.UpdatedText, Does.Contain("RealClass"), "The original class name must be present in the returned (unchanged) source.");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Real.cs", "NonExistent"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("Class not found."));
     }
 
     [Test]

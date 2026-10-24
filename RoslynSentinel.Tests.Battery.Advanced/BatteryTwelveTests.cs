@@ -170,15 +170,17 @@ public class ModernizationEngineTests
     }
 
     [Test]
-    public async Task ClassToRecord_UnknownClassName_ReturnsOriginalSource()
+    public async Task ClassToRecord_UnknownClassName_ThrowsNotFound()
     {
         const string source = "public class Point { public int X { get; set; } }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Dto.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _engine.ClassToRecordAsync("Dto.cs", "NoSuchClass");
-
-        Assert.That(result.UpdatedText, Does.Contain("class Point"), "Original source should be returned unchanged");
+        // An unknown class is a typed NotFound failure, not a returned result.
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _engine.ClassToRecordAsync("Dto.cs", "NoSuchClass"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("Class 'NoSuchClass' not found."));
     }
 }
 

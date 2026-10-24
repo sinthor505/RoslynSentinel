@@ -230,12 +230,15 @@ class C {
 
     [Test]
     [Category("SyntaxModernizationEngine")] // sentinel:auto-category
-    public async Task UseSpanForParsing_MethodNotFound_ReturnsOriginal()
+    public async Task UseSpanForParsing_MethodNotFound_ThrowsNotFound()
     {
         const string source = "class C { void M() {} }";
         SetSource(source);
-        var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "NonExistent");
-        Assert.That(result.UpdatedText, Does.Contain("class C"));
+        // A missing method is a typed NotFound failure, not a returned result.
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "NonExistent"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("Method 'NonExistent' not found."));
     }
 
     // ══════════════════════════════════════════════════════════════

@@ -884,12 +884,12 @@ public class C { public string S() => ""Hello"" + "", World""; }", "C.cs");
     [Category("SyntaxModernizationEngine")] // sentinel:auto-category
     public async Task ReplaceStringConcat_DoesNotChange_FileWithNoStringConcat()
     {
-        SetSource(@"public class C { public string Hello() => ""Hi""; }", "C.cs");
+        const string source = @"public class C { public string Hello() => ""Hi""; }";
+        SetSource(source, "C.cs");
         var result = await new SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("C.cs");
-        // No concat found means the engine reports TargetNotFound and leaves UpdatedText unset ->
-        // no interpolation is introduced because there is nothing to rewrite.
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-        Assert.That(result.UpdatedText, Is.Null);
+        // No concat found: the engine returns NoCandidatesFound. Nothing is changed; the unchanged text is returned.
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.NoCandidatesFound));
+        Assert.That(result.UpdatedText, Is.EqualTo(source));
     }
 
     [Test]

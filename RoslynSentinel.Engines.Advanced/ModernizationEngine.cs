@@ -22,12 +22,7 @@ public class SyntaxModernizationEngine
     {
         if (!_config.IsFeatureEnabled("ClassToRecord"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature 'ClassToRecord' is disabled."
-            };
+            throw new ToolFeatureDisabledException("ClassToRecord");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -37,13 +32,7 @@ public class SyntaxModernizationEngine
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Class '{className}' not found.",
-                UpdatedText = root?.ToFullString() ?? string.Empty
-            };
+            throw new ToolNotFoundException($"Class '{className}' not found.", "class", className);
         }
 
         // Extract properties
@@ -110,12 +99,7 @@ public class SyntaxModernizationEngine
     {
         if (!_config.IsFeatureEnabled("RecordToClass"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature 'RecordToClass' is disabled."
-            };
+            throw new ToolFeatureDisabledException("RecordToClass");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -125,11 +109,7 @@ public class SyntaxModernizationEngine
         var recordNode = root?.DescendantNodes().OfType<RecordDeclarationSyntax>().FirstOrDefault(r => r.Identifier.Text == recordName);
         if (recordNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Record '{recordName}' not found."};
+            throw new ToolNotFoundException($"Record '{recordName}' not found.", "record", recordName);
         }
 
         var classNode = SyntaxFactory.ClassDeclaration(recordNode.Identifier.WithoutTrivia()).WithModifiers(recordNode.Modifiers);
@@ -199,20 +179,10 @@ public class SyntaxModernizationEngine
 
         if (method != null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = $"// Method '{methodName}' cannot be converted to an expression body.",
-                UpdatedText = root!.ToFullString()
-            };
+            throw new ToolTargetIneligibleException($"Method '{methodName}' cannot be converted to an expression body.");
         }
 
-        return new DocumentEditResult
-        {
-            Outcome = EditOutcome.TargetNotFound,
-            FilePath = filePath,
-            Message = $"// Method '{methodName}' not found."};
+        throw new ToolNotFoundException($"Method '{methodName}' not found.", "method", methodName);
     }
 
     public async Task<DocumentEditResult> ConvertToPatternAsync(FilePathWrapper filePath, CancellationToken cancellationToken = default)
@@ -223,12 +193,7 @@ public class SyntaxModernizationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found.");
         }
 
         var rewriter = new PatternModernizationRewriter();
@@ -585,12 +550,7 @@ public class SyntaxModernizationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found.");
         }
 
         SyntaxNode scope = root;
@@ -599,13 +559,7 @@ public class SyntaxModernizationEngine
             var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
             if (method == null)
             {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// Method '{methodName}' not found.",
-                    UpdatedText = root.ToFullString()
-                };
+                throw new ToolNotFoundException($"Method '{methodName}' not found.", "method", methodName);
             }
 
             scope = method;
@@ -639,12 +593,7 @@ public class SyntaxModernizationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found.");
         }
 
         var rewriter = new ThrowExpressionRewriter();
@@ -765,13 +714,7 @@ public class SyntaxModernizationEngine
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Class not found.",
-                UpdatedText = root?.ToFullString() ?? string.Empty
-            };
+            throw new ToolNotFoundException("Class not found.", "class", className);
         }
 
         var newMembers = classNode.Members.Select(member =>
@@ -818,11 +761,7 @@ public class SyntaxModernizationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found.");
         }
 
         // Find top-level string concat chains -> not a child of another string-concat-with-literal
@@ -831,8 +770,9 @@ public class SyntaxModernizationEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath
+                Outcome = EditOutcome.NoCandidatesFound,
+                FilePath = filePath,
+                UpdatedText = root.ToFullString()
             };
         }
 

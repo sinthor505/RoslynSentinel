@@ -4122,25 +4122,23 @@ namespace MyApp
         }
 
         [Test]
-        public async Task MakeClassImmutableAsync_ClassNotInFile_ReturnsOriginalContent()
+        public async Task MakeClassImmutableAsync_ClassNotInFile_ThrowsNotFound()
         {
-            // When the file exists but the class doesn't, the engine returns the original
-            // file content unchanged -> "no changes needed" is not the same as "file not found".
-            var result = await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
-            // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-            Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
+            // A missing class in an existing file is a typed NotFound failure, not a no-op result.
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+                await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("Foo.cs", "NonExistentClass"));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+            Assert.That(ex.Message, Does.Contain("Class not found."));
         }
 
         [Test]
-        public async Task MakeClassImmutable_Tool_ClassNotFound_DoesNotThrow()
+        public async Task MakeClassImmutable_Tool_ClassNotFound_ThrowsNotFound()
         {
-            // When the engine returns non-empty content (no changes needed), the tool
-            // returns that content rather than throwing -> only file-not-found triggers IOE.
-            var result = await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("Foo.cs", "NonExistentClass");
-            // TODO throw-migration: assert the typed exception once SyntaxModernizationEngine throws
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-            Assert.That(result, Is.Not.Null, "Engine returns file content (not empty) when target class is not found - no changes needed");
+            // The engine throws a typed NotFound (not a no-op result) when the class is absent.
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+                await new SyntaxModernizationEngine(_workspaceManager, _config).MakeClassImmutableAsync("Foo.cs", "NonExistentClass"));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+            Assert.That(ex.Message, Does.Contain("Class not found."));
         }
     }
 

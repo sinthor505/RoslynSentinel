@@ -92,7 +92,7 @@ public class ModernizationTests
     }
 
     [Test]
-    public async Task ConvertMethodToExpressionBody_MultipleStatements_NotConverted()
+    public async Task ConvertMethodToExpressionBody_MultipleStatements_ThrowsTargetIneligible()
     {
         var source = @"public class C
 {
@@ -106,12 +106,11 @@ public class ModernizationTests
 }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
 
-        var result = await _modernEngine.ConvertMethodToExpressionBodyAsync("C.cs", "GetFullName");
-
-        Assert.That(result.UpdatedText, Does.Not.Contain("=>"),
-            "Method with multiple statements should NOT be converted to expression body.");
-        Assert.That(result.UpdatedText, Does.Contain("return name"),
-            "Original return statement should be preserved.");
+        // A multi-statement body is ineligible for expression-body conversion: typed TargetIneligible, not a no-op.
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+            await _modernEngine.ConvertMethodToExpressionBodyAsync("C.cs", "GetFullName"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(ex.Message, Does.Contain("cannot be converted to an expression body"));
     }
 
     [Test]
