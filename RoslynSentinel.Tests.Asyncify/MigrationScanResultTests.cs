@@ -497,8 +497,8 @@ public class Svc
         Assert.That(result.ErrorData, Is.Not.Null);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Cancelled),
             "A cancelled call reports Cancelled, not the catch-all Exception code.");
-        Assert.That(result.ErrorData.Detail, Is.Not.Null.And.Not.Empty,
-            "Detail must carry the exception message.");
+        Assert.That(result.ErrorData.Message, Is.Not.Null.And.Not.Empty,
+            "Message must carry the exception text; Detail is null when it would only repeat Message.");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

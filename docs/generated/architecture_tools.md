@@ -123,7 +123,7 @@
 | WorkspaceReadNavigationTools | GetMethodSource | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Returns a method's or constructor's full source text and attributes. |
 | WorkspaceReadNavigationTools | GetOperationDetail | Claude, claude-lean (on demand), Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Returns a filtered, paged slice of an operation result blob by changeId. |
 | WorkspaceReadNavigationTools | ListAll | Claude, Workspace, WorkspaceFileContent, WorkspaceReadNav | Allowed | Lists every declared symbol in the loaded solution with file, kind, name, container, and line range. |
-| WorkspaceReadNavigationTools | Search | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Unified search; mode selects the target. text: regex/literal scan of .cs files (restrict with fileGlob). symbol:... |
+| WorkspaceReadNavigationTools | Search | Claude, claude-lean, Workspace, WorkspaceFileContent, WorkspaceReadNav | - | Search; mode picks the target. text: regex/literal scan of .cs files (restrict with fileGlob). symbol: declaration... |
 | WorkspaceTools | Build | Claude, claude-lean, Workspace | - | Compiles the solution. level=quickBuild: in-memory Roslyn diagnostics (fast). |
 | WorkspaceTools | CreateFile | Claude, claude-lean, Workspace | - | Creates a new file; fails if it already exists. |
 | WorkspaceTools | CreateProject | Claude, claude-lean (on demand), Workspace | - | Creates a new project and adds it to the loaded solution. |

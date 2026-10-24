@@ -643,19 +643,19 @@ public class BatteryTwentyTests
     [Test]
     [Description("blocking_error_search_fileglob_brace_pattern_silently_matches_nothing.md fix 2+3: " +
              "a glob that matches zero files must name the glob as the cause (not tell the caller " +
-             "to adjust the search pattern) and must not count toward the orientation breaker.")]
-    public async Task SearchSolutionText_GlobMatchesNoFiles_ReturnsGlobSpecificError()
+             "to adjust the search pattern). It is now a non-error empty result (see " +
+             "plan_search_text_scan_all_projects_and_recovery_hints.md Step 1).")]
+    public async Task SearchSolutionText_GlobMatchesNoFiles_ReturnsNonErrorWithGlobHint()
     {
         SetSource(SimpleSource, "Test.cs");
         var result = await _workspaceTools.SearchSolutionTool(reason: "test message", mode: SearchMode.text, query: "Order",
             fileGlob: "NoSuchFile*.cs");
 
-        Assert.That(!result.IsError, Is.False);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument),
-            "a glob matching zero files is a glob problem (InvalidArgument), not a query problem (NoMatches)");
-        Assert.That(result.ErrorData?.Message, Does.Contain("NoSuchFile*.cs"));
-        Assert.That(result.ErrorData?.Message, Does.Contain("Test.cs"), "should name a real file as an example");
-        Assert.That(result.ErrorData?.Message, Does.Not.Contain("adjusting the search pattern"),
+        Assert.That(result.IsError, Is.False, "a glob matching zero files is an empty answer, not a failure");
+        Assert.That(result.TotalRecords, Is.EqualTo(0));
+        Assert.That(result.StatusMessage, Does.Contain("NoSuchFile*.cs"));
+        Assert.That(result.StatusMessage, Does.Contain("Test.cs"), "should name a real file as an example");
+        Assert.That(result.StatusMessage, Does.Not.Contain("adjusting the search pattern"),
             "the query was never at fault - the glob filtered out every document before matching ran");
     }
 
@@ -696,18 +696,19 @@ public class BatteryTwentyTests
 
     [Test]
     [Description("blocking_error_search_fileglob_matches_zero_files_absolute_paths.md: when a '/'-containing " +
-             "glob really matches nothing, the example paths in the error must be solution-relative " +
+             "glob really matches nothing, the example paths in the status message must be solution-relative " +
              "(the form the glob is tested against), never absolute.")]
-    public async Task SearchSolutionText_SlashGlobMatchesNothing_ErrorExamplesAreRelative()
+    public async Task SearchSolutionText_SlashGlobMatchesNothing_StatusExamplesAreRelative()
     {
         SetRootedSources((Path.Combine("ProjA", "Order.cs"), "namespace TestProj; public class Order { public int Marker() => 1; }"));
         var result = await _workspaceTools.SearchSolutionTool(reason: "test message", mode: SearchMode.text, query: "Marker",
             fileGlob: "NoSuchProj/*.cs");
 
-        Assert.That(!result.IsError, Is.False);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
-        Assert.That(result.ErrorData?.Message, Does.Contain("ProjA/Order.cs"));
-        Assert.That(result.ErrorData?.Message, Does.Not.Contain("GlobRootTest"),
+        Assert.That(result.IsError, Is.False, "a glob matching zero files is an empty answer, not a failure");
+        Assert.That(result.TotalRecords, Is.EqualTo(0));
+        Assert.That(result.StatusMessage, Does.Contain("NoSuchProj/*.cs"));
+        Assert.That(result.StatusMessage, Does.Contain("ProjA/Order.cs"));
+        Assert.That(result.StatusMessage, Does.Not.Contain("GlobRootTest"),
             "example paths must be solution-relative, not absolute");
     }
 

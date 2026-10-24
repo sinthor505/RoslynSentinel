@@ -456,6 +456,253 @@ public class WorkspaceReadNavigationImpl
         }
     }
 
+    // A '/'-containing fileGlob whose first path segment matches a test project's name (for example
+    // "MyProj.Tests/**/*.cs") is an explicit request for that project, so includeTests is implied
+    // (same rule as naming a test project in projectName/filePath). A segment made only of '*'
+    // ("**/*.cs", "*/Foo.cs") names nothing and never counts. Malformed globs still raise
+    // GlobSyntaxException from GlobToRegex.
+    private static bool GlobNamesTestProject(string? fileGlob, IEnumerable<string> testProjectNames)
+    {
+        if (string.IsNullOrEmpty(fileGlob))
+        {
+            return false;
+        }
+
+        var normalizedGlob = fileGlob.Replace('\\', '/');
+        var slashIndex = normalizedGlob.IndexOf('/');
+        if (slashIndex <= 0)
+        {
+            return false;
+        }
+
+        var firstSegment = normalizedGlob[..slashIndex];
+        if (firstSegment.All(c => c == '*'))
+        {
+            return false;
+        }
+
+        var segmentRegex = "^" + GlobToRegex(firstSegment) + "$";
+        return testProjectNames.Any(name => Regex.IsMatch(name, segmentRegex, RegexOptions.IgnoreCase));
+    }
+
+    // Cap on hidden (test-project) match lines counted per project when includeTests is false. These
+    // counts only feed the status-message hint and never consume maxResults.
+    private const int HiddenTestMatchCapPerProject = 1000;
+
+    private static string BuildHiddenTestMatchHint(IReadOnlyDictionary<string, int> hiddenCounts, bool hasVisibleHits)
+    {
+        var total = hiddenCounts.Values.Sum();
+        var anyCapped = hiddenCounts.Values.Any(c => c >= HiddenTestMatchCapPerProject);
+        var totalText = anyCapped ? $"{total}+" : total.ToString();
+        var perProject = string.Join(", ", hiddenCounts
+            .OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(kv => $"{kv.Key} {kv.Value}{(kv.Value >= HiddenTestMatchCapPerProject ? "+" : string.Empty)}"));
+        return hasVisibleHits
+            ? $"+{totalText} more in test projects ({perProject}), hidden because includeTests is false - rerun with includeTests: true to include them."
+            : $"{totalText} match(es) in test projects ({perProject}) are hidden because includeTests is false - rerun with includeTests: true to see them.";
+    }
+
+    // Recovery pass (empty visible result only): at most this many relaxed candidates are counted,
+    // each capped per project, so the extra scan stays cheap. Relaxed hits are never returned.
+    private const int RecoveryCandidateLimit = 6;
+
+    private const int RecoveryCountCapPerProject = 1000;
+
+    // Kind: 0 = same pattern with fileGlob dropped, 1 = dotted-name prefix (Foo.Bar.Baz -> Foo.Bar, Foo),
+    // 2 = one alternative of a '|' alternation. Candidates are literal case-insensitive substrings.
+    // An empty list means there is nothing to relax (no fileGlob, no dotted name, no '|'), and the
+    // recovery pass is skipped entirely.
+    private static List<(string Text, bool DropGlob, int Kind)> BuildRelaxationCandidates(string pattern, string? fileGlob, bool globMatchedAnyDocument)
+    {
+        var candidates = new List<(string Text, bool DropGlob, int Kind)>();
+        if (string.IsNullOrWhiteSpace(pattern))
+        {
+            return candidates;
+        }
+
+        var hasGlob = !string.IsNullOrEmpty(fileGlob);
+        if (hasGlob)
+        {
+            candidates.Add((pattern, true, 0));
+        }
+
+        // Glob-kept candidates cannot hit when the glob matched no document at all.
+        var globKeptCanHit = !hasGlob || globMatchedAnyDocument;
+        if (globKeptCanHit && Regex.IsMatch(pattern, @"^\w+(\.\w+)+$"))
+        {
+            var segments = pattern.Split('.');
+            for (var length = segments.Length - 1; length >= 1; length--)
+            {
+                candidates.Add((string.Join(".", segments.Take(length)), false, 1));
+            }
+        }
+
+        if (globKeptCanHit && pattern.Contains('|'))
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { pattern };
+            foreach (var alternative in pattern.Split('|').Select(a => a.Trim()).Where(a => a.Length > 0))
+            {
+                if (seen.Add(alternative))
+                {
+                    candidates.Add((alternative, false, 2));
+                }
+            }
+        }
+
+        return candidates.Take(RecoveryCandidateLimit).ToList();
+    }
+
+    private static string FormatRecoveryCount(IReadOnlyDictionary<string, int> perProject)
+    {
+        var sum = perProject.Values.Sum();
+        return perProject.Values.Any(c => c >= RecoveryCountCapPerProject) ? $"{sum}+" : sum.ToString();
+    }
+
+    private static List<KeyValuePair<string, int>> TopRecoveryProjects(IReadOnlyDictionary<string, int> perProject)
+    => perProject.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase).Take(3).ToList();
+
+    // Runs only when a text search has no visible hit: ONE extra flattened parallel pass counts literal
+    // case-insensitive substring hits (no regex) for the relaxed candidates, split into visible and
+    // hidden test-project hits and per project. The result is advice text only - relaxed matches are
+    // never returned as hits. Returns null when there is nothing to relax or no candidate hit anything.
+    private static async Task<string?> BuildRecoveryHintAsync(
+        Solution solution,
+        IReadOnlyList<(Document Document, string ProjectName, bool IsTest)> documents,
+        string pattern, string? fileGlob, bool includeTests, bool effectiveIncludeTests,
+        int globMatchedDocCount, string? solutionRoot, CancellationToken cancellationToken)
+    {
+        var candidates = BuildRelaxationCandidates(pattern, fileGlob, globMatchedDocCount > 0);
+        if (candidates.Count == 0)
+        {
+            return null;
+        }
+
+        var hasGlob = !string.IsNullOrEmpty(fileGlob);
+        var visible = candidates.Select(_ => new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase)).ToArray();
+        var inTests = candidates.Select(_ => new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase)).ToArray();
+        var options = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount, TaskScheduler = TaskScheduler.Default };
+
+        await Parallel.ForEachAsync(documents, options, async (item, ct) =>
+        {
+            var (document, projectName, isTest) = item;
+            var globOk = !hasGlob || GlobMatchesFileName(new FilePathWrapper(document.FilePath ?? "", solutionRoot), fileGlob!);
+            var active = new List<int>();
+            for (var i = 0; i < candidates.Count; i++)
+            {
+                if (candidates[i].DropGlob || globOk)
+                {
+                    active.Add(i);
+                }
+            }
+
+            if (active.Count == 0)
+            {
+                return;
+            }
+
+            var text = await document.GetTextAsync(ct);
+            var counts = new int[candidates.Count];
+            foreach (var line in text.ToString().Split('\n'))
+            {
+                foreach (var i in active)
+                {
+                    if (line.IndexOf(candidates[i].Text, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        counts[i]++;
+                    }
+                }
+            }
+
+            foreach (var i in active)
+            {
+                var added = Math.Min(counts[i], RecoveryCountCapPerProject);
+                if (added == 0)
+                {
+                    continue;
+                }
+
+                // Candidates that keep the glob share the main pass's view rule; a glob-dropped candidate
+                // no longer has the glob naming a test project, so only the includeTests argument counts.
+                var hiddenDoc = isTest && !(candidates[i].DropGlob ? includeTests : effectiveIncludeTests);
+                (hiddenDoc ? inTests[i] : visible[i]).AddOrUpdate(projectName, added, (_, existing) => Math.Min(RecoveryCountCapPerProject, existing + added));
+            }
+        });
+
+        var entries = new List<string>();
+        for (var i = 0; i < candidates.Count; i++)
+        {
+            var visibleCount = visible[i].Values.Sum();
+            var testCount = inTests[i].Values.Sum();
+            if (visibleCount == 0 && testCount == 0)
+            {
+                continue;
+            }
+
+            var label = candidates[i].DropGlob ? $"the same pattern outside fileGlob '{fileGlob}'" : $"'{candidates[i].Text}'";
+            string Top(ConcurrentDictionary<string, int> d) => string.Join(", ", TopRecoveryProjects(d).Select(kv => $"{kv.Key} {kv.Value}{(kv.Value >= RecoveryCountCapPerProject ? "+" : string.Empty)}"));
+            if (visibleCount > 0)
+            {
+                var entry = $"{FormatRecoveryCount(visible[i])} for {label} ({Top(visible[i])})";
+                if (testCount > 0)
+                {
+                    entry += $", plus {FormatRecoveryCount(inTests[i])} in test projects ({Top(inTests[i])}; needs includeTests: true)";
+                }
+                entries.Add(entry);
+            }
+            else
+            {
+                entries.Add($"{FormatRecoveryCount(inTests[i])} in test projects for {label} ({Top(inTests[i])}; rerun with includeTests: true)");
+            }
+        }
+
+        if (entries.Count == 0)
+        {
+            return null;
+        }
+
+        // Suggestion: prefer candidates with visible hits, glob-dropped first, then the longest dotted prefix
+        // (most specific), then the alternative with the most hits; fall back to test-project-only candidates.
+        int? Pick(Func<int, bool> hasHits)
+        {
+            var ranked = Enumerable.Range(0, candidates.Count)
+                .Where(hasHits)
+                .OrderBy(i => candidates[i].Kind)
+                .ThenBy(i => candidates[i].Kind == 2 ? -(visible[i].Values.Sum() + inTests[i].Values.Sum()) : i)
+                .ToList();
+            return ranked.Count > 0 ? ranked[0] : null;
+        }
+
+        var fromTestsOnly = false;
+        var pick = Pick(i => visible[i].Count > 0);
+        if (pick == null)
+        {
+            pick = Pick(i => inTests[i].Count > 0);
+            fromTestsOnly = true;
+        }
+
+        string suggestion;
+        var chosen = candidates[pick!.Value];
+        if (chosen.DropGlob)
+        {
+            var topProject = TopRecoveryProjects(fromTestsOnly ? inTests[pick.Value] : visible[pick.Value])[0].Key;
+            var projectFile = solution.Projects.FirstOrDefault(p => string.Equals(p.Name, topProject, StringComparison.OrdinalIgnoreCase))?.FilePath;
+            var relativeProjectFile = projectFile == null ? string.Empty : new FilePathWrapper(projectFile, solutionRoot).Relative.Replace('\\', '/');
+            var slash = relativeProjectFile.LastIndexOf('/');
+            var projectDir = slash > 0 ? relativeProjectFile[..slash] : topProject;
+            suggestion = fromTestsOnly
+                ? $"Rerun with fileGlob: '{projectDir}/**/*.cs', includeTests: true (or without fileGlob)."
+                : $"Rerun without fileGlob or with fileGlob: '{projectDir}/**/*.cs'.";
+        }
+        else
+        {
+            suggestion = fromTestsOnly
+                ? $"Rerun with query: '{chosen.Text}', includeTests: true."
+                : $"Rerun with query: '{chosen.Text}'.";
+        }
+
+        return $"0 matches for '{pattern}'; {string.Join("; ", entries)}. {suggestion}";
+    }
+
     public async Task<SentinelCallToolResult<object>> SearchSolutionText(
         ToolCallReason reason,
         string pattern, string? fileGlob = null, int maxResults = 200, bool includeTests = true,
@@ -464,17 +711,27 @@ public class WorkspaceReadNavigationImpl
         try
         {
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            var projects = includeTests ? solution.Projects.ToList() : solution.Projects.Where(p => !TestProjectDetector.IsTestProject(p)).ToList();
-            var excludedTestProjectCount = solution.Projects.Count() - projects.Count;
-            var testExclusionSentence = $"{excludedTestProjectCount} test project(s) were excluded because includeTests is false; pass includeTests: true if the target is in a test project.";
-            var testExclusionNote = excludedTestProjectCount > 0 ? " " + testExclusionSentence : string.Empty;
+
+            // Every project (test projects included) is scanned in one flattened pass over documents;
+            // includeTests is only a view filter. Test-project matches are counted per project (hidden
+            // when includeTests is false) so the status message can say exactly what to rerun with.
+            var projectScans = solution.Projects
+                .Select(p => (Project: p, IsTest: TestProjectDetector.IsTestProject(p)))
+                .ToList();
+            var effectiveIncludeTests = includeTests
+                || GlobNamesTestProject(fileGlob, projectScans.Where(s => s.IsTest).Select(s => s.Project.Name));
+            var documentsToScan = projectScans
+                .SelectMany(s => s.Project.Documents.Select(d => (Document: d, ProjectName: s.Project.Name, IsTest: s.IsTest)))
+                .ToList();
+
             var results = new ConcurrentBag<TextSearchMatch>();
+            var hiddenCounts = new ConcurrentDictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             var warnings = new List<string>();
-            var globMatchedPaths = new ConcurrentBag<string>();
             // FilePathWrapper.Relative is empty unless a root is supplied; a '/'-containing fileGlob
             // is matched against Relative, so omitting the root made every such glob match 0 files.
             var solutionRoot = _workspaceManager.GetSolutionRoot();
             int resultCount = 0;
+            int globMatchedDocCount = 0;
             Regex? regex = null;
             bool regexPatternValid = true;
 
@@ -488,85 +745,133 @@ public class WorkspaceReadNavigationImpl
                 warnings.Add($"Pattern '{pattern}' is not a valid regex - only literal substring matches are returned.");
             }
 
-            var options1 = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount, TaskScheduler = TaskScheduler.Default };
+            var scanOptions = new ParallelOptions { CancellationToken = cancellationToken, MaxDegreeOfParallelism = Environment.ProcessorCount, TaskScheduler = TaskScheduler.Default };
 
-            await Parallel.ForEachAsync(projects, options1, async (project, ct1) =>
+            await Parallel.ForEachAsync(documentsToScan, scanOptions, async (item, ct) =>
             {
-                var options2 = new ParallelOptions { CancellationToken = ct1, MaxDegreeOfParallelism = Environment.ProcessorCount, TaskScheduler = TaskScheduler.Default };
+                var (document, projectName, isTest) = item;
+                var hidden = isTest && !effectiveIncludeTests;
 
-                await Parallel.ForEachAsync(project.Documents, options2, async (document, ct2) =>
+                if (!hidden && Volatile.Read(ref resultCount) >= maxResults)
                 {
-                    if (Volatile.Read(ref resultCount) >= maxResults)
+                    return;
+                }
+
+                var docPath = new FilePathWrapper(document.FilePath ?? "", solutionRoot);
+                if (!string.IsNullOrEmpty(fileGlob))
+                {
+                    if (!GlobMatchesFileName(docPath, fileGlob))
                     {
                         return;
                     }
 
-                    var docPath = new FilePathWrapper(document.FilePath ?? "", solutionRoot);
-                    if (!string.IsNullOrEmpty(fileGlob) && !GlobMatchesFileName(docPath, fileGlob))
+                    Interlocked.Increment(ref globMatchedDocCount);
+                }
+
+                var hiddenAlready = 0;
+                if (hidden && hiddenCounts.TryGetValue(projectName, out hiddenAlready) && hiddenAlready >= HiddenTestMatchCapPerProject)
+                {
+                    return;
+                }
+
+                var text = await document.GetTextAsync(ct);
+                var sourceText = text.ToString();
+                var lines = sourceText.Split('\n');
+                // The syntax root is only needed to name the enclosing member of a visible hit, so it
+                // is fetched on the first hit in the document rather than for every document.
+                SyntaxNode? root = null;
+                var rootFetched = false;
+                var docHiddenCount = 0;
+
+                string? EnclosingMemberAt(int lineIndex, int col)
+                {
+                    if (root == null || lineIndex >= text.Lines.Count)
                     {
-                        return;
+                        return null;
                     }
+                    var lineStart = text.Lines[lineIndex].Start;
+                    var lineLength = text.Lines[lineIndex].End - lineStart;
+                    var position = lineStart + Math.Clamp(col, 0, Math.Max(0, lineLength));
+                    return EnclosingMemberResolver.GetEnclosingMemberName(root, position);
+                }
 
-                    if (!string.IsNullOrEmpty(fileGlob) && globMatchedPaths.Count < 3)
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    if (hidden)
                     {
-                        globMatchedPaths.Add(docPath.Relative.Replace('\\', '/'));
-                    }
-
-                    var text = await document.GetTextAsync(ct2);
-                    var sourceText = text.ToString();
-                    var lines = sourceText.Split('\n');
-                    var root = await document.GetSyntaxRootAsync(ct2);
-                    for (int i = 0; i < lines.Length && Volatile.Read(ref resultCount) < maxResults; i++)
-                    {
-                        var line = lines[i];
-
-                        string BuildPreview()
+                        if (hiddenAlready + docHiddenCount >= HiddenTestMatchCapPerProject)
                         {
-                            var preview = line.Trim();
-                            return preview.Length > 120 ? preview[..120] + "…" : preview;
+                            break;
                         }
+                    }
+                    else if (Volatile.Read(ref resultCount) >= maxResults)
+                    {
+                        break;
+                    }
 
-                        string? EnclosingMemberAt(int col)
+                    var line = lines[i];
+                    var literalCol = line.IndexOf(pattern, StringComparison.OrdinalIgnoreCase);
+                    Match? regexMatch = null;
+                    if (regex != null)
+                    {
+                        try
                         {
-                            if (root == null || i >= text.Lines.Count)
+                            var m = regex.Match(line);
+                            if (m.Success)
                             {
-                                return null;
+                                regexMatch = m;
                             }
-                            var lineStart = text.Lines[i].Start;
-                            var lineLength = text.Lines[i].End - lineStart;
-                            var position = lineStart + Math.Clamp(col, 0, Math.Max(0, lineLength));
-                            return EnclosingMemberResolver.GetEnclosingMemberName(root, position);
                         }
-
-                        var literalCol = line.IndexOf(pattern, StringComparison.OrdinalIgnoreCase);
-                        if (literalCol >= 0)
+                        catch (RegexMatchTimeoutException)
                         {
-                            results.Add(new TextSearchMatch(docPath.Absolute, i + 1, literalCol + 1, BuildPreview(), MatchKind.Literal, EnclosingMemberAt(literalCol)));
+                        }
+                    }
+
+                    if (literalCol < 0 && regexMatch == null)
+                    {
+                        continue;
+                    }
+
+                    if (hidden)
+                    {
+                        docHiddenCount++;
+                        continue;
+                    }
+
+                    if (!rootFetched)
+                    {
+                        root = await document.GetSyntaxRootAsync(ct);
+                        rootFetched = true;
+                    }
+
+                    var preview = line.Trim();
+                    if (preview.Length > 120)
+                    {
+                        preview = preview[..120] + "…";
+                    }
+
+                    if (literalCol >= 0)
+                    {
+                        results.Add(new TextSearchMatch(docPath.Absolute, i + 1, literalCol + 1, preview, MatchKind.Literal, EnclosingMemberAt(i, literalCol)));
+                        Interlocked.Increment(ref resultCount);
+                    }
+
+                    if (regexMatch != null)
+                    {
+                        results.Add(new TextSearchMatch(docPath.Absolute, i + 1, regexMatch.Index + 1, preview, MatchKind.Regex, EnclosingMemberAt(i, regexMatch.Index)));
+                        // A regex hit at the same column as the literal hit is deduped out of the
+                        // final lists (literalKeys), so it must not consume a resultCount slot.
+                        if (!(literalCol >= 0 && regexMatch.Index == literalCol))
+                        {
                             Interlocked.Increment(ref resultCount);
                         }
-
-                        if (regex != null)
-                        {
-                            try
-                            {
-                                var m = regex.Match(line);
-                                if (m.Success)
-                                {
-                                    results.Add(new TextSearchMatch(docPath.Absolute, i + 1, m.Index + 1, BuildPreview(), MatchKind.Regex, EnclosingMemberAt(m.Index)));
-                                    // A regex hit at the same column as the literal hit is deduped out of the
-                                    // final lists (literalKeys), so it must not consume a resultCount slot.
-                                    if (!(literalCol >= 0 && m.Index == literalCol))
-                                    {
-                                        Interlocked.Increment(ref resultCount);
-                                    }
-                                }
-                            }
-                            catch (RegexMatchTimeoutException)
-                            {
-                            }
-                        }
                     }
-                });
+                }
+
+                if (docHiddenCount > 0)
+                {
+                    hiddenCounts.AddOrUpdate(projectName, docHiddenCount, (_, existing) => existing + docHiddenCount);
+                }
             });
 
             // ConcurrentBag has no defined enumeration order; sort deterministically before any
@@ -579,15 +884,19 @@ public class WorkspaceReadNavigationImpl
             var regexResults = rawRegexResults.Where(r => !literalKeys.Contains((r.filePath, r.Line, r.Column))).Take(maxResults).ToList();
             int regexOverlapCount = rawRegexResults.Count - regexResults.Count;
             int totalResultCount = literalResults.Count + regexResults.Count;
+            var hiddenHint = hiddenCounts.IsEmpty
+                ? string.Empty
+                : BuildHiddenTestMatchHint(hiddenCounts, hasVisibleHits: totalResultCount > 0);
 
             if (literalResults.Count == 0 && regexResults.Count == 0)
             {
-                if (!string.IsNullOrEmpty(fileGlob) && globMatchedPaths.IsEmpty)
+                if (!string.IsNullOrEmpty(fileGlob) && globMatchedDocCount == 0)
                 {
+                    // A glob that matches no document in any project is an empty answer, not a failure.
                     var matchedAgainstDescription = fileGlob.Replace('\\', '/').Contains('/')
                         ? "the solution-relative path"
                         : "the bare filename";
-                    var sampleRelativePaths = projects
+                    var sampleRelativePaths = solution.Projects
                         .SelectMany(p => p.Documents)
                         .Select(d =>
                         {
@@ -605,20 +914,27 @@ public class WorkspaceReadNavigationImpl
                     var sampleText = sampleRelativePaths.Count > 0
                         ? $"Example paths in this solution: {string.Join(", ", sampleRelativePaths)}."
                         : "This solution has no documents to match against.";
-                    throw new GlobSyntaxException(
-                        $"fileGlob '{fileGlob}' matched 0 files (matched against {matchedAgainstDescription}), so the search for " +
-                        $"'{pattern}' never ran against any document. {sampleText}{testExclusionNote} This is a glob problem, not a search-pattern problem - " +
-                        "widen or fix the fileGlob rather than changing the pattern.");
+                    warnings.Add(
+                        $"fileGlob '{fileGlob}' matched 0 documents in any project (matched against {matchedAgainstDescription}), so the search for " +
+                        $"'{pattern}' did not run against any document. {sampleText} Widen or fix the fileGlob.");
                 }
-
-                warnings.Add(
-                    $"No matches were found for '{pattern}' as either a literal substring or a regex pattern. Try adjusting the search pattern. Matching is case-insensitive and per line, over C# source files only; a|b alternation is supported. The text may have been reworded, so search for a shorter distinctive fragment, or search each alternative separately. " +
-                    "If you were searching for a known symbol by name, use Search with mode: symbol instead (semantic lookup, not text matching). " +
-                    "Use ListAll to browse the solution's structure, ProjectDoc to read plan/handoff/documentation files directly, or " +
-                    "GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
-                if (excludedTestProjectCount > 0)
+                else
                 {
-                    warnings.Add(testExclusionSentence);
+                    warnings.Add(
+                        $"No matches were found for '{pattern}' as either a literal substring or a regex pattern. Try adjusting the search pattern. Matching is case-insensitive and per line, over C# source files only; a|b alternation is supported. The text may have been reworded, so search for a shorter distinctive fragment, or search each alternative separately. " +
+                        "If you were searching for a known symbol by name, use Search with mode: symbol instead (semantic lookup, not text matching). " +
+                        "Use ListAll to browse the solution's structure, ProjectDoc to read plan/handoff/documentation files directly, or " +
+                        "GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
+                    if (hiddenHint.Length > 0)
+                    {
+                        warnings.Add(hiddenHint);
+                    }
+                }
+                // The recovery pass runs only here (empty visible result), never during the main scan.
+                var recoveryHint = await BuildRecoveryHintAsync(solution, documentsToScan, pattern, fileGlob, includeTests, effectiveIncludeTests, globMatchedDocCount, solutionRoot, cancellationToken);
+                if (recoveryHint != null)
+                {
+                    warnings.Add(recoveryHint);
                 }
                 var justTripped = _workspaceManager.RecordSearchOutcome(0);
                 var emptyResult = await SentinelCallToolResult<object>.ForPossiblyLargeDataAsync(
@@ -630,7 +946,7 @@ public class WorkspaceReadNavigationImpl
                     workspaceVersion: _workspaceManager.WorkspaceVersion,
                     statusMessage: string.Join(" ", warnings),
                     cancellationToken: cancellationToken);
-                return emptyResult with { IsError = false, Findings = justTripped ? new[] { new Finding("OrientationBreaker", string.Join(" ", warnings), FindingSeverity.Warning) } : Array.Empty<Finding>() };
+                return emptyResult with { IsError = false, WarningDetails = recoveryHint, Findings = justTripped ? new[] { new Finding("OrientationBreaker", string.Join(" ", warnings), FindingSeverity.Warning) } : Array.Empty<Finding>() };
             }
             else if (totalResultCount >= maxResults)
             {
@@ -650,7 +966,7 @@ public class WorkspaceReadNavigationImpl
                 ResultWrapperType.TextSearchMatchList,
                 totalRecords: literalResults.Count + regexResults.Count,
                 workspaceVersion: _workspaceManager.WorkspaceVersion,
-                statusMessage: matchSummary.ToSummaryMessage("match") + testExclusionNote,
+                statusMessage: matchSummary.ToSummaryMessage("match") + (hiddenHint.Length > 0 ? " " + hiddenHint : string.Empty),
                 listSummary: matchSummary,
                 cancellationToken: cancellationToken);
             return searchResult with { WarningDetails = warning };

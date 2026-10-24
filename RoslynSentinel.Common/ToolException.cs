@@ -258,9 +258,12 @@ public static class ToolErrorMapper
         // small and capped by the engine, far under the offload threshold, and ToResultError is
         // synchronous, so it is inlined rather than offloaded.
         var detail = (ex as IOperationError)?.StructuredDetail;
+        // Detail carries ex.Message only when Message does not already embed it (ToCodeAndMessage
+        // currently always does, so Detail is normally null) - avoids sending the same text twice.
+        var extraDetail = ex.Message.Length > 0 && !message.Contains(ex.Message, StringComparison.Ordinal) ? ex.Message : null;
         if (detail is { Count: > 0 })
-            return new ResultError(code, message, ex.Message, StructuredDetail: detail);
-        return new ResultError(code, message, ex.Message);
+            return new ResultError(code, message, extraDetail, StructuredDetail: detail);
+        return new ResultError(code, message, extraDetail);
     }
 
     /// <summary>

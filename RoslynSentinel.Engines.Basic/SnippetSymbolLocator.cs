@@ -43,6 +43,11 @@ public static class SnippetSymbolLocator
         var pos = SnippetLookup.ResolveOrThrow(text, contextSnippet, lineBefore, lineAfter).Start;
         var node = root.FindNode(new TextSpan(pos, 0));
 
+        // TODO a snippet on a positional record parameter (e.g. "string? Detail = null,") resolves to null
+        // (suspected: FindNode lands on the ParameterList when the snippet has leading indentation) and, even when
+        // it hits the ParameterSyntax, returns the IParameterSymbol, not the synthesized property that references
+        // bind to. The failure message also omits record parameters from its candidate list
+        // (SymbolNavigationEngine.DescribeNameOnlyCandidates filters to MemberDeclarationSyntax).
         return model.GetDeclaredSymbol(node, cancellationToken)
                ?? model.GetSymbolInfo(node, cancellationToken).Symbol
                ?? node.DescendantNodes().OfType<VariableDeclaratorSyntax>()

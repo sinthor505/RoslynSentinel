@@ -180,7 +180,7 @@ public class ResultStatusTests
 
         Assert.That(error.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
         Assert.That(error.Message, Is.EqualTo("Op failed: two matches"));
-        Assert.That(error.Detail, Is.EqualTo("two matches"));
+        Assert.That(error.Detail, Is.Null, "Detail must not repeat the text Message already carries.");
         Assert.That(error.StructuredDetail, Is.Not.Null);
         Assert.That(error.StructuredDetail!, Has.Count.EqualTo(2));
         Assert.That(error.StructuredDetail![0], Is.InstanceOf<AmbiguousCandidate>());

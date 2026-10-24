@@ -69,11 +69,11 @@ public class WorkspaceReadNavigationTools
         [Description("Restricts the search to files whose path matches this glob. Supports *, **, ?, " +
             "{a,b,...} alternation, and [abc]/[!abc] character classes; other special characters are " +
             "rejected with an error naming the unsupported construct. Matches the solution-relative " +
-            "path (with / separators) when the glob contains '/', otherwise matches the bare filename.")]
+            "path (with / separators) when the glob contains '/', otherwise matches the bare filename. Test projects are scanned too but their hits are hidden unless includeTests: true (or the glob's first path segment names a test project); hidden hits are counted in the status message.")]
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
         [Description("Maximum number of matches to scan.")]
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,
-        [Description("false (default) = skip test projects; true = include them. Naming a test project in projectName/filePath always includes it.")] bool includeTests = false,
+        [Description("false (default) = test projects are scanned but their matches are hidden and only counted in the status message; true = include them. Naming a test project as the glob's first path segment always includes it.")] bool includeTests = false,
         CancellationToken cancellationToken = default)
         => _impl.SearchSolutionText(reason, pattern, fileGlob, maxResults, includeTests, cancellationToken);
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
@@ -116,11 +116,11 @@ public class WorkspaceReadNavigationTools
     [Produces(DataTag.FileList)]
     [Produces(DataTag.DocCommentId)]
     [Produces(DataTag.ProjectName)]
-    [Description("Unified search; mode selects the target. text: regex/literal scan of .cs files (restrict with fileGlob). symbol: declaration lookup by name. references/callers/implementations: usages of a symbol (callers = call sites, implementations = overrides/implementers). attribute: where an attribute is applied. Declaration-kind modes (all, namespace, class, interface, method, property, struct, record, enum, enum member, constructor, field) list declarations, max 30 rows; totalRecords and hasMoreData show truncation - narrow with query or projectName. Zero matches is not an error.")]
+    [Description("Search; mode picks the target. text: regex/literal scan of .cs files (restrict with fileGlob). symbol: declaration lookup by name. references/callers/implementations: usages of a symbol (callers = call sites, implementations = overrides/implementers). attribute: where an attribute is applied. Declaration-kind modes (all, namespace, class, interface, method, property, struct, record, enum, enum member, constructor, field) list up to 30 rows; totalRecords/hasMoreData show truncation - narrow with query or projectName. Zero matches is not an error.")]
     public Task<SentinelCallToolResult<object>> SearchSolutionTool(
     [Description(ToolParams.Reason)] ToolCallReason reason,
     SearchMode mode,
-    [Description("text: pattern matched as literal and regex, case-insensitive, per line (| for alternation). symbol/references/callers/implementations/attribute: the name. Declaration-kind modes: optional name filter (see exactMatch). Required except in declaration-kind modes.")]
+    [Description("text: literal or regex, case-insensitive, per line (| alternates). symbol/references/callers/implementations/attribute: the name. Declaration-kind modes: optional name filter (see exactMatch). Required except in declaration-kind modes.")]
         string? query = null,
     [Description("mode text only. Glob on file paths: '*', '**', '?', '{a,b}'. With '/' it matches the solution-relative path (e.g. 'MyProj/**/*.cs'); without '/' the bare filename (e.g. 'Foo.cs').")]
         [ExternalInputRequired(DataTag.SourceFilepath)] string? fileGlob = null,
@@ -142,7 +142,7 @@ public class WorkspaceReadNavigationTools
         [Consumes(DataTag.ContextSnippet, required: false)] string? contextSnippet = null,
     [Description("mode: references/callers/implementations only. " + ToolParams.LineBefore)][ExternalInputRequired(DataTag.LineBefore)] string? lineBefore = null,
     [Description("mode: references/callers/implementations only. " + ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
-    [Description("false (default) = skip test projects in every mode, including symbol; true = include them. Naming a test project in projectName/filePath always includes it.")] bool includeTests = false,
+    [Description("false (default) = skip test projects (mode text still scans them and only counts hidden hits in the status message); true = include. A test project named in projectName/filePath or as fileGlob's first path segment is included.")] bool includeTests = false,
     [Description("mode: attribute only. Owner must also carry this attribute.")] string? hasAttribute = null,
     CancellationToken cancellationToken = default)
     => DispatchSearch(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, cancellationToken);

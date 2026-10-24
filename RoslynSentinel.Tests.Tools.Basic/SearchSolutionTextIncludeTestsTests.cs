@@ -1,6 +1,7 @@
 // Coverage for the includeTests parameter of WorkspaceReadNavigationImpl.SearchSolutionTextTool.
-// With includeTests: false, documents of projects whose .csproj references Microsoft.NET.Test.Sdk
-// (TestProjectDetector.IsTestProject) are not scanned; the result says how many were excluded.
+// Test projects are always scanned; with includeTests: false their hits are hidden and only counted per
+// project in the status message. Test projects are those whose .csproj references Microsoft.NET.Test.Sdk
+// (TestProjectDetector.IsTestProject).
 
 using System.IO;
 
@@ -41,7 +42,12 @@ public class SearchSolutionTextIncludeTestsTests
         File.WriteAllText(Path.Combine(_dir, "TestsProj", "TestsProj.csproj"), TestSdkCsproj);
         File.WriteAllText(Path.Combine(_dir, "AppProj", "AppProj.csproj"), PlainCsproj);
 
-        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance);
+        // SolutionPath supplies the solution root; without it FilePathWrapper.Relative is empty and
+        // a '/'-containing fileGlob (matched against the solution-relative path) matches nothing.
+        _workspaceManager = new PersistentWorkspaceManager(NullLogger<IWorkspaceManager>.Instance)
+        {
+            SolutionPath = Path.Combine(_dir, "Test.slnx")
+        };
         _impl = new WorkspaceReadNavigationImpl(_workspaceManager, NullLogger<WorkspaceReadNavigationImpl>.Instance);
 
         var testsDocPath = Path.Combine(_dir, "TestsProj", "UnitTest1.cs");
@@ -94,7 +100,7 @@ public class SearchSolutionTextIncludeTestsTests
         var paths = PathsOf((TextSearchResult)result.SuccessData!).ToList();
         Assert.That(paths.Any(p => p.EndsWith("UnitTest1.cs", StringComparison.OrdinalIgnoreCase)), Is.True);
         Assert.That(paths.Any(p => p.EndsWith("App.cs", StringComparison.OrdinalIgnoreCase)), Is.True);
-        Assert.That(result.StatusMessage, Does.Not.Contain("test project(s) were excluded"),
+        Assert.That(result.StatusMessage, Does.Not.Contain("hidden because includeTests is false"),
             "nothing is excluded when includeTests is true");
     }
 
@@ -115,7 +121,7 @@ public class SearchSolutionTextIncludeTestsTests
         var result = await _impl.SearchSolutionText(reason: "test message", pattern: SharedPattern, includeTests: false);
 
         Assert.That(result.IsError, Is.False);
-        Assert.That(result.StatusMessage, Does.Contain("test project(s) were excluded"));
+        Assert.That(result.StatusMessage, Does.Contain("+1 more in test projects (TestsProj 1)"));
         Assert.That(result.StatusMessage, Does.Contain("includeTests: true"));
     }
 
@@ -126,17 +132,62 @@ public class SearchSolutionTextIncludeTestsTests
 
         Assert.That(result.IsError, Is.False, "zero matches is an empty answer, not a failure");
         Assert.That(result.TotalRecords, Is.EqualTo(0));
-        Assert.That(result.StatusMessage, Does.Contain("test project(s) were excluded"));
+        Assert.That(result.StatusMessage, Does.Contain("hidden because includeTests is false"));
+        Assert.That(result.StatusMessage, Does.Contain("TestsProj 1"));
         Assert.That(result.StatusMessage, Does.Contain("includeTests: true"));
     }
 
     [Test]
-    public async Task IncludeTestsFalse_GlobOnlyMatchingExcludedTestProject_ErrorNamesIncludeTests()
+    public async Task IncludeTestsFalse_GlobOnlyMatchingHiddenTestProject_IsNotAnErrorAndNamesIncludeTests()
     {
         var result = await _impl.SearchSolutionText(reason: "test message", pattern: SharedPattern,
             fileGlob: "UnitTest1.cs", includeTests: false);
 
-        Assert.That(result.IsError, Is.True, "a glob matching only excluded documents is a glob problem and must surface as an error");
-        Assert.That(result.ErrorData?.Message, Does.Contain("includeTests: true"));
+        Assert.That(result.IsError, Is.False, "the glob matched a (hidden) test document, so it is not a glob problem");
+        Assert.That(result.TotalRecords, Is.EqualTo(0));
+        Assert.That(result.StatusMessage, Does.Contain("includeTests: true"));
+        Assert.That(result.StatusMessage, Does.Contain("TestsProj 1"));
+        Assert.That(result.StatusMessage, Does.Not.Contain("glob problem"));
+    }
+
+    [Test]
+    public async Task IncludeTestsFalse_GlobNamingTestProject_ReturnsTestDocumentWithoutHiddenNote()
+    {
+        var result = await _impl.SearchSolutionText(reason: "test message", pattern: SharedPattern,
+            fileGlob: "TestsProj/**/*.cs", includeTests: false);
+
+        Assert.That(result.IsError, Is.False);
+        var paths = PathsOf((TextSearchResult)result.SuccessData!).ToList();
+        Assert.That(paths.Any(p => p.EndsWith("UnitTest1.cs", StringComparison.OrdinalIgnoreCase)), Is.True,
+            "a glob whose first segment names a test project implies includeTests");
+        Assert.That(result.StatusMessage, Does.Not.Contain("hidden because includeTests is false"));
+    }
+
+    [Test]
+    public async Task IncludeTestsFalse_GlobWithWildcardFirstSegment_StillHidesTestProject()
+    {
+        var result = await _impl.SearchSolutionText(reason: "test message", pattern: SharedPattern,
+            fileGlob: "**/*.cs", includeTests: false);
+
+        Assert.That(result.IsError, Is.False);
+        var paths = PathsOf((TextSearchResult)result.SuccessData!).ToList();
+        Assert.That(paths.Any(p => p.EndsWith("App.cs", StringComparison.OrdinalIgnoreCase)), Is.True);
+        Assert.That(paths.Any(p => p.EndsWith("UnitTest1.cs", StringComparison.OrdinalIgnoreCase)), Is.False,
+            "'**' names no project, so it must not switch includeTests on");
+        Assert.That(result.StatusMessage, Does.Contain("+1 more in test projects (TestsProj 1)"));
+    }
+
+    [Test]
+    public async Task GlobMatchingNoDocument_IsNotAnErrorAndSamplesPathsFromAllProjects()
+    {
+        var result = await _impl.SearchSolutionText(reason: "test message", pattern: SharedPattern,
+            fileGlob: "NoSuchFile.cs", includeTests: false);
+
+        Assert.That(result.IsError, Is.False, "a glob that matches nothing is an empty answer, not a failure");
+        Assert.That(result.TotalRecords, Is.EqualTo(0));
+        Assert.That(result.StatusMessage, Does.Contain("fileGlob 'NoSuchFile.cs' matched 0 documents"));
+        Assert.That(result.StatusMessage, Does.Contain("UnitTest1.cs"), "sample paths must include test-project documents");
+        Assert.That(result.StatusMessage, Does.Contain("App.cs"));
+        Assert.That(result.StatusMessage, Does.Not.Contain("glob problem, not a search-pattern problem"));
     }
 }
