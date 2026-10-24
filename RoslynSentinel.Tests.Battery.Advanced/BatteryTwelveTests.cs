@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 using NUnit.Framework;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 
@@ -56,16 +57,17 @@ public class CodeStyleEngineTests
     }
 
     [Test]
-    public async Task ConvertPropertyToMethods_PropertyInInterface_ReturnsErrorComment()
+    public async Task ConvertPropertyToMethods_PropertyInInterface_ThrowsTargetIneligible()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj",
             [("IService.cs", "public interface IService { string Name { get; set; } }")]);
         _workspaceManager.SetTestSolution(solution);
 
-        var result = await _engine.ConvertPropertyToMethodsAsync("IService.cs", "Name");
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _engine.ConvertPropertyToMethodsAsync("IService.cs", "Name"));
 
-        // The engine returns an error comment when property is not in a class (e.g. interface)
-        Assert.That(result.Message, Does.Contain("// ERROR:"), "Property in interface should return error comment");
+        // The engine throws ToolTargetIneligibleException when the property is not in a class (e.g. interface)
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible), "Property in interface should throw TargetIneligible");
+        Assert.That(ex.Message, Does.Contain("must be in a class"));
     }
 }
 

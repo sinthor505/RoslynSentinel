@@ -25,12 +25,7 @@ public class CodeStyleEngine
     {
         if (!_config.IsFeatureEnabled("LockModernization"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature LockModernization is disabled."
-            };
+            throw new ToolFeatureDisabledException("LockModernization");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -39,12 +34,7 @@ public class CodeStyleEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Source invalid.");
         }
 
         var rewriter = new DangerousLockRewriter();
@@ -99,12 +89,7 @@ public class CodeStyleEngine
     {
         if (!_config.IsFeatureEnabled("ConvertPropertyToMethod"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature ConvertPropertyToMethod is disabled."
-            };
+            throw new ToolFeatureDisabledException("ConvertPropertyToMethod");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -114,24 +99,14 @@ public class CodeStyleEngine
         var prop = root?.DescendantNodes().OfType<PropertyDeclarationSyntax>().FirstOrDefault(p => p.Identifier.Text == propertyName);
         if (prop == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Property '{propertyName}' not found."
-            };
+            throw new ToolNotFoundException($"Property '{propertyName}' not found.", "property", propertyName);
         }
 
         // Only works for properties declared directly inside a class (not an interface or struct)
         var classNode = prop.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
         if (classNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// ERROR: '{propertyName}' must be in a class - this tool does not support interfaces or structs.\n" + (root?.ToFullString() ?? "")
-            };
+            throw new ToolTargetIneligibleException($"'{propertyName}' must be in a class - this tool does not support interfaces or structs.");
         }
 
         var type = prop.Type;
@@ -164,12 +139,7 @@ public class CodeStyleEngine
     {
         if (!_config.IsFeatureEnabled("SimplifyVerbosity"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature SimplifyVerbosity is disabled."
-            };
+            throw new ToolFeatureDisabledException("SimplifyVerbosity");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -178,12 +148,7 @@ public class CodeStyleEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Source invalid.");
         }
 
         var rewriter = new VerbosityRewriter(_config);
@@ -200,12 +165,7 @@ public class CodeStyleEngine
     {
         if (!_config.IsFeatureEnabled("CollectionExpressions"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature CollectionExpressions is disabled."
-            };
+            throw new ToolFeatureDisabledException("CollectionExpressions");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -214,12 +174,7 @@ public class CodeStyleEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Source invalid.");
         }
 
         var rewriter = new CollectionExpressionRewriter();
@@ -236,12 +191,7 @@ public class CodeStyleEngine
     {
         if (!_config.IsFeatureEnabled("TimeProviderInjection"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature TimeProviderInjection is disabled."
-            };
+            throw new ToolFeatureDisabledException("TimeProviderInjection");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -250,12 +200,7 @@ public class CodeStyleEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Source invalid.");
         }
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
@@ -267,12 +212,7 @@ public class CodeStyleEngine
         var cu = rewriter.Visit(root) as CompilationUnitSyntax;
         if (cu == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Source invalid.");
         }
 
         var newClassNode = cu.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
@@ -296,12 +236,7 @@ public class CodeStyleEngine
     {
         if (!_config.IsFeatureEnabled("IDE0001"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature IDE0001 is disabled."
-            };
+            throw new ToolFeatureDisabledException("IDE0001");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -310,12 +245,7 @@ public class CodeStyleEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Source invalid.");
         }
 
         var rewriter = new NameSimplifierRewriter();
@@ -332,12 +262,7 @@ public class CodeStyleEngine
     {
         if (!_config.IsFeatureEnabled("LengthMinusOneToIndex"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature LengthMinusOneToIndex is disabled."
-            };
+            throw new ToolFeatureDisabledException("LengthMinusOneToIndex");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -346,12 +271,7 @@ public class CodeStyleEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Source invalid.");
         }
 
         var rewriter = new IndexFromEndRewriter();
