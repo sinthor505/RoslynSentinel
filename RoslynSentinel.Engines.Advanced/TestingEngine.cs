@@ -304,24 +304,14 @@ public class TestingEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult()
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = $"Failed to get syntax root for file: {filePath}"
-            };
+            throw new ToolNotFoundException($"Syntax root could not be read for '{filePath}'. Searched: the document's syntax tree. Next: confirm the file is in the loaded solution with ListAll, then retry.");
         }
 
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return new DocumentEditResult()
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"Class '{className}' was not found in {filePath}."
-            };
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file. Next: Search(mode: class, query: '{className}') to confirm the name.", "class", className);
         }
         bool isStaticClass = classNode.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
 

@@ -5,6 +5,7 @@ using System.Text;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Basic;
 
@@ -926,11 +927,13 @@ public class BatteryTwentyTests
     // --- SafeDelete ---
 
     [Test]
-    public async Task SafeDelete_NonSymbolPosition_ReturnsNoChangeError()
+    public async Task SafeDelete_NonSymbolPosition_ReturnsTargetIneligible()
     {
         SetSource(SimpleSource, "Test.cs");
+        // TODO position at a non-symbol resolves to the enclosing namespace; SafeDelete should say "no symbol at position"
         var result = await _workspaceTools.DeleteUnusedSymbolTool(reason: "test message", "Test.cs", projectName: "", docCommentId: "", line: 1, column: 1);
-        Assert.That(result.IsError, Is.True); Assert.That(result.ErrorData!.Message, Does.Contain("no change produced"));
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
     }
 
     private const string DeadMethodSource = @"

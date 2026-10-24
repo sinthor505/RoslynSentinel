@@ -1989,14 +1989,16 @@ public class TargetDto
 
         [Test]
         [Category("MappingEngine")] // sentinel:auto-category
-        public async Task GenerateMapping_WithUnknownType_ReturnsHelpfulMessage()
+        public async Task GenerateMapping_WithUnknownType_ThrowsNotFound()
         {
             const string src = @"public class Foo { public int X { get; set; } }";
             SetSource(src, "Foo.cs");
-            var result = await _mappingEngine.GenerateMappingAsync("Foo.cs", "Foo", "NonExistentType");
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound), "Unknown type should be reported as TargetNotFound, not thrown");
-            Assert.That(result.Message, Does.Contain("Could not resolve symbols"), "Should name the unresolved symbols in the message");
-            Assert.That(result.Message, Does.Not.Contain("System.Exception"), "Must not surface a raw exception to the caller");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            {
+                await _mappingEngine.GenerateMappingAsync("Foo.cs", "Foo", "NonExistentType");
+            });
+            Assert.That(ex.Message, Does.Contain("Could not resolve"), "Should name the unresolved symbols in the message");
+            Assert.That(ex.Message, Does.Contain("NonExistentType"));
         }
 
         // --- Bug: optimize_independent_awaits throws when method not found instead of returning message ---
@@ -2531,7 +2533,7 @@ public class Item { public int Id { get; set; } }";
             // ──────────────────────────────────────────────────────────────────────────
             [Test]
             [Category("StructuralRefinementEngine")] // sentinel:auto-category
-            public async Task BUG_73_SafeDeleteSymbol_SymbolIsUsed_ReturnsErrorNotChangeId()
+            public async Task BUG_73_SafeDeleteSymbol_SymbolIsUsed_ThrowsTargetIneligible()
             {
                 SetMultipleFiles("TestProj", ("ImportHistoryDto.cs", @"namespace App;
 
@@ -2547,10 +2549,11 @@ public class MyService
         return new ImportHistoryDto { Id = 1 };
     }
 }"));
-                var filePath = Path.Combine(Path.GetTempPath(), "TestProj", "ImportHistoryDto.cs");
-                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync(filePath, "ImportHistoryDto", "public class ImportHistoryDto", lineBefore: null, lineAfter: null);
-                // Should refuse to delete since the symbol IS used
-                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit), "Should refuse deletion since symbol is used, not modify the file");
+                var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+                {
+                    await _structuralRefinementEngine.SafeDeleteSymbolAsync("ImportHistoryDto.cs", "ImportHistoryDto", "public class ImportHistoryDto", lineBefore: null, lineAfter: null);
+                });
+                Assert.That(ex.Message, Does.Contain("usages"));
             }
 
             // ──────────────────────────────────────────────────────────────────────────
@@ -3340,7 +3343,7 @@ public class MyClass
             // ── BUG-73: SafeDeleteSymbol -> refuses when symbol IS used ──────────
             [Test]
             [Category("StructuralRefinementEngine")] // sentinel:auto-category
-            public async Task BUG_73_SafeDelete_WithUsedSymbol_ReturnsError()
+            public async Task BUG_73_SafeDelete_WithUsedSymbol_ThrowsTargetIneligible()
             {
                 // BUG-73 documents that SafeDeleteSymbolAsync may fail to detect when a symbol
                 // is actively used, returning an empty dict (indicating no errors found) when
@@ -3358,9 +3361,11 @@ public class Service
     }
 }";
                 SetSource(code, "Service.cs");
-                var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("Service.cs", "GetValue", contextSnippet: "public string GetValue", lineBefore: null, lineAfter: null);
-                // Verify it refuses deletion for used symbols
-                Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit), "Should refuse deletion when symbol is used and cannot be deleted");
+                var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+                {
+                    await _structuralRefinementEngine.SafeDeleteSymbolAsync("Service.cs", "GetValue", contextSnippet: "public string GetValue", lineBefore: null, lineAfter: null);
+                });
+                Assert.That(ex.Message, Does.Contain("usages"));
             }
 
             [Test]
@@ -4021,19 +4026,23 @@ namespace MyApp
         }
 
         [Test]
-        public async Task AddBenchmarkStubAsync_ClassNotInFile_ReturnsTargetNotFound()
+        public async Task AddBenchmarkStubAsync_ClassNotInFile_ThrowsNotFound()
         {
-            var result = await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "A missing class must not produce a stub");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            {
+                await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
+            });
+            Assert.That(ex.MissingTargetName, Is.EqualTo("NonExistentClass"));
         }
 
         [Test]
-        public async Task AddBenchmarkStub_Tool_ClassNotFound_DoesNotThrow()
+        public async Task AddBenchmarkStub_Tool_ClassNotFound_ThrowsNotFound()
         {
-            var result = await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-            Assert.That(result.UpdatedText, Is.Null.Or.Empty, "A missing class must not produce a stub");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            {
+                await _engine.AddBenchmarkStubAsync("Calc.cs", "NonExistentClass", "Add");
+            });
+            Assert.That(ex.MissingTargetName, Is.EqualTo("NonExistentClass"));
         }
     }
 

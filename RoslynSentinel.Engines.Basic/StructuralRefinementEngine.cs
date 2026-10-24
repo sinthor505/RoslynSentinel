@@ -51,12 +51,7 @@ public class StructuralRefinementEngine
             if (primaryType == null)
             {
                 var available = topLevelTypes.Count == 0 ? "none" : string.Join(", ", topLevelTypes.Select(t => t.Identifier.Text));
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"No top-level type named '{targetTypeName}' found in '{filePath}'. Top-level types present: {available}."
-                };
+                throw new ToolNotFoundException($"No top-level type named '{targetTypeName}' found in '{filePath}'. Top-level types present: {available}. Next: Search(mode: class, query: \"{targetTypeName}\")", "type", targetTypeName);
             }
         }
         else
@@ -66,7 +61,7 @@ public class StructuralRefinementEngine
 
         if (primaryType == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, FilePath = filePath, Message = "No type declaration found." };
+            throw new ToolNotFoundException($"No type declaration found in '{filePath}'. Next: ReadFile the file to confirm it declares a type.", "type");
         }
 
         var expectedName = primaryType.Identifier.Text + ".cs";
@@ -90,7 +85,8 @@ public class StructuralRefinementEngine
         {
             Outcome = EditOutcome.AlreadyInTargetState,
             FilePath = filePath,
-            Message = "// Filename matches primary type."
+            Message = "// Filename matches primary type.",
+            UpdatedText = root?.ToFullString() ?? ""
         };
     }
 
@@ -108,12 +104,7 @@ public class StructuralRefinementEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// File not found."
-            };
+            throw new ToolNotFoundException($"File '{filePath}' is not in the loaded solution. Next: ListAll to confirm the owning project.", "file");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -126,23 +117,15 @@ public class StructuralRefinementEngine
         var symbol = semanticModel?.GetDeclaredSymbol(node!, cancellationToken) ?? semanticModel?.GetSymbolInfo(node!, cancellationToken).Symbol;
         if (symbol == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Symbol not found."
-            };
+            throw new ToolNotFoundException($"No symbol found at line {line}, column {column} of '{filePath}'. Next: ReadFile the line to confirm the position.", "symbol");
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
         if (references.Any(r => r.Locations.Any()))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Symbol '{symbol.Name}' has {references.Sum(r => r.Locations.Count())} usages and cannot be safely deleted."
-            };
+            var firstLocations = references.SelectMany(r => r.Locations.Select(l => l.Location)).Take(3)
+                .Select(l => $"{Path.GetFileName(l.SourceTree?.FilePath ?? string.Empty)}:{l.GetLineSpan().StartLinePosition.Line + 1}");
+            throw new ToolTargetIneligibleException($"Symbol '{symbol.Name}' has {references.Sum(r => r.Locations.Count())} usages and cannot be safely deleted. First locations: {string.Join(", ", firstLocations)}. Next: Search(mode: references) to review them.", "Search(mode: references)");
         }
 
         var reflectionRisk = await CheckReflectionRiskAsync(solution, filePath, symbol, cancellationToken);
@@ -170,12 +153,7 @@ public class StructuralRefinementEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// File not found."
-            };
+            throw new ToolNotFoundException($"File '{filePath}' is not in the loaded solution. Next: ListAll to confirm the owning project.", "file");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -183,12 +161,7 @@ public class StructuralRefinementEngine
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (root == null || sourceText == null || semanticModel == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not parse file."
-            };
+            throw new ToolInvalidArgumentException($"Could not parse '{filePath}': syntax root, source text or semantic model is unavailable.");
         }
 
         var candidates = root.DescendantNodes()
@@ -212,26 +185,15 @@ public class StructuralRefinementEngine
 
         if (target == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = candidates.Count == 0
-                    ? $"// No symbol named '{symbolName}' found in {filePath}."
-                    : $"// '{symbolName}' has {candidates.Count} declaration(s) in {filePath}, and contextSnippet did not match any of them. " +
-                      "Provide a contextSnippet that is a verbatim substring of the intended declaration."
-            };
+            throw new ToolNotFoundException(candidates.Count == 0
+                ? $"No symbol named '{symbolName}' found in '{filePath}'. Next: Search(mode: symbol, query: \"{symbolName}\")"
+                : $"'{symbolName}' has {candidates.Count} declaration(s) in '{filePath}', and contextSnippet did not match any of them. Provide a contextSnippet that is a verbatim substring of the intended declaration.", "symbol", symbolName);
         }
 
         var symbol = semanticModel.GetDeclaredSymbol(target, cancellationToken);
         if (symbol == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Could not resolve a symbol for '{symbolName}' at the matched location."
-            };
+            throw new ToolNotFoundException($"No symbol could be resolved for '{symbolName}' at the matched location of '{filePath}'. Next: ReadFile the snippet location to confirm it is a declaration.", "symbol", symbolName);
         }
 
         return await SafeDeleteSymbolAsync(filePath, symbol, cancellationToken);
@@ -267,12 +229,7 @@ public class StructuralRefinementEngine
                     .Any(l => l.IsKind(SyntaxKind.StringLiteralExpression) && l.Token.ValueText == symbol.Name) ?? false;
                 if (hasMatchingLiteral)
                 {
-                    return new DocumentEditResult
-                    {
-                        Outcome = EditOutcome.CannotEdit,
-                        FilePath = filePath,
-                        Message = $"// Potential reflection risk: symbol '{symbol.Name}' is referenced by a string literal in {doc.Name} - possible reflection/dynamic usage. Delete manually after verifying."
-                    };
+                    throw new ToolTargetIneligibleException($"Potential reflection risk: symbol '{symbol.Name}' is referenced by a string literal in {doc.Name}, possible reflection/dynamic usage. Delete manually after verifying.", "Search(mode: text)");
                 }
             }
         }
@@ -294,34 +251,21 @@ public class StructuralRefinementEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// File not found."
-            };
+            throw new ToolNotFoundException($"File '{filePath}' is not in the loaded solution. Next: ListAll to confirm the owning project.", "file");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not get syntax root."
-            };
+            throw new ToolInvalidArgumentException($"Could not get the syntax root of '{filePath}'; the file did not parse.");
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
         if (references.Any(r => r.Locations.Any()))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Symbol '{symbol.Name}' has {references.Sum(r => r.Locations.Count())} usages and cannot be safely deleted."
-            };
+            var firstLocations = references.SelectMany(r => r.Locations.Select(l => l.Location)).Take(3)
+                .Select(l => $"{Path.GetFileName(l.SourceTree?.FilePath ?? string.Empty)}:{l.GetLineSpan().StartLinePosition.Line + 1}");
+            throw new ToolTargetIneligibleException($"Symbol '{symbol.Name}' has {references.Sum(r => r.Locations.Count())} usages and cannot be safely deleted. First locations: {string.Join(", ", firstLocations)}. Next: Search(mode: references) to review them.", "Search(mode: references)");
         }
 
         var reflectionRisk = await CheckReflectionRiskAsync(solution, filePath, symbol, cancellationToken);
@@ -334,12 +278,7 @@ public class StructuralRefinementEngine
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         if (semanticModel == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not get semantic model."
-            };
+            throw new ToolInvalidArgumentException($"Could not get the semantic model of '{filePath}'; the file did not compile far enough to analyze.");
         }
 
         var node = root.DescendantNodes().FirstOrDefault(n =>
@@ -347,12 +286,7 @@ public class StructuralRefinementEngine
 
         if (node == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Symbol declaration not found in file."
-            };
+            throw new ToolNotFoundException($"Declaration of symbol '{symbol.Name}' not found in '{filePath}'. Next: Search(mode: symbol, query: \"{symbol.Name}\") to locate it.", "symbol", symbol.Name);
         }
 
         return new DocumentEditResult

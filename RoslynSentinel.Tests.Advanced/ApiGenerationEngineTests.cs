@@ -128,13 +128,14 @@ public class OrdersController
 
 
     [Test]
-    public async Task GenerateHttpClient_ControllerNotFound_ReturnsEmpty()
+    public async Task GenerateHttpClient_ControllerNotFound_ThrowsNotFound()
     {
         SetSource(@"public class SomeOtherClass { public void Method() { } }");
 
-        var result = await _engine.GenerateHttpClientForControllerAsync("Test.cs", "MissingController");
-
-        // TODO throw-migration: assert the typed exception once ApiGenerationEngine throws
-        Assert.That(result.UpdatedText, Is.Null, "Should return null when controller class not found");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _engine.GenerateHttpClientForControllerAsync("Test.cs", "MissingController");
+        });
+        Assert.That(ex.Message, Does.Contain("MissingController"));
     }
 }

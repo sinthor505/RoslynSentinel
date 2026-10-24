@@ -30,9 +30,9 @@ public class IDEStyleEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
+                Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
-                Message = "// No member accesses to simplify.",
+                Message = "No member accesses to simplify.",
                 UpdatedText = root?.ToFullString() ?? string.Empty
             };
         }
@@ -62,12 +62,7 @@ public class IDEStyleEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException($"Syntax root of '{filePath}' is unavailable. Next: confirm the file parses with GetFileOutline.");
         }
 
         var newRoot = RewriteBlocksWithObjectInitializers(root);
@@ -186,12 +181,7 @@ public class IDEStyleEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException($"Syntax root of '{filePath}' is unavailable. Next: confirm the file parses with GetFileOutline.");
         }
 
         var rewriter = new NullPropagationRewriter();

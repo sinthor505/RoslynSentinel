@@ -25,12 +25,7 @@ public class SolutionStructureEngine
         var fileDir = Path.GetDirectoryName(filePath);
         if (projectDir == null || fileDir == null || !fileDir.StartsWith(projectDir))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// File is outside the project directory."
-            };
+            throw new ToolNotFoundException($"File '{filePath}' is outside the project directory, so its namespace cannot be checked. Next: ListAll to confirm the owning project of this file.");
         }
 
         var relativePath = fileDir.Substring(projectDir.Length).Trim(Path.DirectorySeparatorChar);
@@ -52,9 +47,10 @@ public class SolutionStructureEngine
 
         return new DocumentEditResult
         {
-            Outcome = EditOutcome.TargetNotFound,
+            Outcome = EditOutcome.NoCandidatesFound,
             FilePath = filePath,
-            Message = "// Namespace is already correct."
+            Message = "Namespace is already correct; nothing to fix.",
+            UpdatedText = root?.ToFullString() ?? ""
         };
     }
 
@@ -67,12 +63,7 @@ public class SolutionStructureEngine
         var nsNode = root?.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
         if (nsNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Namespace not found."
-            };
+            throw new ToolNotFoundException($"No namespace declaration found in '{filePath}', so its target folder cannot be derived. Next: ReadFile the file to confirm it declares a namespace.", "namespace");
         }
 
         var ns = nsNode.Name.ToString();
@@ -81,12 +72,7 @@ public class SolutionStructureEngine
         var defaultNamespace = project.DefaultNamespace ?? project.Name;
         if (projectDir == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Project directory not found."
-            };
+            throw new ToolNotFoundException($"Project directory not found for '{filePath}'. Next: ListAll to confirm the owning project.", "project");
         }
 
         // Strip the default namespace from the beginning of the file's namespace
@@ -111,9 +97,10 @@ public class SolutionStructureEngine
 
         return new DocumentEditResult
         {
-            Outcome = EditOutcome.CannotMove,
+            Outcome = EditOutcome.NoCandidatesFound,
             FilePath = filePath,
-            Message = "// File is already in the correct folder."
+            Message = "File is already in the correct folder; nothing to move.",
+            UpdatedText = root?.ToFullString() ?? ""
         };
     }
 

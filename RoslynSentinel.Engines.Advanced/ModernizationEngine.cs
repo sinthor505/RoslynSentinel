@@ -622,10 +622,10 @@ public class SyntaxModernizationEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
+                Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
-                Message = "// No logging invocations found.",
-                UpdatedText = root?.ToFullString() ?? string.Empty
+                Message = $"No LogInformation, LogWarning or LogError calls found in class '{className}'. Searched: invocations in the class body only. Next: Search(mode: text, query: 'LogInformation|LogWarning|LogError') to locate the logging calls, or GetFileOutline to confirm the class name.",
+                UpdatedText = root!.ToFullString()
             };
         }
 

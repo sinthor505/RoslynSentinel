@@ -177,15 +177,14 @@ public class SemanticRefactoringEngine
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         var propNode = classNode?.Members.OfType<PropertyDeclarationSyntax>().FirstOrDefault(p => p.Identifier.Text == propertyName);
 
-        if (classNode == null || propNode == null)
+        if (classNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root?.ToFullString() ?? "",
-                Message = "// ErrorDetails: Class or property not found.",
-                FilePath = filePath
-            };
+            throw new ToolNotFoundException($"Class '{className}' was not found in '{filePath}'. Searched: class declarations in this file. Next: Search(mode: class, query: \"{className}\")", "class", className);
+        }
+
+        if (propNode == null)
+        {
+            throw new ToolNotFoundException($"Property '{propertyName}' was not found in class '{className}'. Next: Search(mode: property, query: \"{propertyName}\")", "property", propertyName);
         }
 
         var getter = SyntaxFactory.MethodDeclaration(propNode.Type, $"Get{propertyName}")
@@ -221,7 +220,7 @@ public class SemanticRefactoringEngine
         var nodes = root?.DescendantNodes(span).Where(n => n is StatementSyntax && n.Parent is BlockSyntax).Cast<StatementSyntax>().ToList();
         if (nodes == null || nodes.Count == 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "// ErrorDetails: No statements found in the specified range.", FilePath = filePath };
+            throw new ToolNotFoundException($"No statements found in lines {startLine}-{endLine} of '{filePath}'. Searched: statements inside a block body whose span falls within that line range. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.", "statements");
         }
 
         return await WrapStatementsInUsingAsync(filePath, document, root!, nodes, disposalName, cancellationToken);
@@ -240,7 +239,7 @@ public class SemanticRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, Message = "// Cannot edit: syntax root not found.", FilePath = filePath };
+            throw new ToolInvalidArgumentException($"Syntax root or source text is unavailable for '{filePath}'; the file did not parse.");
         }
 
         // Find the snippet position
@@ -264,7 +263,7 @@ public class SemanticRefactoringEngine
 
         if (nodes.Count == 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "// ErrorDetails: No statements found at the snippet location.", FilePath = filePath };
+            throw new ToolNotFoundException($"No statements found at the snippet location in '{filePath}'. Searched: statements containing the snippet match and statements on the snippet's line. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.", "statements");
         }
 
         // TODO this snippet form selects only the statement(s) containing the snippet, so it cannot cover a multi-statement range (the using block would be empty); WrapRange using is meant for startLine/endLine

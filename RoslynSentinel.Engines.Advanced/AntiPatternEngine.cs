@@ -2831,23 +2831,20 @@ public class AntiPatternEngine
         }
 
         var methodNode = candidateMethods.FirstOrDefault();
-        if (methodNode == null || semanticModel == null)
+        if (methodNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath
-            };
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations named '{actualMethodName}' with class filter '{className}'. Next: Search(mode: method, query: '{actualMethodName}') to locate it.", "method", actualMethodName);
+        }
+
+        if (semanticModel == null)
+        {
+            throw new ToolInvalidArgumentException($"Semantic model is unavailable for '{filePath}'. Next: Build to check the file compiles, then retry.");
         }
 
         var methodSymbol = semanticModel.GetDeclaredSymbol(methodNode, cancellationToken);
         if (methodSymbol == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath
-            };
+            throw new ToolNotFoundException($"Symbol for method '{methodName}' could not be resolved in '{filePath}'. Searched: declared symbols for the method declaration. Next: Build to check the file for compile errors.", "method", actualMethodName);
         }
 
         var sb = new StringBuilder();
@@ -2903,13 +2900,14 @@ public class AntiPatternEngine
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        if (root == null || classNode == null)
+        if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath
-            };
+            throw new ToolInvalidArgumentException($"Syntax root is unavailable for '{filePath}'. Next: confirm the file parses with GetFileOutline.");
+        }
+
+        if (classNode == null)
+        {
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file. Next: Search(mode: class, query: '{className}') to confirm the name.", "class", className);
         }
 
         // Gather fields with their types (private instance fields only -> skip const, static, backing fields)
@@ -2923,11 +2921,7 @@ public class AntiPatternEngine
 
         if (fieldsWithTypes.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException($"Class '{className}' has no non-static fields or get-accessor properties to compare, so Equals and GetHashCode cannot be generated. Next: add the fields to compare, or target a different class.");
         }
 
         var fieldNames = fieldsWithTypes.Select(f => f.Name).ToList();

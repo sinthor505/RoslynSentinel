@@ -232,7 +232,7 @@ public class CodeGenerationEngine
                 Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
                 UpdatedText = root!.ToFullString(),
-                Message = "// Info: No fields to initialize in constructor."
+                Message = "Info: No fields to initialize in constructor."
             };
         }
 

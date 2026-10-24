@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 
@@ -88,11 +89,13 @@ public class Service {
         _workspaceManager.SetTestSolution(solution);
 
         // Act & Assert
-        var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("Target.cs", "DeadMethod", "public void DeadMethod()", null, null);
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _structuralRefinementEngine.SafeDeleteSymbolAsync("Target.cs", "DeadMethod", "public void DeadMethod()", null, null);
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.Message, Does.Contain("Potential reflection risk"));
-        Assert.That(result.Message, Does.Contain("Caller.cs"));
+        Assert.That(ex.Message, Does.Contain("reflection"));
+        Assert.That(ex.Message, Does.Contain("Caller.cs"));
     }
 
     [Test]

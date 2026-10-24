@@ -42,14 +42,7 @@ public class MappingEngine
 
         if (fromSymbol == null || toSymbol == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Could not resolve symbols for '{fromType}' or '{toType}'.\n" +
-                          $"// Tip: pass the simple class name (e.g. 'CreateRecipeCommand') or the fully-qualified metadata name\n" +
-                          $"// (e.g. 'MyApp.Commands.CreateRecipeCommand').  Ensure the types are in the loaded solution."
-            };
+            throw new ToolNotFoundException($"Could not resolve type '{fromType}' or '{toType}'. Searched: the loaded solution's compilation by fully-qualified metadata name, then by simple name. Next: pass the simple class name (e.g. 'CreateRecipeCommand') or the fully-qualified name (e.g. 'MyApp.Commands.CreateRecipeCommand'), and confirm both types are in the loaded solution.");
         }
 
         var fromProps = fromSymbol.GetMembers().OfType<IPropertySymbol>().ToList();
@@ -113,7 +106,7 @@ public class MappingEngine
         var toSymbol = ResolveType(compilation, toType, cancellationToken);
         if (document == null || fromSymbol == null || toSymbol == null)
         {
-            return DocumentEditResult.TargetNotFound(filePath);
+            throw new ToolNotFoundException($"Could not find the document or the types '{fromType}' and '{toType}' for '{filePath}'. Searched: the document in the loaded solution and both type symbols. Next: Search(mode: class, query: '{fromType}') and Search(mode: class, query: '{toType}') to confirm the names, and confirm the file is in the loaded solution.");
         }
 
         var sourceTree = fromSymbol.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree;
@@ -124,13 +117,7 @@ public class MappingEngine
         FilePathWrapper newPath = string.IsNullOrEmpty(directory) ? fileName : Path.Combine(directory, fileName);
         if (solution.GetDocumentIdsWithFilePath(newPath).Any() || File.Exists(newPath))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = newPath,
-                ErrorCode = ToolErrorCode.InvalidArgument,
-                Message = $"GenerateMapping: '{newPath}' already exists. GenerateMapping never overwrites a file - delete or rename the existing file, or add the mapping method to it yourself."
-            };
+            throw new ToolInvalidArgumentException($"GenerateMapping: '{newPath}' already exists. GenerateMapping never overwrites a file - delete or rename the existing file, or add the mapping method to it yourself.");
         }
 
         var sourceNamespace = fromSymbol.ContainingNamespace is { IsGlobalNamespace: false } ns ? ns.ToDisplayString() : null;
@@ -191,9 +178,9 @@ public class MappingEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
+                Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
-                Message = $"// No assignment expressions found in the specified range: {startLine}-{endLine}",
+                Message = $"No assignment expressions found in the specified range: {startLine}-{endLine}",
                 UpdatedText = root?.ToFullString() ?? string.Empty
             };
         }
@@ -224,12 +211,7 @@ public class MappingEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = "// Cannot get syntax root or source text."
-            };
+            throw new ToolInvalidArgumentException($"Syntax root or source text is unavailable for '{filePath}'. Next: confirm the file parses with GetFileOutline.");
         }
 
         // Find the snippet position
@@ -260,9 +242,9 @@ public class MappingEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
+                Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
-                Message = $"// No assignment expressions found at the snippet location",
+                Message = $"No assignment expressions found at the snippet location",
                 UpdatedText = root.ToFullString() ?? string.Empty
             };
         }

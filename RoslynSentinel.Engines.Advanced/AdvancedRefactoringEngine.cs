@@ -54,11 +54,7 @@ public class AdvancedRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath
-            };
+            throw new ToolInvalidArgumentException($"Could not parse '{filePath}' into a syntax tree, so task waits cannot be optimized.");
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -181,7 +177,7 @@ public class AdvancedRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
+                Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
                 UpdatedText = root.ToFullString()
             };
@@ -240,23 +236,13 @@ public class AdvancedRefactoringEngine
         var classRoot = await classDocument.GetSyntaxRootAsync(cancellationToken);
         if (classRoot == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Could not parse '{filePath}'."
-            };
+            throw new ToolInvalidArgumentException($"Could not parse '{filePath}' into a syntax tree, so the interface cannot be synced.");
         }
 
         var classNode = classRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Class '{className}' was not found in '{System.IO.Path.GetFileName(filePath)}'."
-            };
+            throw new ToolNotFoundException($"Class '{className}' was not found in '{System.IO.Path.GetFileName(filePath)}'. Searched: class declarations in this file. Next: Search(mode: class, query: \"{className}\")", "class", className);
         }
 
         // Collect public non-static non-override methods and properties from the class
@@ -302,12 +288,7 @@ public class AdvancedRefactoringEngine
 
         if (interfaceNode == null || interfaceDocument == null || interfaceRoot == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// Interface '{interfaceName}' was not found in '{System.IO.Path.GetFileName(filePath)}' or any other loaded document."
-            };
+            throw new ToolNotFoundException($"Interface '{interfaceName}' was not found in '{System.IO.Path.GetFileName(filePath)}' or any other loaded document. Searched: all project documents. Next: Search(mode: interface, query: \"{interfaceName}\")", "interface", interfaceName);
         }
 
         // Collect existing interface member signatures (for deduplication)

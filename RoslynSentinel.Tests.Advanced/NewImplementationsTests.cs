@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 
 #pragma warning disable CS8618
@@ -503,8 +504,10 @@ public class Big
     {
         SetSource(@"
 public class Marker { }", "Marker.cs");
-        var result = await _antiPatternEngine.GenerateEqualityOverridesAsync("Marker.cs", "Marker");
-        Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Modified), "A class with no fields or properties cannot generate equality overrides - " + "that is reported through Outcome, not thrown.");
+        await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _antiPatternEngine.GenerateEqualityOverridesAsync("Marker.cs", "Marker");
+        });
     }
 
     // ══════════════════════════════════════════════════════════════

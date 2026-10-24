@@ -23,11 +23,7 @@ public class ApiGenerationEngine
         var controller = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == controllerName);
         if (controller == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath
-            };
+            throw new ToolNotFoundException($"Controller class '{controllerName}' not found in '{filePath}'. Searched: class declarations in the file. Next: Search(mode: class, query: '{controllerName}') to locate it, or GetFileOutline on the file.", "class", controllerName);
         }
 
         var sb = new System.Text.StringBuilder();
@@ -104,11 +100,7 @@ public class ApiGenerationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath
-            };
+            throw new ToolInvalidArgumentException($"Syntax root of '{filePath}' is unavailable or not a compilation unit. Next: confirm the file is a plain .cs source file with GetFileOutline.");
         }
 
         // First add the using directive if not present
@@ -121,11 +113,7 @@ public class ApiGenerationEngine
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath
-            };
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file after adding the using directive. Next: Search(mode: class, query: '{className}') to confirm the name.", "class", className);
         }
 
         // Helper: check whether a property already carries an attribute (avoids duplicates)

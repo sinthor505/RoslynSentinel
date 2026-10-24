@@ -2661,7 +2661,7 @@ public class SymbolNavigationEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return (EditOutcome.CannotEdit, "// Cannot read: syntax root not found.", null, null);
+            throw new ToolInvalidArgumentException($"Cannot read '{filePath}': syntax root or source text is unavailable; the file did not parse.");
         }
 
         var allNameCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, memberName, cancellationToken);

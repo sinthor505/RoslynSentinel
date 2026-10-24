@@ -105,7 +105,7 @@ public class LogicSimplificationEngine
         {
             Outcome = EditOutcome.NoCandidatesFound,
             FilePath = filePath,
-            Message = "// No reference type parameters found.",
+            Message = "No reference type parameters found.",
             UpdatedText = root!.ToFullString()
         };
     }

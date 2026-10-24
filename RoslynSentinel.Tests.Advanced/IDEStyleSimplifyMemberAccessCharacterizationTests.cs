@@ -187,14 +187,14 @@ public class IDEStyleSimplifyMemberAccessCharacterizationTests
     }
 
     [Test]
-    public async Task SimplifyMemberAccess_NoThisAccess_ReturnsTargetNotFoundWithSourceUnchanged()
+    public async Task SimplifyMemberAccess_NoThisAccess_ReturnsNoCandidatesWithSourceUnchanged()
     {
         var source = Src(false, "public class C", "{", "    public int  M( ) { return 1; }", "}");
         SetSource(source);
 
         var result = await _engine.SimplifyMemberAccessAsync("Test.cs");
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.NoCandidatesFound));
         Assert.That(result.UpdatedText, Is.EqualTo(source));
     }
 

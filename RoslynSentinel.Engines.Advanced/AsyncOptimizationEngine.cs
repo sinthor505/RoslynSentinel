@@ -866,7 +866,7 @@ public class AsyncOptimizationEngine
         var body = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody;
         if (body == null)
         {
-            return new DocumentEditResult(EditOutcome.NoCandidatesFound, filePath);
+            return new DocumentEditResult { Outcome = EditOutcome.NoCandidatesFound, FilePath = filePath, UpdatedText = root.ToFullString() };
         }
 
         // Find the CancellationToken parameter to forward.
@@ -897,7 +897,7 @@ public class AsyncOptimizationEngine
 
         if (bridgeTargets.Count == 0)
         {
-            return new DocumentEditResult(EditOutcome.NoCandidatesFound, filePath);
+            return new DocumentEditResult { Outcome = EditOutcome.NoCandidatesFound, FilePath = filePath, UpdatedText = root.ToFullString() };
         }
 
         const string BridgeCallAnnotation = "AsyncifyBridgeCallWithCT";
