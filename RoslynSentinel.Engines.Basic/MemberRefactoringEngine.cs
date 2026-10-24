@@ -389,7 +389,7 @@ public class MemberRefactoringEngine
         {
             return new AddConstructorParameterCascadeResult(
                 new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = $"// Cannot edit: {unresolved.Count} call site(s) have no callSiteFixups entry and no defaultValue/nullDefault." },
-                new Dictionary<FilePathWrapper, string>(), unresolved, null, 0, 0);
+                new Dictionary<FilePathWrapper, string>(), unresolved, 0, 0);
         }
 
         var editedDocuments = await ConstructorCallSiteFinder.ApplyAsync(edits, paramName, cancellationToken);
@@ -398,9 +398,10 @@ public class MemberRefactoringEngine
         // declared there): run the class edit on the already-rewritten document so both land in one text.
         var classDocument = editedDocuments.TryGetValue(document.Id, out var rewrittenClassDocument) ? rewrittenClassDocument : document;
         var classEdit = await AddConstructorParameterToDocumentAsync(classDocument, filePath, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, defaultValue, nullDefault, cancellationToken);
+        // TODO unreachable after throw migration; verify (AddConstructorParameterToDocumentAsync's only explicit outcome is Modified)
         if (classEdit.Outcome != EditOutcome.Modified || classEdit.UpdatedText == null)
         {
-            return new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), [], null, 0, 0);
+            return new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), [], 0, 0);
         }
 
         var changes = new Dictionary<FilePathWrapper, string> { [filePath] = classEdit.UpdatedText };
@@ -416,7 +417,7 @@ public class MemberRefactoringEngine
             changes[(FilePathWrapper)editedDocument.FilePath] = (await editedDocument.GetTextAsync(cancellationToken)).ToString();
         }
 
-        return new AddConstructorParameterCascadeResult(classEdit, changes, [], null, edits.Count, leftToDefault);
+        return new AddConstructorParameterCascadeResult(classEdit, changes, [], edits.Count, leftToDefault);
     }
 
     /// <summary>

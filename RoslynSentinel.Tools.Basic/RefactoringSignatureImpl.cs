@@ -377,11 +377,6 @@ public class RefactoringSignatureImpl
                 if (callSiteFixups is { Count: > 0 })
                 {
                     cascade = await _memberRefactoringEngine.AddConstructorParameterWithCallSitesAsync(filePathResolved, className, paramName, paramType!, callSiteFixups, fieldName, contextSnippet, lineBefore, lineAfter, defaultValue, nullDefault, cancellationToken);
-                    if (cascade.InvalidArgumentMessage is { } invalidFixups)
-                    {
-                        return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"ConstructorParameter: {invalidFixups}") };
-                    }
-
                     if (cascade.UnresolvedSites.Count > 0)
                     {
                         // Detail echoes the full path verbatim: "{FilePath}:{Line}" is the literal callSiteFixups key.

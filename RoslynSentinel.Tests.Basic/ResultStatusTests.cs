@@ -863,21 +863,10 @@ public class ResultStatusTests
     }
 
     [Test]
-    public void AddConstructorParameterCascadeResult_InvalidArgument_IsInvalidInput()
-    {
-        var result = new AddConstructorParameterCascadeResult(new DocumentEditResult(), new Dictionary<FilePathWrapper, string>(), Array.Empty<UnresolvedConstructorCallSite>(), "bad fixup", 0, 0);
-
-        Assert.That(result.Status, Is.EqualTo(ResultStatus.InvalidInput));
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.InvalidArgument));
-        Assert.That(result.Message, Is.EqualTo("bad fixup"));
-    }
-
-    [Test]
     public void AddConstructorParameterCascadeResult_ClassEditFailed_PassesThroughClassEditStatus()
     {
         var classEdit = new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "no class" };
-        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), Array.Empty<UnresolvedConstructorCallSite>(), null, 0, 0);
+        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), Array.Empty<UnresolvedConstructorCallSite>(), 0, 0);
 
         Assert.That(result.Status, Is.EqualTo(classEdit.Status));
         Assert.That(result.IsError, Is.True);
@@ -890,7 +879,7 @@ public class ResultStatusTests
     {
         var classEdit = new DocumentEditResult { Outcome = EditOutcome.Modified };
         var sites = new[] { new UnresolvedConstructorCallSite("a.cs", 3, "new Foo()", null) };
-        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), sites, null, 0, 0);
+        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), sites, 0, 0);
 
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
         Assert.That(result.IsError, Is.True);
@@ -902,7 +891,7 @@ public class ResultStatusTests
     public void AddConstructorParameterCascadeResult_FullChangeSet_IsSuccess()
     {
         var classEdit = new DocumentEditResult { Outcome = EditOutcome.Modified };
-        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), Array.Empty<UnresolvedConstructorCallSite>(), null, 2, 0);
+        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), Array.Empty<UnresolvedConstructorCallSite>(), 2, 0);
 
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(result.IsError, Is.False);

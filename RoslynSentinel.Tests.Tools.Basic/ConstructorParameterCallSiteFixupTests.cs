@@ -85,7 +85,6 @@ public class Caller
 
         var result = await CascadeAsync("Svc", new() { [$"Caller.cs:{LineOf(SimpleCaller, "new Svc(1)")}"] = "cfg" });
 
-        Assert.That(result.InvalidArgumentMessage, Is.Null, result.ClassEdit.Message);
         Assert.That(result.UnresolvedSites, Is.Empty);
         Assert.That(result.CallSitesUpdated, Is.EqualTo(1));
         Assert.That(ChangeFor(result, "Caller.cs"), Does.Contain("new Svc(1, cfg)"));
@@ -111,7 +110,6 @@ public class Caller
 
         var result = await CascadeAsync("Svc", new() { ["Caller.cs:*"] = "cfg" });
 
-        Assert.That(result.InvalidArgumentMessage, Is.Null, result.ClassEdit.Message);
         Assert.That(result.CallSitesUpdated, Is.EqualTo(2));
         Assert.That(ChangeFor(result, "Caller.cs"), Does.Contain("new Svc(1, cfg)").And.Contain("new Svc(2, cfg)"));
     }
@@ -125,7 +123,6 @@ public class Caller
 
         var result = await CascadeAsync("Svc", new() { ["*"] = "cfg" });
 
-        Assert.That(result.InvalidArgumentMessage, Is.Null, result.ClassEdit.Message);
         Assert.That(result.CallSitesUpdated, Is.EqualTo(2));
         Assert.That(ChangeFor(result, "A.cs"), Does.Contain("new Svc(1, cfg)"));
         Assert.That(ChangeFor(result, "B.cs"), Does.Contain("new Svc(2, cfg)"));
@@ -154,7 +151,6 @@ public class Caller
             ["*"] = "globalCfg",
         });
 
-        Assert.That(result.InvalidArgumentMessage, Is.Null, result.ClassEdit.Message);
         Assert.That(ChangeFor(result, "Caller.cs"), Does.Contain("new Svc(1, exactCfg)").And.Contain("new Svc(2, fileCfg)"));
         Assert.That(ChangeFor(result, "Other.cs"), Does.Contain("new Svc(3, globalCfg)"));
     }
@@ -187,7 +183,6 @@ public class Caller
         // defaultValue keeps the new parameter legal after the existing optional one.
         var result = await CascadeAsync("Svc", new() { ["*"] = "cfg" }, defaultValue: "null");
 
-        Assert.That(result.InvalidArgumentMessage, Is.Null, result.ClassEdit.Message);
         var text = ChangeFor(result, "Caller.cs");
         Assert.That(text, Does.Contain("new Svc(1, config: cfg)"), "Omitted trailing optional: a positional argument would bind to 'b'.");
         Assert.That(text, Does.Contain("new Svc(1, 2, cfg)"), "All parameters supplied: positional is correct.");
@@ -212,7 +207,6 @@ public class Caller
 
         var result = await CascadeAsync("Svc", new() { ["*"] = "cfg" });
 
-        Assert.That(result.InvalidArgumentMessage, Is.Null, result.ClassEdit.Message);
         Assert.That(result.CallSitesUpdated, Is.EqualTo(1));
         Assert.That(ChangeFor(result, "Caller.cs"), Does.Contain("new(1, cfg)"));
     }
@@ -231,7 +225,6 @@ public class Derived : Svc
 
         var result = await CascadeAsync("Svc", new() { ["*"] = "cfg" });
 
-        Assert.That(result.InvalidArgumentMessage, Is.Null, result.ClassEdit.Message);
         Assert.That(result.CallSitesUpdated, Is.EqualTo(1));
         Assert.That(ChangeFor(result, "Derived.cs"), Does.Contain(": base(1, cfg)"));
     }
@@ -252,7 +245,6 @@ public class Svc
 
         var result = await CascadeAsync("Svc", new() { ["*"] = "cfg" });
 
-        Assert.That(result.InvalidArgumentMessage, Is.Null, result.ClassEdit.Message);
         Assert.That(result.Changes, Has.Count.EqualTo(1), "The this(...) site and the class edit share one file, so one text.");
         var text = ChangeFor(result, "Svc.cs");
         Assert.That(text, Does.Contain(": this(7, cfg)"));
@@ -288,7 +280,6 @@ public class Caller
 
         var result = await CascadeAsync("Inner", new() { ["*"] = "cfg" }, file: "Types.cs");
 
-        Assert.That(result.InvalidArgumentMessage, Is.Null, result.ClassEdit.Message);
         Assert.That(result.CallSitesUpdated, Is.EqualTo(1));
         Assert.That(ChangeFor(result, "Caller.cs"), Does.Contain("new Outer(new Inner(1, cfg))"),
             "The argument belongs to Inner's argument list, not the enclosing Outer creation.");
@@ -302,7 +293,6 @@ public class Caller
 
         var result = await CascadeAsync("Svc", new() { ["Other.cs:*"] = "cfg" });
 
-        Assert.That(result.InvalidArgumentMessage, Is.Null);
         Assert.That(result.UnresolvedSites, Has.Count.EqualTo(1));
         Assert.That(result.UnresolvedSites[0].FilePath, Does.EndWith("Caller.cs"));
         Assert.That(result.UnresolvedSites[0].Line, Is.EqualTo(LineOf(SimpleCaller, "new Svc(1)")));
@@ -316,7 +306,6 @@ public class Caller
 
         var result = await CascadeAsync("Svc", new() { ["Other.cs:*"] = "cfg" }, defaultValue: "null");
 
-        Assert.That(result.InvalidArgumentMessage, Is.Null, result.ClassEdit.Message);
         Assert.That(result.UnresolvedSites, Is.Empty);
         Assert.That(result.CallSitesUpdated, Is.EqualTo(1));
         Assert.That(result.CallSitesLeftToDefault, Is.EqualTo(1));
