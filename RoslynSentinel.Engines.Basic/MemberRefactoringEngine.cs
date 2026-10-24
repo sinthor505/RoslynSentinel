@@ -293,8 +293,8 @@ public class MemberRefactoringEngine
     /// (object creation, target-typed new, <c>: this(...)</c>, <c>: base(...)</c>, and - for a parameterless target - the
     /// implicit <c>base()</c> of derived constructors), as ONE multi-file change set. Per site the argument comes from
     /// <paramref name="callSiteFixups"/> (exact "FilePath:Line" beats "FilePath:*" beats "*"); a site with no entry is left
-    /// alone when <paramref name="defaultValue"/>/<paramref name="nullDefault"/> covers it, else it is reported in
-    /// <see cref="AddConstructorParameterCascadeResult.UnresolvedSites"/> and nothing is edited. An exact key that names no
+    /// alone when <paramref name="defaultValue"/>/<paramref name="nullDefault"/> covers it, else it is thrown as
+    /// <see cref="UnresolvedCallSitesException"/> and nothing is edited. An exact key that names no
     /// real call site is rejected up front. The class is targeted exactly as <see cref="AddConstructorParameterAsync"/>
     /// targets it (its first declared constructor, or a synthesized one).
     /// </summary>
@@ -387,9 +387,7 @@ public class MemberRefactoringEngine
 
         if (unresolved.Count > 0)
         {
-            return new AddConstructorParameterCascadeResult(
-                new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = $"// Cannot edit: {unresolved.Count} call site(s) have no callSiteFixups entry and no defaultValue/nullDefault." },
-                new Dictionary<FilePathWrapper, string>(), unresolved, 0, 0);
+            throw new UnresolvedCallSitesException($"{unresolved.Count} call site(s) of the '{className}' constructor have no callSiteFixups entry and no defaultValue/nullDefault, so nothing was changed. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) holding the argument expression for '{paramName}' at each site, or \"FilePath:*\" / \"*\" to apply one expression to every unresolved site in a file / everywhere, or pass defaultValue/nullDefault to leave these sites on the default.", unresolved);
         }
 
         var editedDocuments = await ConstructorCallSiteFinder.ApplyAsync(edits, paramName, cancellationToken);
@@ -401,7 +399,7 @@ public class MemberRefactoringEngine
         // TODO unreachable after throw migration; verify (AddConstructorParameterToDocumentAsync's only explicit outcome is Modified)
         if (classEdit.Outcome != EditOutcome.Modified || classEdit.UpdatedText == null)
         {
-            return new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), [], 0, 0);
+            return new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), 0, 0);
         }
 
         var changes = new Dictionary<FilePathWrapper, string> { [filePath] = classEdit.UpdatedText };
@@ -417,7 +415,7 @@ public class MemberRefactoringEngine
             changes[(FilePathWrapper)editedDocument.FilePath] = (await editedDocument.GetTextAsync(cancellationToken)).ToString();
         }
 
-        return new AddConstructorParameterCascadeResult(classEdit, changes, [], edits.Count, leftToDefault);
+        return new AddConstructorParameterCascadeResult(classEdit, changes, edits.Count, leftToDefault);
     }
 
     /// <summary>

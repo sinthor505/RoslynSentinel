@@ -376,15 +376,18 @@ public class RefactoringSignatureImpl
             {
                 if (callSiteFixups is { Count: > 0 })
                 {
-                    cascade = await _memberRefactoringEngine.AddConstructorParameterWithCallSitesAsync(filePathResolved, className, paramName, paramType!, callSiteFixups, fieldName, contextSnippet, lineBefore, lineAfter, defaultValue, nullDefault, cancellationToken);
-                    if (cascade.UnresolvedSites.Count > 0)
+                    try
+                    {
+                        cascade = await _memberRefactoringEngine.AddConstructorParameterWithCallSitesAsync(filePathResolved, className, paramName, paramType!, callSiteFixups, fieldName, contextSnippet, lineBefore, lineAfter, defaultValue, nullDefault, cancellationToken);
+                    }
+                    catch (UnresolvedCallSitesException ex)
                     {
                         // Detail echoes the full path verbatim: "{FilePath}:{Line}" is the literal callSiteFixups key.
-                        var unresolvedDetail = string.Join("; ", cascade.UnresolvedSites.Select(s => $"{s.FilePath}:{s.Line} [{s.CallText}]" + (s.Note != null ? $" (cannot be fixed with callSiteFixups: {s.Note})" : string.Empty)));
+                        var unresolvedDetail = string.Join("; ", ex.Sites.Select(s => $"{s.FilePath}:{s.Line} [{s.CallText}]" + (s.Note != null ? $" (cannot be fixed with callSiteFixups: {s.Note})" : string.Empty)));
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = true,
-                            ErrorData = await ResultError.ForPossiblyLargeDetailAsync(ToolErrorCode.UnresolvedCallSites, $"{cascade.UnresolvedSites.Count} call site(s) of the '{className}' constructor have no callSiteFixups entry and no defaultValue/nullDefault, so nothing was changed. Retry with callSiteFixups keyed \"FilePath:Line\" (the full path shown below) holding the argument expression for '{paramName}' at each site, or \"FilePath:*\" / \"*\" to apply one expression to every unresolved site in a file / everywhere, or pass defaultValue/nullDefault to leave these sites on the default.", unresolvedDetail, cascade.UnresolvedSites.Cast<object>().ToList(), _workspaceManager.GetSolutionRoot(), cancellationToken)
+                            ErrorData = await ResultError.ForPossiblyLargeDetailAsync(ToolErrorCode.UnresolvedCallSites, ex.Message, unresolvedDetail, ex.Sites.Cast<object>().ToList(), _workspaceManager.GetSolutionRoot(), cancellationToken)
                         };
                     }
 

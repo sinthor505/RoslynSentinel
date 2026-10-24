@@ -866,7 +866,7 @@ public class ResultStatusTests
     public void AddConstructorParameterCascadeResult_ClassEditFailed_PassesThroughClassEditStatus()
     {
         var classEdit = new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "no class" };
-        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), Array.Empty<UnresolvedConstructorCallSite>(), 0, 0);
+        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), 0, 0);
 
         Assert.That(result.Status, Is.EqualTo(classEdit.Status));
         Assert.That(result.IsError, Is.True);
@@ -875,23 +875,10 @@ public class ResultStatusTests
     }
 
     [Test]
-    public void AddConstructorParameterCascadeResult_UnresolvedSites_IsFailedWithUnresolvedCallSitesCode()
-    {
-        var classEdit = new DocumentEditResult { Outcome = EditOutcome.Modified };
-        var sites = new[] { new UnresolvedConstructorCallSite("a.cs", 3, "new Foo()", null) };
-        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), sites, 0, 0);
-
-        Assert.That(result.Status, Is.EqualTo(ResultStatus.Failed));
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.Code, Is.EqualTo(ToolErrorCode.UnresolvedCallSites));
-        Assert.That(result.Message, Is.EqualTo("1 call site(s) could not be resolved"));
-    }
-
-    [Test]
     public void AddConstructorParameterCascadeResult_FullChangeSet_IsSuccess()
     {
         var classEdit = new DocumentEditResult { Outcome = EditOutcome.Modified };
-        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), Array.Empty<UnresolvedConstructorCallSite>(), 2, 0);
+        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), 2, 0);
 
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
         Assert.That(result.IsError, Is.False);

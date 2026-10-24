@@ -54,17 +54,36 @@ internal sealed record ConstructorCallSite(Document Document, SyntaxNode Node, C
 public sealed record UnresolvedConstructorCallSite(string FilePath, int Line, string CallText, string? Note);
 
 /// <summary>
-/// Outcome of <c>AddConstructorParameterWithCallSitesAsync</c>. Exactly one of these holds: <see cref="ClassEdit"/>
-/// is not Modified (pass its message through); <see cref="UnresolvedSites"/>
-/// is non-empty; or <see cref="Changes"/> holds the class edit plus every call-site edit as one change set.
+/// One or more call sites of the target constructor have no callSiteFixups entry and no defaultValue/nullDefault,
+/// so nothing was changed. Carries every such site in <see cref="Sites"/>.
 /// </summary>
-public sealed record AddConstructorParameterCascadeResult(DocumentEditResult ClassEdit, Dictionary<FilePathWrapper, string> Changes, IReadOnlyList<UnresolvedConstructorCallSite> UnresolvedSites, int CallSitesUpdated, int CallSitesLeftToDefault) : IOperationResult
+public sealed class UnresolvedCallSitesException : ToolException
 {
-    /// <summary><see cref="IOperationResult.Status"/>: the class edit's status when it failed, Failed when call sites were unresolved, else Success. Not serialized.</summary>
+    public UnresolvedCallSitesException(string message, IReadOnlyList<UnresolvedConstructorCallSite> sites) : base(message)
+    {
+        Sites = sites;
+    }
+
+    public override string ErrorCode => ToolErrorCode.UnresolvedCallSites;
+
+    /// <summary>The unresolved call sites, in discovery order.</summary>
+    public IReadOnlyList<UnresolvedConstructorCallSite> Sites { get; }
+
+    /// <summary>The unresolved sites as objects; null when there are none.</summary>
+    public override IReadOnlyList<object>? StructuredDetail => Sites.Count == 0 ? null : Sites.Cast<object>().ToList();
+}
+
+/// <summary>
+/// Outcome of <c>AddConstructorParameterWithCallSitesAsync</c>. Either <see cref="ClassEdit"/> is not Modified
+/// (pass its message through), or <see cref="Changes"/> holds the class edit plus every call-site edit as one change set.
+/// Unresolved call sites are thrown as <see cref="UnresolvedCallSitesException"/> instead.
+/// </summary>
+public sealed record AddConstructorParameterCascadeResult(DocumentEditResult ClassEdit, Dictionary<FilePathWrapper, string> Changes, int CallSitesUpdated, int CallSitesLeftToDefault) : IOperationResult
+{
+    /// <summary><see cref="IOperationResult.Status"/>: the class edit's status when it failed, else Success. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public ResultStatus Status =>
         ClassEdit.IsError ? ClassEdit.Status
-        : UnresolvedSites.Count > 0 ? ResultStatus.Failed
         : ResultStatus.Success;
 
     /// <summary><see cref="IOperationResult.IsError"/>: true for every state other than the full change set. Not serialized.</summary>
@@ -75,14 +94,12 @@ public sealed record AddConstructorParameterCascadeResult(DocumentEditResult Cla
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Code =>
         ClassEdit.IsError ? ClassEdit.Code
-        : UnresolvedSites.Count > 0 ? ToolErrorCode.UnresolvedCallSites
         : null;
 
-    /// <summary><see cref="Message"/>: the class edit's message, else a count of unresolved sites; null on success. Not serialized.</summary>
+    /// <summary><see cref="Message"/>: the class edit's message; null on success. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? Message =>
-        (ClassEdit.IsError && !string.IsNullOrEmpty(ClassEdit.Message) ? ClassEdit.Message : null)
-        ?? (UnresolvedSites.Count > 0 ? $"{UnresolvedSites.Count} call site(s) could not be resolved" : null);
+        ClassEdit.IsError && !string.IsNullOrEmpty(ClassEdit.Message) ? ClassEdit.Message : null;
 }
 
 /// <summary>

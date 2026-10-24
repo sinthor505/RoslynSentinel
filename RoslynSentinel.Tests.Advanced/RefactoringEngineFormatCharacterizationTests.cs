@@ -114,7 +114,6 @@ public class RefactoringEngineFormatCharacterizationTests
     private async Task<AddConstructorParameterCascadeResult> CascadeAsync(string fixupKey)
     {
         var result = await _memberEngine.AddConstructorParameterWithCallSitesAsync("Svc.cs", "Svc", "config", "Config", new Dictionary<string, string> { [fixupKey] = "Create(() => { return 1; })" });
-        Assert.That(result.UnresolvedSites, Is.Empty);
         Assert.That(result.CallSitesUpdated, Is.EqualTo(1));
         return result;
     }

@@ -85,7 +85,6 @@ public class Caller
 
         var result = await CascadeAsync("Svc", new() { [$"Caller.cs:{LineOf(SimpleCaller, "new Svc(1)")}"] = "cfg" });
 
-        Assert.That(result.UnresolvedSites, Is.Empty);
         Assert.That(result.CallSitesUpdated, Is.EqualTo(1));
         Assert.That(ChangeFor(result, "Caller.cs"), Does.Contain("new Svc(1, cfg)"));
         Assert.That(ChangeFor(result, "Svc.cs"), Does.Contain("Config config").And.Contain("_config = config"));
@@ -291,12 +290,14 @@ public class Caller
     {
         SetFiles(("Svc.cs", SvcSource), ("Caller.cs", SimpleCaller), ("Other.cs", OtherCaller));
 
-        var result = await CascadeAsync("Svc", new() { ["Other.cs:*"] = "cfg" });
+        var ex = await Assert.ThrowsAsync<UnresolvedCallSitesException>(async () =>
+        {
+            await CascadeAsync("Svc", new() { ["Other.cs:*"] = "cfg" });
+        });
 
-        Assert.That(result.UnresolvedSites, Has.Count.EqualTo(1));
-        Assert.That(result.UnresolvedSites[0].FilePath, Does.EndWith("Caller.cs"));
-        Assert.That(result.UnresolvedSites[0].Line, Is.EqualTo(LineOf(SimpleCaller, "new Svc(1)")));
-        Assert.That(result.Changes, Is.Empty, "Fail closed: no partial edit when any site is unresolved.");
+        Assert.That(ex.Sites, Has.Count.EqualTo(1));
+        Assert.That(ex.Sites[0].FilePath, Does.EndWith("Caller.cs"));
+        Assert.That(ex.Sites[0].Line, Is.EqualTo(LineOf(SimpleCaller, "new Svc(1)")));
     }
 
     [Test]
@@ -306,7 +307,6 @@ public class Caller
 
         var result = await CascadeAsync("Svc", new() { ["Other.cs:*"] = "cfg" }, defaultValue: "null");
 
-        Assert.That(result.UnresolvedSites, Is.Empty);
         Assert.That(result.CallSitesUpdated, Is.EqualTo(1));
         Assert.That(result.CallSitesLeftToDefault, Is.EqualTo(1));
         Assert.That(ChangeFor(result, "Other.cs"), Does.Contain("new Svc(3, cfg)"));
