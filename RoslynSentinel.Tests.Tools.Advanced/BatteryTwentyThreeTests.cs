@@ -225,23 +225,20 @@ public class QualityClass
 
     [Test]
     [Category("ThreadSafetyEngine")] // sentinel:auto-category
-    public async Task ConvertLockToSemaphoreSlim_NonExistentFile_ReportsNotFound()
+    public async Task ConvertLockToSemaphoreSlim_NonExistentFile_ThrowsToolNotFoundException()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("NonExistent.cs", "MethodWithLock");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Error)); // TODO throw-migration: assert the typed exception once ThreadSafetyEngine throws
+        await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("NonExistent.cs", "MethodWithLock"));
     }
 
     [Test]
     [Category("RefactoringToolHelpers")] // sentinel:auto-category
     [Category("ThreadSafetyEngine")] // sentinel:auto-category
-    public async Task ConvertLockToSemaphoreSlim_NonExistentFile_ReportsNotFoundCode()
+    public async Task ConvertLockToSemaphoreSlim_NonExistentFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("NonExistent.cs", "MethodWithLock");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Error), "non-existent file should return Error outcome");
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "error code should be NotFound");
-        Assert.That(RefactoringToolHelpers.ErrorCodeFor(result), Is.EqualTo(ToolErrorCode.NotFound), "ErrorCodeFor helper should also return NotFound");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _threadSafetyEngine.ConvertLockToSemaphoreSlimAsync("NonExistent.cs", "MethodWithLock"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "error code should be NotFound");
     }
 
     // --- ConvertToAsyncEnumerable---
@@ -296,11 +293,11 @@ public class Streamer { public IEnumerable<int> GetData() { yield return 1; yiel
 
     [Test]
     [Category("ThreadSafetyEngine")] // sentinel:auto-category
-    public async Task MakeMethodThreadSafe_NonExistentFile_ReportsNotFound()
+    public async Task MakeMethodThreadSafe_NonExistentFile_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("NonExistent.cs", "SyncMethod");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound)); // TODO throw-migration: assert the typed exception once ThreadSafetyEngine throws
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _threadSafetyEngine.MakeMethodThreadSafeAsync("NonExistent.cs", "SyncMethod"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "error code should be NotFound");
     }
 
     // ===================== NON-THROW METHODS =====================

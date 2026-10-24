@@ -82,22 +82,22 @@ public class ThreadSafetyEngineTests
     }
 
     [Test]
-    public async Task MakeMethodThreadSafe_UnknownFile_ReturnsErrorComment()
+    public async Task MakeMethodThreadSafe_UnknownFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Counter.cs", "public class Counter { public void Inc() { } }")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.MakeMethodThreadSafeAsync("DoesNotExist.cs", "Inc");
-        Assert.That(result.Message, Does.StartWith("// ErrorDetails:"), "Unknown file should return error comment");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.MakeMethodThreadSafeAsync("DoesNotExist.cs", "Inc"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "error code should be NotFound");
     }
 
     [Test]
-    public async Task MakeMethodThreadSafe_UnknownMethod_ReturnsErrorComment()
+    public async Task MakeMethodThreadSafe_UnknownMethod_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Counter.cs", "public class Counter { public void Inc() { } }")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.MakeMethodThreadSafeAsync("Counter.cs", "NonExistentMethod");
-        Assert.That(result.Message, Does.StartWith("// ErrorDetails:"), "Unknown method should return error comment");
-        Assert.That(result.Message, Does.Contain("NonExistentMethod"), "ErrorDetails should mention the missing method name");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.MakeMethodThreadSafeAsync("Counter.cs", "NonExistentMethod"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "error code should be NotFound");
+        Assert.That(ex.Message, Does.Contain("NonExistentMethod"), "the exception should name the missing method");
     }
 }
 

@@ -20,119 +20,77 @@ public class ThreadSafetyEngine
     /// </summary>
     public async Task<DocumentEditResult> MakeMethodThreadSafeAsync(FilePathWrapper filePath, string methodName, string lockFieldName = "_lock", CancellationToken cancellationToken = default)
     {
-        try
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = DocumentLookup.RequireDocument(solution, filePath);
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null)
         {
-            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
-            if (document == null)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// ErrorDetails: File '{filePath}' not found."
-                };
-            }
+            throw new ToolInvalidArgumentException("Failed to get syntax root for '" + filePath + "'.");
+        }
 
-            var root = await document.GetSyntaxRootAsync(cancellationToken);
-            if (root == null)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
-                };
-            }
+        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (method == null || method.Body == null)
+        {
+            throw new ToolNotFoundException("Method '" + methodName + "' not found or has no body.", "method", methodName);
+        }
 
-            var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-            if (method == null || method.Body == null)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// ErrorDetails: Method '{methodName}' not found or has no body."
-                };
-            }
+        var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+        if (typeNode == null)
+        {
+            throw new ToolNotFoundException("Containing type not found for method '" + methodName + "'.");
+        }
 
-            var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
-            if (typeNode == null)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// ErrorDetails: Containing type not found for method '{methodName}'."
-                };
-            }
+        // Check if a field with lockFieldName already exists
+        var existingLockField = typeNode.Members.OfType<FieldDeclarationSyntax>()
+        .FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == lockFieldName));
 
-            // Check if a field with lockFieldName already exists
-            var existingLockField = typeNode.Members.OfType<FieldDeclarationSyntax>()
-            .FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == lockFieldName));
-
-            bool addLockField;
-            if (existingLockField != null)
+        bool addLockField;
+        if (existingLockField != null)
+        {
+            var fieldType = existingLockField.Declaration.Type.ToString().Trim();
+            if (fieldType == "object")
             {
-                var fieldType = existingLockField.Declaration.Type.ToString().Trim();
-                if (fieldType == "object")
-                {
-                    // Reuse existing object lock field
-                    addLockField = false;
-                }
-                else
-                {
-                    return new DocumentEditResult
-                    {
-                        Outcome = EditOutcome.TargetNotFound,
-                        FilePath = filePath,
-                        Message = $"// ErrorDetails: Field '{lockFieldName}' already exists but is not of type 'object'. Please supply a different lockFieldName."
-                    };
-                }
+                // Reuse existing object lock field
+                addLockField = false;
             }
             else
             {
-                addLockField = true;
+                throw new ToolTargetIneligibleException("Field '" + lockFieldName + "' already exists but is not of type 'object'. Please supply a different lockFieldName.");
             }
-
-            var lockField = SyntaxFactory.FieldDeclaration(
-                SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("object"))
-                .WithVariables(SyntaxFactory.SingletonSeparatedList(
-                    SyntaxFactory.VariableDeclarator(lockFieldName)
-                    .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("object")).WithArgumentList(SyntaxFactory.ArgumentList()))))))
-                .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
-
-            var newBody = SyntaxFactory.Block(
-                SyntaxFactory.LockStatement(
-                    SyntaxFactory.IdentifierName(lockFieldName),
-                    method.Body));
-
-            var newMethod = method.WithBody(newBody);
-            var newTypeNode = typeNode.ReplaceNode(method, newMethod);
-
-            if (addLockField)
-            {
-                newTypeNode = newTypeNode.InsertNodesBefore(newTypeNode.Members.First(), new[] { lockField });
-            }
-
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.Modified,
-                FilePath = filePath,
-                Message = "// Lock statement converted to SemaphoreSlim pattern.",
-                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, typeNode, newTypeNode, cancellationToken)
-            };
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        else
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.Error,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: {ex.Message}",
-                ErrorCode = (ex as ToolException)?.ErrorCode
-            };
+            addLockField = true;
         }
+
+        var lockField = SyntaxFactory.FieldDeclaration(
+            SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("object"))
+            .WithVariables(SyntaxFactory.SingletonSeparatedList(
+                SyntaxFactory.VariableDeclarator(lockFieldName)
+                .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("object")).WithArgumentList(SyntaxFactory.ArgumentList()))))))
+            .AddModifiers(SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword));
+
+        var newBody = SyntaxFactory.Block(
+            SyntaxFactory.LockStatement(
+                SyntaxFactory.IdentifierName(lockFieldName),
+                method.Body));
+
+        var newMethod = method.WithBody(newBody);
+        var newTypeNode = typeNode.ReplaceNode(method, newMethod);
+
+        if (addLockField)
+        {
+            newTypeNode = newTypeNode.InsertNodesBefore(newTypeNode.Members.First(), new[] { lockField });
+        }
+
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = "// Lock statement converted to SemaphoreSlim pattern.",
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, typeNode, newTypeNode, cancellationToken)
+        };
     }
 
     /// <summary>
@@ -141,164 +99,139 @@ public class ThreadSafetyEngine
     /// </summary>
     public async Task<DocumentEditResult> ConvertLockToSemaphoreSlimAsync(FilePathWrapper filePath, string methodName, CancellationToken cancellationToken = default)
     {
-        try
+        var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+        var document = DocumentLookup.RequireDocument(solution, filePath);
+
+        var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
+        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+        .FirstOrDefault(m => m.Identifier.Text == methodName);
+        if (method == null || method.Body == null)
         {
-            var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-            var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
+            throw new ToolNotFoundException($"Method or body not found: {methodName} in file: {filePath}");
+        }
 
-            var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException($"Failed to get syntax root for file: {filePath}");
-            var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName);
-            if (method == null || method.Body == null)
-            {
-                throw new ToolNotFoundException($"Method or body not found: {methodName} in file: {filePath}");
-            }
+        var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() ?? throw new ToolNotFoundException($"Type not found for method: {methodName} in file: {filePath}");
 
-            var typeNode = method.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() ?? throw new ToolNotFoundException($"Type not found for method: {methodName} in file: {filePath}");
+        // Find the lock object being used in this method
+        var lockStatements = method.Body.DescendantNodes().OfType<LockStatementSyntax>().ToList();
+        if (lockStatements.Count == 0)
+        {
+            throw new ToolNotFoundException("No lock statement found in method '" + methodName + "'.");
+        }
 
-            // Find the lock object being used in this method
-            var lockStatements = method.Body.DescendantNodes().OfType<LockStatementSyntax>().ToList();
-            if (lockStatements.Count == 0)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// Info: No lock statement found in method '{methodName}'; returning original code unchanged.",
-                    UpdatedText = root.ToFullString()
-                };
-            }
+        // Get the lock object identifier (e.g., "_lock")
+        var lockExpression = lockStatements.First().Expression.ToString().Trim();
 
-            // Get the lock object identifier (e.g., "_lock")
-            var lockExpression = lockStatements.First().Expression.ToString().Trim();
+        // Find ALL lock statements in the entire type that use the same lock object
+        var allLockStatementsInType = typeNode.DescendantNodes().OfType<LockStatementSyntax>()
+            .Where(ls => ls.Expression.ToString().Trim() == lockExpression)
+            .ToList();
 
-            // Find ALL lock statements in the entire type that use the same lock object
-            var allLockStatementsInType = typeNode.DescendantNodes().OfType<LockStatementSyntax>()
-                .Where(ls => ls.Expression.ToString().Trim() == lockExpression)
-                .ToList();
+        if (allLockStatementsInType.Count == 0)
+        {
+            throw new ToolNotFoundException("No lock statement found using expression '" + lockExpression + "'.");
+        }
 
-            if (allLockStatementsInType.Count == 0)
-            {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// Info: No lock statement found using expression '{lockExpression}'; returning original code unchanged.",
-                    UpdatedText = root.ToFullString()
-                };
-            }
+        const string semaphoreName = "_semaphore";
+        var hasSemaphore = typeNode.Members.OfType<FieldDeclarationSyntax>()
+            .Any(f => f.Declaration.Variables.Any(v => v.Identifier.Text == semaphoreName));
 
-            const string semaphoreName = "_semaphore";
-            var hasSemaphore = typeNode.Members.OfType<FieldDeclarationSyntax>()
-                .Any(f => f.Declaration.Variables.Any(v => v.Identifier.Text == semaphoreName));
+        // Build the conversion function for lock statements
+        Func<LockStatementSyntax, SyntaxNode> convertLock = (lockStmt) =>
+        {
+            var bodyStatements = lockStmt.Statement is BlockSyntax blk
+                ? blk.Statements
+                : SyntaxFactory.SingletonList<StatementSyntax>(lockStmt.Statement);
 
-            // Build the conversion function for lock statements
-            Func<LockStatementSyntax, SyntaxNode> convertLock = (lockStmt) =>
-            {
-                var bodyStatements = lockStmt.Statement is BlockSyntax blk
-                    ? blk.Statements
-                    : SyntaxFactory.SingletonList<StatementSyntax>(lockStmt.Statement);
-
-                var waitAsync = SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.AwaitExpression(
-                        SyntaxFactory.InvocationExpression(
-                            SyntaxFactory.MemberAccessExpression(
-                                SyntaxKind.SimpleMemberAccessExpression,
-                                SyntaxFactory.IdentifierName(semaphoreName),
-                                SyntaxFactory.IdentifierName("WaitAsync")))));
-
-                var release = SyntaxFactory.ExpressionStatement(
+            var waitAsync = SyntaxFactory.ExpressionStatement(
+                SyntaxFactory.AwaitExpression(
                     SyntaxFactory.InvocationExpression(
                         SyntaxFactory.MemberAccessExpression(
                             SyntaxKind.SimpleMemberAccessExpression,
                             SyntaxFactory.IdentifierName(semaphoreName),
-                            SyntaxFactory.IdentifierName("Release"))));
+                            SyntaxFactory.IdentifierName("WaitAsync")))));
 
-                var tryFinally = SyntaxFactory.TryStatement(
-                    SyntaxFactory.Block(bodyStatements),
-                    new SyntaxList<CatchClauseSyntax>(),
-                    SyntaxFactory.FinallyClause(SyntaxFactory.Block(release)));
+            var release = SyntaxFactory.ExpressionStatement(
+                SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName(semaphoreName),
+                        SyntaxFactory.IdentifierName("Release"))));
 
-                return SyntaxFactory.Block(waitAsync, tryFinally);
-            };
+            var tryFinally = SyntaxFactory.TryStatement(
+                SyntaxFactory.Block(bodyStatements),
+                new SyntaxList<CatchClauseSyntax>(),
+                SyntaxFactory.FinallyClause(SyntaxFactory.Block(release)));
 
-            // Replace all lock statements in the type
-            var newTypeNode = typeNode.ReplaceNodes(allLockStatementsInType, (old, _) => convertLock((LockStatementSyntax)old));
+            return SyntaxFactory.Block(waitAsync, tryFinally);
+        };
 
-            // Find method SIGNATURES that contain locks (before replacement, using original typeNode).
-            // Using (name, parameterList) tuples avoids the overload bug where method-name-only matching
-            // would make ALL overloads async even when only one overload actually contained a lock.
-            var methodSignaturesWithLocks = typeNode.DescendantNodes().OfType<MethodDeclarationSyntax>()
-                .Where(m => m.Body?.DescendantNodes().OfType<LockStatementSyntax>().Any(ls => ls.Expression.ToString().Trim() == lockExpression) ?? false)
-                .Select(m => (Name: m.Identifier.Text, Params: m.ParameterList.ToString()))
-                .ToHashSet();
+        // Replace all lock statements in the type
+        var newTypeNode = typeNode.ReplaceNodes(allLockStatementsInType, (old, _) => convertLock((LockStatementSyntax)old));
 
-            // Make ONLY the methods that contained locks async (match by name + parameters, not name alone)
-            var methodsInNewType = newTypeNode.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
-            foreach (var meth in methodsInNewType)
-            {
-                if (methodSignaturesWithLocks.Contains((meth.Identifier.Text, meth.ParameterList.ToString())) && !meth.Modifiers.Any(SyntaxKind.AsyncKeyword))
-                {
-                    var newMeth = meth.AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
-                    var retStr = newMeth.ReturnType.ToString().Trim();
-                    if (retStr == "void")
-                    {
-                        newMeth = newMeth.WithReturnType(SyntaxFactory.ParseTypeName("Task "));
-                    }
-                    else if (!retStr.StartsWith("Task"))
-                    {
-                        newMeth = newMeth.WithReturnType(SyntaxFactory.ParseTypeName($"Task<{retStr}> "));
-                    }
+        // Find method SIGNATURES that contain locks (before replacement, using original typeNode).
+        // Using (name, parameterList) tuples avoids the overload bug where method-name-only matching
+        // would make ALL overloads async even when only one overload actually contained a lock.
+        var methodSignaturesWithLocks = typeNode.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Body?.DescendantNodes().OfType<LockStatementSyntax>().Any(ls => ls.Expression.ToString().Trim() == lockExpression) ?? false)
+            .Select(m => (Name: m.Identifier.Text, Params: m.ParameterList.ToString()))
+            .ToHashSet();
 
-                    newTypeNode = newTypeNode.ReplaceNode(meth, newMeth);
-                }
-            }
-
-            if (!hasSemaphore)
-            {
-                // If every method that contains this lock is static, the semaphore must also be static
-                // so that the static methods can access it without an instance.
-                bool isStaticContext = typeNode.DescendantNodes().OfType<MethodDeclarationSyntax>()
-                    .Where(m => m.Body?.DescendantNodes().OfType<LockStatementSyntax>()
-                        .Any(ls => ls.Expression.ToString().Trim() == lockExpression) ?? false)
-                    .All(m => m.Modifiers.Any(SyntaxKind.StaticKeyword));
-
-                var semaphoreField = SyntaxFactory.FieldDeclaration(
-                    SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("SemaphoreSlim"))
-                    .WithVariables(SyntaxFactory.SingletonSeparatedList(
-                        SyntaxFactory.VariableDeclarator(semaphoreName)
-                        .WithInitializer(SyntaxFactory.EqualsValueClause(
-                            SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("SemaphoreSlim"))
-                            .WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(new[]
-                            {
-                            SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1))),
-                            SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1)))
-                            }))))))))
-                .AddModifiers(isStaticContext
-                    ? new[] { SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword) }
-                    : new[] { SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword) });
-
-                newTypeNode = newTypeNode.InsertNodesBefore(newTypeNode.Members.First(), new[] { semaphoreField });
-            }
-
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.Modified,
-                FilePath = filePath,
-                Message = "// Lock statement converted to SemaphoreSlim pattern.",
-                UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, typeNode, newTypeNode, cancellationToken)
-            };
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        // Make ONLY the methods that contained locks async (match by name + parameters, not name alone)
+        var methodsInNewType = newTypeNode.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
+        foreach (var meth in methodsInNewType)
         {
-            return new DocumentEditResult
+            if (methodSignaturesWithLocks.Contains((meth.Identifier.Text, meth.ParameterList.ToString())) && !meth.Modifiers.Any(SyntaxKind.AsyncKeyword))
             {
-                Outcome = EditOutcome.Error,
-                FilePath = filePath,
-                Message = $"// ErrorDetail converting lock to SemaphoreSlim: {ex.Message}",
-                ErrorCode = (ex as ToolException)?.ErrorCode
-            };
+                var newMeth = meth.AddModifiers(SyntaxFactory.Token(SyntaxKind.AsyncKeyword));
+                var retStr = newMeth.ReturnType.ToString().Trim();
+                if (retStr == "void")
+                {
+                    newMeth = newMeth.WithReturnType(SyntaxFactory.ParseTypeName("Task "));
+                }
+                else if (!retStr.StartsWith("Task"))
+                {
+                    newMeth = newMeth.WithReturnType(SyntaxFactory.ParseTypeName($"Task<{retStr}> "));
+                }
+
+                newTypeNode = newTypeNode.ReplaceNode(meth, newMeth);
+            }
         }
+
+        if (!hasSemaphore)
+        {
+            // If every method that contains this lock is static, the semaphore must also be static
+            // so that the static methods can access it without an instance.
+            bool isStaticContext = typeNode.DescendantNodes().OfType<MethodDeclarationSyntax>()
+                .Where(m => m.Body?.DescendantNodes().OfType<LockStatementSyntax>()
+                    .Any(ls => ls.Expression.ToString().Trim() == lockExpression) ?? false)
+                .All(m => m.Modifiers.Any(SyntaxKind.StaticKeyword));
+
+            var semaphoreField = SyntaxFactory.FieldDeclaration(
+                SyntaxFactory.VariableDeclaration(SyntaxFactory.ParseTypeName("SemaphoreSlim"))
+                .WithVariables(SyntaxFactory.SingletonSeparatedList(
+                    SyntaxFactory.VariableDeclarator(semaphoreName)
+                    .WithInitializer(SyntaxFactory.EqualsValueClause(
+                        SyntaxFactory.ObjectCreationExpression(SyntaxFactory.ParseTypeName("SemaphoreSlim"))
+                        .WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(new[]
+                        {
+                        SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1))),
+                        SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(1)))
+                        }))))))))
+            .AddModifiers(isStaticContext
+                ? new[] { SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword) }
+                : new[] { SyntaxFactory.Token(SyntaxKind.PrivateKeyword), SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword) });
+
+            newTypeNode = newTypeNode.InsertNodesBefore(newTypeNode.Members.First(), new[] { semaphoreField });
+        }
+
+        return new DocumentEditResult
+        {
+            Outcome = EditOutcome.Modified,
+            FilePath = filePath,
+            Message = "// Lock statement converted to SemaphoreSlim pattern.",
+            UpdatedText = await RoslynFormattingHelper.ReplaceNodeAndFormatReplacementAsync(document, root, typeNode, newTypeNode, cancellationToken)
+        };
     }
 
     // ── UnsafeLazyInit ────────────────────────────────────────────────────────

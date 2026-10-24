@@ -393,7 +393,7 @@ public class ThreadSafeLockGotchaTests
     }
 
     [Test]
-    public async Task MakeMethodThreadSafe_NonExistentMethod_ReturnsErrorString()
+    public async Task MakeMethodThreadSafe_NonExistentMethod_ThrowsNotFound()
     {
         const string source = """
             public class Worker {
@@ -402,8 +402,8 @@ public class ThreadSafeLockGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Worker.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.MakeMethodThreadSafeAsync("Worker.cs", "NonExistent");
-        Assert.That(result.Message, Does.Contain("ErrorDetails"), "Requesting a non-existent method must return an error string, not throw.");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.MakeMethodThreadSafeAsync("Worker.cs", "NonExistent"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "error code should be NotFound");
     }
 
     [Test]
@@ -445,9 +445,9 @@ public class ThreadSafeLockGotchaTests
     }
 
     [Test]
-    public async Task ConvertLockToSemaphoreSlim_MethodWithNoLock_ReturnsOriginalCode()
+    public async Task ConvertLockToSemaphoreSlim_MethodWithNoLock_ThrowsNotFound()
     {
-        // When no lock statements are found the engine returns root.ToFullString() -> the original code.
+        // A method with no lock statement throws NotFound (the engine no longer returns the original code).
         const string source = """
             public class NoLockAtAll {
                 public void Process() { var x = 1; }
@@ -455,9 +455,8 @@ public class ThreadSafeLockGotchaTests
             """;
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("NoLock.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _engine.ConvertLockToSemaphoreSlimAsync("NoLock.cs", "Process");
-        Assert.That(result, Is.Not.Null, "Must return the original code, not null, when no lock exists.");
-        Assert.That(result.UpdatedText, Does.Contain("NoLockAtAll"), "Original class name must be present in returned code.");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ConvertLockToSemaphoreSlimAsync("NoLock.cs", "Process"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "error code should be NotFound");
     }
 
     [Test]

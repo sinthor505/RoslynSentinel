@@ -27,12 +27,7 @@ public class DocumentationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
@@ -105,23 +100,13 @@ public class DocumentationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Class not found."
-            };
+            throw new ToolNotFoundException("Class '" + className + "' not found in '" + filePath + "'.", "class", className);
         }
 
         if (!root.Usings.Any(u => u.Name?.ToString() == "System.ComponentModel"))

@@ -83,10 +83,9 @@ public class ToolGapsTests
         SetSource(
             "public class C { private readonly System.Threading.SemaphoreSlim _lock = new(1,1); public void DoWork() { int x = 1; } }",
             "C.cs");
-        DocumentEditResult? result = null;
-        await Assert.DoesNotThrowAsync(async () =>
-            result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("C.cs", "DoWork", "_lock"));
-        Assert.That(result!.Message, Does.StartWith("// ErrorDetails:"));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+            await _threadSafetyEngine.MakeMethodThreadSafeAsync("C.cs", "DoWork", "_lock"));
+        Assert.That(ex!.Message, Is.Not.Empty);
     }
 
     // The engine's whole-method catch must not turn a cancelled token into an "// ErrorDetails:" edit result.
@@ -108,13 +107,12 @@ public class ToolGapsTests
     // ConvertLockToSemaphoreSlimAsync already carried it. No solution loaded -> SolutionNotLoadedException.
     [Test]
     [Category("ThreadSafetyEngine")] // sentinel:auto-category
-    public async Task MakeMethodThreadSafe_ToolExceptionInsideTry_KeepsErrorCode()
+    public async Task MakeMethodThreadSafe_NoSolutionLoaded_PropagatesSolutionNotLoadedException()
     {
-        // Deliberately no SetSource: GetSolutionAsync throws SolutionNotLoadedException inside the try.
-        var result = await _threadSafetyEngine.MakeMethodThreadSafeAsync("C.cs", "DoWork");
-
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Error));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
+        // Deliberately no SetSource: GetSolutionAsync throws SolutionNotLoadedException.
+        var ex = await Assert.ThrowsAsync<SolutionNotLoadedException>(async () =>
+            await _threadSafetyEngine.MakeMethodThreadSafeAsync("C.cs", "DoWork"));
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.SolutionNotLoaded));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

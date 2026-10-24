@@ -159,17 +159,15 @@ public class Counter
     // The pre-guard tool used any non-empty UpdatedText, and this engine returns the unchanged file with a
     // nothing-to-do outcome: still a success carrying the transform result.
     [Test]
-    public async Task ConvertLockToSemaphoreSlim_MethodWithoutLock_StaysASuccess()
+    public async Task ConvertLockToSemaphoreSlim_MethodWithoutLock_IsNotFoundError()
     {
         var path = SetSource("Counter.cs", "public class Counter\n{\n    private int _n;\n    public void Increment() { _n++; }\n}");
 
         var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Increment", "convert_lock_to_semaphore_slim");
 
-        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
-        var transform = (SourceTransformResult)result.SuccessData!;
-        Assert.That(transform.UpdatedSource, Is.EqualTo("public class Counter\n{\n    private int _n;\n    public void Increment() { _n++; }\n}"));
-        Assert.That(transform.WroteToFile, Is.False);
-        Assert.That(transform.WorkspaceUpdated, Is.False);
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.Contain("No lock statement found in method"));
     }
 
     [Test]
@@ -202,19 +200,15 @@ public class Counter
     // (c) A genuine engine failure (Error / DocumentNotFound / SourceInvalid ...) is an error with the engine's
     // code, the engine's reason cut to one line, and the tool's hint.
     [Test]
-    public async Task ConvertLockToSemaphoreSlim_MethodNotFound_IsErrorWithEngineNotFoundCodeAndTheToolsHint()
+    public async Task ConvertLockToSemaphoreSlim_MethodNotFound_IsNotFoundError()
     {
         var path = SetSource("Counter.cs", CounterWithoutTargetMethod);
 
         var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Missing", "convert_lock_to_semaphore_slim");
 
-        Assert.That(result.IsError, Is.True, "an engine error must not be reported as a no-op success");
+        Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(result.ErrorData!.Message, Does.StartWith("convert_lock_to_semaphore_slim failed for method 'Missing' in"));
-        Assert.That(result.ErrorData.Message, Does.Contain("(Error)"));
-        Assert.That(result.ErrorData.Message, Does.Contain("GetFileOutline"));
-        Assert.That(result.ErrorData.Message, Does.Not.Contain("private int _n"));
-        Assert.That(result.ErrorData.Message.Split('\n').Length, Is.EqualTo(1), "one line only");
+        Assert.That(result.ErrorData!.Message, Does.Contain("Missing"));
     }
 
     [Test]

@@ -20,12 +20,7 @@ public class CodeHealingEngine
     {
         if (!_config.IsFeatureEnabled("EPC33"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature EPC33 is disabled."
-            };
+            throw new ToolFeatureDisabledException("EPC33");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -34,12 +29,7 @@ public class CodeHealingEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
         var rewriter = new ThreadSleepRewriter();
@@ -81,12 +71,7 @@ public class CodeHealingEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken: cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = f,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Syntax root not found for '" + f + "'.");
         }
 
         var methods = root.DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
@@ -102,12 +87,7 @@ public class CodeHealingEngine
         method ??= methods.FirstOrDefault();
         if (method?.Body == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = f,
-                Message = "// Method body not found."
-            };
+            throw new ToolNotFoundException("Method body not found in '" + f + "'.", "method");
         }
 
         var retryDecl = SyntaxFactory.LocalDeclarationStatement(

@@ -581,9 +581,9 @@ namespace RoslynSentinel.Tests.Advanced
         }
 
         [Test]
-        public async Task ConvertLockToSemaphoreSlim_MethodWithNoLock_ReturnsUnchanged()
+        public async Task ConvertLockToSemaphoreSlim_MethodWithNoLock_ThrowsNotFound()
         {
-            // A method with no lock statement should return the file unchanged (no modification).
+            // A method with no lock statement throws NotFound; the engine no longer returns the file unchanged.
             const string source = """
             public class Service {
                 public void Process() {
@@ -594,12 +594,8 @@ namespace RoslynSentinel.Tests.Advanced
             var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Service.cs", source)]);
             _workspaceManager.SetTestSolution(solution);
 
-            var result = await _engine.ConvertLockToSemaphoreSlimAsync("Service.cs", "Process");
-
-            Assert.That(result.UpdatedText, Does.Not.Contain("SemaphoreSlim"),
-                "Method with no lock should not have SemaphoreSlim added.");
-            Assert.That(result.UpdatedText, Does.Not.Contain("WaitAsync"),
-                "Method with no lock should not have WaitAsync added.");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.ConvertLockToSemaphoreSlimAsync("Service.cs", "Process"));
+            Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "error code should be NotFound");
         }
     }
 
