@@ -853,36 +853,19 @@ public class ResultStatusTests
     }
 
     [Test]
-    public void AddConstructorParameterCascadeResult_ClassEditFailed_PassesThroughClassEditStatus()
-    {
-        var classEdit = new DocumentEditResult { Outcome = EditOutcome.NoCandidatesFound, Message = "no class" };
-        var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), 0, 0);
-
-        Assert.That(result.Status, Is.EqualTo(classEdit.Status));
-        Assert.That(result.IsError, Is.True);
-        Assert.That(result.Code, Is.EqualTo(classEdit.Code));
-        Assert.That(result.Message, Is.EqualTo("no class"));
-    }
-
-    [Test]
     public void AddConstructorParameterCascadeResult_FullChangeSet_IsSuccess()
     {
         var classEdit = new DocumentEditResult { Outcome = EditOutcome.Modified };
         var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), 2, 0);
 
         Assert.That(result.Status, Is.EqualTo(ResultStatus.Success));
-        Assert.That(result.IsError, Is.False);
-        Assert.That(result.Code, Is.Null);
-        Assert.That(result.Message, Is.Null);
+        Assert.That(((IOperationResult)result).IsError, Is.False);
     }
 
     [Test]
     public void AddConstructorParameterCascadeResult_ComputedStatusMembers_AreJsonIgnored()
     {
-        foreach (string name in new[] { "IsError", "Status", "Code", "Message" })
-        {
-            Assert.That(typeof(AddConstructorParameterCascadeResult).GetProperty(name)!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, name);
-        }
+        Assert.That(typeof(AddConstructorParameterCascadeResult).GetProperty("Status")!.GetCustomAttributes(typeof(System.Text.Json.Serialization.JsonIgnoreAttribute), false), Is.Not.Empty, "Status");
     }
 
     private static SubAgentEvalResult EvalResult(bool converged = true, bool buildSucceeded = true, int buildErrors = 0, int testsFailed = 0, string? excerpt = null) =>

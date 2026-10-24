@@ -74,32 +74,15 @@ public sealed class UnresolvedCallSitesException : ToolException
 }
 
 /// <summary>
-/// Outcome of <c>AddConstructorParameterWithCallSitesAsync</c>. Either <see cref="ClassEdit"/> is not Modified
-/// (pass its message through), or <see cref="Changes"/> holds the class edit plus every call-site edit as one change set.
-/// Unresolved call sites are thrown as <see cref="UnresolvedCallSitesException"/> instead.
+/// Outcome of <c>AddConstructorParameterWithCallSitesAsync</c>. <see cref="ClassEdit"/> is always Modified (a failed
+/// class edit throws before this record is built), and <see cref="Changes"/> holds the class edit plus every call-site
+/// edit as one change set. Unresolved call sites are thrown as <see cref="UnresolvedCallSitesException"/> instead.
 /// </summary>
 public sealed record AddConstructorParameterCascadeResult(DocumentEditResult ClassEdit, Dictionary<FilePathWrapper, string> Changes, int CallSitesUpdated, int CallSitesLeftToDefault) : IOperationResult
 {
-    /// <summary><see cref="IOperationResult.Status"/>: the class edit's status when it failed, else Success. Not serialized.</summary>
+    /// <summary><see cref="IOperationResult.Status"/>: always Success for this result. Not serialized.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public ResultStatus Status =>
-        ClassEdit.IsError ? ClassEdit.Status
-        : ResultStatus.Success;
-
-    /// <summary><see cref="IOperationResult.IsError"/>: true for every state other than the full change set. Not serialized.</summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public bool IsError => Status != ResultStatus.Success;
-
-    /// <summary><see cref="Code"/>: the ToolErrorCode for the state; null on success. Not serialized.</summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public string? Code =>
-        ClassEdit.IsError ? ClassEdit.Code
-        : null;
-
-    /// <summary><see cref="Message"/>: the class edit's message; null on success. Not serialized.</summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public string? Message =>
-        ClassEdit.IsError && !string.IsNullOrEmpty(ClassEdit.Message) ? ClassEdit.Message : null;
+    public ResultStatus Status => ResultStatus.Success;
 }
 
 /// <summary>

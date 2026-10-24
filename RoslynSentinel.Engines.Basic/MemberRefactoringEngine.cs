@@ -396,13 +396,8 @@ public class MemberRefactoringEngine
         // declared there): run the class edit on the already-rewritten document so both land in one text.
         var classDocument = editedDocuments.TryGetValue(document.Id, out var rewrittenClassDocument) ? rewrittenClassDocument : document;
         var classEdit = await AddConstructorParameterToDocumentAsync(classDocument, filePath, className, paramName, paramType, fieldName, contextSnippet, lineBefore, lineAfter, defaultValue, nullDefault, cancellationToken);
-        // TODO unreachable after throw migration; verify (AddConstructorParameterToDocumentAsync's only explicit outcome is Modified)
-        if (classEdit.Outcome != EditOutcome.Modified || classEdit.UpdatedText == null)
-        {
-            return new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), 0, 0);
-        }
-
-        var changes = new Dictionary<FilePathWrapper, string> { [filePath] = classEdit.UpdatedText };
+        // TODO S4: UpdatedText becomes non-nullable
+        var changes = new Dictionary<FilePathWrapper, string> { [filePath] = classEdit.UpdatedText! };
         foreach (var (documentId, editedDocument) in editedDocuments)
         {
             if (documentId == document.Id || editedDocument.FilePath == null)
