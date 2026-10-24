@@ -38,6 +38,18 @@ public sealed class UsingDocsTypedMemberTests
         Assert.That(workspace.ReadText("Order.cs"), Does.Contain("Represents an order."));
     }
 
+    [Test]
+    [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category
+    public async Task SummaryComment_RemoveWithNoSummary_IsNoWriteSuccess()
+    {
+        using var workspace = InMemoryWorkspace.Create(("Order.cs", CrlfSimpleSource));
+        var tools = BatteryToolFactory.CreateRefactoringExtractionDocsTools(workspace.Manager);
+        var result = await tools.SummaryCommentTool(reason: "test message", workspace.PathOf("Order.cs"), AddRemoveViewAction.remove, "Order");
+        Assert.That(result.IsError, Is.False, $"error: {result.ErrorData?.Message}");
+        Assert.That(workspace.ReadText("Order.cs"), Is.EqualTo(CrlfSimpleSource));
+        Assert.That(result.StatusMessage, Does.Not.Contain("Removed"));
+    }
+
     // --- ExtractLocalVariableTool ---
     [Test]
     [Category("RefactoringExtractionDocsTools")] // sentinel:auto-category

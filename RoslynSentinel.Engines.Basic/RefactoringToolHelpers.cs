@@ -52,8 +52,9 @@ public static class RefactoringToolHelpers
     /// the server had faulted. Run 20260910-013550-398 hit this via a generic containerName ->
     /// see docs/current/feedback_agent_friendly_error_messages.md.
     /// <para>
-    /// <see cref="EditOutcome.AlreadyInTargetState"/> is the one outcome that is a success without a
-    /// write: the engine positively verified the code already has the requested shape. It is checked
+    /// <see cref="EditOutcome.AlreadyInTargetState"/> and <see cref="EditOutcome.NoCandidatesFound"/> are the
+    /// two outcomes that are a success without a write. AlreadyInTargetState means the engine positively verified
+    /// the code already has the requested shape; NoCandidatesFound means it found nothing to change. Both are checked
     /// first, whatever <c>UpdatedText</c> holds (some engines return the unchanged text with it), and
     /// returns a non-error result whose <c>SuccessData</c> is an <see cref="AppliedChangeSummary"/> with
     /// no affected files, so a caller must return the guard result as-is and never read
@@ -72,6 +73,19 @@ public static class RefactoringToolHelpers
                 IsError = false,
                 SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: [], Description: description, DryRun: false),
                 StatusMessage = description
+            };
+        }
+
+        if (updated.Outcome == EditOutcome.NoCandidatesFound)
+        {
+            var nothingDone = $"{operationName}: nothing to do for '{filePath}' - no change was needed, nothing was written.";
+            var detail = SummarizeEngineMessage(updated.Message, MaxEngineGuidanceLength);
+            var nothingDoneText = string.IsNullOrEmpty(detail) ? nothingDone : nothingDone + " " + detail;
+            return new SentinelCallToolResult<object>
+            {
+                IsError = false,
+                SuccessData = new AppliedChangeSummary(ChangeId: null, AffectedFiles: [], Description: nothingDoneText, DryRun: false),
+                StatusMessage = nothingDoneText
             };
         }
 

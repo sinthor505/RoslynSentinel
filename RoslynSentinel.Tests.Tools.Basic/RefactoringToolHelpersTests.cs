@@ -15,7 +15,7 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 public class RefactoringToolHelpersTests
 {
     [Test]
-    public void RequireUpdatedText_OutcomeNoCandidatesFound_ReturnsNotFound()
+    public void RequireUpdatedText_OutcomeNoCandidatesFound_IsSuccessWithNoWrite()
     {
         var result = RefactoringToolHelpers.RequireUpdatedText(
             new DocumentEditResult(EditOutcome.NoCandidatesFound, "X.cs") { Message = "m" },
@@ -23,9 +23,9 @@ public class RefactoringToolHelpersTests
             "X.cs");
 
         Assert.That(result, Is.Not.Null);
-        Assert.That(!result!.IsError, Is.False);
-        Assert.That(result.ErrorData, Is.Not.Null);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result!.IsError, Is.False);
+        Assert.That(result.ErrorData, Is.Null);
+        Assert.That((result.SuccessData as AppliedChangeSummary)!.AffectedFiles, Is.Empty);
     }
 
     [Test]
@@ -81,14 +81,14 @@ public class RefactoringToolHelpersTests
     public void ToSummaryResult_ErrorGuard_KeepsErrorCode()
     {
         var guard = RefactoringToolHelpers.RequireUpdatedText(
-            new DocumentEditResult(EditOutcome.NoCandidatesFound, "X.cs") { Message = "m" },
+            new DocumentEditResult(EditOutcome.Unset, "X.cs") { Message = "m" },
             "test",
             "X.cs")!;
 
         var typed = RefactoringToolHelpers.ToSummaryResult(guard);
 
         Assert.That(typed.IsError, Is.True);
-        Assert.That(typed.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(typed.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Exception));
     }
 
     // ---- GuardEngineResult: engines report facts, the tool passes every word of guidance -------------------
