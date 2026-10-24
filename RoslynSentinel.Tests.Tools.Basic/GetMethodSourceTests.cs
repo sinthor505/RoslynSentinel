@@ -118,6 +118,86 @@ public class GetMethodSourceTests
     }
 
     [Test]
+    public async Task GetMethodSource_MethodDeclaredInAnotherFile_MessageNamesThatFileAndRetryAsync()
+    {
+        var otherDocPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Other.cs");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
+            new[]
+            {
+                ("Foo.cs", "public class Foo\n{\n    public int Bar(int x)\n    {\n        return x + 1;\n    }\n}\n", _documentPath),
+                ("Other.cs", "public class Other\n{\n    public void Qux()\n    {\n    }\n}\n", otherDocPath),
+            });
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _tools.GetMethodSourceTool(reason: "test message", _documentPath, "Qux");
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain("Other.cs"));
+        Assert.That(message, Does.Contain("Retry GetMethodSource"));
+    }
+
+    [Test]
+    public async Task GetMethodSource_NameIsPropertyInFile_MessagePointsToMemberViewAsync()
+    {
+        var propDocPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Props.cs");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
+            new[] { ("Props.cs", "public class Props\n{\n    public int Size { get; set; }\n}\n", propDocPath) });
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _tools.GetMethodSourceTool(reason: "test message", propDocPath, "Size");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.Message, Does.Contain("Member(operation: view"));
+    }
+
+    [Test]
+    public async Task GetMethodSource_QualifiedName_MessageAsksForBareNameAsync()
+    {
+        var result = await _tools.GetMethodSourceTool(reason: "test message", _documentPath, "Foo.Bar");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.Message, Does.Contain("pass the bare method name"));
+    }
+
+    [Test]
+    public async Task GetMethodSource_NameExistsNowhere_MessageListsFileMethodsAsync()
+    {
+        var result = await _tools.GetMethodSourceTool(reason: "test message", _documentPath, "NoSuchMethod");
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain("No method or constructor named"));
+        Assert.That(message, Does.Contain("Methods and constructors in this file:"));
+    }
+
+    [Test]
+    public async Task GetMethodSource_ClassNameWhoseConstructorIsInAnotherFile_MessageNamesThatFileAsync()
+    {
+        var svcDocPath = Path.Combine(Path.GetDirectoryName(_documentPath)!, "Svc.cs");
+        var solution = TestSolutionBuilder.CreateSolutionWithProject(
+            "TestProj",
+            Path.Combine(Path.GetDirectoryName(_documentPath)!, "TestProj.csproj"),
+            new[]
+            {
+                ("Foo.cs", "public class Foo\n{\n    public int Bar(int x)\n    {\n        return x + 1;\n    }\n}\n", _documentPath),
+                ("Svc.cs", "public class SomeClass\n{\n    public SomeClass(int x)\n    {\n    }\n}\n", svcDocPath),
+            });
+        _workspaceManager.SetTestSolution(solution);
+
+        var result = await _tools.GetMethodSourceTool(reason: "test message", _documentPath, "SomeClass");
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain("Svc.cs"));
+        Assert.That(message, Does.Contain("(constructor)"));
+    }
+
+    [Test]
     public async Task GetMethodSource_MethodNameCaseMismatch_FallsBackToCaseInsensitiveMatchAsync()
     {
         var result = await _tools.GetMethodSourceTool(reason: "test message", _documentPath, "bar");

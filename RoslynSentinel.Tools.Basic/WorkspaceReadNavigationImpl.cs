@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.Extensions.Logging;
 
 using RoslynSentinel.Engines.Basic;
@@ -91,6 +92,113 @@ public class WorkspaceReadNavigationImpl
             "You MUST call ListSolutionItems(kind: all) next to see every file actually in the solution before trying another path.");
     }
 
+    /// <summary>
+    /// Builds the MethodNotFound message for GetMethodSource. Parts, each only when it applies: the original sentence,
+    /// a qualified-name hint, same-name non-method members in this file, same-name methods elsewhere in the solution,
+    /// and the list of methods this file declares. Solution-wide lookup is best-effort and skipped on failure.
+    /// </summary>
+    internal static async Task<ResultError> BuildMethodNotFoundErrorAsync(Solution solution, SyntaxNode root, string methodName, string requestedFilePath, string? solutionRoot, CancellationToken cancellationToken)
+    {
+        var parts = new List<string>
+        {
+            $"Method or constructor '{methodName}' not found in '{requestedFilePath}'."
+        };
+
+        var name = methodName;
+        var lastDot = methodName.LastIndexOf('.');
+        if (lastDot >= 0)
+        {
+            var bare = methodName[(lastDot + 1)..];
+            var bareIsMethodInFile = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>()
+                .Any(m => GetMethodOrCtorName(m).Equals(bare, StringComparison.OrdinalIgnoreCase));
+            parts.Add($"'{methodName}' looks qualified; pass the bare method name '{bare}' (and the file that declares it) instead. " +
+                (bareIsMethodInFile ? $"'{bare}' does exist as a method in this file." : $"'{bare}' is not a method in this file."));
+            name = bare;
+        }
+
+        if (name.Length > 0)
+        {
+            var cmp = StringComparison.OrdinalIgnoreCase;
+            string? otherKind = null;
+            if (root.DescendantNodes().OfType<PropertyDeclarationSyntax>().Any(p => p.Identifier.Text.Equals(name, cmp)))
+                otherKind = "property";
+            else if (root.DescendantNodes().OfType<FieldDeclarationSyntax>().Any(f => f.Declaration.Variables.Any(v => v.Identifier.Text.Equals(name, cmp))))
+                otherKind = "field";
+            else if (root.DescendantNodes().OfType<EventDeclarationSyntax>().Any(e => e.Identifier.Text.Equals(name, cmp)))
+                otherKind = "event";
+            else if (root.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Any(l => l.Identifier.Text.Equals(name, cmp)))
+                otherKind = "local function";
+            if (otherKind != null)
+            {
+                parts.Add($"'{name}' exists in this file as a {otherKind}, not a method; read it with Member(operation: view, memberName: '{name}').");
+            }
+        }
+
+        try
+        {
+            var found = new List<string>();
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var project in solution.Projects)
+            {
+                var memberDeclarations = await SymbolFinder.FindDeclarationsAsync(project, name, ignoreCase: true, SymbolFilter.Member, cancellationToken);
+                var candidates = memberDeclarations.OfType<IMethodSymbol>().ToList();
+                // Constructor symbols are named ".ctor", so a class-name query only reaches them through the type declaration.
+                var typeDeclarations = await SymbolFinder.FindDeclarationsAsync(project, name, ignoreCase: true, SymbolFilter.Type, cancellationToken);
+                candidates.AddRange(typeDeclarations.OfType<INamedTypeSymbol>()
+                    .SelectMany(t => t.Constructors)
+                    .Where(c => c.MethodKind == MethodKind.Constructor && !c.IsImplicitlyDeclared));
+                foreach (var symbol in candidates)
+                {
+                    var location = symbol.Locations.FirstOrDefault(l => l.IsInSource);
+                    if (location == null || location.SourceTree == null)
+                    {
+                        continue;
+                    }
+                    var fullPath = location.SourceTree.FilePath;
+                    var displayPath = !string.IsNullOrEmpty(solutionRoot) ? Path.GetRelativePath(solutionRoot, fullPath) : fullPath;
+                    var line = location.GetLineSpan().StartLinePosition.Line + 1;
+                    var label = symbol.MethodKind == MethodKind.Constructor
+                        ? $"{symbol.ContainingType?.Name} (constructor)"
+                        : $"{symbol.ContainingType?.Name}.{symbol.Name}";
+                    var entry = $"  - {displayPath}:{line} ({label})";
+                    if (seen.Add(entry))
+                    {
+                        found.Add(entry);
+                    }
+                }
+            }
+
+            if (found.Count > 0)
+            {
+                var lines = string.Join("\n", found.Take(5));
+                if (found.Count > 5)
+                {
+                    lines += $"\n  (+{found.Count - 5} more)";
+                }
+                parts.Add("A method or constructor with this name is declared in:\n" + lines + "\nRetry GetMethodSource with filePath set to the file that holds the one you mean.");
+            }
+            else
+            {
+                parts.Add($"No method or constructor named '{name}' is declared in any project of the loaded solution (tests included). If the name may be a substring or differently spelled, call Search(mode: method, query: '{name}', exactMatch: false); a file outside the loaded solution cannot be searched until it is loaded.");
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Best-effort lookup: skip the solution-wide step rather than leak exception text into the result.
+        }
+
+        var fileMethodNames = root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>()
+            .Select(GetMethodOrCtorName)
+            .Where(n => n.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        parts.Add(fileMethodNames.Count == 0
+            ? "This file declares no methods or constructors."
+            : "Methods and constructors in this file: " + string.Join(", ", fileMethodNames.Take(12)) + (fileMethodNames.Count > 12 ? $" (+{fileMethodNames.Count - 12} more)" : ""));
+
+        return new ResultError("MethodNotFound", string.Join(" ", parts));
+    }
+
     public async Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSource(
         ToolCallReason reason,
         string filePath, string methodName,
@@ -130,7 +238,7 @@ public class WorkspaceReadNavigationImpl
                 return new SentinelCallToolResult<MethodSourceResult, ResultError>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError("MethodNotFound", $"Method or constructor '{methodName}' not found in '{filePathResolved}'.")
+                    ErrorData = await BuildMethodNotFoundErrorAsync(solution, root, methodName, filePathResolved, _workspaceManager.GetSolutionRoot(), cancellationToken)
                 };
             }
 
