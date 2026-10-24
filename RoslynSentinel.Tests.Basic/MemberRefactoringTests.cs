@@ -2709,9 +2709,14 @@ public class C
     public void Foo(string x) { }
 }", "C.cs");
 
-        var noSnippetResult = await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(bool x) { }");
-        Assert.That(noSnippetResult.UpdatedText, Is.Not.Null.And.Not.Empty,
-            "With 2+ overloads and no contextSnippet, existing first-match behavior should still apply.");
+        // A name with 2+ overloads and no contextSnippet is refused with the candidate list (no first-match).
+        var noSnippetEx = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+        {
+            await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(bool x) { }");
+        });
+        Assert.That(noSnippetEx.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(noSnippetEx.Message, Does.Contain("line 4 `public void Foo(int x) { }`"));
+        Assert.That(noSnippetEx.Message, Does.Contain("line 5 `public void Foo(string x) { }`"));
 
         // A genuinely ambiguous name (2+ overloads) with a non-matching contextSnippet must still fail -
         // the single-candidate bypass must not apply when there IS real ambiguity to resolve.
@@ -2760,6 +2765,58 @@ public class C
         Assert.That(ex.Message, Does.Contain("line 5 `public void Foo(string x) { }`"));
         Assert.That(ex.Message, Does.Contain("line 6 `public void Foo(bool x) { }`"));
     }
+    [Test]
+    public async Task RemoveMember_OverloadedMembers_NoContextSnippet_Throws_Ambiguous()
+    {
+        SetSource(@"
+public class C
+{
+    public void Foo(int x) { }
+    public void Foo(string x) { }
+}", "C.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+        {
+            await _memberRefactoringEngine.RemoveMemberAsync("C.cs", "Foo");
+        });
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+
+        var result = await _memberRefactoringEngine.RemoveMemberAsync("C.cs", "Foo", contextSnippet: "public void Foo(string x) { }");
+        Assert.That(result.UpdatedText, Does.Not.Contain("Foo(string x)"));
+        Assert.That(result.UpdatedText, Does.Contain("Foo(int x)"));
+    }
+
+    [Test]
+    public async Task ChangeAccessibility_OverloadedMembers_NoContextSnippet_Throws_Ambiguous()
+    {
+        SetSource(@"
+public class C
+{
+    public void Foo(int x) { }
+    public void Foo(string x) { }
+}", "C.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(async () =>
+        {
+            await _memberRefactoringEngine.ChangeAccessibilityAsync("C.cs", "Foo", AccessibilityLevel.@private);
+        });
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+    }
+
+    [Test]
+    public async Task ReplaceMember_SingleMember_NoContextSnippet_StillSucceeds()
+    {
+        SetSource(@"
+public class C
+{
+    public void Foo(int x) { }
+}", "C.cs");
+
+        var result = await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(bool x) { }");
+        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Does.Contain("Foo(bool x)"));
+    }
+
 
     [Test]
     public async Task ReplaceMember_Constructor_ReplacesConstructorBody()

@@ -283,11 +283,11 @@ public static class SyntaxTargetResolver
     /// <summary>
     /// Disambiguation helper: resolves a contextSnippet against a candidate list the same way
     /// ResolveMemberByNameOrSnippet/ResolveTypeByNameOrSnippet did inline. Returns the single
-    /// unambiguous candidate; when contextSnippet is null or the set already has &lt;= 1 entry, returns
+    /// unambiguous candidate; when the set already has &lt;= 1 entry, returns
     /// the sole candidate (or null) without requiring a snippet at all -- a defensively-supplied
     /// snippet must never fail a call that didn't actually need disambiguating.
     /// Throws ToolNotFoundException (snippet matched nothing) or ToolAmbiguousMatchException (2+ snippet
-    /// matches, or the single match fell outside every candidate), each carrying the hintBuilder-produced
+    /// matches, a null snippet with 2+ candidates, or the single match fell outside every candidate), each carrying the hintBuilder-produced
     /// message. Callers catch ToolException and copy ex.ErrorCode onto their result.
     /// trustSingleCandidate: true keeps the single-candidate shortcut (a lone candidate is returned without
     /// requiring contextSnippet to select it); this wrapper discards the warning that
@@ -455,6 +455,7 @@ public static class SyntaxTargetResolver
     {
         var parts = new List<string>();
         if (!string.IsNullOrEmpty(lead))
+    /// A null contextSnippet with more than one candidate throws ToolAmbiguousMatchException instead of returning the first candidate.
         {
             parts.Add(lead);
         }
@@ -464,6 +465,11 @@ public static class SyntaxTargetResolver
         {
             parts.Add(scope);
         }
+        if (contextSnippet == null && candidates.Count > 1)
+        {
+            throw new ToolAmbiguousMatchException(hintBuilder(candidates, [], "ambiguous"), filePath == null ? null : BuildDeclarationCandidates(candidates, sourceText, filePath));
+        }
+
 
         parts.Add(hint);
         var message = string.Join("\n", parts);

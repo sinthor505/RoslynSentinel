@@ -2558,7 +2558,7 @@ public class MemberRefactoringEngine
     /// Repeats the name lookup used by RemoveMemberAsync against the committed document after a
     /// removal. Returns false when the lookup finds no declaration (removed), true when a
     /// declaration still resolves (possibly an overload or another same-named member), or null
-    /// when the check cannot run. Uses all candidate kinds so removed type declarations are seen.
+    /// when the check cannot run. Uses all candidate kinds so removed type declarations are seen. An ambiguous lookup (several same-named declarations) counts as still present.
     /// </summary>
     public async Task<bool?> IsDeclarationStillPresentAsync(FilePathWrapper filePath, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, string? containerName = null, CancellationToken cancellationToken = default)
     {
@@ -2583,6 +2583,10 @@ public class MemberRefactoringEngine
             var node = SyntaxTargetResolver.ResolveBySnippetOrThrow(filtered, sourceText, contextSnippet, lineBefore, lineAfter,
                 (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node;
             return node != null;
+        }
+        catch (ToolAmbiguousMatchException)
+        {
+            return true;
         }
         catch (ToolException)
         {
