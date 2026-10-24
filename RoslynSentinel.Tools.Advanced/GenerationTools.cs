@@ -124,12 +124,6 @@ public class GenerationTools
         try
         {
             var result = await _apiGenerationEngine.GenerateHttpClientForControllerAsync(resolvedFilePath, controllerName, cancellationToken);
-            if (string.IsNullOrEmpty(result.UpdatedText))
-            {
-                return $"GenerateHttpClient: controller class '{controllerName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " +
-                       "Verify the class name (case-sensitive). Use GetFileOutline to list available classes.";
-            }
-
             return result.ToJsonSummary();
         }
         catch (Exception ex)
@@ -173,13 +167,7 @@ public class GenerationTools
         try
         {
             var result = await _codeGenerationEngine.GenerateDefaultConfigJsonAsync(projectName, cancellationToken);
-            if (string.IsNullOrEmpty(result.UpdatedText))
-            {
-                return $"GenerateDefaultConfigJson: no configuration keys found in project '{projectName}'. " +
-                       "The project may not use IConfiguration or config[\"Key\"] patterns.";
-            }
-
-            return result.UpdatedText;
+            return result.UpdatedText!;
         }
         catch (Exception ex)
         {
@@ -222,12 +210,6 @@ public class GenerationTools
         try
         {
             var result = await _codeGenerationEngine.InterpolateStringAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, cancellationToken);
-            if (string.IsNullOrEmpty(result.UpdatedText))
-            {
-                return $"InterpolateStringSafe: context snippet did not match or target is not a string.Format() call in '{Path.GetFileName(resolvedFilePath)}'. " +
-                       "Verify the snippet is verbatim text from the file and the call uses string.Format(...) (not interpolation or concatenation already).";
-            }
-
             return result.ToJsonSummary();
         }
         catch (Exception ex)
@@ -254,13 +236,8 @@ public class GenerationTools
 
             // The mapping goes into a NEW file ({From}To{To}Mapper.cs beside the source type); the source file is never rewritten.
             var result = await _mappingEngine.GenerateMappingFileAsync(filePathResolved, fromType, toType, cancellationToken);
-            if (result.IsError)
-                return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(result.Code ?? ToolErrorCode.Exception, result.Message) };
-            if (string.IsNullOrEmpty(result.UpdatedText))
-                return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"GenerateMapping produced no output for '{fromType}' -> '{toType}' in '{filePathResolved}'. Ensure both types exist in the solution.") };
-
             FilePathWrapper newFilePath = result.FilePath;
-            var changes = new Dictionary<FilePathWrapper, string> { [newFilePath] = result.UpdatedText };
+            var changes = new Dictionary<FilePathWrapper, string> { [newFilePath] = result.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"Generate mapping from '{fromType}' to '{toType}'.", "GenerateMapping", dryRun, returnDiff, progress.ToEngineProgress(), cancellationToken: cancellationToken);
             if (apply.Error is not null)
                 return new SentinelCallToolResult<object> { IsError = true, ErrorData = apply.Error };

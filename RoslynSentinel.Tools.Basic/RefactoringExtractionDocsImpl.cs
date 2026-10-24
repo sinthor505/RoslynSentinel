@@ -258,13 +258,7 @@ public class RefactoringExtractionDocsImpl
             var result = await _refactoringEngine.ExtractLocalVariableAsync(filePathResolved, exactExpressionText, variableName, lineBefore, lineAfter, cancellationToken: cancellationToken);
             if (string.IsNullOrEmpty(result.UpdatedText))
             {
-                string errorReason = result.Outcome switch
-                {
-                    EditOutcome.DocumentNotFound => $"ExtractLocalVariable: document '{filePathResolved}' not found in the workspace.",
-                    EditOutcome.SourceInvalid => $"ExtractLocalVariable: exactExpressionText not found in '{filePathResolved}'. {result.Message}",
-                    EditOutcome.CannotConvert => $"ExtractLocalVariable: could not extract '{variableName}' in '{filePathResolved}'. {result.Message}",
-                    _ => $"ExtractLocalVariable: no change produced for '{variableName}' in '{filePathResolved}' ({result.Outcome}). {result.Message}"
-                };
+                string errorReason = $"ExtractLocalVariable: no change produced for '{variableName}' in '{filePathResolved}' ({result.Outcome}). {result.Message}";
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(RefactoringToolHelpers.ErrorCodeFor(result), errorReason) };
             }
 
