@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## `GetMethodSource` MethodNotFound was a one-line dead end - resolved (2026-10-24)
+
+The message gave no next step (22 transcript cases, 0% guided, 18% recovered). It now adds, on the failure path only, a qualified-name hint, a same-file other-kind note, a solution-wide list of matching methods and constructors (cap 5, `FindDeclarationsAsync`), a no-match statement with a `Search` fallback, and the methods the file declares. Evidence: f543fa51 (`WorkspaceReadNavigationImpl.BuildMethodNotFoundErrorAsync`); `GetMethodSourceTests` 11/11 and `RoslynSentinel.Tests.Tools.Basic` 1184 passed, 0 failed, 1 skipped. Remaining offenders: TODO.md (file-not-found copies, `FindReferences`, `Member`).
+
 ## `Inline(method)` changed meaning at call sites where the template's names bind differently - resolved (2026-10-22)
 
 - `InlineMethodAsync` Pass 1 now runs `CollectInlineTemplateNames` (defining model) and `ThrowIfInlinedNamesDoNotRebind` (per call site): explicit non-`this` receivers are refused when the template needs the defining instance or is not a plain name chain (receiver dropped), every used member must be accessible at the call position, and the substituted expression is bound speculatively so each name must resolve to the same symbol; failures throw `ToolTargetIneligibleException`. Removes the `// TODO no accessibility check`. Evidence: seven `BUG_InlineMethod_*` tests in `BugFixTests.cs` (instance field from another type / other instance, private static from another type, unqualified static from another type, call-receiver, plus the two positive same-type and stateless cases).
