@@ -688,61 +688,105 @@ public class C
     }
 
     [Test]
-    public async Task ApplyModifierBatch_SnippetMatchesNothing_ReturnsNotFoundErrorCode()
+    public async Task ApplyModifierBatch_SnippetMatchesNothing_ThrowsNotFound()
     {
         SetSource(OverloadedRunSource, "RunBatchNotFound.cs");
 
-        var result = await _memberRefactoringEngine.ApplyModifierBatchAsync(
-            "RunBatchNotFound.cs",
-            [(0, "Run", "static", AddRemoveAction.add, "public void Run(double d)", null, null)]);
+        var ex = await Assert.ThrowsAsync<ToolBatchEditException>(async () =>
+        {
+            await _memberRefactoringEngine.ApplyModifierBatchAsync(
+                "RunBatchNotFound.cs",
+                [(0, "Run", "static", AddRemoveAction.add, "public void Run(double d)", null, null)]);
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Failures, Has.Count.EqualTo(1));
+        Assert.That(ex.Failures[0].ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
-    public async Task ApplyModifierBatch_MixedFailureKinds_LeavesErrorCodeUnset()
+    public async Task ApplyModifierBatch_MissingFile_ThrowsNotFound()
+    {
+        SetSource(OverloadedRunSource, "Present.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ApplyModifierBatchAsync(
+                "NoSuchFile.cs",
+                [(0, "Run", "static", AddRemoveAction.add, "public void Run(double d)", null, null)]);
+        });
+
+        Assert.That(ex.Message, Does.Contain("NoSuchFile"));
+    }
+
+    [Test]
+    public async Task ApplyModifierBatch_MixedFailureKinds_ThrowsInvalidArgument()
     {
         SetSource(OverloadedRunSource, "RunBatchMixed.cs");
 
-        var result = await _memberRefactoringEngine.ApplyModifierBatchAsync(
-            "RunBatchMixed.cs",
-            [
-                (0, "Run", "static", AddRemoveAction.add, "public void Run(double d)", null, null),
-                (1, "Run", "static", AddRemoveAction.add, "public void Run(", null, null)
-            ]);
+        var ex = await Assert.ThrowsAsync<ToolBatchEditException>(async () =>
+        {
+            await _memberRefactoringEngine.ApplyModifierBatchAsync(
+                "RunBatchMixed.cs",
+                [
+                    (0, "Run", "static", AddRemoveAction.add, "public void Run(double d)", null, null),
+                    (1, "Run", "static", AddRemoveAction.add, "public void Run(", null, null)
+                ]);
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.ErrorCode, Is.Null, "A batch whose failures disagree on kind carries no single code.");
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(ex.Failures.Select(f => f.ErrorCode).Distinct().Count(), Is.GreaterThan(1), "The failures must carry more than one kind, so the batch proves mixing.");
     }
 
     [Test]
-    public async Task ApplyAttributeBatch_TargetMissing_ReturnsNotFoundErrorCode()
+    public async Task ApplyAttributeBatch_TargetMissing_ThrowsNotFound()
     {
         SetSource(OverloadedRunSource, "AttrBatchNotFound.cs");
 
-        var result = await _memberRefactoringEngine.ApplyAttributeBatchAsync(
-            "AttrBatchNotFound.cs",
-            [(0, "NoSuchMember", "Obsolete", AttributeModifyAction.add, null, null, null, null)]);
+        var ex = await Assert.ThrowsAsync<ToolBatchEditException>(async () =>
+        {
+            await _memberRefactoringEngine.ApplyAttributeBatchAsync(
+                "AttrBatchNotFound.cs",
+                [(0, "NoSuchMember", "Obsolete", AttributeModifyAction.add, null, null, null, null)]);
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Failures, Has.Count.EqualTo(1));
+        Assert.That(ex.Failures[0].ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
-    public async Task ApplyAttributeBatch_MixedFailureKinds_LeavesErrorCodeUnset()
+    public async Task ApplyAttributeBatch_MissingFile_ThrowsNotFound()
+    {
+        SetSource(OverloadedRunSource, "Present.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ApplyAttributeBatchAsync(
+                "NoSuchFile.cs",
+                [(0, "Run", "Obsolete", AttributeModifyAction.add, null, "public void Run(double d)", null, null)]);
+        });
+
+        Assert.That(ex.Message, Does.Contain("NoSuchFile"));
+    }
+
+    [Test]
+    public async Task ApplyAttributeBatch_MixedFailureKinds_ThrowsInvalidArgument()
     {
         SetSource(OverloadedRunSource, "AttrBatchMixed.cs");
 
-        var result = await _memberRefactoringEngine.ApplyAttributeBatchAsync(
-            "AttrBatchMixed.cs",
-            [
-                (0, "Run", "Obsolete", AttributeModifyAction.add, null, "public void Run(double d)", null, null),
-                (1, "Run", "Obsolete", AttributeModifyAction.add, null, "public void Run(", null, null)
-            ]);
+        var ex = await Assert.ThrowsAsync<ToolBatchEditException>(async () =>
+        {
+            await _memberRefactoringEngine.ApplyAttributeBatchAsync(
+                "AttrBatchMixed.cs",
+                [
+                    (0, "Run", "Obsolete", AttributeModifyAction.add, null, "public void Run(double d)", null, null),
+                    (1, "Run", "Obsolete", AttributeModifyAction.add, null, "public void Run(", null, null)
+                ]);
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.ErrorCode, Is.Null, "A batch whose failures disagree on kind carries no single code.");
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(ex.Failures.Select(f => f.ErrorCode).Distinct().Count(), Is.GreaterThan(1), "The failures must carry more than one kind, so the batch proves mixing.");
     }
 
     private const string DuplicateTypeSource = """
@@ -751,45 +795,71 @@ public class C
         """;
 
     [Test]
-    public async Task ApplyBaseTypeBatch_TypeMissing_ReturnsNotFoundErrorCode()
+    public async Task ApplyBaseTypeBatch_TypeMissing_ThrowsNotFound()
     {
         SetSource(OverloadedRunSource, "BaseBatchNotFound.cs");
 
-        var result = await _memberRefactoringEngine.ApplyBaseTypeBatchAsync(
-            "BaseBatchNotFound.cs",
-            [(0, "NoSuchType", "IDisposable", AddRemoveAction.add, null, null, null)]);
+        var ex = await Assert.ThrowsAsync<ToolBatchEditException>(async () =>
+        {
+            await _memberRefactoringEngine.ApplyBaseTypeBatchAsync(
+                "BaseBatchNotFound.cs",
+                [(0, "NoSuchType", "IDisposable", AddRemoveAction.add, null, null, null)]);
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Failures, Has.Count.EqualTo(1));
+        Assert.That(ex.Failures[0].ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]
-    public async Task ApplyBaseTypeBatch_AmbiguousType_ReturnsAmbiguousErrorCode()
+    public async Task ApplyBaseTypeBatch_AmbiguousType_ThrowsAmbiguous()
     {
         SetSource(DuplicateTypeSource, "BaseBatchAmbiguous.cs");
 
-        var result = await _memberRefactoringEngine.ApplyBaseTypeBatchAsync(
-            "BaseBatchAmbiguous.cs",
-            [(0, "Dup", "IDisposable", AddRemoveAction.add, "public class Dup", null, null)]);
+        var ex = await Assert.ThrowsAsync<ToolBatchEditException>(async () =>
+        {
+            await _memberRefactoringEngine.ApplyBaseTypeBatchAsync(
+                "BaseBatchAmbiguous.cs",
+                [(0, "Dup", "IDisposable", AddRemoveAction.add, "public class Dup", null, null)]);
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+        Assert.That(ex.Failures, Has.Count.EqualTo(1));
+        Assert.That(ex.Failures[0].ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
     }
 
     [Test]
-    public async Task ApplyBaseTypeBatch_MixedFailureKinds_LeavesErrorCodeUnset()
+    public async Task ApplyBaseTypeBatch_MixedFailureKinds_ThrowsInvalidArgument()
     {
         SetSource(DuplicateTypeSource, "BaseBatchMixed.cs");
 
-        var result = await _memberRefactoringEngine.ApplyBaseTypeBatchAsync(
-            "BaseBatchMixed.cs",
-            [
-                (0, "Dup", "IDisposable", AddRemoveAction.add, "no such text anywhere", null, null),
-                (1, "Dup", "IDisposable", AddRemoveAction.add, "public class Dup", null, null)
-            ]);
+        var ex = await Assert.ThrowsAsync<ToolBatchEditException>(async () =>
+        {
+            await _memberRefactoringEngine.ApplyBaseTypeBatchAsync(
+                "BaseBatchMixed.cs",
+                [
+                    (0, "Dup", "IDisposable", AddRemoveAction.add, "no such text anywhere", null, null),
+                    (1, "Dup", "IDisposable", AddRemoveAction.add, "public class Dup", null, null)
+                ]);
+        });
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit));
-        Assert.That(result.ErrorCode, Is.Null, "A batch whose failures disagree on kind carries no single code.");
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.InvalidArgument));
+        Assert.That(ex.Failures.Select(f => f.ErrorCode).Distinct().Count(), Is.GreaterThan(1), "The failures must carry more than one kind, so the batch proves mixing.");
+    }
+
+    [Test]
+    public async Task ApplyBaseTypeBatch_MissingFile_ThrowsNotFound()
+    {
+        SetSource(DuplicateTypeSource, "Present.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ApplyBaseTypeBatchAsync(
+                "NoSuchFile.cs",
+                [(0, "Dup", "IDisposable", AddRemoveAction.add, "public class Dup", null, null)]);
+        });
+
+        Assert.That(ex.Message, Does.Contain("NoSuchFile"));
     }
 
     // ══════════════════════════════════════════════════════════════

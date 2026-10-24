@@ -878,15 +878,6 @@ public class MemberRefactoringEngine
     }
 
     /// <summary>
-    /// The single <see cref="ToolErrorCode"/> shared by every per-edit failure of a batch, or null when the
-    /// failures carry different codes (or none), so a mixed batch never reports a misleading single cause.
-    /// </summary>
-    private static string? SharedErrorCode(IReadOnlyCollection<string> codes)
-    {
-        return codes.Distinct().Count() == 1 ? codes.First() : null;
-    }
-
-    /// <summary>
     /// Batch form of <see cref="AddModifierAsync"/>/<see cref="RemoveModifierAsync"/>: applies every
     /// edit in <paramref name="edits"/> to <paramref name="filePath"/> against ONE original syntax root,
     /// then folds all replacements into a single <see cref="RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync"/>
@@ -902,21 +893,16 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, FilePath = filePath, Message = "// Document not found." };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = "// Cannot edit: syntax root not found." };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
-        var errors = new List<string>();
-        var errorCodes = new List<string>();
+        var failures = new List<BatchEditFailure>();
         var resolvedTargets = new Dictionary<int, MemberDeclarationSyntax>();
         foreach (var edit in edits)
         {
@@ -928,22 +914,20 @@ public class MemberRefactoringEngine
                     (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as MemberDeclarationSyntax;
                 if (target == null)
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): target not found.");
-                    errorCodes.Add(ToolErrorCode.NotFound);
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ToolErrorCode.NotFound, $"batchEdits[{edit.Index}] ({edit.TargetName}): target not found."));
                     continue;
                 }
                 resolvedTargets[edit.Index] = target;
             }
-            catch (ToolException ex) // TODO throw-migration: batch aggregator collects every per-index failure (all-or-nothing, no partial write); needs a typed aggregate exception carrying per-item failures before it can throw (proposal_throw_typed_exceptions_not_failure_results S1)
+            catch (ToolException ex)
             {
-                errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
-                errorCodes.Add(ex.ErrorCode);
+                failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ex.ErrorCode, $"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}"));
             }
         }
 
-        if (errors.Count > 0)
+        if (failures.Count > 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors), ErrorCode = SharedErrorCode(errorCodes) };
+            throw new ToolBatchEditException(string.Join("\n", failures.Select(f => f.Message)), failures);
         }
 
         // Same-node collision check: two edits resolving to the identical declaration is the node-identity
@@ -953,7 +937,8 @@ public class MemberRefactoringEngine
         {
             if (seen.TryGetValue(kvp.Value, out var firstIndex))
             {
-                errors.Add($"batchEdits[{firstIndex}] and batchEdits[{kvp.Key}] both resolve to the same target in '{filePath}'. Split these into separate calls.");
+                var laterTargetName = edits.First(e => e.Index == kvp.Key).TargetName;
+                failures.Add(new BatchEditFailure(kvp.Key, laterTargetName, ToolErrorCode.InvalidArgument, $"batchEdits[{firstIndex}] and batchEdits[{kvp.Key}] both resolve to the same target in '{filePath}'. Split these into separate calls."));
             }
             else
             {
@@ -961,9 +946,9 @@ public class MemberRefactoringEngine
             }
         }
 
-        if (errors.Count > 0)
+        if (failures.Count > 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+            throw new ToolBatchEditException(string.Join("\n", failures.Select(f => f.Message)), failures);
         }
 
         var replacements = new Dictionary<SyntaxNode, SyntaxNode>();
@@ -980,7 +965,7 @@ public class MemberRefactoringEngine
             {
                 if (target.Modifiers.Any(m => m.IsKind(kind)))
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): modifier already exists.");
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ToolErrorCode.InvalidArgument, $"batchEdits[{edit.Index}] ({edit.TargetName}): modifier already exists."));
                     continue;
                 }
                 var token = SyntaxFactory.Token(kind).WithTrailingTrivia(SyntaxFactory.Space);
@@ -990,16 +975,16 @@ public class MemberRefactoringEngine
             {
                 if (!target.Modifiers.Any(m => m.IsKind(kind)))
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): modifier not found.");
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ToolErrorCode.InvalidArgument, $"batchEdits[{edit.Index}] ({edit.TargetName}): modifier not found."));
                     continue;
                 }
                 replacements[target] = target.WithModifiers(SyntaxFactory.TokenList(target.Modifiers.Where(m => !m.IsKind(kind))));
             }
         }
 
-        if (errors.Count > 0)
+        if (failures.Count > 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+            throw new ToolBatchEditException(string.Join("\n", failures.Select(f => f.Message)), failures);
         }
 
         var replaced = await RoslynFormattingHelper.ReplaceNodesAndFormatReplacementsAsync(document, root, replacements, cancellationToken);
@@ -1009,9 +994,13 @@ public class MemberRefactoringEngine
             // tool reported success for an edit that was never written. Name each affected edit and refuse to write.
             var unlocated = edits
                 .Where(e => resolvedTargets.TryGetValue(e.Index, out var node) && replaced.UnlocatedNodes.Contains(node))
-                .Select(e => $"batchEdits[{e.Index}] ({e.TargetName}): the target could not be located after other edits in this batch changed the tree (it is nested inside, or overlaps, another edit's target in '{filePath}'). Split these edits into separate calls.")
+                .Select(e => new BatchEditFailure(e.Index, e.TargetName, ToolErrorCode.InvalidArgument, $"batchEdits[{e.Index}] ({e.TargetName}): the target could not be located after other edits in this batch changed the tree (it is nested inside, or overlaps, another edit's target in '{filePath}'). Split these edits into separate calls."))
                 .ToList();
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", unlocated.Count > 0 ? unlocated : [$"'{filePath}': {replaced.UnlocatedNodes.Count} edit(s) could not be applied because their targets could not be located. Split these edits into separate calls."]) };
+            if (unlocated.Count == 0)
+            {
+                unlocated.Add(new BatchEditFailure(-1, filePath.ToString(), ToolErrorCode.InvalidArgument, $"'{filePath}': {replaced.UnlocatedNodes.Count} edit(s) could not be applied because their targets could not be located. Split these edits into separate calls."));
+            }
+            throw new ToolBatchEditException(string.Join("\n", unlocated.Select(f => f.Message)), unlocated);
         }
 
         return new DocumentEditResult
@@ -1402,21 +1391,16 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, FilePath = filePath, Message = "// Document not found." };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = "// Cannot edit: syntax root not found." };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
-        var errors = new List<string>();
-        var errorCodes = new List<string>();
+        var failures = new List<BatchEditFailure>();
         var resolvedTargets = new Dictionary<int, SyntaxNode>();
         foreach (var edit in edits)
         {
@@ -1438,22 +1422,20 @@ public class MemberRefactoringEngine
 
                 if (targetNode == null)
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): target not found.");
-                    errorCodes.Add(ToolErrorCode.NotFound);
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ToolErrorCode.NotFound, $"batchEdits[{edit.Index}] ({edit.TargetName}): target not found."));
                     continue;
                 }
                 resolvedTargets[edit.Index] = targetNode;
             }
-            catch (ToolException ex) // TODO throw-migration: batch aggregator, see ApplyModifierBatchAsync
+            catch (ToolException ex)
             {
-                errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
-                errorCodes.Add(ex.ErrorCode);
+                failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ex.ErrorCode, $"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}"));
             }
         }
 
-        if (errors.Count > 0)
+        if (failures.Count > 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors), ErrorCode = SharedErrorCode(errorCodes) };
+            throw new ToolBatchEditException(string.Join("\n", failures.Select(f => f.Message)), failures);
         }
 
         // Same-node collision: two edits on the identical declaration. A type and a member inside it are NOT a collision
@@ -1463,7 +1445,8 @@ public class MemberRefactoringEngine
         {
             if (seen.TryGetValue(kvp.Value, out var firstIndex))
             {
-                errors.Add($"batchEdits[{firstIndex}] and batchEdits[{kvp.Key}] resolve to the same target in '{filePath}'. Split these into separate calls.");
+                var laterTargetName = edits.First(e => e.Index == kvp.Key).TargetName;
+                failures.Add(new BatchEditFailure(kvp.Key, laterTargetName, ToolErrorCode.InvalidArgument, $"batchEdits[{firstIndex}] and batchEdits[{kvp.Key}] resolve to the same target in '{filePath}'. Split these into separate calls."));
             }
             else
             {
@@ -1471,9 +1454,9 @@ public class MemberRefactoringEngine
             }
         }
 
-        if (errors.Count > 0)
+        if (failures.Count > 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+            throw new ToolBatchEditException(string.Join("\n", failures.Select(f => f.Message)), failures);
         }
 
         var eol = EolUtilities.DetectNormalizableEol(sourceText);
@@ -1489,7 +1472,7 @@ public class MemberRefactoringEngine
                 var attrList = AttributeTextEditBuilder.ParseAttributeList(edit.ExistingAttribute);
                 if (attrList == null)
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): invalid attribute source.");
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ToolErrorCode.InvalidArgument, $"batchEdits[{edit.Index}] ({edit.TargetName}): invalid attribute source."));
                     continue;
                 }
                 try
@@ -1498,8 +1481,7 @@ public class MemberRefactoringEngine
                 }
                 catch (ToolInvalidArgumentException ex)
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
-                    errorCodes.Add(ex.ErrorCode);
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ex.ErrorCode, $"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}"));
                     continue;
                 }
 
@@ -1509,19 +1491,19 @@ public class MemberRefactoringEngine
             {
                 if (string.IsNullOrEmpty(edit.NewAttribute))
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): newAttribute is required for action 'replace'.");
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ToolErrorCode.InvalidArgument, $"batchEdits[{edit.Index}] ({edit.TargetName}): newAttribute is required for action 'replace'."));
                     continue;
                 }
                 var newAttrList = AttributeTextEditBuilder.ParseAttributeList(edit.NewAttribute);
                 if (newAttrList == null)
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): invalid new attribute source.");
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ToolErrorCode.InvalidArgument, $"batchEdits[{edit.Index}] ({edit.TargetName}): invalid new attribute source."));
                     continue;
                 }
                 var oldAttr = attrLists.SelectMany(al => al.Attributes).FirstOrDefault(a => GetAttributeName(a) == edit.ExistingAttribute);
                 if (oldAttr == null)
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): attribute '{edit.ExistingAttribute}' not found on target.");
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ToolErrorCode.InvalidArgument, $"batchEdits[{edit.Index}] ({edit.TargetName}): attribute '{edit.ExistingAttribute}' not found on target."));
                     continue;
                 }
                 try
@@ -1530,8 +1512,7 @@ public class MemberRefactoringEngine
                 }
                 catch (ToolInvalidArgumentException ex)
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}");
-                    errorCodes.Add(ex.ErrorCode);
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ex.ErrorCode, $"batchEdits[{edit.Index}] ({edit.TargetName}): {ex.Message}"));
                     continue;
                 }
 
@@ -1547,7 +1528,7 @@ public class MemberRefactoringEngine
                 }
                 if (targetNode is not MemberDeclarationSyntax memberTarget2)
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TargetName}): action 'remove' requires a declaration target.");
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TargetName, ToolErrorCode.InvalidArgument, $"batchEdits[{edit.Index}] ({edit.TargetName}): action 'remove' requires a declaration target."));
                     continue;
                 }
                 var removeEdits = AttributeTextEditBuilder.BuildRemoveEdits(edit.Index, memberTarget2, AttrMatches, sourceText);
@@ -1559,17 +1540,17 @@ public class MemberRefactoringEngine
             }
         }
 
-        if (errors.Count > 0)
+        if (failures.Count > 0)
         {
-            // errorCodes only holds the per-edit failures that carry a code (comment rejection); a code is reported only
-            // when EVERY collected error has one and they agree. Nothing has been written at this point: the batch aborts.
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors), ErrorCode = errorCodes.Count == errors.Count ? SharedErrorCode(errorCodes) : null };
+            // Nothing has been written at this point: the batch aborts.
+            throw new ToolBatchEditException(string.Join("\n", failures.Select(f => f.Message)), failures);
         }
 
         var updatedText = AttributeTextEditBuilder.TryApply(sourceText, textEdits, out var applyError);
         if (updatedText == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = applyError ?? "Attribute edits could not be applied." };
+            var overlap = new BatchEditFailure(-1, filePath.ToString(), ToolErrorCode.InvalidArgument, applyError ?? "Attribute edits could not be applied.");
+            throw new ToolBatchEditException(overlap.Message, new List<BatchEditFailure> { overlap });
         }
 
         return new DocumentEditResult
@@ -4914,21 +4895,16 @@ public class MemberRefactoringEngine
     {
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
-        if (document == null)
-        {
-            return new DocumentEditResult { Outcome = EditOutcome.DocumentNotFound, FilePath = filePath, Message = "// Document not found." };
-        }
+        var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = "// Cannot edit: syntax root not found." };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
-        var errors = new List<string>();
-        var errorCodes = new List<string>();
+        var failures = new List<BatchEditFailure>();
         var resolvedTargets = new Dictionary<int, BaseTypeDeclarationSyntax>();
         foreach (var edit in edits)
         {
@@ -4941,22 +4917,20 @@ public class MemberRefactoringEngine
                     (candidates, matches, failureMode) => SyntaxTargetResolver.BuildHintForCandidates(candidates, matches, failureMode))?.Node as BaseTypeDeclarationSyntax;
                 if (container == null)
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TypeName}): type not found.");
-                    errorCodes.Add(ToolErrorCode.NotFound);
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TypeName, ToolErrorCode.NotFound, $"batchEdits[{edit.Index}] ({edit.TypeName}): type not found."));
                     continue;
                 }
                 resolvedTargets[edit.Index] = container;
             }
-            catch (ToolException ex) // TODO throw-migration: batch aggregator, see ApplyModifierBatchAsync
+            catch (ToolException ex)
             {
-                errors.Add($"batchEdits[{edit.Index}] ({edit.TypeName}): {ex.Message}");
-                errorCodes.Add(ex.ErrorCode);
+                failures.Add(new BatchEditFailure(edit.Index, edit.TypeName, ex.ErrorCode, $"batchEdits[{edit.Index}] ({edit.TypeName}): {ex.Message}"));
             }
         }
 
-        if (errors.Count > 0)
+        if (failures.Count > 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors), ErrorCode = SharedErrorCode(errorCodes) };
+            throw new ToolBatchEditException(string.Join("\n", failures.Select(f => f.Message)), failures);
         }
 
         var seen = new Dictionary<BaseTypeDeclarationSyntax, int>();
@@ -4964,7 +4938,8 @@ public class MemberRefactoringEngine
         {
             if (seen.TryGetValue(kvp.Value, out var firstIndex))
             {
-                errors.Add($"batchEdits[{firstIndex}] and batchEdits[{kvp.Key}] both resolve to the same target in '{filePath}'. Split these into separate calls.");
+                var laterTargetName = edits.First(e => e.Index == kvp.Key).TypeName;
+                failures.Add(new BatchEditFailure(kvp.Key, laterTargetName, ToolErrorCode.InvalidArgument, $"batchEdits[{firstIndex}] and batchEdits[{kvp.Key}] both resolve to the same target in '{filePath}'. Split these into separate calls."));
             }
             else
             {
@@ -4972,9 +4947,9 @@ public class MemberRefactoringEngine
             }
         }
 
-        if (errors.Count > 0)
+        if (failures.Count > 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+            throw new ToolBatchEditException(string.Join("\n", failures.Select(f => f.Message)), failures);
         }
 
         // Text-span edits against the ORIGINAL text (same approach as ApplyAttributeBatchAsync). Folding ReplaceNode over
@@ -4989,7 +4964,7 @@ public class MemberRefactoringEngine
             {
                 if (container.BaseList?.Types.Any(t => t.ToString().Contains(edit.BaseTypeName)) == true)
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TypeName}): base type already exists.");
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TypeName, ToolErrorCode.InvalidArgument, $"batchEdits[{edit.Index}] ({edit.TypeName}): base type already exists."));
                     continue;
                 }
                 textEdits.Add(BaseTypeTextEditBuilder.BuildAddEdit(edit.Index, container, edit.BaseTypeName));
@@ -5000,7 +4975,7 @@ public class MemberRefactoringEngine
                 var removeEdit = BaseTypeTextEditBuilder.BuildRemoveEdit(edit.Index, container, edit.BaseTypeName);
                 if (removeEdit is null)
                 {
-                    errors.Add($"batchEdits[{edit.Index}] ({edit.TypeName}): base type '{edit.BaseTypeName}' not found.");
+                    failures.Add(new BatchEditFailure(edit.Index, edit.TypeName, ToolErrorCode.InvalidArgument, $"batchEdits[{edit.Index}] ({edit.TypeName}): base type '{edit.BaseTypeName}' not found."));
                     continue;
                 }
                 textEdits.Add(removeEdit.Value);
@@ -5008,15 +4983,16 @@ public class MemberRefactoringEngine
             }
         }
 
-        if (errors.Count > 0)
+        if (failures.Count > 0)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = string.Join("\n", errors) };
+            throw new ToolBatchEditException(string.Join("\n", failures.Select(f => f.Message)), failures);
         }
 
         var updatedText = AttributeTextEditBuilder.TryApply(sourceText, textEdits, out var overlapError);
         if (updatedText is null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.CannotEdit, FilePath = filePath, Message = overlapError ?? "Edits change overlapping source text. Split these into separate calls." };
+            var overlap = new BatchEditFailure(-1, filePath.ToString(), ToolErrorCode.InvalidArgument, overlapError ?? "Edits change overlapping source text. Split these into separate calls.");
+            throw new ToolBatchEditException(overlap.Message, new List<BatchEditFailure> { overlap });
         }
 
         return new DocumentEditResult

@@ -232,7 +232,17 @@ public class RefactoringStructuralImpl
                 pair.edit.LineBefore,
                 pair.edit.LineAfter)).ToList();
 
-            var updated = await _memberRefactoringEngine.ApplyModifierBatchAsync(filePathResolved, engineEdits, cancellationToken);
+            DocumentEditResult updated;
+            try
+            {
+                updated = await _memberRefactoringEngine.ApplyModifierBatchAsync(filePathResolved, engineEdits, cancellationToken);
+            }
+            catch (ToolException ex)
+            {
+                perEditErrors.Add(ex.Message);
+                engineErrorCodes.Add(ex.ErrorCode);
+                continue;
+            }
             if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
             {
                 perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
@@ -363,7 +373,17 @@ public class RefactoringStructuralImpl
                 pair.edit.LineBefore,
                 pair.edit.LineAfter)).ToList();
 
-            var updated = await _memberRefactoringEngine.ApplyAttributeBatchAsync(filePathResolved, engineEdits, cancellationToken);
+            DocumentEditResult updated;
+            try
+            {
+                updated = await _memberRefactoringEngine.ApplyAttributeBatchAsync(filePathResolved, engineEdits, cancellationToken);
+            }
+            catch (ToolException ex)
+            {
+                perEditErrors.Add(ex.Message);
+                engineErrorCodes.Add(ex.ErrorCode);
+                continue;
+            }
             if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
             {
                 perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
@@ -491,7 +511,17 @@ public class RefactoringStructuralImpl
                 pair.edit.LineBefore,
                 pair.edit.LineAfter)).ToList();
 
-            var updated = await _memberRefactoringEngine.ApplyBaseTypeBatchAsync(filePathResolved, engineEdits, cancellationToken);
+            DocumentEditResult updated;
+            try
+            {
+                updated = await _memberRefactoringEngine.ApplyBaseTypeBatchAsync(filePathResolved, engineEdits, cancellationToken);
+            }
+            catch (ToolException ex)
+            {
+                perEditErrors.Add(ex.Message);
+                engineErrorCodes.Add(ex.ErrorCode);
+                continue;
+            }
             if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
             {
                 perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");

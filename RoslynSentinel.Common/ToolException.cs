@@ -324,3 +324,30 @@ public sealed class GlobSyntaxException : ToolException
     {
     }
 }
+
+/// <summary>One failed edit inside a rejected batch: its position in the batch, the target it named, and the failure.</summary>
+public sealed record BatchEditFailure(int Index, string Target, string ErrorCode, string Message);
+
+/// <summary>
+/// A batch of edits was rejected because one or more of its edits failed. Carries each failed edit in
+/// <see cref="Failures"/>. Maps to the shared failure code when every failed edit has the same one, otherwise
+/// <see cref="ToolErrorCode.InvalidArgument"/>.
+/// </summary>
+public sealed class ToolBatchEditException : ToolException
+{
+    public override string ErrorCode
+        => Failures.Count > 0 && Failures.Select(f => f.ErrorCode).Distinct().Count() == 1
+            ? Failures[0].ErrorCode
+            : ToolErrorCode.InvalidArgument;
+
+    public ToolBatchEditException(string message, IReadOnlyList<BatchEditFailure> failures) : base(message)
+    {
+        Failures = failures;
+    }
+
+    /// <summary>The failed edits, in batch order.</summary>
+    public IReadOnlyList<BatchEditFailure> Failures { get; }
+
+    /// <summary>The failed edits as objects; null when there are none.</summary>
+    public override IReadOnlyList<object>? StructuredDetail => Failures.Count == 0 ? null : Failures.Cast<object>().ToList();
+}
