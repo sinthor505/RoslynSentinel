@@ -51,6 +51,12 @@ function Get-RoslynSentinelInstancesRoot {
         $candidate = Join-Path $env:USERPROFILE 'RoslynSentinelInstances'
     }
     if (-not $candidate) { return $null }
+    # MCP "env" blocks pass %VAR% literally; expand it, and refuse a relative root (GetFullPath would
+    # silently resolve it against the current directory, i.e. nest the layout inside the repo).
+    $candidate = [Environment]::ExpandEnvironmentVariables($candidate)
+    if (-not [System.IO.Path]::IsPathRooted($candidate) -or $candidate -match '%[^%]+%') {
+        throw "RoslynSentinel instances root '$candidate' is not an absolute path (unexpanded %VAR% or relative). Use a full path such as C:\Users\<you>\RoslynSentinelInstances."
+    }
     return [System.IO.Path]::GetFullPath($candidate).TrimEnd('\')
 }
 
