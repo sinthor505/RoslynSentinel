@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 
 #pragma warning disable CS8618
@@ -56,7 +57,7 @@ public class Service
     }
 
     [Test]
-    public async Task OptimizeToValueTask_MultipleAwaits_ReturnsWarning()
+    public async Task OptimizeToValueTask_MultipleAwaits_ThrowsTargetIneligible()
     {
         SetSource(@"
 using System.Threading.Tasks;
@@ -70,16 +71,19 @@ public class Service
     }
 }", "Service.cs");
 
-        var result = await _engine.OptimizeToValueTaskAsync("Service.cs", "DoWorkAsync");
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _engine.OptimizeToValueTaskAsync("Service.cs", "DoWorkAsync");
+        });
 
-        Assert.That(result.UpdatedText!, Does.StartWith("// WARNING:"),
-            "Method with 2+ awaits must produce a WARNING comment.");
-        Assert.That(result.UpdatedText, Does.Contain("2 await"),
-            "WarningDetails should mention the count of await expressions.");
+        Assert.That(ex!.Message, Does.Contain("Cannot safely convert to ValueTask"),
+            "Method with 2+ awaits must be rejected as target-ineligible.");
+        Assert.That(ex.Message, Does.Contain("2 await"),
+            "Exception message should mention the count of await expressions.");
     }
 
     [Test]
-    public async Task OptimizeToValueTask_TryCatch_ReturnsWarning()
+    public async Task OptimizeToValueTask_TryCatch_ThrowsTargetIneligible()
     {
         SetSource(@"
 using System.Threading.Tasks;
@@ -97,12 +101,15 @@ public class Service
     }
 }", "Service.cs");
 
-        var result = await _engine.OptimizeToValueTaskAsync("Service.cs", "RunAsync");
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _engine.OptimizeToValueTaskAsync("Service.cs", "RunAsync");
+        });
 
-        Assert.That(result.UpdatedText!, Does.StartWith("// WARNING:"),
-            "Method with try/catch must produce a WARNING comment.");
-        Assert.That(result.UpdatedText, Does.Contain("try/catch"),
-            "WarningDetails should mention try/catch as the reason.");
+        Assert.That(ex!.Message, Does.Contain("Cannot safely convert to ValueTask"),
+            "Method with try/catch must be rejected as target-ineligible.");
+        Assert.That(ex.Message, Does.Contain("try/catch"),
+            "Exception message should mention try/catch as the reason.");
     }
 
     [Test]

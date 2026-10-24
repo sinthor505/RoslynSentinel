@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 
 namespace RoslynSentinel.Tests.Battery.Advanced;
@@ -45,7 +46,7 @@ public class MyService
     }
 
     [Test]
-    public async Task OptimizeToValueTask_MethodWithMultipleAwaits_ReturnsWarning()
+    public async Task OptimizeToValueTask_MethodWithMultipleAwaits_ThrowsTargetIneligible()
     {
         const string source = @"
 using System.Threading.Tasks;
@@ -58,8 +59,11 @@ public class MyService
     }
 }";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("MyService.cs", source)]));
-        var result = await _engine.OptimizeToValueTaskAsync("MyService.cs", "ProcessAsync");
-        Assert.That(result.UpdatedText, Does.Contain("WARNING"), "method with multiple awaits should produce a warning comment");
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _engine.OptimizeToValueTaskAsync("MyService.cs", "ProcessAsync");
+        });
+        Assert.That(ex!.Message, Does.Contain("Cannot safely convert to ValueTask"), "method with multiple awaits should be rejected as target-ineligible");
     }
 }
 

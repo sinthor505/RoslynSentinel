@@ -69,23 +69,13 @@ public class AsyncOptimizationEngine
         var awaitCount = methodNode.DescendantNodes().OfType<AwaitExpressionSyntax>().Count();
         if (awaitCount > 1)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotOptimize,
-                UpdatedText = $"// WARNING: Cannot safely convert to ValueTask: method has {awaitCount} await expressions. ValueTask should only be used with 0-1 awaits.\n{root!.ToFullString()}",
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException($"Cannot safely convert to ValueTask: method has {awaitCount} await expressions. ValueTask should only be used with 0-1 awaits.");
         }
 
         var hasTryCatch = methodNode.DescendantNodes().OfType<TryStatementSyntax>().Any();
         if (hasTryCatch)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotOptimize,
-                UpdatedText = $"// WARNING: Cannot safely convert to ValueTask: method contains try/catch. ValueTask cannot be awaited multiple times.\n{root!.ToFullString()}",
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException("Cannot safely convert to ValueTask: method contains try/catch. ValueTask cannot be awaited multiple times.");
         }
 
         var returnTypeStr = methodNode.ReturnType.ToString();
@@ -112,12 +102,7 @@ public class AsyncOptimizationEngine
         }
         else
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotOptimize,
-                UpdatedText = $"// WARNING: Cannot safely convert to ValueTask: method does not return Task.\n{root!.ToFullString()}",
-                FilePath = filePath
-            };
+            throw new ToolTargetIneligibleException("Cannot safely convert to ValueTask: method does not return Task.");
         }
 
         var newMethodNode = methodNode.WithReturnType(newReturnType);
@@ -135,7 +120,7 @@ public class AsyncOptimizationEngine
         if (methodSymbol?.ContainingType?.Interfaces.Length > 0)
         {
             var interfaceNames = string.Join(", ", methodSymbol.ContainingType.Interfaces.Select(i => i.Name));
-            return new DocumentEditResult { Outcome = EditOutcome.CannotOptimize, Message = $"// WARNING: This method implements interface(s): {interfaceNames}. Update the interface signature(s) to also use ValueTask.\n{newRoot.ToFullString()}", FilePath = filePath };
+            throw new ToolTargetIneligibleException($"This method implements interface(s): {interfaceNames}. Update the interface signature(s) to also use ValueTask.");
         }
 
         return new DocumentEditResult { Outcome = EditOutcome.Modified, UpdatedText = newRoot.ToFullString(), FilePath = filePath };
@@ -153,7 +138,7 @@ public class AsyncOptimizationEngine
         var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null || methodNode.Body == null)
         {
-            return new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = $"// ErrorDetails: Method '{methodName}' not found or has no block body (expression-bodied methods are not supported).", FilePath = filePath };
+            throw new ToolNotFoundException($"Method '{methodName}' not found or has no block body (expression-bodied methods are not supported).", "method", methodName);
         }
 
         // This requires complex data flow analysis to ensure no dependencies between awaited tasks.
@@ -843,7 +828,7 @@ public class AsyncOptimizationEngine
     /// <returns>
     /// <see cref="EditOutcome.Modified"/> with updated text when bridge calls were rewritten;
     /// <see cref="EditOutcome.NoCandidatesFound"/> when no Asyncify-bridge sync calls were found in the body;
-    /// <see cref="EditOutcome.TargetNotFound"/> when the method could not be located.
+    /// Throws <see cref="ToolNotFoundException"/> when the method could not be located.
     /// </returns>
     public async Task<DocumentEditResult> RewriteObsoleteCallsInAsyncMethodAsync(
         FilePathWrapper filePath,
@@ -866,7 +851,7 @@ public class AsyncOptimizationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult(EditOutcome.Error, filePath);
+            throw new ToolInvalidArgumentException("Syntax root is unavailable for the document.");
         }
 
         var methodNode = root.DescendantNodes()
@@ -875,7 +860,7 @@ public class AsyncOptimizationEngine
 
         if (methodNode == null)
         {
-            return new DocumentEditResult(EditOutcome.TargetNotFound, filePath);
+            throw new ToolNotFoundException($"Method '{asyncMethodName}' not found in document.", "method", asyncMethodName);
         }
 
         var body = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody;
@@ -1031,13 +1016,7 @@ public class AsyncOptimizationEngine
 
         if (awaitExprs.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root.ToFullString(),
-                FilePath = filePath,
-                Message = "// No await expressions found that require ConfigureAwait."
-            };
+            return new DocumentEditResult { Outcome = EditOutcome.NoCandidatesFound, FilePath = filePath, Message = "No await expressions found that require ConfigureAwait.", UpdatedText = root.ToFullString() };
         }
 
         var newRoot = root.ReplaceNodes(awaitExprs, (orig, _) =>
@@ -1077,13 +1056,7 @@ public class AsyncOptimizationEngine
 
         if (configureAwaitInvocations.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                UpdatedText = root.ToFullString(),
-                FilePath = filePath,
-                Message = "// No ConfigureAwait invocations found."
-            };
+            return new DocumentEditResult { Outcome = EditOutcome.NoCandidatesFound, FilePath = filePath, Message = "No ConfigureAwait invocations found.", UpdatedText = root.ToFullString() };
         }
 
         var newRoot = root.ReplaceNodes(configureAwaitInvocations, (orig, _) =>
@@ -1111,24 +1084,14 @@ public class AsyncOptimizationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
-            };
+            throw new ToolInvalidArgumentException("Failed to get syntax root for the document.");
         }
 
         var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
         .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Method '{methodName}' not found."
-            };
+            throw new ToolNotFoundException($"Method '{methodName}' not found.", "method", methodName);
         }
 
         var returnTypeStr = methodNode.ReturnType.ToString().Trim();
@@ -1164,12 +1127,7 @@ public class AsyncOptimizationEngine
 
         if (innerType == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Return type '{returnTypeStr}' is not supported. Method must return Task<List<T>>, Task<IEnumerable<T>>, or List<T>."
-            };
+            throw new ToolTargetIneligibleException("Return type is not supported. Method must return Task<List<T>>, Task<IEnumerable<T>>, or List<T>.");
         }
 
         var newReturnType = SyntaxFactory.ParseTypeName($"IAsyncEnumerable<{innerType}>");
@@ -1289,24 +1247,14 @@ public class AsyncOptimizationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// ErrorDetails: Failed to get syntax root."
-            };
+            throw new ToolInvalidArgumentException("Failed to get syntax root.");
         }
 
         var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
             .FirstOrDefault(m => m.Identifier.Text == methodName);
         if (methodNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Method '{methodName}' not found in file.\n// Tip: method names are case-sensitive. Try the exact name as declared in source."
-            };
+            throw new ToolNotFoundException($"Method '{methodName}' not found in file. Method names are case-sensitive; use the exact name as declared in source.", "method", methodName);
         }
 
         // Check if method already has a CancellationToken parameter
@@ -3009,13 +2957,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            result.Error = "Failed to get syntax root.";
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.Error,
-                FilePath = filePath,
-                Message = result.Error
-            };
+            throw new ToolInvalidArgumentException("Failed to get syntax root.");
         }
 
         var methodNode = root.DescendantNodes()
@@ -3024,13 +2966,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
         if (methodNode == null)
         {
-            result.MethodFound = false;
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.DocumentNotFound,
-                FilePath = filePath,
-                Message = $"Method '{methodName}' not found in file '{filePath}'."
-            };
+            throw new ToolNotFoundException($"Method '{methodName}' not found in file.", "method", methodName);
         }
 
         result.MethodFound = true;
@@ -3045,13 +2981,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
         if (ctParam == null)
         {
-            result.Error = "Method does not have a CancellationToken parameter";
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.Error,
-                FilePath = filePath,
-                Message = result.Error
-            };
+            throw new ToolTargetIneligibleException("Method does not have a CancellationToken parameter.");
         }
 
         var ctParamName = ctParam.Identifier.Text;
@@ -3063,12 +2993,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var body = (SyntaxNode?)methodNode.Body ?? methodNode.ExpressionBody;
         if (body == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.Error,
-                FilePath = filePath,
-                Message = "Method body not found."
-            };
+            throw new ToolTargetIneligibleException("Method has no body to propagate into.");
         }
 
         var invocations = body.DescendantNodes()
@@ -3258,12 +3183,7 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
         if (replacements.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "No eligible call sites found."
-            };
+            return new DocumentEditResult { Outcome = EditOutcome.NoCandidatesFound, FilePath = filePath, Message = "No eligible call sites found.", UpdatedText = root.ToFullString() };
         }
 
         // Apply all replacements in one pass
@@ -3297,13 +3217,13 @@ internal sealed class MigrationCandidateAttribute : Attribute
                                .FirstOrDefault();
         if (document == null)
         {
-            return ($"// ErrorDetails: File '{filePath}' not found in the loaded solution.", fileResult);
+            throw new ToolNotFoundException("File not found in the loaded solution.");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return ("// ErrorDetails: Failed to get syntax root.", fileResult);
+            throw new ToolInvalidArgumentException("Failed to get syntax root.");
         }
 
         SemanticModel? semanticModel = null;

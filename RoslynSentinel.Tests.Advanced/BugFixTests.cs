@@ -2002,7 +2002,7 @@ public class TargetDto
         // --- Bug: optimize_independent_awaits throws when method not found instead of returning message ---
         [Test]
         [Category("AsyncOptimizationEngine")] // sentinel:auto-category
-        public async Task OptimizeIndependentAwaits_WhenMethodNotFound_ReturnsErrorMessage()
+        public async Task OptimizeIndependentAwaits_WhenMethodNotFound_ThrowsNotFound()
         {
             const string src = @"public class MyService
 {
@@ -2012,9 +2012,11 @@ public class TargetDto
     }
 }";
             SetSource(src, "MyService.cs");
-            var result = await _asyncEngine.OptimizeIndependentAwaitsAsync("MyService.cs", "NonExistentMethod");
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound), "Missing method should be reported as TargetNotFound, not thrown");
-            Assert.That(result.Message, Does.Contain("Method 'NonExistentMethod' not found"), "Should name the missing method in the message");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            {
+                await _asyncEngine.OptimizeIndependentAwaitsAsync("MyService.cs", "NonExistentMethod");
+            });
+            Assert.That(ex!.Message, Does.Contain("Method 'NonExistentMethod' not found"), "Should name the missing method in the exception message");
         }
 
         [Test]
@@ -2039,16 +2041,18 @@ public class TargetDto
         // --- Bug: add_cancellation_token throws when method not found, and has trailing space ---
         [Test]
         [Category("AsyncOptimizationEngine")] // sentinel:auto-category
-        public async Task AddCancellationToken_WhenMethodNotFound_ReturnsErrorMessage()
+        public async Task AddCancellationToken_WhenMethodNotFound_ThrowsNotFound()
         {
             const string src = @"public class Loader
 {
     public async Task LoadAsync() => await Task.Delay(1);
 }";
             SetSource(src, "Loader.cs");
-            var result = await _asyncEngine.AddCancellationTokenToMethodAsync("Loader.cs", "NonExistentMethod");
-            Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound), "Missing method should be reported as TargetNotFound, not thrown");
-            Assert.That(result.Message, Does.Contain("Method 'NonExistentMethod' not found"), "Should name the missing method in the message");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            {
+                await _asyncEngine.AddCancellationTokenToMethodAsync("Loader.cs", "NonExistentMethod");
+            });
+            Assert.That(ex!.Message, Does.Contain("Method 'NonExistentMethod' not found"), "Should name the missing method in the exception message");
         }
 
         [Test]

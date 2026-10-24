@@ -87,9 +87,10 @@ public class Counter
 
     // OptimizeToValueTask puts its reason in UpdatedText ("// WARNING: ..." ahead of the whole file) and leaves
     // Message empty. The pre-guard tool shipped that text as the new file; the guard first produced an empty
-    // "(CannotOptimize)." message. Now: the tool's hint, plus the one-line reason, plus no source.
+    // "(CannotOptimize)." message. Now the engine throws ToolTargetIneligibleException, which the tool maps to
+    // IsError with ErrorCode TargetIneligible and the engine's one-line reason, plus no source.
     [Test]
-    public async Task OptimizeToValueTask_TooManyAwaits_IsTargetIneligibleWithHintAndTheEnginesReason()
+    public async Task OptimizeToValueTask_TooManyAwaits_IsTargetIneligibleWithTheEnginesReason()
     {
         var path = SetSource("Svc.cs", "using System.Threading.Tasks;\npublic class Svc\n{\n    public async Task<int> Work()\n    {\n        await Task.Delay(1);\n        await Task.Delay(2);\n        return 1;\n    }\n}");
 
@@ -98,7 +99,6 @@ public class Counter
         Assert.That(result.IsError, Is.True, "the warning-prefixed whole file must not be returned as the transformed source");
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
         var message = result.ErrorData!.Message;
-        Assert.That(message, Does.Contain("The method must return Task or Task<T> and be async. Use GetFileOutline to verify."));
         Assert.That(message, Does.Contain("Cannot safely convert to ValueTask: method has 2 await expressions."));
         Assert.That(message, Does.Not.Contain("public class Svc"));
         Assert.That(message, Does.Not.Contain("(CannotOptimize)."), "the empty-reason message of the reviewed-bad guard");
@@ -144,14 +144,17 @@ public class Counter
     }
 
     [Test]
-    public async Task OptimizeIndependentAwaits_MethodNotFound_StaysASuccessWithTheToolsMessage()
+    public async Task OptimizeIndependentAwaits_MethodNotFound_IsNotFoundError()
     {
         var path = SetSource("Counter.cs", CounterWithoutTargetMethod);
 
         var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Missing", "optimize_independent_awaits");
 
-        Assert.That(result.IsError, Is.False, result.ErrorData?.Message);
-        Assert.That(result.SuccessData, Is.EqualTo($"No sequential independent awaits found to parallelize in 'Missing' in '{path}'."));
+        Assert.That(result.IsError, Is.True, "a missing method must be an error, not a success message");
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain("Method 'Missing' not found"));
+        Assert.That(message, Does.Not.Contain("public class Counter"), "the error must not echo the file source");
     }
 
     // The pre-guard tool used any non-empty UpdatedText, and this engine returns the unchanged file with a
