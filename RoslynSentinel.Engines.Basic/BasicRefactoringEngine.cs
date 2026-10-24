@@ -1327,7 +1327,7 @@ public class BasicRefactoringEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+            throw new ToolNotFoundException($"File '{filePath}' not found in the loaded solution. Searched: documents of all loaded projects. Next: ListAll or Search(mode: text) to find the exact file path.", "file", filePath.ToString());
         }
 
         var root = (await document.GetSyntaxRootAsync(cancellationToken))!;
@@ -1343,22 +1343,23 @@ public class BasicRefactoringEngine
         }
 
         method ??= root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method?.Body == null)
+        if (method == null)
         {
-            return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: GetFileOutline on '{filePath}' to list its methods, or Search(mode: method, query: '{methodName}').", "method", methodName);
+        }
+
+        if (method.Body == null)
+        {
+            throw new ToolTargetIneligibleException($"Method '{methodName}' in '{filePath}' has no body (abstract, extern or interface member), so control-flow analysis does not apply. Next: pick a method with a body from GetFileOutline.");
         }
 
         var model = await document.GetSemanticModelAsync(cancellationToken);
         if (model == null)
         {
-            return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
+            throw new ToolInvalidArgumentException($"Semantic model for '{filePath}' is unavailable. Next: confirm the project compiles with Build.");
         }
 
-        var flow = model.AnalyzeControlFlow(method.Body);
-        if (flow == null)
-        {
-            return new ControlFlowSummary(methodName, false, false, true, new List<string>(), new List<string>(), 0);
-        }
+        var flow = model.AnalyzeControlFlow(method.Body)!;
 
         var returnPoints = flow.ReturnStatements.Select(r => r.ToString().Trim()).ToList();
         var throwPoints = method.Body.DescendantNodes().OfType<ThrowStatementSyntax>().Select(t => t.ToString().Trim()).ToList();
@@ -1372,7 +1373,7 @@ public class BasicRefactoringEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>());
+            throw new ToolNotFoundException($"File '{filePath}' not found in the loaded solution. Searched: documents of all loaded projects. Next: ListAll or Search(mode: text) to find the exact file path.", "file", filePath.ToString());
         }
 
         var root = (await document.GetSyntaxRootAsync(cancellationToken))!;
@@ -1388,15 +1389,20 @@ public class BasicRefactoringEngine
         }
 
         method ??= root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method?.Body == null)
+        if (method == null)
         {
-            return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>());
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: GetFileOutline on '{filePath}' to list its methods, or Search(mode: method, query: '{methodName}').", "method", methodName);
+        }
+
+        if (method.Body == null)
+        {
+            throw new ToolTargetIneligibleException($"Method '{methodName}' in '{filePath}' has no body (abstract, extern or interface member), so data-flow analysis does not apply. Next: pick a method with a body from GetFileOutline.");
         }
 
         var model = await document.GetSemanticModelAsync(cancellationToken);
         if (model == null)
         {
-            return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>());
+            throw new ToolInvalidArgumentException($"Semantic model for '{filePath}' is unavailable. Next: confirm the project compiles with Build.");
         }
 
         DataFlowAnalysis flow;
@@ -1404,6 +1410,7 @@ public class BasicRefactoringEngine
         {
             flow = model.AnalyzeDataFlow(method.Body)!;
         }
+        // TODO bare catch swallows Roslyn failures into a warning string; throw ToolTargetIneligibleException instead
         catch
         {
             return new DataFlowSummary(methodName, new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string>(), new List<string> { "AnalyzeDataFlow failed: body may contain unsupported constructs." });
@@ -1779,14 +1786,14 @@ public class BasicRefactoringEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return (EditOutcome.DocumentNotFound, "// Document not found.", null);
+            throw new ToolNotFoundException($"File '{filePath}' not found in the loaded solution. Searched: documents of all loaded projects. Next: ListAll or Search(mode: text) to find the exact file path.", "file", filePath.ToString());
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return (EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.", null);
+            throw new ToolInvalidArgumentException($"Syntax root of '{filePath}' is unavailable. Next: confirm the file is a plain .cs source file with GetFileOutline.");
         }
 
         SyntaxNode? target;
@@ -1797,13 +1804,13 @@ public class BasicRefactoringEngine
 
         if (target == null)
         {
-            return (EditOutcome.TargetNotFound, "// Cannot edit: target not found.", null);
+            throw new ToolNotFoundException($"Target '{targetName}' not found in '{filePath}'. Searched: symbols named '{targetName}' in the file. Next: Search(mode: symbol, query: '{targetName}') or GetFileOutline on '{filePath}'.", "symbol", targetName);
         }
 
         var docTrivia = target.GetLeadingTrivia().FirstOrDefault(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
         if (docTrivia == default)
         {
-            return (EditOutcome.NoCandidatesFound, "// No summary comment present.", null);
+            return (EditOutcome.NoCandidatesFound, $"No summary comment present on '{targetName}' in '{filePath}'. Next: AddSummaryComment to add one.", null);
         }
 
         var lines = docTrivia.ToFullString().Split('\n').Select(l => l.Trim().TrimStart('/').Trim()).Where(l => l.Length > 0 && !l.StartsWith("<summary>") && !l.StartsWith("</summary>")).ToList();

@@ -170,9 +170,7 @@ public class RefactoringSignatureImpl
         {
             if (operation == AddRemoveViewAction.view)
             {
-                var (outcome, message, parameters) = await _memberRefactoringEngine.GetMethodParametersAsync(filePathResolved, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit or EditOutcome.TargetNotFound)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"MethodSignature: {message}") };
+                var (_, _, parameters) = await _memberRefactoringEngine.GetMethodParametersAsync(filePathResolved, methodName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MethodSignatureViewResult(parameters) };
             }
 
@@ -347,9 +345,7 @@ public class RefactoringSignatureImpl
         {
             if (operation == AddRemoveViewAction.view)
             {
-                var (outcome, message, parameters) = await _memberRefactoringEngine.GetConstructorParametersAsync(filePath: filePathResolved, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"ConstructorParameter: {message}") };
+                var (_, _, parameters) = await _memberRefactoringEngine.GetConstructorParametersAsync(filePath: filePathResolved, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new ConstructorParameterViewResult(parameters) };
             }
 

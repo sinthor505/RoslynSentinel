@@ -735,7 +735,7 @@ public class CodeGenerationEngine
 
     // ── GenerateDecoratorClass ────────────────────────────────────────────────
 
-    public async Task<DecoratorResult?> GenerateDecoratorClassAsync(
+    public async Task<DecoratorResult> GenerateDecoratorClassAsync(
         string interfaceName,
         string decoratorPrefix = "Logging",
         string? projectName = null,
@@ -768,7 +768,11 @@ public class CodeGenerationEngine
 
         if (interfaceSymbol == null)
         {
-            return null;
+            var scope = projectName != null ? $"project '{projectName}'" : "all loaded projects";
+            throw new ToolNotFoundException(
+                $"Interface '{interfaceName}' not found in {scope}. Searched: interface type declarations named '{interfaceName}' in {scope}. Ensure the interface name matches exactly (including leading 'I') and is part of the loaded solution. Next: Search(mode: interface, query: '{interfaceName}') to confirm the name.",
+                "interface",
+                interfaceName);
         }
 
         var ns = interfaceSymbol.ContainingNamespace?.IsGlobalNamespace == true

@@ -1155,7 +1155,7 @@ public class SymbolNavigationEngine
         return token.Parent?.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().FirstOrDefault()?.Identifier.Text;
     }
 
-    public async Task<CallGraphNode?> GetCallGraphAsync(
+    public async Task<CallGraphNode> GetCallGraphAsync(
         FilePathWrapper filePath,
         string methodName,
         int maxDepth = 3,
@@ -1168,19 +1168,19 @@ public class SymbolNavigationEngine
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return null;
+            throw new ToolNotFoundException($"File '{filePath}' is not part of the loaded solution. Ensure the file is part of the loaded solution, then retry with its exact path.", "file", $"{filePath}");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return null;
+            throw new ToolInvalidArgumentException($"Syntax root is unavailable for '{filePath}'; the file did not parse.");
         }
 
         var model = await document.GetSemanticModelAsync(cancellationToken);
         if (model == null)
         {
-            return null;
+            throw new ToolInvalidArgumentException($"Semantic model is unavailable for '{filePath}'; the file could not be analysed.");
         }
 
         // Prefer class method over interface method when both exist in the same file
@@ -1190,13 +1190,13 @@ public class SymbolNavigationEngine
             ?? methodDecls.FirstOrDefault();
         if (methodDecl == null)
         {
-            return null;
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Ensure the method name exactly matches (case-sensitive). Next: Search(mode: method, query: '{methodName}') or GetFileOutline to list available methods in the file.", "method", methodName);
         }
 
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
         if (methodSymbol == null)
         {
-            return null;
+            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' has no resolvable symbol. Next: GetFileOutline to confirm the method declaration.", "method", methodName);
         }
 
         var visited = new HashSet<string>();
@@ -1295,7 +1295,7 @@ public class SymbolNavigationEngine
         return node;
     }
 
-    public async Task<ReverseCallGraphNode?> GetReverseCallGraphAsync(
+    public async Task<ReverseCallGraphNode> GetReverseCallGraphAsync(
         FilePathWrapper filePath,
         string methodName,
         int maxDepth = 3,
@@ -1308,19 +1308,19 @@ public class SymbolNavigationEngine
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return null;
+            throw new ToolNotFoundException($"File '{filePath}' is not part of the loaded solution. Ensure the file is part of the loaded solution, then retry with its exact path.", "file", $"{filePath}");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return null;
+            throw new ToolInvalidArgumentException($"Syntax root is unavailable for '{filePath}'; the file did not parse.");
         }
 
         var model = await document.GetSemanticModelAsync(cancellationToken);
         if (model == null)
         {
-            return null;
+            throw new ToolInvalidArgumentException($"Semantic model is unavailable for '{filePath}'; the file could not be analysed.");
         }
 
         // Prefer class method over interface method when both exist in the same file
@@ -1330,13 +1330,13 @@ public class SymbolNavigationEngine
             ?? methodDecls2.FirstOrDefault();
         if (methodDecl == null)
         {
-            return null;
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Ensure the method name exactly matches (case-sensitive). Next: Search(mode: method, query: '{methodName}') or GetFileOutline to list available methods in the file.", "method", methodName);
         }
 
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
         if (methodSymbol == null)
         {
-            return null;
+            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' has no resolvable symbol. Next: GetFileOutline to confirm the method declaration.", "method", methodName);
         }
 
         var visited = new HashSet<string>();
@@ -2585,7 +2585,7 @@ public class SymbolNavigationEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return (EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.", []);
+            throw new ToolInvalidArgumentException($"Syntax root or source text is unavailable for '{filePath}'; the file did not parse.");
         }
 
         var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, containerName, cancellationToken)
@@ -2607,9 +2607,10 @@ public class SymbolNavigationEngine
 
         if (containerNode == null || containerNode is not TypeDeclarationSyntax typeDecl)
         {
-            return (EditOutcome.CannotEdit, "// Cannot edit: container not found.", []);
+            throw new ToolNotFoundException($"Container '{containerName}' was not found in '{filePath}'. Searched: class, interface, struct, record and enum declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. Next: GetFileOutline to confirm the type name, or Search(mode: text, query: '{containerName}').", "container", containerName);
         }
 
+        // TODO tuple outcome slot is always Modified; return only the list
         var lines = sourceText.Lines;
         var result = typeDecl.Members.Select(m =>
         {

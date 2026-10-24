@@ -174,9 +174,7 @@ public class RefactoringExtractionDocsImpl
         {
             if (operation == AddRemoveViewAction.view)
             {
-                var (outcome, message, text) = await _refactoringEngine.GetSummaryCommentAsync(filePathResolved, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken);
-                if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.Exception, $"SummaryComment: {message}") };
+                var (_, _, text) = await _refactoringEngine.GetSummaryCommentAsync(filePathResolved, targetName, contextSnippet, lineBefore, lineAfter, containingTypeName, cancellationToken);
                 return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new SummaryCommentViewResult(text) };
             }
 

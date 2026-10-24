@@ -159,10 +159,9 @@ public class MemberRefactoringEngine
 
     /// <summary>
     /// Resolves the class an AddConstructorParameter edit targets. Shared by the single-file path and the
-    /// callSiteFixups path so both locate the class identically. Returns the class, or a CannotEdit result
-    /// describing why it could not be resolved.
+    /// callSiteFixups path so both locate the class identically. Returns the class; throws ToolNotFoundException when it cannot be resolved.
     /// </summary>
-    private (ClassDeclarationSyntax? Class, DocumentEditResult? Error) ResolveAddConstructorTargetClass(SyntaxNode root, SourceText sourceText, FilePathWrapper filePath, string className, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken)
+    private ClassDeclarationSyntax ResolveAddConstructorTargetClass(SyntaxNode root, SourceText sourceText, FilePathWrapper filePath, string className, string? contextSnippet, string? lineBefore, string? lineAfter, CancellationToken cancellationToken)
     {
         BaseTypeDeclarationSyntax? classNode;
         var typeCandidates = SyntaxTargetResolver.ResolveCandidates(root, sourceText, className, cancellationToken)
@@ -173,11 +172,10 @@ public class MemberRefactoringEngine
 
         if (classNode is not ClassDeclarationSyntax classDecl)
         {
-            // TODO: the Error tuple slot is now always null; drop it once AddConstructorParameterWithCallSitesAsync stops destructuring it.
             throw new ToolNotFoundException("Cannot edit: class not found.", "class", className);
         }
 
-        return (classDecl, null);
+        return classDecl;
     }
 
     public async Task<DocumentEditResult> AddConstructorParameterAsync(FilePathWrapper filePath, string className, string paramName, string paramType, string? fieldName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default, string? defaultValue = null, bool nullDefault = false)
@@ -208,11 +206,7 @@ public class MemberRefactoringEngine
             throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
-        var (classDecl, resolveError) = ResolveAddConstructorTargetClass(root, sourceText, filePath, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
-        if (classDecl == null)
-        {
-            return resolveError!;
-        }
+        var classDecl = ResolveAddConstructorTargetClass(root, sourceText, filePath, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
         // Derive the backing field name, disambiguating from paramName so the generated
         // assignment can never degenerate into a no-op self-assignment (e.g. `stopwatch = stopwatch;`
@@ -339,11 +333,7 @@ public class MemberRefactoringEngine
             throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
-        var (classDecl, resolveError) = ResolveAddConstructorTargetClass(root, sourceText, filePath, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
-        if (classDecl == null)
-        {
-            return new AddConstructorParameterCascadeResult(resolveError!, new Dictionary<FilePathWrapper, string>(), [], null, 0, 0);
-        }
+        var classDecl = ResolveAddConstructorTargetClass(root, sourceText, filePath, className, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
         var targetCtorDecl = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
         if (targetCtorDecl != null && targetCtorDecl.Modifiers.Any(SyntaxKind.StaticKeyword))
@@ -551,14 +541,14 @@ public class MemberRefactoringEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return (EditOutcome.DocumentNotFound, "// Document not found.", []);
+            throw new ToolNotFoundException($"Document '{filePath}' was not found in the loaded solution. Next: GetFileOutline on the file to confirm its path.", "file", $"{filePath}");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return (EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.", []);
+            throw new ToolInvalidArgumentException($"Syntax root or source text is unavailable for '{filePath}'; the file did not parse.");
         }
 
         BaseTypeDeclarationSyntax? classNode;
@@ -570,9 +560,10 @@ public class MemberRefactoringEngine
 
         if (classNode == null || classNode is not ClassDeclarationSyntax classDecl)
         {
-            return (EditOutcome.CannotEdit, "// Cannot edit: class not found.", []);
+            throw new ToolNotFoundException($"Class '{className}' was not found in '{filePath}'. Searched: class, interface, struct, record and enum declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. Next: GetFileOutline to confirm the type name.", "class", className);
         }
 
+        // TODO tuple outcome slot is always Modified; return only the list
         var ctor = classDecl.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
         if (ctor == null)
         {
@@ -768,12 +759,7 @@ public class MemberRefactoringEngine
     /// </summary>
     public async Task<DocumentEditResult> AddEnumMemberAsync(FilePathWrapper filePath, string enumName, string newMemberToken, string? afterMemberName = null, string? beforeMemberName = null, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var (outcome, message, existing) = await _symbolNavigationEngine.GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-        if (outcome != EditOutcome.Modified)
-        {
-            // TODO throw-migration: GetContainerMembersAsync still returns an outcome tuple (null/tuple getter slice)
-            return new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message ?? $"// Cannot edit: enum '{enumName}' not found." };
-        }
+        var (_, _, existing) = await _symbolNavigationEngine.GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
         var newToken = newMemberToken.Trim();
         var newName = newToken.Split('=')[0].Trim();
@@ -818,12 +804,7 @@ public class MemberRefactoringEngine
     /// </summary>
     public async Task<DocumentEditResult> RemoveEnumMemberAsync(FilePathWrapper filePath, string enumName, string memberName, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var (outcome, message, existing) = await _symbolNavigationEngine.GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-        if (outcome != EditOutcome.Modified)
-        {
-            // TODO throw-migration: GetContainerMembersAsync still returns an outcome tuple (null/tuple getter slice)
-            return new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message ?? $"// Cannot edit: enum '{enumName}' not found." };
-        }
+        var (_, _, existing) = await _symbolNavigationEngine.GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
         if (!existing.Any(m => m.Name == memberName))
         {
@@ -846,12 +827,7 @@ public class MemberRefactoringEngine
     /// </summary>
     public async Task<DocumentEditResult> ReplaceEnumMemberAsync(FilePathWrapper filePath, string enumName, string memberName, string newMemberToken, string? contextSnippet = null, string? lineBefore = null, string? lineAfter = null, CancellationToken cancellationToken = default)
     {
-        var (outcome, message, existing) = await _symbolNavigationEngine.GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-        if (outcome != EditOutcome.Modified)
-        {
-            // TODO throw-migration: GetContainerMembersAsync still returns an outcome tuple (null/tuple getter slice)
-            return new DocumentEditResult { Outcome = outcome, FilePath = filePath, Message = message ?? $"// Cannot edit: enum '{enumName}' not found." };
-        }
+        var (_, _, existing) = await _symbolNavigationEngine.GetContainerMembersAsync(filePath, enumName, contextSnippet, lineBefore, lineAfter, cancellationToken);
 
         var idx = existing.FindIndex(m => m.Name == memberName);
         if (idx < 0)
@@ -1171,14 +1147,14 @@ public class MemberRefactoringEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return (EditOutcome.DocumentNotFound, "// Document not found.", []);
+            throw new ToolNotFoundException($"Document '{filePath}' was not found in the loaded solution. Next: GetFileOutline on the file to confirm its path.", "file", $"{filePath}");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return (EditOutcome.CannotEdit, "// Cannot edit: syntax root not found.", []);
+            throw new ToolInvalidArgumentException($"Syntax root or source text is unavailable for '{filePath}'; the file did not parse.");
         }
 
         MemberDeclarationSyntax? memberNode;
@@ -1189,8 +1165,9 @@ public class MemberRefactoringEngine
 
         if (memberNode is not MethodDeclarationSyntax methodDecl)
         {
-            return (EditOutcome.TargetNotFound, $"// Method '{methodName}' not found.", []);
+            throw new ToolNotFoundException($"Method '{methodName}' was not found in '{filePath}'. Searched: method declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. Next: Search(mode: text, query: '{methodName}') or GetFileOutline to confirm the method name.", "method", methodName);
         }
+        // TODO tuple outcome slot is always Modified; return only the list
 
         var result = methodDecl.ParameterList.Parameters.Select(p => new MethodParameterInfo(p.Identifier.Text, p.Type?.ToString() ?? "", p.Default?.Value.ToString())).ToList();
         return (EditOutcome.Modified, null, result);

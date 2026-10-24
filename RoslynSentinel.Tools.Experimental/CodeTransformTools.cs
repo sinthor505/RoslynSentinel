@@ -921,14 +921,6 @@ public class CodeTransformTools
                                 SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
                             };
                         }
-                        catch (InvalidOperationException ioe)
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"add_validation_to_poco: class '{className}' not found in '{resolvedFilePath}'. {ioe.Message} " + "Use GetFileOutline to verify the class name (case-sensitive).")
-                            };
-                        }
                         catch (Exception ex)
                         {
                             _logger.LogError(ex, "add_validation_to_poco unexpected exception for '{ClassName}' in '{FilePathWrapper}'", className, resolvedFilePath);
@@ -1314,14 +1306,6 @@ public class CodeTransformTools
                         }
 
                         var result = await _codeGenerationEngine.GenerateDecoratorClassAsync(className, decoratorPrefix, projectName, cancellationToken);
-                        if (result == null)
-                        {
-                            return new SentinelCallToolResult<object>()
-                            {
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"generate_decorator_class: interface '{className}' not found in the solution{(projectName != null ? $" project '{projectName}'" : string.Empty)}. Ensure the interface name matches exactly (including leading 'I') and is part of the loaded solution.")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>()
                         {
                             IsError = false,

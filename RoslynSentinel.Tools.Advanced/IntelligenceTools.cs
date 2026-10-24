@@ -157,14 +157,6 @@ public class IntelligenceTools
             if (direction == "forward")
             {
                 var fwd = await _symbolNavigationEngine.GetCallGraphAsync(resolvedFilePath, methodName, maxDepth, cancellationToken);
-                if (fwd == null)
-                {
-                    return new SentinelCallToolResult<object>
-                    {
-                        IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"Method '{methodName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " + "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " + "Use GetFileOutline to list available methods in the file.")
-                    };
-                }
 
                 return new SentinelCallToolResult<object>
                 {
@@ -175,15 +167,7 @@ public class IntelligenceTools
 
             if (direction == "reverse")
             {
-                var rev = await _symbolNavigationEngine.GetReverseCallGraphAsync(filePath, methodName, maxDepth, cancellationToken: cancellationToken);
-                if (rev == null)
-                {
-                    return new SentinelCallToolResult<object>
-                    {
-                        IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"Method '{methodName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " + "Ensure the file is part of the loaded solution and the method name exactly matches (case-sensitive). " + "Use GetFileOutline to list available methods in the file.")
-                    };
-                }
+                var rev = await _symbolNavigationEngine.GetReverseCallGraphAsync(resolvedFilePath, methodName, maxDepth, cancellationToken: cancellationToken);
 
                 return new SentinelCallToolResult<object>
                 {

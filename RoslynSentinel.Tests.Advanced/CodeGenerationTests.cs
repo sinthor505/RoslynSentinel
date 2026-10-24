@@ -394,15 +394,16 @@ public interface IEmailService
     }
 
     [Test]
-    public async Task GenerateDecorator_UnknownInterface_ReturnsNull()
+    public async Task GenerateDecorator_UnknownInterface_ThrowsNotFound()
     {
         SetSource(@"
 public class SomeClass { }", "SomeClass.cs");
 
-        var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("INonExistent", "Logging");
-
-        Assert.That(result, Is.Null,
-            "Unknown interface should return null (not throw).");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _codeGenerationEngine.GenerateDecoratorClassAsync("INonExistent", "Logging");
+        });
+        Assert.That(ex.MissingTargetName, Is.EqualTo("INonExistent"));
     }
 
     // ──────────────────────────────────────────────────────────────────────────

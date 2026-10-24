@@ -2,6 +2,7 @@
 // Tests all 13 public methods of GenerationTools in-memory via TestSolutionBuilder.
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tools.Advanced;
@@ -197,11 +198,14 @@ public interface IOrderRepository
 
     [Test]
     [Category("CodeGenerationEngine")] // sentinel:auto-category
-    public async Task GenerateDecoratorClass_NonExistentInterface_ReturnsNull()
+    public async Task GenerateDecoratorClass_NonExistentInterface_ThrowsNotFound()
     {
         SetSource("public class C {}", "Test.cs");
-        var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("INoSuchInterface", "Logging", null);
-        Assert.That(result, Is.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _codeGenerationEngine.GenerateDecoratorClassAsync("INoSuchInterface", "Logging", null);
+        });
+        Assert.That(ex.MissingTargetName, Is.EqualTo("INoSuchInterface"));
     }
 
     // --- GenerateDefaultConfigJsonTool ---

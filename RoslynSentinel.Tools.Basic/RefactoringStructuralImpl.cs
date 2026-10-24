@@ -559,9 +559,7 @@ public class RefactoringStructuralImpl
                 if (string.IsNullOrEmpty(containerName))
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "Member: containerName is required for operation 'view' when memberName is not given.") };
 
-                var (outcome, message, members) = await _symbolNavigationEngine.GetContainerMembersAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                if (outcome is EditOutcome.DocumentNotFound or EditOutcome.CannotEdit)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(RefactoringToolHelpers.ErrorCodeFor(outcome), $"Member: {message}") };
+                var (_, _, members) = await _symbolNavigationEngine.GetContainerMembersAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberViewResult(members) };
             }
 

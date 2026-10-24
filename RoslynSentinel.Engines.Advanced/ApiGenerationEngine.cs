@@ -113,7 +113,7 @@ public class ApiGenerationEngine
         var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file after adding the using directive. Next: Search(mode: class, query: '{className}') to confirm the name.", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file after adding the using directive. Next: Search(mode: class, query: '{className}') to confirm the name. Use GetFileOutline to verify the class name (case-sensitive).", "class", className);
         }
 
         // Helper: check whether a property already carries an attribute (avoids duplicates)

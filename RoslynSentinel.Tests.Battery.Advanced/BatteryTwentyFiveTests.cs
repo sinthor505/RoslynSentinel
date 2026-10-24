@@ -778,13 +778,38 @@ public class Service {
     }
 
     [Test]
-    public async Task AnalyzeControlFlowAsync_UnknownFile_ReturnsDefaultSummary()
+    public async Task AnalyzeControlFlowAsync_UnknownFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _basicRefactoringEngine.AnalyzeControlFlowAsync("NoFile.cs", "Foo");
-        // TODO throw-migration: assert the typed exception once BasicRefactoringEngine throws
-        Assert.That(result, Is.Not.Null, "Should return a ControlFlowSummary even for missing file");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _basicRefactoringEngine.AnalyzeControlFlowAsync("NoFile.cs", "Foo");
+        });
+        Assert.That(ex.MissingTargetName, Is.EqualTo("NoFile.cs"));
+    }
+
+    [Test]
+    public async Task AnalyzeControlFlowAsync_UnknownMethod_ThrowsNotFound()
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", "public class Calc { public int Add(int a, int b) => a + b; }")]);
+        _workspaceManager.SetTestSolution(solution);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _basicRefactoringEngine.AnalyzeControlFlowAsync("Calc.cs", "Missing");
+        });
+        Assert.That(ex.MissingTargetKind, Is.EqualTo("method"));
+    }
+
+    [Test]
+    public async Task AnalyzeControlFlowAsync_AbstractMethod_ThrowsTargetIneligible()
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Shape.cs", "public abstract class Shape { public abstract int Area(); }")]);
+        _workspaceManager.SetTestSolution(solution);
+        await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _basicRefactoringEngine.AnalyzeControlFlowAsync("Shape.cs", "Area");
+        });
     }
 
     [Test]
@@ -806,13 +831,27 @@ public class Service {
     }
 
     [Test]
-    public async Task AnalyzeDataFlowAsync_UnknownFile_ReturnsDefaultSummary()
+    public async Task AnalyzeDataFlowAsync_UnknownFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await _basicRefactoringEngine.AnalyzeDataFlowAsync("NoFile.cs", "Foo");
-        // TODO throw-migration: assert the typed exception once BasicRefactoringEngine throws
-        Assert.That(result, Is.Not.Null, "Should return a DataFlowSummary even for missing file");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _basicRefactoringEngine.AnalyzeDataFlowAsync("NoFile.cs", "Foo");
+        });
+        Assert.That(ex.MissingTargetName, Is.EqualTo("NoFile.cs"));
+    }
+
+    [Test]
+    public async Task AnalyzeDataFlowAsync_UnknownMethod_ThrowsNotFound()
+    {
+        var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", "public class Calc { public int Add(int a, int b) => a + b; }")]);
+        _workspaceManager.SetTestSolution(solution);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _basicRefactoringEngine.AnalyzeDataFlowAsync("Calc.cs", "Missing");
+        });
+        Assert.That(ex.MissingTargetKind, Is.EqualTo("method"));
     }
 }
 

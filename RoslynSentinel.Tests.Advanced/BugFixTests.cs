@@ -3815,13 +3815,15 @@ public class Calc
             }
 
             [Test]
-            public async Task GetCallGraph_NonExistentMethod_ReturnsNull()
+            public async Task GetCallGraph_NonExistentMethod_ThrowsNotFound()
             {
                 const string code = @"public class Calc { public int Add(int a, int b) => a + b; }";
                 SetSource(code, "Calc.cs");
-                var result = await _symbolNavigationEngine.GetCallGraphAsync("Calc.cs", "NonExistent", maxDepth: 2);
-                // TODO throw-migration: assert the typed exception once SymbolNavigationEngine throws
-                Assert.That(result, Is.Null, "Engine should return null for unknown method (tool layer converts to exception)");
+                var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+                {
+                    await _symbolNavigationEngine.GetCallGraphAsync("Calc.cs", "NonExistent", maxDepth: 2);
+                });
+                Assert.That(ex.MissingTargetName, Is.EqualTo("NonExistent"));
             }
 
             [Test]
@@ -3840,13 +3842,15 @@ public class Svc
             }
 
             [Test]
-            public async Task GetReverseCallGraph_NonExistentMethod_ReturnsNull()
+            public async Task GetReverseCallGraph_NonExistentMethod_ThrowsNotFound()
             {
                 const string code = @"public class Svc { public void Helper() { } }";
                 SetSource(code, "Svc.cs");
-                var result = await _symbolNavigationEngine.GetReverseCallGraphAsync("Svc.cs", "Ghost", maxDepth: 2);
-                // TODO throw-migration: assert the typed exception once SymbolNavigationEngine throws
-                Assert.That(result, Is.Null, "Engine should return null for unknown method (tool layer converts to exception)");
+                var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+                {
+                    await _symbolNavigationEngine.GetReverseCallGraphAsync("Svc.cs", "Ghost", maxDepth: 2);
+                });
+                Assert.That(ex.MissingTargetName, Is.EqualTo("Ghost"));
             }
         }
 
@@ -3878,23 +3882,27 @@ public class Svc
             }
 
             [Test]
-            public async Task GenerateDecoratorClass_NonExistentInterface_EngineReturnsNull()
+            public async Task GenerateDecoratorClass_NonExistentInterface_EngineThrowsNotFound()
             {
                 const string code = @"public class Foo { }";
                 SetSource(code, "Foo.cs");
-                var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("INonExistent", "Logging", null);
-                // TODO throw-migration: assert the typed exception once CodeGenerationEngine throws
-                Assert.That(result, Is.Null, "Engine should return null for non-existent interface (tool layer converts to exception)");
+                var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+                {
+                    await _codeGenerationEngine.GenerateDecoratorClassAsync("INonExistent", "Logging", null);
+                });
+                Assert.That(ex.MissingTargetName, Is.EqualTo("INonExistent"));
             }
 
             [Test]
-            public async Task GenerateDecoratorClass_NonExistentInterface_ToolThrowsInvalidOperation()
+            public async Task GenerateDecoratorClass_NonExistentInterface_ThrowsNotFound()
             {
                 const string code = @"public class Foo { }";
                 SetSource(code, "Foo.cs");
-                var result = await _codeGenerationEngine.GenerateDecoratorClassAsync("INonExistent", "Logging", null);
-                // TODO throw-migration: assert the typed exception once CodeGenerationEngine throws
-                Assert.That(result, Is.Null, "Engine should return null for non-existent interface (tool layer converts to exception)");
+                var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+                {
+                    await _codeGenerationEngine.GenerateDecoratorClassAsync("INonExistent", "Logging", null);
+                });
+                Assert.That(ex.MissingTargetName, Is.EqualTo("INonExistent"));
             }
 
             [Test]
