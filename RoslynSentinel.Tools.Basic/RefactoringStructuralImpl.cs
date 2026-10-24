@@ -243,13 +243,9 @@ public class RefactoringStructuralImpl
                 engineErrorCodes.Add(ex.ErrorCode);
                 continue;
             }
-            if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
+            if (string.IsNullOrEmpty(updated.UpdatedText))
             {
                 perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
-                if (updated.ErrorCode is not null)
-                {
-                    engineErrorCodes.Add(updated.ErrorCode);
-                }
                 continue;
             }
 
@@ -384,13 +380,9 @@ public class RefactoringStructuralImpl
                 engineErrorCodes.Add(ex.ErrorCode);
                 continue;
             }
-            if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
+            if (string.IsNullOrEmpty(updated.UpdatedText))
             {
                 perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
-                if (updated.ErrorCode is not null)
-                {
-                    engineErrorCodes.Add(updated.ErrorCode);
-                }
                 continue;
             }
 
@@ -522,13 +514,9 @@ public class RefactoringStructuralImpl
                 engineErrorCodes.Add(ex.ErrorCode);
                 continue;
             }
-            if (updated.Outcome != EditOutcome.Modified || string.IsNullOrEmpty(updated.UpdatedText))
+            if (string.IsNullOrEmpty(updated.UpdatedText))
             {
                 perEditErrors.Add(updated.Message ?? $"'{filePathResolved}': batch failed.");
-                if (updated.ErrorCode is not null)
-                {
-                    engineErrorCodes.Add(updated.ErrorCode);
-                }
                 continue;
             }
 
@@ -633,16 +621,7 @@ public class RefactoringStructuralImpl
                     return replaceAlreadyInStateResult;
                 if (string.IsNullOrEmpty(result.UpdatedText))
                 {
-                    string errorReason = result.Outcome switch
-                    {
-                        EditOutcome.DocumentNotFound => $"Member: document '{filePathResolved}' not found in the workspace.",
-                        // Pass the engine's reason through: it distinguishes a multi-member source (replace
-                        // takes exactly one) from a genuinely malformed one, and a single hardcoded string
-                        // here previously reported both as "not a valid member declaration".
-                        EditOutcome.SourceInvalid => $"Member: replace of '{memberName}' rejected - {result.Message.TrimStart('/', ' ')}",
-                        EditOutcome.TargetNotFound => $"Member: member '{memberName}' not found in '{filePathResolved}'.",
-                        _ => $"Member: no changes produced for '{memberName}' in '{filePathResolved}' ({result.Outcome}). {result.Message}"
-                    };
+                    string errorReason = $"Member: no changes produced for '{memberName}' in '{filePathResolved}' ({result.Outcome}). {result.Message}";
                     return new SentinelCallToolResult<object> { IsError = true, ErrorData = new ResultError(RefactoringToolHelpers.ErrorCodeFor(result), errorReason, StructuredDetail: ToolErrorMapper.ToStructuredDetail(result.Candidates)) };
                 }
 
@@ -708,9 +687,6 @@ public class RefactoringStructuralImpl
                 }
 
                 var result = await _memberRefactoringEngine.RemoveMemberAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken: cancellationToken);
-                var removeError = RefactoringToolHelpers.RequireUpdatedText(result, "Member", filePathResolved);
-                if (removeError is not null)
-                    return removeError;
 
                 var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = result.UpdatedText! };
                 var apply = await ValidateAndApplyAsync(changes, $"Remove member '{memberName}'.", "Member", dryRun, returnDiff, cancellationToken: cancellationToken);
@@ -752,8 +728,6 @@ public class RefactoringStructuralImpl
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: newMemberSource is required for operation 'addTopLevelType'. {RequiredParamsHint(operation)}") };
 
                 var topLevelResult = await _memberRefactoringEngine.AddTopLevelTypeAsync(filePathResolved, newMemberSource, namespaceName, cancellationToken);
-                if (RefactoringToolHelpers.RequireUpdatedText(topLevelResult, "Member", filePathResolved) is { } topLevelGuardResult)
-                    return topLevelGuardResult;
                 if (!autoStage)
                 {
                     var topLevelNoStageDescription = $"Added new top-level type to {Path.GetFileName(filePathResolved)}.";
@@ -870,8 +844,6 @@ public class RefactoringStructuralImpl
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
             }
 
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "Member", filePathResolved) is { } guardResult)
-                return guardResult;
             if (!autoStage)
             {
                 var noStageChanges = string.IsNullOrEmpty(updated.UpdatedText)
@@ -975,8 +947,6 @@ public class RefactoringStructuralImpl
                 description = $"Added '{typedType} {typedName}' field to '{containerName}' in {Path.GetFileName(filePathResolved)}.";
             }
 
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "TypedMember", filePathResolved) is { } guardResult)
-                return guardResult;
             return await ApplyAddedMemberAsync(updated, description, filePathResolved, "TypedMember", dryRun, returnDiff, cancellationToken);
         }
         catch (Exception ex)
@@ -1156,8 +1126,6 @@ public class RefactoringStructuralImpl
                         Validated: false)
                 };
             }
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ModifyAttribute", filePathResolved) is { } guardResult)
-                return RefactoringToolHelpers.ToSummaryResult(guardResult);
 
             var changes = new Dictionary<FilePathWrapper, string> { [filePathResolved] = updated.UpdatedText! };
             var apply = await ValidateAndApplyAsync(changes, $"{action} attribute '{existingAttribute}' on '{targetName}'.", "ModifyAttribute", dryRun, returnDiff, cancellationToken: cancellationToken);
