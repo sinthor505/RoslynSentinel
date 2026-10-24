@@ -3,6 +3,7 @@
 // All tests use in-memory AdhocWorkspace via TestSolutionBuilder (no MSBuild/project loading).
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 
@@ -662,7 +663,7 @@ public class GranularRefactoringEngineGapTests
     }
 
     [Test]
-    public async Task MoveTypeToOuterScopeAsync_NestedClass_ReturnsNonNull()
+    public async Task MoveTypeToOuterScopeAsync_ThrowsTargetIneligibleForPrivateNestedClass()
     {
         var source = @"
 public class Outer {
@@ -671,18 +672,19 @@ public class Outer {
 }";
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Outer.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new StructuralRefactoringEngine(_workspaceManager).MoveTypeToOuterScopeAsync("Outer.cs", "Inner");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotMove)); Assert.That(result.Message, Does.Contain("CS1527"));
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await new StructuralRefactoringEngine(_workspaceManager).MoveTypeToOuterScopeAsync("Outer.cs", "Inner"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(ex.Message, Does.Contain("allowWidenToInternal"));
     }
 
     [Test]
-    public async Task MoveTypeToOuterScopeAsync_UnknownFile_ReturnsNonNull()
+    public async Task MoveTypeToOuterScopeAsync_UnknownFile_ThrowsNotFound()
     {
         var solution = TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Other.cs", "public class X {}")]);
         _workspaceManager.SetTestSolution(solution);
-        var result = await new StructuralRefactoringEngine(_workspaceManager).MoveTypeToOuterScopeAsync("NoFile.cs", "Inner");
-        // Returns empty string or an error message -> must not throw
-        Assert.That(result, Is.Not.Null);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).MoveTypeToOuterScopeAsync("NoFile.cs", "Inner"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("File 'NoFile.cs' not found"));
     }
 }
 

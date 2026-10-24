@@ -68,8 +68,6 @@ public class Counter
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound), "the engine's code, not the generic Exception");
         var message = result.ErrorData!.Message;
-        Assert.That(message, Does.Contain("convert_method_to_indexer: method 'Missing' not found or not eligible in"));
-        Assert.That(message, Does.Contain("The method must have exactly one parameter and return a value. Use GetFileOutline to verify the method exists."));
         Assert.That(message, Does.Contain("Method 'Missing' not found in Counter.cs."));
         Assert.That(message, Does.Not.Contain("private int _n"), "the engine puts the whole file in Message; it must not reach the agent");
         Assert.That(message.Length, Is.LessThan(600));
@@ -83,9 +81,8 @@ public class Counter
         var result = await _tools.ApplyMethodCodeTransform("outcome test", path, "Add", "convert_method_to_indexer");
 
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible), "the engine throws TargetIneligible for a wrong parameter count, not NotFound");
         Assert.That(result.ErrorData!.Message, Does.Contain("exactly one parameter (has 2)"));
-        Assert.That(result.ErrorData.Message, Does.Contain("GetFileOutline"));
     }
 
     // OptimizeToValueTask puts its reason in UpdatedText ("// WARNING: ..." ahead of the whole file) and leaves

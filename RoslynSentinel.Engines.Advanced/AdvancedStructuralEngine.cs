@@ -56,11 +56,12 @@ public class StructuralRefactoringEngine
             };
         }
 
-        return new DocumentEditResult
+        if (classNode == null)
         {
-            Outcome = EditOutcome.TargetNotFound,
-            FilePath = filePath
-        };
+            throw new ToolNotFoundException($"Class '{className}' not found in {Path.GetFileName(filePath)}.", "class", className);
+        }
+
+        throw new ToolTargetIneligibleException($"Class '{className}' is not abstract; only an abstract class can be converted to an interface.");
     }
 
     public async Task<DocumentEditResult> ReplaceConstructorWithFactoryAsync(FilePathWrapper filePath, string className, CancellationToken cancellationToken = default)
@@ -95,11 +96,12 @@ public class StructuralRefactoringEngine
             };
         }
 
-        return new DocumentEditResult
+        if (classNode == null)
         {
-            Outcome = EditOutcome.TargetNotFound,
-            FilePath = filePath
-        };
+            throw new ToolNotFoundException($"Class '{className}' not found in {Path.GetFileName(filePath)}.", "class", className);
+        }
+
+        throw new ToolNotFoundException($"Class '{className}' has no constructor to replace with a factory.", "constructor", className);
     }
 
     // ExtractSuperclass is DELIBERATELY left unimplemented (stubbed): it copies only public properties and never
@@ -330,12 +332,7 @@ public class StructuralRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Source invalid.");
         }
 
         SyntaxNode? newRoot = refactoringId.ToLowerInvariant() switch
@@ -521,22 +518,12 @@ public class StructuralRefactoringEngine
         // If field not found or has no initializer, return error
         if (field == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ERROR: Field '{fieldName}' not found."
-            };
+            throw new ToolNotFoundException($"ERROR: Field '{fieldName}' not found.", "field", fieldName);
         }
 
         if (field.Declaration.Variables[0].Initializer == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ERROR: Cannot inline field '{fieldName}' without initializer. Field must have a static initializer or initial assignment."
-            };
+            throw new ToolTargetIneligibleException($"ERROR: Cannot inline field '{fieldName}' without initializer. Field must have a static initializer or initial assignment.");
         }
 
         var value = field.Declaration.Variables[0].Initializer!.Value;
@@ -571,25 +558,20 @@ public class StructuralRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
-        if (method == null || semanticModel == null)
+        if (method == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolNotFoundException($"Method '{methodName}' not found in {Path.GetFileName(filePath)}.", "method", methodName);
+        }
+
+        if (semanticModel == null)
+        {
+            throw new ToolInvalidArgumentException("Source invalid.");
         }
 
         var parameter = method.ParameterList.Parameters.FirstOrDefault(p => p.Identifier.Text == parameterName);
         if (parameter == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ERROR: Parameter '{parameterName}' not found in method '{methodName}'."
-            };
+            throw new ToolNotFoundException($"ERROR: Parameter '{parameterName}' not found in method '{methodName}'.", "parameter", parameterName);
         }
 
         // TODO implement parameter inlining (bind the constant argument into the body and drop the parameter plus every call-site argument); until then refuse
@@ -605,33 +587,18 @@ public class StructuralRefactoringEngine
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ERROR: Method '{methodName}' not found in {Path.GetFileName(filePath)}.\n" + (root?.ToFullString() ?? "")
-            };
+            throw new ToolNotFoundException($"ERROR: Method '{methodName}' not found in {Path.GetFileName(filePath)}.", "method", methodName);
         }
 
         if (method.ParameterList.Parameters.Count != 1)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ERROR: Cannot convert '{methodName}' to an indexer - it must have exactly one parameter (has {method.ParameterList.Parameters.Count})."
-            };
+            throw new ToolTargetIneligibleException($"ERROR: Cannot convert '{methodName}' to an indexer - it must have exactly one parameter (has {method.ParameterList.Parameters.Count}).");
         }
 
         // C# does not support static indexers
         if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ERROR: Cannot convert static method '{methodName}' to an indexer - C# does not support static indexers."
-            };
+            throw new ToolTargetIneligibleException($"ERROR: Cannot convert static method '{methodName}' to an indexer - C# does not support static indexers.");
         }
 
         // Build getter body from block body or expression body
@@ -647,12 +614,7 @@ public class StructuralRefactoringEngine
         else
         {
             // Abstract/extern methods have no body -> cannot create indexer
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ERROR: Cannot convert '{methodName}' to an indexer - method has no body."
-            };
+            throw new ToolTargetIneligibleException($"ERROR: Cannot convert '{methodName}' to an indexer - method has no body.");
         }
 
         // Exclude modifiers that are invalid on indexers (static, abstract, extern, etc.)
@@ -675,12 +637,7 @@ public class StructuralRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Source invalid.");
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -689,24 +646,13 @@ public class StructuralRefactoringEngine
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Expression not found.",
-                UpdatedText = root.ToFullString()
-            };
+            throw new ToolNotFoundException("Expression not found.", "expression");
         }
 
         var containingClass = expression.Ancestors().OfType<ClassDeclarationSyntax>().FirstOrDefault();
         if (containingClass == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Containing class not found."
-            };
+            throw new ToolNotFoundException("Containing class not found.", "class");
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -780,48 +726,27 @@ public class StructuralRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Source invalid.");
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
         var position = SnippetLookup.TryResolve(sourceText, contextSnippet, lineBefore, lineAfter, out var paramMatch, out var paramSnippetError) ? paramMatch.Start : -1;
         if (position < 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: {paramSnippetError}"
-            };
+            throw new ToolNotFoundException($"ErrorDetails: {paramSnippetError}", "snippet");
         }
 
         var token = root.FindToken(position);
         var expression = token.Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Expression not found.",
-                UpdatedText = root.ToFullString()
-            };
+            throw new ToolNotFoundException("Expression not found.", "expression");
         }
 
         var containingMethod = expression.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
         if (containingMethod == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Containing method not found."
-            };
+            throw new ToolNotFoundException("Containing method not found.", "method");
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -842,24 +767,14 @@ public class StructuralRefactoringEngine
         var currentExpression = trackedRoot.GetCurrentNode(expression);
         if (currentExpression == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Expression not found."
-            };
+            throw new ToolNotFoundException("Expression not found.", "expression");
         }
 
         var newRoot = trackedRoot.ReplaceNode(currentExpression, paramRef);
         var currentMethod = newRoot.GetCurrentNode(containingMethod);
         if (currentMethod == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Containing method not found."
-            };
+            throw new ToolNotFoundException("Containing method not found.", "method");
         }
 
         var updatedMethod = currentMethod.WithParameterList(currentMethod.ParameterList.AddParameters(newParameter));
@@ -879,12 +794,7 @@ public class StructuralRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = "// Source invalid."
-            };
+            throw new ToolInvalidArgumentException("Source invalid.");
         }
 
         var sourceText = await document.GetTextAsync(cancellationToken);
@@ -896,33 +806,18 @@ public class StructuralRefactoringEngine
  ?? root.FindToken(position).Parent?.AncestorsAndSelf().OfType<ExpressionSyntax>().FirstOrDefault();
         if (expression == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Expression not found."
-            };
+            throw new ToolNotFoundException("Expression not found.", "expression");
         }
 
         var containingStatement = expression.Ancestors().OfType<StatementSyntax>().FirstOrDefault();
         if (containingStatement == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Containing statement not found."
-            };
+            throw new ToolTargetIneligibleException("Expression is not inside a statement, so a local variable cannot be introduced for it.");
         }
 
         if (containingStatement.Parent is not BlockSyntax block)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Containing block not found."
-            };
+            throw new ToolTargetIneligibleException("Statement is not directly inside a block, so a local variable cannot be introduced for it.");
         }
 
         // If the expression IS the entire initializer of an existing local var declaration, the
@@ -932,9 +827,10 @@ public class StructuralRefactoringEngine
             var existingName = existingDecl.Declaration.Variables[0].Identifier.Text;
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
-                Message = $"// '{existingName}' is already a local variable - nothing to introduce."
+                Message = $"'{existingName}' is already a local variable - nothing to introduce.",
+                UpdatedText = root.ToFullString()
             };
         }
 
@@ -956,12 +852,7 @@ public class StructuralRefactoringEngine
         var idx = currentBlock.Statements.IndexOf(currentStatement);
         if (idx < 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Statement not found in block."
-            };
+            throw new ToolNotFoundException("Statement not found in block.", "statement");
         }
 
         var newBlock = currentBlock.WithStatements(currentBlock.Statements.Insert(idx, varDecl));
@@ -980,35 +871,20 @@ public class StructuralRefactoringEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: File '{filePath}' not found."
-            };
+            throw new ToolNotFoundException($"ErrorDetails: File '{filePath}' not found.", "file");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Failed to get syntax root."
-            };
+            throw new ToolInvalidArgumentException("ErrorDetails: Failed to get syntax root.");
         }
 
         // Find the type
         var nestedType = root.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.Text == nestedTypeName);
         if (nestedType == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Type '{nestedTypeName}' not found."
-            };
+            throw new ToolNotFoundException($"ErrorDetails: Type '{nestedTypeName}' not found.", "type", nestedTypeName);
         }
 
         // Check if type is actually nested (parent is a type, not namespace/file scope)
@@ -1017,9 +893,10 @@ public class StructuralRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.TargetNotFound,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
-                Message = $"// ErrorDetails: Type '{nestedTypeName}' is already at outer scope. Cannot move to outer scope."
+                Message = $"ErrorDetails: Type '{nestedTypeName}' is already at outer scope. Cannot move to outer scope.",
+                UpdatedText = root.ToFullString()
             };
         }
 
@@ -1033,13 +910,7 @@ public class StructuralRefactoringEngine
             var originalModifiers = string.Join(" ", accessModifiers.Select(m => m.ValueText));
             if (!allowWidenToInternal)
             {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.CannotMove,
-                    FilePath = filePath,
-                    ErrorCode = ToolErrorCode.TargetIneligible,
-                    Message = $"// ErrorDetails: Nested type '{nestedTypeName}' is declared '{originalModifiers}'; moving it to namespace level would not compile (CS1527). Retry with allowWidenToInternal: true to widen it to 'internal'."
-                };
+                throw new ToolTargetIneligibleException($"ErrorDetails: Nested type '{nestedTypeName}' is declared '{originalModifiers}'; moving it to namespace level would not compile (CS1527). Retry with allowWidenToInternal: true to widen it to 'internal'.");
             }
 
             // The first access modifier's trivia is kept so the declaration keeps its indentation; the others are dropped.
@@ -1075,12 +946,7 @@ public class StructuralRefactoringEngine
         var currentContainer = newRoot?.GetCurrentNode(container);
         if (newRoot == null || currentContainer == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Failed to remove nested type '{nestedTypeName}'."
-            };
+            throw new ToolNotFoundException($"ErrorDetails: Failed to remove nested type '{nestedTypeName}'.", "type", nestedTypeName);
         }
 
         // Only the re-added type is annotated for formatting.
@@ -1273,34 +1139,19 @@ public class StructuralRefactoringEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// File not found."
-            };
+            throw new ToolNotFoundException("File not found.", "file");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Could not parse file."
-            };
+            throw new ToolInvalidArgumentException("Could not parse file.");
         }
 
         var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).OrderBy(m => m.Parent is InterfaceDeclarationSyntax ? 1 : 0).FirstOrDefault();
         if (methodNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Method not found."
-            };
+            throw new ToolNotFoundException("Method not found.", "method", methodName);
         }
 
         // Check if method implements an interface
@@ -1329,12 +1180,7 @@ public class StructuralRefactoringEngine
 
         if (groupedParams.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// No parameters to group."
-            };
+            throw new ToolTargetIneligibleException("No parameters to group.");
         }
 
         // Generate record name
@@ -1489,12 +1335,7 @@ public class StructuralRefactoringEngine
     {
         if (!_config.IsFeatureEnabled("ConvertExpressionBody"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature 'ConvertExpressionBody' is disabled."
-            };
+            throw new ToolFeatureDisabledException("ConvertExpressionBody");
         }
 
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
@@ -1511,12 +1352,7 @@ public class StructuralRefactoringEngine
 
         if (target == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Member '{memberName}' not found in '{Path.GetFileName(filePath)}'."
-            };
+            throw new ToolNotFoundException($"Member '{memberName}' not found in '{Path.GetFileName(filePath)}'.", "member", memberName);
         }
 
         SyntaxNode newTarget;
@@ -1531,12 +1367,7 @@ public class StructuralRefactoringEngine
                 }
                 else
                 {
-                    return new DocumentEditResult
-                    {
-                        Outcome = EditOutcome.CannotConvert,
-                        FilePath = filePath,
-                        Message = $"// Cannot convert '{memberName}' to expression body: method body has {stmts.Count} statement(s); only single-return methods can be converted."
-                    };
+                    throw new ToolTargetIneligibleException($"Cannot convert '{memberName}' to expression body: method body has {stmts.Count} statement(s); only single-return methods can be converted.");
                 }
             }
             else if (target is PropertyDeclarationSyntax prop && prop.AccessorList != null)
@@ -1548,22 +1379,12 @@ public class StructuralRefactoringEngine
                 }
                 else
                 {
-                    return new DocumentEditResult
-                    {
-                        Outcome = EditOutcome.CannotConvert,
-                        FilePath = filePath,
-                        Message = $"// Cannot convert '{memberName}' to expression body: property getter does not contain a simple return statement."
-                    };
+                    throw new ToolTargetIneligibleException($"Cannot convert '{memberName}' to expression body: property getter does not contain a simple return statement.");
                 }
             }
             else
             {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.CannotConvert,
-                    FilePath = filePath,
-                    Message = $"// Cannot convert '{memberName}' to expression body: member has no block body or is already an expression body."
-                };
+                throw new ToolTargetIneligibleException($"Cannot convert '{memberName}' to expression body: member has no block body or is already an expression body.");
             }
         }
         else // ToBlockBody
@@ -1581,12 +1402,7 @@ public class StructuralRefactoringEngine
             }
             else
             {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.CannotConvert,
-                    FilePath = filePath,
-                    Message = $"// Cannot convert '{memberName}' to block body: member has no expression body (already a block body or not a method/property)."
-                };
+                throw new ToolTargetIneligibleException($"Cannot convert '{memberName}' to block body: member has no expression body (already a block body or not a method/property).");
             }
         }
 

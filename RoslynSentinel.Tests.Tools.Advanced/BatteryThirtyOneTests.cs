@@ -218,53 +218,54 @@ public class Recipient { public int Existing; }";
     // convert_method_to_indexer -> Bug Fix: Silent no-op on error conditions
     // ======================================================================
     [Test]
-    public async Task ConvertMethodToIndexer_MethodNotFound_ReturnsErrorComment()
+    public async Task ConvertMethodToIndexer_MethodNotFound_ThrowsNotFound()
     {
         const string src = "public class MyClass { public int Compute(int x) => x * 2; }";
         SetSource(src, "C.cs");
-        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "NoSuchMethod");
         // Regression: was silently returning original content with no indication of failure
-        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Should return error comment when method not found");
-        Assert.That(result.Message!, Does.Contain("NoSuchMethod"), "ErrorDetails should mention the method name");
+        var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "NoSuchMethod"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("NoSuchMethod"), "the message should name the missing method");
     }
 
     [Test]
-    public async Task ConvertMethodToIndexer_ZeroParams_ReturnsErrorComment()
+    public async Task ConvertMethodToIndexer_ZeroParams_ThrowsTargetIneligible()
     {
         const string src = "public class MyClass { public int GetValue() => 42; }";
         SetSource(src, "C.cs");
-        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "GetValue");
-        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Zero-param method cannot become indexer");
-        Assert.That(result.Message!, Does.Contain("GetValue"), "ErrorDetails should name the method");
+        var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "GetValue"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.TargetIneligible), "Zero-param method cannot become indexer");
+        Assert.That(ex.Message, Does.Contain("exactly one parameter"), "the message should give the parameter-count reason");
     }
 
     [Test]
-    public async Task ConvertMethodToIndexer_TwoParams_ReturnsErrorComment()
+    public async Task ConvertMethodToIndexer_TwoParams_ThrowsTargetIneligible()
     {
         const string src = "public class MyClass { public int Get(int row, int col) => row + col; }";
         SetSource(src, "C.cs");
-        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
-        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Two-param method cannot become indexer");
-        Assert.That(result.Message!, Does.Contain("Get"), "ErrorDetails should name the method");
+        var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "Get"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.TargetIneligible), "Two-param method cannot become indexer");
+        Assert.That(ex.Message, Does.Contain("exactly one parameter (has 2)"), "the message should give the engine's specific reason");
     }
 
     [Test]
-    public async Task ConvertMethodToIndexer_StaticMethod_ReturnsErrorComment()
+    public async Task ConvertMethodToIndexer_StaticMethod_ThrowsTargetIneligible()
     {
         const string src = "public class MyClass { public static int Get(int i) => i; }";
         SetSource(src, "C.cs");
-        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
-        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Static method cannot become indexer");
-        Assert.That(result.Message!, Does.Contain("static"), "ErrorDetails should mention static");
+        var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "Get"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.TargetIneligible), "Static method cannot become indexer");
+        Assert.That(ex.Message, Does.Contain("static indexers"), "the message should explain that C# has no static indexers");
     }
 
     [Test]
-    public async Task ConvertMethodToIndexer_AbstractNoBody_ReturnsErrorComment()
+    public async Task ConvertMethodToIndexer_AbstractNoBody_ThrowsTargetIneligible()
     {
         const string src = "public abstract class Base { public abstract int Get(int i); }";
         SetSource(src, "C.cs");
-        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
-        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "Abstract method with no body cannot become indexer");
+        var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "Get"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.TargetIneligible), "Abstract method with no body cannot become indexer");
+        Assert.That(ex.Message, Does.Contain("has no body"), "the message should explain that the method has no body");
     }
 
     [Test]
@@ -319,13 +320,13 @@ public class Lookup {
     }
 
     [Test]
-    public async Task ConvertMethodToIndexer_ErrorPreservesOriginalContent()
+    public async Task ConvertMethodToIndexer_ErrorPreservesOriginalContent_ThrowsNotFound()
     {
-        // When an error is returned, the original content should still be present after the comment
+        // A not-found method throws before any rewrite, so the engine returns no source to corrupt
         const string src = "public class C { public int Compute(int x) => x; }";
         SetSource(src, "C.cs");
-        var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "NotAMethod");
-        Assert.That(result.Message, Does.Contain("class C"), "Original source should be included after error comment");
-        Assert.That(result.Message, Does.Contain("Compute"), "Original method should still be present");
+        var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "NotAMethod"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("NotAMethod"), "the message should name the missing method");
     }
 }

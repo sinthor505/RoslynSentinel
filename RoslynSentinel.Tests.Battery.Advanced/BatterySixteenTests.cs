@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 
@@ -82,7 +83,7 @@ public class GranularRefactoringEngineTests
     }
 
     [Test]
-    public async Task InlineField_FieldNotFound_ReturnsErrorComment()
+    public async Task InlineField_FieldNotFound_ThrowsNotFound()
     {
         const string source = @"
 public class MyClass
@@ -91,8 +92,9 @@ public class MyClass
     public int GetCount() => _count;
 }";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("MyClass.cs", source)]));
-        var result = await new StructuralRefactoringEngine(_mgr).InlineFieldAsync("MyClass.cs", "_nonexistent");
-        Assert.That(result.Message!, Does.StartWith("// ERROR:"), "absent field should return error comment");
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_mgr).InlineFieldAsync("MyClass.cs", "_nonexistent"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("Field '_nonexistent' not found"));
     }
 
     [Test]

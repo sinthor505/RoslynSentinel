@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 
 #pragma warning disable CS8618
@@ -258,11 +259,11 @@ public class MoveTypeToOuterScopeFormatCharacterizationTests
     {
         SetSource(Src(false, GlobalInput().Select(line => line.Replace("public class Inner", "private class Inner")).ToArray()));
 
-        var result = await _engine.MoveTypeToOuterScopeAsync("Test.cs", "Inner");
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () => await _engine.MoveTypeToOuterScopeAsync("Test.cs", "Inner"));
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotMove));
-        Assert.That(result.Message, Does.Contain("allowWidenToInternal"));
-        Assert.That(result.UpdatedText, Is.Null);
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
+        Assert.That(ex.Message, Does.Contain("is declared 'private'"));
+        Assert.That(ex.Message, Does.Contain("allowWidenToInternal"));
     }
 
     [Test]
@@ -278,11 +279,14 @@ public class MoveTypeToOuterScopeFormatCharacterizationTests
     [Test]
     public async Task MoveTypeToOuterScope_TopLevelType_IsReportedAsAlreadyOuter()
     {
-        SetSource(Src(false, GlobalInput()));
+        var input = Src(false, GlobalInput());
+        SetSource(input);
 
         var result = await _engine.MoveTypeToOuterScopeAsync("Test.cs", "Outer");
 
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound));
-        Assert.That(result.UpdatedText, Is.Null);
+        // Nothing is changed; the unchanged text is returned.
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
+        Assert.That(result.Message, Does.Contain("already at outer scope"));
+        Assert.That(result.UpdatedText, Is.EqualTo(input));
     }
 }

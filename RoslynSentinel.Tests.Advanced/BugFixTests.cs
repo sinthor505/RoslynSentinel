@@ -2126,7 +2126,7 @@ public class TargetDto
         // --- Bug: inline_field -> must error when field has no initializer ---
         [Test]
         [Category("StructuralRefactoringEngine")] // sentinel:auto-category
-        public async Task InlineField_NoInitializer_ReturnsError()
+        public async Task InlineField_NoInitializer_ThrowsTargetIneligible()
         {
             const string code = @"public class Service
 {
@@ -2138,10 +2138,9 @@ public class TargetDto
     }
 }";
             SetSource(code, "Service.cs");
-            var result = await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("Service.cs", "_config");
-            // Should error or explain why inlining failed
-            Assert.That(result.Message, Does.Contain("ERROR"), "Should return error message when field has no initializer");
-            Assert.That(result.Message, Does.Contain("Cannot inline"), "Should explain the inlining cannot proceed");
+            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("Service.cs", "_config"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.TargetIneligible));
+            Assert.That(ex.Message, Does.Contain("without initializer"), "Should explain the field has no initializer to inline");
         }
 
         [Test]
@@ -2167,13 +2166,13 @@ public class TargetDto
 
         [Test]
         [Category("StructuralRefactoringEngine")] // sentinel:auto-category
-        public async Task InlineField_FieldNotFound_ReturnsError()
+        public async Task InlineField_FieldNotFound_ThrowsNotFound()
         {
             const string code = @"public class Service { }";
             SetSource(code, "Service.cs");
-            var result = await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("Service.cs", "NonExistentField");
-            Assert.That(result.Message, Does.Contain("ERROR"), "Should return error when field not found");
-            Assert.That(result.Message, Does.Contain("not found"), "Should explain that field was not found");
+            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("Service.cs", "NonExistentField"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
+            Assert.That(ex.Message, Does.Contain("Field 'NonExistentField' not found"), "Should name the missing field");
         }
     }
 
@@ -2248,20 +2247,21 @@ public class OtherClass
 
         // Bug: ConvertExpressionBody with non-existent member -> now returns error string
         [Test]
-        public async Task ConvertExpressionBody_WithNonExistentMember_ReturnsErrorString()
+        public async Task ConvertExpressionBody_WithNonExistentMember_ThrowsNotFound()
         {
             const string src = @"public class MyClass
 {
     public string Name { get; set; }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "NonExistentMethod", "ToExpressionBody");
-            Assert.That(result.Message, Does.Contain("not found"), "Should return an error message when the named member does not exist");
+            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "NonExistentMethod", "ToExpressionBody"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
+            Assert.That(ex.Message, Does.Contain("Member 'NonExistentMethod' not found"), "Should name the missing member");
         }
 
         // Bug: ConvertExpressionBody on multi-statement method -> now returns error string
         [Test]
-        public async Task ConvertExpressionBody_WithMultiStatementMethod_ReturnsErrorString()
+        public async Task ConvertExpressionBody_WithMultiStatementMethod_ThrowsTargetIneligible()
         {
             const string src = @"public class MyClass
 {
@@ -2272,13 +2272,14 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody");
-            Assert.That(result.Message, Does.Contain("Cannot convert"), "Should return an error message when method has multiple statements");
+            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToExpressionBody"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.TargetIneligible));
+            Assert.That(ex.Message, Does.Contain("only single-return methods can be converted"), "Should explain that the method has multiple statements");
         }
 
         // Bug: ConvertExpressionBody ToBlockBody on already-block-body -> now returns error string
         [Test]
-        public async Task ConvertExpressionBody_ToBlockBody_WhenAlreadyBlockBody_ReturnsErrorString()
+        public async Task ConvertExpressionBody_ToBlockBody_WhenAlreadyBlockBody_ThrowsTargetIneligible()
         {
             const string src = @"public class MyClass
 {
@@ -2288,8 +2289,9 @@ public class OtherClass
     }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToBlockBody");
-            Assert.That(result.Message, Does.Contain("Cannot convert"), "Should return an error message when converting ToBlockBody but already a block body");
+            var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolTargetIneligibleException>(async () => await new StructuralRefactoringEngine(_workspaceManager).ConvertExpressionBodyAsync("MyClass.cs", "GetName", "ToBlockBody"));
+            Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.TargetIneligible));
+            Assert.That(ex.Message, Does.Contain("has no expression body"), "Should explain the member is already a block body");
         }
 
         // Regression test: ConvertExpressionBodyAsync previously resolved via
@@ -2823,6 +2825,9 @@ public class Calculator
                 [Test]
                 public async Task BUG_77_IntroduceParameter_VariableExpression_NoServerCrash()
                 {
+                    // Regression: the engine must surface a structured error, not crash the server.
+                    // The snippet "input" is deliberately ambiguous here (the parameter declaration and its use
+                    // both match), so the engine throws NotFound asking for lineBefore/lineAfter.
                     const string code = @"
 public class Processor
 {
@@ -2838,10 +2843,10 @@ public class Processor
                         Assert.Fail("Document not found");
                     }
 
-                    var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(document.FilePath!, "input", "text");
-                    Assert.That(result, Is.Not.Null, "Should return non-null result");
-                    // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
-                    Assert.That(result.Outcome, Is.EqualTo(EditOutcome.TargetNotFound), "Parameter identifier is not an expression, so the engine should report TargetNotFound");
+                    var documentPath = document.FilePath!;
+                    var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterAsync(documentPath, "input", "text"));
+                    Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
+                    Assert.That(ex.Message, Does.Contain("ambiguous"), "The snippet matches two places, so the engine should ask for a disambiguating line");
                 }
             }
         }

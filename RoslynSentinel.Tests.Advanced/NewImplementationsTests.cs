@@ -1011,15 +1011,14 @@ public class C
 
     [Test]
     [Category("StructuralRefactoringEngine")] // sentinel:auto-category
-    public async Task IntroduceField_ReturnsOriginal_WhenColumnPointsToNonExpression()
+    public async Task IntroduceField_ThrowsNotFound_WhenColumnPointsToNonExpression()
     {
         const string source = "public class C { public void M() { } }";
         SetSource(source, "C.cs");
-        // Snippet points to class declaration -> no expression there; graceful fallback returns original
-        var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceFieldAsync("C.cs", "public class C", "_f");
-        // Should return the original source unchanged (graceful fallback)
-        // TODO throw-migration: assert the typed exception once StructuralRefactoringEngine throws
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        // Snippet points to class declaration -> no expression there, so the engine throws NotFound
+        var ex = await Assert.ThrowsAsync<RoslynSentinel.Common.ToolNotFoundException>(async () => await new StructuralRefactoringEngine(_workspaceManager).IntroduceFieldAsync("C.cs", "public class C", "_f"));
+        Assert.That(ex.ErrorCode, Is.EqualTo(RoslynSentinel.Common.ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("Expression not found"), "Should explain that no expression sits at the snippet");
     }
 
     // ══════════════════════════════════════════════════════════════
