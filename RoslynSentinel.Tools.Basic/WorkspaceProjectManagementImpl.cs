@@ -473,18 +473,9 @@ public class WorkspaceProjectManagementImpl
         FilePathWrapper filePathResolved = _workspaceManager.ResolveFromWire(filePath);
         async Task<SentinelCallToolResult<object>> ApplyAndRespondAsync(DocumentEditResult result)
         {
-            if (string.IsNullOrEmpty(result.UpdatedText))
-            {
-                return new SentinelCallToolResult<object>()
-                {
-                    IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"DeleteUnusedSymbol: no change produced for '{filePathResolved}' ({result.Outcome}). {result.Message}")
-                };
-            }
-
             var changes = new Dictionary<FilePathWrapper, string>
             {
-                [filePathResolved] = result.UpdatedText
+                [filePathResolved] = result.UpdatedText! // TODO S4: UpdatedText becomes non-nullable
             };
             var apply = await _workspaceManager.ApplyProposedChangesAsync(changes, retryCount: 3, validateChanges: true, cancellationToken: cancellationToken);
             if (apply.IsError)

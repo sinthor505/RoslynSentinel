@@ -426,9 +426,6 @@ public class RefactoringSignatureImpl
                 };
             }
 
-            if (RefactoringToolHelpers.RequireUpdatedText(updated, "ConstructorParameter", filePathResolved) is { } guardResult)
-                return guardResult;
-
             var description = operation == AddRemoveViewAction.add
                 ? $"Added '{paramType} {paramName}{(nullDefault ? " = null" : defaultValue != null ? $" = {defaultValue}" : "")}' DI parameter to '{className}' in {Path.GetFileName(filePathResolved)}, backed by field '{resolvedFieldName}'."
                 : $"Removed '{paramName}' DI parameter from '{className}' in {Path.GetFileName(filePathResolved)}."
