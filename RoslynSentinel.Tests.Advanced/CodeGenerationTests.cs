@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 
 #pragma warning disable CS8618
@@ -484,16 +485,17 @@ public class SomeClass { }", "SomeClass.cs");
     }
 
     [Test]
-    public async Task InterpolateStringSafe_SnippetNotFound_ThrowsOrReturnsError()
+    public async Task InterpolateStringSafe_SnippetNotFound_ThrowsNotFound()
     {
         SetSource("""
             public class Foo { }
             """);
 
-        DocumentEditResult? result = null;
-        await Assert.DoesNotThrowAsync(async () =>
-            result = await _codeGenerationEngine.InterpolateStringAsync("Test.cs", "string.Format(\"missing\")"));
-        Assert.That(result!.Message, Does.Contain("ErrorDetails:"));
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _codeGenerationEngine.InterpolateStringAsync("Test.cs", "string.Format(\"missing\")");
+        });
+        Assert.That(ex!.Message, Does.Contain("contextSnippet was not found"));
     }
 
     // ══════════════════════════════════════════════════════════════════════════

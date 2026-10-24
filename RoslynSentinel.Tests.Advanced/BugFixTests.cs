@@ -2234,7 +2234,7 @@ public class TargetDto
         // should still fail with a clear error.
         [Test]
         [Category("CodeGenerationEngine")] // sentinel:auto-category
-        public async Task ConvertPropertySafe_AmbiguousPropertyWithBadContextSnippet_ReturnsErrorString()
+        public async Task ConvertPropertySafe_AmbiguousPropertyWithBadContextSnippet_ThrowsNotFound()
         {
             const string src = @"public class MyClass
 {
@@ -2245,8 +2245,11 @@ public class OtherClass
     public string Name { get; set; }
 }";
             SetSource(src, "MyClass.cs");
-            var result = await _codeGenerationEngine.ConvertPropertySafeAsync("MyClass.cs", "Name", "ToFullProperty", contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
-            Assert.That(result.Message, Does.Contain("ErrorDetails:"), "Should return an error message when contextSnippet is needed to disambiguate but doesn't match");
+            var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            {
+                await _codeGenerationEngine.ConvertPropertySafeAsync("MyClass.cs", "Name", "ToFullProperty", contextSnippet: "THIS_SNIPPET_DOES_NOT_EXIST_IN_FILE");
+            });
+            Assert.That(ex!.Message, Does.Contain("contextSnippet was not found"), "A contextSnippet needed to disambiguate but matching nothing must be reported as not found");
         }
 
         // Bug: ConvertExpressionBody with non-existent member -> now returns error string

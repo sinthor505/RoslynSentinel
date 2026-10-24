@@ -213,7 +213,7 @@ public class Counter
     }
 
     [Test]
-    public async Task GenerateConstructor_ClassNotFound_IsNotFoundErrorWithTheToolsOldTextAndHint()
+    public async Task GenerateConstructor_ClassNotFound_IsNotFoundError()
     {
         var path = SetSource("Counter.cs", CounterWithoutTargetMethod);
 
@@ -221,8 +221,7 @@ public class Counter
 
         Assert.That(result.IsError, Is.True);
         Assert.That(result.ErrorData?.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(result.ErrorData!.Message, Does.Contain("generate_constructor failed for 'Missing' in"));
-        Assert.That(result.ErrorData.Message, Does.Contain("Ensure the solution is loaded."));
+        Assert.That(result.ErrorData!.Message, Does.Contain("Class 'Missing' not found"));
     }
 
     // (d) AlreadyInTargetState is a success with an explicit message; nothing is written (the tool never

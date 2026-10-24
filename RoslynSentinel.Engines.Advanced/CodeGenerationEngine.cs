@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Advanced;
@@ -199,12 +200,7 @@ public class CodeGenerationEngine
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (classNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Class '{className}' not found."
-            };
+            throw new ToolNotFoundException($"Class '{className}' not found.", "class", className);
         }
 
         if (classNode.Members.OfType<ConstructorDeclarationSyntax>().Any())
@@ -872,35 +868,20 @@ public class CodeGenerationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null || semanticModel == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// ErrorDetails: Could not load semantic model."
-            };
+            throw new ToolInvalidArgumentException("Could not load semantic model.");
         }
 
         var classDecl = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(c => c.Identifier.Text == className);
         if (classDecl == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Class '{className}' not found in file."
-            };
+            throw new ToolNotFoundException($"Class '{className}' not found in file.", "class", className);
         }
 
         var classSymbol = semanticModel.GetDeclaredSymbol(classDecl, cancellationToken: cancellationToken) as INamedTypeSymbol;
         if (classSymbol == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// ErrorDetails: Could not get class symbol."
-            };
+            throw new ToolTargetIneligibleException("Could not get class symbol.");
         }
 
         var ifaceSymbol = classSymbol.AllInterfaces
@@ -908,12 +889,7 @@ public class CodeGenerationEngine
                 i.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) == interfaceName);
         if (ifaceSymbol == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Interface '{interfaceName}' not found on class. Ensure the class already declares it implements '{interfaceName}'."
-            };
+            throw new ToolNotFoundException($"Interface '{interfaceName}' not found on class. Ensure the class already declares it implements '{interfaceName}'.", "interface", interfaceName);
         }
 
         var unimplemented = ifaceSymbol.GetMembers()
@@ -1017,12 +993,7 @@ public class CodeGenerationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
-            };
+            throw new ToolInvalidArgumentException($"Failed to get syntax root for '{filePath}'.");
         }
 
         // Compute name-based candidates first (same shape as BasicRefactoringEngine's
@@ -1043,12 +1014,7 @@ public class CodeGenerationEngine
             var pos = SnippetLookup.TryResolve(srcText, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
             if (pos < 0)
             {
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.TargetNotFound,
-                    FilePath = filePath,
-                    Message = $"// ErrorDetails: {snippetError}"
-                };
+                throw new ToolNotFoundException($"{snippetError}", "property", propertyName);
             }
 
             propNode = candidates.FirstOrDefault(p => p.Span.Contains(pos));
@@ -1056,12 +1022,7 @@ public class CodeGenerationEngine
 
         if (propNode == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Property '{propertyName}' not found."
-            };
+            throw new ToolNotFoundException($"Property '{propertyName}' not found.", "property", propertyName);
         }
 
         SyntaxNode newRoot = direction switch
@@ -1235,24 +1196,14 @@ public class CodeGenerationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: Failed to get syntax root for '{filePath}'."
-            };
+            throw new ToolInvalidArgumentException($"Failed to get syntax root for '{filePath}'.");
         }
 
         var srcText = await document.GetTextAsync(cancellationToken);
         var pos = SnippetLookup.TryResolve(srcText, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
         if (pos < 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// ErrorDetails: {snippetError}"
-            };
+            throw new ToolNotFoundException($"{snippetError}");
         }
 
         var invocation = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, 0))
@@ -1262,23 +1213,13 @@ public class CodeGenerationEngine
 
         if (invocation == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// ErrorDetails: No string.Format call found at the given context snippet."
-            };
+            throw new ToolNotFoundException("No string.Format call found at the given context snippet.");
         }
 
         var args = invocation.ArgumentList.Arguments;
         if (args.Count < 1)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// ErrorDetails: string.Format call has no arguments."
-            };
+            throw new ToolNotFoundException("string.Format call has no arguments.");
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -1302,25 +1243,14 @@ public class CodeGenerationEngine
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                // If constant value resolution fails (e.g., invalid const reference),
-                // return a graceful error instead of crashing
-                return new DocumentEditResult
-                {
-                    Outcome = EditOutcome.CannotEdit,
-                    FilePath = filePath,
-                    Message = $"// ErrorDetails: Could not resolve format string constant. Data: {ex.Message}"
-                };
+                // Constant resolution failed (e.g., invalid const reference): report it as an ineligible target.
+                throw new ToolTargetIneligibleException($"Could not resolve format string constant. Data: {ex.Message}");
             }
         }
 
         if (formatString == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// ErrorDetails: Could not resolve the format string (not a string literal or const string)."
-            };
+            throw new ToolTargetIneligibleException("Could not resolve the format string (not a string literal or const string).");
         }
 
         var fmtArgs = args.Skip(1).Select(a => a.Expression.ToString()).ToList();
