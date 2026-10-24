@@ -173,7 +173,7 @@ public class TargetModel
     }
 
     [Test]
-    public async Task InvertAssignments_NoAssignmentsInRange_ReturnsUnchanged()
+    public async Task InvertAssignments_NoAssignmentsInRange_ThrowsNotFound()
     {
         SetSource(@"public class NoOp
 {
@@ -184,10 +184,27 @@ public class TargetModel
 }", "NoOp.cs");
 
         // Lines 5-5 contain "return a + b;" -> no assignment expressions
-        var result = await _engine.InvertAssignmentsAsync("NoOp.cs", 5, 5);
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _engine.InvertAssignmentsAsync("NoOp.cs", 5, 5));
 
-        Assert.That(result.UpdatedText, Does.Contain("return a + b"),
-            "Source without assignments in range should be returned unchanged.");
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+    }
+
+    [Test]
+    public async Task InvertAssignments_SnippetWithoutAssignments_ThrowsNotFound()
+    {
+        SetSource(@"public class NoOp
+{
+    public int Compute(int a, int b)
+    {
+        return a + b;
+    }
+}", "NoOp.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+            await _engine.InvertAssignmentsAsync("NoOp.cs", "return a + b", null, null));
+
+        Assert.That(ex!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
 
     [Test]

@@ -384,15 +384,10 @@ public class AdvancedRefactoringTools
             if (!string.IsNullOrWhiteSpace(contextSnippet))
             {
                 var result = await _mappingEngine.InvertAssignmentsAsync(resolvedFilePath, contextSnippet, lineBefore, lineAfter, cancellationToken: cancellationToken);
-                if (string.IsNullOrEmpty(result.UpdatedText))
-                    return new SentinelCallToolResult<object>
-                    {
-                        IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"InvertAssignments: no assignments found in the snippet of '{resolvedFilePath}'.")
-                    };
+                // TODO S4: UpdatedText becomes non-nullable; drop the ! once it does
                 var changes = new Dictionary<FilePathWrapper, string>
                 {
-                    [resolvedFilePath] = result.UpdatedText
+                    [resolvedFilePath] = result.UpdatedText!
                 };
                 var apply = await ValidateAndApplyAsync(changes, $"Invert assignments in snippet.", "InvertAssignments", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (apply.Error is not null)
@@ -410,15 +405,9 @@ public class AdvancedRefactoringTools
             else if (startLine > 0 && endLine > 0)
             {
                 var result = await _mappingEngine.InvertAssignmentsAsync(resolvedFilePath, startLine, endLine, cancellationToken: cancellationToken);
-                if (string.IsNullOrEmpty(result.UpdatedText))
-                    return new SentinelCallToolResult<object>
-                    {
-                        IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.Exception, $"InvertAssignments: no assignments found in lines {startLine}-{endLine} of '{resolvedFilePath}'.")
-                    };
                 var changes = new Dictionary<FilePathWrapper, string>
                 {
-                    [resolvedFilePath] = result.UpdatedText
+                    [resolvedFilePath] = result.UpdatedText!
                 };
                 var apply = await ValidateAndApplyAsync(changes, $"Invert assignments in lines {startLine}-{endLine}.", "InvertAssignments", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (apply.Error is not null)

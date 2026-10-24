@@ -176,13 +176,7 @@ public class MappingEngine
         var nodes = root?.DescendantNodes(span).OfType<AssignmentExpressionSyntax>().ToList();
         if (nodes == null || nodes.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.NoCandidatesFound,
-                FilePath = filePath,
-                Message = $"No assignment expressions found in the specified range: {startLine}-{endLine}",
-                UpdatedText = root?.ToFullString() ?? string.Empty
-            };
+            throw new ToolNotFoundException($"No assignment expressions found in the specified range: {startLine}-{endLine}");
         }
 
         var annotation = Formatter.Annotation;
@@ -240,13 +234,7 @@ public class MappingEngine
 
         if (nodes.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.NoCandidatesFound,
-                FilePath = filePath,
-                Message = $"No assignment expressions found at the snippet location",
-                UpdatedText = root.ToFullString() ?? string.Empty
-            };
+            throw new ToolNotFoundException("No assignment expressions found at the snippet location");
         }
 
         var annotation = Formatter.Annotation;
