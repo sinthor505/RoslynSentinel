@@ -77,27 +77,28 @@
       <root>\source\          prod clone of the dev repo (git clone on first use, then
                               git pull --ff-only origin <Branch> on every launch; -SkipSourceSync when the
                               shim already did it). A failed pull keeps the current HEAD and is logged.
-      <root>\builds\<sha>\    immutable build of one commit: Advanced\ (the server) + 'complete' marker +
-                              'lastused' stamp. Shared read-only by every window on that commit.
+      <root>\builds\<sha8>\   immutable build of one commit: Advanced\ (the server) + 'complete' marker +
+                              'lastused' stamp. <sha8> is the first 8 chars of the commit sha. Shared
+                              read-only by every window on that commit.
       <root>\instances\<id>\  --working-dir of one server process (logs, tool dumps, crash.log, marker).
       <root>\wt\<token>\      throwaway git worktree used to build one commit.
       <root>\launch-startup.log
 
-    On every launch: sync source -> HEAD sha -> if builds\<sha>\complete exists use it (fast path);
+    On every launch: sync source -> HEAD sha -> if builds\<sha8>\complete exists use it (fast path);
     else build it in a throwaway worktree: `git worktree add --detach wt\<token> <sha>`,
-    `dotnet build ... -o builds\<sha>.<token>\Advanced -p:SourceRevisionId=<sha>` (the server reads the
-    sha back from AssemblyInformationalVersion), write 'complete', Rename-Item to builds\<sha> (first
+    `dotnet build ... -o builds\<sha8>.<token>\Advanced -p:SourceRevisionId=<sha>` (the server reads the
+    full sha back from AssemblyInformationalVersion), write 'complete', Rename-Item to builds\<sha8> (first
     rename wins; a loser deletes its own copy), `git worktree remove --force` + `git worktree prune`.
     A failed build falls back to the newest 'complete' build with a loud warning in launch.log and
     launch-startup.log (and one line on stderr). Then it sweeps and starts
-    builds\<sha>\Advanced\RoslynSentinel.Server.Advanced.exe with --working-dir=<root>\instances\<id>;
+    builds\<sha8>\Advanced\RoslynSentinel.Server.Advanced.exe with --working-dir=<root>\instances\<id>;
     ROSLYNSENTINEL_INSTANCE_ID=<id> is exported to the server process (Build's throwaway output dir).
-    No copy per instance, no lock: concurrent windows on one commit produce ONE builds\<sha>.
+    No copy per instance, no lock: concurrent windows on one commit produce ONE builds\<sha8>.
 
     Sweep (same single minimum age for everything, see $minimumAgeForSweep): instances\<id> whose
     process is gone (matched on --working-dir in the Win32_Process command line, because the exe is
-    shared); builds\<sha> with no process whose ExecutablePath is under it (never the build in use or the
-    newest 'complete' one); abandoned builds\<sha>.<token> and wt\* leftovers; and the dev repo's
+    shared); builds\<sha8> with no process whose ExecutablePath is under it (never the build in use or the
+    newest 'complete' one); abandoned builds\<sha8>.<token> and wt\* leftovers; and the dev repo's
     .roslynsentinel\build\<id> for dead instance ids.
 
     Exit code 97 means "prod layout could not be set up, no server was started" (the shim falls back to
@@ -132,7 +133,7 @@
     script itself is crashing early - read the rest of that file, including the last entry, which
     for an unhandled exception will be the full exception type/message/stack trace.
 
-    A cold prod-layout build (a commit with no builds\<sha> yet) takes longer than a legacy launch, once
+    A cold prod-layout build (a commit with no builds\<sha8> yet) takes longer than a legacy launch, once
     per commit; raise "startup_timeout_sec" in the MCP config accordingly (the first window pays it,
     the others reuse the result).
 
@@ -348,7 +349,7 @@ Write-StartupLog "Instance ID '$instanceId' derived OK -> per-instance log is $l
 
 #region Sweep settings (shared by both layouts)
 # Minimum age before a folder is eligible for sweeping - ONE value for every sweep rule in both
-# layouts (instance folders, builds\<sha>, abandoned builds, wt\ leftovers, .roslynsentinel\build\<id>).
+# layouts (instance folders, builds\<sha8>, abandoned builds, wt\ leftovers, .roslynsentinel\build\<id>).
 # Without it, several VS Code windows/tabs launching near-simultaneously against a freshly-cleared
 # root can race: window A creates its instance folder and starts building, then window B launches
 # moments later, and B's sweep deletes A's folder out from under its still-running build - wasted work
@@ -501,14 +502,16 @@ catch {
     Write-StartupLog "[$instanceId] $msg"
 }
 
-# Builds <sha> in a throwaway worktree of the prod clone and publishes it as builds\<sha> by rename.
-# Returns $true when builds\<sha>\complete exists afterwards (built here, or published first by a
-# racing launch), $false otherwise. Never throws.
+# Builds <sha> in a throwaway worktree of the prod clone and publishes it as builds\<sha8> by rename.
+# <sha8> is the first 8 chars of the full commit sha (the folder name); the full sha is still used for git
+# and -p:SourceRevisionId. Returns $true when builds\<sha8>\complete exists afterwards (built here, or
+# published first by a racing launch), $false otherwise. Never throws.
 function Invoke-ProdBuild {
     param([string]$Sha)
 
-    $final = Join-Path $buildsRoot $Sha
-    $buildTmp = Join-Path $buildsRoot "$Sha.$instanceToken"
+    $shortSha = $Sha.Substring(0, 8)
+    $final = Join-Path $buildsRoot $shortSha
+    $buildTmp = Join-Path $buildsRoot "$shortSha.$instanceToken"
     $outTmp = Join-Path $buildTmp 'Advanced'
     $wt = Join-Path $wtRoot $instanceToken
     $worktreeAdded = $false
@@ -535,7 +538,7 @@ function Invoke-ProdBuild {
         $published = $false
         for ($attempt = 1; $attempt -le 3 -and -not $published; $attempt++) {
             try {
-                Rename-Item -LiteralPath $buildTmp -NewName $Sha -ErrorAction Stop
+                Rename-Item -LiteralPath $buildTmp -NewName $shortSha -ErrorAction Stop
                 $published = $true
                 Write-LaunchLog "Build published as $final."
             }
@@ -550,7 +553,7 @@ function Invoke-ProdBuild {
                 Start-Sleep -Seconds 1
             }
         }
-        if (-not $published) { throw "Could not rename '$buildTmp' to '$Sha' after 3 attempts." }
+        if (-not $published) { throw "Could not rename '$buildTmp' to '$shortSha' after 3 attempts." }
         return $true
     }
     catch {
@@ -573,10 +576,10 @@ function Invoke-ProdBuild {
 # --- choose the build: fast path, slow path, or last-good fallback ---
 $selectedBuildDir = $null
 if ($sha) {
-    $shaDir = Join-Path $buildsRoot $sha
+    $shaDir = Join-Path $buildsRoot $sha.Substring(0, 8)
     if (Test-Path -LiteralPath (Join-Path $shaDir 'complete')) {
         $selectedBuildDir = $shaDir
-        Write-LaunchLog "Fast path: builds\$sha is complete; skipping build."
+        Write-LaunchLog "Fast path: builds\$($sha.Substring(0, 8)) is complete; skipping build."
     }
     elseif (Invoke-ProdBuild -Sha $sha) {
         $selectedBuildDir = $shaDir
@@ -652,13 +655,14 @@ try {
             else { Write-LaunchLog "Sweep: instance '$($_.Name)' still present after delete attempt - left in place, will retry next launch." }
         }
 
-    # builds\<sha> with no process running from it, plus abandoned builds\<sha>.<token> partials. The build
+    # builds\<sha8> with no process running from it, plus abandoned builds\<sha8>.<token> partials. The build
     # this launch selected and the newest complete build (the "last good" fallback) are never swept.
+    # Legacy 40-char folders ({8,40}) are still swept.
     $newestComplete = Get-NewestCompleteBuild -BuildsRoot $buildsRoot
     Get-ChildItem -LiteralPath $buildsRoot -Directory -ErrorAction SilentlyContinue |
         ForEach-Object {
             $folderPath = $_.FullName
-            if ($_.Name -match '^[0-9a-f]{40}$') {
+            if ($_.Name -match '^[0-9a-f]{8,40}$') {
                 if ($folderPath -ieq $selectedBuildDir) { return }
                 if ($newestComplete -and $folderPath -ieq $newestComplete.FullName) { return }
                 $stampFile = Join-Path $folderPath 'lastused'
@@ -673,7 +677,7 @@ try {
                 if (Remove-SweepFolder -Path $folderPath -MustBeUnder $buildsRoot) { $swept.Add("builds\$($_.Name)") }
                 else { Write-LaunchLog "Sweep: build '$($_.Name)' still present after delete attempt - left in place, will retry next launch." }
             }
-            elseif ($_.Name -match '^[0-9a-f]{40}\.[0-9a-f]{8}$') {
+            elseif ($_.Name -match '^[0-9a-f]{8,40}\.[0-9a-f]{8}$') {
                 if (($now - $_.CreationTime) -lt $minimumAgeForSweep) { $skippedYoung++; return }
                 if (Remove-SweepFolder -Path $folderPath -MustBeUnder $buildsRoot) { $swept.Add("builds\$($_.Name)") }
             }

@@ -12,8 +12,9 @@
     Layout under the instances root (default %USERPROFILE%\RoslynSentinelInstances):
 
       source\                 prod clone of the dev repo (git clone, then git pull --ff-only on launch)
-      builds\<sha>\Advanced\  immutable build of one commit, plus builds\<sha>\complete (marker) and
-                              builds\<sha>\lastused (touched by every launch that selects the build)
+      builds\<sha8>\Advanced\ immutable build of one commit (<sha8> = first 8 chars of the commit sha), plus
+                              builds\<sha8>\complete (marker) and
+                              builds\<sha8>\lastused (touched by every launch that selects the build)
       instances\<id>\         --working-dir of one server process (logs\, tool_list*.json, crash.log,
                               stopped-by-script.marker, launch.log)
       wt\<token>\             throwaway git worktree used to build one commit; removed after the build
@@ -143,13 +144,14 @@ function Get-RoslynSentinelServerProcesses {
         }
 }
 
-# The newest builds\<sha> that has a 'complete' marker (the "last good" build), or $null.
+# The newest builds\<sha8> that has a 'complete' marker (the "last good" build), or $null.
+# Accepts 8-char short-sha folders and legacy 40-char folders.
 function Get-NewestCompleteBuild {
     param([Parameter(Mandatory)][string]$BuildsRoot)
 
     if (-not (Test-Path -LiteralPath $BuildsRoot)) { return $null }
     Get-ChildItem -LiteralPath $BuildsRoot -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match '^[0-9a-f]{40}$' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'complete')) } |
+        Where-Object { $_.Name -match '^[0-9a-f]{8,40}$' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'complete')) } |
         Sort-Object { (Get-Item -LiteralPath (Join-Path $_.FullName 'complete')).LastWriteTime } -Descending |
         Select-Object -First 1
 }

@@ -234,7 +234,7 @@ function Show-Status {
             Write-Host "$($folder.Name): created $($folder.CreationTime), $liveDesc." -ForegroundColor Green
         }
         $buildFolders = @(Get-ChildItem -LiteralPath (Join-Path $prodRoot 'builds') -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $_.Name -match '^[0-9a-f]{40}$' })
+            Where-Object { $_.Name -match '^[0-9a-f]{8,40}$' })
         Write-Host "$($buildFolders.Count) immutable build(s) under $(Join-Path $prodRoot 'builds')." -ForegroundColor DarkGray
     }
     else {
