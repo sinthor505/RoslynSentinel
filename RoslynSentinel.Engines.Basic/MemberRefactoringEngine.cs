@@ -884,7 +884,7 @@ public class MemberRefactoringEngine
     /// targeting the same file: each call resolves against its own fresh GetCurrentSolutionAsync root, so
     /// the second call's UpdatedText would silently discard the first edit instead of compounding it.
     /// Returns one <see cref="DocumentEditResult"/> for the whole file: <see cref="EditOutcome.Modified"/>
-    /// with UpdatedText on full success, or <see cref="EditOutcome.CannotEdit"/> with every per-index
+    /// with UpdatedText on full success, or a non-Modified outcome with every per-index
     /// failure joined into Message (never a partial write) when any edit in this file's group fails to
     /// resolve, or two edits collide on the same target node.
     /// </summary>

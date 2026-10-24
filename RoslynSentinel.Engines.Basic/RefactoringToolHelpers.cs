@@ -35,7 +35,7 @@ public static class RefactoringToolHelpers
     /// <summary>
     /// Maps a document-edit result to the error code the agent sees, preferring ErrorCode if set.
     /// </summary>
-    public static string ErrorCodeFor(DocumentEditResult result) => result.ErrorCode ?? ErrorCodeFor(result.Outcome);
+    public static string ErrorCodeFor(DocumentEditResult result) => ErrorCodeFor(result.Outcome);
 
     /// <summary>
     /// Guards against staging an unintended empty-file overwrite: when a document-edit engine
@@ -113,8 +113,7 @@ public static class RefactoringToolHelpers
     /// <list type="bullet">
     /// <item>null for <see cref="EditOutcome.Modified"/> with text (the caller continues with its success path);</item>
     /// <item>a non-error result with a string message and no write for <see cref="EditOutcome.AlreadyInTargetState"/>;</item>
-    /// <item>for the "nothing to do / not found / not eligible" family (TargetNotFound, NoCandidatesFound,
-    /// CannotEdit, CannotOptimize, CannotMove, CannotRemove, CannotConvert, and Modified with no text) whatever
+    /// <item>for the "nothing to do" family (NoCandidatesFound, and Modified with no text) whatever
     /// <paramref name="noOp"/> says: the tool's own success message, or an error carrying the engine's code
     /// (<see cref="EngineResultBase.Code"/>) with the tool's own wording;</item>
     /// <item>an error for every other outcome (Error, Unset, SourceInvalid, FeatureDisabled, DocumentNotFound),
@@ -138,13 +137,7 @@ public static class RefactoringToolHelpers
                 var message = AlreadyInStateMessage(operationName, subject, result.Message);
                 return new SentinelCallToolResult<object> { IsError = false, SuccessData = message, StatusMessage = message };
             case EditOutcome.Modified:
-            case EditOutcome.TargetNotFound:
             case EditOutcome.NoCandidatesFound:
-            case EditOutcome.CannotEdit:
-            case EditOutcome.CannotOptimize:
-            case EditOutcome.CannotMove:
-            case EditOutcome.CannotRemove:
-            case EditOutcome.CannotConvert:
                 return GuardNothingToDo(result, hint, noOp, hasText);
             default:
                 return GuardEngineFailure(result, operationName, subject, hint);

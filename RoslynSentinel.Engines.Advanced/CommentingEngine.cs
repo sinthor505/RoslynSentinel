@@ -339,7 +339,7 @@ public class CommentingEngine
             }
             catch (ToolException ex) // TODO no test pins this per-item catch (needs a workspace-backed CommentFileAsync fixture with FakeLlmClient)
             {
-                outcomes.Add(new MemberCommentOutcome(site, false, $"AddSummaryComment failed: {EditOutcome.CannotEdit} - {ex.Message}"));
+                outcomes.Add(new MemberCommentOutcome(site, false, $"AddSummaryComment failed: {ex.Message}"));
                 continue;
             }
 

@@ -4,18 +4,14 @@ public static class EditOutcomeExtensions
 {
     /// <summary>
     /// The one place that says how a document-edit outcome reads as a canonical <see cref="ResultStatus"/>.
-    /// <see cref="EditOutcome.Unset"/>, <see cref="EditOutcome.Error"/> and the obsolete <see cref="EditOutcome.NoChange"/>
-    /// are <see cref="ResultStatus.Failed"/>: an engine that fell through without classifying itself is an error, never a success.
+    /// <see cref="EditOutcome.Unset"/> (an engine that fell through without classifying itself) is <see cref="ResultStatus.Failed"/>:
+    /// an error, never a success.
     /// </summary>
     public static ResultStatus ToResultStatus(this EditOutcome outcome) => outcome switch
     {
         EditOutcome.Modified => ResultStatus.Success,
         EditOutcome.AlreadyInTargetState => ResultStatus.AlreadyInState,
-        EditOutcome.TargetNotFound or EditOutcome.DocumentNotFound or EditOutcome.NoCandidatesFound => ResultStatus.NotFound,
-        EditOutcome.SourceInvalid => ResultStatus.InvalidInput,
-        EditOutcome.FeatureDisabled => ResultStatus.FeatureDisabled,
-        EditOutcome.CannotOptimize or EditOutcome.CannotEdit or EditOutcome.CannotMove
-            or EditOutcome.CannotRemove or EditOutcome.CannotConvert => ResultStatus.NotApplicable,
+        EditOutcome.NoCandidatesFound => ResultStatus.NotFound,
         _ => ResultStatus.Failed
     };
 

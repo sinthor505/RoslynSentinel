@@ -3385,7 +3385,7 @@ public class Service
                 SetSource(code, "Service.cs");
                 var result = await _structuralRefinementEngine.SafeDeleteSymbolAsync("Service.cs", "UnusedHelper", contextSnippet: "UnusedHelper", lineBefore: "private string UnusedHelper", lineAfter: null);
                 // Should not refuse for a truly unused symbol
-                Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.CannotEdit), "Should not error for truly unused symbol");
+                Assert.That(result.Outcome, Is.Not.EqualTo(EditOutcome.Unset), "Should not error for truly unused symbol");
             }
 
             // ── inline_method bug: multi-statement method handling ─────────────────

@@ -2,37 +2,17 @@ namespace RoslynSentinel.Common
 {
     public enum EditOutcome
     {
-        Unset,          // default value, should be treated as error if returned
-        Modified,
-        TargetNotFound,    // method/line/container not located
-        DocumentNotFound,
-        SourceInvalid,     // parsed fragment failed (the 3 fragment methods)
-        [Obsolete] NoChange,     // already in target form
-        CannotOptimize,        // e.g. optimization not applicable
-        CannotEdit,          // e.g. unsupported scenario or API
-        CannotMove,          // e.g. code can't be moved to target location (for move refactoring)
-        CannotRemove,         // e.g. code can't be removed (for remove refactoring)
-        CannotConvert,       // e.g. code can't be converted to target form (for convert refactoring)
-        FeatureDisabled,        // e.g. optimization disabled by user or policy
-        Error,                 // for unexpected exceptions or failures
-        AlreadyInTargetState, // already in target state
-        NoCandidatesFound   // e.g. no matching methods for a signature change
+        Unset = 0,          // default value, should be treated as error if returned
+        Modified = 1,
+        // 2-12 are retired failure values (engines throw instead); do not reuse them.
+        AlreadyInTargetState = 13, // already in target state
+        NoCandidatesFound = 14   // e.g. no matching methods for a signature change
     }
 
     public sealed record DocumentEditResult : EngineResultBase
     {
 
         public Dictionary<FilePathWrapper, string> Changes { get; init; } = new Dictionary<FilePathWrapper, string>();
-
-        /// <summary>Optional ToolErrorCode value copied from the ToolException that caused the failure; when set it takes precedence over the code derived from Outcome.</summary>
-        public string? ErrorCode
-        {
-            get; init;
-        }
-
-        /// <summary><see cref="Code"/>: <see cref="ErrorCode"/> when set, else the code for <see cref="EngineResultBase.Outcome"/>. Not serialized.</summary>
-        [System.Text.Json.Serialization.JsonIgnore]
-        public override string? Code => ErrorCode ?? base.Code;
 
         /// <summary>
         /// Batch engines only: the caller-supplied edit indexes that actually changed this file's text. An index that
@@ -78,21 +58,6 @@ namespace RoslynSentinel.Common
         public string ToJsonSummary()
         {
             return System.Text.Json.JsonSerializer.Serialize(this, _jsonOptions);
-        }
-
-        public static DocumentEditResult DocumentNotFound(FilePathWrapper filePath)
-        {
-            return new DocumentEditResult(EditOutcome.DocumentNotFound, filePath) { Message = $"File not found: {filePath}" };
-        }
-
-        public static DocumentEditResult TargetNotFound(FilePathWrapper filePath)
-        {
-            return new DocumentEditResult(EditOutcome.TargetNotFound, filePath) { Message = $"Target not found in file: {filePath}" };
-        }
-
-        public static DocumentEditResult FeatureDisabled(FilePathWrapper filePath)
-        {
-            return new DocumentEditResult(EditOutcome.FeatureDisabled, filePath) { Message = $"Feature is disabled." };
         }
     }
 }

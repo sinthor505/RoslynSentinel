@@ -15,24 +15,10 @@ namespace RoslynSentinel.Tests.Tools.Basic;
 public class RefactoringToolHelpersTests
 {
     [Test]
-    public void RequireUpdatedText_WithErrorCodeSet_ReturnsErrorWithPrecedence()
+    public void RequireUpdatedText_OutcomeNoCandidatesFound_ReturnsNotFound()
     {
         var result = RefactoringToolHelpers.RequireUpdatedText(
-            new DocumentEditResult(EditOutcome.CannotEdit, "X.cs") { ErrorCode = ToolErrorCode.Ambiguous, Message = "m" },
-            "test",
-            "X.cs");
-
-        Assert.That(result, Is.Not.Null);
-        Assert.That(!result!.IsError, Is.False);
-        Assert.That(result.ErrorData, Is.Not.Null);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
-    }
-
-    [Test]
-    public void RequireUpdatedText_OutcomeTargetNotFound_ReturnsNotFound()
-    {
-        var result = RefactoringToolHelpers.RequireUpdatedText(
-            new DocumentEditResult(EditOutcome.TargetNotFound, "X.cs") { Message = "m" },
+            new DocumentEditResult(EditOutcome.NoCandidatesFound, "X.cs") { Message = "m" },
             "test",
             "X.cs");
 
@@ -95,7 +81,7 @@ public class RefactoringToolHelpersTests
     public void ToSummaryResult_ErrorGuard_KeepsErrorCode()
     {
         var guard = RefactoringToolHelpers.RequireUpdatedText(
-            new DocumentEditResult(EditOutcome.TargetNotFound, "X.cs") { Message = "m" },
+            new DocumentEditResult(EditOutcome.NoCandidatesFound, "X.cs") { Message = "m" },
             "test",
             "X.cs")!;
 
@@ -147,13 +133,7 @@ public class RefactoringToolHelpersTests
         Assert.That(result.SuccessData as string, Does.Contain("already in the requested state"));
     }
 
-    [TestCase(EditOutcome.TargetNotFound)]
     [TestCase(EditOutcome.NoCandidatesFound)]
-    [TestCase(EditOutcome.CannotEdit)]
-    [TestCase(EditOutcome.CannotOptimize)]
-    [TestCase(EditOutcome.CannotMove)]
-    [TestCase(EditOutcome.CannotRemove)]
-    [TestCase(EditOutcome.CannotConvert)]
     public void GuardEngineResult_NothingToDo_SuccessHandling_ReturnsExactlyTheToolsMessage(EditOutcome outcome)
     {
         // A whole source file in the engine's Message must never reach the agent on the success path either.
@@ -168,13 +148,10 @@ public class RefactoringToolHelpersTests
     public void GuardEngineResult_NothingToDo_SuccessHandling_NonEmptyTextProceeds()
     {
         // Pre-guard behaviour for the success-style tools: any non-empty UpdatedText was used by the tool.
-        Assert.That(Guard(Edit(EditOutcome.CannotConvert, "class C { }"), NoOpHandling.Success(SuccessText)), Is.Null);
+        Assert.That(Guard(Edit(EditOutcome.NoCandidatesFound, "class C { }"), NoOpHandling.Success(SuccessText)), Is.Null);
     }
 
-    [TestCase(EditOutcome.TargetNotFound, ToolErrorCode.NotFound)]
     [TestCase(EditOutcome.NoCandidatesFound, ToolErrorCode.NotFound)]
-    [TestCase(EditOutcome.CannotConvert, ToolErrorCode.TargetIneligible)]
-    [TestCase(EditOutcome.CannotOptimize, ToolErrorCode.TargetIneligible)]
     public void GuardEngineResult_NothingToDo_ErrorHandling_UsesEngineCodeAndToolWording(EditOutcome outcome, string expectedCode)
     {
         var result = Guard(Edit(outcome, message: "// ERROR: Method 'M' not found in X.cs.\nclass Secret { }"), NoOpHandling.Error(ErrorLead));
@@ -187,26 +164,10 @@ public class RefactoringToolHelpersTests
     }
 
     [Test]
-    public void GuardEngineResult_NothingToDo_ErrorHandling_IgnoresTextAndQuotesTheReasonThePlaceTheEngineHidIt()
-    {
-        // OptimizeToValueTask: Outcome CannotOptimize, Message empty, the reason is the first line of UpdatedText
-        // ahead of the whole file. The old tool shipped that text as the new file.
-        var result = Guard(
-            Edit(EditOutcome.CannotOptimize, "// WARNING: Cannot safely convert to ValueTask: method has 2 await expressions.\nclass Secret { }"),
-            NoOpHandling.Error(ErrorLead));
-
-        Assert.That(result!.IsError, Is.True);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
-        Assert.That(result.ErrorData.Message, Does.Contain(Hint));
-        Assert.That(result.ErrorData.Message, Does.Contain("Cannot safely convert to ValueTask: method has 2 await expressions."));
-        Assert.That(result.ErrorData.Message, Does.Not.Contain("Secret"));
-    }
-
-    [Test]
     public void GuardEngineResult_NothingToDo_ErrorHandling_PlainFileInUpdatedTextIsNotQuotedAsAReason()
     {
         // ConvertStaticToExtension: TargetNotFound with the unchanged file as UpdatedText.
-        var result = Guard(Edit(EditOutcome.TargetNotFound, "// Copyright header\nclass Secret { }"), NoOpHandling.Error(ErrorLead));
+        var result = Guard(Edit(EditOutcome.NoCandidatesFound, "// Copyright header\nclass Secret { }"), NoOpHandling.Error(ErrorLead));
 
         Assert.That(result!.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
@@ -218,17 +179,13 @@ public class RefactoringToolHelpersTests
     {
         Assert.That(Guard(Edit(EditOutcome.NoCandidatesFound, "class C { }", "// Info: No fields."), NoOpHandling.ErrorUnlessText(ErrorLead)), Is.Null);
 
-        var result = Guard(Edit(EditOutcome.TargetNotFound, message: "// ErrorDetails: Class 'C' not found."), NoOpHandling.ErrorUnlessText(ErrorLead));
+        var result = Guard(Edit(EditOutcome.NoCandidatesFound, message: "// ErrorDetails: Class 'C' not found."), NoOpHandling.ErrorUnlessText(ErrorLead));
         Assert.That(result!.IsError, Is.True);
         Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(result.ErrorData.Message, Does.Contain("Engine detail: Class 'C' not found."));
     }
 
-    [TestCase(EditOutcome.Error, ToolErrorCode.Exception)]
     [TestCase(EditOutcome.Unset, ToolErrorCode.Exception)]
-    [TestCase(EditOutcome.SourceInvalid, ToolErrorCode.InvalidArgument)]
-    [TestCase(EditOutcome.FeatureDisabled, ToolErrorCode.FeatureDisabled)]
-    [TestCase(EditOutcome.DocumentNotFound, ToolErrorCode.NotFound)]
     public void GuardEngineResult_GenuineFailure_UsesEngineCodeOneLineReasonAndToolHint(EditOutcome outcome, string expectedCode)
     {
         // A genuine failure is an error even when the tool's no-op handling is a success, and even when text came back.
@@ -240,28 +197,17 @@ public class RefactoringToolHelpersTests
     }
 
     [Test]
-    public void GuardEngineResult_GenuineFailure_EngineErrorCodeWinsOverTheOutcomeMapping()
-    {
-        var edit = new DocumentEditResult(EditOutcome.Error, "X.cs") { ErrorCode = ToolErrorCode.Ambiguous, Message = "Two overloads match" };
-
-        var result = Guard(edit, NoOpHandling.Success(SuccessText));
-
-        Assert.That(result!.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
-        Assert.That(result.ErrorData.Message, Does.Contain("Two overloads match."));
-    }
-
-    [Test]
     public void GuardEngineResult_GenuineFailure_WithoutAReasonStillExplainsAndHints()
     {
-        var result = Guard(Edit(EditOutcome.Error), NoOpHandling.Success(SuccessText));
+        var result = Guard(Edit(EditOutcome.Unset), NoOpHandling.Success(SuccessText));
 
-        Assert.That(result!.ErrorData!.Message, Is.EqualTo($"op failed for method 'M' (Error). {Hint}"));
+        Assert.That(result!.ErrorData!.Message, Is.EqualTo($"op failed for method 'M' (Unset). {Hint}"));
     }
 
     [Test]
     public void GuardEngineResult_GenuineFailure_CapsAnEnormousReasonAndNeverLeaksTheSource()
     {
-        var result = Guard(Edit(EditOutcome.Error, message: new string('x', 5000) + "\nclass Secret { }"), NoOpHandling.Success(SuccessText));
+        var result = Guard(Edit(EditOutcome.Unset, message: new string('x', 5000) + "\nclass Secret { }"), NoOpHandling.Success(SuccessText));
 
         Assert.That(result!.ErrorData!.Message.Length, Is.LessThan(400));
         Assert.That(result.ErrorData.Message, Does.Contain("..."));
@@ -322,19 +268,5 @@ public class RefactoringToolHelpersTests
     {
         Assert.That(RefactoringToolHelpers.SummarizeEngineMessage("abcdefghij", 8), Is.EqualTo("abcde..."));
         Assert.That(RefactoringToolHelpers.SummarizeEngineMessage("abcdefghij", 10), Is.EqualTo("abcdefghij"));
-    }
-
-    [Test]
-    public void RequireUpdatedText_ErrorCodeWinsOverOutcome()
-    {
-        var result = RefactoringToolHelpers.RequireUpdatedText(
-            new DocumentEditResult(EditOutcome.TargetNotFound, "X.cs") { ErrorCode = ToolErrorCode.TargetIneligible, Message = "m" },
-            "test",
-            "X.cs");
-
-        Assert.That(result, Is.Not.Null);
-        Assert.That(!result!.IsError, Is.False);
-        Assert.That(result.ErrorData, Is.Not.Null);
-        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.TargetIneligible));
     }
 }

@@ -258,7 +258,7 @@ public static class DocumentLookup
     }
 
     /// <summary>
-    /// Resolves path or throws ToolNotFoundException / ToolAmbiguousMatchException; the engine-layer replacement for an inline FirstOrDefault + EditOutcome.DocumentNotFound return.
+    /// Resolves path or throws ToolNotFoundException / ToolAmbiguousMatchException; the engine-layer replacement for an inline FirstOrDefault + not-found return.
     /// </summary>
     public static Document RequireDocument(Solution solution, FilePathWrapper path) => TryGetDocument(solution, path).GetDocumentOrThrow();
 

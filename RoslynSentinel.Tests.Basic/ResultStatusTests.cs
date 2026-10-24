@@ -96,17 +96,7 @@ public class ResultStatusTests
 
     [TestCase(EditOutcome.Modified, ResultStatus.Success, null)]
     [TestCase(EditOutcome.AlreadyInTargetState, ResultStatus.AlreadyInState, null)]
-    [TestCase(EditOutcome.TargetNotFound, ResultStatus.NotFound, ToolErrorCode.NotFound)]
-    [TestCase(EditOutcome.DocumentNotFound, ResultStatus.NotFound, ToolErrorCode.NotFound)]
     [TestCase(EditOutcome.NoCandidatesFound, ResultStatus.NotFound, ToolErrorCode.NotFound)]
-    [TestCase(EditOutcome.SourceInvalid, ResultStatus.InvalidInput, ToolErrorCode.InvalidArgument)]
-    [TestCase(EditOutcome.FeatureDisabled, ResultStatus.FeatureDisabled, ToolErrorCode.FeatureDisabled)]
-    [TestCase(EditOutcome.CannotOptimize, ResultStatus.NotApplicable, ToolErrorCode.TargetIneligible)]
-    [TestCase(EditOutcome.CannotEdit, ResultStatus.NotApplicable, ToolErrorCode.TargetIneligible)]
-    [TestCase(EditOutcome.CannotMove, ResultStatus.NotApplicable, ToolErrorCode.TargetIneligible)]
-    [TestCase(EditOutcome.CannotRemove, ResultStatus.NotApplicable, ToolErrorCode.TargetIneligible)]
-    [TestCase(EditOutcome.CannotConvert, ResultStatus.NotApplicable, ToolErrorCode.TargetIneligible)]
-    [TestCase(EditOutcome.Error, ResultStatus.Failed, ToolErrorCode.Exception)]
     [TestCase(EditOutcome.Unset, ResultStatus.Failed, ToolErrorCode.Exception)]
     public void EditOutcome_MapsToStatusAndCode_AndResultAgrees(EditOutcome outcome, ResultStatus expectedStatus, string? expectedCode)
     {
@@ -119,7 +109,7 @@ public class ResultStatusTests
     }
 
     [Test]
-    public void EditOutcome_EveryMember_ErrorStatusAgreesWithCode_AndExplicitErrorCodeWins()
+    public void EditOutcome_EveryMember_ErrorStatusAgreesWithCode_AndUnsetIsError()
     {
         foreach (var outcome in Enum.GetValues<EditOutcome>())
         {
@@ -127,8 +117,8 @@ public class ResultStatusTests
             Assert.That(outcome.ToErrorCode() is null, Is.EqualTo(!status.IsErrorStatus()), $"{outcome}: code presence must match IsError");
         }
 
-        IOperationResult withCode = new DocumentEditResult(EditOutcome.CannotEdit, default) { ErrorCode = ToolErrorCode.Ambiguous };
-        Assert.That(withCode.IsError, Is.True);
+        IOperationResult unset = new DocumentEditResult(EditOutcome.Unset, default);
+        Assert.That(unset.IsError, Is.True);
 
         var json = JsonSerializer.Serialize(new DocumentEditResult(EditOutcome.Modified, default));
         Assert.That(json, Does.Not.Contain("\"IsError\"").And.Not.Contain("\"Status\"").And.Not.Contain("\"Code\""));
@@ -865,7 +855,7 @@ public class ResultStatusTests
     [Test]
     public void AddConstructorParameterCascadeResult_ClassEditFailed_PassesThroughClassEditStatus()
     {
-        var classEdit = new DocumentEditResult { Outcome = EditOutcome.TargetNotFound, Message = "no class" };
+        var classEdit = new DocumentEditResult { Outcome = EditOutcome.NoCandidatesFound, Message = "no class" };
         var result = new AddConstructorParameterCascadeResult(classEdit, new Dictionary<FilePathWrapper, string>(), 0, 0);
 
         Assert.That(result.Status, Is.EqualTo(classEdit.Status));
