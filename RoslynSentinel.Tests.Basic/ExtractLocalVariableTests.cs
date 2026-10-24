@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 
 #pragma warning disable CS8618
@@ -238,7 +239,7 @@ public class Counter
     // Observed flaky 2026-08-25: failed under a full-suite/parallel run, passed in isolation and
     // on suite rerun. Not a regression -> see feedback_comment_suspected_flaky_tests memory.
     [Test]
-    public async Task ExtractLocalVariable_SkipsMethodCallsWithSideEffects()
+    public async Task ExtractLocalVariable_SkipsMethodCallsWithSideEffects_ThrowsTargetIneligible()
     {
         const string source = @"
 public class Calculator
@@ -252,15 +253,12 @@ public class Calculator
 }";
         SetSource(source, "Test.cs");
 
-        var result = await _refactoringEngine.ExtractLocalVariableAsync(
-            "Test.cs", "Add(5, 3)", "value");
-
-        // Should not modify source for method call (has side effects)
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotConvert),
-            "Method calls with side effects must be skipped as CannotConvert, not DocumentNotFound or Modified");
-        Assert.That(result.Message, Does.Contain("potential side effects"));
-        Assert.That(result.UpdatedText, Is.Null,
-            "Should skip extraction of method calls due to potential side effects");
+        // Method calls with side effects are rejected by throwing, not by returning a result, so there is no updated text to inspect.
+        var ex = await Assert.ThrowsAsync<ToolTargetIneligibleException>(async () =>
+        {
+            await _refactoringEngine.ExtractLocalVariableAsync("Test.cs", "Add(5, 3)", "value");
+        });
+        Assert.That(ex!.Message, Does.Contain("side effects"));
     }
 
     // ══════════════════════════════════════════════════════════════════════════

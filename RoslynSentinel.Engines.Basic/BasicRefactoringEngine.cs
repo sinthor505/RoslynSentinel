@@ -10,6 +10,7 @@ using Microsoft.CodeAnalysis.Simplification;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
@@ -1000,12 +1001,7 @@ public class BasicRefactoringEngine
     {
         if (!_config.IsFeatureEnabled("ConvertIndexerToMethod"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// Feature is disabled."
-            };
+            throw new ToolFeatureDisabledException("ConvertIndexerToMethod");
         }
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -1016,12 +1012,7 @@ public class BasicRefactoringEngine
         var indexer = root?.DescendantNodes().OfType<IndexerDeclarationSyntax>().FirstOrDefault();
         if (indexer == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Indexer not found."
-            };
+            throw new ToolNotFoundException("Indexer not found.");
         }
 
         var blockBody = indexer.AccessorList?.Accessors.FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration))?.Body;
@@ -1037,12 +1028,7 @@ public class BasicRefactoringEngine
         }
         else
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = "// Indexer not found."
-            };
+            throw new ToolTargetIneligibleException("Indexer has no get accessor body or expression body to convert.");
         }
 
         return new DocumentEditResult
@@ -1058,12 +1044,7 @@ public class BasicRefactoringEngine
     {
         if (!_config.IsFeatureEnabled("ExtractConstant"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// ExtractConstant feature is disabled."
-            };
+            throw new ToolFeatureDisabledException("ExtractConstant");
         }
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -1075,35 +1056,20 @@ public class BasicRefactoringEngine
         var pos = SnippetLookup.TryResolve(text, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
         if (pos < 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = $"// Error: {snippetError}"
-            };
+            throw new ToolInvalidArgumentException(snippetError ?? "Context snippet not found.");
         }
 
         var node = root.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, snippetMatch!.Length));
         var literal = node.DescendantNodesAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault() ?? node.AncestorsAndSelf().OfType<LiteralExpressionSyntax>().FirstOrDefault();
         if (literal == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = "// Cannot convert: literal not found."
-            };
+            throw new ToolTargetIneligibleException("Cannot convert: literal not found.");
         }
 
         var containingType = literal.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
         if (containingType == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = "// Cannot convert: containing type not found."
-            };
+            throw new ToolTargetIneligibleException("Cannot convert: containing type not found.");
         }
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
@@ -1149,12 +1115,7 @@ public class BasicRefactoringEngine
     {
         if (!_config.IsFeatureEnabled("ExtractLocalVariable"))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.FeatureDisabled,
-                FilePath = filePath,
-                Message = "// ExtractLocalVariable feature is disabled."
-            };
+            throw new ToolFeatureDisabledException("ExtractLocalVariable");
         }
 
         // READCHOKEPOINT-CAST: see FormatDocumentAsync above for rationale (40-site constructor cascade avoided).
@@ -1173,12 +1134,7 @@ public class BasicRefactoringEngine
             // literal text, not a named declaration) -> so there is no candidate set to report here
             // the way there is for the member/type lookups in SyntaxTargetResolver. Point the caller at the tools that
             // would show it real file content instead of leaving a bare message with nothing to act on.
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.SourceInvalid,
-                FilePath = filePath,
-                Message = $"// Error: {snippetError} Re-check the snippet against GetMethodSource/GetFileOutline " + "output, or add lineBefore/lineAfter (the single verbatim line immediately before/after) to disambiguate."
-            };
+            throw new ToolInvalidArgumentException((snippetError ?? "Context snippet not found.") + " Re-check the snippet against GetMethodSource/GetFileOutline " + "output, or add lineBefore/lineAfter (the single verbatim line immediately before/after) to disambiguate.");
         }
 
         // Find the expression that matches the context snippet - use same logic as IntroduceVariableAsync.
@@ -1203,47 +1159,27 @@ public class BasicRefactoringEngine
             // caller reading only "expression not found" has no way to tell its snippet was even
             // located at all versus silently mismatched.
             var landedLine = text.Lines.GetLineFromPosition(pos).LineNumber + 1;
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = $"// Cannot convert: contextSnippet was found at line {landedLine}, but it does not " + "align to a single, whole extractable expression there (it may span a statement, a keyword, " + "or cross an expression boundary). Narrow the snippet to exactly one expression's text."
-            };
+            throw new ToolTargetIneligibleException($"Cannot convert: contextSnippet was found at line {landedLine}, but it does not " + "align to a single, whole extractable expression there (it may span a statement, a keyword, " + "or cross an expression boundary). Narrow the snippet to exactly one expression's text.");
         }
 
         // Find the containing method
         var containingMethod = expression.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
         if (containingMethod == null || containingMethod.Body == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = "// Cannot convert: containing method not found."
-            };
+            throw new ToolTargetIneligibleException("Cannot convert: containing method not found.");
         }
 
         // Find the containing statement and block
         var containingStatement = expression.Ancestors().OfType<StatementSyntax>().FirstOrDefault();
         if (containingStatement == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = "// Cannot convert: containing statement not found."
-            };
+            throw new ToolTargetIneligibleException("Cannot convert: containing statement not found.");
         }
 
         var containingBlock = containingStatement.Parent as BlockSyntax;
         if (containingBlock == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = "// Cannot convert: containing block not found."
-            };
+            throw new ToolTargetIneligibleException("Cannot convert: containing block not found.");
         }
 
         // Skip if expression is already a standalone variable declaration
@@ -1254,19 +1190,15 @@ public class BasicRefactoringEngine
             {
                 Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
-                Message = $"// '{existingName}' is already a local variable - nothing to extract."
+                Message = $"'{existingName}' is already a local variable - nothing to extract.",
+                UpdatedText = text.ToString()
             };
         }
 
         // Skip if expression has potential side effects (method calls, assignments)
         if (HasSideEffects(expression))
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = "// Cannot convert: expression has potential side effects."
-            };
+            throw new ToolTargetIneligibleException("Cannot convert: expression has potential side effects.");
         }
 
         // Generate or validate variable name
@@ -1315,12 +1247,7 @@ public class BasicRefactoringEngine
         var idx = currentBlock.Statements.IndexOf(currentStatement);
         if (idx < 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotConvert,
-                FilePath = filePath,
-                Message = "// Cannot convert: statement index not found."
-            };
+            throw new ToolTargetIneligibleException("Cannot convert: statement index not found.");
         }
 
         // Insert variable declaration before the statement
@@ -1534,12 +1461,7 @@ public class BasicRefactoringEngine
         var root = (CompilationUnitSyntax?)await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         // Idempotency check
@@ -1550,7 +1472,7 @@ public class BasicRefactoringEngine
             {
                 Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
-                Message = "// Using directive already exists.",
+                Message = "Using directive already exists.",
                 UpdatedText = root.ToFullString()
             };
         }
@@ -1610,12 +1532,7 @@ public class BasicRefactoringEngine
         var root = (CompilationUnitSyntax?)await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         var targetName = namespaceName.StartsWith("static ") ? namespaceName[7..] : namespaceName;
@@ -1623,12 +1540,7 @@ public class BasicRefactoringEngine
         var existing = root.Usings.FirstOrDefault(u => u.Name?.ToString() == targetName && u.StaticKeyword.IsKind(SyntaxKind.StaticKeyword) == isStaticTarget);
         if (existing == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.TargetNotFound,
-                FilePath = filePath,
-                Message = $"// Using directive '{namespaceName}' not found."
-            };
+            throw new ToolNotFoundException($"Using directive '{namespaceName}' not found.", "using directive", namespaceName);
         }
 
         return new DocumentEditResult
@@ -1680,12 +1592,7 @@ public class BasicRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         SyntaxNode? target = null;
@@ -1696,12 +1603,7 @@ public class BasicRefactoringEngine
 
         if (target == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: target not found."
-            };
+            throw new ToolNotFoundException("Cannot edit: target not found.", "declaration", targetName);
         }
 
         // baseIndent is derived first because docText bakes it into every line of the synthetic doc
@@ -1836,12 +1738,7 @@ public class BasicRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         SyntaxNode? target;
@@ -1852,12 +1749,7 @@ public class BasicRefactoringEngine
 
         if (target == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: target not found."
-            };
+            throw new ToolNotFoundException("Cannot edit: target not found.", "declaration", targetName);
         }
 
         if (!target.GetLeadingTrivia().Any(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)))
@@ -1866,7 +1758,7 @@ public class BasicRefactoringEngine
             {
                 Outcome = EditOutcome.NoCandidatesFound,
                 FilePath = filePath,
-                Message = "// No summary comment present.",
+                Message = "No summary comment present.",
                 UpdatedText = root.ToFullString()
             };
         }
@@ -1927,12 +1819,7 @@ public class BasicRefactoringEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         var tree = root.SyntaxTree;
@@ -1946,23 +1833,13 @@ public class BasicRefactoringEngine
         }).OrderBy(b => b.Span.Length).FirstOrDefault();
         if (block == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not find a suitable block."
-            };
+            throw new ToolNotFoundException("Could not find a suitable block. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.", "block");
         }
 
         var targeted = block.Statements.Where(s => StatementStartLine(s) <= endLine && StatementEndLine(s) >= startLine).ToList();
         if (targeted.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not find any statements in the specified range."
-            };
+            throw new ToolNotFoundException("Could not find any statements in the specified range. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.", "statement");
         }
 
         var tryBlock = SyntaxFactory.Block(SyntaxFactory.List(targeted));
@@ -2013,12 +1890,7 @@ public class BasicRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Cannot edit: syntax root not found."
-            };
+            throw new ToolInvalidArgumentException("Cannot edit: syntax root not found.");
         }
 
         // Find the snippet position
@@ -2036,12 +1908,7 @@ public class BasicRefactoringEngine
         }).OrderBy(b => b.Span.Length).FirstOrDefault();
         if (block == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not find a suitable block for the snippet."
-            };
+            throw new ToolNotFoundException("Could not find a suitable block for the snippet. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.", "block");
         }
 
         // StatementStartLine and StatementEndLine are unused
@@ -2058,12 +1925,7 @@ public class BasicRefactoringEngine
 
         if (targeted.Count == 0)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not find any statements containing the snippet."
-            };
+            throw new ToolNotFoundException("Could not find any statements containing the snippet. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.", "statement");
         }
 
         // Build the try/catch as in the original
@@ -2182,34 +2044,19 @@ public class BasicRefactoringEngine
         var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath);
         if (document == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Document not found."
-            };
+            throw new ToolNotFoundException("Document not found.", "document");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not parse document."
-            };
+            throw new ToolInvalidArgumentException("Could not parse document.");
         }
 
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Method not found."
-            };
+            throw new ToolNotFoundException("Method not found.", "method", methodName);
         }
 
         var currentParams = method.ParameterList.Parameters.Select(p => p.Identifier.Text).ToList();
@@ -2246,12 +2093,7 @@ public class BasicRefactoringEngine
         var xmlDoc = xmlTrivia.GetStructure() as Microsoft.CodeAnalysis.CSharp.Syntax.DocumentationCommentTriviaSyntax;
         if (xmlDoc == null)
         {
-            return new DocumentEditResult
-            {
-                Outcome = EditOutcome.CannotEdit,
-                FilePath = filePath,
-                Message = "// Could not parse XML documentation."
-            };
+            throw new ToolTargetIneligibleException("Could not parse XML documentation.");
         }
 
         // Find existing param tags
@@ -2269,9 +2111,10 @@ public class BasicRefactoringEngine
         {
             return new DocumentEditResult
             {
-                Outcome = EditOutcome.CannotEdit,
+                Outcome = EditOutcome.AlreadyInTargetState,
                 FilePath = filePath,
-                Message = "// No changes needed."
+                Message = "No changes needed.",
+                UpdatedText = root.ToFullString()
             };
         }
 
@@ -2401,12 +2244,7 @@ public class BasicRefactoringEngine
         _ = cancellationToken;
 
         // Requires solution-wide reference tracking, logic implemented in AdvancedLogicEngine.
-        return new DocumentEditResult
-        {
-            Outcome = EditOutcome.CannotEdit,
-            FilePath = filePath,
-            Message = "// InvertBooleanAsync is not implemented."
-        };
+        throw new ToolNotImplementedException("InvertBooleanAsync is not implemented.");
     }
 
     // Removes the compiler's unused-using diagnostics (CS8019) from a freshly scaffolded split file. The original

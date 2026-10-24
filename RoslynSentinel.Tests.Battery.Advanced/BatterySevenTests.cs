@@ -1,6 +1,7 @@
 #pragma warning disable CS8618
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Advanced;
 using RoslynSentinel.Engines.Basic;
 using RoslynSentinel.Tests.Support;
@@ -43,12 +44,15 @@ public class BasicRefactoringEngineTests
     }
 
     [Test]
-    public async Task InvertBoolean_AnyInput_ReturnsEmpty()
+    public async Task InvertBoolean_AnyInput_ThrowsNotImplemented()
     {
         // InvertBoolean is a documented stub -> requires solution-wide reference tracking
         SetSource("public class C { public bool IsEnabled { get; set; } }");
-        var result = await _basicRefactoringEngine.InvertBooleanAsync("Test.cs", "IsEnabled");
-        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.CannotEdit), "InvertBoolean stub should report CannotEdit");
+        var ex = await Assert.ThrowsAsync<ToolNotImplementedException>(async () =>
+        {
+            await _basicRefactoringEngine.InvertBooleanAsync("Test.cs", "IsEnabled");
+        });
+        Assert.That(ex!.Message, Does.Contain("not implemented"), "InvertBoolean stub should throw ToolNotImplementedException");
     }
 }
 
