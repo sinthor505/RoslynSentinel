@@ -664,12 +664,6 @@ public class AdvancedRefactoringTools
                     ErrorData = new ResultError(ToolErrorCode.Exception, fileErr)
                 };
             var result = await _advancedStructuralEngine.IntroduceParameterObjectAsync(resolvedFilePath, methodName, newTypeName, parameterNames, cancellationToken: cancellationToken);
-            if (string.IsNullOrEmpty(result.UpdatedText))
-                return new SentinelCallToolResult<object>()
-                {
-                    IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.Exception, $"IntroduceParameterObject: method '{methodName}' not found in '{Path.GetFileName(resolvedFilePath)}'. " + "Verify the method name (case-sensitive) or use GetFileOutline to list available methods.")
-                };
             // Not wired into MemberChangedContentResult: the generated record's text isn't caller-
             // supplied or separately exposed -> IntroduceParameterObjectAsync only returns the whole-file
             // UpdatedText, so showing just the new record here would mean duplicating its formatting
@@ -677,7 +671,7 @@ public class AdvancedRefactoringTools
             // UpdatedText.
             var changes = new Dictionary<FilePathWrapper, string>
             {
-                [resolvedFilePath] = result.UpdatedText
+                [resolvedFilePath] = result.UpdatedText! // TODO S4: UpdatedText becomes non-nullable
             };
             var apply = await ValidateAndApplyAsync(changes, $"Introduce parameter object for '{methodName}'.", "IntroduceParameterObject", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
@@ -764,12 +758,6 @@ public class AdvancedRefactoringTools
                 };
             }
 
-            if (string.IsNullOrEmpty(result.UpdatedText))
-                return new SentinelCallToolResult<object>
-                {
-                    IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.NotFound, $"Introduce({newType}): context snippet '{contextSnippet}' not matched in '{resolvedFilePath}'.")
-                };
             // Not wired into MemberChangedContentResult: the new declaration's text isn't caller-
             // supplied or separately exposed -> IntroduceVariable/Field/ParameterAsync only return
             // the whole-file UpdatedText, so showing just the new declaration here would mean
@@ -777,7 +765,7 @@ public class AdvancedRefactoringTools
             // returning the introduced declaration's text alongside UpdatedText.
             var changes = new Dictionary<FilePathWrapper, string>
             {
-                [resolvedFilePath] = result.UpdatedText
+                [resolvedFilePath] = result.UpdatedText! // TODO S4: UpdatedText becomes non-nullable
             };
             var apply = await ValidateAndApplyAsync(changes, stageDesc, $"Introduce({newType})", dryRun, returnDiff, cancellationToken: cancellationToken);
             if (apply.Error is not null)
@@ -1122,15 +1110,9 @@ public class AdvancedRefactoringTools
             if (kind == InlineKind.field)
             {
                 var fieldResult = await _advancedStructuralEngine.InlineFieldAsync(resolvedFilePath, targetName, cancellationToken: cancellationToken);
-                if (string.IsNullOrEmpty(fieldResult.UpdatedText))
-                    return new SentinelCallToolResult<object>
-                    {
-                        IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"Inline/field: field '{targetName}' not found in '{resolvedFilePath}'.")
-                    };
                 var fieldChanges = new Dictionary<FilePathWrapper, string>
                 {
-                    [resolvedFilePath] = fieldResult.UpdatedText
+                    [resolvedFilePath] = fieldResult.UpdatedText! // TODO S4: UpdatedText becomes non-nullable
                 };
                 var fieldApply = await ValidateAndApplyAsync(fieldChanges, $"Inline field '{targetName}'.", "Inline_field", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (fieldApply.Error is not null)
@@ -1155,15 +1137,9 @@ public class AdvancedRefactoringTools
                         ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "methodName is required when kind=parameter.")
                     };
                 var paramResult = await _advancedStructuralEngine.InlineParameterAsync(resolvedFilePath, methodName, targetName, cancellationToken: cancellationToken);
-                if (string.IsNullOrEmpty(paramResult.UpdatedText))
-                    return new SentinelCallToolResult<object>
-                    {
-                        IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"Inline/parameter: parameter '{targetName}' not found in method '{methodName}' in '{resolvedFilePath}'.")
-                    };
                 var paramChanges = new Dictionary<FilePathWrapper, string>
                 {
-                    [resolvedFilePath] = paramResult.UpdatedText
+                    [resolvedFilePath] = paramResult.UpdatedText! // TODO S4: UpdatedText becomes non-nullable
                 };
                 var paramApply = await ValidateAndApplyAsync(paramChanges, $"Inline parameter '{targetName}' in '{methodName}'.", "Inline_parameter", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (paramApply.Error is not null)
@@ -1557,15 +1533,9 @@ public class AdvancedRefactoringTools
                     };
                 }
 
-                if (string.IsNullOrEmpty(outerResult.UpdatedText))
-                    return new SentinelCallToolResult<AppliedChangeSummary>
-                    {
-                        IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.NotFound, $"MoveType/outerScope: nested type '{typeName}' not found in '{resolvedFilePath}'.")
-                    };
                 var outerChanges = new Dictionary<FilePathWrapper, string>
                 {
-                    [resolvedFilePath] = outerResult.UpdatedText
+                    [resolvedFilePath] = outerResult.UpdatedText! // TODO S4: UpdatedText becomes non-nullable
                 };
                 var outerApply = await ValidateAndApplyAsync(outerChanges, $"Move type '{typeName}' to outer scope.", "MoveType_outerScope", dryRun, returnDiff, cancellationToken: cancellationToken);
                 if (outerApply.Error is not null)
