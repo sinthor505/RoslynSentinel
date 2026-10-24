@@ -1476,15 +1476,6 @@ public class AsyncifyTools
                         target.FilePath, methodName, cancellationToken: cancellationToken);
                     updatedSource = convertResult.UpdatedText;
 
-                    if (string.IsNullOrEmpty(updatedSource))
-                    {
-                        var reason781 = $"Conversion failed: {convertResult.Outcome} - {convertResult.Message}";
-                        items.Add(new OperationItemRecord { FilePath = target.FilePath, MethodName = methodName, Outcome = ItemRecordOutcome.Failed, Reason = reason781 });
-                        failures.Add(new FailureDetail { FilePath = target.FilePath, MethodName = methodName, Reason = reason781, Outcome = ItemRecordOutcome.Failed });
-                        failed++;
-                        continue;
-                    }
-
                     if (propagateCancellationTokens)
                     {
                         var asyncMethod = methodName + "Async";
@@ -1497,7 +1488,7 @@ public class AsyncifyTools
                     }
 
                     var bridgeValidation = await _validationEngine.ValidateChangesAsync(
-                        new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource } },
+                        new Dictionary<FilePathWrapper, string> { { target.FilePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable
                         cancellationToken: cancellationToken);
                     if (bridgeValidation.IsError)
                     {
@@ -1559,10 +1550,10 @@ public class AsyncifyTools
                         {
                             var ctResult = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync(
                                 target.FilePath, asyncMethodName, cancellationToken: cancellationToken);
-                            if (ctResult.Outcome == EditOutcome.Modified && ctResult.UpdatedText != null)
+                            if (ctResult.Outcome == EditOutcome.Modified)
                             {
                                 var ctApplyResult = await _workspaceManager.ApplyProposedChangesAsync(
-                                    new Dictionary<FilePathWrapper, string> { { target.FilePath, ctResult.UpdatedText } },
+                                    new Dictionary<FilePathWrapper, string> { { target.FilePath, ctResult.UpdatedText! } }, // TODO S4: UpdatedText becomes non-nullable
                                     validateChanges: true);
                                 if (!ctApplyResult.IsError)
                                 {
@@ -1600,10 +1591,6 @@ public class AsyncifyTools
                                     Reason = $"Async overload '{asyncMethodName}' already exists and already has CancellationToken",
                                 });
                                 handled = true;
-                            }
-                            else
-                            {
-                                reason = $"{ex.Message}; CT-add fallback: {ctResult.Message ?? ctResult.Outcome.ToString()}";
                             }
                         }
                         catch (Exception ctEx)
@@ -3030,11 +3017,6 @@ public class AsyncifyTools
                     candidate.FilePath, candidate.MethodName, progress: progress, cancellationToken: state.InnerToken);
                 updatedSource = convertResult.UpdatedText;
 
-                if (string.IsNullOrEmpty(updatedSource))
-                {
-                    throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} - {convertResult.Message}");
-                }
-
                 if (input.PropagateCancellationTokens)
                 {
                     var asyncMethod = candidate.MethodName + "Async";
@@ -3044,13 +3026,8 @@ public class AsyncifyTools
                         updatedSource = propagationResult.UpdatedText;
                 }
 
-                if (string.IsNullOrEmpty(updatedSource))
-                {
-                    throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} - {convertResult.Message}");
-                }
-
                 var applyResult3a = await _workspaceManager.ApplyProposedChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { candidate.FilePath, updatedSource } },
+                    new Dictionary<FilePathWrapper, string> { { candidate.FilePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable
                     validateChanges: true, cancellationToken: state.InnerToken);
                 if (applyResult3a.IsError && applyResult3a.ValidationResult != null)
                 {
@@ -3155,18 +3132,15 @@ public class AsyncifyTools
                     .ConvertEventHandlerCallerToAsyncVoidAsync(
                         handler.FilePath, handler.MethodName, cancellationToken: state.InnerToken);
 
-                if (!string.IsNullOrEmpty(handlerResult.UpdatedText))
+                var applyResult3b = await _workspaceManager.ApplyProposedChangesAsync(
+                    new Dictionary<FilePathWrapper, string> { { handler.FilePath, handlerResult.UpdatedText! } }, // TODO S4: UpdatedText becomes non-nullable
+                    validateChanges: true, cancellationToken: state.InnerToken);
+                if (applyResult3b.IsError && applyResult3b.ValidationResult != null)
                 {
-                    var applyResult3b = await _workspaceManager.ApplyProposedChangesAsync(
-                        new Dictionary<FilePathWrapper, string> { { handler.FilePath, handlerResult.UpdatedText } },
-                        validateChanges: true, cancellationToken: state.InnerToken);
-                    if (applyResult3b.IsError && applyResult3b.ValidationResult != null)
-                    {
-                        var diagMsg = string.Join("; ", applyResult3b.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
-                        throw new InvalidOperationException($"Validation: {applyResult3b.ValidationResult.Diagnostics.Count} error(s) - {diagMsg}");
-                    }
-                    state.HandlerConvertedFiles.Add(handler.FilePath);
+                    var diagMsg = string.Join("; ", applyResult3b.ValidationResult.Diagnostics.Take(3).Select(d => $"[{d.Id}] {d.Message}"));
+                    throw new InvalidOperationException($"Validation: {applyResult3b.ValidationResult.Diagnostics.Count} error(s) - {diagMsg}");
                 }
+                state.HandlerConvertedFiles.Add(handler.FilePath);
 
                 items.Add(new OperationItemRecord
                 {
@@ -3538,11 +3512,6 @@ public class AsyncifyTools
                     filePath, methodName, progress: progress, cancellationToken: cancellationToken);
                 updatedSource = convertResult.UpdatedText;
 
-                if (string.IsNullOrEmpty(updatedSource))
-                {
-                    throw new InvalidOperationException($"Conversion failed: {convertResult.Outcome} - {convertResult.Message}");
-                }
-
                 if (propagateCancellationTokens)
                 {
                     var asyncMethod = methodName + "Async";
@@ -3555,7 +3524,7 @@ public class AsyncifyTools
                 }
 
                 var handlerToAsyncValidation = await _validationEngine.ValidateChangesAsync(
-                    new Dictionary<FilePathWrapper, string> { { filePath, updatedSource } },
+                    new Dictionary<FilePathWrapper, string> { { filePath, updatedSource! } }, // TODO S4: UpdatedText becomes non-nullable
                     cancellationToken: cancellationToken);
                 if (handlerToAsyncValidation.IsError)
                 {
