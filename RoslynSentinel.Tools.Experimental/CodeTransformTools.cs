@@ -789,19 +789,10 @@ public class CodeTransformTools
                         try
                         {
                             var r = await _apiGenerationEngine.AddValidationToPocoAsync(resolvedFilePath, className, cancellationToken);
-                            if (string.IsNullOrEmpty(r.UpdatedText))
-                            {
-                                return new SentinelCallToolResult<object>
-                                {
-                                    IsError = false,
-                                    SuccessData = $"No unvalidated properties found on '{className}' in '{resolvedFilePath}'. Class may already have validation attributes or have no settable properties."
-                                };
-                            }
-
                             return new SentinelCallToolResult<object>
                             {
                                 IsError = false,
-                                SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                                SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
                             };
                         }
                         catch (Exception ex)
@@ -818,19 +809,10 @@ public class CodeTransformTools
                 case "class_to_record":
                     {
                         var r = await _modernizationEngine.ClassToRecordAsync(resolvedFilePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"class_to_record: class '{className}' not found or not eligible in '{resolvedFilePath}'. " + "The class must have no custom methods beyond property accessors. Use GetFileOutline to verify.")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
                         };
                     }
 
@@ -839,19 +821,10 @@ public class CodeTransformTools
                         try
                         {
                             var r = await _advancedStructuralEngine.ConvertAbstractClassToInterfaceAsync(resolvedFilePath, className, cancellationToken);
-                            if (string.IsNullOrEmpty(r.UpdatedText))
-                            {
-                                return new SentinelCallToolResult<object>
-                                {
-                                    IsError = true,
-                                    ErrorData = new ResultError(ToolErrorCode.Exception, $"convert_abstract_to_interface: class '{className}' not found or is not abstract in '{resolvedFilePath}'. " + "The class must be declared with the 'abstract' keyword. Use GetFileOutline to verify.")
-                                };
-                            }
-
                             return new SentinelCallToolResult<object>
                             {
                                 IsError = false,
-                                SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                                SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
                             };
                         }
                         catch (InvalidOperationException ioe)
@@ -886,19 +859,10 @@ public class CodeTransformTools
                         }
 
                         var r = await _codeGenerationEngine.ConvertPropertySafeAsync(resolvedFilePath, propName, direction, contextSnippet, lineBefore, lineAfter, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.NotFound, $"convert_property_safe ({direction}): property '{propName}' not found or not eligible in '{resolvedFilePath}'. " + "Possible causes: property name is wrong (case-sensitive), property already has the target style, " + "or contextSnippet did not uniquely identify it. Use GetFileOutline to list available properties.")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
                         };
                     }
 
@@ -906,38 +870,20 @@ public class CodeTransformTools
                     {
                         var propName = propertyName ?? className;
                         var r = await _codeStyleEngine.ConvertPropertyToMethodsAsync(resolvedFilePath, propName, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.NotFound, $"convert_property_to_methods: property '{propName}' not found in '{resolvedFilePath}'. " + "Use GetFileOutline to list available properties (name is case-sensitive).")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
                         };
                     }
 
                 case "convert_to_background_service":
                     {
                         var r = await _solutionStructureEngine.ConvertToBackgroundServiceAsync(resolvedFilePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.NotFound, $"convert_to_background_service: class '{className}' not found or not eligible in '{resolvedFilePath}'. " + "The class must not already implement BackgroundService. Use GetFileOutline to verify.")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
                         };
                     }
 
@@ -963,114 +909,60 @@ public class CodeTransformTools
                 case "document_poco_fields":
                     {
                         var r = await _documentationEngine.DocumentPocoFieldsAsync(resolvedFilePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = false,
-                                SuccessData = $"No undocumented fields/properties found on '{className}' in '{resolvedFilePath}'. Class may already be documented or have no public fields."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
                         };
                     }
 
                 case "make_class_immutable":
                     {
                         var r = await _modernizationEngine.MakeClassImmutableAsync(resolvedFilePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"make_class_immutable: class '{className}' not found or already immutable in '{resolvedFilePath}'. " + "Use GetFileOutline to verify the class exists and has mutable properties.")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
                         };
                     }
 
                 case "record_to_class":
                     {
                         var r = await _modernizationEngine.RecordToClassAsync(resolvedFilePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.NotFound, $"record_to_class: record '{className}' not found in '{resolvedFilePath}'. " + "The type must be declared as a 'record'. Use GetFileOutline to verify.")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
                         };
                     }
 
                 case "replace_constructor_with_factory":
                     {
                         var r = await _advancedStructuralEngine.ReplaceConstructorWithFactoryAsync(resolvedFilePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"replace_constructor_with_factory: class '{className}' not found or not eligible in '{resolvedFilePath}'. " + "Use GetFileOutline to verify the class name (case-sensitive).")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
                         };
                     }
 
                 case "sort_members":
                     {
                         var r = await _memberRefactoringEngine.SortMembersAsync(resolvedFilePath, className, cancellationToken: cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = false,
-                                SuccessData = $"No members to reorder found in '{className}' in '{resolvedFilePath}'. Type may be empty or already sorted."
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
                         };
                     }
 
                 case "upgrade_to_primary_constructor":
                     {
                         var r = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync(resolvedFilePath, className, cancellationToken);
-                        if (string.IsNullOrEmpty(r.UpdatedText))
-                        {
-                            return new SentinelCallToolResult<object>
-                            {
-                                IsError = true,
-                                ErrorData = new ResultError(ToolErrorCode.Exception, $"upgrade_to_primary_constructor: class '{className}' not found or not eligible in '{resolvedFilePath}'. " + "The constructor must only assign parameters to readonly fields (no other logic). Use GetFileOutline to verify the class exists.")
-                            };
-                        }
-
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
-                            SuccessData = new SourceTransformResult(r.UpdatedText, false, false, resolvedFilePath)
+                            SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
                         };
                     }
 
