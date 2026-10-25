@@ -103,7 +103,7 @@ public class DocumentationEngine
             throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
         }
 
-        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (classNode == null)
         {
             throw new ToolNotFoundException("Class '" + className + "' not found in '" + filePath + "'.", "class", className);
@@ -116,7 +116,7 @@ public class DocumentationEngine
         {
             root = AnnotatedInsertionHelper.AddUsingDirective(root, "System.ComponentModel");
             addedUsing = true;
-            classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+            classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         }
 
         // DEFERRED (accepted 2026-10-22, finding #20): only properties are annotated; plain fields are ignored.

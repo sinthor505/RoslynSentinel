@@ -37,7 +37,7 @@ public class StructuralRefactoringEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
         if (classNode != null && classNode.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword)))
         {
             // Each member keeps its own outer trivia (blank lines, comments, line break), which dropping the modifiers
@@ -70,7 +70,7 @@ public class StructuralRefactoringEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
         var constructor = classNode?.Members.OfType<ConstructorDeclarationSyntax>().FirstOrDefault();
         if (classNode != null && constructor != null)
         {
@@ -120,7 +120,7 @@ public class StructuralRefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == classNames[0]);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == classNames[0]).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", classNames[0]);
         if (classNode == null)
         {
             return changes;
@@ -192,7 +192,7 @@ public class StructuralRefactoringEngine
             return new Dictionary<FilePathWrapper, string>();
         }
 
-        var sourceClass = sourceRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var sourceClass = RoslynSentinel.Common.NameTargetLookup.RequireSingle(sourceRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (sourceClass == null)
         {
             return new Dictionary<FilePathWrapper, string>
@@ -226,7 +226,7 @@ public class StructuralRefactoringEngine
             targetClassName = targetClass.Identifier.Text;
             var expandedTarget = targetClass.AddMembers(PrepareInlinedMembers(targetClass, membersToInline));
             var intermediate = (CompilationUnitSyntax)sourceRoot.ReplaceNode(targetClass, expandedTarget);
-            var classToRemove = intermediate.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+            var classToRemove = RoslynSentinel.Common.NameTargetLookup.RequireSingle(intermediate.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
             var newRoot = classToRemove != null ? (CompilationUnitSyntax)intermediate.RemoveNode(classToRemove, RemoveOptionsKeepingComments(classToRemove))! : intermediate;
             result[sourceFilePath] = await FormatAnnotatedTextAsync(sourceDoc, newRoot, cancellationToken);
             // Update type references in all other files
@@ -885,7 +885,7 @@ public class StructuralRefactoringEngine
         }
 
         // Find the type
-        var nestedType = root.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.Text == nestedTypeName);
+        var nestedType = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<TypeDeclarationSyntax>().Where(t => t.Identifier.Text == nestedTypeName).ToList(), "Type", nestedTypeName);
         if (nestedType == null)
         {
             throw new ToolNotFoundException($"Type '{nestedTypeName}' not found.", "type", nestedTypeName);
@@ -985,7 +985,7 @@ public class StructuralRefactoringEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
         if (classNode != null)
         {
             var membersToMove = SelectMembersToMove(classNode, memberNames);
@@ -1052,7 +1052,7 @@ public class StructuralRefactoringEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         var root = document == null ? null : await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
         if (root == null || classNode == null)
         {
             return new Dictionary<FilePathWrapper, string>();
@@ -1972,8 +1972,8 @@ public class StructuralRefactoringEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
-        var propNode = classNode?.Members.OfType<PropertyDeclarationSyntax>().FirstOrDefault(p => p.Identifier.Text == propertyName);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
+        var propNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classNode?.Members.OfType<PropertyDeclarationSyntax>().Where(p => p.Identifier.Text == propertyName).ToList() ?? new System.Collections.Generic.List<PropertyDeclarationSyntax>(), "Property", propertyName);
         if (classNode == null || propNode == null)
         {
             throw new ToolNotFoundException("Class or property not found.");

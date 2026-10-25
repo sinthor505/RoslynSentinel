@@ -20,7 +20,7 @@ public class ApiGenerationEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var controller = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == controllerName);
+        var controller = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == controllerName).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", controllerName);
         if (controller == null)
         {
             throw new ToolNotFoundException($"Controller class '{controllerName}' not found in '{filePath}'. Searched: class declarations in the file. Next: Search(mode: class, query: '{controllerName}') to locate it, or GetFileOutline on the file.", "class", controllerName);
@@ -114,7 +114,7 @@ public class ApiGenerationEngine
         }
 
         // Now get the classNode from the updated root
-        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (classNode == null)
         {
             throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file after adding the using directive. Next: Search(mode: class, query: '{className}') to confirm the name. Use GetFileOutline to verify the class name (case-sensitive).", "class", className);
