@@ -29,7 +29,7 @@ public class SyntaxModernizationEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
         if (classNode == null)
         {
             if (root?.DescendantNodes().OfType<RecordDeclarationSyntax>().Any(r => r.Identifier.Text == className) == true)
@@ -642,7 +642,7 @@ public class SyntaxModernizationEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new ToolNotFoundException("Class not found.");
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className) ?? throw new ToolNotFoundException("Class not found.");
         // Identify logging calls
         var invocations = classNode.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(inv => inv.Expression is MemberAccessExpressionSyntax ma && ma.Name.Identifier.Text.StartsWith("Log") && (ma.Name.Identifier.Text == "LogInformation" || ma.Name.Identifier.Text == "LogError" || ma.Name.Identifier.Text == "LogWarning")).ToList();
         var noLogCallsMessage = $"No LogInformation, LogWarning or LogError calls found in class '{className}'. Searched: invocations in the class body only. Next: Search(mode: text, query: 'LogInformation|LogWarning|LogError') to locate the logging calls, or GetFileOutline to confirm the class name.";
@@ -750,7 +750,7 @@ public class SyntaxModernizationEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
         if (classNode == null)
         {
             throw new ToolNotFoundException("Class not found.", "class", className);

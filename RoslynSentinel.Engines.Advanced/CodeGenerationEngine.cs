@@ -879,10 +879,22 @@ public class CodeGenerationEngine
             throw new ToolTargetIneligibleException("Could not get class symbol.");
         }
 
-        // TODO first-match: a class implementing IFoo<int> and IFoo<string> matches "IFoo" twice; refuse with ToolAmbiguousMatchException (plan_first_match_ambiguity_audit step 8 baseline)
-        var ifaceSymbol = classSymbol.AllInterfaces
-            .FirstOrDefault(i => i.Name == interfaceName ||
-                i.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) == interfaceName);
+        var ifaceMatches = classSymbol.AllInterfaces
+            .Where(i => i.Name == interfaceName ||
+                i.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) == interfaceName)
+            .ToList();
+        var exactMatches = ifaceMatches
+            .Where(i => i.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) == interfaceName)
+            .ToList();
+        if (exactMatches.Count == 1)
+        {
+            ifaceMatches = exactMatches;
+        }
+        if (ifaceMatches.Count > 1)
+        {
+            throw new RoslynSentinel.Common.ToolAmbiguousMatchException($"Interface '{interfaceName}' matches {ifaceMatches.Count} interfaces on class: {string.Join(", ", ifaceMatches.Select(i => i.ToDisplayString()))}. Next: pass the full generic form, e.g. IFoo<int>.");
+        }
+        var ifaceSymbol = ifaceMatches.FirstOrDefault();
         if (ifaceSymbol == null)
         {
             throw new ToolNotFoundException($"Interface '{interfaceName}' not found on class. Ensure the class already declares it implements '{interfaceName}'.", "interface", interfaceName);

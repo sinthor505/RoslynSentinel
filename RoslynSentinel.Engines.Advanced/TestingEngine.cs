@@ -75,8 +75,8 @@ public class TestingEngine
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException($"Could not parse syntax root for file: {filePath}");
 
-        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className) ?? throw new ToolNotFoundException($"Class {className} not found in file: {filePath}");
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className) ?? throw new ToolNotFoundException($"Class {className} not found in file: {filePath}");
         var ns = classNode.Ancestors().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString() ?? "Global";
         var publicMethods = classNode.Members.OfType<MethodDeclarationSyntax>()
             .Where(m => m.Modifiers.Any(mod => mod.IsKind(SyntaxKind.PublicKeyword)));
@@ -180,8 +180,8 @@ public class TestingEngine
             return new TestScaffoldResult(className, $"{className}Tests", "Global.Tests", "", "Could not parse syntax root.");
         }
 
-        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
 
         if (classNode == null)
         {
@@ -301,8 +301,8 @@ public class TestingEngine
             throw new ToolNotFoundException($"Syntax root could not be read for '{filePath}'. Searched: the document's syntax tree. Next: confirm the file is in the loaded solution with ListAll, then retry.");
         }
 
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>(), "Class", className);
         if (classNode == null)
         {
             throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'. Searched: class declarations in the file. Next: Search(mode: class, query: '{className}') to confirm the name.", "class", className);
