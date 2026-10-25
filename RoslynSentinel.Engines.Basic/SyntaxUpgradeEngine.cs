@@ -118,7 +118,7 @@ public class SyntaxUpgradeEngine
         var pos = SnippetLookup.TryResolve(text, contextSnippet, lineBefore, lineAfter, out var snippetMatch, out var snippetError) ? snippetMatch.Start : -1;
         if (pos < 0)
         {
-            throw new ToolNotFoundException($"ErrorDetails: {snippetError}");
+            throw new ToolNotFoundException($"{snippetError}");
         }
 
         var node = root?.FindNode(new Microsoft.CodeAnalysis.Text.TextSpan(pos, snippetMatch!.Length))

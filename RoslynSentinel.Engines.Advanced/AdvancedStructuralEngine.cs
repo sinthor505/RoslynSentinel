@@ -518,12 +518,12 @@ public class StructuralRefactoringEngine
         // If field not found or has no initializer, return error
         if (field == null)
         {
-            throw new ToolNotFoundException($"ERROR: Field '{fieldName}' not found.", "field", fieldName);
+            throw new ToolNotFoundException($"Field '{fieldName}' not found.", "field", fieldName);
         }
 
         if (field.Declaration.Variables[0].Initializer == null)
         {
-            throw new ToolTargetIneligibleException($"ERROR: Cannot inline field '{fieldName}' without initializer. Field must have a static initializer or initial assignment.");
+            throw new ToolTargetIneligibleException($"Cannot inline field '{fieldName}' without initializer. Field must have a static initializer or initial assignment.");
         }
 
         var value = field.Declaration.Variables[0].Initializer!.Value;
@@ -571,7 +571,7 @@ public class StructuralRefactoringEngine
         var parameter = method.ParameterList.Parameters.FirstOrDefault(p => p.Identifier.Text == parameterName);
         if (parameter == null)
         {
-            throw new ToolNotFoundException($"ERROR: Parameter '{parameterName}' not found in method '{methodName}'.", "parameter", parameterName);
+            throw new ToolNotFoundException($"Parameter '{parameterName}' not found in method '{methodName}'.", "parameter", parameterName);
         }
 
         // TODO implement parameter inlining (bind the constant argument into the body and drop the parameter plus every call-site argument); until then refuse
@@ -587,18 +587,18 @@ public class StructuralRefactoringEngine
         var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException($"ERROR: Method '{methodName}' not found in {Path.GetFileName(filePath)}.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in {Path.GetFileName(filePath)}.", "method", methodName);
         }
 
         if (method.ParameterList.Parameters.Count != 1)
         {
-            throw new ToolTargetIneligibleException($"ERROR: Cannot convert '{methodName}' to an indexer - it must have exactly one parameter (has {method.ParameterList.Parameters.Count}).");
+            throw new ToolTargetIneligibleException($"Cannot convert '{methodName}' to an indexer - it must have exactly one parameter (has {method.ParameterList.Parameters.Count}).");
         }
 
         // C# does not support static indexers
         if (method.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)))
         {
-            throw new ToolTargetIneligibleException($"ERROR: Cannot convert static method '{methodName}' to an indexer - C# does not support static indexers.");
+            throw new ToolTargetIneligibleException($"Cannot convert static method '{methodName}' to an indexer - C# does not support static indexers.");
         }
 
         // Build getter body from block body or expression body
@@ -614,7 +614,7 @@ public class StructuralRefactoringEngine
         else
         {
             // Abstract/extern methods have no body -> cannot create indexer
-            throw new ToolTargetIneligibleException($"ERROR: Cannot convert '{methodName}' to an indexer - method has no body.");
+            throw new ToolTargetIneligibleException($"Cannot convert '{methodName}' to an indexer - method has no body.");
         }
 
         // Exclude modifiers that are invalid on indexers (static, abstract, extern, etc.)
@@ -733,7 +733,7 @@ public class StructuralRefactoringEngine
         var position = SnippetLookup.TryResolve(sourceText, contextSnippet, lineBefore, lineAfter, out var paramMatch, out var paramSnippetError) ? paramMatch.Start : -1;
         if (position < 0)
         {
-            throw new ToolNotFoundException($"ErrorDetails: {paramSnippetError}", "snippet");
+            throw new ToolNotFoundException($"{paramSnippetError}", "snippet");
         }
 
         var token = root.FindToken(position);
@@ -871,20 +871,20 @@ public class StructuralRefactoringEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            throw new ToolNotFoundException($"ErrorDetails: File '{filePath}' not found.", "file");
+            throw new ToolNotFoundException($"File '{filePath}' not found.", "file");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         if (root == null)
         {
-            throw new ToolInvalidArgumentException("ErrorDetails: Failed to get syntax root.");
+            throw new ToolInvalidArgumentException("Failed to get syntax root.");
         }
 
         // Find the type
         var nestedType = root.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.Text == nestedTypeName);
         if (nestedType == null)
         {
-            throw new ToolNotFoundException($"ErrorDetails: Type '{nestedTypeName}' not found.", "type", nestedTypeName);
+            throw new ToolNotFoundException($"Type '{nestedTypeName}' not found.", "type", nestedTypeName);
         }
 
         // Check if type is actually nested (parent is a type, not namespace/file scope)
@@ -910,7 +910,7 @@ public class StructuralRefactoringEngine
             var originalModifiers = string.Join(" ", accessModifiers.Select(m => m.ValueText));
             if (!allowWidenToInternal)
             {
-                throw new ToolTargetIneligibleException($"ErrorDetails: Nested type '{nestedTypeName}' is declared '{originalModifiers}'; moving it to namespace level would not compile (CS1527). Retry with allowWidenToInternal: true to widen it to 'internal'.");
+                throw new ToolTargetIneligibleException($"Nested type '{nestedTypeName}' is declared '{originalModifiers}'; moving it to namespace level would not compile (CS1527). Retry with allowWidenToInternal: true to widen it to 'internal'.");
             }
 
             // The first access modifier's trivia is kept so the declaration keeps its indentation; the others are dropped.
@@ -946,7 +946,7 @@ public class StructuralRefactoringEngine
         var currentContainer = newRoot?.GetCurrentNode(container);
         if (newRoot == null || currentContainer == null)
         {
-            throw new ToolNotFoundException($"ErrorDetails: Failed to remove nested type '{nestedTypeName}'.", "type", nestedTypeName);
+            throw new ToolNotFoundException($"Failed to remove nested type '{nestedTypeName}'.", "type", nestedTypeName);
         }
 
         // Only the re-added type is annotated for formatting.
