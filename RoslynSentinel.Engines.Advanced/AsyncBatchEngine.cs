@@ -540,7 +540,7 @@ public class AsyncBatchEngine
                     candidate.MethodName,
                     progress,
                     cancellationToken);
-                newSource = result.UpdatedText ?? throw new InvalidOperationException();
+                newSource = result.UpdatedText;
             }
             catch (Exception ex) when (ex is AsyncBridgePreconditionException { Kind: AsyncBridgePreconditionKind.OverloadExists })
             {
@@ -554,7 +554,7 @@ public class AsyncBatchEngine
                 {
                     var ctResult = await _asyncOptimizationEngine.AddCancellationTokenToMethodAsync(
                         candidate.FilePath, asyncMethodName, progress, cancellationToken);
-                    if (ctResult.Outcome == EditOutcome.Modified && ctResult.UpdatedText != null)
+                    if (ctResult.Outcome == EditOutcome.Modified)
                     {
                         var ctValidation = await _validationEngine.ValidateChangesAsync(
                             new Dictionary<FilePathWrapper, string> { { candidate.FilePath, ctResult.UpdatedText } },
@@ -606,7 +606,7 @@ public class AsyncBatchEngine
                             progress: progress,
                             cancellationToken: cancellationToken);
 
-                        if (bodyRewrite.Outcome == EditOutcome.Modified && bodyRewrite.UpdatedText != null)
+                        if (bodyRewrite.Outcome == EditOutcome.Modified)
                         {
                             _logger.LogInformation(
                                 "RunBridgeBatch: rewriting bridge-call body of '{AsyncMethod}' in {File}",
@@ -805,7 +805,7 @@ public class AsyncBatchEngine
                         sourceText: sourceToValidate,
                         progress: progress,
                         cancellationToken: cancellationToken);
-                    if (bodyRewrite.Outcome == EditOutcome.Modified && bodyRewrite.UpdatedText != null)
+                    if (bodyRewrite.Outcome == EditOutcome.Modified)
                     {
                         sourceToValidate = bodyRewrite.UpdatedText;
                     }

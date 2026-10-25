@@ -343,7 +343,7 @@ public class CommentingEngine
                 continue;
             }
 
-            if (editResult.Outcome != EditOutcome.Modified || editResult.UpdatedText == null)
+            if (editResult.Outcome != EditOutcome.Modified)
             {
                 outcomes.Add(new MemberCommentOutcome(site, false, $"AddSummaryComment failed: {editResult.Outcome} - {editResult.Message}"));
                 continue;
