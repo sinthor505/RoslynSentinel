@@ -1,6 +1,6 @@
 # Plan: Refuse and report ambiguity instead of silently using the first match
 
-**Status:** IN PROGRESS 2026-10-24. Audit done; steps 1-4 built, step 5 partly built (all but `FilterByContainingType`) and step 6 built; steps 7-8 open.
+**Status:** IN PROGRESS 2026-10-24. Audit done; steps 1-4 built, step 5 partly built (all but `FilterByContainingType`), step 6 built and step 7 built for the six named engines (file-name group open); step 8 open.
 
 ## Problem
 
@@ -85,10 +85,11 @@ the old, `[Obsolete("Use X")]` on the old, `// TODO` for remaining callers, fini
 - Open follow-up: `AntiPatternEngine`, `AsyncOptimizationEngine`, `ControlFlowEngine`, `CodeStyleEngine`, `DiscoveryEngine`, `ProjectStructureEngine.DetectLayerViolationsAsync` return an empty document set when the named project does not exist (silent miss, not first-match); out of scope here.
 - Original text: one `RequireProject(solution, name)` that throws on zero or several; migrate callers in slices. Done when no `Projects.FirstOrDefault(p => p.Name == ...)` remains in Engines/Tools (met except the two exceptions above).
 
-### Step 7 - Engines.Advanced name-keyed picks
-- Files: engines listed in Problem.
-- Change: triage the 305-candidate list (CSV from the measurement build), fix only picks reachable from a user-supplied name; give each a justified "unique by construction" comment when it is.
-- Done when: the triaged list is empty or annotated.
+### Step 7 - Engines.Advanced name-keyed picks - DONE 2026-10-24 (name picks); file-name group open
+- DONE (commits b8637b0a, 47b154e9, 97eb6064, 1faf1ad7, 4eae04c2, 509d6ea3): triage of the six engines found 21 picks reachable from a user-supplied method, class or property name (the CSV missed ~10 in `AsyncOptimizationEngine`; a text search for `Identifier.Text == methodName|className|propertyName` found them). All now go through `NameTargetLookup.RequireSingle(matches, kind, name)` in `Common` (null on none, the node on one, `ToolAmbiguousMatchException` listing `file:line` candidates on several; an interface declaration plus one implementation counts as one method). `AsyncOptimizationEngine` 12 sites, `CodeGenerationEngine` 6, `CodeStyleEngine` / `DeadCodeEngine` / `CloneDetectionEngine` 1 each, `DependencyInjectionEngine` 2. `FlagMultipleMigrationCandidatesAsync` reports an ambiguous item in its per-item errors instead of aborting the batch. `GenerateAsyncOverloadAsync` now resolves the method first and takes its class from it (a method in a later class used to be "not found"). Tests: `AmbiguousNameTargetTests` (9) and `NameTargetLookupTests` (5); five existing tests that relied on the first-match pick were fixed (interface pair kept as one method; overloaded or virtual/override fixtures renamed or given a `contextSnippet`).
+- Open follow-up (file-name group): `d.Name == filePath` document picks silently match the first file of that bare name in `CodeGenerationEngine` (~304, ~509, ~609), `DeadCodeEngine` (~267) and `AntiPatternEngine`, `ResourceSafetyEngine`, `CodeHealingEngine`, `CommentingEngine`, `LogicOptimizationEngine`, `TestingEngine`. `DocumentLookup.RequireDocument` exists; check how it treats a bare name before migrating.
+- Not re-triaged: the other Engines.Advanced engines outside the six named, and name-comparison shapes other than `Identifier.Text ==` (for example `.Name ==` on symbols).
+- Original text: triage the 305-candidate list and fix only picks reachable from a user-supplied name, annotating the rest as unique by construction (file-path-keyed `GetDocumentIdsWithFilePath(...).FirstOrDefault()` picks are multi-target duplicates, intended).
 
 ### Step 8 - Regression net
 - Files: new test fixture and tests.
