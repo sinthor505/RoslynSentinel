@@ -429,7 +429,7 @@ public abstract class BaseService
     public abstract DataTable GetTrips(int companyId);
 }", "BaseService.cs");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<AsyncBridgePreconditionException>(
             () => _engine.ConvertToAsyncBridgeAsync(PathOf("BaseService.cs"), "GetTrips"),
             "Should throw for abstract methods (no body to copy).");
     }
@@ -447,7 +447,7 @@ public class Form1
     }
 }", "Form1.cs");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<AsyncBridgePreconditionException>(
             () => _engine.ConvertToAsyncBridgeAsync(PathOf("Form1.cs"), "Button_Click"),
             "Should throw for event handler methods (fixed delegate signature).");
     }
@@ -465,7 +465,7 @@ public class Service
     }
 }", "Service.cs");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<AsyncBridgePreconditionException>(
             () => _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "ComputeRef"),
             "Should throw when method has ref parameters.");
     }
@@ -483,7 +483,7 @@ public class Service
     }
 }", "Service.cs");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<AsyncBridgePreconditionException>(
             () => _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "TryGet"),
             "Should throw when method has out parameters.");
     }
@@ -508,7 +508,7 @@ public class TripService
     }
 }", "TripService.cs");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<AsyncBridgePreconditionException>(
             () => _engine.ConvertToAsyncBridgeAsync(PathOf("TripService.cs"), "GetTrips"),
             "Should throw when GetTripsAsync already exists in the class.");
     }
@@ -584,7 +584,7 @@ public abstract class Base
     public abstract void DoWork(string arg);
 }", "Base.cs");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<AsyncBridgePreconditionException>(
             async () => await _engine.ConvertToAsyncBridgeAsync(PathOf("Base.cs"), "DoWork"));
     }
 

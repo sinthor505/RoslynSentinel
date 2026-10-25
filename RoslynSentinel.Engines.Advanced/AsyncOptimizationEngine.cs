@@ -458,13 +458,13 @@ public class AsyncOptimizationEngine
 
         if (methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword)))
         {
-            throw new InvalidOperationException(
+            throw new AsyncBridgePreconditionException(AsyncBridgePreconditionKind.Other,
                 $"Method '{methodName}' is abstract - abstract methods have no body and cannot be bridged.");
         }
 
         if (IsEventHandlerSignature(methodNode))
         {
-            throw new InvalidOperationException(
+            throw new AsyncBridgePreconditionException(AsyncBridgePreconditionKind.EventHandler,
                 $"Method '{methodName}' appears to be an event handler (object sender, XxxEventArgs e). " +
                 "Fixed delegate signatures cannot receive an extra CancellationToken parameter.");
         }
@@ -476,7 +476,7 @@ public class AsyncOptimizationEngine
                 m.IsKind(SyntaxKind.RefKeyword) || m.IsKind(SyntaxKind.OutKeyword)));
         if (refOrOutParam != null)
         {
-            throw new InvalidOperationException(
+            throw new AsyncBridgePreconditionException(AsyncBridgePreconditionKind.Other,
                 $"Method '{methodName}' has a ref/out parameter '{refOrOutParam.Identifier.Text}'. " +
                 "ref/out parameters are not supported by the Asyncify-bridge pattern.");
         }
@@ -484,7 +484,7 @@ public class AsyncOptimizationEngine
         var asyncMethodName = methodName + "Async";
         if (classNode.Members.OfType<MethodDeclarationSyntax>().Any(m => m.Identifier.Text == asyncMethodName))
         {
-            throw new InvalidOperationException(
+            throw new AsyncBridgePreconditionException(AsyncBridgePreconditionKind.OverloadExists,
                 $"An overload named '{asyncMethodName}' already exists in the class. " +
                 "Remove it first, or use add_cancellation_token_to_method to add CT to the existing overload.");
         }
