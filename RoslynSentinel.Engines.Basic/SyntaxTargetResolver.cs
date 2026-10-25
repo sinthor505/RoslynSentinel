@@ -455,6 +455,7 @@ public static class SyntaxTargetResolver
     /// The warning is non-null only when trustSingleCandidate is true, exactly one candidate exists, and a non-blank
     /// contextSnippet does not match anywhere inside that candidate's declaration (so the shortcut ignored a snippet
     /// that the validating path would have rejected or resolved elsewhere). Candidate is null only when there are no candidates.
+    /// A null contextSnippet with more than one candidate throws ToolAmbiguousMatchException instead of returning the first candidate.
     /// </summary>
     public static (SyntaxNodeCandidate? Candidate, string? Warning) ResolveBySnippetWithWarning(
         List<SyntaxNodeCandidate> candidates,
@@ -464,6 +465,11 @@ public static class SyntaxTargetResolver
         string? lineAfter,
         Func<List<SyntaxNodeCandidate>, List<int>, string, string> hintBuilder, bool trustSingleCandidate = false, string? filePath = null)
     {
+        if (contextSnippet == null && candidates.Count > 1)
+        {
+            throw new ToolAmbiguousMatchException(hintBuilder(candidates, [], "ambiguous"), filePath == null ? null : BuildDeclarationCandidates(candidates, sourceText, filePath));
+        }
+
         if (contextSnippet == null || candidates.Count == 0)
         {
             return (candidates.FirstOrDefault(), null);
@@ -599,7 +605,6 @@ public static class SyntaxTargetResolver
     {
         var parts = new List<string>();
         if (!string.IsNullOrEmpty(lead))
-    /// A null contextSnippet with more than one candidate throws ToolAmbiguousMatchException instead of returning the first candidate.
         {
             parts.Add(lead);
         }
@@ -609,11 +614,6 @@ public static class SyntaxTargetResolver
         {
             parts.Add(scope);
         }
-        if (contextSnippet == null && candidates.Count > 1)
-        {
-            throw new ToolAmbiguousMatchException(hintBuilder(candidates, [], "ambiguous"), filePath == null ? null : BuildDeclarationCandidates(candidates, sourceText, filePath));
-        }
-
 
         parts.Add(hint);
         var message = string.Join("\n", parts);
