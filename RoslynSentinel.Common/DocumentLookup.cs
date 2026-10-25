@@ -120,7 +120,7 @@ public sealed record DocumentLookupResult(
         }
 
         return $"File '{RequestedPath}' was not found anywhere in the loaded solution (searched {SearchedProjectCount} project(s), no file-name match; path comparison ignores case, so casing is not the cause). " +
-               "You MUST call ListSolutionItems(kind: all) next to see every file actually in the solution before trying another path.";
+               $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path.";
     }
 
     /// <summary>

@@ -158,11 +158,11 @@ public class HaltInfoTests
         Assert.That(info.Recovery, Is.Not.Empty);
     }
 
+    // The rendered ExternalFileDrift call parameters are asserted in RoslynSentinel.Tests.Tools.Basic ConvertedToolHintTests, where the tool schemas are visible.
     [Test]
     public void DriftHaltMessage_NamesRecoveryCallsAndReadOnlyTools()
     {
         Assert.That(DriftMessages.DriftHaltMessage, Does.Contain("ExternalFileDrift"));
-        Assert.That(DriftMessages.DriftHaltMessage, Does.Contain("Acknowledge"));
         Assert.That(DriftMessages.DriftHaltMessage, Does.Contain("ConfirmAll"));
         Assert.That(DriftMessages.DriftHaltMessage, Does.Contain("Read-only"));
         Assert.That(DriftMessages.DriftHaltMessage,

@@ -38,4 +38,28 @@ public class ConvertedToolHintTests
         Assert.That(message, Does.Contain("LoadSolution(reason:"));
         Assert.That(message, Does.Contain("timeoutSeconds: 120"));
     }
+
+    [Test]
+    public void DriftHaltMessage_NamesCompleteExternalFileDriftCalls()
+    {
+        var message = DriftMessages.DriftHaltMessage;
+
+        Assert.That(message, Does.Contain("ExternalFileDrift(reason:"));
+        Assert.That(message, Does.Contain("operation: List"));
+        Assert.That(message, Does.Contain("operation: Acknowledge"));
+    }
+
+    [Test]
+    public void OrientationCircuitBreaker_StateMessage_NamesCompleteCalls()
+    {
+        var breaker = new OrientationCircuitBreaker(Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, tripThreshold: 2);
+        breaker.RecordSearchOutcome(0);
+        breaker.RecordSearchOutcome(0);
+
+        var message = breaker.StateMessage();
+
+        Assert.That(message, Is.Not.Null);
+        Assert.That(message, Does.Contain("ListAll(reason:"));
+        Assert.That(message, Does.Contain("ReadFile(reason:"));
+    }
 }

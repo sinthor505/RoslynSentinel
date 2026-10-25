@@ -55,7 +55,7 @@ public static class LaunchBuildMarker
         var attempted = raw.AttemptedSha ?? "?";
         var served = raw.ServedSha ?? "?";
         var hint = buildFailed
-            ? $"Committed HEAD {attempted} does not build; this server runs older build {served}. Fix and commit, then McpServerControl StopServer."
+            ? $"Committed HEAD {attempted} does not build; this server runs older build {served}. Fix and commit, then {ToolCallHint.Call("McpServerControl", ("operation", "StopServer"), ("confirmServerStop", "ConfirmServerStop"))}."
             : null;
         return new LaunchBuildResult(raw.Utc, raw.AttemptedSha, raw.ServedSha, buildFailed, raw.FirstErrors ?? Array.Empty<string>(), hint);
     }

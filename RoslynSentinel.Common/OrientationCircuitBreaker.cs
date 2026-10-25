@@ -64,10 +64,11 @@ public class OrientationCircuitBreaker : IAutomaticCircuitBreaker
                 return null;
             }
 
+            // hint-ok: names the disabled mode as a label, not a call to make
             return $"Search(mode: text) is DISABLED after {_consecutiveZeroMatchSearches} consecutive calls returned " +
                    "no matches. It will not run again until one of the tools below succeeds. You MUST call " +
-                   "ListAll(kind: all) or ListSolutionItems(kind: all) now - browse the returned list for what " +
-                   "you're looking for. GetFileOutline and ReadFile are also available once you have a real path " +
+                   $"{ToolCallHint.Call("ListAll", ("kind", "all"))} or {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} now - browse the returned list for what " +
+                   $"you're looking for. GetFileOutline and {ToolCallHint.Call("ReadFile")} are also available once you have a real path " +
                    "from that list.";
         }
     }

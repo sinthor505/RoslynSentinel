@@ -69,7 +69,7 @@ public record AppliedChangeSummary(
             // ApplyOutcome.NotReversibleReason for callers that surface it.
             if (!string.IsNullOrEmpty(ChangeId))
             {
-                return $"Written to disk. Call UndoLastApply(changeId: \"{ChangeId}\") to revert if needed." + NotEchoedHint();
+                return $"Written to disk. Call {ToolCallHint.Call("UndoLastApply", ("changeId", ChangeId))} to revert if needed." + NotEchoedHint();
             }
 
             return AffectedFiles.Count == 0
@@ -106,9 +106,9 @@ public record AppliedChangeSummary(
 
         if (!string.IsNullOrEmpty(ChangedContentResultId))
         {
-            return $" The updated content is not echoed; fetch it with {LargeResultHints.FetchCall(ChangedContentResultId)}, or read the file with ReadFile, GetMethodSource or Member(operation: view).";
+            return $" The updated content is not echoed; fetch it with {LargeResultHints.FetchCall(ChangedContentResultId)}, or read the file with {ToolCallHint.Call("ReadFile")}, GetMethodSource or {ToolCallHint.Call("Member", ("operation", "view"))}.";
         }
 
-        return Validated ? " The updated content is not echoed; read it with ReadFile, GetMethodSource or Member(operation: view)." : "";
+        return Validated ? $" The updated content is not echoed; read it with {ToolCallHint.Call("ReadFile")}, GetMethodSource or {ToolCallHint.Call("Member", ("operation", "view"))}." : "";
     }
 }

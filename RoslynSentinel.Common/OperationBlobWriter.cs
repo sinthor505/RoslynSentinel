@@ -132,6 +132,7 @@ public static class OperationBlobWriter
             // Logged at ErrorData with the exception attached: the previous catch discarded it
             // entirely, which is why the DirectoryNotFoundException behind the A3 defect never
             // appeared anywhere at all.
+            // hint-ok: log message template for operators; the text is never returned to an agent
             logger?.LogError(ex,
                 "Operation blob write failed for {ToolName}/{ChangeId} - the change is not reversible via UndoLastApply.",
                 toolName, changeId);

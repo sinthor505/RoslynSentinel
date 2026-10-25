@@ -22,15 +22,15 @@ public sealed record HaltInfo(string Kind, string Reason, string Recovery)
         "No reset exists for this halt; stop and report it to the operator. " +
         "Read-only tools (ReadFile, GetFileOutline, Search, GetMethodSource, Git status/log/diff) still work.";
 
-    private const string OrientationReason =
-        "The orientation breaker is tripped: repeated Search(mode: text) calls returned no matches.";
+    private static string OrientationReason =>
+        $"The orientation breaker is tripped: repeated {ToolCallHint.Call("Search", ("mode", "text"))} calls returned no matches.";
 
     private const string MutationReason =
         "The batch-mutation breaker is tripped after repeated failed batches; " +
         "Asyncify/BulkComment-style batch tools are disabled.";
 
-    private const string MutationRecoveryWithReset =
-        "Review why the batches failed, fix the cause, then call ResetMutationBreaker.";
+    private static string MutationRecoveryWithReset =>
+        $"Review why the batches failed, fix the cause, then call {ToolCallHint.Call("ResetMutationBreaker")}.";
 
     private const string MutationRecoveryWithoutReset =
         "Stop and report to the user/operator; the tool that resets this breaker is not available in this tool set.";

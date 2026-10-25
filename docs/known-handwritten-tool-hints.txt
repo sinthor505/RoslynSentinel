@@ -3,21 +3,6 @@
 # `// hint-ok: <reason>` comment on their statement. This file may only shrink.
 # Refresh after removing hints: set ROSLYNSENTINEL_UPDATE_HINT_BASELINE=1 and run
 # ToolHintRatchetTests.Scan_MatchesBaseline. Line format: <path> | <member> | <tool> | <count>
-RoslynSentinel.Common/AppliedChangeSummary.cs | NotEchoedHint | Member | 2
-RoslynSentinel.Common/AppliedChangeSummary.cs | NotEchoedHint | ReadFile | 2
-RoslynSentinel.Common/AppliedChangeSummary.cs | Note | UndoLastApply | 1
-RoslynSentinel.Common/DocumentLookup.cs | Describe | ListSolutionItems | 1
-RoslynSentinel.Common/DriftMessages.cs | BuildHint | ExternalFileDrift | 1
-RoslynSentinel.Common/DriftMessages.cs | BuildHint | Git | 1
-RoslynSentinel.Common/DriftMessages.cs | DriftMessages | ExternalFileDrift | 2
-RoslynSentinel.Common/HaltInfo.cs | HaltInfo | ResetMutationBreaker | 1
-RoslynSentinel.Common/HaltInfo.cs | HaltInfo | Search | 1
-RoslynSentinel.Common/LaunchBuildMarker.cs | Parse | McpServerControl | 1
-RoslynSentinel.Common/OperationBlobWriter.cs | WriteAsync | UndoLastApply | 1
-RoslynSentinel.Common/OrientationCircuitBreaker.cs | StateMessage | ListAll | 1
-RoslynSentinel.Common/OrientationCircuitBreaker.cs | StateMessage | ListSolutionItems | 1
-RoslynSentinel.Common/OrientationCircuitBreaker.cs | StateMessage | ReadFile | 1
-RoslynSentinel.Common/OrientationCircuitBreaker.cs | StateMessage | Search | 1
 RoslynSentinel.Common/PersistentWorkspaceManager.cs | ApplyProposedChangesAsync | LoadSolution | 1
 RoslynSentinel.Common/PersistentWorkspaceManager.cs | ResolveFromWireAsync | Search | 1
 RoslynSentinel.Common/SymbolValidator.cs | IsValidSymbolId | Search | 1
