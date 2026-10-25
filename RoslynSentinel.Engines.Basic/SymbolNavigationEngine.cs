@@ -8,6 +8,7 @@ using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
@@ -1179,13 +1180,13 @@ public class SymbolNavigationEngine
             ?? methodDecls.FirstOrDefault();
         if (methodDecl == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Ensure the method name exactly matches (case-sensitive). Next: Search(mode: method, query: '{methodName}') or GetFileOutline to list available methods in the file.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Ensure the method name exactly matches (case-sensitive). Next: {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list available methods in the file.", "method", methodName);
         }
 
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
         if (methodSymbol == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' has no resolvable symbol. Next: GetFileOutline to confirm the method declaration.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' has no resolvable symbol. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to confirm the method declaration.", "method", methodName);
         }
 
         var visited = new HashSet<string>();
@@ -1314,13 +1315,13 @@ public class SymbolNavigationEngine
             ?? methodDecls2.FirstOrDefault();
         if (methodDecl == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Ensure the method name exactly matches (case-sensitive). Next: Search(mode: method, query: '{methodName}') or GetFileOutline to list available methods in the file.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Ensure the method name exactly matches (case-sensitive). Next: {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list available methods in the file.", "method", methodName);
         }
 
         var methodSymbol = model.GetDeclaredSymbol(methodDecl, cancellationToken) as IMethodSymbol;
         if (methodSymbol == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' has no resolvable symbol. Next: GetFileOutline to confirm the method declaration.", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' in '{filePath}' has no resolvable symbol. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to confirm the method declaration.", "method", methodName);
         }
 
         var visited = new HashSet<string>();
@@ -1531,7 +1532,7 @@ public class SymbolNavigationEngine
                         "or omit contextSnippet if the symbolName is unambiguous in this file." +
                         (positionalRecord != null
                             ? $" '{symbolName}' is a positional parameter of record {positionalRecord.ContainingType.Name}; point contextSnippet at that line or omit it to resolve the property by name."
-                            : string.Empty));
+                            : string.Empty)); // hint-ok: names tools in prose
                 }
             }
             else
@@ -1570,7 +1571,7 @@ public class SymbolNavigationEngine
                     throw new ToolNotFoundException(
                         $"symbolName '{symbolName}' was not found declared in '{filePath}'. " +
                         "This is NOT a confirmed zero-references result - the lookup never ran. Verify the " +
-                        "name against GetFileOutline, or omit filePath to search by name across the solution.");
+                        $"name against {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))}, or omit filePath to search by name across the solution.");
                 }
             }
         }
@@ -1665,7 +1666,7 @@ public class SymbolNavigationEngine
                         "across the solution. This is NOT a confirmed zero-references result - the lookup " +
                         "never ran. " + DescribeCandidateLocations(memberMatches) + DescribeTypeMatchHint(allMatches, symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output for the " +
-                        "specific candidate you meant, or supply filePath to pin resolution to one file.");
+                        "specific candidate you meant, or supply filePath to pin resolution to one file."); // hint-ok: names tools in prose
                 }
             }
             else
@@ -1697,7 +1698,7 @@ public class SymbolNavigationEngine
                 $"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                 (contextSnippet != null ? " with the supplied contextSnippet" : "") + ". " +
                 "This is NOT a confirmed zero-references result - the lookup never ran. " + nearMissHint +
-                "Verify the name via Search(mode: symbol)/GetFileOutline before treating this as evidence the symbol is unused.");
+                $"Verify the name via {ToolCallHint.Call("Search", ("mode", "symbol"))}/{ToolCallHint.Call("GetFileOutline")} before treating this as evidence the symbol is unused.");
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -2005,7 +2006,7 @@ public class SymbolNavigationEngine
                         "across the solution. This is NOT a confirmed zero-implementations result - the " +
                         "lookup never ran. " + DescribeCandidateLocations(memberMatches) + DescribeTypeMatchHint(allMatches, symbolName) +
                         "Re-check the snippet against GetMethodSource/GetFileOutline output for the " +
-                        "specific candidate you meant, or supply filePath to pin resolution to one file.");
+                        "specific candidate you meant, or supply filePath to pin resolution to one file."); // hint-ok: names tools in prose
                 }
             }
             else
@@ -2063,7 +2064,7 @@ public class SymbolNavigationEngine
                     ($"symbolName '{symbolName}' could not be resolved anywhere in the solution" +
                     (contextSnippet != null ? " with the supplied contextSnippet" : "") + ".")) +
                 " This is NOT a confirmed zero-implementations result - the lookup never ran. " + nearMissHint +
-                "Verify the name via Search(mode: symbol)/GetFileOutline before treating this as evidence of no implementations.");
+                $"Verify the name via {ToolCallHint.Call("Search", ("mode", "symbol"))}/{ToolCallHint.Call("GetFileOutline")} before treating this as evidence of no implementations.");
         }
 
         // The resolved symbol may still be structurally incapable of having implementations - e.g.
@@ -2106,7 +2107,7 @@ public class SymbolNavigationEngine
                 "member - it is structurally incapable of having implementations, so this is NOT a confirmed " +
                 "zero-implementations result. If you meant the interface/virtual declaration this member " +
                 "implements or overrides, disambiguate with contextSnippet or filepath pointing at that " +
-                "declaration specifically, or call Search(mode: symbol, exactMatch: true) first to see every " +
+                $"declaration specifically, or call {ToolCallHint.Call("Search", ("mode", "symbol"), ("exactMatch", "true"))} first to see every " +
                 $"same-named candidate ('{symbolName}') with its containing type and kind.");
         }
 
@@ -2665,7 +2666,7 @@ public class SymbolNavigationEngine
 
         if (containerNode == null || containerNode is not TypeDeclarationSyntax typeDecl)
         {
-            throw new ToolNotFoundException($"Container '{containerName}' was not found in '{filePath}'. Searched: class, interface, struct, record and enum declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. Next: GetFileOutline to confirm the type name, or Search(mode: text, query: '{containerName}').", "container", containerName);
+            throw new ToolNotFoundException($"Container '{containerName}' was not found in '{filePath}'. Searched: class, interface, struct, record and enum declarations matching this name and the contextSnippet/lineBefore/lineAfter filter. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to confirm the type name, or {ToolCallHint.Call("Search", ("mode", "text"), ("query", containerName))}.", "container", containerName);
         }
 
         // TODO tuple outcome slot is always Modified; return only the list
@@ -2753,7 +2754,7 @@ public class SymbolNavigationEngine
                 var kindNames = string.Join(", ", allNameCandidates.Select(c => c.Kind).Distinct());
                 throw new ToolTargetIneligibleException(
                     $"'{memberName}' is a type-level declaration ({kindNames}). Member source only supports class-level members " +
-                    "(methods, properties, fields, constructors, events, indexers) and enum members; use ReadFile or GetFileOutline for a whole type.");
+                    $"(methods, properties, fields, constructors, events, indexers) and enum members; use {ToolCallHint.Call("ReadFile")} or {ToolCallHint.Call("GetFileOutline")} for a whole type.");
             }
 
             throw new ToolNotFoundException($"Member '{memberName}' not found");

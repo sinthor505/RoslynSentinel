@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
@@ -235,7 +236,7 @@ public static class SyntaxTargetResolver
         }
         else
         {
-            parts.Add($"No type in this file declares '{memberName}'; list the file's members with GetFileOutline(filePath: '{filePath}').");
+            parts.Add($"No type in this file declares '{memberName}'; list the file's members with {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))}.");
         }
 
         string Expand(string container, bool topLevel)
@@ -264,7 +265,7 @@ public static class SyntaxTargetResolver
                 parts.Add($"Retry {Expand(string.Empty, true)}; the declaration is top level, so omit the container.");
             }
 
-            parts.Add($"To read exact lines: ReadFile(filePath: '{filePath}', startLine: {listed[0].StartLine}, endLine: {listed[0].EndLine}).");
+            parts.Add($"To read exact lines: {ToolCallHint.Call("ReadFile", ("filePath", filePath), ("startLine", listed[0].StartLine.ToString()), ("endLine", listed[0].EndLine.ToString()))}.");
         }
 
         return (string.Join(" ", parts), BuildDeclarationCandidates(listed, sourceText, filePath));

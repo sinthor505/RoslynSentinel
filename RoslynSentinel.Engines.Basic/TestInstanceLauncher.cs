@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text;
+using RoslynSentinel.Common;
 
 namespace RoslynSentinel.Engines.Basic;
 
@@ -414,7 +415,7 @@ public sealed class TestInstanceLauncher
             if (!_instances.TryRemove(pid.Value, out var handle))
             {
                 throw new TestInstanceException(ToolErrorCode.NotFound,
-                    $"No test instance with pid {pid.Value} is tracked by this server. Call McpServerControl(operation: ListTestInstances) to see the running ones.");
+                    $"No test instance with pid {pid.Value} is tracked by this server. Call {ToolCallHint.Call("McpServerControl", ("operation", "ListTestInstances"))} to see the running ones.");
             }
 
             targets.Add(handle);
@@ -500,15 +501,15 @@ public sealed class TestInstanceLauncher
         if (string.IsNullOrWhiteSpace(solutionPath))
         {
             throw new SolutionNotLoadedException(
-                SolutionNotLoadedMessage.Plain + " LaunchTestInstance needs the RoslynSentinel solution loaded: call LoadSolution with its .slnx path first.");
+                SolutionNotLoadedMessage.Plain + " LaunchTestInstance needs the RoslynSentinel solution loaded: call " + ToolCallHint.Call("LoadSolution") + " with its .slnx path first.");
         }
 
         if (projectNames is null || !projectNames.Contains(ServerProjectName, StringComparer.OrdinalIgnoreCase))
         {
             throw new ToolTargetIneligibleException(
                 $"LaunchTestInstance is for developing this server: the loaded solution has no '{ServerProjectName}' project, so there is no server to build and launch. "
-                + "Load the RoslynSentinel solution (LoadSolution) to use it.",
-                suggestedTool: "LoadSolution");
+                + $"Load the RoslynSentinel solution ({ToolCallHint.Call("LoadSolution")}) to use it.",
+                suggestedTool: ToolCallHint.Call("LoadSolution"));
         }
     }
 
@@ -527,7 +528,7 @@ public sealed class TestInstanceLauncher
                 {
                     throw new TestInstanceException(ToolErrorCode.NotFound,
                         $"build: Skip but there is no server build output at '{Path.GetRelativePath(solutionDirectory, outputDirectory)}'. "
-                        + "Run Build (its default level writes there) and retry, or call LaunchTestInstance with build: Auto.");
+                        + $"Run {ToolCallHint.Call("Build")} (its default level writes there) and retry, or call LaunchTestInstance with build: Auto.");
                 }
 
                 return false;
@@ -662,7 +663,7 @@ public sealed class TestInstanceLauncher
 
         var note = "This test instance is driven out of band with these requests, because your own session cannot reconnect or add MCP servers; "
             + "the endpoint replies only as Server-Sent Events (the response is the line starting 'data:') and answers HTTP 406 unless Accept lists both application/json and text/event-stream; "
-            + $"stop it with McpServerControl(operation: StopTestInstance, pid: {pid}).";
+            + $"stop it with {ToolCallHint.Call("McpServerControl", ("operation", "StopTestInstance"), ("pid", pid.ToString()))}.";
         return new TestInstanceHowToCall(note, list, call);
     }
 
