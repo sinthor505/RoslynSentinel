@@ -10,13 +10,8 @@ public class ToolCallHintTests
     private const string LoadSolutionSchema = """{"type":"object","properties":{"reason":{"type":"string"},"solutionPath":{"type":"string"}},"required":["reason","solutionPath"]}""";
     private const string ToggleSchema = """{"type":"object","properties":{"reason":{"type":"string"},"verbose":{"type":"boolean"}},"required":["reason"]}""";
 
-    private ToolSignatureCatalog _savedCurrent = ToolSignatureCatalog.Empty;
-
-    [SetUp]
-    public void SaveCurrent() => _savedCurrent = ToolCallHint.Current;
-
     [TearDown]
-    public void RestoreCurrent() => ToolCallHint.Current = _savedCurrent;
+    public void RestoreCurrent() => ToolCallHint.Current = null!;
 
     [Test]
     public void Call_MissingRequired_UsesPlaceholders()

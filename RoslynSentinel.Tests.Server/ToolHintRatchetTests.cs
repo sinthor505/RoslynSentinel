@@ -121,6 +121,18 @@ public class ToolHintRatchetTests
                 string M() => "Member.Name; Build.cs";
             }
             """, tools);
+        var andFileName = ScanText(SamplePath, """
+            class C
+            {
+                string M() => "Edit it and Build.cs too";
+            }
+            """, tools);
+        var sentenceEnd = ScanText(SamplePath, """
+            class C
+            {
+                string M() => "Call Search.";
+            }
+            """, tools);
 
         Assert.Multiple(() =>
         {
@@ -132,6 +144,8 @@ public class ToolHintRatchetTests
             Assert.That(CountFor(hintOk, "LoadSolution"), Is.EqualTo(0), "hint-ok comment exempts the statement");
             Assert.That(CountFor(namesOnly, "Member"), Is.EqualTo(0), "Member.Name is not a call");
             Assert.That(CountFor(namesOnly, "Build"), Is.EqualTo(0), "Build.cs is not a call");
+            Assert.That(CountFor(andFileName, "Build"), Is.EqualTo(0), "and + Build.cs (dotted file name) is not a call");
+            Assert.That(CountFor(sentenceEnd, "Search"), Is.EqualTo(1), "Call + name at sentence end is a hit");
         });
     }
 
@@ -180,6 +194,74 @@ public class ToolHintRatchetTests
         return hits;
     }
 
+    internal static IReadOnlyList<string> ValidateHintCalls(string relativePath, string sourceText, ToolSignatureCatalog catalog)
+    {
+        var problems = new List<string>();
+        var root = CSharpSyntaxTree.ParseText(sourceText).GetRoot();
+        foreach (var invocation in root.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (invocation.Expression is not MemberAccessExpressionSyntax access
+                || access.Expression is not IdentifierNameSyntax owner
+                || owner.Identifier.ValueText != "ToolCallHint")
+            {
+                continue;
+            }
+
+            var method = access.Name.Identifier.ValueText;
+            var fixedCount = method switch
+            {
+                "Call" => 1,
+                "Next" => 2,
+                _ => -1,
+            };
+            var arguments = invocation.ArgumentList.Arguments;
+            if (fixedCount < 0 || arguments.Count < fixedCount || !TryReadStringLiteral(arguments[0].Expression, out var toolName))
+            {
+                continue;
+            }
+
+            var pairs = new List<(string Name, string Value)>();
+            var literal = true;
+            for (var i = fixedCount; i < arguments.Count && literal; i++)
+            {
+                if (arguments[i].Expression is not TupleExpressionSyntax { Arguments.Count: 2 } tuple
+                    || !TryReadStringLiteral(tuple.Arguments[0].Expression, out var pairName)
+                    || !TryReadStringLiteral(tuple.Arguments[1].Expression, out var pairValue))
+                {
+                    literal = false;
+                    break;
+                }
+
+                pairs.Add((pairName, pairValue));
+            }
+
+            if (!literal)
+            {
+                continue;
+            }
+
+            var line = invocation.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
+            foreach (var problem in ToolCallHint.Validate(catalog, toolName, pairs.ToArray()))
+            {
+                problems.Add($"{relativePath}:{line}: {problem}");
+            }
+        }
+
+        return problems;
+    }
+
+    private static bool TryReadStringLiteral(ExpressionSyntax? expression, out string value)
+    {
+        if (expression is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.StringLiteralExpression))
+        {
+            value = literal.Token.ValueText;
+            return true;
+        }
+
+        value = string.Empty;
+        return false;
+    }
+
     private static bool HasHintOk(SyntaxNode node)
     {
         return node.GetLeadingTrivia().Concat(node.GetTrailingTrivia()).Any(trivia =>
@@ -194,7 +276,9 @@ public class ToolHintRatchetTests
         {
             var end = index + name.Length;
             var boundaryBefore = index == 0 || !IsBeforeBlocker(text[index - 1]);
-            var boundaryAfter = end >= text.Length || !(char.IsLetterOrDigit(text[end]) || text[end] == '_');
+            // A '.' followed by a letter is member or file access (Build.cs, Member.Name), not a sentence end.
+            var dottedAccess = end + 1 < text.Length && text[end] == '.' && char.IsLetter(text[end + 1]);
+            var boundaryAfter = end >= text.Length || !(char.IsLetterOrDigit(text[end]) || text[end] == '_' || dottedAccess);
             if (boundaryBefore && boundaryAfter && (IsCallParen(text, end) || PrecededByTrigger(text, index)))
             {
                 count++;
@@ -226,6 +310,19 @@ public class ToolHintRatchetTests
     {
         var names = toolNames.ToList();
         var totals = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var (relativeKey, fullPath) in EnumerateProductionFiles(repoRoot))
+        {
+            foreach (var (key, count) in ScanText(relativeKey, File.ReadAllText(fullPath), names))
+            {
+                totals[key] = totals.GetValueOrDefault(key) + count;
+            }
+        }
+
+        return totals;
+    }
+
+    private static IEnumerable<(string RelativeKey, string FullPath)> EnumerateProductionFiles(string repoRoot)
+    {
         var separator = Path.DirectorySeparatorChar;
         var projectDirs = Directory.EnumerateDirectories(repoRoot, "RoslynSentinel.*")
             .Where(dir => !Path.GetFileName(dir).Contains(".Tests", StringComparison.Ordinal)
@@ -242,15 +339,9 @@ public class ToolHintRatchetTests
                     continue;
                 }
 
-                var relativeKey = relative.Replace(separator, '/');
-                foreach (var (key, count) in ScanText(relativeKey, File.ReadAllText(file), names))
-                {
-                    totals[key] = totals.GetValueOrDefault(key) + count;
-                }
+                yield return (relative.Replace(separator, '/'), file);
             }
         }
-
-        return totals;
     }
 
     private static string EnclosingMember(SyntaxToken token)
@@ -355,5 +446,51 @@ public class ToolHintRatchetTests
         };
         lines.AddRange(hits.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => $"{pair.Key} | {pair.Value}"));
         File.WriteAllLines(path, lines);
+    }
+
+    [Test]
+    public void ValidateHintCalls_FlagsBadLiteralsAndAcceptsGoodOnes()
+    {
+        using var search = System.Text.Json.JsonDocument.Parse("""{"type":"object","properties":{"reason":{"type":"string"},"mode":{"type":"string","enum":["symbol","text"]}},"required":["reason","mode"]}""");
+        var catalog = ToolSignatureCatalog.FromSchemas(new[] { KeyValuePair.Create("Search", search.RootElement.Clone()) });
+        var source = """
+            class C
+            {
+                string Good() => ToolCallHint.Call("Search", ("mode", "symbol"));
+                string BadParam() => ToolCallHint.Call("Search", ("modee", "symbol"));
+                string BadTool() => ToolCallHint.Next("Nope", "msg");
+                string Dynamic(string v) => ToolCallHint.Call("Search", ("mode", v));
+                string BadEnum() => ToolCallHint.Call("Search", ("mode", "nope"));
+            }
+            """;
+
+        var problems = ValidateHintCalls(SamplePath, source, catalog);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(problems, Has.Count.EqualTo(3), string.Join(Environment.NewLine, problems));
+            Assert.That(problems[0], Does.StartWith($"{SamplePath}:4: ").And.Contain("modee"));
+            Assert.That(problems[1], Does.StartWith($"{SamplePath}:5: ").And.Contain("Nope"));
+            Assert.That(problems[2], Does.StartWith($"{SamplePath}:7: ").And.Contain("nope"));
+        });
+    }
+
+    [Test]
+    public void Scan_HintCallLiterals_AreValid()
+    {
+        // Force-load every tool assembly so the reflection catalog lists all tools.
+        _ = Assembly.Load("RoslynSentinel.Tools.Basic");
+        _ = Assembly.Load("RoslynSentinel.Tools.Advanced");
+        _ = Assembly.Load("RoslynSentinel.Tools.Experimental");
+        var catalog = ToolSignatureCatalogReflection.FromLoadedAssemblies();
+        var repoRoot = FindRepoRoot();
+
+        var problems = new List<string>();
+        foreach (var (relativeKey, fullPath) in EnumerateProductionFiles(repoRoot))
+        {
+            problems.AddRange(ValidateHintCalls(relativeKey, File.ReadAllText(fullPath), catalog));
+        }
+
+        Assert.That(problems, Is.Empty, string.Join(Environment.NewLine, problems));
     }
 }
