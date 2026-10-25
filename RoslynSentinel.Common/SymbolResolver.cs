@@ -14,7 +14,7 @@ public class SymbolResolver
     public async Task<ISymbol?> ResolveSymbolAsync(SymbolHandle handle, CancellationToken cancellationToken)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var project = solution.Projects.FirstOrDefault(p => p.Name == handle.ProjectName);
+        var project = ProjectLookup.FindProject(solution, handle.ProjectName);
         if (project is null) { return null; }
         var compilation = await project.GetCompilationAsync(cancellationToken);
         if (compilation is null) { return null; }
@@ -25,7 +25,7 @@ public class SymbolResolver
     public async Task<ISymbol?> ResolveByDocCommentIdAsync(string symbolId, string projectName, CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var project = solution.Projects.FirstOrDefault(p => p.Name == projectName);
+        var project = ProjectLookup.FindProject(solution, projectName);
         if (project is null) { return null; }
         var compilation = await project.GetCompilationAsync(cancellationToken);
         if (compilation is null) { return null; }
