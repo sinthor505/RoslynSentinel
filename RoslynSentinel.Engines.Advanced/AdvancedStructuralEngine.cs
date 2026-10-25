@@ -1740,6 +1740,12 @@ public class StructuralRefactoringEngine
 
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
         var candidates = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList();
+        // An interface declaration has no body to inline; narrow to the concrete declarations when any exist.
+        var inlinable = candidates.Where(m => m.Parent is not InterfaceDeclarationSyntax).ToList();
+        if (inlinable.Count > 0)
+        {
+            candidates = inlinable;
+        }
         if (candidates.Count == 0 || semanticModel == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'.");
