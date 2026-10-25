@@ -106,8 +106,10 @@ public class MsToolAugmentEngine
             return MsAugmentResult.Fail("Could not parse syntax tree.");
         }
 
-        var field = root.DescendantNodes().OfType<FieldDeclarationSyntax>()
-            .FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == fieldName));
+        var fieldMatches = root.DescendantNodes().OfType<FieldDeclarationSyntax>()
+            .Where(f => f.Declaration.Variables.Any(v => v.Identifier.Text == fieldName))
+            .ToList();
+        var field = RoslynSentinel.Common.NameTargetLookup.RequireSingle(fieldMatches, "Field", fieldName);
         if (field == null)
         {
             return MsAugmentResult.Fail($"Field '{fieldName}' not found in {filePath}.", ToolErrorCode.NotFound);

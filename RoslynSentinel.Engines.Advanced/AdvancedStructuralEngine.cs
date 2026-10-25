@@ -515,7 +515,10 @@ public class StructuralRefactoringEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var field = root?.DescendantNodes().OfType<FieldDeclarationSyntax>().FirstOrDefault(f => f.Declaration.Variables.Any(v => v.Identifier.Text == fieldName));
+        var fieldMatches = root?.DescendantNodes().OfType<FieldDeclarationSyntax>()
+            .Where(f => f.Declaration.Variables.Any(v => v.Identifier.Text == fieldName))
+            .ToList();
+        var field = RoslynSentinel.Common.NameTargetLookup.RequireSingle(fieldMatches, "Field", fieldName);
         // If field not found or has no initializer, return error
         if (field == null)
         {
