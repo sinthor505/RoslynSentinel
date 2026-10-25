@@ -1012,7 +1012,7 @@ public class MemberRefactoringEngine
         var targets = new List<(StaticConversionRequest Request, Document Document, SemanticModel Model, MemberDeclarationSyntax Declaration, ISymbol Symbol)>();
         foreach (var request in requests)
         {
-            var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == request.FilePath || d.FilePath == request.FilePath);
+            var document = DocumentLookup.FindDocumentOrNull(solution, request.FilePath);
             var root = document == null ? null : await document.GetSyntaxRootAsync(cancellationToken);
             var sourceText = document == null ? null : await document.GetTextAsync(cancellationToken);
             var model = document == null ? null : await document.GetSemanticModelAsync(cancellationToken);

@@ -879,6 +879,7 @@ public class CodeGenerationEngine
             throw new ToolTargetIneligibleException("Could not get class symbol.");
         }
 
+        // TODO first-match: a class implementing IFoo<int> and IFoo<string> matches "IFoo" twice; refuse with ToolAmbiguousMatchException (plan_first_match_ambiguity_audit step 8 baseline)
         var ifaceSymbol = classSymbol.AllInterfaces
             .FirstOrDefault(i => i.Name == interfaceName ||
                 i.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat) == interfaceName);

@@ -624,7 +624,7 @@ public class LogicSimplificationEngine
     {
         FilePathWrapper resolvedFilePath = _workspaceManager.ResolveFromWire(filePath);
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
-        var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == resolvedFilePath || d.FilePath == resolvedFilePath);
+        var document = DocumentLookup.FindDocumentOrNull(solution, resolvedFilePath);
         if (document == null)
         {
             return new EngineResultWrapper<List<DocumentEditResult>>(EngineOutcome.DocumentNotFound, null, new EngineError("Document not found"));

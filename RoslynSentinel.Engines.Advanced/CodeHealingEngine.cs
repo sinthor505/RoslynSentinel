@@ -142,7 +142,7 @@ public class CodeHealingEngine
 
         foreach (var target in targets)
         {
-            var document = solution.Projects.SelectMany(p => p.Documents).FirstOrDefault(d => d.Name == target.FilePath || d.FilePath == target.FilePath);
+            var document = DocumentLookup.FindDocumentOrNull(solution, target.FilePath);
             if (document == null)
             {
                 continue;
