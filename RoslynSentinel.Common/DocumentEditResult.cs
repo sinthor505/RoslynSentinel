@@ -14,6 +14,12 @@ namespace RoslynSentinel.Common
 
         public Dictionary<FilePathWrapper, string> Changes { get; init; } = new Dictionary<FilePathWrapper, string>();
 
+        // DEFERRED (accepted 2026-10-22, finding #22): UpdatedText is excluded from JSON summaries, so generate-style tools do not show the generated text.
+        // Left as-is on purpose until scheduled; do not re-raise in reviews.
+        // required was tried and rejected because System.Text.Json refuses a required member that is [JsonIgnore]; omissions are caught by RefactoringToolHelpers.RequireUpdatedText's empty-text guard instead (plan_document_edit_result_non_nullable_updated_text, step 7).
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string UpdatedText { get; init; } = string.Empty;
+
         /// <summary>
         /// Batch engines only: the caller-supplied edit indexes that actually changed this file's text. An index that
         /// was requested but is absent here had no effect (e.g. removing an attribute that was not present), so a
@@ -44,9 +50,10 @@ namespace RoslynSentinel.Common
         {
             this.Outcome = outcome;
             this.FilePath = filePath;
+            this.UpdatedText = string.Empty;
         }
 
-        public DocumentEditResult(EditOutcome outcome, FilePathWrapper filePath, string changeId, bool isCommitted = false, string? updatedText = null)
+        public DocumentEditResult(EditOutcome outcome, FilePathWrapper filePath, string changeId, bool isCommitted = false, string updatedText = "")
         {
             this.Outcome = outcome;
             this.FilePath = filePath;
