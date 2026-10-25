@@ -8,6 +8,16 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## No tool removed a redundant null-forgiving `!` across files - resolved (2026-10-25)
+
+`DocumentEditResult.UpdatedText` became non-nullable, leaving 241 redundant `UpdatedText!` in 47 test files and no
+semantic tool to strip them. Fixed by a third `SemanticFindReplace` operation, `removeNullForgiving` (1934c0f3),
+applied in 600251b0 (205 sites, 46 files) and to `MemberRefactoringTests.cs` (36 sites) once its owning session
+committed it; 53 redundant `UpdatedText ... Is.Not.Null` asserts were then simplified (47e03a6b and the last file).
+Doc: [plan_semantic_find_replace_remove_null_forgiving.md](plans/closed/plan_semantic_find_replace_remove_null_forgiving.md).
+Evidence: solution-wide `Search` for `UpdatedText!` and `UpdatedText.*Is.Not.Null` returns 0 matches. Open follow-up: the
+claude-lean client does not list on-demand tools enabled mid-session (blockers/blocking_error_toolset_enable_not_visible_in_client_tool_list.md).
+
 ## Tool-call hints omit required parameters - resolved (2026-10-25)
 
 Every server-emitted hint naming a tool lacked `reason` (all 137 tools) and often `filePath`/`query`/`solutionPath`.

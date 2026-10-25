@@ -1,6 +1,6 @@
 # Plan: SemanticFindReplace operation removeNullForgiving, then strip the 235 redundant UpdatedText! in tests
 
-**Status:** IN PROGRESS 2026-10-25. Steps 1-5 done in `1934c0f3`; step 6 applied in `600251b0` to 46 files (205 sites); the 36 sites in `MemberRefactoringTests.cs` and step 7 remain (TODO.md).
+**Status:** IMPLEMENTED 2026-10-25. Steps 1-5 in `1934c0f3`; step 6 in `600251b0` (205 sites, 46 files) and `39a98834` (the last 36 sites in `MemberRefactoringTests.cs`); the 53 redundant `UpdatedText` `Is.Not.Null` asserts were simplified in `47e03a6b` and `39a98834`.
 
 ## Problem
 `DocumentEditResult.UpdatedText` is now a non-nullable `string` (`RoslynSentinel.Common/DocumentEditResult.cs:21`), so the
