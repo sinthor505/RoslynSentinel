@@ -918,12 +918,14 @@ public class WorkspaceReadNavigationImpl
 
     public async Task<SentinelCallToolResult<object>> SearchSolutionText(
         ToolCallReason reason,
-        string pattern, string? fileGlob = null, int maxResults = 200, bool includeTests = true,
+        string pattern, string? fileGlob = null, int maxResults = 200, bool includeTests = true, int contextLines = 0,
         CancellationToken cancellationToken = default)
     {
         try
         {
+            contextLines = Math.Clamp(contextLines, 0, 10);
             var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
+            IReadOnlyList<string>? ContextOf(IReadOnlyList<string> source, int hit, bool before) => contextLines <= 0 ? null : (before ? source.Skip(Math.Max(0, hit - contextLines)).Take(Math.Min(contextLines, hit)) : source.Skip(hit + 1).Take(contextLines)).Select(ctxLine => ctxLine.Trim()).Select(ctxText => ctxText.Length > 120 ? ctxText[..120] + "…" : ctxText).ToList();
 
             // Every project (test projects included) is scanned in one flattened pass over documents;
             // includeTests is only a view filter. Test-project matches are counted per project (hidden
@@ -1065,13 +1067,13 @@ public class WorkspaceReadNavigationImpl
 
                     if (literalCol >= 0)
                     {
-                        results.Add(new TextSearchMatch(docPath.Absolute, i + 1, literalCol + 1, preview, MatchKind.Literal, EnclosingMemberAt(i, literalCol)));
+                        results.Add(new TextSearchMatch(docPath.Absolute, i + 1, literalCol + 1, preview, MatchKind.Literal, EnclosingMemberAt(i, literalCol), ContextOf(lines, i, before: true), ContextOf(lines, i, before: false)));
                         Interlocked.Increment(ref resultCount);
                     }
 
                     if (regexMatch != null)
                     {
-                        results.Add(new TextSearchMatch(docPath.Absolute, i + 1, regexMatch.Index + 1, preview, MatchKind.Regex, EnclosingMemberAt(i, regexMatch.Index)));
+                        results.Add(new TextSearchMatch(docPath.Absolute, i + 1, regexMatch.Index + 1, preview, MatchKind.Regex, EnclosingMemberAt(i, regexMatch.Index), ContextOf(lines, i, before: true), ContextOf(lines, i, before: false)));
                         // A regex hit at the same column as the literal hit is deduped out of the
                         // final lists (literalKeys), so it must not consume a resultCount slot.
                         if (!(literalCol >= 0 && regexMatch.Index == literalCol))

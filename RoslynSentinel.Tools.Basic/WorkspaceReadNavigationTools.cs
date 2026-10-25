@@ -77,7 +77,7 @@ public class WorkspaceReadNavigationTools
         [ToolOptionAttribute(ToolOptionTag.ResultLimit)] int maxResults = 200,
         [Description("false (default) = test projects are scanned but their matches are hidden and only counted in the status message; true = include them. Naming a test project as the glob's first path segment always includes it.")] bool includeTests = false,
         CancellationToken cancellationToken = default)
-        => _impl.SearchSolutionText(reason, pattern, fileGlob, maxResults, includeTests, cancellationToken);
+        => _impl.SearchSolutionText(reason, pattern, fileGlob, maxResults, includeTests, cancellationToken: cancellationToken);
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "GetOperationDetail")]
     [Produces(DataTag.ResultOnly)]
@@ -146,8 +146,9 @@ public class WorkspaceReadNavigationTools
     [Description("mode: references/callers/implementations only. " + ToolParams.LineAfter)][ExternalInputRequired(DataTag.LineAfter)] string? lineAfter = null,
     [Description("false (default) = skip test projects (mode text still scans them and only counts hidden hits in the status message); true = include. A test project named in projectName/filePath or as fileGlob's first path segment is included.")] bool includeTests = false,
     [Description("mode: attribute only. Owner must also carry this attribute.")] string? hasAttribute = null,
+    [Description("mode: text only. Lines (0-10, default 0) of source before and after each match, returned in contextBefore/contextAfter. Use instead of a follow-up ReadFile.")] int contextLines = 0,
     CancellationToken cancellationToken = default)
-    => DispatchSearch(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, cancellationToken);
+    => DispatchSearch(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, contextLines, cancellationToken);
 
     /// <summary>
     /// Hard cap on rows returned by Search in declaration-kind modes; extra matches are counted in totalRecords and flagged via hasMoreData/warningDetails.
@@ -175,12 +176,12 @@ public class WorkspaceReadNavigationTools
     ToolCallReason reason, SearchMode mode, string? query, string? fileGlob, int maxResults,
     SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName,
     bool exactMatch, string? filePath, string? contextSnippet,
-    string? lineBefore, string? lineAfter, bool includeTests, string? hasAttribute, CancellationToken cancellationToken)
+    string? lineBefore, string? lineAfter, bool includeTests, string? hasAttribute, int contextLines, CancellationToken cancellationToken)
     {
         switch (mode)
         {
             case SearchMode.text:
-                return _impl.SearchSolutionText(reason, query ?? string.Empty, fileGlob, maxResults, includeTests, cancellationToken);
+                return _impl.SearchSolutionText(reason, query ?? string.Empty, fileGlob, maxResults, includeTests, contextLines, cancellationToken);
             case SearchMode.symbol:
                 return _symbolNavigation.LocateSymbol(reason, query ?? string.Empty, symbolKind, containingType, containingNamespace, projectName, filePath, exactMatch, includeTests: includeTests, cancellationToken: cancellationToken);
             case SearchMode.references:
@@ -200,7 +201,7 @@ public class WorkspaceReadNavigationTools
     ToolCallReason reason, SearchMode mode, string? query, string? fileGlob, int maxResults,
     SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName,
     bool exactMatch, string? filePath, string? contextSnippet,
-    string? lineBefore, string? lineAfter, bool includeTests, string? hasAttribute, CancellationToken cancellationToken)
+    string? lineBefore, string? lineAfter, bool includeTests, string? hasAttribute, int contextLines, CancellationToken cancellationToken)
     {
         if (mode is SearchMode.text or SearchMode.symbol or SearchMode.references or SearchMode.callers or SearchMode.implementations or SearchMode.attribute
             && string.IsNullOrWhiteSpace(query))
@@ -218,9 +219,9 @@ public class WorkspaceReadNavigationTools
             };
         }
 
-        var result = await DispatchSearchCore(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, cancellationToken);
+        var result = await DispatchSearchCore(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, contextLines, cancellationToken);
 
-        var ignored = FindIgnoredSearchParameters(mode, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, hasAttribute);
+        var ignored = FindIgnoredSearchParameters(mode, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, hasAttribute, contextLines);
         if (ignored.Count == 0)
         {
             return result;
@@ -230,11 +231,11 @@ public class WorkspaceReadNavigationTools
         return result with { WarningDetails = priorWarning + $"Ignored parameter(s) for mode {mode}: {string.Join(", ", ignored)}." };
     }
 
-    private static List<string> FindIgnoredSearchParameters(SearchMode mode, string? fileGlob, int maxResults, SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName, bool exactMatch, string? filePath, string? contextSnippet, string? lineBefore, string? lineAfter, string? hasAttribute)
+    private static List<string> FindIgnoredSearchParameters(SearchMode mode, string? fileGlob, int maxResults, SymbolKindFilter symbolKind, string? containingType, string? containingNamespace, string? projectName, bool exactMatch, string? filePath, string? contextSnippet, string? lineBefore, string? lineAfter, string? hasAttribute, int contextLines)
     {
         var used = mode switch
         {
-            SearchMode.text => new[] { "fileGlob", "maxResults" },
+            SearchMode.text => new[] { "fileGlob", "maxResults", "contextLines" },
             SearchMode.symbol => new[] { "symbolKind", "containingType", "containingNamespace", "projectName", "exactMatch", "filePath" },
             SearchMode.references or SearchMode.callers or SearchMode.implementations => new[] { "filePath", "contextSnippet", "lineBefore", "lineAfter" },
             SearchMode.attribute => new[] { "projectName", "filePath", "hasAttribute" },
@@ -252,6 +253,7 @@ public class WorkspaceReadNavigationTools
 
         Check("fileGlob", fileGlob is not null);
         Check("maxResults", maxResults != 200);
+        Check("contextLines", contextLines != 0);
         Check("symbolKind", symbolKind != SymbolKindFilter.any);
         Check("containingType", containingType is not null);
         Check("containingNamespace", containingNamespace is not null);

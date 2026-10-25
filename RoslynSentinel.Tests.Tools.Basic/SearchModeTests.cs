@@ -135,6 +135,83 @@ public class SearchModeTests
     }
 
     [Test]
+    public async Task Search_TextMode_ContextLines2_ReturnsTwoLinesBeforeAndAfterEachHit()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search text context lines two-before-and-after regression",
+            SearchMode.text,
+            query: "public class MarkedProbe",
+            contextLines: 2);
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        var hit = ((TextSearchResult)result.SuccessData!).LiteralResults
+            .Single(m => m.Preview.Contains("public class MarkedProbe"));
+        Assert.That(hit.ContextBefore, Is.EqualTo(new[]
+        {
+            "public sealed class ProbeMarkerAttribute : System.Attribute { }",
+            "[ProbeMarker]",
+        }), "contextLines 2 must return the two source lines above the hit.");
+        Assert.That(hit.ContextAfter, Is.EqualTo(new[]
+        {
+            "public sealed class CoFooAttribute : System.Attribute { }",
+            "public sealed class CoBarAttribute : System.Attribute { }",
+        }), "contextLines 2 must return the two source lines below the hit.");
+    }
+
+    [Test]
+    public async Task Search_TextMode_ContextLinesOmitted_ReturnsNullContext()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search text context lines omitted regression",
+            SearchMode.text,
+            query: "public class MarkedProbe");
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        var hit = ((TextSearchResult)result.SuccessData!).LiteralResults
+            .Single(m => m.Preview.Contains("public class MarkedProbe"));
+        Assert.That(hit.ContextBefore, Is.Null, "Without contextLines the match must carry no ContextBefore.");
+        Assert.That(hit.ContextAfter, Is.Null, "Without contextLines the match must carry no ContextAfter.");
+    }
+
+    [Test]
+    public async Task Search_TextMode_ContextLinesAboveMax_IsClampedToTen()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search text context lines clamp to ten regression",
+            SearchMode.text,
+            query: "probe.Target",
+            contextLines: 50);
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        var hit = ((TextSearchResult)result.SuccessData!).LiteralResults
+            .Single(m => m.Preview.Contains("probe.Target"));
+        Assert.That(hit.ContextBefore, Has.Count.EqualTo(10), "contextLines above 10 must be clamped to 10 before the hit.");
+        Assert.That(hit.ContextAfter, Has.Count.EqualTo(10), "contextLines above 10 must be clamped to 10 after the hit.");
+    }
+
+    [Test]
+    public async Task Search_SymbolMode_WithContextLines_SucceedsAndWarnsIgnoredParameter()
+    {
+        using var h = await CreateHarnessAsync();
+
+        var result = await h.Tools.SearchSolutionTool(
+            reason: "search symbol ignored contextLines warning regression",
+            SearchMode.symbol,
+            query: "SearchModeProbeImpl",
+            contextLines: 2);
+
+        Assert.That(result.IsError, Is.Not.True, result.ErrorData?.Message);
+        Assert.That(result.WarningDetails, Does.Contain("Ignored parameter"));
+        Assert.That(result.WarningDetails, Does.Contain("contextLines"));
+    }
+
+    [Test]
     public async Task Search_CallersMode_FindsCallerOfInterfaceMethod()
     {
         using var h = await CreateHarnessAsync();

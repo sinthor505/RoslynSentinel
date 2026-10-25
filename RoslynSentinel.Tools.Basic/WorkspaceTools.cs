@@ -603,8 +603,9 @@ public class WorkspaceTools
         SymbolKindFilter symbolKind = SymbolKindFilter.any, string? containingType = null, string? containingNamespace = null,
         string? projectName = null, bool exactMatch = true, string? filePath = null, string? contextSnippet = null,
         string? lineBefore = null, string? lineAfter = null, bool includeTests = false, string? hasAttribute = null,
+        int contextLines = 0,
         CancellationToken cancellationToken = default)
-        => _readNavTools.SearchSolutionTool(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, cancellationToken);
+        => _readNavTools.SearchSolutionTool(reason, mode, query, fileGlob, maxResults, symbolKind, containingType, containingNamespace, projectName, exactMatch, filePath, contextSnippet, lineBefore, lineAfter, includeTests, hasAttribute, contextLines, cancellationToken);
 
     // Non-tool delegator: the GetOperationDetail [McpServerTool] lives on WorkspaceReadNavigationTools.
     public Task<SentinelCallToolResult<object>> GetOperationDetailTool(
