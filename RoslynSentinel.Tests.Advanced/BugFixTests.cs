@@ -750,7 +750,7 @@ public class Derived : Base
     public new string Value { get { return _value; } set { _value = value; } }
 }";
         SetSource(code, "Properties.cs");
-        var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Properties.cs", "Value", "ToFullProperty");
+        var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Properties.cs", "Value", "ToFullProperty", "public new string Value");
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should convert property");
         Assert.That(result.UpdatedText, Does.Contain("Value"), "Should handle property with same name in multiple classes");
     }

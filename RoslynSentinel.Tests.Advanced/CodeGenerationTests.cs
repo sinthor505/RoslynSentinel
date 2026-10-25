@@ -531,7 +531,7 @@ public class SomeClass { }", "SomeClass.cs");
             }
             """);
 
-        var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "Size", "ToFullProperty");
+        var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "Size", "ToFullProperty", "public virtual int Size");
 
         Assert.That(result.UpdatedText, Does.Contain("override"), "override modifier must survive ToFullProperty conversion");
         Assert.That(result.UpdatedText, Does.Contain("99"), "Initializer 99 must survive conversion");

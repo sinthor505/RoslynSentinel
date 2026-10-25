@@ -196,8 +196,9 @@ public class CodeGenerationEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className);
+        var classMatches = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>();
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className);
         if (classNode == null)
         {
             throw new ToolNotFoundException($"Class '{className}' not found.", "class", className);
@@ -308,8 +309,9 @@ public class CodeGenerationEngine
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className);
+        var classMatches = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>();
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className);
         if (classNode == null)
         {
             return new GenerateToStringResult(string.Empty, [], [], $"Class '{className}' not found.");
@@ -508,8 +510,9 @@ public class CodeGenerationEngine
         var document = solution.Projects.SelectMany(p => p.Documents)
             .FirstOrDefault(d => d.Name == filePath || d.FilePath == filePath) ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var classNode = (root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className)) ?? throw new ToolNotFoundException($"Class '{className}' not found.");
+        var classMatches = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .Where(c => c.Identifier.Text == className).ToList() ?? new System.Collections.Generic.List<ClassDeclarationSyntax>();
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className) ?? throw new ToolNotFoundException($"Class '{className}' not found.");
 
         // Determine namespace
         var ns = root?.DescendantNodes()
@@ -616,10 +619,9 @@ public class CodeGenerationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
 
         // Support both class and record declarations
-        MemberDeclarationSyntax? typeNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className) as MemberDeclarationSyntax
-            ?? root?.DescendantNodes().OfType<RecordDeclarationSyntax>()
-                   .FirstOrDefault(r => r.Identifier.Text == className);
+        var typeMatches = root?.DescendantNodes().OfType<TypeDeclarationSyntax>()
+            .Where(t => t.Identifier.Text == className && (t is ClassDeclarationSyntax || t is RecordDeclarationSyntax)).ToList() ?? new System.Collections.Generic.List<TypeDeclarationSyntax>();
+        MemberDeclarationSyntax? typeNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(typeMatches, "Type", className);
 
         if (typeNode == null)
         {
@@ -875,8 +877,9 @@ public class CodeGenerationEngine
             throw new ToolInvalidArgumentException("Could not load semantic model.");
         }
 
-        var classDecl = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
-            .FirstOrDefault(c => c.Identifier.Text == className);
+        var classMatches = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .Where(c => c.Identifier.Text == className).ToList();
+        var classDecl = RoslynSentinel.Common.NameTargetLookup.RequireSingle(classMatches, "Class", className);
         if (classDecl == null)
         {
             throw new ToolNotFoundException($"Class '{className}' not found in file.", "class", className);
@@ -1011,7 +1014,9 @@ public class CodeGenerationEngine
         PropertyDeclarationSyntax? propNode;
         if (contextSnippet == null || candidates.Count <= 1)
         {
-            propNode = candidates.FirstOrDefault();
+            propNode = contextSnippet == null && candidates.Count > 1
+                ? RoslynSentinel.Common.NameTargetLookup.RequireSingle(candidates, "Property", propertyName)
+                : candidates.FirstOrDefault();
         }
         else
         {
