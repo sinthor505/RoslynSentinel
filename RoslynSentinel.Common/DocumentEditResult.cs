@@ -2,7 +2,7 @@ namespace RoslynSentinel.Common
 {
     public enum EditOutcome
     {
-        Unset = 0,          // default value, should be treated as error if returned
+        // 0 is deliberately unnamed: Outcome is required, and an undefined value reads as Failed (see EditOutcomeExtensions).
         Modified = 1,
         // 2-12 are retired failure values (engines throw instead); do not reuse them.
         AlreadyInTargetState = 13, // already in target state

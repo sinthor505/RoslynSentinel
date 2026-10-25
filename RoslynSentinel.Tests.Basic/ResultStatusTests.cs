@@ -97,7 +97,7 @@ public class ResultStatusTests
     [TestCase(EditOutcome.Modified, ResultStatus.Success, null)]
     [TestCase(EditOutcome.AlreadyInTargetState, ResultStatus.AlreadyInState, null)]
     [TestCase(EditOutcome.NoCandidatesFound, ResultStatus.NotFound, ToolErrorCode.NotFound)]
-    [TestCase(EditOutcome.Unset, ResultStatus.Failed, ToolErrorCode.Exception)]
+    [TestCase((EditOutcome)0, ResultStatus.Failed, ToolErrorCode.Exception)]
     public void EditOutcome_MapsToStatusAndCode_AndResultAgrees(EditOutcome outcome, ResultStatus expectedStatus, string? expectedCode)
     {
         Assert.That(outcome.ToResultStatus(), Is.EqualTo(expectedStatus));
@@ -109,7 +109,7 @@ public class ResultStatusTests
     }
 
     [Test]
-    public void EditOutcome_EveryMember_ErrorStatusAgreesWithCode_AndUnsetIsError()
+    public void EditOutcome_EveryMember_ErrorStatusAgreesWithCode_AndUndefinedValueIsError()
     {
         foreach (var outcome in Enum.GetValues<EditOutcome>())
         {
@@ -117,8 +117,8 @@ public class ResultStatusTests
             Assert.That(outcome.ToErrorCode() is null, Is.EqualTo(!status.IsErrorStatus()), $"{outcome}: code presence must match IsError");
         }
 
-        IOperationResult unset = new DocumentEditResult(EditOutcome.Unset, default);
-        Assert.That(unset.IsError, Is.True);
+        IOperationResult undefined = new DocumentEditResult((EditOutcome)0, default);
+        Assert.That(undefined.IsError, Is.True);
 
         var json = JsonSerializer.Serialize(new DocumentEditResult(EditOutcome.Modified, default));
         Assert.That(json, Does.Not.Contain("\"IsError\"").And.Not.Contain("\"Status\"").And.Not.Contain("\"Code\""));

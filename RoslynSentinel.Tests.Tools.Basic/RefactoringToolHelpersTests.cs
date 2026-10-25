@@ -81,7 +81,7 @@ public class RefactoringToolHelpersTests
     public void ToSummaryResult_ErrorGuard_KeepsErrorCode()
     {
         var guard = RefactoringToolHelpers.RequireUpdatedText(
-            new DocumentEditResult(EditOutcome.Unset, "X.cs") { Message = "m" },
+            new DocumentEditResult((EditOutcome)0, "X.cs") { Message = "m" },
             "test",
             "X.cs")!;
 
@@ -185,7 +185,7 @@ public class RefactoringToolHelpersTests
         Assert.That(result.ErrorData.Message, Does.Contain("Engine detail: Class 'C' not found."));
     }
 
-    [TestCase(EditOutcome.Unset, ToolErrorCode.Exception)]
+    [TestCase((EditOutcome)0, ToolErrorCode.Exception)]
     public void GuardEngineResult_GenuineFailure_UsesEngineCodeOneLineReasonAndToolHint(EditOutcome outcome, string expectedCode)
     {
         // A genuine failure is an error even when the tool's no-op handling is a success, and even when text came back.
@@ -199,15 +199,15 @@ public class RefactoringToolHelpersTests
     [Test]
     public void GuardEngineResult_GenuineFailure_WithoutAReasonStillExplainsAndHints()
     {
-        var result = Guard(Edit(EditOutcome.Unset), NoOpHandling.Success(SuccessText));
+        var result = Guard(Edit((EditOutcome)0), NoOpHandling.Success(SuccessText));
 
-        Assert.That(result!.ErrorData!.Message, Is.EqualTo($"op failed for method 'M' (Unset). {Hint}"));
+        Assert.That(result!.ErrorData!.Message, Is.EqualTo($"op failed for method 'M' (0). {Hint}"));
     }
 
     [Test]
     public void GuardEngineResult_GenuineFailure_CapsAnEnormousReasonAndNeverLeaksTheSource()
     {
-        var result = Guard(Edit(EditOutcome.Unset, message: new string('x', 5000) + "\nclass Secret { }"), NoOpHandling.Success(SuccessText));
+        var result = Guard(Edit((EditOutcome)0, message: new string('x', 5000) + "\nclass Secret { }"), NoOpHandling.Success(SuccessText));
 
         Assert.That(result!.ErrorData!.Message.Length, Is.LessThan(400));
         Assert.That(result.ErrorData.Message, Does.Contain("..."));

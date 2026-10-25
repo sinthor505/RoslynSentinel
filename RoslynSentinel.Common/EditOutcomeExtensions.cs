@@ -4,7 +4,7 @@ public static class EditOutcomeExtensions
 {
     /// <summary>
     /// The one place that says how a document-edit outcome reads as a canonical <see cref="ResultStatus"/>.
-    /// <see cref="EditOutcome.Unset"/> (an engine that fell through without classifying itself) is <see cref="ResultStatus.Failed"/>:
+    /// An undefined value (for example a bare cast of 0) is <see cref="ResultStatus.Failed"/>:
     /// an error, never a success.
     /// </summary>
     public static ResultStatus ToResultStatus(this EditOutcome outcome) => outcome switch

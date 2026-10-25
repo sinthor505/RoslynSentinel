@@ -130,9 +130,9 @@ public static class RefactoringToolHelpers
     /// <item>for the "nothing to do" family (NoCandidatesFound, and Modified with no text) whatever
     /// <paramref name="noOp"/> says: the tool's own success message, or an error carrying the engine's code
     /// (<see cref="EngineResultBase.Code"/>) with the tool's own wording;</item>
-    /// <item>an error for every other outcome (Error, Unset, SourceInvalid, FeatureDisabled, DocumentNotFound),
+    /// <item>an error for every other outcome (an undefined or retired value),
     /// carrying the engine's code, the engine's reason reduced by <see cref="SummarizeEngineMessage"/>, and
-    /// <paramref name="hint"/>. An unclassified outcome (Unset, Error) is therefore an error, never a silent success.</item>
+    /// <paramref name="hint"/>. An unclassified outcome is therefore an error, never a silent success.</item>
     /// </list>
     /// </summary>
     /// <param name="result">The engine result.</param>
