@@ -103,8 +103,13 @@ public class ThreadSafetyEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException("Syntax root not found for '" + filePath + "'.");
-        var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-        .Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
+        var nameMatches = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Identifier.Text == methodName).ToList();
+        // Only overloads that contain a lock are converted, so a lock-free overload with the same name is not a real candidate.
+        var lockingMatches = nameMatches
+            .Where(m => m.Body?.DescendantNodes().OfType<LockStatementSyntax>().Any() ?? false)
+            .ToList();
+        var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(lockingMatches.Count > 0 ? lockingMatches : nameMatches, "Method", methodName);
         if (method == null || method.Body == null)
         {
             throw new ToolNotFoundException($"Method or body not found: {methodName} in file: {filePath}");
