@@ -1,6 +1,6 @@
 # Plan: Surface a failed launcher build to the agent (no silent fallback to an older build)
 
-**Status:** IN PROGRESS 2026-10-24. All four steps built (Build 0 errors, new tests pass); live verification (commit, StopServer, read `lastLaunch` on the respawned server) pending, then close.
+**Status:** IMPLEMENTED 2026-10-24 in e592a4e2. Live-verified: respawn onto e592a4e2 reports `lastLaunch.buildFailed:false`, and StopServer returned the uncommitted-source warning. The `buildFailed:true` path (broken HEAD) is covered by unit tests only, not a live launch.
 
 ## Problem
 When `McpServerControl(StopServer)` respawns, the launcher builds the new HEAD in a clean worktree. If that

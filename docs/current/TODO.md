@@ -6,7 +6,6 @@ Rules: (1) one entry = one line (`- [OPEN|IN-PROGRESS|BLOCKED] Title (YYYY-MM-DD
 
 Blocking or in-flight slices.
 
-- [OPEN] Surface a failed respawn build (2026-10-24) - when the launcher cannot build the new commit-keyed build it silently falls back to the previous one (visible only in launch.log); McpServerStatus should report lastLaunchBuildFailed plus the first error so StopServer cannot look successful - [doc](blockers/resolved/blocking_error_restart_reuses_stale_commit_keyed_build.md)
 - [OPEN] Hidden-test-hit hints still missing in some Search paths (2026-10-24) - `symbol` and `typesWithAttribute` still skip test projects before searching (hits not counted; scanning them means compiling test projects, so only do it if timing allows); `attributeUsages` with `hasAttribute` set omits the hint from its early-return message and the broaden-on-empty path drops hidden hits silently (`SymbolRelationshipImpl.QuerySymbolRelationships`); `implementorsOf`/`objectCreations`/`extensionsFor`/`methodsByReturnType` ignore `includeTests` entirely - [doc](plans/closed/plan_search_text_scan_all_projects_and_recovery_hints.md)
 - [OPEN] Record-parameter gaps left after the locator fix (2026-10-24) - `FindImplementationsForMemberAsync` and `DescribeNameOnlyCandidates` still ignore positional record parameters (`// TODO` in `SnippetSymbolLocator`); stale header comment in `SearchSolutionTextRecoveryHintTests.cs` still says advice goes in "StatusMessage/WarningDetails" - [doc](findings/closed/finding_snippet_locator_misses_record_positional_parameters.md)
 

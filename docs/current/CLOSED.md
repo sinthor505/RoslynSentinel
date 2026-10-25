@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Failed respawn build was invisible to the agent - resolved (2026-10-24)
+
+The launcher fell back to the newest complete build when the new HEAD failed to build, visible only in `launch.log`. It now writes `instances\<id>\launch-outcome.json`; `McpServerStatus.lastLaunch` and a one-shot `launchWarning` report it, and StopServer warns about uncommitted server source. Evidence: e592a4e2; [plan](plans/plan_surface_failed_launch_build.md); [blocker](blockers/resolved/blocking_error_restart_reuses_stale_commit_keyed_build.md). Live check: respawn reported `lastLaunch.buildFailed:false` and StopServer returned the warning; the failed-build path is unit-tested only.
+
 ## `Search(text)` recovery hint duplicated, and positional-record snippets did not resolve - resolved (2026-10-24)
 
 The zero-match hint no longer appears in `warningDetails` or a third `Findings` copy, and the long generic paragraph is dropped when a specific hint exists. `ListAll` (declaration kinds) and `attributeUsages` now scan test projects and report hidden hits per project with an `includeTests: true` hint. `SnippetSymbolLocator` skips snippet indentation and maps a positional-record parameter to its synthesized property; `FindCallers` resolves a record parameter by name and drops the internal "FindCallers:" prefix. Evidence: `RoslynSentinel.Tests.Tools.Basic` 1179 of 1183 passed (the one failure is a git-environment test), `BugFixTests` record-parameter tests 4/4, `RoslynSentinel.Tests.Tools.Advanced` attribute tests 65/65. Plan: [plan_search_text_scan_all_projects_and_recovery_hints.md](plans/closed/plan_search_text_scan_all_projects_and_recovery_hints.md); finding: [finding_snippet_locator_misses_record_positional_parameters.md](findings/closed/finding_snippet_locator_misses_record_positional_parameters.md).
