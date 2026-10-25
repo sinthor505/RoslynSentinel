@@ -910,6 +910,7 @@ public class CodeGenerationEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.AlreadyInTargetState,
+                UpdatedText = root.ToFullString(),
                 FilePath = filePath,
                 Message = $"// Info: All members of '{interfaceName}' are already implemented."
             };

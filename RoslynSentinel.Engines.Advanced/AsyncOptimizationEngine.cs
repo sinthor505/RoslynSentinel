@@ -1264,6 +1264,7 @@ public class AsyncOptimizationEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.AlreadyInTargetState,
+                UpdatedText = root.ToFullString(),
                 FilePath = filePath,
                 Message = "// Info: Method already has a CancellationToken parameter."
             };

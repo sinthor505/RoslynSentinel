@@ -128,6 +128,7 @@ public class BasicRefactoringEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.AlreadyInTargetState,
+                UpdatedText = currentText,
                 FilePath = filePath
             };
         }

@@ -351,6 +351,7 @@ public class StructuralRefactoringEngine
             return new DocumentEditResult
             {
                 Outcome = EditOutcome.AlreadyInTargetState,
+                UpdatedText = root.ToFullString(),
                 FilePath = filePath
             };
         }
