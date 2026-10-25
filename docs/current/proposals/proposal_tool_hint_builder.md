@@ -92,7 +92,13 @@ Foundation:
 - F1: `ToolSignatureCatalog` plus tests.
 - F2: `ToolCallHint` plus tests (named `ToolCallHint` because `RoslynSentinel.Common.ToolHint` already exists in ItemFailure.cs, an Asyncify failure-routing type). F2b: reflection-fallback catalog so unit tests without a server still render real signatures; then rebuild `LargeResultHints` on `ToolCallHint` (it cannot move earlier: with an empty catalog the existing LargeResultHintsTests would see a bare tool name).
 - F3: ratchet test plus seeded baseline.
-- F4: startup wiring of the live catalog in `Server.Basic`.
+- F4: startup wiring of the live catalog in `Server.Basic`. DROPPED: the reflection fallback uses the same
+  `McpToolSchemaPatcher.CreateSentinelTool` as the emitted schema, so a live catalog adds nothing.
+- F5: `FromLoadedAssemblies()` loads the three tool assemblies first, so a lazily built catalog sees every tool
+  even when the host has not touched a type from each assembly yet.
+- Actual conversion order (replaces C1-C6): by project - Common (A1/A2, C1a/C1b `LoadSolution`), then
+  B1 `Engines.Basic`, B2 `Engines.Advanced`, B3 `Server.Basic`, B4 `Tools.Advanced`, B5 `Tools.Basic` small
+  files, B6 `GitImpl`/`GitTools`, B7 `CodeTransformTools`, `PlanStepRunner`, `ToolParams` (hint-ok).
 
 Conversion (each removes its baseline entries in the same commit):
 - C1: `LoadSolution` (~25 sites, 14 files).
@@ -140,6 +146,20 @@ each helper and has no way to catch a new hand-written hint. Not chosen; `ToolCa
   real sources; the first run against the seeded baseline will show how many `// hint-ok:` escapes it needs.
 - Whether the live catalog and the reflection fallback can disagree for tools in toolsets not loaded in a
   given mode (affects only `IsActive` and enum lists; hypothesis, not traced).
+- Side effect of the reflection fallback under the lean profile: `HiddenSchemaParams` hides parameters from the
+  emitted schema, so the catalog (built through the same patcher) omits them too and a hint cannot name them.
+  Not yet checked against any converted hint.
+- In a test project that cannot see the tool assemblies (`RoslynSentinel.Tests` references only Common and
+  `Engines.Basic`) the catalog is empty and `ToolCallHint.Call` silently renders the bare tool name. Exact-text
+  assertions on converted hints must live in `Tests.Tools.Basic` (`ConvertedToolHintTests`) or `Tests.Server`.
+
+## Conversion rules learned
+
+- A `const` or `static readonly` string embedding a call becomes an expression-bodied static property or method:
+  the catalog is built lazily and a static initializer could freeze a bare tool name.
+- A const used as an attribute argument or default parameter value cannot be converted: make the parameter
+  nullable and default inside the method, or mark the statement `// hint-ok: <why>`.
+- Labels (a tool named but not a call to make) and logger-only templates are marked `// hint-ok:`.
 
 ## Cost / risk
 

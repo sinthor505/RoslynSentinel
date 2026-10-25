@@ -240,7 +240,7 @@ public class ReplaceSnippetBatchTests
     {
         // The single-edit path always carried escape-hatch advice on a size rejection; the batch
         // path used to list the per-edit bounds with no way forward. Two oversized edits must still
-        // yield exactly one advice sentence, led by MemberTool(replace).
+        // yield exactly one advice sentence, led by a complete Member(reason: ..., operation: replace) call.
         using var workspace = CreateWorkspace();
         var tools = BuildTools(workspace.Manager);
 
@@ -261,8 +261,9 @@ public class ReplaceSnippetBatchTests
         Assert.Multiple(() =>
         {
             Assert.That(message, Does.Contain("newContent is 2500 chars"));
-            Assert.That(message, Does.Contain("Member(operation: replace)"));
-            Assert.That(message.Split("Member(operation: replace)").Length - 1, Is.EqualTo(1),
+            Assert.That(message, Does.Contain("Member(reason:"));
+            Assert.That(message, Does.Contain("operation: replace"));
+            Assert.That(message.Split("Member(reason:").Length - 1, Is.EqualTo(1),
                 "the advice must be appended once per batch, not once per edit");
         });
     }

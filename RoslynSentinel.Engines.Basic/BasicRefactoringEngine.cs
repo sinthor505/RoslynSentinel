@@ -58,7 +58,7 @@ public record RenameSymbolResult(string OldName, string NewName, Dictionary<File
 
     public string ToToolResponse()
     {
-        return System.Text.Json.JsonSerializer.Serialize(new { success = Error is null, oldName = OldName, newName = NewName, filesChanged = PendingChanges.Count, updatedHandle = UpdatedHandle is SymbolHandle h ? new { h.ProjectName, h.DocCommentId } : null, note = UpdatedHandle is null ? "updatedHandle is null - re-run Search(mode: symbol) before further operations on this symbol." : null });
+        return System.Text.Json.JsonSerializer.Serialize(new { success = Error is null, oldName = OldName, newName = NewName, filesChanged = PendingChanges.Count, updatedHandle = UpdatedHandle is SymbolHandle h ? new { h.ProjectName, h.DocCommentId } : null, note = UpdatedHandle is null ? $"updatedHandle is null - re-run {ToolCallHint.Call("Search", ("mode", "symbol"))} before further operations on this symbol." : null });
     }
 }
 
@@ -221,12 +221,12 @@ public class BasicRefactoringEngine
         var originalParams = methodDecl.ParameterList.Parameters.ToList();
         if (originalParams.Count == 0)
         {
-            return Refuse($"'{methodName}' declares no parameters, and ChangeSignature cannot add a parameter to a parameterless method. Nothing was changed. Edit the declaration and its call sites directly.");
+            return Refuse($"'{methodName}' declares no parameters, and ChangeSignature cannot add a parameter to a parameterless method. Nothing was changed. Edit the declaration and its call sites directly."); // hint-ok: names the tool in prose, not a call to make
         }
 
         if (parameters.Count == 0)
         {
-            return Refuse("The parameters list is empty, and ChangeSignature does not remove every parameter in one call. Nothing was changed. Edit the declaration and its call sites directly.");
+            return Refuse("The parameters list is empty, and ChangeSignature does not remove every parameter in one call. Nothing was changed. Edit the declaration and its call sites directly."); // hint-ok: names the tool in prose, not a call to make
         }
 
         // Validate: every ExistingParameterSpec.OriginalIndex must be in range and referenced at most once.
@@ -1330,7 +1330,7 @@ public class BasicRefactoringEngine
         method ??= RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: GetFileOutline on '{filePath}' to list its methods, or Search(mode: method, query: '{methodName}').", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list its methods, or {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))}.", "method", methodName);
         }
 
         if (method.Body == null)
@@ -1341,7 +1341,7 @@ public class BasicRefactoringEngine
         var model = await document.GetSemanticModelAsync(cancellationToken);
         if (model == null)
         {
-            throw new ToolInvalidArgumentException($"Semantic model for '{filePath}' is unavailable. Next: confirm the project compiles with Build.");
+            throw new ToolInvalidArgumentException($"Semantic model for '{filePath}' is unavailable. Next: confirm the project compiles with {ToolCallHint.Call("Build")}.");
         }
 
         var flow = model.AnalyzeControlFlow(method.Body)!;
@@ -1372,7 +1372,7 @@ public class BasicRefactoringEngine
         method ??= RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
-            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: GetFileOutline on '{filePath}' to list its methods, or Search(mode: method, query: '{methodName}').", "method", methodName);
+            throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'. Searched: method declarations in the file by name. Next: {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))} to list its methods, or {ToolCallHint.Call("Search", ("mode", "method"), ("query", methodName))}.", "method", methodName);
         }
 
         if (method.Body == null)
@@ -1383,7 +1383,7 @@ public class BasicRefactoringEngine
         var model = await document.GetSemanticModelAsync(cancellationToken);
         if (model == null)
         {
-            throw new ToolInvalidArgumentException($"Semantic model for '{filePath}' is unavailable. Next: confirm the project compiles with Build.");
+            throw new ToolInvalidArgumentException($"Semantic model for '{filePath}' is unavailable. Next: confirm the project compiles with {ToolCallHint.Call("Build")}.");
         }
 
         DataFlowAnalysis flow;
@@ -1766,7 +1766,7 @@ public class BasicRefactoringEngine
         var sourceText = await document.GetTextAsync(cancellationToken);
         if (root == null || sourceText == null)
         {
-            throw new ToolInvalidArgumentException($"Syntax root of '{filePath}' is unavailable. Next: confirm the file is a plain .cs source file with GetFileOutline.");
+            throw new ToolInvalidArgumentException($"Syntax root of '{filePath}' is unavailable. Next: confirm the file is a plain .cs source file with {ToolCallHint.Call("GetFileOutline")}.");
         }
 
         SyntaxNode? target;
@@ -1777,7 +1777,7 @@ public class BasicRefactoringEngine
 
         if (target == null)
         {
-            throw new ToolNotFoundException($"Target '{targetName}' not found in '{filePath}'. Searched: symbols named '{targetName}' in the file. Next: Search(mode: symbol, query: '{targetName}') or GetFileOutline on '{filePath}'.", "symbol", targetName);
+            throw new ToolNotFoundException($"Target '{targetName}' not found in '{filePath}'. Searched: symbols named '{targetName}' in the file. Next: {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", targetName))} or {ToolCallHint.Call("GetFileOutline", ("filePath", filePath))}.", "symbol", targetName);
         }
 
         var docTrivia = target.GetLeadingTrivia().FirstOrDefault(t => t.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
@@ -1813,13 +1813,13 @@ public class BasicRefactoringEngine
         }).OrderBy(b => b.Span.Length).FirstOrDefault();
         if (block == null)
         {
-            throw new ToolNotFoundException("Could not find a suitable block. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.", "block");
+            throw new ToolNotFoundException($"Could not find a suitable block. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "block");
         }
 
         var targeted = block.Statements.Where(s => StatementStartLine(s) <= endLine && StatementEndLine(s) >= startLine).ToList();
         if (targeted.Count == 0)
         {
-            throw new ToolNotFoundException("Could not find any statements in the specified range. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.", "statement");
+            throw new ToolNotFoundException($"Could not find any statements in the specified range. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "statement");
         }
 
         var tryBlock = SyntaxFactory.Block(SyntaxFactory.List(targeted));
@@ -1888,7 +1888,7 @@ public class BasicRefactoringEngine
         }).OrderBy(b => b.Span.Length).FirstOrDefault();
         if (block == null)
         {
-            throw new ToolNotFoundException("Could not find a suitable block for the snippet. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.", "block");
+            throw new ToolNotFoundException($"Could not find a suitable block for the snippet. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "block");
         }
 
         // StatementStartLine and StatementEndLine are unused
@@ -1905,7 +1905,7 @@ public class BasicRefactoringEngine
 
         if (targeted.Count == 0)
         {
-            throw new ToolNotFoundException("Could not find any statements containing the snippet. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.", "statement");
+            throw new ToolNotFoundException($"Could not find any statements containing the snippet. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "statement");
         }
 
         // Build the try/catch as in the original

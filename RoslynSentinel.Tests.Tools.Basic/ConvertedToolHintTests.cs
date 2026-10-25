@@ -62,4 +62,22 @@ public class ConvertedToolHintTests
         Assert.That(message, Does.Contain("ListAll(reason:"));
         Assert.That(message, Does.Contain("ReadFile(reason:"));
     }
+
+    [Test]
+    public void AppliedChangeSummary_Note_WithResultId_NamesCompleteGetLargeResultCall()
+    {
+        var filePath = new FilePathWrapper("test.cs");
+        var summary = new AppliedChangeSummary(
+            ChangeId: "abc12345",
+            AffectedFiles: new List<FilePathWrapper> { filePath },
+            Description: "test",
+            DryRun: false,
+            ChangedContent: null,
+            Validated: true,
+            ChangedContentResultId: "resultId123");
+
+        Assert.That(summary.Note, Does.Contain("GetLargeResult("));
+        Assert.That(summary.Note, Does.Contain("resultId: \"resultId123\""));
+        Assert.That(summary.Note, Does.Contain("reason:"));
+    }
 }

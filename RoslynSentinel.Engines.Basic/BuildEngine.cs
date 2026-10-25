@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 
+using RoslynSentinel.Common;
+
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -101,7 +103,7 @@ public class BuildEngine
                 EngineOutcome.InvalidInput,
                 new EngineError(
                     EngineErrorCode.BuildNotRun,
-                    $"Quick build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to nothing -- no compile verdict is available. Call ListAll(kind: \"all\") to see valid project/file names."));
+                    $"Quick build compiled zero projects. Scope '{scope}' with scopeName '{scopeName}' resolved to nothing -- no compile verdict is available. Call {ToolCallHint.Call("ListAll", ("kind", "all"))} to see valid project/file names."));
         }
 
         var allErrors = summary!.Details.Where(d => d.Severity == "Error").ToList();
@@ -206,7 +208,7 @@ public class BuildEngine
                 EngineOutcome.InvalidInput,
                 new EngineError(
                     EngineErrorCode.BuildNotRun,
-                    "Full build compiled zero projects. The loaded solution contains no projects -- no compile verdict is available. Call LoadSolution with a populated .slnx/.sln, or ListAll(kind: \"all\") to inspect the current workspace."));
+                    $"Full build compiled zero projects. The loaded solution contains no projects -- no compile verdict is available. Call {ToolCallHint.Call("LoadSolution")} with a populated .slnx/.sln, or {ToolCallHint.Call("ListAll", ("kind", "all"))} to inspect the current workspace."));
         }
 
         BuildGateLease gateLease;

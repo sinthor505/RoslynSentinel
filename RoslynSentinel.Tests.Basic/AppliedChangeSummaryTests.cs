@@ -70,8 +70,8 @@ public class AppliedChangeSummaryTests
             Validated: true,
             ChangedContentResultId: "resultId123");
 
+        // The resultId inside the call is asserted in Tests.Tools.Basic ConvertedToolHintTests (this project sees no tool schemas, so ToolCallHint renders the bare tool name).
         Assert.That(summary.Note, Does.Contain("GetLargeResult"));
-        Assert.That(summary.Note, Does.Contain("resultId123"));
     }
 
     [Test]
@@ -242,7 +242,7 @@ public class AppliedChangeSummaryTests
             Validated: false,
             ChangedContentResultId: "rid1");
 
+        // The resultId inside the call is asserted in Tests.Tools.Basic ConvertedToolHintTests (this project sees no tool schemas, so ToolCallHint renders the bare tool name).
         Assert.That(summary.Note, Does.Contain("GetLargeResult"));
-        Assert.That(summary.Note, Does.Contain("rid1"));
     }
 }

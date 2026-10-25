@@ -20,9 +20,9 @@ namespace RoslynSentinel.Engines.Basic;
 /// </remarks>
 public static class ConstructionReplacer
 {
-    private const string SymbolHint = "Pass a type id such as 'T:Ns.Type' or a constructor id such as 'M:Ns.Type.#ctor(System.Int32)' (from Search(mode: symbol) or Search(mode: constructor)).";
+    private static string SymbolHint => $"Pass a type id such as 'T:Ns.Type' or a constructor id such as 'M:Ns.Type.#ctor(System.Int32)' (from {ToolCallHint.Call("Search", ("mode", "symbol"))} or {ToolCallHint.Call("Search", ("mode", "constructor"))}).";
 
-    private const string FactoryHint = "Pass the id of a public or internal static, non-generic method such as 'M:Ns.Factories.CreateType(System.Int32)' (from Search(mode: symbol)).";
+    private static string FactoryHint => $"Pass the id of a public or internal static, non-generic method such as 'M:Ns.Factories.CreateType(System.Int32)' (from {ToolCallHint.Call("Search", ("mode", "symbol"))}).";
 
     /// <summary>Plans the rewrite. Sites that were rewritten have Role Construction; skipped sites have Role Unsupported and an UnsupportedReason.</summary>
     /// <returns>Sites, a per-file full new text dictionary (empty when nothing can be rewritten) and an error for a refused operation.</returns>
