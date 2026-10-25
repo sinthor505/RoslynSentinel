@@ -15,7 +15,7 @@ public class SolutionManagementEngine
     /// <summary>
     /// Creates a new project within the solution.
     /// </summary>
-    public async Task<DocumentEditResult> CreateProjectAsync(string projectName, string projectType = "console", CancellationToken cancellationToken = default)
+    public async Task<ProjectEditResult> CreateProjectAsync(string projectName, string projectType = "console", CancellationToken cancellationToken = default)
     {
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var slnPath = _workspaceManager.SolutionPath ?? solution.FilePath;
@@ -35,7 +35,7 @@ public class SolutionManagementEngine
         });
 
         await process!.WaitForExitAsync(cancellationToken);
-        return new DocumentEditResult
+        return new ProjectEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = default,
@@ -46,7 +46,7 @@ public class SolutionManagementEngine
     /// <summary>
     /// Splits a project by moving a folder's contents into a new project and updating references.
     /// </summary>
-    public async Task<DocumentEditResult> SplitProjectByFolderAsync(string sourceProjectName, string folderName, string targetProjectName, CancellationToken cancellationToken = default)
+    public async Task<ProjectEditResult> SplitProjectByFolderAsync(string sourceProjectName, string folderName, string targetProjectName, CancellationToken cancellationToken = default)
     {
         // 1. Create target project
         await CreateProjectAsync(targetProjectName, "classlib", cancellationToken);
@@ -57,7 +57,8 @@ public class SolutionManagementEngine
         var filesToMove = sourceProject.Documents.Where(d => d.Folders.Contains(folderName)).ToList();
 
         // 3. Physically move files and update solution (simulated for expansion)
-        return new DocumentEditResult
+        // TODO SplitProjectByFolderAsync is a simulation: it creates the project and reports "Moved N files" without moving any file; throw ToolNotImplementedException or implement the move (plan_document_edit_result_non_nullable_updated_text risks)
+        return new ProjectEditResult
         {
             Outcome = EditOutcome.Modified,
             FilePath = default,
