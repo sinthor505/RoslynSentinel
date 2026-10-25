@@ -25,7 +25,7 @@ public class SolutionStructureEngine
         var fileDir = Path.GetDirectoryName(filePath);
         if (projectDir == null || fileDir == null || !fileDir.StartsWith(projectDir))
         {
-            throw new ToolNotFoundException($"File '{filePath}' is outside the project directory, so its namespace cannot be checked. Next: ListAll to confirm the owning project of this file.");
+            throw new ToolNotFoundException($"File '{filePath}' is outside the project directory, so its namespace cannot be checked. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project of this file.");
         }
 
         var relativePath = fileDir.Substring(projectDir.Length).Trim(Path.DirectorySeparatorChar);
@@ -63,7 +63,7 @@ public class SolutionStructureEngine
         var nsNode = root?.DescendantNodes().OfType<BaseNamespaceDeclarationSyntax>().FirstOrDefault();
         if (nsNode == null)
         {
-            throw new ToolNotFoundException($"No namespace declaration found in '{filePath}', so its target folder cannot be derived. Next: ReadFile the file to confirm it declares a namespace.", "namespace");
+            throw new ToolNotFoundException($"No namespace declaration found in '{filePath}', so its target folder cannot be derived. Next: {ToolCallHint.Call("ReadFile")} the file to confirm it declares a namespace.", "namespace");
         }
 
         var ns = nsNode.Name.ToString();
@@ -72,7 +72,7 @@ public class SolutionStructureEngine
         var defaultNamespace = project.DefaultNamespace ?? project.Name;
         if (projectDir == null)
         {
-            throw new ToolNotFoundException($"Project directory not found for '{filePath}'. Next: ListAll to confirm the owning project.", "project");
+            throw new ToolNotFoundException($"Project directory not found for '{filePath}'. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project.", "project");
         }
 
         // Strip the default namespace from the beginning of the file's namespace

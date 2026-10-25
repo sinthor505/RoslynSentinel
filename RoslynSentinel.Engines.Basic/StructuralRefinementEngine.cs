@@ -5,6 +5,7 @@ using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
@@ -51,7 +52,7 @@ public class StructuralRefinementEngine
             if (primaryType == null)
             {
                 var available = topLevelTypes.Count == 0 ? "none" : string.Join(", ", topLevelTypes.Select(t => t.Identifier.Text));
-                throw new ToolNotFoundException($"No top-level type named '{targetTypeName}' found in '{filePath}'. Top-level types present: {available}. Next: Search(mode: class, query: \"{targetTypeName}\")", "type", targetTypeName);
+                throw new ToolNotFoundException($"No top-level type named '{targetTypeName}' found in '{filePath}'. Top-level types present: {available}. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", targetTypeName))}", "type", targetTypeName);
             }
         }
         else
@@ -61,7 +62,7 @@ public class StructuralRefinementEngine
 
         if (primaryType == null)
         {
-            throw new ToolNotFoundException($"No type declaration found in '{filePath}'. Next: ReadFile the file to confirm it declares a type.", "type");
+            throw new ToolNotFoundException($"No type declaration found in '{filePath}'. Next: {ToolCallHint.Call("ReadFile")} the file to confirm it declares a type.", "type");
         }
 
         var expectedName = primaryType.Identifier.Text + ".cs";
@@ -105,7 +106,7 @@ public class StructuralRefinementEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            throw new ToolNotFoundException($"File '{filePath}' is not in the loaded solution. Next: ListAll to confirm the owning project.", "file");
+            throw new ToolNotFoundException($"File '{filePath}' is not in the loaded solution. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project.", "file");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -118,7 +119,7 @@ public class StructuralRefinementEngine
         var symbol = semanticModel?.GetDeclaredSymbol(node!, cancellationToken) ?? semanticModel?.GetSymbolInfo(node!, cancellationToken).Symbol;
         if (symbol == null)
         {
-            throw new ToolNotFoundException($"No symbol found at line {line}, column {column} of '{filePath}'. Next: ReadFile the line to confirm the position.", "symbol");
+            throw new ToolNotFoundException($"No symbol found at line {line}, column {column} of '{filePath}'. Next: {ToolCallHint.Call("ReadFile")} the line to confirm the position.", "symbol");
         }
 
         var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
@@ -126,7 +127,7 @@ public class StructuralRefinementEngine
         {
             var firstLocations = references.SelectMany(r => r.Locations.Select(l => l.Location)).Take(3)
                 .Select(l => $"{Path.GetFileName(l.SourceTree?.FilePath ?? string.Empty)}:{l.GetLineSpan().StartLinePosition.Line + 1}");
-            throw new ToolTargetIneligibleException($"Symbol '{symbol.Name}' has {references.Sum(r => r.Locations.Count())} usages and cannot be safely deleted. First locations: {string.Join(", ", firstLocations)}. Next: Search(mode: references) to review them.", "Search(mode: references)");
+            throw new ToolTargetIneligibleException($"Symbol '{symbol.Name}' has {references.Sum(r => r.Locations.Count())} usages and cannot be safely deleted. First locations: {string.Join(", ", firstLocations)}. Next: {ToolCallHint.Call("Search", ("mode", "references"))} to review them.", ToolCallHint.Call("Search", ("mode", "references")));
         }
 
         var reflectionRisk = await CheckReflectionRiskAsync(solution, filePath, symbol, cancellationToken);
@@ -154,7 +155,7 @@ public class StructuralRefinementEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            throw new ToolNotFoundException($"File '{filePath}' is not in the loaded solution. Next: ListAll to confirm the owning project.", "file");
+            throw new ToolNotFoundException($"File '{filePath}' is not in the loaded solution. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project.", "file");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -187,14 +188,14 @@ public class StructuralRefinementEngine
         if (target == null)
         {
             throw new ToolNotFoundException(candidates.Count == 0
-                ? $"No symbol named '{symbolName}' found in '{filePath}'. Next: Search(mode: symbol, query: \"{symbolName}\")"
+                ? $"No symbol named '{symbolName}' found in '{filePath}'. Next: {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", symbolName))}"
                 : $"'{symbolName}' has {candidates.Count} declaration(s) in '{filePath}', and contextSnippet did not match any of them. Provide a contextSnippet that is a verbatim substring of the intended declaration.", "symbol", symbolName);
         }
 
         var symbol = semanticModel.GetDeclaredSymbol(target, cancellationToken);
         if (symbol == null)
         {
-            throw new ToolNotFoundException($"No symbol could be resolved for '{symbolName}' at the matched location of '{filePath}'. Next: ReadFile the snippet location to confirm it is a declaration.", "symbol", symbolName);
+            throw new ToolNotFoundException($"No symbol could be resolved for '{symbolName}' at the matched location of '{filePath}'. Next: {ToolCallHint.Call("ReadFile")} the snippet location to confirm it is a declaration.", "symbol", symbolName);
         }
 
         return await SafeDeleteSymbolAsync(filePath, symbol, cancellationToken);
@@ -230,7 +231,7 @@ public class StructuralRefinementEngine
                     .Any(l => l.IsKind(SyntaxKind.StringLiteralExpression) && l.Token.ValueText == symbol.Name) ?? false;
                 if (hasMatchingLiteral)
                 {
-                    throw new ToolTargetIneligibleException($"Potential reflection risk: symbol '{symbol.Name}' is referenced by a string literal in {doc.Name}, possible reflection/dynamic usage. Delete manually after verifying.", "Search(mode: text)");
+                    throw new ToolTargetIneligibleException($"Potential reflection risk: symbol '{symbol.Name}' is referenced by a string literal in {doc.Name}, possible reflection/dynamic usage. Delete manually after verifying.", ToolCallHint.Call("Search", ("mode", "text")));
                 }
             }
         }
@@ -252,7 +253,7 @@ public class StructuralRefinementEngine
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault();
         if (document == null)
         {
-            throw new ToolNotFoundException($"File '{filePath}' is not in the loaded solution. Next: ListAll to confirm the owning project.", "file");
+            throw new ToolNotFoundException($"File '{filePath}' is not in the loaded solution. Next: {ToolCallHint.Call("ListAll")} to confirm the owning project.", "file");
         }
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
@@ -266,7 +267,7 @@ public class StructuralRefinementEngine
         {
             var firstLocations = references.SelectMany(r => r.Locations.Select(l => l.Location)).Take(3)
                 .Select(l => $"{Path.GetFileName(l.SourceTree?.FilePath ?? string.Empty)}:{l.GetLineSpan().StartLinePosition.Line + 1}");
-            throw new ToolTargetIneligibleException($"Symbol '{symbol.Name}' has {references.Sum(r => r.Locations.Count())} usages and cannot be safely deleted. First locations: {string.Join(", ", firstLocations)}. Next: Search(mode: references) to review them.", "Search(mode: references)");
+            throw new ToolTargetIneligibleException($"Symbol '{symbol.Name}' has {references.Sum(r => r.Locations.Count())} usages and cannot be safely deleted. First locations: {string.Join(", ", firstLocations)}. Next: {ToolCallHint.Call("Search", ("mode", "references"))} to review them.", ToolCallHint.Call("Search", ("mode", "references")));
         }
 
         var reflectionRisk = await CheckReflectionRiskAsync(solution, filePath, symbol, cancellationToken);
@@ -287,7 +288,7 @@ public class StructuralRefinementEngine
 
         if (node == null)
         {
-            throw new ToolNotFoundException($"Declaration of symbol '{symbol.Name}' not found in '{filePath}'. Next: Search(mode: symbol, query: \"{symbol.Name}\") to locate it.", "symbol", symbol.Name);
+            throw new ToolNotFoundException($"Declaration of symbol '{symbol.Name}' not found in '{filePath}'. Next: {ToolCallHint.Call("Search", ("mode", "symbol"), ("query", symbol.Name))} to locate it.", "symbol", symbol.Name);
         }
 
         return new DocumentEditResult

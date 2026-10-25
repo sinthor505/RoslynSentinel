@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.SnippetMatching;
 
 namespace RoslynSentinel.Engines.Basic;
@@ -180,12 +181,12 @@ public class SemanticRefactoringEngine
 
         if (classNode == null)
         {
-            throw new ToolNotFoundException($"Class '{className}' was not found in '{filePath}'. Searched: class declarations in this file. Next: Search(mode: class, query: \"{className}\")", "class", className);
+            throw new ToolNotFoundException($"Class '{className}' was not found in '{filePath}'. Searched: class declarations in this file. Next: {ToolCallHint.Call("Search", ("mode", "class"), ("query", className))}", "class", className);
         }
 
         if (propNode == null)
         {
-            throw new ToolNotFoundException($"Property '{propertyName}' was not found in class '{className}'. Next: Search(mode: property, query: \"{propertyName}\")", "property", propertyName);
+            throw new ToolNotFoundException($"Property '{propertyName}' was not found in class '{className}'. Next: {ToolCallHint.Call("Search", ("mode", "property"), ("query", propertyName))}", "property", propertyName);
         }
 
         var getter = SyntaxFactory.MethodDeclaration(propNode.Type, $"Get{propertyName}")
@@ -221,7 +222,7 @@ public class SemanticRefactoringEngine
         var nodes = root?.DescendantNodes(span).Where(n => n is StatementSyntax && n.Parent is BlockSyntax).Cast<StatementSyntax>().ToList();
         if (nodes == null || nodes.Count == 0)
         {
-            throw new ToolNotFoundException($"No statements found in lines {startLine}-{endLine} of '{filePath}'. Searched: statements inside a block body whose span falls within that line range. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.", "statements");
+            throw new ToolNotFoundException($"No statements found in lines {startLine}-{endLine} of '{filePath}'. Searched: statements inside a block body whose span falls within that line range. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "statements");
         }
 
         return await WrapStatementsInUsingAsync(filePath, document, root!, nodes, disposalName, cancellationToken);
@@ -264,7 +265,7 @@ public class SemanticRefactoringEngine
 
         if (nodes.Count == 0)
         {
-            throw new ToolNotFoundException($"No statements found at the snippet location in '{filePath}'. Searched: statements containing the snippet match and statements on the snippet's line. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use GetFileOutline to find the lines.", "statements");
+            throw new ToolNotFoundException($"No statements found at the snippet location in '{filePath}'. Searched: statements containing the snippet match and statements on the snippet's line. Choose a range that covers complete statements inside a method body (not a constructor header, field or attribute list); use {ToolCallHint.Call("GetFileOutline")} to find the lines.", "statements");
         }
 
         // TODO this snippet form selects only the statement(s) containing the snippet, so it cannot cover a multi-statement range (the using block would be empty); WrapRange using is meant for startLine/endLine
