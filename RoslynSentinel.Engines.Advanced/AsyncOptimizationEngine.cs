@@ -422,10 +422,10 @@ public class AsyncOptimizationEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath)
                                .Select(solution.GetDocument)
-                               .FirstOrDefault() ?? throw new InvalidOperationException(
-                $"File '{filePath}' not found in the loaded solution. Ensure LoadSolution has been called.");
+                               .FirstOrDefault() ?? throw new ToolNotFoundException(
+                $"File '{filePath}' not found in the loaded solution. Ensure LoadSolution has been called.", "file", filePath);
 
-        var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException($"Could not get syntax root for '{filePath}'.");
+        var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException($"Could not get syntax root for '{filePath}'.");
 
         // Find the class that contains the named method.
         var classNode = root.DescendantNodes()
@@ -439,20 +439,20 @@ public class AsyncOptimizationEngine
 
         if (classNode == null || methodNode == null)
         {
-            throw new InvalidOperationException(
-                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.");
+            throw new ToolNotFoundException(
+                $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.", "method", methodName);
         }
 
         // ── Precondition checks ──────────────────────────────────────────────
         if (methodNode.Modifiers.Any(m => m.IsKind(SyntaxKind.AsyncKeyword)))
         {
-            throw new InvalidOperationException(
+            throw new AsyncBridgePreconditionException(AsyncBridgePreconditionKind.AlreadyAsync,
                 $"Method '{methodName}' is already async - it cannot be converted to a bridge.");
         }
 
         if (methodName.EndsWith("Async", StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(
+            throw new AsyncBridgePreconditionException(AsyncBridgePreconditionKind.Other,
                 $"Method '{methodName}' already ends with 'Async' - it is likely already the async overload.");
         }
 

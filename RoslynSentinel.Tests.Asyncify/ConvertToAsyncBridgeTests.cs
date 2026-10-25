@@ -395,7 +395,7 @@ public class Service
         return await Task.FromResult(1);
     }
 }", "Service.cs");
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<AsyncBridgePreconditionException>(
             () => _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "GetValue"),
             "Should throw when method is already async.");
     }
@@ -414,7 +414,7 @@ public class Service
     }
 }", "Service.cs");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<AsyncBridgePreconditionException>(
             () => _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "GetTripsAsync"),
             "Should throw when method name already ends with 'Async'.");
     }
@@ -522,7 +522,7 @@ public class Service
     public int GetValue() => 42;
 }", "Service.cs");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<ToolNotFoundException>(
         () => _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "NonExistentMethod"),
         "Should throw when the named method does not exist in the file.");
     }
@@ -532,7 +532,7 @@ public class Service
     {
         SetSource(@"public class Dummy {}", "Dummy.cs");
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<ToolNotFoundException>(
             () => _engine.ConvertToAsyncBridgeAsync(PathOf("DoesNotExist.cs"), "SomeMethod"),
             "Should throw when the file is not found in the loaded solution.");
     }
