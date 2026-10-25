@@ -63,7 +63,8 @@ public class AsyncOptimizationEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var methodNode = (root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName)) ?? throw new ToolNotFoundException($"Method '{methodName}' not found in document.");
+        var methodMatches = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>();
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName) ?? throw new ToolNotFoundException($"Method '{methodName}' not found in document.");
 
         // Safety checks
         var awaitCount = methodNode.DescendantNodes().OfType<AwaitExpressionSyntax>().Count();
@@ -135,7 +136,8 @@ public class AsyncOptimizationEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var methodMatches = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>();
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
         if (methodNode == null || methodNode.Body == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found or has no block body (expression-bodied methods are not supported).", "method", methodName);
@@ -322,8 +324,9 @@ public class AsyncOptimizationEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault();
-        var methodNode = classNode?.Members.OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var methodMatches = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>();
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
+        var classNode = methodNode?.Parent as ClassDeclarationSyntax;
 
         if (classNode == null || methodNode == null)
         {
@@ -428,14 +431,12 @@ public class AsyncOptimizationEngine
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException($"Could not get syntax root for '{filePath}'.");
 
         // Find the class that contains the named method.
-        var classNode = root.DescendantNodes()
-                            .OfType<ClassDeclarationSyntax>()
-                            .FirstOrDefault(c => c.Members
+        var methodMatches = root.DescendantNodes()
                                 .OfType<MethodDeclarationSyntax>()
-                                .Any(m => m.Identifier.Text == methodName));
-        var methodNode = classNode?.Members
-                                   .OfType<MethodDeclarationSyntax>()
-                                   .FirstOrDefault(m => m.Identifier.Text == methodName);
+                                .Where(m => m.Identifier.Text == methodName)
+                                .ToList();
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
+        var classNode = methodNode?.Parent as ClassDeclarationSyntax;
 
         if (classNode == null || methodNode == null)
         {
@@ -636,13 +637,14 @@ public class AsyncOptimizationEngine
         bridgedDocument = bridgedDocument.WithSyntaxRoot(bridgedRoot);
 
         // Step 2: insert the async overload immediately after the bridge wrapper. Same lookup as above; the overload
-        // name does not exist yet, so the first class with the method is still the one that was bridged.
-        var bridgedClass = bridgedRoot.DescendantNodes()
-                                      .OfType<ClassDeclarationSyntax>()
-                                      .First(c => c.Members.OfType<MethodDeclarationSyntax>().Any(m => m.Identifier.Text == methodName));
-        var bridgeInNewClass = bridgedClass.Members
-                                           .OfType<MethodDeclarationSyntax>()
-                                           .First(m => m.Identifier.Text == methodName);
+        // name does not exist yet, so the single method with that name is still the bridge wrapper.
+        var bridgeInNewClass = RoslynSentinel.Common.NameTargetLookup.RequireSingle(bridgedRoot.DescendantNodes()
+                                                                                       .OfType<MethodDeclarationSyntax>()
+                                                                                       .Where(m => m.Identifier.Text == methodName)
+                                                                                       .ToList(), "Method", methodName)
+            ?? throw new ToolNotFoundException($"Method '{methodName}' not found in the bridged document.", "method", methodName);
+        var bridgedClass = bridgeInNewClass.Parent as ClassDeclarationSyntax
+            ?? throw new ToolNotFoundException($"Method '{methodName}' is not a direct member of a class.", "method", methodName);
 
         // The overload gets a blank line before it and the original trailing line break after it.
         asyncMethod = asyncMethod
@@ -684,9 +686,11 @@ public class AsyncOptimizationEngine
                 $"File '{filePath}' not found in the loaded solution. Ensure LoadSolution has been called.", "file", filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException($"Could not get syntax root for '{filePath}'.");
-        var methodNode = root.DescendantNodes()
+        var methodMatches = root.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName)
+            .Where(m => m.Identifier.Text == methodName)
+            .ToList();
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName)
             ?? throw new ToolNotFoundException(
                 $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.", "method", methodName);
 
@@ -1087,8 +1091,9 @@ public class AsyncOptimizationEngine
             throw new ToolInvalidArgumentException("Failed to get syntax root for the document.");
         }
 
-        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-        .FirstOrDefault(m => m.Identifier.Text == methodName);
+        var methodMatches = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+        .Where(m => m.Identifier.Text == methodName).ToList();
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
         if (methodNode == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found.", "method", methodName);
@@ -1250,8 +1255,9 @@ public class AsyncOptimizationEngine
             throw new ToolInvalidArgumentException("Failed to get syntax root.");
         }
 
-        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName);
+        var methodMatches = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Identifier.Text == methodName).ToList();
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
         if (methodNode == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found in file. Method names are case-sensitive; use the exact name as declared in source.", "method", methodName);
@@ -1812,9 +1818,10 @@ internal sealed class MigrationCandidateAttribute : Attribute
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new ToolInvalidArgumentException($"Could not get syntax root for '{filePath}'.");
 
         // ── Find the target method ───────────────────────────────────────────
-        var methodNode = root.DescendantNodes()
+        var methodMatches = root.DescendantNodes()
                              .OfType<MethodDeclarationSyntax>()
-                             .FirstOrDefault(m => m.Identifier.Text == methodName) ?? throw new ToolNotFoundException(
+                             .Where(m => m.Identifier.Text == methodName).ToList();
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName) ?? throw new ToolNotFoundException(
                 $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive.", "method", methodName);
         var methodLine = methodNode.GetLocation().GetLineSpan().StartLinePosition.Line + 1;
 
@@ -1994,9 +2001,21 @@ internal sealed class MigrationCandidateAttribute : Attribute
             foreach (var idx in indices)
             {
                 var (_, methodName, pattern, score, reason) = items[idx];
-                var methodNode = root.DescendantNodes()
-                                     .OfType<MethodDeclarationSyntax>()
-                                     .FirstOrDefault(m => m.Identifier.Text == methodName);
+                MethodDeclarationSyntax? methodNode;
+                try
+                {
+                    var methodMatches = root.DescendantNodes()
+                                         .OfType<MethodDeclarationSyntax>()
+                                         .Where(m => m.Identifier.Text == methodName).ToList();
+                    methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
+                }
+                catch (ToolAmbiguousMatchException ex)
+                {
+                    errors.Add((idx, ex.Message));
+                    resultSlots[idx] = new FlagMigrationCandidateEngineResult(
+                        new Dictionary<FilePathWrapper, string>(), false, null, false, -1);
+                    continue;
+                }
                 if (methodNode == null)
                 {
                     errors.Add((idx, $"Method '{methodName}' not found in '{filePath}'. Names are case-sensitive."));
@@ -2961,9 +2980,10 @@ internal sealed class MigrationCandidateAttribute : Attribute
             throw new ToolInvalidArgumentException("Failed to get syntax root.");
         }
 
-        var methodNode = root.DescendantNodes()
+        var methodMatches = root.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName);
+            .Where(m => m.Identifier.Text == methodName).ToList();
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
 
         if (methodNode == null)
         {
@@ -3458,9 +3478,10 @@ internal sealed class MigrationCandidateAttribute : Attribute
 
         var allReplacements = new Dictionary<InvocationExpressionSyntax, InvocationExpressionSyntax>();
 
-        var methodNode = root.DescendantNodes()
+        var methodMatches = root.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName);
+            .Where(m => m.Identifier.Text == methodName).ToList();
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
 
         if (methodNode == null)
         {

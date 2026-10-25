@@ -9,6 +9,9 @@ public static class NameTargetLookup
     {
         if (matches.Count == 0) { return null; }
         if (matches.Count == 1) { return matches[0]; }
+        // An interface declaration plus its one implementation is one logical member, not ambiguity.
+        var interfaceMembers = matches.Where(m => m.Parent is Microsoft.CodeAnalysis.CSharp.Syntax.InterfaceDeclarationSyntax).ToList();
+        if (interfaceMembers.Count <= 1 && matches.Count - interfaceMembers.Count <= 1) { return matches[0]; }
         var descriptions = matches.Select(m =>
         {
             var path = string.IsNullOrEmpty(m.SyntaxTree.FilePath) ? "<unknown>" : m.SyntaxTree.FilePath;

@@ -218,11 +218,11 @@ public class Service
     public async Task<string> GetDataAsync()
     {
         var user = await GetUserAsync();
-        var data = await GetDataAsync(user);
+        var data = await FetchDataAsync(user);
         return data;
     }
     private Task<string> GetUserAsync() => Task.FromResult(""u1"");
-    private Task<string> GetDataAsync(string user) => Task.FromResult(""data"");
+    private Task<string> FetchDataAsync(string user) => Task.FromResult(""data"");
 }", "Service.cs");
 
         var result = await _engine.OptimizeIndependentAwaitsAsync("Service.cs", "GetDataAsync");

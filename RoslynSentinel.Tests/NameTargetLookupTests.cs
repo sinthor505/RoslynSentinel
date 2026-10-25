@@ -35,4 +35,25 @@ public class NameTargetLookupTests
 
         Assert.That(ex!.Message, Does.Contain("matches 2 declarations").And.Contain(":3 `").And.Contain(":4 `"));
     }
+
+    [Test]
+    public void RequireSingle_InterfaceMethodPlusOneImplementation_ReturnsFirstMatch()
+    {
+        var tree = CSharpSyntaxTree.ParseText("interface I { void M(); }\nclass C : I { public void M() { } }");
+        var methods = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
+
+        var result = NameTargetLookup.RequireSingle(methods, "Method", "M");
+
+        Assert.That(result, Is.Not.Null);
+        Assert.That(result, Is.SameAs(methods[0]));
+    }
+
+    [Test]
+    public void RequireSingle_TwoOverloadsPlusInterfaceDeclaration_Throws()
+    {
+        var tree = CSharpSyntaxTree.ParseText("interface I { void M(); }\nclass C\n{\n    void M() { }\n    void M(int x) { }\n}");
+        var methods = tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().ToList();
+
+        Assert.Throws<ToolAmbiguousMatchException>(() => NameTargetLookup.RequireSingle(methods, "Method", "M"));
+    }
 }
