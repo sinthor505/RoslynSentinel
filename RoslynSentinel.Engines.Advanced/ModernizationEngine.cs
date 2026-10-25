@@ -717,6 +717,8 @@ public class SyntaxModernizationEngine
             throw new ToolNotFoundException("Class not found.", "class", className);
         }
 
+        var originalText = (await document.GetTextAsync(cancellationToken)).ToString();
+        var changed = false;
         var newMembers = classNode.Members.Select(member =>
         {
             if (member is FieldDeclarationSyntax field)
@@ -729,6 +731,7 @@ public class SyntaxModernizationEngine
 
                 if (!field.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword)))
                 {
+                    changed = true;
                     return field.AddModifiers(SyntaxFactory.Token(SyntaxFactory.TriviaList(), SyntaxKind.ReadOnlyKeyword, SyntaxFactory.TriviaList(SyntaxFactory.Space)));
                 }
             }
@@ -737,6 +740,7 @@ public class SyntaxModernizationEngine
                 var setter = prop.AccessorList?.Accessors.FirstOrDefault(a => a.IsKind(SyntaxKind.SetAccessorDeclaration));
                 if (setter != null)
                 {
+                    changed = true;
                     var initOnly = setter.WithKeyword(SyntaxFactory.Token(SyntaxKind.InitKeyword));
                     return prop.WithAccessorList(prop.AccessorList!.WithAccessors(prop.AccessorList.Accessors.Replace(setter, initOnly)));
                 }
@@ -745,6 +749,17 @@ public class SyntaxModernizationEngine
             return member;
         });
         var newClass = classNode.WithMembers(SyntaxFactory.List(newMembers));
+        if (!changed)
+        {
+            return new DocumentEditResult
+            {
+                Outcome = EditOutcome.AlreadyInTargetState,
+                FilePath = filePath,
+                UpdatedText = originalText,
+                Message = "Class is already immutable - nothing to change."
+            };
+        }
+
         return new DocumentEditResult
         {
             Outcome = EditOutcome.Modified,

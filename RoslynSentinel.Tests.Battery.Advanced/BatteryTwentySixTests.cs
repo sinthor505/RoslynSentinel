@@ -737,6 +737,7 @@ public class ImmutabilityGotchaTests
         _workspaceManager.SetTestSolution(solution);
         var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("AI.cs", "AlreadyImmutable");
         Assert.That(result, Is.Not.Null, "Must not return null for an already-immutable class.");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
         Assert.That(result.UpdatedText, Does.Contain("init"), "init keyword must still be present.");
         Assert.That(result.UpdatedText, Does.Not.Contain("set;"), "No spurious set; must be introduced.");
     }
@@ -781,6 +782,7 @@ public class ImmutabilityGotchaTests
         _workspaceManager.SetTestSolution(solution);
         var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Empty.cs", "EmptyClass");
         Assert.That(result, Is.Not.Null, "Engine must not crash or return null for a class with no properties.");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
         Assert.That(result.UpdatedText, Does.Contain("EmptyClass"), "Class name must be present in the returned code.");
     }
 }

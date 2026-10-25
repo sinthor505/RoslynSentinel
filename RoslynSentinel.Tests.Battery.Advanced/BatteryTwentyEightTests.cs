@@ -99,6 +99,7 @@ public class B02extra_Immutability_ReadonlySpacing
         var solution = TestSolutionBuilder.CreateSolutionWithProject("P", [("Const.cs", source)]);
         _workspaceManager.SetTestSolution(solution);
         var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Const.cs", "Const");
+        Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
         var readonlyCount = result.UpdatedText!.Split("readonly").Length - 1;
         Assert.That(readonlyCount, Is.EqualTo(1), "An already-readonly field must not get a second readonly modifier.");
     }
