@@ -815,6 +815,10 @@ public class CodeTransformTools
                 case "class_to_record":
                     {
                         var r = await _modernizationEngine.ClassToRecordAsync(resolvedFilePath, className, cancellationToken);
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "class_to_record", $"class '{className}' in '{resolvedFilePath}'", ClassLookupHint, NoOpHandling.Success($"Class '{className}' in '{resolvedFilePath}' is already in the target state; nothing to change.")) is { } outcomeGuard)
+                        {
+                            return outcomeGuard;
+                        }
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
@@ -827,12 +831,17 @@ public class CodeTransformTools
                         try
                         {
                             var r = await _advancedStructuralEngine.ConvertAbstractClassToInterfaceAsync(resolvedFilePath, className, cancellationToken);
+                            if (RefactoringToolHelpers.GuardEngineResult(r, "convert_abstract_to_interface", $"class '{className}' in '{resolvedFilePath}'", ClassLookupHint, NoOpHandling.Success($"Class '{className}' in '{resolvedFilePath}' is already in the target state; nothing to change.")) is { } outcomeGuard)
+                            {
+                                return outcomeGuard;
+                            }
                             return new SentinelCallToolResult<object>
                             {
                                 IsError = false,
                                 SuccessData = new SourceTransformResult(r.UpdatedText!, false, false, resolvedFilePath) // TODO S4: UpdatedText becomes non-nullable
                             };
                         }
+                        // TODO dead catch: ConvertAbstractClassToInterfaceAsync throws only ToolException types; confirm its helpers before removing
                         catch (InvalidOperationException ioe)
                         {
                             return new SentinelCallToolResult<object>
@@ -865,6 +874,10 @@ public class CodeTransformTools
                         }
 
                         var r = await _codeGenerationEngine.ConvertPropertySafeAsync(resolvedFilePath, propName, direction, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_property_safe", $"property '{propName}' in '{resolvedFilePath}'", ClassLookupHint, NoOpHandling.Success($"Property '{propName}' in '{resolvedFilePath}' is already in the target state; nothing to change.")) is { } outcomeGuard)
+                        {
+                            return outcomeGuard;
+                        }
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
@@ -876,6 +889,10 @@ public class CodeTransformTools
                     {
                         var propName = propertyName ?? className;
                         var r = await _codeStyleEngine.ConvertPropertyToMethodsAsync(resolvedFilePath, propName, cancellationToken);
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_property_to_methods", $"property '{propName}' in '{resolvedFilePath}'", ClassLookupHint, NoOpHandling.Success($"Property '{propName}' in '{resolvedFilePath}' is already in the target state; nothing to change.")) is { } outcomeGuard)
+                        {
+                            return outcomeGuard;
+                        }
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
@@ -886,6 +903,10 @@ public class CodeTransformTools
                 case "convert_to_background_service":
                     {
                         var r = await _solutionStructureEngine.ConvertToBackgroundServiceAsync(resolvedFilePath, className, cancellationToken);
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "convert_to_background_service", $"class '{className}' in '{resolvedFilePath}'", ClassLookupHint, NoOpHandling.Success($"Class '{className}' in '{resolvedFilePath}' is already in the target state; nothing to change.")) is { } outcomeGuard)
+                        {
+                            return outcomeGuard;
+                        }
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
@@ -943,6 +964,10 @@ public class CodeTransformTools
                 case "record_to_class":
                     {
                         var r = await _modernizationEngine.RecordToClassAsync(resolvedFilePath, className, cancellationToken);
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "record_to_class", $"class '{className}' in '{resolvedFilePath}'", ClassLookupHint, NoOpHandling.Success($"Class '{className}' in '{resolvedFilePath}' is already in the target state; nothing to change.")) is { } outcomeGuard)
+                        {
+                            return outcomeGuard;
+                        }
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
@@ -953,6 +978,10 @@ public class CodeTransformTools
                 case "replace_constructor_with_factory":
                     {
                         var r = await _advancedStructuralEngine.ReplaceConstructorWithFactoryAsync(resolvedFilePath, className, cancellationToken);
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "replace_constructor_with_factory", $"class '{className}' in '{resolvedFilePath}'", ClassLookupHint, NoOpHandling.Success($"Class '{className}' in '{resolvedFilePath}' is already in the target state; nothing to change.")) is { } outcomeGuard)
+                        {
+                            return outcomeGuard;
+                        }
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
@@ -977,6 +1006,10 @@ public class CodeTransformTools
                 case "upgrade_to_primary_constructor":
                     {
                         var r = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync(resolvedFilePath, className, cancellationToken);
+                        if (RefactoringToolHelpers.GuardEngineResult(r, "upgrade_to_primary_constructor", $"class '{className}' in '{resolvedFilePath}'", ClassLookupHint, NoOpHandling.Success($"Class '{className}' in '{resolvedFilePath}' is already in the target state; nothing to change.")) is { } outcomeGuard)
+                        {
+                            return outcomeGuard;
+                        }
                         return new SentinelCallToolResult<object>
                         {
                             IsError = false,
