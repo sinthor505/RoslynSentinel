@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 
 using ModelContextProtocol;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
@@ -574,7 +575,7 @@ public class RefactoringStructuralImpl
                 var replaceEnumName = await _symbolNavigationEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (replaceEnumName != null)
                 {
-                    var enumReplaceHint = $"Retry using ModifyEnum(enumName: \"{replaceEnumName}\", values: ...) directly with the full desired member list if this keeps failing.";
+                    var enumReplaceHint = $"Retry using {ToolCallHint.Call("ModifyEnum", ("enumName", replaceEnumName))} directly with the full desired member list if this keeps failing.";
                     DocumentEditResult enumReplaced;
                     try
                     {
@@ -641,7 +642,7 @@ public class RefactoringStructuralImpl
                 var removeEnumName = await _symbolNavigationEngine.TryGetEnumMemberContainerNameAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, cancellationToken);
                 if (removeEnumName != null)
                 {
-                    var enumRemoveHint = $"Retry using ModifyEnum(enumName: \"{removeEnumName}\", values: ...) directly with the full desired member list if this keeps failing.";
+                    var enumRemoveHint = $"Retry using {ToolCallHint.Call("ModifyEnum", ("enumName", removeEnumName))} directly with the full desired member list if this keeps failing.";
                     DocumentEditResult enumRemoved;
                     try
                     {
@@ -675,11 +676,11 @@ public class RefactoringStructuralImpl
                     var stillPresent = await _memberRefactoringEngine.IsDeclarationStillPresentAsync(filePathResolved, memberName, contextSnippet, lineBefore, lineAfter, containerName, cancellationToken);
                     if (stillPresent == false)
                     {
-                        removeMessage += $" Verified: a repeat lookup for '{memberName}' finds no declaration. To double-check, call GetFileOutline on the file.";
+                        removeMessage += $" Verified: a repeat lookup for '{memberName}' finds no declaration. To double-check, call {ToolCallHint.Call("GetFileOutline")} on the file.";
                     }
                     else if (stillPresent == true)
                     {
-                        removeWarning = $"A declaration named '{memberName}' still resolves after removal (possibly an overload or another member of the same name); check with GetFileOutline on the file.";
+                        removeWarning = $"A declaration named '{memberName}' still resolves after removal (possibly an overload or another member of the same name); check with {ToolCallHint.Call("GetFileOutline")} on the file.";
                         removeMessage += " " + removeWarning;
                     }
                 }
@@ -697,7 +698,7 @@ public class RefactoringStructuralImpl
             if (operation == MemberAction.addTopLevelType)
             {
                 if (containerName != null)
-                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is not used for operation 'addTopLevelType' (there is no container - the type is added at the top level). {RequiredParamsHint(operation)} If you meant to add a member to an existing container, use operation 'addMember' instead.") };
+                    return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: containerName is not used for operation 'addTopLevelType' (there is no container - the type is added at the top level). {RequiredParamsHint(operation)} If you meant to add a member to an existing container, use {ToolCallHint.Call("Member", ("operation", "addMember"))} instead.") };
                 if (position != null)
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Member: position is not used for operation 'addTopLevelType' (the type is always appended). {RequiredParamsHint(operation)}") };
                 if (string.IsNullOrEmpty(newMemberSource))
@@ -750,7 +751,7 @@ public class RefactoringStructuralImpl
                 if (position != null && afterName == null && beforeName == null && position != "end")
                     return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"Unknown position '{position}'. Valid values: null, 'end', 'after:MemberName', 'before:MemberName'.") };
 
-                var enumAddHint = $"Retry using ModifyEnum(enumName: \"{containerName}\", values: ...) directly with the full desired member list if this keeps failing.";
+                var enumAddHint = $"Retry using {ToolCallHint.Call("ModifyEnum", ("enumName", containerName))} directly with the full desired member list if this keeps failing.";
                 DocumentEditResult enumAdded;
                 try
                 {
@@ -906,7 +907,7 @@ public class RefactoringStructuralImpl
                 return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"TypedMember: typedName and typedType are required. {requiredParamsHint}") };
 
             if (await _symbolNavigationEngine.IsEnumContainerAsync(filePathResolved, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken))
-                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"TypedMember: '{containerName}' is an enum - typedKind (property/field generation) doesn't apply. Pass newMemberSource as a bare member token ('Name' or 'Name=IntValue') via Member(operation: addMember) instead, or use ModifyEnum(enumName: \"{containerName}\", values: ...) directly.") };
+                return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"TypedMember: '{containerName}' is an enum - typedKind (property/field generation) doesn't apply. Pass newMemberSource as a bare member token ('Name' or 'Name=IntValue') via {ToolCallHint.Call("Member", ("operation", "addMember"))} instead, or use {ToolCallHint.Call("ModifyEnum", ("enumName", containerName))} directly.") };
 
             DocumentEditResult updated;
             string description;

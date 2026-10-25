@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Text;
+using RoslynSentinel.Common;
 
 using Microsoft.Extensions.Logging;
 
@@ -131,7 +132,7 @@ public class DocumentationTools
         var solutionRoot = _workspaceManager.GetSolutionRoot();
         if (solutionRoot is null)
         {
-            error = "No solution path configured. Call LoadSolution first.";
+            error = $"No solution path configured. Call {ToolCallHint.Call("LoadSolution")} first.";
             return null;
         }
 
@@ -226,8 +227,8 @@ public class DocumentationTools
                 Found = false,
                 Filename = filename,
                 Error = ignoreDocType
-                    ? $"'{filename}' was not found under the testing doc root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted. Call ProjectDoc(action: list) to see the exact available paths."
-                    : $"'{filename}' was not found under docType='{docType}', nor at that path relative to the docs root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted - a same-named file in a different directory is not a valid substitute. Call ProjectDoc(action: list) to see the exact available paths."
+                    ? $"'{filename}' was not found under the testing doc root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted. Call {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see the exact available paths."
+                    : $"'{filename}' was not found under docType='{docType}', nor at that path relative to the docs root. Names containing a directory separator are treated as explicit relative paths, so no basename fallback was attempted - a same-named file in a different directory is not a valid substitute. Call {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see the exact available paths."
             };
         }
 
@@ -288,8 +289,8 @@ public class DocumentationTools
         string stem = Path.GetFileNameWithoutExtension(Path.GetFileName(filename));
         var notFoundError = ok
             ? ignoreDocType
-                ? $"No file matching '{stem}' (with or without extension) was found anywhere under the testing doc root. Call ProjectDoc(action: list) to see all available files."
-                : $"No file matching '{stem}' (with or without extension) was found under docType='{docType}', or anywhere else under docs/. Call ProjectDoc(action: list) to see all available files."
+                ? $"No file matching '{stem}' (with or without extension) was found anywhere under the testing doc root. Call {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see all available files."
+                : $"No file matching '{stem}' (with or without extension) was found under docType='{docType}', or anywhere else under docs/. Call {ToolCallHint.Call("ProjectDoc", ("action", "list"))} to see all available files."
             : guardError;
         return new DocReadResult { Found = false, Filename = filename, Error = notFoundError };
     }

@@ -511,12 +511,15 @@ public class McpToolsetControlTests
         await using var live = await LiveServer.StartAsync(advanced: true, "claude-lean");
 
         var inactive = await live.CallAsync("McpServerStatus", new() { ["toolListing"] = "inactive", ["toolNameFilter"] = "Declaration", ["reason"] = Reason });
-        Assert.That(LiveServer.Text(inactive), Does.Contain("McpToolsetControl(toolSet: declarations, enabled: true)"));
+        Assert.That(LiveServer.Text(inactive), Does.Contain("McpToolsetControl(reason:"));
+        Assert.That(LiveServer.Text(inactive), Does.Contain("toolSet: declarations"));
+        Assert.That(LiveServer.Text(inactive), Does.Contain("enabled: true"));
 
         await live.ToggleAsync("declarations", enabled: true);
 
         var after = await live.CallAsync("McpServerStatus", new() { ["toolListing"] = "inactive", ["toolNameFilter"] = "Declaration", ["reason"] = Reason });
-        Assert.That(LiveServer.Text(after), Does.Not.Contain("McpToolsetControl(toolSet: declarations"));
+        Assert.That(LiveServer.Text(after), Does.Not.Contain("McpToolsetControl(reason:"));
+        Assert.That(LiveServer.Text(after), Does.Not.Contain("toolSet: declarations"));
         Assert.That(after.IsError, Is.Not.True, LiveServer.Text(after));
         Assert.That(LiveServer.Text(after), Does.Contain("Declaration"));
     }

@@ -152,7 +152,8 @@ public class GetMethodSourceTests
         var result = await _tools.GetMethodSourceTool(reason: "test message", propDocPath, "Size");
 
         Assert.That(result.IsError, Is.True);
-        Assert.That(result.ErrorData!.Message, Does.Contain("Member(operation: view"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("Member(reason:"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("operation: view"));
     }
 
     [Test]
@@ -274,7 +275,7 @@ public class GetMethodSourceTests
         Assert.That(message, Does.Contain("Run(int x)"));
         Assert.That(message, Does.Contain("Run(string s)"));
         Assert.That(message, Does.Contain("lines"));
-        Assert.That(message, Does.Contain("containerName: 'B'"));
+        Assert.That(message, Does.Contain("containerName: \"B\""));
         Assert.That(message, Does.Contain("ReadFile("));
         var candidates = result.ErrorData!.StructuredDetail!.Cast<AmbiguousCandidate>().ToList();
         Assert.That(candidates, Has.Count.EqualTo(2));
@@ -470,7 +471,7 @@ public class GetMethodSourceTests
         Assert.That(message, Does.Contain("'Run'"));
         Assert.That(message, Does.Contain("A."));
         Assert.That(message, Does.Contain("lines"));
-        Assert.That(message, Does.Contain("containerName: 'A'"));
+        Assert.That(message, Does.Contain("containerName: \"A\""));
         var candidates = result.ErrorData!.StructuredDetail!.Cast<AmbiguousCandidate>().ToList();
         Assert.That(candidates, Has.Count.EqualTo(1));
         Assert.That(candidates[0].ContainingType, Is.EqualTo("A"));

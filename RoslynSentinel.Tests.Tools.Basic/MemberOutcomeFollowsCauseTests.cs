@@ -149,7 +149,8 @@ public class MemberOutcomeFollowsCauseTests
         Assert.Multiple(() =>
         {
             Assert.That(result.IsError, Is.True, "an invalid enum value must be an error");
-            Assert.That(result.ErrorData?.Message, Does.Contain("ModifyEnum(enumName:"), "the recovery hint must name ModifyEnum");
+            Assert.That(result.ErrorData?.Message, Does.Contain("ModifyEnum(reason:"), "the recovery hint must name ModifyEnum");
+            Assert.That(result.ErrorData?.Message, Does.Contain("enumName: "), "the recovery hint must name the enumName argument");
             Assert.That(result.ErrorData?.Message, Does.Contain("OrderState"), "the recovery hint must name the enum");
         });
     }

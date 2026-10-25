@@ -1,5 +1,7 @@
 using System.ComponentModel;
 
+using RoslynSentinel.Common;
+
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
@@ -105,7 +107,7 @@ public class AdminTools
         if (!hasFiles)
         {
             var tracked = health.GetExternalFileChanges();
-            return "Nothing cleared: operation Acknowledge needs one of two things. (1) files = the files you reviewed with ExternalFileDrift(operation: List), keeping acknowledgeScope at its default ConfirmWithListedFiles, to clear only those files; or (2) acknowledgeScope = ConfirmAll with no files, to clear every tracked change. "
+            return $"Nothing cleared: operation Acknowledge needs one of two things. (1) files = the files you reviewed with {ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))}, keeping acknowledgeScope at its default ConfirmWithListedFiles, to clear only those files; or (2) acknowledgeScope = ConfirmAll with no files, to clear every tracked change. "
                 + $"Tracked changes: {DriftMessages.SummarizeFiles(tracked)}.";
         }
 
@@ -125,12 +127,12 @@ public class AdminTools
 
         if (unmatched.Count > 0)
         {
-            return $"Nothing cleared: '{string.Join("', '", unmatched)}' match no tracked change. Tracked changes: {DriftMessages.SummarizeFiles(current)}. Call ExternalFileDrift(operation: List) for full paths.";
+            return $"Nothing cleared: '{string.Join("', '", unmatched)}' match no tracked change. Tracked changes: {DriftMessages.SummarizeFiles(current)}. Call {ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))} for full paths.";
         }
 
         if (matched.Count == 0)
         {
-            return $"Nothing cleared: files named no entries. Tracked changes: {DriftMessages.SummarizeFiles(current)}. Call ExternalFileDrift(operation: List) for full paths.";
+            return $"Nothing cleared: files named no entries. Tracked changes: {DriftMessages.SummarizeFiles(current)}. Call {ToolCallHint.Call("ExternalFileDrift", ("operation", "List"))} for full paths.";
         }
 
         health.ClearExternalFileChanges(matched);
@@ -217,7 +219,7 @@ public class AdminTools
                     return System.Text.Json.JsonSerializer.Serialize(new
                     {
                         instances,
-                        note = instances.Count == 0 ? "No test instances are running. Start one with McpServerControl(operation: LaunchTestInstance)." : null,
+                        note = instances.Count == 0 ? $"No test instances are running. Start one with {ToolCallHint.Call("McpServerControl", ("operation", "LaunchTestInstance"))}." : null,
                     }, TestInstanceJson);
 
                 default:
@@ -296,13 +298,13 @@ public class AdminTools
             if (respawn == RespawnPolicy.None)
             {
                 // --respawn=none (the HTTP default): no launcher or client restarts this process.
-                return "Stopping. This instance stays down: nothing will restart it, so there is no fresh instance to call LoadSolution on. "
-                    + "To get another test instance, call McpServerControl(operation: LaunchTestInstance) from your own session.";
+                return $"Stopping. This instance stays down: nothing will restart it, so there is no fresh instance to call {ToolCallHint.Call("LoadSolution")} on. "
+                    + $"To get another test instance, call {ToolCallHint.Call("McpServerControl", ("operation", "LaunchTestInstance"))} from your own session.";
             }
 
             var loadHint = string.IsNullOrWhiteSpace(loadedSolutionPath)
-                ? "call LoadSolution with your solution path"
-                : $"call LoadSolution(solutionPath: \"{loadedSolutionPath}\")";
+                ? $"call {ToolCallHint.Call("LoadSolution")}"
+                : $"call {ToolCallHint.Call("LoadSolution", ("solutionPath", loadedSolutionPath))}";
             var stopping = "Stopping. VS Code will rebuild the server binary and spawn a fresh instance on your next tool call. "
                 + $"The fresh instance starts with no solution loaded: {loadHint} before any other tool.";
             // The respawn builds committed HEAD only, so flag server source that has uncommitted edits.

@@ -201,7 +201,9 @@ public class AdminToolsTests
             loadedSolutionPath: @"C:\repo\My.slnx");
 
         Assert.That(result, Does.Contain("next tool call"));
-        Assert.That(result, Does.Contain(@"LoadSolution(solutionPath: ""C:\repo\My.slnx"")"));
+        Assert.That(result, Does.Contain("LoadSolution(reason:"));
+        Assert.That(result, Does.Contain("solutionPath: "));
+        Assert.That(result, Does.Contain("My.slnx"));
     }
 
     [Test]
@@ -212,7 +214,8 @@ public class AdminToolsTests
             AdminTools.McpServerStopConfirmation.ConfirmServerStop,
             () => { });
 
-        Assert.That(result, Does.Contain("call LoadSolution with your solution path"));
+        Assert.That(result, Does.Contain("no solution loaded: call LoadSolution(reason:"));
+        Assert.That(result, Does.Contain("before any other tool."));
     }
 
     [Test]
@@ -251,9 +254,11 @@ public class AdminToolsTests
             loadedSolutionPath: @"C:\repo\My.slnx",
             respawn: RespawnPolicy.Auto);
 
-        Assert.That(result, Is.EqualTo(
-            "Stopping. VS Code will rebuild the server binary and spawn a fresh instance on your next tool call. "
-            + "The fresh instance starts with no solution loaded: call LoadSolution(solutionPath: \"C:\\repo\\My.slnx\") before any other tool."));
+        Assert.That(result, Does.StartWith("Stopping. VS Code will rebuild the server binary and spawn a fresh instance on your next tool call. "));
+        Assert.That(result, Does.Contain("LoadSolution(reason:"));
+        Assert.That(result, Does.Contain("solutionPath: "));
+        Assert.That(result, Does.Contain("My.slnx"));
+        Assert.That(result, Does.EndWith("before any other tool."));
         Assert.That(result, Does.Not.Contain("LaunchTestInstance"));
     }
 

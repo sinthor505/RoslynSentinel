@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.CodeAnalysis.Text;
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Common.SnippetMatching;
 using RoslynSentinel.Engines.Basic;
 
@@ -99,7 +100,7 @@ public class WorkspaceFileEditImpl
                         "original file contents needed to revert. The change itself completed - this is a gap in " +
                         "what was recorded, not a failed apply, and it is most common for operations that renamed " +
                         "or created files rather than editing them in place. Revert manually (e.g. via version " +
-                        $"control); GetOperationDetail(changeId: \"{changeId}\") shows exactly which files were touched.")
+                        $"control); {ToolCallHint.Call("GetOperationDetail", ("changeId", changeId))} shows exactly which files were touched.")
                 };
             }
 
@@ -186,7 +187,7 @@ public class WorkspaceFileEditImpl
 
         return new ResultError("FileNotFound",
             $"'{requestedFileName}' does not exist anywhere in the solution (searched {solution.Projects.Count()} project(s), no filename match). " +
-            "You MUST call ListSolutionItems(kind: all) next to see every file actually in the solution before trying another path.");
+            $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path.");
     }
 
     private const int RangedReadInlineBudgetChars = LargeResultHelper.OffloadThresholdBytes - 2048;
@@ -208,7 +209,7 @@ public class WorkspaceFileEditImpl
             var sourceText = SourceText.From(diskContent);
             var totalLines = sourceText.Lines.Count;
             var explanation = "No solution is loaded; read directly from disk (no outline or offload available). "
-                + (_workspaceManager.LoadState is { IsFreshStartup: true } ? "This server was freshly (re)started and has not loaded a solution yet; call LoadSolution to restore full functionality. " : string.Empty);
+                + (_workspaceManager.LoadState is { IsFreshStartup: true } ? $"This server was freshly (re)started and has not loaded a solution yet; call {ToolCallHint.Call("LoadSolution")} to restore full functionality. " : string.Empty);
 
             if (startLine.HasValue || endLine.HasValue)
             {
@@ -231,7 +232,7 @@ public class WorkspaceFileEditImpl
                     IsError = false,
                     SuccessData = new { filePath = absolutePath, startLine = from, endLine = to, totalLines, source = slice },
                     HasMoreData = to < totalLines,
-                    StatusMessage = explanation + (to < requestedTo ? $"Range shortened to lines {from}-{to} of {totalLines} to stay under the {LargeResultHelper.OffloadThresholdBytes}-byte inline limit. Call ReadFile again with startLine: {to + 1} for the rest." : string.Empty),
+                    StatusMessage = explanation + (to < requestedTo ? $"Range shortened to lines {from}-{to} of {totalLines} to stay under the {LargeResultHelper.OffloadThresholdBytes}-byte inline limit. Call {ToolCallHint.Call("ReadFile", ("startLine", (to + 1).ToString()))} for the rest." : string.Empty),
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
             }
@@ -242,7 +243,7 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"File is {totalLines} lines; it is over the inline limit and results cannot be offloaded while no solution is loaded. Pass startLine/endLine (ranges are shortened to fit) or call LoadSolution first.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"File is {totalLines} lines; it is over the inline limit and results cannot be offloaded while no solution is loaded. Pass startLine/endLine (ranges are shortened to fit) or call {ToolCallHint.Call("LoadSolution")} first.")
                 };
             }
 
@@ -390,7 +391,7 @@ public class WorkspaceFileEditImpl
                     },
                     HasMoreData = to < totalLines,
                     StatusMessage = shortened
-                        ? $"Range shortened to lines {from}-{to} of {totalLines} to stay under the {LargeResultHelper.OffloadThresholdBytes}-byte inline limit. Call ReadFile again with startLine: {to + 1} for the rest."
+                        ? $"Range shortened to lines {from}-{to} of {totalLines} to stay under the {LargeResultHelper.OffloadThresholdBytes}-byte inline limit. Call {ToolCallHint.Call("ReadFile", ("startLine", (to + 1).ToString()))} for the rest."
                         : null,
                     WorkspaceVersion = _workspaceManager.WorkspaceVersion,
                 };
@@ -422,7 +423,7 @@ public class WorkspaceFileEditImpl
                     // Paging here goes through LargeResult/GetLargeResultTool, not HasMoreData -> leaving it
                     // false avoids signalling a second, redundant continuation mechanism.
                     HasMoreData = false,
-                    LargeResult = new LargeResultInfo(resultType: "FileSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: textBytes, totalRecords: 1, message: $"Result is {totalLines} lines, {textBytes} bytes (threshold: {thresholdBytes}). " + $"Use {RoslynSentinel.Common.LargeResultHints.FetchCall(stored.resultId!)} to page through results, or retry ReadFile with startLine/endLine for just the slice you need, or use GetFileOutline to get the constructors, methods, helpers, members, enums, fields, properties, etc of a file without reading the entire file."),
+                    LargeResult = new LargeResultInfo(resultType: "FileSource", writtenToFile: stored.offloaded, filePath: stored.filePath, resultId: stored.resultId!, sizeBytes: textBytes, totalRecords: 1, message: $"Result is {totalLines} lines, {textBytes} bytes (threshold: {thresholdBytes}). " + $"Use {RoslynSentinel.Common.LargeResultHints.FetchCall(stored.resultId!)} to page through results, or retry {ToolCallHint.Call("ReadFile")} with startLine/endLine for just the slice you need, or use {ToolCallHint.Call("GetFileOutline")} to get the constructors, methods, helpers, members, enums, fields, properties, etc of a file without reading the entire file."),
                     SuccessData = new
                     {
                         totalLines,
@@ -988,7 +989,7 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: '{filePathResolved}' already exists. CreateFile never overwrites - use Member/ReplaceSnippet to edit an existing file.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: '{filePathResolved}' already exists. CreateFile never overwrites - use {ToolCallHint.Call("Member", ("operation", "replace"))}/{ToolCallHint.Call("ReplaceSnippet")} to edit an existing file.")
                 };
             }
 
@@ -998,7 +999,7 @@ public class WorkspaceFileEditImpl
                 return new SentinelCallToolResult<object>()
                 {
                     IsError = true,
-                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, "CreateFile: 'typeKind' and 'typeName' are both required for a .cs file, so the new file starts with an empty top-level type that Member(add) can populate members into.")
+                    ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"CreateFile: 'typeKind' and 'typeName' are both required for a .cs file, so the new file starts with an empty top-level type that {ToolCallHint.Call("Member", ("operation", "addMember"))} can populate members into.")
                 };
             }
 
@@ -1027,7 +1028,7 @@ public class WorkspaceFileEditImpl
             if (result.IsError && result.ValidationResult != null)
             {
                 string writeFileHint = _writeAdvice.IsExposed("WriteFile")
-                    ? "\nAlternatively, WriteFile(operation=CreateFile) can create this file with its full, already-correct body in one call, avoiding the empty-scaffold-then-populate sequence entirely."
+                    ? $"\nAlternatively, {ToolCallHint.Call("WriteFile", ("operation", "CreateFile"))} can create this file with its full, already-correct body in one call, avoiding the empty-scaffold-then-populate sequence entirely."
                     : "";
                 return new SentinelCallToolResult<object>()
                 {
@@ -1057,8 +1058,8 @@ public class WorkspaceFileEditImpl
                 SuccessData = strippedResult,
                 Findings = _writeAdvice.IsExposed("WriteFile")
                     ? [new Finding("CreateFile",
-                        "WriteFile is also available on this server and can create a file with its full body " +
-                        "in one call, instead of populating it afterward via Member(add).")]
+                        $"{ToolCallHint.Call("WriteFile")} is also available on this server and can create a file with its full body " +
+                        $"in one call, instead of populating it afterward via {ToolCallHint.Call("Member", ("operation", "addMember"))}.")]
                     : []
             };
         }

@@ -1,6 +1,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
@@ -295,7 +296,7 @@ public class WorkspaceProjectManagementImpl
         var solutionItems = _workspaceManager.GetSolutionFolderItems();
         if (solutionItems.Count > 0)
         {
-            parts.Add($"{solutionItems.Count} file(s) attached via Solution Folders in the .sln (not visible to SearchSolutionText - list them with ListSolutionItems(kind: solutionItems)).");
+            parts.Add($"{solutionItems.Count} file(s) attached via Solution Folders in the .sln (not visible to SearchSolutionText - list them with {ToolCallHint.Call("ListSolutionItems", ("kind", "solutionItems"))}).");
         }
 
         var docsRoot = Path.Combine(solutionRoot, "docs");
@@ -310,7 +311,7 @@ public class WorkspaceProjectManagementImpl
             var count = Directory.GetFiles(fullDir).Length;
             if (count > 0)
             {
-                parts.Add($"docs/{dir}/ has {count} file(s) - read with ProjectDoc(action: read, docType: {docType}, name: \"<filename>\").");
+                parts.Add($"docs/{dir}/ has {count} file(s) - read with {ToolCallHint.Call("ProjectDoc", ("action", "read"), ("docType", docType))}.");
             }
         }
 

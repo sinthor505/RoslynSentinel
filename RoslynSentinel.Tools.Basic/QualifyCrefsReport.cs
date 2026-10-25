@@ -108,7 +108,7 @@ public sealed record QualifyCrefsSummary(
         ? "Dry run: nothing was written. Pass dryRun: false to apply; each project is validated and written as one batch."
         : ChangeIds.Count == 0
             ? "Nothing was written: no bare member crefs needed qualifying, or every project was rejected. Run with dryRun: true to see the plan."
-            : $"Written to disk. Call UndoLastApply(changeId: ...) once per batch to revert; one batch per project: {string.Join(", ", ChangeIds)}.";
+            : $"Written to disk. Call {ToolCallHint.Call("UndoLastApply")} once per batch to revert; one batch per project: {string.Join(", ", ChangeIds)}.";
 }
 
 /// <summary>One project's raw run: the per-document counters summed, the files that carry edits, and the batch outcome.</summary>

@@ -787,7 +787,8 @@ public class BatteryTwentyTwoTests
         var result = await _symbolRelationshipTools.QuerySymbolRelationshipsTool(reason: "test message", "ProcessAsync", FindUsagesSearchKind.objectCreations);
         Assert.That(!result.IsError, Is.False, "objectCreations against a method name must be rejected, not silently return [].");
         Assert.That(result.ErrorData, Is.Not.Null);
-        Assert.That(result.ErrorData!.Message, Does.Contain("Search(mode: callers"), "The guard should point the caller at Search(mode: callers) instead of objectCreations for a member name.");
+        Assert.That(result.ErrorData!.Message, Does.Contain("Search(reason:"));
+        Assert.That(result.ErrorData!.Message, Does.Contain("mode: callers"), "The guard should point the caller at Search(mode: callers) instead of objectCreations for a member name.");
     }
 
     [Test]

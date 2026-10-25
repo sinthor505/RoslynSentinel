@@ -1,5 +1,7 @@
 using System.ComponentModel;
 
+using RoslynSentinel.Common;
+
 namespace RoslynSentinel.Tools.Basic;
 
 public class ServerStatusTools
@@ -156,7 +158,7 @@ public class ServerStatusTools
         // claude-lean with McpToolsetControlTool: a tool in an on-demand set is enabled at runtime, not by a restart.
         if (_toolsets is not null && ToolsetCatalog.FindSet(toolName) is { } toolSet)
         {
-            return $"McpToolsetControl(toolSet: {toolSet}, enabled: true)";
+            return ToolCallHint.Call("McpToolsetControl", ("toolSet", toolSet.ToString()), ("enabled", "true"));
         }
 
         // A per-tool allow-list (claude-lean) filters the tool out whether or not its class is active.

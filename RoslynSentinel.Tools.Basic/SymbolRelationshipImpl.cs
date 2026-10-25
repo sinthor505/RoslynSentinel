@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
@@ -72,7 +73,7 @@ public class SymbolRelationshipImpl
                     return new SentinelCallToolResult<object>
                     {
                         IsError = true,
-                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"'{name}' resolves to a {kindsFound} ({resolved.Count} declaration(s) found), not a type - " + "objectCreations only matches 'new TypeName(...)' expressions and is structurally incapable of " + $"returning anything for a member name. Use Search(mode: callers, query: \"{name}\") " + "to find call sites, or Search(mode: implementations, query: \"{name}\") for overrides.")
+                        ErrorData = new ResultError(ToolErrorCode.InvalidArgument, $"'{name}' resolves to a {kindsFound} ({resolved.Count} declaration(s) found), not a type - " + "objectCreations only matches 'new TypeName(...)' expressions and is structurally incapable of " + $"returning anything for a member name. Use {ToolCallHint.Call("Search", ("mode", "callers"), ("query", name))} " + $"to find call sites, or {ToolCallHint.Call("Search", ("mode", "implementations"), ("query", name))} for overrides.")
                     };
                 }
             }

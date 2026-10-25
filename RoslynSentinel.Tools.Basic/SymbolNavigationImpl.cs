@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
@@ -63,7 +64,7 @@ public class SymbolNavigationImpl
                     IsError = true,
                     ErrorData = new ResultError(ToolErrorCode.NotFound, $"Symbol '{symbolName}' not found in the solution" +
                         (projectName != null ? $" (project: {projectName})" : "") +
-                        ". Try exactMatch=false for a broader search, verify the symbol name and symbolKind, or call ListAll for a cheap solution-wide orientation listing if you're not sure of the exact name." + (excluded > 0 ? $" {excluded} test project(s) were excluded because includeTests is false; pass includeTests: true if the symbol is declared in a test project." : string.Empty))
+                        $". Try exactMatch=false for a broader search, verify the symbol name and symbolKind, or call {ToolCallHint.Call("ListAll")} for a cheap solution-wide orientation listing if you're not sure of the exact name." + (excluded > 0 ? $" {excluded} test project(s) were excluded because includeTests is false; pass includeTests: true if the symbol is declared in a test project." : string.Empty))
                 };
             }
 

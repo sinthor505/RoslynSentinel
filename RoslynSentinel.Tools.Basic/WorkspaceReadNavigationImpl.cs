@@ -9,6 +9,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.Extensions.Logging;
 
+using RoslynSentinel.Common;
 using RoslynSentinel.Engines.Basic;
 
 namespace RoslynSentinel.Tools.Basic;
@@ -89,7 +90,7 @@ public class WorkspaceReadNavigationImpl
 
         return new ResultError("FileNotFound",
             $"'{requestedFileName}' does not exist anywhere in the solution (searched {solution.Projects.Count()} project(s), no filename match). " +
-            "You MUST call ListSolutionItems(kind: all) next to see every file actually in the solution before trying another path.");
+            $"You MUST call {ToolCallHint.Call("ListSolutionItems", ("kind", "all"))} next to see every file actually in the solution before trying another path.");
     }
 
     /// <summary>
@@ -130,7 +131,7 @@ public class WorkspaceReadNavigationImpl
                 otherKind = "local function";
             if (otherKind != null)
             {
-                parts.Add($"'{name}' exists in this file as a {otherKind}, not a method; read it with Member(operation: view, memberName: '{name}').");
+                parts.Add($"'{name}' exists in this file as a {otherKind}, not a method; read it with {ToolCallHint.Call("Member", ("operation", "view"), ("memberName", name))}.");
             }
         }
 
@@ -175,11 +176,11 @@ public class WorkspaceReadNavigationImpl
                 {
                     lines += $"\n  (+{found.Count - 5} more)";
                 }
-                parts.Add("A method or constructor with this name is declared in:\n" + lines + "\nRetry GetMethodSource with filePath set to the file that holds the one you mean.");
+                parts.Add("A method or constructor with this name is declared in:\n" + lines + $"\nRetry {ToolCallHint.Call("GetMethodSource")} with filePath set to the file that holds the one you mean.");
             }
             else
             {
-                parts.Add($"No method or constructor named '{name}' is declared in any project of the loaded solution (tests included). If the name may be a substring or differently spelled, call Search(mode: method, query: '{name}', exactMatch: false); a file outside the loaded solution cannot be searched until it is loaded.");
+                parts.Add($"No method or constructor named '{name}' is declared in any project of the loaded solution (tests included). If the name may be a substring or differently spelled, call {ToolCallHint.Call("Search", ("mode", "method"), ("query", name), ("exactMatch", "false"))}; a file outside the loaded solution cannot be searched until it is loaded.");
             }
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -245,11 +246,11 @@ public class WorkspaceReadNavigationImpl
             .ToList();
         if (singleCandidateTypes.Count > 0)
         {
-            var retries = singleCandidateTypes.Select(t => $"GetMethodSource(filePath: '{requestedFilePath}', methodName: '{methodName}', containerName: '{t}')");
+            var retries = singleCandidateTypes.Select(t => ToolCallHint.Call("GetMethodSource", ("filePath", requestedFilePath), ("methodName", methodName), ("containerName", t)));
             parts.Add($"To choose a type, retry {string.Join(" or ", retries)}.");
         }
 
-        parts.Add($"To choose between overloads, read the exact lines: ReadFile(filePath: '{requestedFilePath}', startLine: {entries[0].Start}, endLine: {entries[0].End}).");
+        parts.Add($"To choose between overloads, read the exact lines: {ToolCallHint.Call("ReadFile", ("filePath", requestedFilePath), ("startLine", entries[0].Start.ToString()), ("endLine", entries[0].End.ToString()))}.");
 
         return new ResultError(ToolErrorCode.Ambiguous, string.Join(" ", parts), null, ToolErrorMapper.ToStructuredDetail(candidates));
     }
@@ -321,7 +322,7 @@ public class WorkspaceReadNavigationImpl
 
                 var sourceText = await document.GetTextAsync(cancellationToken);
                 var (missMessage, missCandidates) = SyntaxTargetResolver.BuildContainerMissDetail(root, sourceText, methodName, containerName!, filePathResolved,
-                    retryCallTemplate: "GetMethodSource(filePath: '{file}', methodName: '{member}', containerName: '{container}')", methodsOnly: true);
+                    retryCallTemplate: ToolCallHint.Call("GetMethodSource", ("filePath", "{file}"), ("methodName", "{member}"), ("containerName", "{container}")), methodsOnly: true);
                 return new SentinelCallToolResult<MethodSourceResult, ResultError>()
                 {
                     IsError = true,
@@ -643,7 +644,7 @@ public class WorkspaceReadNavigationImpl
                     HasMoreData = true,
                     ListSummary = summary,
                     StatusMessage = hiddenTestHint,
-                    WarningDetails = $"Truncated: showing the first {entries.Count} of {totalMatches} matching declarations (cap {maxItems}), spread over {summary.FileCount} files and {summary.ByProject!.Count} projects - listSummary.byProject and listSummary.byFile (top {summary.ByFile.Count} files, {summary.TruncatedFileCount} more files not shown) count ALL matches, use them to pick where to look. Narrow with query (name filter) or projectName, or use mode: symbol. For all callers/implementations of a symbol use Search(mode: references) or QuerySymbolRelationships; for orientation use ListAll or GetFileOutline."
+                    WarningDetails = $"Truncated: showing the first {entries.Count} of {totalMatches} matching declarations (cap {maxItems}), spread over {summary.FileCount} files and {summary.ByProject!.Count} projects - listSummary.byProject and listSummary.byFile (top {summary.ByFile.Count} files, {summary.TruncatedFileCount} more files not shown) count ALL matches, use them to pick where to look. Narrow with query (name filter) or projectName, or use mode: symbol. For all callers/implementations of a symbol use {ToolCallHint.Call("Search", ("mode", "references"))} or {ToolCallHint.Call("QuerySymbolRelationships")}; for orientation use {ToolCallHint.Call("ListAll")} or {ToolCallHint.Call("GetFileOutline")}."
                 };
             }
 
@@ -1145,8 +1146,8 @@ public class WorkspaceReadNavigationImpl
                     {
                         warnings.Add(
                             $"No matches were found for '{pattern}' as either a literal substring or a regex pattern. Try adjusting the search pattern. Matching is case-insensitive and per line, over C# source files only; a|b alternation is supported. The text may have been reworded, so search for a shorter distinctive fragment, or search each alternative separately. " +
-                            "If you were searching for a known symbol by name, use Search with mode: symbol instead (semantic lookup, not text matching). " +
-                            "Use ListAll to browse the solution's structure, ProjectDoc to read plan/handoff/documentation files directly, or " +
+                            $"If you were searching for a known symbol by name, use {ToolCallHint.Call("Search", ("mode", "symbol"))} instead (semantic lookup, not text matching). " +
+                            $"Use {ToolCallHint.Call("ListAll")} to browse the solution's structure, ProjectDoc to read plan/handoff/documentation files directly, or " +
                             "GetFileOutline to get the constructors, members, enums, fields, properties, etc of a file.");
                     }
                     if (hiddenHint.Length > 0)

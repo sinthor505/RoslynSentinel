@@ -108,7 +108,7 @@ public sealed record TestCategoryAppliedSummary(
 
     public string Note => ChangeIds.Count == 0
         ? "Nothing was written: the plan had no edits, or every planned attribute already exists. Run with dryRun: true to see the plan."
-        : $"Written to disk. Call UndoLastApply(changeId: ...) once per batch to revert; one batch per test project: {string.Join(", ", ChangeIds)}.";
+        : $"Written to disk. Call {ToolCallHint.Call("UndoLastApply")} once per batch to revert; one batch per test project: {string.Join(", ", ChangeIds)}.";
 }
 
 internal static class TestCategoryApplyReport
