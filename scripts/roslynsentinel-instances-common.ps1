@@ -16,7 +16,7 @@
                               builds\<sha8>\complete (marker) and
                               builds\<sha8>\lastused (touched by every launch that selects the build)
       instances\<id>\         --working-dir of one server process (logs\, tool_list*.json, crash.log,
-                              stopped-by-script.marker, launch.log)
+                              stopped-by-script.marker, launch.log, launch-outcome.json)
       wt\<token>\             throwaway git worktree used to build one commit; removed after the build
       launch-startup.log      shared, append-only launcher log
 

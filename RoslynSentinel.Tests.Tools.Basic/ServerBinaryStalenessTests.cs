@@ -179,4 +179,33 @@ public class ServerBinaryStalenessTests
 
         Assert.That(ServerBinaryStaleness.EnumerateRepoBinaries(_root), Is.EquivalentTo([Path.GetFullPath(kept)]));
     }
+
+    [Test]
+    public void ParseUncommittedStatus_ServerSourceEntries_CountsThemAndNamesTheFirst()
+    {
+        const string porcelain = " M RoslynSentinel.Common/A.cs\n?? RoslynSentinel.Tools.Basic/B.cs\n M docs/x.md\n";
+
+        var message = ServerBinaryStaleness.ParseUncommittedStatus(porcelain, ServerBinaryStaleness.SourcePathPrefixes);
+
+        Assert.That(message, Is.Not.Null);
+        Assert.That(message, Does.Contain("2 uncommitted").And.Contain("RoslynSentinel.Common/A.cs"));
+    }
+
+    [Test]
+    public void ParseUncommittedStatus_NoServerSourceEntriesOrEmptyOutput_ReturnsNull()
+    {
+        Assert.That(ServerBinaryStaleness.ParseUncommittedStatus(" M docs/x.md\n?? scripts/y.ps1\n", ServerBinaryStaleness.SourcePathPrefixes), Is.Null);
+        Assert.That(ServerBinaryStaleness.ParseUncommittedStatus(string.Empty, ServerBinaryStaleness.SourcePathPrefixes), Is.Null);
+    }
+
+    [Test]
+    public void ParseUncommittedStatus_RenameIntoServerSource_DescribesTheNewPath()
+    {
+        const string porcelain = "R  RoslynSentinel.Engines.Basic/Old.cs -> RoslynSentinel.Engines.Basic/New.cs\n";
+
+        var message = ServerBinaryStaleness.ParseUncommittedStatus(porcelain, ServerBinaryStaleness.SourcePathPrefixes);
+
+        Assert.That(message, Is.Not.Null);
+        Assert.That(message, Does.Contain("New.cs"));
+    }
 }

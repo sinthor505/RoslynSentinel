@@ -303,8 +303,13 @@ public class AdminTools
             var loadHint = string.IsNullOrWhiteSpace(loadedSolutionPath)
                 ? "call LoadSolution with your solution path"
                 : $"call LoadSolution(solutionPath: \"{loadedSolutionPath}\")";
-            return "Stopping. VS Code will rebuild the server binary and spawn a fresh instance on your next tool call. "
+            var stopping = "Stopping. VS Code will rebuild the server binary and spawn a fresh instance on your next tool call. "
                 + $"The fresh instance starts with no solution loaded: {loadHint} before any other tool.";
+            // The respawn builds committed HEAD only, so flag server source that has uncommitted edits.
+            var dirty = string.IsNullOrWhiteSpace(loadedSolutionPath)
+                ? null
+                : ServerBinaryStaleness.DescribeUncommittedServerSource(Path.GetDirectoryName(loadedSolutionPath) ?? string.Empty);
+            return dirty is null ? stopping : $"{stopping} Warning: {dirty}";
         }
 
         return $"Unknown operation '{operation}'. Valid operations: GetServerStatus, StopServer, LaunchTestInstance, StopTestInstance, ListTestInstances.";

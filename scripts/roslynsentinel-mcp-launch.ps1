@@ -90,7 +90,8 @@
     full sha back from AssemblyInformationalVersion), write 'complete', Rename-Item to builds\<sha8> (first
     rename wins; a loser deletes its own copy), `git worktree remove --force` + `git worktree prune`.
     A failed build falls back to the newest 'complete' build with a loud warning in launch.log and
-    launch-startup.log (and one line on stderr). Then it sweeps and starts
+    launch-startup.log (and one line on stderr); every launch also writes instances\<id>\launch-outcome.json
+    (buildFailed=true when this fallback ran). Then it sweeps and starts
     builds\<sha8>\Advanced\RoslynSentinel.Server.Advanced.exe with --working-dir=<root>\instances\<id>;
     ROSLYNSENTINEL_INSTANCE_ID=<id> is exported to the server process (Build's throwaway output dir).
     No copy per instance, no lock: concurrent windows on one commit produce ONE builds\<sha8>.
@@ -120,6 +121,8 @@
       - <instance folder>\launch.log (legacy: bin-vscode\<instance-id>\; prod: <root>\instances\<id>\):
         per-instance, one step per line (sweep, build start, build result, launch) from the moment its
         instance ID is known onward.
+      - <instance folder>\launch-outcome.json: rewritten on every prod launch; the build served (servedSha),
+        the HEAD attempted (attemptedSha), buildFailed and up to 3 first compile errors.
 
     If VS Code never seems to launch this script at all (no entry appears in
     launch-startup.log, not even a "Script launched" line), the fault is usually one
@@ -557,6 +560,7 @@ function Invoke-ProdBuild {
         return $true
     }
     catch {
+        $script:lastBuildFailureText = $_.Exception.Message
         Write-LaunchLog "Build of $Sha FAILED: $($_.Exception.Message)"
         Remove-Item -LiteralPath $buildTmp -Recurse -Force -ErrorAction SilentlyContinue
         return $false
@@ -573,8 +577,59 @@ function Invoke-ProdBuild {
     }
 }
 
+# Writes <instance dir>\launch-outcome.json (overwritten every launch): which build this server runs and
+# whether the HEAD build failed (buildFailed=true means the last-good fallback ran). The server reads it for
+# McpServerStatus.lastLaunch. Never throws; a marker failure is logged and the launch continues.
+function Write-LaunchOutcome {
+    param([bool]$BuildFailed, [string]$AttemptedSha, [string]$ServedDir)
+
+    try {
+        $firstErrors = @()
+        if ($BuildFailed) {
+            if ($null -eq $script:lastBuildFailureText) {
+                $firstErrors = @('no build attempted: source sync failed or HEAD unknown')
+            }
+            else {
+                $errorLines = @($script:lastBuildFailureText -split "`r?`n" |
+                    Where-Object { $_ -match 'error [A-Z]+[0-9]+' } |
+                    Select-Object -First 3 |
+                    ForEach-Object {
+                        $line = $_ -replace '^.*\\wt\\[0-9a-f]+\\', ''
+                        if ($line.Length -gt 300) { $line.Substring(0, 300) } else { $line }
+                    })
+                if ($errorLines.Count -gt 0) { $firstErrors = $errorLines }
+                else {
+                    # No compiler-style line (e.g. git worktree add failed): use the first non-empty line instead.
+                    $firstLine = @($script:lastBuildFailureText -split "`r?`n" | Where-Object { $_.Trim() -ne '' } | Select-Object -First 1)
+                    if ($firstLine.Count -gt 0) {
+                        $line = $firstLine[0] -replace '^.*\\wt\\[0-9a-f]+\\', ''
+                        if ($line.Length -gt 300) { $line = $line.Substring(0, 300) }
+                        $firstErrors = @($line)
+                    }
+                }
+            }
+        }
+        $servedSha = Split-Path -Path $ServedDir -Leaf
+        $outcome = [ordered]@{
+            utc          = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', [System.Globalization.CultureInfo]::InvariantCulture)
+            attemptedSha = $AttemptedSha
+            servedSha    = $servedSha
+            buildFailed  = $BuildFailed
+            firstErrors  = $firstErrors
+        }
+        $json = ConvertTo-Json -InputObject $outcome -Compress
+        Set-Content -LiteralPath (Join-Path $instanceDir 'launch-outcome.json') -Value $json -Encoding ASCII
+        Write-LaunchLog "Launch outcome written: buildFailed=$($BuildFailed.ToString().ToLower()) served=$servedSha"
+    }
+    catch {
+        Write-LaunchLog "Launch outcome marker not written: $($_.Exception.Message)"
+    }
+}
+
 # --- choose the build: fast path, slow path, or last-good fallback ---
 $selectedBuildDir = $null
+$usedFallback = $false
+$script:lastBuildFailureText = $null
 if ($sha) {
     $shaDir = Join-Path $buildsRoot $sha.Substring(0, 8)
     if (Test-Path -LiteralPath (Join-Path $shaDir 'complete')) {
@@ -589,6 +644,7 @@ if (-not $selectedBuildDir) {
     $newest = Get-NewestCompleteBuild -BuildsRoot $buildsRoot
     if ($newest) {
         $selectedBuildDir = $newest.FullName
+        $usedFallback = $true
         $warning = "WARNING: could not produce a build for the current source HEAD (sha=$sha); falling back to the newest complete build $($newest.Name). This server is OLDER than the source; see the lines above for the reason."
         Write-LaunchLog $warning
         Write-StartupLog "[$instanceId] $warning"
@@ -601,6 +657,8 @@ if (-not $selectedBuildDir) {
         exit 97
     }
 }
+$attemptedShaShort = if ($sha) { $sha.Substring(0, 8) } else { '' }
+Write-LaunchOutcome -BuildFailed:$usedFallback -AttemptedSha $attemptedShaShort -ServedDir $selectedBuildDir
 $exePath = Join-Path $selectedBuildDir 'Advanced\RoslynSentinel.Server.Advanced.exe'
 # Stamp the build as in use so another window's sweep (age is measured from this stamp) cannot remove it
 # between now and the server process starting.

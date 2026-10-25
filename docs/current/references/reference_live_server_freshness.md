@@ -51,7 +51,12 @@ Set `ROSLYNSENTINEL_INSTANCES_ROOT` (or flip `$UseDefaultInstancesRootWhenUnset`
   `isServerBinaryStale` then means the loaded solution's repo has commits after that SHA touching
   `RoslynSentinel.Common/`, `Engines.*`, `Tools.*` or `Server.*`; they are listed in
   `binaryStaleness.staleCommits`. A binary without a SHA (a plain local build) falls back to the `bin/**` scan.
-- A restart picks up new commits: `StopServer`, then the launcher builds the new SHA once for all windows.
+- A restart picks up new commits **only if they build**: `StopServer`, then the launcher builds the new SHA
+  once for all windows. If that build fails it falls back to the newest complete build (an OLDER server) and
+  records `instances\<id>\launch-outcome.json`. `McpServerStatus.lastLaunch` shows it (`buildFailed`,
+  `attemptedSha`, `servedSha`, `firstErrors`, `hint`) and the first response after start carries a one-shot
+  `launchWarning`. Full detail: `instances\<id>\launch.log`. `StopServer` also warns when server source is
+  uncommitted, since a restart builds committed code only.
 
 ## Test instances for uncommitted server changes
 

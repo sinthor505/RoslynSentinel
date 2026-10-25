@@ -30,7 +30,8 @@ public class ServerStatusTools
     [Description("Diagnostic snapshot: server build identity (serverVersion, serverBuildTimeUtc, serverBinaryPath, serverPid, buildSha, binaryStaleness = commits since buildSha touching server source, else loaded assemblies with a newer build on disk), session-halt state, circuit breaker, loaded workspace (isFreshStartup = this server process has not loaded a solution yet, e.g. just restarted), active tool-mode resolution. " +
         "Tools are gated per mode: before concluding a tool does not exist, call with toolListing=inactive." +
         " solutionLoadStatus = NotLoaded | Loading | Loaded | Failed; tool calls wait up to 30 s for a Loading solution." +
-        " workspaceStale = a workspace reload failed and the loaded solution may not match disk (see reloadFailure; recover with LoadSolution forceReload: true); lastLoadFailure = text of the last failed load.")]
+        " workspaceStale = a workspace reload failed and the loaded solution may not match disk (see reloadFailure; recover with LoadSolution forceReload: true); lastLoadFailure = text of the last failed load." +
+        " lastLaunch = the launcher's last build of source HEAD (buildFailed = it fell back to the older servedSha; firstErrors and hint say why).")]
     public object McpServerStatusTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Description("inactive: declared tools not active in this mode, with an enabledBy hint. all: every declared tool.")]
@@ -138,7 +139,9 @@ public class ServerStatusTools
             // Commit this binary was built from (null for an unstamped local build).
             BuildSha: ServerBuildInfo.BuildSha,
             // Effective --respawn (auto | none): whether anything restarts this process after StopServer.
-            Respawn: (_hostOptions?.Respawn ?? RespawnPolicy.Auto).ToString().ToLowerInvariant()
+            Respawn: (_hostOptions?.Respawn ?? RespawnPolicy.Auto).ToString().ToLowerInvariant(),
+            // The launcher's last build outcome (null when no marker: legacy layout, HTTP, no launcher).
+            LastLaunch: LaunchBuildMarker.Current
         )
         };
     }
@@ -236,7 +239,8 @@ public sealed record McpServerStatusResult(
     string? WorkingDir = null,
     bool WorkingDirExplicit = false,
     string? BuildSha = null,
-    string? Respawn = null);
+    string? Respawn = null,
+    LaunchBuildResult? LastLaunch = null);
 /// <summary>
 /// One <see cref="McpServerToolAttribute"/>-carrying method discovered via reflection, as reported
 /// by McpServerStatusTool's <c>AllDeclaredTools</c>. Ground truth for "does this tool exist in this

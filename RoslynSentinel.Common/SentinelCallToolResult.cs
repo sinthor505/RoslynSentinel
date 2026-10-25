@@ -189,6 +189,12 @@ public record SentinelCallToolResult<TSuccess, TError> : IOperationResult
     /// </summary>
     public bool? IsServerBinaryStale { get; init; } = ServerBinaryStaleness.EnvelopeFlag;
 
+    /// <summary>
+    /// One-shot text, set only on the first envelope after a launch whose build of source HEAD failed and fell back to an
+    /// older build (see <see cref="LaunchBuildMarker"/>). Null - and so omitted - otherwise.
+    /// </summary>
+    public string? LaunchWarning { get; init; } = LaunchBuildMarker.TakeEnvelopeWarning();
+
     // Fails closed: an envelope nobody marked successful is an error, so a construction site that forgets to
     // set a flag reports failure rather than success.
     private bool _isError = true;

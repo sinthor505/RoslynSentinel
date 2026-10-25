@@ -223,6 +223,76 @@ public static class ServerBinaryStaleness
     }
 
     /// <summary>
+    /// Uncommitted changes under <see cref="SourcePathPrefixes"/> in the repo containing <paramref name="solutionDirectory"/>, as a warning for StopServer (a restart builds committed code only); null when clean, when git/the directory is unavailable, or on any failure. Never throws.
+    /// </summary>
+    public static string? DescribeUncommittedServerSource(string solutionDirectory)
+    {
+        try
+        {
+            if (!Directory.Exists(solutionDirectory))
+            {
+                return null;
+            }
+
+            // No pathspecs: git matches a pathspec by whole leading components, so "RoslynSentinel.Tools." would match nothing.
+            // The prefix filter in ParseUncommittedStatus does the narrowing.
+            var run = GitProcess.TryRun(solutionDirectory, GitTimeout, "-c", "core.quotepath=false", "status", "--porcelain");
+            if (run is not { ExitCode: 0 })
+            {
+                return null;
+            }
+
+            return ParseUncommittedStatus(run.Value.StdOut, SourcePathPrefixes);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.ComponentModel.Win32Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Pure parser for <c>git status --porcelain</c> output: counts entries whose repo-relative path starts with one of
+    /// <paramref name="pathPrefixes"/> and describes the first one; null when none match.
+    /// </summary>
+    internal static string? ParseUncommittedStatus(string porcelainOutput, IReadOnlyList<string> pathPrefixes)
+    {
+        var count = 0;
+        string? first = null;
+        foreach (var rawLine in porcelainOutput.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (string.IsNullOrWhiteSpace(line) || line.Length < 4)
+            {
+                continue;
+            }
+
+            // Porcelain v1: "XY <path>"; a rename reads "old -> new", and the new path is the one that matters.
+            var path = line[3..];
+            var arrow = path.IndexOf(" -> ", StringComparison.Ordinal);
+            if (arrow >= 0)
+            {
+                path = path[(arrow + 4)..];
+            }
+
+            path = path.Trim('"');
+            if (!pathPrefixes.Any(prefix => path.StartsWith(prefix, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            count++;
+            first ??= path;
+        }
+
+        if (count == 0)
+        {
+            return null;
+        }
+
+        return $"{count} uncommitted file(s) under server source (first: {first}); a restart builds committed code only, so the respawn may fall back to an older build if HEAD does not compile - commit them first.";
+    }
+
+    /// <summary>
     /// Pure parser for <c>git log --name-only --format=%h%x09%s</c> output: a header line is <c>hash&lt;TAB&gt;subject</c>
     /// (the subject may itself contain tabs), followed by its changed paths (git quotes any path holding a tab, so a
     /// path line never contains one) and a blank line. Returns, in log order, the commits with at least one path that
