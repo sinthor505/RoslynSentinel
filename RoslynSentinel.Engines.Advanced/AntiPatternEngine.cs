@@ -2743,7 +2743,8 @@ public class AntiPatternEngine
             return new List<string>();
         }
 
-        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var methodMatches = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList();
+        var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
         if (method == null)
         {
             return new List<string>();

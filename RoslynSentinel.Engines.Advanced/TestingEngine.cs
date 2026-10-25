@@ -42,8 +42,9 @@ public class TestingEngine
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException("Could not parse syntax root.");
 
-        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName) ?? throw new ToolNotFoundException($"Method {methodName} not found.");
+        var methodMatches = root.DescendantNodes().OfType<MethodDeclarationSyntax>()
+            .Where(m => m.Identifier.Text == methodName).ToList();
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName) ?? throw new ToolNotFoundException($"Method {methodName} not found.");
         var conditionals = new List<string>();
         int complexity = 1;
 

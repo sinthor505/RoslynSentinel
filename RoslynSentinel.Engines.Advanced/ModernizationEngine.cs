@@ -169,7 +169,10 @@ public class SyntaxModernizationEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var methodMatches = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? [];
+        // Only single-statement bodies can be converted; narrow to them when any exist so an ineligible overload does not make the pick ambiguous.
+        var eligibleMatches = methodMatches.Where(m => m.Body != null && m.Body.Statements.Count == 1).ToList();
+        var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(eligibleMatches.Count > 0 ? eligibleMatches : methodMatches, "Method", methodName);
         if (method?.Body != null && method.Body.Statements.Count == 1)
         {
             var stmt = method.Body.Statements[0];
@@ -579,7 +582,8 @@ public class SyntaxModernizationEngine
         SyntaxNode scope = root;
         if (!string.IsNullOrWhiteSpace(methodName))
         {
-            var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+            var methodMatches = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList();
+            var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(methodMatches, "Method", methodName);
             if (method == null)
             {
                 throw new ToolNotFoundException($"Method '{methodName}' not found.", "method", methodName);

@@ -68,9 +68,13 @@ public class OutParamRefactoringEngine
         }
 
         // Find the target method
-        var methodDecl = root.DescendantNodes()
+        var methodMatches = root.DescendantNodes()
             .OfType<MethodDeclarationSyntax>()
-            .FirstOrDefault(m => m.Identifier.Text == methodName);
+            .Where(m => m.Identifier.Text == methodName)
+            .ToList();
+        // Only overloads with out parameters are convertible; narrow to them when any exist.
+        var outMatches = methodMatches.Where(m => m.ParameterList.Parameters.Any(p => p.Modifiers.Any(mod => mod.IsKind(SyntaxKind.OutKeyword)))).ToList();
+        var methodDecl = RoslynSentinel.Common.NameTargetLookup.RequireSingle(outMatches.Count > 0 ? outMatches : methodMatches, "Method", methodName);
 
         if (methodDecl == null)
         {
