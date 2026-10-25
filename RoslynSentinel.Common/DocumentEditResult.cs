@@ -46,6 +46,7 @@ namespace RoslynSentinel.Common
         {
         }
 
+        [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
         public DocumentEditResult(EditOutcome outcome, FilePathWrapper filePath)
         {
             this.Outcome = outcome;
@@ -53,6 +54,7 @@ namespace RoslynSentinel.Common
             this.UpdatedText = string.Empty;
         }
 
+        [System.Diagnostics.CodeAnalysis.SetsRequiredMembers]
         public DocumentEditResult(EditOutcome outcome, FilePathWrapper filePath, string changeId, bool isCommitted = false, string updatedText = "")
         {
             this.Outcome = outcome;

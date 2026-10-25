@@ -9,10 +9,10 @@ public record EngineResultBase : IOperationResult
         WriteIndented = true
     };
 
-    public EditOutcome Outcome
+    public required EditOutcome Outcome
     {
         get; init;
-    } = EditOutcome.Unset;
+    }
     public FilePathWrapper FilePath
     {
         get; init;

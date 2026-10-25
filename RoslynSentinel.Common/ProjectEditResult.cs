@@ -9,10 +9,10 @@ namespace RoslynSentinel.Common;
 /// </summary>
 public sealed record ProjectEditResult : IOperationResult
 {
-    public EditOutcome Outcome
+    public required EditOutcome Outcome
     {
         get; init;
-    } = EditOutcome.Unset;
+    }
 
     public FilePathWrapper? FilePath
     {
