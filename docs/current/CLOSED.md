@@ -8,6 +8,10 @@ Only the newest month (2026-10) is kept here. Older entries are archived unchang
 [archive/closed_2026-09.md](archive/closed_2026-09.md) and [archive/closed_2026-08.md](archive/closed_2026-08.md).
 Entries moved here from TODO.md on 2026-10-17 carry their original text plus an "Evidence" line.
 
+## Retire EditOutcome.Unset - resolved (2026-10-24)
+
+Re-parented `BatchResultSummary` (keeps `ChangeId`), `BridgeBatchResult`, `BestInsertionResult` (keeps `FilePath`) and `GenerateToStringResult` off `EngineResultBase` (`743283d6`), made `Outcome` `required` on `EngineResultBase` and `ProjectEditResult` (`1daccad1`), then removed `Unset`; 0 is now unnamed and maps to Failed through `ToResultStatus`'s `_` arm, and `GuardEngineResult`'s `default` arm stays for undefined values (`d120b7b9`). Evidence: full build 0 errors, test failures limited to the known baseline set. Wire change: `outcome`, `message`, `isCommitted` (and `filePath` on the batch types) no longer appear in the output of the batch tools, `GetBestInsertionPoint` and `GenerateToString`.
+
 ## Failed respawn build was invisible to the agent - resolved (2026-10-24)
 
 The launcher fell back to the newest complete build when the new HEAD failed to build, visible only in `launch.log`. It now writes `instances\<id>\launch-outcome.json`; `McpServerStatus.lastLaunch` and a one-shot `launchWarning` report it, and StopServer warns about uncommitted server source. Evidence: e592a4e2; [plan](plans/closed/plan_surface_failed_launch_build.md); [blocker](blockers/resolved/blocking_error_restart_reuses_stale_commit_keyed_build.md). Live check: respawn reported `lastLaunch.buildFailed:false` and StopServer returned the warning; the failed-build path is unit-tested only.
