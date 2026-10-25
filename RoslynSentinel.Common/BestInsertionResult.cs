@@ -1,7 +1,11 @@
 namespace RoslynSentinel.Common;
 
-public record BestInsertionResult : EngineResultBase
+public record BestInsertionResult
 {
+    public FilePathWrapper FilePath
+    {
+        get; init;
+    }
     public string ContainerName
     {
         get; init;

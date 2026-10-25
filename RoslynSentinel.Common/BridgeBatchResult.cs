@@ -21,7 +21,7 @@ namespace RoslynSentinel.Common;
 ///   <item><c>dry_run</c> -> dry-run mode; no files written.</item>
 /// </list>
 /// </param>
-public sealed record BridgeBatchResult : EngineResultBase
+public sealed record BridgeBatchResult
 {
     public List<BridgeAppliedInfo> Applied
     {

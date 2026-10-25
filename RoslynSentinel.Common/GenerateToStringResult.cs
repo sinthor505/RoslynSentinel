@@ -1,6 +1,6 @@
 namespace RoslynSentinel.Common;
 
-public record GenerateToStringResult : EngineResultBase
+public record GenerateToStringResult
 {
     public string UpdatedContent
     {

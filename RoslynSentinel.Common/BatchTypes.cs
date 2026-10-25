@@ -63,8 +63,9 @@ public record AsyncifyPhaseBreakdown
 }
 
 /// <summary>Agent-facing return from every batch-first mutation tool.</summary>
-public record BatchResultSummary : EngineResultBase
+public record BatchResultSummary
 {
+    public string ChangeId { get; init; } = string.Empty;
     public string BlobName { get; init; } = "";
     public int Succeeded
     {
