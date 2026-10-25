@@ -65,7 +65,7 @@ public class LogicSimplificationEngine
             throw new ToolInvalidArgumentException("Semantic model not found.");
         }
 
-        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null || method.Body == null)
         {
             throw new ToolNotFoundException("Method or body not found.", "method", methodName);
@@ -632,7 +632,7 @@ public class LogicSimplificationEngine
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
         var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-        var variable = root?.DescendantNodes().OfType<VariableDeclaratorSyntax>().FirstOrDefault(v => v.Identifier.Text == boolName);
+        var variable = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<VariableDeclaratorSyntax>().Where(v => v.Identifier.Text == boolName).ToList() ?? new System.Collections.Generic.List<VariableDeclaratorSyntax>(), "Variable", boolName);
         ISymbol? symbol = null;
         if (variable != null)
         {
@@ -640,7 +640,7 @@ public class LogicSimplificationEngine
         }
         else
         {
-            var method = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == boolName);
+            var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == boolName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>(), "Method", boolName);
             if (method != null)
             {
                 symbol = semanticModel?.GetDeclaredSymbol(method, cancellationToken);
@@ -704,7 +704,7 @@ public class LogicSimplificationEngine
             throw new ToolInvalidArgumentException($"Could not read the syntax tree for '{filePath}'.");
         }
 
-        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' was not found in '{filePath}'.", "method", methodName);
@@ -749,7 +749,7 @@ public class LogicSimplificationEngine
             throw new ToolInvalidArgumentException($"Could not read the syntax tree for '{filePath}'.");
         }
 
-        var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var method = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (method == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' was not found in '{filePath}'.", "method", methodName);
@@ -794,7 +794,7 @@ public class LogicSimplificationEngine
         var document = DocumentLookup.RequireDocument(solution, resolvedFilePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>(), "Method", methodName);
         if (methodNode == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'.", "method", methodName);
@@ -829,7 +829,7 @@ public class LogicSimplificationEngine
         var document = DocumentLookup.RequireDocument(solution, resolvedFilePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var methodNode = root?.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList() ?? new System.Collections.Generic.List<MethodDeclarationSyntax>(), "Method", methodName);
         if (methodNode == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found in '{filePath}'.", "method", methodName);
@@ -1193,7 +1193,7 @@ public class LogicSimplificationEngine
             throw new ToolInvalidArgumentException($"Could not read the syntax tree for '{filePath}'.");
         }
 
-        var methodNode = root.DescendantNodes().OfType<MethodDeclarationSyntax>().FirstOrDefault(m => m.Identifier.Text == methodName);
+        var methodNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.Text == methodName).ToList(), "Method", methodName);
         if (methodNode == null || methodNode.Body == null)
         {
             throw new ToolNotFoundException($"Method '{methodName}' not found or has no body in '{filePath}'.", "method", methodName);
