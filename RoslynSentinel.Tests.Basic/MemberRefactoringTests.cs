@@ -2766,33 +2766,6 @@ public class C
     }
 
     [Test]
-    [Description("NearMissList must surface every real candidate a snippet actually matched, not "
-                 + "just the first one - the losing NearestSnippet/CorrectedCoordinates strategies "
-                 + "only ever showed candidate #1 here, which would mislead an agent into thinking "
-                 + "there was one unrelated nearby match instead of 2 genuine ones to choose between.")]
-    public async Task ReplaceMember_ThreeOverloads_ThrowsNotFoundListsUpToThreeCandidates()
-    {
-        SetSource(@"
-public class C
-{
-    public void Foo(int x) { }
-    public void Foo(string x) { }
-    public void Foo(bool x) { }
-}", "C.cs");
-
-        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
-        {
-            await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(double x) { }",
-                contextSnippet: "this text does not appear anywhere in the file");
-        });
-
-        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
-        Assert.That(ex.Message, Does.Contain("contextSnippet not found (3 candidates):"));
-        Assert.That(ex.Message, Does.Contain("line 4 `public void Foo(int x) { }`"));
-        Assert.That(ex.Message, Does.Contain("line 5 `public void Foo(string x) { }`"));
-        Assert.That(ex.Message, Does.Contain("line 6 `public void Foo(bool x) { }`"));
-    }
-    [Test]
     public async Task RemoveMember_OverloadedMembers_NoContextSnippet_Throws_Ambiguous()
     {
         SetSource(@"
@@ -2844,6 +2817,33 @@ public class C
         Assert.That(result.UpdatedText, Does.Contain("Foo(bool x)"));
     }
 
+    [Test]
+    [Description("NearMissList must surface every real candidate a snippet actually matched, not "
+                 + "just the first one - the losing NearestSnippet/CorrectedCoordinates strategies "
+                 + "only ever showed candidate #1 here, which would mislead an agent into thinking "
+                 + "there was one unrelated nearby match instead of 2 genuine ones to choose between.")]
+    public async Task ReplaceMember_ThreeOverloads_ThrowsNotFoundListsUpToThreeCandidates()
+    {
+        SetSource(@"
+public class C
+{
+    public void Foo(int x) { }
+    public void Foo(string x) { }
+    public void Foo(bool x) { }
+}", "C.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () =>
+        {
+            await _memberRefactoringEngine.ReplaceMemberAsync("C.cs", "Foo", "public void Foo(double x) { }",
+                contextSnippet: "this text does not appear anywhere in the file");
+        });
+
+        Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(ex.Message, Does.Contain("contextSnippet not found (3 candidates):"));
+        Assert.That(ex.Message, Does.Contain("line 4 `public void Foo(int x) { }`"));
+        Assert.That(ex.Message, Does.Contain("line 5 `public void Foo(string x) { }`"));
+        Assert.That(ex.Message, Does.Contain("line 6 `public void Foo(bool x) { }`"));
+    }
 
     [Test]
     public async Task ReplaceMember_Constructor_ReplacesConstructorBody()
@@ -3245,7 +3245,6 @@ public class Calc
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
         Assert.That(ex.Message, Is.Not.Empty);
     }
-}
 
     [Test]
     [Category("SymbolNavigationEngine")] // sentinel:auto-category
@@ -3416,3 +3415,4 @@ public class Calc
 
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
     }
+}
