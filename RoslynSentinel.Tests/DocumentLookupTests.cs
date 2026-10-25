@@ -166,4 +166,26 @@ public class DocumentLookupTests
 
         Assert.Throws<ToolAmbiguousMatchException>(() => DocumentLookup.RequireDocument(solution, new FilePathWrapper("Foo.cs")));
     }
+
+    [Test]
+    public void ProjectScope_SameNameDifferentFilePaths_IsAmbiguous_AndNamesBothPaths()
+    {
+        var solution = new AdhocWorkspace().CurrentSolution
+            .AddProject(ProjectInfo.Create(ProjectId.CreateNewId(), VersionStamp.Default, "Dup", "Dup", LanguageNames.CSharp, filePath: @"C:\repo\A\Dup.csproj"))
+            .AddProject(ProjectInfo.Create(ProjectId.CreateNewId(), VersionStamp.Default, "Dup", "Dup", LanguageNames.CSharp, filePath: @"C:\repo\B\Dup.csproj"));
+
+        var ex = Assert.Throws<ToolAmbiguousMatchException>(() => DocumentLookup.GetDocuments(solution, DocumentScope.ForProject("Dup")));
+
+        Assert.That(ex.Message, Does.Contain("Dup").And.Contain(@"C:\repo\A\Dup.csproj").And.Contain(@"C:\repo\B\Dup.csproj"));
+    }
+
+    [Test]
+    public void ProjectScope_SingleProjectByName_ReturnsItsDocuments()
+    {
+        var solution = BuildSolution(PathOf("A", "Foo.cs"), PathOf("A", "Bar.cs"));
+
+        var documents = DocumentLookup.GetDocuments(solution, DocumentScope.ForProject("P"));
+
+        Assert.That(documents, Has.Count.EqualTo(2));
+    }
 }

@@ -240,4 +240,34 @@ public class TargetModel
         var ex = await Assert.ThrowsAsync<ToolNotFoundException>(async () => await _engine.InvertAssignmentsAsync("Missing.cs", 5, 6));
         Assert.That(ex.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
     }
+
+    [Test]
+    public async Task GenerateMapping_SimpleNameMatchesTwoNamespaces_ThrowsAmbiguousMatch()
+    {
+        SetSource(@"
+namespace A { public class Dto { public string Name { get; set; } } }
+namespace B { public class Dto { public string Name { get; set; } } }
+public class Target { public string Name { get; set; } }
+", "Models.cs");
+
+        var ex = await Assert.ThrowsAsync<ToolAmbiguousMatchException>(() => _engine.GenerateMappingAsync("Models.cs", "Dto", "Target"));
+
+        Assert.That(ex!.Message, Does.Contain("A.Dto").And.Contain("B.Dto"),
+            "the ambiguity message must list both candidate display strings");
+    }
+
+    [Test]
+    public async Task GenerateMapping_FullyQualifiedName_ResolvesDespiteDuplicateSimpleName()
+    {
+        SetSource(@"
+namespace A { public class Dto { public string Name { get; set; } } }
+namespace B { public class Dto { public string Name { get; set; } } }
+public class Target { public string Name { get; set; } }
+", "Models.cs");
+
+        var result = await _engine.GenerateMappingAsync("Models.cs", "A.Dto", "Target");
+
+        Assert.That(result.UpdatedText, Does.Contain("dest.Name = source.Name"),
+            "a fully-qualified type name must resolve even when another type shares its simple name");
+    }
 }

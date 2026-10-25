@@ -5,7 +5,8 @@ namespace RoslynSentinel.Common;
 public static class SolutionProjectLocator
 {
     // Longest-prefix match: returns the project whose .csproj directory is the deepest
-    // ancestor of filePath, or null if no project contains it.
+    // ancestor of filePath, or null if no project contains it. A directory matches only on a
+    // path-separator boundary ('\' or '/'), so 'Foo' does not contain 'FooBar\x.cs'.
     public static Project? FindContainingProject(Solution solution, string filePath)
     {
         Project? best = null;
@@ -24,8 +25,13 @@ public static class SolutionProjectLocator
                 continue;
             }
 
-            if (filePath.StartsWith(projectDir, StringComparison.OrdinalIgnoreCase) &&
-                projectDir.Length > bestLen)
+            var dirPrefix = projectDir.TrimEnd('\\', '/');
+            var isInside = string.Equals(filePath, projectDir, StringComparison.OrdinalIgnoreCase) ||
+                (filePath.StartsWith(dirPrefix, StringComparison.OrdinalIgnoreCase) &&
+                 filePath.Length > dirPrefix.Length &&
+                 (filePath[dirPrefix.Length] == '\\' || filePath[dirPrefix.Length] == '/'));
+
+            if (isInside && projectDir.Length > bestLen)
             {
                 best = project;
                 bestLen = projectDir.Length;

@@ -287,6 +287,8 @@ public static class DocumentLookup
     /// Selects documents by <paramref name="scope"/>. A file scope that does not resolve, or a project scope naming no
     /// project, throws <see cref="ToolNotFoundException"/> / <see cref="ToolAmbiguousMatchException"/> rather than
     /// returning an empty list, because an empty list would read as "nothing to analyze" instead of "the scope was wrong".
+    /// A project scope selected by name that matches several projects with different file paths also throws
+    /// <see cref="ToolAmbiguousMatchException"/>; same-named projects sharing one file path (multi-target loads) are merged.
     /// </summary>
     public static IReadOnlyList<Document> GetDocuments(Solution solution, DocumentScope scope)
     {
@@ -304,6 +306,14 @@ public static class DocumentLookup
                     var key = scope.ProjectId is not null ? scope.ProjectId.ToString() : scope.ProjectName;
                     throw new ToolNotFoundException(
                         $"Project '{key}' was not found in the loaded solution. Projects: {string.Join(", ", solution.Projects.Select(p => p.Name))}.");
+                }
+
+                if (scope.ProjectId is null &&
+                    projects.Select(p => (p.FilePath ?? "<null>").ToUpperInvariant()).Distinct().Count() > 1)
+                {
+                    var candidates = string.Join("; ", projects.Select(p => $"{p.Name} ({p.FilePath ?? "<null>"})"));
+                    throw new ToolAmbiguousMatchException(
+                        $"Project name '{scope.ProjectName}' matches {projects.Count} projects in the loaded solution: {candidates}. GetDocuments never merges same-named projects. Next: rename one of the projects or scope by file instead.");
                 }
 
                 return projects.SelectMany(p => p.Documents).ToList();

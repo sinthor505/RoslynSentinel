@@ -16,11 +16,46 @@ public class MappingEngine
         _workspaceManager = workspaceManager;
     }
 
-    /// <summary>Resolves a type by fully-qualified metadata name first, then by simple name; null when neither finds it.</summary>
-    private static INamedTypeSymbol? ResolveType(Compilation? compilation, string typeName, CancellationToken cancellationToken) =>
-        compilation?.GetTypeByMetadataName(typeName)
-        ?? compilation?.GetSymbolsWithName(n => n == typeName || n == typeName.Split('.').Last(), SymbolFilter.Type, cancellationToken)
-            .OfType<INamedTypeSymbol>().FirstOrDefault();
+    /// <summary>
+    /// Resolves a type by fully-qualified metadata name first, then by simple name; null when neither finds it.
+    /// Throws ToolAmbiguousMatchException when several distinct types share the simple name; never picks one.
+    /// </summary>
+    private static INamedTypeSymbol? ResolveType(Compilation? compilation, string typeName, CancellationToken cancellationToken)
+    {
+        if (compilation is null)
+        {
+            return null;
+        }
+
+        var exact = compilation.GetTypeByMetadataName(typeName);
+        if (exact is not null)
+        {
+            return exact;
+        }
+
+        var matches = compilation
+            .GetSymbolsWithName(n => n == typeName || n == typeName.Split('.').Last(), SymbolFilter.Type, cancellationToken)
+            .OfType<INamedTypeSymbol>()
+            .GroupBy(t => t.ToDisplayString())
+            .Select(g => g.First())
+            .ToList();
+
+        if (matches.Count == 0)
+        {
+            return null;
+        }
+
+        if (matches.Count == 1)
+        {
+            return matches[0];
+        }
+
+        var shown = matches.Take(10).Select(t => t.ToDisplayString()).ToList();
+        var listing = string.Join("; ", shown) + (matches.Count > shown.Count ? "; ..." : string.Empty);
+        throw new ToolAmbiguousMatchException(
+            $"Type name '{typeName}' matches {matches.Count} types: {listing} (listing at most 10 by display string). " +
+            $"ResolveType never picks one for you. Next: pass the fully-qualified name, e.g. '{shown[0]}'.");
+    }
 
     /// <summary>
     /// Generates a mapping method between two types based on property names.

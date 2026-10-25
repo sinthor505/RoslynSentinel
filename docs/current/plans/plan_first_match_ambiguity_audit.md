@@ -1,6 +1,6 @@
 # Plan: Refuse and report ambiguity instead of silently using the first match
 
-**Status:** IN PROGRESS 2026-10-24. Audit done; steps 1, 2 and 2b built (central null-snippet guard, post-remove check, FindCallers/FindImplementations guard, tests); steps 3-8 open.
+**Status:** IN PROGRESS 2026-10-24. Audit done; steps 1-4 built and step 5 partly built (all but `FilterByContainingType`); steps 6-8 open.
 
 ## Problem
 
@@ -66,12 +66,15 @@ the old, `[Obsolete("Use X")]` on the old, `// TODO` for remaining callers, fini
 - Change: covered by step 2 for the resolution. Verify the tool-impl precheck (`RefactoringStructuralImpl` ~620) runs after a unique resolution, so `FindCallersAsync` is never called with an ambiguous name; with `skipPrecheck: true` the engine guard from step 2 must still fire. Fix the stale `skipPrecheck`/`FindCallersAsync` comments in the engine if they misdescribe where the precheck lives.
 - Done when: test where overload 1 is unused and overload 2 is used, no snippet: error, nothing deleted.
 
-### Step 4 - GetMethodSource overloads
+### Step 4 - GetMethodSource overloads - DONE (found already built 2026-10-24 by a concurrent session)
+- `WorkspaceReadNavigationImpl.GetMethodSource` now takes `containerName` and returns `BuildAmbiguousMethodError` (ErrorCode Ambiguous, candidates with line ranges, retry calls) when several methods remain; `GetMethodSourceTests` was modified in the same work. Not authored under this plan; verify its tests pass when that session commits.
 - Files: `WorkspaceReadNavigationImpl.cs` and the tool schema.
 - Change: when more than one method matches, return an error listing every overload's signature and line; add an optional `containerName`/`contextSnippet` only if a concrete usage needs a fallback (otherwise the error lists the line range to read with `ReadFile`).
 - Done when: test with overloads asserts the listing error.
 
-### Step 5 - Type and project lookups
+### Step 5 - Type and project lookups - PARTLY DONE 2026-10-24
+- Built: `ResolveType` throws on a same-simple-name collision, `GetDocuments` throws when same-named projects have different file paths (multi-target loads of one csproj still merge), `FindContainingProject` requires a separator boundary; 6 tests added (`SolutionProjectLocatorTests`, `DocumentLookupTests`, `MappingEngineTests`).
+- Open: `FilterByContainingType` silent widen (owner confirmation needed; the file also holds another session's uncommitted hunks).
 - Files: `MappingEngine.cs`, `SyntaxTargetResolver.FilterByContainingType`, `DocumentLookup.cs`, `SolutionProjectLocator.cs`.
 - Change: `ResolveType` reports same-simple-name collisions; `FilterByContainingType` stops widening when `containerName` was given and matched nothing (not-found error instead); `GetDocuments` reports duplicate project names; `FindContainingProject` requires a directory separator boundary.
 - Done when: a test per item.
