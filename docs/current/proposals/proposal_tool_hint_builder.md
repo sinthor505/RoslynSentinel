@@ -1,4 +1,4 @@
-# Build server hints that name a tool through a validated ToolHint helper, enforced by a ratchet
+# Build server hints that name a tool through a validated ToolCallHint helper, enforced by a ratchet
 
 **Status:** DRAFT 2026-10-25. Approved in principle by the user; slices not started.
 
@@ -38,10 +38,10 @@ environment's instruction to the model), so the fix is in how hints are produced
 
 ## Proposal
 
-### Decided design: a build-time helper `ToolHint` in RoslynSentinel.Common (not a filter)
+### Decided design: a build-time helper `ToolCallHint` in RoslynSentinel.Common (not a filter)
 
-- `ToolHint.Call(tool, (param, value)...)` returns a complete call string.
-- `ToolHint.Next(tool, message, (param, value)...)` returns `"Next: <call> <message>"`.
+- `ToolCallHint.Call(tool, (param, value)...)` returns a complete call string.
+- `ToolCallHint.Next(tool, message, (param, value)...)` returns `"Next: <call> <message>"`.
 - The helper validates tool name, parameter names and enum values against a `ToolSignatureCatalog`,
   quotes values by parameter type, and adds a typed placeholder for every remaining required parameter.
   `reason` gets `<why you call this>`, which passes `ToolCallReason` validation (>= 10 chars, contains a space).
@@ -65,17 +65,17 @@ environment's instruction to the model), so the fix is in how hints are produced
 
 ### Ratchet (keeps future hand-written hints out)
 
-- A syntax-tree scan test over production projects (skipping tests, `ToolHint` itself and `[Description]`
+- A syntax-tree scan test over production projects (skipping tests, `ToolCallHint` itself and `[Description]`
   attributes) finds string literals and interpolated parts that use an active tool name as a call:
   `Name(` or a trigger phrase (Call / Use / Next: / run / retry / via / with) followed by the name. Tool
   names come from `[McpServerTool(Name = ...)]` by reflection.
-- A hit outside the baseline file fails the build with "use ToolHint.Call/Next". A baseline entry with no
+- A hit outside the baseline file fails the build with "use ToolCallHint.Call/Next". A baseline entry with no
   matching site also fails, so the baseline only shrinks; each conversion slice removes its entries in the
   same commit.
 - Baseline: a text file in the style of `docs/known-failing-tests.*.txt`, one line per site group,
   `file | enclosing member | tool | count`, no line numbers (they churn). Seeded with today's ~150 sites.
 - Escape hatch for intentional prose mentions: a `// hint-ok: <reason>` comment.
-- A second test checks every `ToolHint.Call` literal (tool, param, enum value) against the catalog, so a
+- A second test checks every `ToolCallHint.Call` literal (tool, param, enum value) against the catalog, so a
   typo fails CI instead of production.
 
 ### Decisions (decided 2026-10-25, revisit if a model pastes the placeholder verbatim)
@@ -90,7 +90,7 @@ The user answered "Continue" to the recommended defaults for these three.
 
 Foundation:
 - F1: `ToolSignatureCatalog` plus tests.
-- F2: `ToolHint` plus tests; rebuild `LargeResultHints` on it.
+- F2: `ToolCallHint` plus tests (named `ToolCallHint` because `RoslynSentinel.Common.ToolHint` already exists in ItemFailure.cs, an Asyncify failure-routing type). F2b: reflection-fallback catalog so unit tests without a server still render real signatures; then rebuild `LargeResultHints` on `ToolCallHint` (it cannot move earlier: with an empty catalog the existing LargeResultHintsTests would see a bare tool name).
 - F3: ratchet test plus seeded baseline.
 - F4: startup wiring of the live catalog in `Server.Basic`.
 
@@ -130,7 +130,7 @@ itself is at `ServiceRegistrationExtensionsBasic.cs:745`). Lost because:
 Its one advantage is catching future hand-written hints; the ratchet replaces that.
 
 **Per-family helpers like `LargeResultHints` for each tool.** Works, but repeats the schema knowledge in
-each helper and has no way to catch a new hand-written hint. Not chosen; `ToolHint` is the generalisation.
+each helper and has no way to catch a new hand-written hint. Not chosen; `ToolCallHint` is the generalisation.
 
 ## Open questions
 
