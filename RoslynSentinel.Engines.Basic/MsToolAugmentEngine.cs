@@ -1248,9 +1248,9 @@ public class MsToolAugmentEngine
         var tree = CSharpSyntaxTree.ParseText(source, cancellationToken: cancellationToken);
         var root = await tree.GetRootAsync(cancellationToken);
 
-        var typeDecl = root.DescendantNodes()
+        var typeDecl = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes()
             .OfType<TypeDeclarationSyntax>()
-            .FirstOrDefault(t => t.Identifier.Text == typeName);
+            .Where(t => t.Identifier.Text == typeName).ToList(), "Type", typeName);
 
         if (typeDecl == null)
         {

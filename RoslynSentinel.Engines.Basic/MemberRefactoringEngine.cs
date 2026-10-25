@@ -2133,7 +2133,7 @@ public class MemberRefactoringEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken);
-        var container = root?.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == containerName);
+        var container = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<TypeDeclarationSyntax>().Where(c => c.Identifier.Text == containerName).ToList() ?? new List<TypeDeclarationSyntax>(), "Type", containerName);
         if (container == null)
         {
             throw new ToolNotFoundException("Cannot edit: container not found.", "type", containerName);
@@ -2707,7 +2707,7 @@ public class MemberRefactoringEngine
             throw new ToolNotFoundException($"Failed to get syntax root for '{filePath}'.");
         }
 
-        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (classNode == null)
         {
             throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'.");
@@ -3669,7 +3669,7 @@ public class MemberRefactoringEngine
             var sameClassRoot = (CompilationUnitSyntax)(await sameClassDocument.GetSyntaxRootAsync(cancellationToken))!;
             var sameClassText = await sameClassDocument.GetTextAsync(cancellationToken);
             var sameClassModel = await sameClassDocument.GetSemanticModelAsync(cancellationToken);
-            var sameClassNode = sameClassRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().First(c => c.Identifier.Text == className);
+            var sameClassNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(sameClassRoot.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw new InvalidOperationException("Sequence contains no matching element");
             var receiverCandidates = sameClassModel?.GetDeclaredSymbol(sameClassNode, cancellationToken) is { } sameClassSymbol
                 ? sameClassSymbol.GetMembers().Where(m => !m.IsStatic && !m.IsImplicitlyDeclared && (m is IFieldSymbol || m is IPropertySymbol) && (m is IFieldSymbol f ? f.Type : ((IPropertySymbol)m).Type).Name == targetClassName).Select(m => m.Name).ToList()
                 : new List<string>();
@@ -3718,7 +3718,7 @@ public class MemberRefactoringEngine
 
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).First()!;
         var root = (CompilationUnitSyntax)(await document.GetSyntaxRootAsync(cancellationToken))!;
-        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().First(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className) ?? throw new InvalidOperationException("Sequence contains no matching element");
 
         // Receiver rewrites (`oldReceiver.Member` -> `resolvedReceiver.Member`) are minimal edits: only the receiver
         // expression's own span is replaced, against each document's ORIGINAL text, so the rest of every caller file
@@ -4362,7 +4362,7 @@ public class MemberRefactoringEngine
             throw new ToolNotFoundException($"Failed to get syntax root for '{filePath}'.");
         }
 
-        var classNode = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList(), "Class", className);
         if (classNode == null)
         {
             throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'.");

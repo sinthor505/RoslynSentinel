@@ -400,7 +400,7 @@ public class DiscoveryEngine
         var solution = await _workspaceManager.GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = solution.GetDocumentIdsWithFilePath(filePath).Select(solution.GetDocument).FirstOrDefault() ?? throw new ToolNotFoundException($"File not found: {filePath}");
         var root = await document.GetSyntaxRootAsync(cancellationToken) ?? throw new InvalidOperationException("Could not get syntax root.");
-        var container = root.DescendantNodes().OfType<TypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.Text == containerName) ?? throw new ToolNotFoundException($"Type '{containerName}' not found.");
+        var container = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root.DescendantNodes().OfType<TypeDeclarationSyntax>().Where(t => t.Identifier.Text == containerName).ToList(), "Type", containerName) ?? throw new ToolNotFoundException($"Type '{containerName}' not found.");
         // Standard C# ordering: fields(0) -> constructors(1) -> destructors(2) -> properties(3) -> events(4) -> methods(5) -> nested(6)
         static int MemberOrder(MemberDeclarationSyntax m) => m switch
         {

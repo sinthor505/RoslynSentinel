@@ -526,7 +526,7 @@ public class BasicRefactoringEngine
         var document = DocumentLookup.RequireDocument(solution, filePath);
 
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var typeNode = root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.Text == typeName);
+        var typeNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Where(t => t.Identifier.Text == typeName).ToList() ?? new List<BaseTypeDeclarationSyntax>(), "Type", typeName);
         if (typeNode == null)
         {
             return new Dictionary<FilePathWrapper, string>();
@@ -757,7 +757,7 @@ public class BasicRefactoringEngine
         var solution = await ((IWorkspaceReader)_workspaceManager).GetSolutionAsync(ReadSource.Committed, cancellationToken);
         var document = DocumentLookup.RequireDocument(solution, filePath);
         var root = await document.GetSyntaxRootAsync(cancellationToken) as CompilationUnitSyntax;
-        var classNode = root?.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.Text == className);
+        var classNode = RoslynSentinel.Common.NameTargetLookup.RequireSingle(root?.DescendantNodes().OfType<ClassDeclarationSyntax>().Where(c => c.Identifier.Text == className).ToList() ?? new List<ClassDeclarationSyntax>(), "Class", className);
         if (classNode == null)
         {
             throw new ToolNotFoundException($"Class '{className}' not found in '{filePath}'.", "class", className);
