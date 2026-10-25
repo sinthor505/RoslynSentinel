@@ -542,7 +542,7 @@ public class AsyncBatchEngine
                     cancellationToken);
                 newSource = result.UpdatedText ?? throw new InvalidOperationException();
             }
-            catch (InvalidOperationException ex) when (ex.Message.Contains("already exists"))
+            catch (Exception ex) when ((ex is InvalidOperationException && ex.Message.Contains("already exists")) || ex is AsyncBridgePreconditionException { Kind: AsyncBridgePreconditionKind.OverloadExists })
             {
                 // The async overload already exists -> try adding CT to it instead of failing
                 var asyncMethodName = candidate.MethodName + "Async";
@@ -706,7 +706,7 @@ public class AsyncBatchEngine
                 }
                 continue;
             }
-            catch (InvalidOperationException ex)
+            catch (Exception ex) when (ex is InvalidOperationException or AsyncBridgePreconditionException)
             {
                 // Other pre-condition failure (abstract, already async, event handler, etc.)
                 // Flag NeedsManualReview so this method is excluded from future bridge batches.
@@ -1394,7 +1394,7 @@ public class AsyncBatchEngine
                 bridgedCallerSource = result.UpdatedText
                     ?? throw new InvalidOperationException("ConvertToAsyncBridgeAsync returned null source.");
             }
-            catch (InvalidOperationException ex) when (ex.Message.Contains("event handler"))
+            catch (Exception ex) when ((ex is InvalidOperationException && ex.Message.Contains("event handler")) || ex is AsyncBridgePreconditionException { Kind: AsyncBridgePreconditionKind.EventHandler })
             {
                 _logger.LogInformation(
                     "TryTransformCaller: '{Method}' is an event handler - attempting in-place async void conversion",
@@ -1417,7 +1417,7 @@ public class AsyncBatchEngine
                         $"Event handler in-place: {inPlaceEx.Message}", new List<DiagnosticInfo>()));
                 }
             }
-            catch (InvalidOperationException ex)
+            catch (Exception ex) when (ex is InvalidOperationException or AsyncBridgePreconditionException)
             {
                 _logger.LogWarning(
                     "Bridge pre-condition failed for caller {Method}: {Message}",
