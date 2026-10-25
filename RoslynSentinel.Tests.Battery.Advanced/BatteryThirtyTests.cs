@@ -53,7 +53,7 @@ public class Product {
         SetSource(code, "Product.cs");
         var result = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Product.cs", "Product");
         // [Required] should be present exactly once
-        var count = CountOccurrences(result.UpdatedText!, "[Required]");
+        var count = CountOccurrences(result.UpdatedText, "[Required]");
         Assert.That(count, Is.EqualTo(1), "Expected exactly 1 [Required] attribute on Name");
     }
 
@@ -73,7 +73,7 @@ public class Product {
         SetSource(code, "Product.cs");
         var result = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Product.cs", "Product");
         // Name already had [Required] -> count must still be 1
-        var requiredCount = CountOccurrences(result.UpdatedText!, "[Required]");
+        var requiredCount = CountOccurrences(result.UpdatedText, "[Required]");
         Assert.That(requiredCount, Is.EqualTo(2), "Description should get [Required] but Name should NOT get a duplicate - total must be 2");
     }
 
@@ -89,7 +89,7 @@ public class Order {
 }";
         SetSource(code, "Order.cs");
         var result = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Order.cs", "Order");
-        var count = CountOccurrences(result.UpdatedText!, "StringLength");
+        var count = CountOccurrences(result.UpdatedText, "StringLength");
         Assert.That(count, Is.EqualTo(1), "Should not duplicate [StringLength]");
     }
 
@@ -106,7 +106,7 @@ public class Measurement {
         SetSource(code, "Measurement.cs");
         var result = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Measurement.cs", "Measurement");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
-        var count = CountOccurrences(result.UpdatedText!, "[Range(");
+        var count = CountOccurrences(result.UpdatedText, "[Range(");
         Assert.That(count, Is.EqualTo(1), "Should not duplicate [Range]");
     }
 
@@ -121,11 +121,11 @@ public class Customer {
 }";
         SetSource(code, "Customer.cs");
         var first = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Customer.cs", "Customer");
-        SetSource(first.UpdatedText!, "Customer.cs");
+        SetSource(first.UpdatedText, "Customer.cs");
         var second = await new ApiGenerationEngine(_ws).AddValidationToPocoAsync("Customer.cs", "Customer");
         // Running twice must produce the same result -> no extra attributes appended
-        var req1 = CountOccurrences(first.UpdatedText!, "[Required]");
-        var req2 = CountOccurrences(second.UpdatedText!, "[Required]");
+        var req1 = CountOccurrences(first.UpdatedText, "[Required]");
+        var req2 = CountOccurrences(second.UpdatedText, "[Required]");
         Assert.That(req2, Is.EqualTo(req1), "Second run must not add duplicate attributes");
         Assert.That(second.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
     }
@@ -140,11 +140,11 @@ public class Ticket {
 }";
         SetSource(code, "Ticket.cs");
         var first = await new DocumentationEngine(_ws).DocumentPocoFieldsAsync("Ticket.cs", "Ticket");
-        SetSource(first.UpdatedText!, "Ticket.cs");
+        SetSource(first.UpdatedText, "Ticket.cs");
         var second = await new DocumentationEngine(_ws).DocumentPocoFieldsAsync("Ticket.cs", "Ticket");
         Assert.That(second.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
         Assert.That(second.UpdatedText, Is.EqualTo(first.UpdatedText));
-        Assert.That(CountOccurrences(second.UpdatedText!, "[Description("), Is.EqualTo(1), "Second run must not add a duplicate [Description]");
+        Assert.That(CountOccurrences(second.UpdatedText, "[Description("), Is.EqualTo(1), "Second run must not add a duplicate [Description]");
     }
 
     // =========================================================================
@@ -161,9 +161,9 @@ public class Point {
 }";
         SetSource(code, "Point.cs");
         var result = await _modEngine.ClassToRecordAsync("Point.cs", "Point");
-        Assert.That(result.UpdatedText!, Contains.Substring("record Point("), "Simple class should use positional syntax");
-        Assert.That(result.UpdatedText!, Contains.Substring("int X"), "X parameter should be present");
-        Assert.That(result.UpdatedText!, Contains.Substring("int Y"), "Y parameter should be present");
+        Assert.That(result.UpdatedText, Contains.Substring("record Point("), "Simple class should use positional syntax");
+        Assert.That(result.UpdatedText, Contains.Substring("int X"), "X parameter should be present");
+        Assert.That(result.UpdatedText, Contains.Substring("int Y"), "Y parameter should be present");
     }
 
     [Test]
@@ -181,10 +181,10 @@ public class Product {
         SetSource(code, "Product.cs");
         var result = await _modEngine.ClassToRecordAsync("Product.cs", "Product");
         // Must preserve the [Required] attribute
-        Assert.That(result.UpdatedText!, Contains.Substring("[Required]"), "Attribute [Required] must survive ClassToRecord");
+        Assert.That(result.UpdatedText, Contains.Substring("[Required]"), "Attribute [Required] must survive ClassToRecord");
         // Should be a class-body record, not positional
-        Assert.That(result.UpdatedText!, Does.Not.Contain("record Product("), "Should NOT use positional syntax when attributes exist");
-        Assert.That(result.UpdatedText!, Contains.Substring("record Product"), "Should still be a record");
+        Assert.That(result.UpdatedText, Does.Not.Contain("record Product("), "Should NOT use positional syntax when attributes exist");
+        Assert.That(result.UpdatedText, Contains.Substring("record Product"), "Should still be a record");
     }
 
     [Test]
@@ -200,10 +200,10 @@ public class Config {
         SetSource(code, "Config.cs");
         var result = await _modEngine.ClassToRecordAsync("Config.cs", "Config");
         // Must preserve both initializers
-        Assert.That(result.UpdatedText!, Contains.Substring("localhost"), "Default value 'localhost' must survive ClassToRecord");
-        Assert.That(result.UpdatedText!, Contains.Substring("8080"), "Default value 8080 must survive ClassToRecord");
+        Assert.That(result.UpdatedText, Contains.Substring("localhost"), "Default value 'localhost' must survive ClassToRecord");
+        Assert.That(result.UpdatedText, Contains.Substring("8080"), "Default value 8080 must survive ClassToRecord");
         // Should be a class-body record, not positional
-        Assert.That(result.UpdatedText!, Does.Not.Contain("record Config("), "Should NOT use positional syntax when initializers exist");
+        Assert.That(result.UpdatedText, Does.Not.Contain("record Config("), "Should NOT use positional syntax when initializers exist");
     }
 
     [Test]
@@ -220,11 +220,11 @@ public class Item {
 }";
         SetSource(code, "Item.cs");
         var result = await _modEngine.ClassToRecordAsync("Item.cs", "Item");
-        Assert.That(result.UpdatedText!, Contains.Substring("[Required]"), "Must preserve [Required]");
-        Assert.That(result.UpdatedText!, Contains.Substring("[Range(0, 999)]"), "Must preserve [Range]");
-        Assert.That(result.UpdatedText!, Contains.Substring("string.Empty"), "Must preserve string.Empty initializer");
-        Assert.That(result.UpdatedText!, Contains.Substring("= 1"), "Must preserve numeric initializer");
-        Assert.That(result.UpdatedText!, Contains.Substring("record Item"), "Must be a record");
+        Assert.That(result.UpdatedText, Contains.Substring("[Required]"), "Must preserve [Required]");
+        Assert.That(result.UpdatedText, Contains.Substring("[Range(0, 999)]"), "Must preserve [Range]");
+        Assert.That(result.UpdatedText, Contains.Substring("string.Empty"), "Must preserve string.Empty initializer");
+        Assert.That(result.UpdatedText, Contains.Substring("= 1"), "Must preserve numeric initializer");
+        Assert.That(result.UpdatedText, Contains.Substring("record Item"), "Must be a record");
     }
 
     [Test]
@@ -240,8 +240,8 @@ public class Address {
         SetSource(code, "Address.cs");
         var result = await _modEngine.ClassToRecordAsync("Address.cs", "Address");
         // set -> init for records
-        Assert.That(result.UpdatedText!, Contains.Substring("init"), "set accessor should become init in class-body record");
-        Assert.That(result.UpdatedText!, Does.Not.Contain("{ get; set; }"), "Should not have bare { get; set; }");
+        Assert.That(result.UpdatedText, Contains.Substring("init"), "set accessor should become init in class-body record");
+        Assert.That(result.UpdatedText, Does.Not.Contain("{ get; set; }"), "Should not have bare { get; set; }");
     }
 
     // =========================================================================
@@ -261,8 +261,8 @@ public class Service {
         SetSource(code, "Service.cs");
         var result = await _tsEngine.ConvertLockToSemaphoreSlimAsync("Service.cs", "DoWork");
         // Instance method: field must be `private readonly`, NOT `private static readonly`
-        Assert.That(result.UpdatedText!, Contains.Substring("private readonly SemaphoreSlim"), "Instance-method context must use private readonly field");
-        Assert.That(result.UpdatedText!, Does.Not.Contain("private static readonly SemaphoreSlim"), "Instance-method context must NOT emit static field");
+        Assert.That(result.UpdatedText, Contains.Substring("private readonly SemaphoreSlim"), "Instance-method context must use private readonly field");
+        Assert.That(result.UpdatedText, Does.Not.Contain("private static readonly SemaphoreSlim"), "Instance-method context must NOT emit static field");
     }
 
     [Test]
@@ -280,8 +280,8 @@ public class RateLimiter {
         SetSource(code, "RateLimiter.cs");
         var result = await _tsEngine.ConvertLockToSemaphoreSlimAsync("RateLimiter.cs", "Throttle");
         // Static method: field must be `private static readonly`
-        Assert.That(result.UpdatedText!, Contains.Substring("private static readonly SemaphoreSlim"), "Static-method context must use private static readonly field");
-        Assert.That(result.UpdatedText!, Does.Not.Contain("private readonly SemaphoreSlim "), "Static-method context must NOT emit instance field");
+        Assert.That(result.UpdatedText, Contains.Substring("private static readonly SemaphoreSlim"), "Static-method context must use private static readonly field");
+        Assert.That(result.UpdatedText, Does.Not.Contain("private readonly SemaphoreSlim "), "Static-method context must NOT emit instance field");
     }
 
     [Test]
@@ -298,7 +298,7 @@ public class Cache {
         SetSource(code, "Cache.cs");
         var result = await _tsEngine.ConvertLockToSemaphoreSlimAsync("Cache.cs", "FlushAll");
         // Both methods share the lock; since Refresh is instance, field must be instance
-        Assert.That(result.UpdatedText!, Contains.Substring("private readonly SemaphoreSlim"), "Mixed static+instance context must produce instance field");
+        Assert.That(result.UpdatedText, Contains.Substring("private readonly SemaphoreSlim"), "Mixed static+instance context must produce instance field");
     }
 
     [Test]
@@ -317,8 +317,8 @@ public class Counter {
         SetSource(code, "Counter.cs");
         var result = await _tsEngine.ConvertLockToSemaphoreSlimAsync("Counter.cs", "Increment");
         // The converted code must reference _semaphore in a static method body
-        Assert.That(result.UpdatedText!, Contains.Substring("_semaphore.WaitAsync()"), "Must use _semaphore.WaitAsync()");
-        Assert.That(result.UpdatedText!, Contains.Substring("private static readonly SemaphoreSlim"), "Field must be static so static method can access it");
+        Assert.That(result.UpdatedText, Contains.Substring("_semaphore.WaitAsync()"), "Must use _semaphore.WaitAsync()");
+        Assert.That(result.UpdatedText, Contains.Substring("private static readonly SemaphoreSlim"), "Field must be static so static method can access it");
     }
 
     // =========================================================================
@@ -364,10 +364,10 @@ public class Entity {
         SetSource(code, "Entity.cs");
         var result = await _suEngine.UseFieldBackedPropertiesAsync("Entity.cs");
         // Backing fields must be removed
-        Assert.That(result.UpdatedText!, Does.Not.Contain("private string _name"), "Backing field _name must be removed");
-        Assert.That(result.UpdatedText!, Does.Not.Contain("private int _count"), "Backing field _count must be removed");
+        Assert.That(result.UpdatedText, Does.Not.Contain("private string _name"), "Backing field _name must be removed");
+        Assert.That(result.UpdatedText, Does.Not.Contain("private int _count"), "Backing field _count must be removed");
         // Properties must become auto-properties
-        Assert.That(result.UpdatedText!, Contains.Substring("{ get; set; }"), "Properties must become auto-properties");
+        Assert.That(result.UpdatedText, Contains.Substring("{ get; set; }"), "Properties must become auto-properties");
     }
 
     [Test]
@@ -381,8 +381,8 @@ public class Settings {
 }";
         SetSource(code, "Settings.cs");
         var result = await _suEngine.UseFieldBackedPropertiesAsync("Settings.cs");
-        Assert.That(result.UpdatedText!, Does.Not.Contain("private string _host"), "Backing field must be removed");
-        Assert.That(result.UpdatedText!, Contains.Substring("localhost"), "Initializer must be transferred to auto-property");
+        Assert.That(result.UpdatedText, Does.Not.Contain("private string _host"), "Backing field must be removed");
+        Assert.That(result.UpdatedText, Contains.Substring("localhost"), "Initializer must be transferred to auto-property");
     }
 
     [Test]
@@ -396,9 +396,9 @@ public class Dto {
 }";
         SetSource(code, "Dto.cs");
         var result = await _suEngine.UseFieldBackedPropertiesAsync("Dto.cs");
-        Assert.That(result.UpdatedText!, Does.Not.Contain("private string _id"), "Backing field must be removed");
+        Assert.That(result.UpdatedText, Does.Not.Contain("private string _id"), "Backing field must be removed");
         // Should preserve init semantics
-        Assert.That(result.UpdatedText!, Contains.Substring("init"), "init accessor must be preserved");
+        Assert.That(result.UpdatedText, Contains.Substring("init"), "init accessor must be preserved");
     }
 
     [Test]
@@ -481,8 +481,8 @@ public class Vector { public double X { get; init; } public double Y { get; init
         SetSource(code, "Vector.cs");
         var result = await _modEngine.ClassToRecordAsync("Vector.cs", "Vector");
         // Positional form should end with ; OR contain { }
-        bool hasSemicolon = result.UpdatedText!.Contains("record Vector(") && result.UpdatedText!.Contains(';');
-        bool hasBraces = result.UpdatedText!.Contains("record Vector(") && result.UpdatedText!.Contains('{') && result.UpdatedText!.Contains('}');
+        bool hasSemicolon = result.UpdatedText.Contains("record Vector(") && result.UpdatedText.Contains(';');
+        bool hasBraces = result.UpdatedText.Contains("record Vector(") && result.UpdatedText.Contains('{') && result.UpdatedText.Contains('}');
         Assert.That(hasSemicolon || hasBraces, Is.True, "Positional record must end with ; or contain braces");
     }
 
@@ -498,7 +498,7 @@ public class Calc {
         SetSource(code, "Calc.cs");
         var result = await _modEngine.ClassToRecordAsync("Calc.cs", "Calc");
         // The Double() method must survive conversion
-        Assert.That(result.UpdatedText!, Contains.Substring("Double()"), "Non-property members must be preserved");
+        Assert.That(result.UpdatedText, Contains.Substring("Double()"), "Non-property members must be preserved");
     }
 
     // =========================================================================

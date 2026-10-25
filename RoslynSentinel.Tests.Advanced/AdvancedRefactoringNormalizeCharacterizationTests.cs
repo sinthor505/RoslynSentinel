@@ -226,7 +226,7 @@ public class AdvancedRefactoringNormalizeCharacterizationTests
         static string Text(DocumentEditResult r)
         {
             Assert.That(r.Outcome, Is.EqualTo(EditOutcome.Modified), r.Message);
-            return r.UpdatedText!;
+            return r.UpdatedText;
         }
     }
 

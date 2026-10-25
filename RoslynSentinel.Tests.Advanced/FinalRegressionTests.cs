@@ -105,7 +105,7 @@ public class FinalRegressionTests
         var filePath = doc.FilePath ?? "Test.cs";
         var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync(filePath, "Process");
         Assert.That(result.UpdatedText, Is.Not.Null);
-        var classStart = result.UpdatedText!.IndexOf("class Processor", StringComparison.Ordinal);
+        var classStart = result.UpdatedText.IndexOf("class Processor", StringComparison.Ordinal);
         Assert.That(classStart, Is.GreaterThanOrEqualTo(0), "Class Processor should still be present");
         Assert.That(result.UpdatedText.Substring(classStart), Does.Contain("Process(ProcessParameters request"), "Class implementation should take the parameter object");
         Assert.That(result.UpdatedText, Does.Contain("public record ProcessParameters"), "Record declaration should be appended");

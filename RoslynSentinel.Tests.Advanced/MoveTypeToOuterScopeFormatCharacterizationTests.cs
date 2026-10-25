@@ -62,7 +62,7 @@ public class MoveTypeToOuterScopeFormatCharacterizationTests
     {
         var result = await _engine.MoveTypeToOuterScopeAsync("Test.cs", "Inner", allowWidenToInternal);
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
-        return result.UpdatedText!;
+        return result.UpdatedText;
     }
 
     // ---- shape 1: no namespace ----

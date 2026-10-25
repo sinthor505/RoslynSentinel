@@ -282,12 +282,12 @@ public class Service : IService {
         var result = await _advancedRefactoringEngine.SyncInterfaceToImplementationAsync("Service.cs", "Service", "IService");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        var interfaceText = result.UpdatedText![..result.UpdatedText.IndexOf("public class Service", StringComparison.Ordinal)];
+        var interfaceText = result.UpdatedText[..result.UpdatedText.IndexOf("public class Service", StringComparison.Ordinal)];
         Assert.That(interfaceText, Does.Contain("Find<T>(int id, T hint)"));
         Assert.That(interfaceText, Does.Contain("where T : class"));
         Assert.That(interfaceText, Does.Contain("int Count { get; set; }"));
         Assert.That(interfaceText, Does.Not.Contain("the identifier"), "A comment inside a reused signature is not carried onto the interface member.");
-        Assert.That(System.Text.RegularExpressions.Regex.IsMatch(result.UpdatedText!, "(?<!\r)\n"), Is.False, "Every line ending must stay CRLF.");
+        Assert.That(System.Text.RegularExpressions.Regex.IsMatch(result.UpdatedText, "(?<!\r)\n"), Is.False, "Every line ending must stay CRLF.");
     }
 
     // ===== Tool 5: IntroduceParameterObjectTool =====

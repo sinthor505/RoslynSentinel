@@ -78,7 +78,7 @@ public class ThreadSafetyEngineTests
         var result = await _engine.MakeMethodThreadSafeAsync("Counter.cs", "Increment");
         Assert.That(result.UpdatedText, Does.Contain("lock"), "Method body should be wrapped in a lock statement");
         Assert.That(result.UpdatedText, Does.Contain("_lock"), "A lock object field should be added");
-        Assert.That(result.UpdatedText!, Does.Not.StartWith("// ErrorDetails:"), "Should not return an error comment");
+        Assert.That(result.UpdatedText, Does.Not.StartWith("// ErrorDetails:"), "Should not return an error comment");
     }
 
     [Test]

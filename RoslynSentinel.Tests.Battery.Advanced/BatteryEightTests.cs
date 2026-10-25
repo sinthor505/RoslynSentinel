@@ -303,8 +303,8 @@ public class Product { public string Name { get; set; } public decimal Price { g
         Assert.That(result.UpdatedText, Does.Contain("Name"), "Property Name should be in initializer");
         Assert.That(result.UpdatedText, Does.Contain("Price"), "Property Price should be in initializer");
         // Both assignments should be collapsed into object initializer -> no separate assignment statements
-        Assert.That(result.UpdatedText!, Does.Not.Match(@"p\.Name\s*="), "Separate p.Name assignment should be removed");
-        Assert.That(result.UpdatedText!, Does.Not.Match(@"p\.Price\s*="), "Separate p.Price assignment should be removed");
+        Assert.That(result.UpdatedText, Does.Not.Match(@"p\.Name\s*="), "Separate p.Name assignment should be removed");
+        Assert.That(result.UpdatedText, Does.Not.Match(@"p\.Price\s*="), "Separate p.Price assignment should be removed");
     }
 
     [Test]

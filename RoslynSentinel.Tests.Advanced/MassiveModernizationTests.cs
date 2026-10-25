@@ -63,7 +63,7 @@ public class MassiveModernizationTests
             }}
         }}", $"C{id}.cs");
         var result = await _syntaxUpgradeEngine.UpgradePatternMatchingAsync($"C{id}.cs");
-        Assert.That(result.UpdatedText!, Contains.Substring("is string s"));
+        Assert.That(result.UpdatedText, Contains.Substring("is string s"));
     }
 
     [Test]
@@ -80,7 +80,7 @@ public class MassiveModernizationTests
             public int X => _x;
         }}", $"C{id}.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToPrimaryConstructorAsync($"C{id}.cs", $"C{id}");
-        Assert.That(result.UpdatedText!, Contains.Substring($"class C{id}(int x)"));
+        Assert.That(result.UpdatedText, Contains.Substring($"class C{id}(int x)"));
     }
 
     [Test]
@@ -94,6 +94,6 @@ public class MassiveModernizationTests
     {
         SetSource($@"public class C{id} {{ public int Id {{ get; set; }} }}", $"C{id}.cs");
         var result = await _modernizationEngine.ClassToRecordAsync($"C{id}.cs", $"C{id}");
-        Assert.That(result.UpdatedText!, Contains.Substring("record C"));
+        Assert.That(result.UpdatedText, Contains.Substring("record C"));
     }
 }

@@ -57,9 +57,9 @@ public class C {
         var result = await _syntaxUpgradeEngine.UpgradeToModernGuardsAsync("Test.cs");
 
         // Assert
-        Assert.That(result.UpdatedText!, Contains.Substring("ArgumentNullException.ThrowIfNull(s)"));
-        Assert.That(result.UpdatedText!, Contains.Substring("ArgumentException.ThrowIfNullOrEmpty(s)"));
-        Assert.That(result.UpdatedText!, Contains.Substring("ArgumentOutOfRangeException.ThrowIfNegative(i)"));
+        Assert.That(result.UpdatedText, Contains.Substring("ArgumentNullException.ThrowIfNull(s)"));
+        Assert.That(result.UpdatedText, Contains.Substring("ArgumentException.ThrowIfNullOrEmpty(s)"));
+        Assert.That(result.UpdatedText, Contains.Substring("ArgumentOutOfRangeException.ThrowIfNegative(i)"));
     }
 
     [Test]
@@ -79,8 +79,8 @@ public class C {
         var result = await _codeStyleEngine.SimplifyVerbosityAsync("Test.cs");
 
         // Assert
-        Assert.That(result.UpdatedText!, Contains.Substring("private Dictionary<string, string> _dict = new();"));
-        Assert.That(result.UpdatedText!, Contains.Substring("input ??= new();"));
+        Assert.That(result.UpdatedText, Contains.Substring("private Dictionary<string, string> _dict = new();"));
+        Assert.That(result.UpdatedText, Contains.Substring("input ??= new();"));
     }
 
     [Test]
@@ -101,9 +101,9 @@ public class C {
         var result = await _codeStyleEngine.UseCollectionExpressionsAsync("Test.cs");
 
         // Assert
-        Assert.That(result.UpdatedText!, Contains.Substring("var a = [1, 2, 3];"));
-        Assert.That(result.UpdatedText!, Contains.Substring("var b = [4, 5];"));
-        Assert.That(result.UpdatedText!, Contains.Substring("var c = [];"));
+        Assert.That(result.UpdatedText, Contains.Substring("var a = [1, 2, 3];"));
+        Assert.That(result.UpdatedText, Contains.Substring("var b = [4, 5];"));
+        Assert.That(result.UpdatedText, Contains.Substring("var c = [];"));
     }
 
     [Test]
@@ -120,7 +120,7 @@ public class C {
         var result = await _codeStyleEngine.UseTimeProviderAsync("Test.cs");
 
         // Assert
-        Assert.That(result.UpdatedText!, Contains.Substring("_timeProvider.GetUtcNow()"));
+        Assert.That(result.UpdatedText, Contains.Substring("_timeProvider.GetUtcNow()"));
     }
 
     [Test]

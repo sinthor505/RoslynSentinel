@@ -243,7 +243,7 @@ public class WriteChokepointGuardrailTests
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(result.UpdatedText, Does.Contain("using System.Linq;"));
-        var after = EolChangeGuard.Count(result.UpdatedText!);
+        var after = EolChangeGuard.Count(result.UpdatedText);
         Assert.That(after.IsSingleStyle && after.Dominant == expectedStyle, Is.True, after.Describe());
     }
 
@@ -263,7 +263,7 @@ public class WriteChokepointGuardrailTests
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
         Assert.That(result.UpdatedText, Does.Contain("/// <summary>"));
-        var after = EolChangeGuard.Count(result.UpdatedText!);
+        var after = EolChangeGuard.Count(result.UpdatedText);
         Assert.That(after.IsSingleStyle && after.Dominant == expectedStyle, Is.True, after.Describe());
     }
 

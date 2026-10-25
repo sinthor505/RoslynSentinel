@@ -199,7 +199,7 @@ public class Logic
         Assert.That(result.UpdatedText, Does.Contain("Console.WriteLine(total)"), "Should replace in print statement");
 
         // Verify the insertion is before the WriteLine statement
-        var lines = result.UpdatedText!.Split('\n');
+        var lines = result.UpdatedText.Split('\n');
         var totalDeclarationLine = Array.FindIndex(lines, l => l.Contains("var total"));
         var printLine = Array.FindIndex(lines, l => l.Contains("Console.WriteLine"));
         Assert.That(totalDeclarationLine, Is.GreaterThanOrEqualTo(0), "Declaration should exist");
@@ -283,7 +283,7 @@ public class Values
         // Should generate a default name for numeric literal
         Assert.That(result.UpdatedText, Does.Contain("var"), "Should declare variable with var");
         Assert.That(result.UpdatedText, Does.Contain("return"), "Should return the extracted variable");
-        Assert.That(result.UpdatedText!, Does.Contain("42"), "Numeric literal should be in the declaration");
+        Assert.That(result.UpdatedText, Does.Contain("42"), "Numeric literal should be in the declaration");
     }
 
     // ══════════════════════════════════════════════════════════════════════════

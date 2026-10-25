@@ -120,7 +120,7 @@ public class ConvertExpressionBodyFormatCharacterizationTests
         var direction = site is MethodToExpr or PropToExpr ? "ToExpressionBody" : "ToBlockBody";
         var r = await _engine.ConvertExpressionBodyAsync("Test.cs", member, direction);
         Assert.That(r.Outcome, Is.EqualTo(EditOutcome.Modified), r.Message);
-        return r.UpdatedText!;
+        return r.UpdatedText;
     }
 
     [Test]

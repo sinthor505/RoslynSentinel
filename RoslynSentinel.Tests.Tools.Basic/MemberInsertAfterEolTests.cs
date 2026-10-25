@@ -113,7 +113,7 @@ public class MemberInsertAfterEolTests
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
         Assert.That(result.UpdatedText, Is.EqualTo(BuildExpected("\r\n", "Gamma")));
-        Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"), "No bare LF should appear once every CRLF pair is stripped.");
+        Assert.That(result.UpdatedText.Replace("\r\n", ""), Does.Not.Contain("\n"), "No bare LF should appear once every CRLF pair is stripped.");
     }
 
     [Test]
@@ -123,6 +123,6 @@ public class MemberInsertAfterEolTests
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
         Assert.That(result.UpdatedText, Is.EqualTo(BuildExpected("\r\n", "Beta")));
-        Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"), "No bare LF should appear once every CRLF pair is stripped.");
+        Assert.That(result.UpdatedText.Replace("\r\n", ""), Does.Not.Contain("\n"), "No bare LF should appear once every CRLF pair is stripped.");
     }
 }

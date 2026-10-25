@@ -206,9 +206,9 @@ public class ConvertToSwitchTests
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
         // Should not have default if no else clause
-        var switchStart = result.UpdatedText!.IndexOf("switch");
-        var switchEnd = result.UpdatedText!.LastIndexOf("}");
-        var switchSection = result.UpdatedText!.Substring(switchStart, switchEnd - switchStart);
+        var switchStart = result.UpdatedText.IndexOf("switch");
+        var switchEnd = result.UpdatedText.LastIndexOf("}");
+        var switchSection = result.UpdatedText.Substring(switchStart, switchEnd - switchStart);
         // This assertion checks that switch was created, default is optional
         Assert.That(switchSection, Does.Contain("case"), "Should contain case statements");
     }

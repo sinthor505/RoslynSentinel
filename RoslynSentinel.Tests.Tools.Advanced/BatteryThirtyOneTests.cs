@@ -278,9 +278,9 @@ public class MyList {
 }";
         SetSource(src, "C.cs");
         var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
-        Assert.That(result.UpdatedText!, Does.Not.StartWith("// ERROR:"), "Should succeed for valid block-body method");
-        Assert.That(result.UpdatedText!, Does.Contain("this[int i]"), "Should produce indexer syntax");
-        Assert.That(result.UpdatedText!, Does.Not.Contain("Get(int i)"), "Original method should be replaced");
+        Assert.That(result.UpdatedText, Does.Not.StartWith("// ERROR:"), "Should succeed for valid block-body method");
+        Assert.That(result.UpdatedText, Does.Contain("this[int i]"), "Should produce indexer syntax");
+        Assert.That(result.UpdatedText, Does.Not.Contain("Get(int i)"), "Original method should be replaced");
     }
 
     [Test]
@@ -293,8 +293,8 @@ public class MyList {
 }";
         SetSource(src, "C.cs");
         var result = await _advancedStructuralEngine.ConvertMethodToIndexerAsync("C.cs", "Get");
-        Assert.That(result.UpdatedText!, Does.Not.StartWith("// ERROR:"), "Should succeed for expression-body method");
-        Assert.That(result.UpdatedText!, Does.Contain("this[int index]"), "Should produce indexer");
+        Assert.That(result.UpdatedText, Does.Not.StartWith("// ERROR:"), "Should succeed for expression-body method");
+        Assert.That(result.UpdatedText, Does.Contain("this[int index]"), "Should produce indexer");
     }
 
     [Test]

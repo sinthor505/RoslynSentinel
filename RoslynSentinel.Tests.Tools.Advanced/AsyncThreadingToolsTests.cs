@@ -221,8 +221,8 @@ public class C {
         var result = await _asyncOptimizationEngine.AddConfigureAwaitFalseAsync("C.cs", libraryMode: true);
         // Should still only have one ConfigureAwait, not double-wrapped
         Assert.That(result.UpdatedText, Does.Contain("ConfigureAwait(false)"));
-        Assert.That(result.UpdatedText!.IndexOf("ConfigureAwait", StringComparison.Ordinal),
-            Is.EqualTo(result.UpdatedText!.LastIndexOf("ConfigureAwait", StringComparison.Ordinal)));
+        Assert.That(result.UpdatedText.IndexOf("ConfigureAwait", StringComparison.Ordinal),
+            Is.EqualTo(result.UpdatedText.LastIndexOf("ConfigureAwait", StringComparison.Ordinal)));
     }
 
     [Test]

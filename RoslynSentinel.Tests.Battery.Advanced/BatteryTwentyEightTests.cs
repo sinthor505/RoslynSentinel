@@ -82,7 +82,7 @@ public class B02extra_Immutability_ReadonlySpacing
         _workspaceManager.SetTestSolution(solution);
         var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Box.cs", "Box");
         Assert.That(result.UpdatedText, Does.Not.Contain("readonlyint"), "No field should produce 'readonlyint' - all must have space.");
-        var readonlyCount = result.UpdatedText!.Split("readonly int").Length - 1;
+        var readonlyCount = result.UpdatedText.Split("readonly int").Length - 1;
         Assert.That(readonlyCount, Is.EqualTo(2), "Both fields should get 'readonly int' with correct spacing.");
     }
 
@@ -100,7 +100,7 @@ public class B02extra_Immutability_ReadonlySpacing
         _workspaceManager.SetTestSolution(solution);
         var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).MakeClassImmutableAsync("Const.cs", "Const");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.AlreadyInTargetState));
-        var readonlyCount = result.UpdatedText!.Split("readonly").Length - 1;
+        var readonlyCount = result.UpdatedText.Split("readonly").Length - 1;
         Assert.That(readonlyCount, Is.EqualTo(1), "An already-readonly field must not get a second readonly modifier.");
     }
 
@@ -340,7 +340,7 @@ public class Processor {
         var result = await new LogicSimplificationEngine(_workspaceManager).ConvertWhileToForAsync("Processor.cs", 6);
         Assert.That(result.UpdatedText, Does.Contain("for"), "Result must contain a for loop.");
         // i++ in the body must be gone (moved to incrementors)
-        var bodyStatements = result.UpdatedText!.Split(new[] { "for " }, StringSplitOptions.None).Skip(1).FirstOrDefault() ?? "";
+        var bodyStatements = result.UpdatedText.Split(new[] { "for " }, StringSplitOptions.None).Skip(1).FirstOrDefault() ?? "";
         Assert.That(result.UpdatedText, Does.Contain("i * 2"), "Body statement _data[i] = i * 2 must be preserved in the for body.");
     }
 

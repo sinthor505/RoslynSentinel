@@ -139,7 +139,7 @@ public class AdvancedStructuralFormatCharacterizationTests
 
         var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");
 
-        Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"));
+        Assert.That(result.UpdatedText.Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
     [TestCase(MethodBraceAnchor)]
@@ -292,7 +292,7 @@ public class AdvancedStructuralFormatCharacterizationTests
         var result = await _engine.IntroduceParameterObjectAsync("Test.cs", "Run");
 
         Assert.That(result.Message, Does.Contain("WARNING: This method implements an interface."));
-        Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"));
+        Assert.That(result.UpdatedText.Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
     [TestCase(MethodBraceAnchor)]

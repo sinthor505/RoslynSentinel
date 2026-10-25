@@ -906,7 +906,7 @@ public class Reporter
     public string Line2(string y) => ""B="" + y;
 }", "Reporter.cs");
         var result = await new SyntaxModernizationEngine(_workspaceManager, _config).ReplaceStringConcatWithInterpolationAsync("Reporter.cs");
-        Assert.That(result.UpdatedText!.Contains("{x}") || result.UpdatedText!.Contains("{y}"), Is.True, "At least one concat chain must be converted.");
+        Assert.That(result.UpdatedText.Contains("{x}") || result.UpdatedText.Contains("{y}"), Is.True, "At least one concat chain must be converted.");
     }
 
     // ══════════════════════════════════════════════════════════════

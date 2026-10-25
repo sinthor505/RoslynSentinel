@@ -112,7 +112,7 @@ public class TargetModel
 
         Assert.That(result.UpdatedText, Does.Contain("dest.Name = source.Name"));
         Assert.That(result.UpdatedText, Does.Contain("\r\n"), "A multi-line method should be emitted.");
-        Assert.That(System.Text.RegularExpressions.Regex.IsMatch(result.UpdatedText!, "(?<!\r)\n"), Is.False, "Every line ending must be CRLF.");
+        Assert.That(System.Text.RegularExpressions.Regex.IsMatch(result.UpdatedText, "(?<!\r)\n"), Is.False, "Every line ending must be CRLF.");
     }
 
     [Test]

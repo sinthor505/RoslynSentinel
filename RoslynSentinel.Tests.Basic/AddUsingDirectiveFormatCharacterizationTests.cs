@@ -176,7 +176,7 @@ public class AddUsingDirectiveFormatCharacterizationTests
 
         var result = await _engine.AddUsingDirectiveAsync("Test.cs", "System.Linq");
 
-        Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"));
+        Assert.That(result.UpdatedText.Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
     [Test]

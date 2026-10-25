@@ -122,7 +122,7 @@ public class MappingEngineInvertAssignmentsCharacterizationTests
 
         var result = await _engine.InvertAssignmentsAsync("Test.cs", 15, 16);
 
-        Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"));
+        Assert.That(result.UpdatedText.Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
     // The stray CRLF goes on the method's opening brace, the "{" line before the first inverted assignment, so it

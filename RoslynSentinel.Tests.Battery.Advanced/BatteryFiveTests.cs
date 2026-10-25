@@ -337,7 +337,7 @@ public class UserService
 
         // Each public method should have a try/catch wrapper
         // Count 'try' occurrences -> should be 2 (CreateUser + DeleteUser), not 3
-        var tryCount = CountOccurrences(result.UpdatedText!, "try");
+        var tryCount = CountOccurrences(result.UpdatedText, "try");
         Assert.That(tryCount, Is.EqualTo(2), "Should wrap exactly 2 public methods");
         Assert.That(result.UpdatedText, Does.Contain("AuditLog"), "Private method should still appear but without wrapping");
     }

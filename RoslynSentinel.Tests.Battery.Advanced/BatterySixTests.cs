@@ -160,7 +160,7 @@ public class W : IDisposable
 }");
         var result = await new SolutionStructureEngine(_workspaceManager, new SentinelConfiguration()).ConvertToBackgroundServiceAsync("Test.cs", "W");
         Assert.That(result.UpdatedText, Does.Match(@"class W\s*:\s*BackgroundService\s*,\s*IDisposable"), "BackgroundService first, existing interface kept");
-        var syntaxErrors = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(result.UpdatedText!)
+        var syntaxErrors = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(result.UpdatedText)
             .GetDiagnostics()
             .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
             .Select(d => d.ToString())

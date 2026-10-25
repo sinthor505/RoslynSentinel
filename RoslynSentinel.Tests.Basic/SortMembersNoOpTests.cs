@@ -63,7 +63,7 @@ public class Repo
 ", "Repo.cs");
 
         var first = await _memberRefactoringEngine.SortMembersAsync("Repo.cs", "Repo");
-        SetSource(first.UpdatedText!, "Repo.cs");
+        SetSource(first.UpdatedText, "Repo.cs");
 
         var second = await _memberRefactoringEngine.SortMembersAsync("Repo.cs", "Repo");
 

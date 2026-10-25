@@ -163,7 +163,7 @@ public class IDEStyleSimplifyMemberAccessCharacterizationTests
 
         var result = await _engine.SimplifyMemberAccessAsync("Test.cs");
 
-        Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"));
+        Assert.That(result.UpdatedText.Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
     [Test]

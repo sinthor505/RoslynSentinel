@@ -258,8 +258,8 @@ public class TripService
         var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("TripService.cs"), "GetTrips");
 
         // The bridge wrapper (GetTrips) should appear before the async overload (GetTripsAsync).
-        var bridgeIdx = result.UpdatedText!.IndexOf("GetAwaiter", StringComparison.Ordinal);
-        var asyncBodyIdx = result.UpdatedText!.IndexOf("DataHelper.Search", StringComparison.Ordinal);
+        var bridgeIdx = result.UpdatedText.IndexOf("GetAwaiter", StringComparison.Ordinal);
+        var asyncBodyIdx = result.UpdatedText.IndexOf("DataHelper.Search", StringComparison.Ordinal);
 
         // Bridge body (GetAwaiter) should appear before the async overload's body (DataHelper.Search).
         Assert.That(bridgeIdx, Is.GreaterThanOrEqualTo(0), "Bridge body (GetAwaiter) must be present.");
@@ -370,7 +370,7 @@ public class TripService
         var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("TripService.cs"), "GetTrips");
 
         Assert.That(result.UpdatedText, Does.Contain("GetTripsAsync"), "The bridge should have been produced.");
-        if (result.UpdatedText!.Contains('\r'))
+        if (result.UpdatedText.Contains('\r'))
         {
             TestContext.Out.WriteLine("ACTUAL:");
             TestContext.Out.WriteLine(result.UpdatedText.Replace("\r", "<CR>").Replace("\n", "<LF>\n"));
@@ -551,7 +551,7 @@ public class Service
 }", "Service.cs");
 
         var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "DoWork");
-        var text = result.UpdatedText!;
+        var text = result.UpdatedText;
 
         Assert.That(text, Does.Contain("public async Task DoWorkAsync"),
             "async overload must be public instance (non-static).");
@@ -569,7 +569,7 @@ public class Service
 }", "Service.cs");
 
         var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("Service.cs"), "DoWork");
-        var text = result.UpdatedText!;
+        var text = result.UpdatedText;
 
         Assert.That(text, Does.Contain("public static async Task DoWorkAsync"),
             "async overload of a static method must also be static.");
@@ -605,7 +605,7 @@ public class Derived : Base
         );
 
         var result = await _engine.ConvertToAsyncBridgeAsync(PathOf("Derived.cs"), "DoWork");
-        var text = result.UpdatedText!;
+        var text = result.UpdatedText;
 
         Assert.That(text, Does.Contain("public async Task DoWorkAsync"),
             "async overload must be present.");
@@ -644,7 +644,7 @@ public class DispatchForm
 }", "DispatchForm.cs");
 
         var result = await _engine.ConvertEventHandlerCallerToAsyncVoidAsync(PathOf("DispatchForm.cs"), "Form_Load");
-        var text = result.UpdatedText!;
+        var text = result.UpdatedText;
 
         Assert.That(text, Does.Contain("async void Form_Load"),
             "Event handler must be uplifted to async void.");
@@ -678,7 +678,7 @@ public class DispatchForm
 }", "DispatchForm.cs");
 
         var result = await _engine.ConvertEventHandlerCallerToAsyncVoidAsync(PathOf("DispatchForm.cs"), "Form_Load");
-        var text = result.UpdatedText!;
+        var text = result.UpdatedText;
 
         Assert.That(text, Does.Contain("async void Form_Load"),
             "Event handler must be uplifted to async void.");

@@ -157,7 +157,7 @@ public class InstrumentationEngineFormatCharacterizationTests
 
         var result = await _engine.AddTryCatchToClassAsync("Test.cs", "Worker");
 
-        Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"));
+        Assert.That(result.UpdatedText.Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
     // An LF document with one CRLF terminator, on the opening brace of the method the engine rewrites (`Run`): the
@@ -212,7 +212,7 @@ public class InstrumentationEngineFormatCharacterizationTests
 
         var result = await _engine.AddStopwatchDiagnosticsAsync("Test.cs", "Run");
 
-        Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"));
+        Assert.That(result.UpdatedText.Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
     [Test]

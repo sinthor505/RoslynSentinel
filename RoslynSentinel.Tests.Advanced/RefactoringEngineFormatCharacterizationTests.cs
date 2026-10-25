@@ -267,7 +267,7 @@ public class RefactoringEngineFormatCharacterizationTests
 
         var result = await _memberEngine.RemoveMethodParameterAsync("Test.cs", "Compute", "b");
 
-        Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"));
+        Assert.That(result.UpdatedText.Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
     // Stray CRLF on: the field line right before the rewritten method (formatter-owned line break), a line in the
@@ -442,7 +442,7 @@ public class RefactoringEngineFormatCharacterizationTests
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
         Assert.That(result.UpdatedText, Does.Contain(anchor.Substring(0, anchor.Length - 1) + "\r\n"));
-        Assert.That(result.UpdatedText!.Count(c => c == '\r'), Is.EqualTo(1), "Only the stray CRLF may carry a carriage return.");
+        Assert.That(result.UpdatedText.Count(c => c == '\r'), Is.EqualTo(1), "Only the stray CRLF may carry a carriage return.");
     }
 
     // ================================================================ AddTopLevelTypeAsync (no-namespace path)
@@ -463,7 +463,7 @@ public class RefactoringEngineFormatCharacterizationTests
         SetFiles(("Test.cs", text));
         var result = await _memberEngine.AddTopLevelTypeAsync("Test.cs", "public class B\n{\n    public int Y;\n}");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
-        return result.UpdatedText!;
+        return result.UpdatedText;
     }
 
     [Test]

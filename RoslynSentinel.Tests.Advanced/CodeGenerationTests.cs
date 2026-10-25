@@ -80,7 +80,7 @@ public class MyService
         Assert.That(result.UpdatedText, Does.Contain("public MyService(string name)"),
             "Existing constructor should be preserved unchanged.");
         // No duplicate constructor
-        Assert.That(result.UpdatedText!.IndexOf("public MyService("), Is.EqualTo(result.UpdatedText!.LastIndexOf("public MyService(")),
+        Assert.That(result.UpdatedText.IndexOf("public MyService("), Is.EqualTo(result.UpdatedText.LastIndexOf("public MyService(")),
             "Should not add a duplicate constructor.");
     }
 
@@ -422,9 +422,9 @@ public class SomeClass { }", "SomeClass.cs");
 
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "Count", "ToFullProperty");
 
-        Assert.That(result.UpdatedText!, Contains.Substring("42"), "Initializer value should survive ToFullProperty conversion");
-        Assert.That(result.UpdatedText!, Contains.Substring("get =>"), "Should produce expression-body getter");
-        Assert.That(result.UpdatedText!, Contains.Substring("set =>"), "Should produce expression-body setter");
+        Assert.That(result.UpdatedText, Contains.Substring("42"), "Initializer value should survive ToFullProperty conversion");
+        Assert.That(result.UpdatedText, Contains.Substring("get =>"), "Should produce expression-body getter");
+        Assert.That(result.UpdatedText, Contains.Substring("set =>"), "Should produce expression-body setter");
     }
 
     [Test]
@@ -444,7 +444,7 @@ public class SomeClass { }", "SomeClass.cs");
 
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Test.cs", "Count", "ToAutoProperty");
 
-        Assert.That(result.UpdatedText!, Contains.Substring("{ get; set; }"), "Should produce auto-property");
+        Assert.That(result.UpdatedText, Contains.Substring("{ get; set; }"), "Should produce auto-property");
     }
 
     [Test]
@@ -480,9 +480,9 @@ public class SomeClass { }", "SomeClass.cs");
             "Test.cs",
             "string.Format(\"Hello {0}, you are {1}\", name, age)");
 
-        Assert.That(result.UpdatedText!, Contains.Substring("$\""), "Should produce an interpolated string");
-        Assert.That(result.UpdatedText!, Contains.Substring("{name}"), "First arg should be inlined");
-        Assert.That(result.UpdatedText!, Contains.Substring("{age}"), "Second arg should be inlined");
+        Assert.That(result.UpdatedText, Contains.Substring("$\""), "Should produce an interpolated string");
+        Assert.That(result.UpdatedText, Contains.Substring("{name}"), "First arg should be inlined");
+        Assert.That(result.UpdatedText, Contains.Substring("{age}"), "Second arg should be inlined");
     }
 
     [Test]
@@ -562,7 +562,7 @@ public class SomeClass { }", "SomeClass.cs");
         Assert.That(result.UpdatedText, Does.Contain("\"Acme\""),
             "Company's initializer Acme must appear in the backing field");
         // Person.Name should still be an auto-property (no _name backing for Alice)
-        var personSection = result.UpdatedText!.Substring(0, result.UpdatedText!.IndexOf("Company", StringComparison.Ordinal));
+        var personSection = result.UpdatedText.Substring(0, result.UpdatedText.IndexOf("Company", StringComparison.Ordinal));
         Assert.That(personSection, Does.Contain("{ get; set; }"),
             "Person.Name must remain an auto-property - context snippet should have limited the change");
     }
@@ -593,11 +593,11 @@ public class SomeClass { }", "SomeClass.cs");
             "Test.cs",
             "string.Format(MessageFmt, user, ip)");
 
-        Assert.That(result.UpdatedText!, Contains.Substring("$\""), "Should produce an interpolated string");
-        Assert.That(result.UpdatedText!, Contains.Substring("{user}"), "user arg should be inlined");
-        Assert.That(result.UpdatedText!, Contains.Substring("{ip}"), "ip arg should be inlined");
+        Assert.That(result.UpdatedText, Contains.Substring("$\""), "Should produce an interpolated string");
+        Assert.That(result.UpdatedText, Contains.Substring("{user}"), "user arg should be inlined");
+        Assert.That(result.UpdatedText, Contains.Substring("{ip}"), "ip arg should be inlined");
         // The const itself should no longer appear as a format reference
-        Assert.That(result.UpdatedText!, Does.Not.Contain("string.Format(MessageFmt"), "Original string.Format call must be replaced");
+        Assert.That(result.UpdatedText, Does.Not.Contain("string.Format(MessageFmt"), "Original string.Format call must be replaced");
     }
 
     [Test]
@@ -618,8 +618,8 @@ public class SomeClass { }", "SomeClass.cs");
             "Test.cs",
             "string.Format(\"Price: {0:N2}\", amount)");
 
-        Assert.That(result.UpdatedText!, Contains.Substring("$\""), "Must produce interpolated string");
-        Assert.That(result.UpdatedText!, Contains.Substring("{amount:N2}"), "Format specifier N2 must be preserved");
+        Assert.That(result.UpdatedText, Contains.Substring("$\""), "Must produce interpolated string");
+        Assert.That(result.UpdatedText, Contains.Substring("{amount:N2}"), "Format specifier N2 must be preserved");
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -652,7 +652,7 @@ public class SomeClass { }", "SomeClass.cs");
         Assert.That(result.UpdatedText, Does.Contain("public void Stop"),
             "Missing Stop() method must be generated");
         // Start() must NOT be duplicated -> check 'public void Start' (not 'void Start' which also matches interface)
-        var publicStartCount = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, @"public void Start").Count;
+        var publicStartCount = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText, @"public void Start").Count;
         Assert.That(publicStartCount, Is.EqualTo(1),
             "Start() must NOT be duplicated - it was already implemented");
     }
@@ -733,8 +733,8 @@ public class SomeClass { }", "SomeClass.cs");
         Assert.That(result.UpdatedText, Does.Contain("public string Id"),
             "Id property must be generated");
         // A read-only stub should NOT have a setter accessor
-        var idPropStart = result.UpdatedText!.IndexOf("public string Id", StringComparison.Ordinal);
-        var afterId = result.UpdatedText!.Substring(idPropStart);
+        var idPropStart = result.UpdatedText.IndexOf("public string Id", StringComparison.Ordinal);
+        var afterId = result.UpdatedText.Substring(idPropStart);
         var nextMemberOrEnd = afterId.IndexOf("\n    public ", StringComparison.Ordinal);
         var idBlock = nextMemberOrEnd > 0 ? afterId.Substring(0, nextMemberOrEnd) : afterId;
         Assert.That(idBlock, Does.Not.Contain("set"),
@@ -769,7 +769,7 @@ public class SomeClass { }", "SomeClass.cs");
         Assert.That(result.UpdatedText, Does.Contain("public void Start"));
         Assert.That(result.UpdatedText, Does.Contain("public int Count"));
         Assert.That(result.UpdatedText, Does.Contain("public string Describe"));
-        Assert.That(BareLf.IsMatch(result.UpdatedText!), Is.False,
+        Assert.That(BareLf.IsMatch(result.UpdatedText), Is.False,
             "A CRLF document must stay CRLF-only after ImplementInterface.");
     }
 
@@ -787,7 +787,7 @@ public class SomeClass { }", "SomeClass.cs");
         Assert.That(result.UpdatedText, Does.Contain("public int Count"));
         if (Environment.NewLine == "\r\n")
         {
-            Assert.That(BareLf.IsMatch(result.UpdatedText!), Is.False, "Generated line breaks must be CRLF on this platform.");
+            Assert.That(BareLf.IsMatch(result.UpdatedText), Is.False, "Generated line breaks must be CRLF on this platform.");
         }
         else
         {

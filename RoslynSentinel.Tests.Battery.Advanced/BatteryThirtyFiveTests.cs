@@ -65,13 +65,13 @@ public class BatteryThirtyFiveTests
         SetSource(src, "Foo.cs");
         var result = await _syntaxUpgradeEngine.UpgradeToFileScopedNamespaceAsync("Foo.cs");
 
-        Assert.That(result.UpdatedText!, Does.Not.StartWith("// "),
+        Assert.That(result.UpdatedText, Does.Not.StartWith("// "),
             "Should return converted code, not an error/message comment");
-        Assert.That(result.UpdatedText!, Does.Contain("namespace MyApp;"),
+        Assert.That(result.UpdatedText, Does.Contain("namespace MyApp;"),
             "Should use file-scoped namespace syntax (semicolon form)");
-        Assert.That(result.UpdatedText!, Does.Not.Contain("namespace MyApp\n{").And.Not.Contain("namespace MyApp\r\n{"),
+        Assert.That(result.UpdatedText, Does.Not.Contain("namespace MyApp\n{").And.Not.Contain("namespace MyApp\r\n{"),
             "Block-form namespace braces should be gone");
-        Assert.That(result.UpdatedText!, Does.Contain("class Foo"), "Class body should be preserved");
+        Assert.That(result.UpdatedText, Does.Contain("class Foo"), "Class body should be preserved");
     }
 
     [Test]

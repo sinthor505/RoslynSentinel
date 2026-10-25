@@ -45,8 +45,8 @@ public class ModernizationTests
         var source = "public class Person { public string Name { get; set; } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "Person.cs"));
         var result = await _modernEngine.ClassToRecordAsync("Person.cs", "Person");
-        Assert.That(result.UpdatedText!, Contains.Substring("public record Person"));
-        Assert.That(result.UpdatedText!, Contains.Substring("string Name"));
+        Assert.That(result.UpdatedText, Contains.Substring("public record Person"));
+        Assert.That(result.UpdatedText, Contains.Substring("string Name"));
     }
 
     [Test]
@@ -96,7 +96,7 @@ public class ModernizationTests
         var source = "public class C { int[] x = new int[] { 1, 2, 3 }; }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
         var result = await _styleEngine.UseCollectionExpressionsAsync("C.cs");
-        Assert.That(result.UpdatedText!, Contains.Substring("int[] x = [1, 2, 3];"));
+        Assert.That(result.UpdatedText, Contains.Substring("int[] x = [1, 2, 3];"));
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -313,7 +313,7 @@ public class C
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        var countOfIsNull = result.UpdatedText!.Split(new[] { "is null" }, StringSplitOptions.None).Length - 1;
+        var countOfIsNull = result.UpdatedText.Split(new[] { "is null" }, StringSplitOptions.None).Length - 1;
         Assert.That(countOfIsNull, Is.GreaterThanOrEqualTo(2), "Should convert both null checks");
     }
 
@@ -365,7 +365,7 @@ public class C
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
         Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
-        var countOfIsNull = result.UpdatedText!.Split(new[] { "is null" }, StringSplitOptions.None).Length - 1;
+        var countOfIsNull = result.UpdatedText.Split(new[] { "is null" }, StringSplitOptions.None).Length - 1;
         Assert.That(countOfIsNull, Is.GreaterThanOrEqualTo(2), "Should convert nested null checks");
     }
 
@@ -451,9 +451,9 @@ public class C
         }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
         var result = await _syntaxUpgradeEngine.ConvertSwitchToExpressionAsync("C.cs", "M");
-        Assert.That(result.UpdatedText!, Contains.Substring("x switch"));
-        Assert.That(result.UpdatedText!, Contains.Substring("1 => 10"));
-        Assert.That(result.UpdatedText!, Contains.Substring("_ => 20"));
+        Assert.That(result.UpdatedText, Contains.Substring("x switch"));
+        Assert.That(result.UpdatedText, Contains.Substring("1 => 10"));
+        Assert.That(result.UpdatedText, Contains.Substring("_ => 20"));
     }
 
     [Test]
@@ -463,7 +463,7 @@ public class C
         var source = "public class C { global::System.String s; }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
         var result = await _styleEngine.SimplifyAllNamesAsync("C.cs");
-        Assert.That(result.UpdatedText!, Contains.Substring("System.String s;"));
+        Assert.That(result.UpdatedText, Contains.Substring("System.String s;"));
         Assert.That(result.UpdatedText, Does.Not.Contain("global::"));
     }
 }

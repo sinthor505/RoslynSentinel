@@ -52,7 +52,7 @@ public class Service
 
         Assert.That(result.UpdatedText, Does.Contain("ValueTask<int>"),
             "Method returning Task<int> with 1 await should be converted to ValueTask<int>.");
-        Assert.That(result.UpdatedText!, Does.Not.StartWith("// WARNING:"),
+        Assert.That(result.UpdatedText, Does.Not.StartWith("// WARNING:"),
             "Single-await method should not trigger a warning.");
     }
 
@@ -152,7 +152,7 @@ public class Service
         // Should return source unchanged (not Task return type -> no conversion)
         Assert.That(result.UpdatedText, Does.Contain("ValueTask<int>"),
             "Already-ValueTask method should be returned as-is.");
-        Assert.That(result.UpdatedText!, Does.Not.StartWith("// WARNING:"),
+        Assert.That(result.UpdatedText, Does.Not.StartWith("// WARNING:"),
             "Already-ValueTask method should not produce a warning.");
     }
 

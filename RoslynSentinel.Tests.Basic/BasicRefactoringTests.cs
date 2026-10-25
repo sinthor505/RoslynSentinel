@@ -160,7 +160,7 @@ public class Foo { }
         var result = await _basicRefactoringEngine.AddUsingDirectiveAsync("Foo.cs", "System.Linq");
 
         // Should not duplicate
-        var count = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText!, "using System\\.Linq").Count;
+        var count = System.Text.RegularExpressions.Regex.Matches(result.UpdatedText, "using System\\.Linq").Count;
         Assert.That(count, Is.EqualTo(1), "Duplicate using directive should not be added.");
     }
 
@@ -245,8 +245,8 @@ public class OrderService
 
         Assert.That(result.UpdatedText, Does.Contain("/// Creates a new order and returns it."));
         Assert.That(result.UpdatedText, Does.Not.Contain("<summary><summary>"));
-        Assert.That(Regex.Matches(result.UpdatedText!, "<summary>").Count, Is.EqualTo(1));
-        Assert.That(Regex.Matches(result.UpdatedText!, "</summary>").Count, Is.EqualTo(1));
+        Assert.That(Regex.Matches(result.UpdatedText, "<summary>").Count, Is.EqualTo(1));
+        Assert.That(Regex.Matches(result.UpdatedText, "</summary>").Count, Is.EqualTo(1));
     }
 
     [Test]
@@ -262,8 +262,8 @@ public class Widget { }
 
         Assert.That(result.UpdatedText, Does.Contain("/// A reusable widget."));
         Assert.That(result.UpdatedText, Does.Not.Contain("<summary><summary>"));
-        Assert.That(Regex.Matches(result.UpdatedText!, "<summary>").Count, Is.EqualTo(1));
-        Assert.That(Regex.Matches(result.UpdatedText!, "</summary>").Count, Is.EqualTo(1));
+        Assert.That(Regex.Matches(result.UpdatedText, "<summary>").Count, Is.EqualTo(1));
+        Assert.That(Regex.Matches(result.UpdatedText, "</summary>").Count, Is.EqualTo(1));
     }
 
     [Test]
@@ -279,8 +279,8 @@ public class Widget { }
 
         Assert.That(result.UpdatedText, Does.Contain("/// A reusable widget."));
         Assert.That(result.UpdatedText, Does.Not.Contain("<summary><summary>"));
-        Assert.That(Regex.Matches(result.UpdatedText!, "<summary>").Count, Is.EqualTo(1));
-        Assert.That(Regex.Matches(result.UpdatedText!, "</summary>").Count, Is.EqualTo(1));
+        Assert.That(Regex.Matches(result.UpdatedText, "<summary>").Count, Is.EqualTo(1));
+        Assert.That(Regex.Matches(result.UpdatedText, "</summary>").Count, Is.EqualTo(1));
     }
 
     [Test]
@@ -522,7 +522,7 @@ public enum OrderStatus
         // BasicRefactoringEngine methods read from the workspace's current solution rather than each
         // other's return values -> in the real tool layer, RefactoringStructuralTools writes
         // UpdatedText back into the workspace between calls, so mirror that here.
-        SetSource(added.UpdatedText!, "OrderStatus.cs");
+        SetSource(added.UpdatedText, "OrderStatus.cs");
 
         var viewed = await _basicRefactoringEngine.GetSummaryCommentAsync("OrderStatus.cs", "Shipped");
         Assert.That(viewed.Outcome, Is.EqualTo(EditOutcome.Modified));
@@ -733,9 +733,9 @@ public class MyClass
 
         var result = await _basicRefactoringEngine.WrapInRegionAsync("MyClass.cs", 5, 5, "Methods");
 
-        var regionIdx = result.UpdatedText!.IndexOf("#region Methods", StringComparison.Ordinal);
-        var runIdx = result.UpdatedText!.IndexOf("public void Run()", StringComparison.Ordinal);
-        var endRegionIdx = result.UpdatedText!.IndexOf("#endregion", StringComparison.Ordinal);
+        var regionIdx = result.UpdatedText.IndexOf("#region Methods", StringComparison.Ordinal);
+        var runIdx = result.UpdatedText.IndexOf("public void Run()", StringComparison.Ordinal);
+        var endRegionIdx = result.UpdatedText.IndexOf("#endregion", StringComparison.Ordinal);
 
         Assert.That(regionIdx, Is.LessThan(runIdx), "#region should precede the method.");
         Assert.That(runIdx, Is.LessThan(endRegionIdx), "#endregion should follow the method.");

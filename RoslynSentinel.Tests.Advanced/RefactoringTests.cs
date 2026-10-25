@@ -109,8 +109,8 @@ public class RefactoringTests
         var source = "public static class Ext { public static void M(this string s) { } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
         var result = await new LogicSimplificationEngine(_workspaceManager).ExtensionToStaticAsync("Ext.cs", "M");
-        Assert.That(result.UpdatedText!, Contains.Substring("public static void M(string s)"));
-        Assert.That(result.UpdatedText!, Does.Not.Contain("this string"));
+        Assert.That(result.UpdatedText, Contains.Substring("public static void M(string s)"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("this string"));
     }
 
     [Test]
@@ -120,7 +120,7 @@ public class RefactoringTests
         var source = "public static class Ext { public static void M(string s) { } }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
         var result = await new LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M");
-        Assert.That(result.UpdatedText!, Contains.Substring("public static void M(this string s)"));
+        Assert.That(result.UpdatedText, Contains.Substring("public static void M(this string s)"));
     }
 
     [Test]
@@ -132,9 +132,9 @@ public class RefactoringTests
     {
         _workspaceManager.SetTestSolution(CreateSolution(source, "Ext.cs"));
         var result = await new LogicSimplificationEngine(_workspaceManager).ConvertStaticToExtensionAsync("Ext.cs", "M");
-        Assert.That(result.UpdatedText!, Does.Contain(expectedDeclaration));
-        Assert.That(result.UpdatedText!, Does.Not.Contain("partial static"));
-        var syntaxErrors = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(result.UpdatedText!)
+        Assert.That(result.UpdatedText, Does.Contain(expectedDeclaration));
+        Assert.That(result.UpdatedText, Does.Not.Contain("partial static"));
+        var syntaxErrors = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(result.UpdatedText)
             .GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .Select(d => d.Id)
@@ -150,8 +150,8 @@ public class RefactoringTests
         var source = "public class C { private const int X = 42; public int M() => X; }";
         _workspaceManager.SetTestSolution(CreateSolution(source, "C.cs"));
         var result = await new StructuralRefactoringEngine(_workspaceManager).InlineFieldAsync("C.cs", "X");
-        Assert.That(result.UpdatedText!, Contains.Substring("=> 42;"));
-        Assert.That(result.UpdatedText!, Does.Not.Contain("const int X"));
+        Assert.That(result.UpdatedText, Contains.Substring("=> 42;"));
+        Assert.That(result.UpdatedText, Does.Not.Contain("const int X"));
     }
 
     [Test]

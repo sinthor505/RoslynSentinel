@@ -195,7 +195,7 @@ class C {
 ");
         var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseSpanForParsingAsync("Test.cs", "Process");
         Assert.That(result.UpdatedText, Does.Not.Contain(".Substring("), "All Substring calls should be converted");
-        Assert.That(result.UpdatedText!.Split("AsSpan").Length - 1, Is.EqualTo(2), "Should have 2 AsSpan calls");
+        Assert.That(result.UpdatedText.Split("AsSpan").Length - 1, Is.EqualTo(2), "Should have 2 AsSpan calls");
     }
 
     [Test]

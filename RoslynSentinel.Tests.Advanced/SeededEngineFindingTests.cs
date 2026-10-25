@@ -69,7 +69,7 @@ public class SeededEngineFindingTests
             .MakeClassImmutableAsync("Test.cs", "Holder");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        var text = result.UpdatedText!;
+        var text = result.UpdatedText;
         Assert.That(text, Does.Contain("readonly string name"));
         Assert.That(text, Does.Contain("readonly int count"));
         Assert.That(text, Does.Contain("readonly bool flag"));
@@ -150,7 +150,7 @@ public class SeededEngineFindingTests
         var result = await engine.GenerateCallTreeAsync("Test.cs", "Chain.A");
 
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified));
-        var lines = result.UpdatedText!.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var lines = result.UpdatedText.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         Assert.That(lines, Is.EqualTo(new[] { "- void Chain.A()", "- void Chain.B()", "- void Chain.C()" }));
         Assert.That(result.UpdatedText, Does.Contain("  - void Chain.B()"), "B must be indented one level under A.");
         Assert.That(result.UpdatedText, Does.Contain("    - void Chain.C()"), "C must be indented two levels under A.");

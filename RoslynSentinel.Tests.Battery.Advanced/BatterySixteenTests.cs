@@ -108,8 +108,8 @@ public class Calc
 }";
         _mgr.SetTestSolution(TestSolutionBuilder.CreateSolutionWithProject("TestProj", [("Calc.cs", source)]));
         var result = await new StructuralRefactoringEngine(_mgr).InlineFieldAsync("Calc.cs", "_factor");
-        Assert.That(result.UpdatedText!, Does.Not.StartWith("// ERROR:"), "valid field should not return error comment");
-        Assert.That(result.UpdatedText!, Does.Contain("2"), "inlined value should appear in output");
+        Assert.That(result.UpdatedText, Does.Not.StartWith("// ERROR:"), "valid field should not return error comment");
+        Assert.That(result.UpdatedText, Does.Contain("2"), "inlined value should appear in output");
     }
 }
 

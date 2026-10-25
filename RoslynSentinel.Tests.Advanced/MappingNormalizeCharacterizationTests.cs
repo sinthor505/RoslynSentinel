@@ -78,7 +78,7 @@ public class MappingNormalizeCharacterizationTests
         _workspaceManager.SetTestSolution(solution);
         var result = await _engine.GenerateMappingAsync("Models.cs", "SourceDto", "DestEntity");
         Assert.That(result.Outcome, Is.EqualTo(EditOutcome.Modified), result.Message);
-        return result.UpdatedText!;
+        return result.UpdatedText;
     }
 
     [Test]

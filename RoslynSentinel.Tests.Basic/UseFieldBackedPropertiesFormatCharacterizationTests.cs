@@ -144,7 +144,7 @@ public class UseFieldBackedPropertiesFormatCharacterizationTests
 
         var result = await _engine.UseFieldBackedPropertiesAsync("Entity.cs");
 
-        Assert.That(result.UpdatedText!.Replace("\r\n", ""), Does.Not.Contain("\n"));
+        Assert.That(result.UpdatedText.Replace("\r\n", ""), Does.Not.Contain("\n"));
     }
 
     [Test]
