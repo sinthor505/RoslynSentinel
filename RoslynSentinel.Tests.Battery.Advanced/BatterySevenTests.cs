@@ -440,7 +440,7 @@ public class MathHelper
         var result = await _memberRefactoringEngine.SortMembersAsync("Order.cs", "Order");
         Assert.That(result.Outcome, Is.EqualTo(RoslynSentinel.Common.EditOutcome.Modified));
         // TODO assert member order in UpdatedText once the sort key for Order.cs members is confirmed
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Empty);
     }
 
     // --- ExtractMethod ---

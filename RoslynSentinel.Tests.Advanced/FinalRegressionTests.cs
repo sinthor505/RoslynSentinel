@@ -104,7 +104,6 @@ public class FinalRegressionTests
         var doc = (await _workspaceManager.GetSolutionAsync(ReadSource.Committed, CancellationToken.None)).Projects.First().Documents.First();
         var filePath = doc.FilePath ?? "Test.cs";
         var result = await new StructuralRefactoringEngine(_workspaceManager).IntroduceParameterObjectAsync(filePath, "Process");
-        Assert.That(result.UpdatedText, Is.Not.Null);
         var classStart = result.UpdatedText.IndexOf("class Processor", StringComparison.Ordinal);
         Assert.That(classStart, Is.GreaterThanOrEqualTo(0), "Class Processor should still be present");
         Assert.That(result.UpdatedText.Substring(classStart), Does.Contain("Process(ProcessParameters request"), "Class implementation should take the parameter object");

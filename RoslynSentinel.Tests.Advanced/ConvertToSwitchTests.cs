@@ -63,7 +63,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
         Assert.That(result.UpdatedText, Does.Contain("case 1:"), "Should contain case 1");
         Assert.That(result.UpdatedText, Does.Contain("case 2:"), "Should contain case 2");
@@ -99,7 +99,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
         Assert.That(result.UpdatedText, Does.Contain("case"), "Should contain case statements");
     }
@@ -134,7 +134,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
     }
 
@@ -170,7 +170,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
         Assert.That(result.UpdatedText, Does.Contain("default:"), "Should contain default case");
     }
@@ -203,7 +203,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
         // Should not have default if no else clause
         var switchStart = result.UpdatedText.IndexOf("switch");
@@ -241,7 +241,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
     }
 
@@ -278,7 +278,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
     }
 
@@ -312,7 +312,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
         Assert.That(result.UpdatedText, Does.Contain("int"), "Should preserve int type");
     }
@@ -349,7 +349,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
         Assert.That(result.UpdatedText, Does.Contain("case 200:"), "Should contain case 200");
     }
@@ -507,7 +507,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
         Assert.That(result.UpdatedText, Does.Contain("return"), "Should preserve return statements");
     }
@@ -540,7 +540,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
         Assert.That(result.UpdatedText, Does.Contain("throw"), "Should preserve throw statements");
     }
@@ -573,7 +573,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
     }
 
@@ -638,7 +638,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement in nested block");
     }
 
@@ -665,7 +665,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
         Assert.That(result.UpdatedText, Does.Contain("case 1:"), "Should handle multiple cases");
     }
@@ -698,7 +698,7 @@ public class ConvertToSwitchTests
         
         var result = await _logicOptimizationEngine.ConvertToSwitchAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("switch"), "Should contain switch statement");
         Assert.That(result.UpdatedText, Does.Contain("case 1:"), "Should handle inverted comparisons");
     }

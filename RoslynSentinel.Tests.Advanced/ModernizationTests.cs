@@ -208,7 +208,7 @@ public class C
         Assert.That(result.UpdatedText, Does.Contain("DoWork"),
             "Already-braced code should still contain the method call.");
         // Count open braces -> should not have extra ones
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty,
+        Assert.That(result.UpdatedText, Is.Not.Empty,
             "Result should be non-empty.");
     }
 
@@ -262,7 +262,7 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("is null"), "Should convert to pattern matching 'is null'");
     }
 
@@ -286,7 +286,7 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("is null"), "Should convert reversed null check to pattern");
     }
 
@@ -312,7 +312,7 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         var countOfIsNull = result.UpdatedText.Split(new[] { "is null" }, StringSplitOptions.None).Length - 1;
         Assert.That(countOfIsNull, Is.GreaterThanOrEqualTo(2), "Should convert both null checks");
     }
@@ -364,7 +364,7 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         var countOfIsNull = result.UpdatedText.Split(new[] { "is null" }, StringSplitOptions.None).Length - 1;
         Assert.That(countOfIsNull, Is.GreaterThanOrEqualTo(2), "Should convert nested null checks");
     }
@@ -412,7 +412,7 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("is null"), "Should convert null check");
     }
 
@@ -433,7 +433,7 @@ public class C
         
         var result = await _modernEngine.ConvertToPatternAsync("Test.cs");
         
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return transformed code");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return transformed code");
         Assert.That(result.UpdatedText, Does.Contain("is null"), "Should convert single-line null check");
     }
 

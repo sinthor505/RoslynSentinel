@@ -414,7 +414,7 @@ public class Math
     public int Double(int x) => Add(x, x);
 }", "Math.cs");
         var tree = await _antiPatternEngine.GenerateCallTreeAsync("Math.cs", "Double");
-        Assert.That(tree.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(tree.UpdatedText, Is.Not.Empty);
         Assert.That(tree.UpdatedText, Does.Contain("Double"), "Root method must appear in call tree.");
         Assert.That(tree.UpdatedText, Does.Contain("Add"), "Direct callee Add must appear in call tree.");
     }

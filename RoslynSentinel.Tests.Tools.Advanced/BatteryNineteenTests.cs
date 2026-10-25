@@ -255,7 +255,7 @@ public interface IOrderRepository
     {
         SetSource(PocoSource, "Order.cs");
         var result = await _apiGenerationEngine.AddValidationToPocoAsync("Order.cs", "Order");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Empty);
     }
 
     [Test]
@@ -293,7 +293,7 @@ public interface IOrderRepository
 ";
         SetSource(source, "Order.cs");
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Order.cs", "Order", "IOrderRepository");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Empty);
     }
 
     [Test]
@@ -311,7 +311,7 @@ public interface IOrderRepository
     {
         SetSource(PocoSource, "Order.cs");
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Order.cs", "OrderId", "ToFullProperty");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Empty);
     }
 
     [Test]

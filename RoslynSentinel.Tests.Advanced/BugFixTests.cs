@@ -570,7 +570,7 @@ public class Data : IData
 }";
         SetSource(code, "Data.cs");
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Data.cs", "Data", "IData");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return implementation");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return implementation");
         Assert.That(result.UpdatedText, Does.Contain("public string Name"), "Should generate Name property stub");
         Assert.That(result.UpdatedText, Does.Contain("public int Count"), "Should generate Count property stub");
     }
@@ -593,7 +593,7 @@ public class Service : IService
 }";
         SetSource(code, "Service.cs");
         var result = await _codeGenerationEngine.ImplementInterfaceAsync("Service.cs", "Service", "IService");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return implementation");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return implementation");
         // Should contain at least Method2 and Method3
         Assert.That(result.UpdatedText, Does.Contain("public void Method2"), "Should generate missing Method2");
         Assert.That(result.UpdatedText, Does.Contain("public void Method3"), "Should generate missing Method3");
@@ -729,7 +729,7 @@ public class Base
 }";
         SetSource(code, "Base.cs");
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Base.cs", "Name", "ToFullProperty");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return converted property");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should return converted property");
         Assert.That(result.UpdatedText, Does.Contain("virtual"), "Virtual modifier should be preserved in property conversion");
     }
 
@@ -751,7 +751,7 @@ public class Derived : Base
 }";
         SetSource(code, "Properties.cs");
         var result = await _codeGenerationEngine.ConvertPropertySafeAsync("Properties.cs", "Value", "ToFullProperty", "public new string Value");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should convert property");
+        Assert.That(result.UpdatedText, Is.Not.Empty, "Should convert property");
         Assert.That(result.UpdatedText, Does.Contain("Value"), "Should handle property with same name in multiple classes");
     }
 
@@ -2152,7 +2152,7 @@ public class TargetDto
 }";
             SetSource(code, "User.cs");
             var result = await new ApiGenerationEngine(_workspaceManager).AddValidationToPocoAsync("User.cs", "User");
-            Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return non-empty result");
+            Assert.That(result.UpdatedText, Is.Not.Empty, "Should return non-empty result");
             // Should have using
             Assert.That(result.UpdatedText, Does.Contain("using System.ComponentModel.DataAnnotations"), "Should add using directive");
             // Should have actual [Required] attributes
@@ -3376,7 +3376,7 @@ public class MyClass
 }";
                 SetSource(code, "MyClass.cs");
                 var result = await _advancedStructuralEngine.IntroduceFieldAsync("MyClass.cs", contextSnippet: "this.Value", newFieldName: "_storedValue");
-                Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty, "Should return updated code");
+                Assert.That(result.UpdatedText, Is.Not.Empty, "Should return updated code");
                 // Field should be initialized with the value, not a parameter
                 Assert.That(result.UpdatedText, Does.Contain("private readonly"), "Should create a field with appropriate scope");
                 Assert.That(result.UpdatedText, Does.Contain("_storedValue"), "Should reference the new field");

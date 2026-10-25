@@ -126,7 +126,7 @@ public class Guard
     }
 }");
         var result = await new SyntaxModernizationEngine(_workspaceManager, new SentinelConfiguration()).UseThrowExpressionsAsync("Test.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Empty);
         Assert.That(result.UpdatedText, Does.Contain("Validate"), "Method name should be preserved");
     }
 }
@@ -320,7 +320,7 @@ public class Checker
     }
 }");
         var result = await _engine.UseNullPropagationAsync("Test.cs");
-        Assert.That(result.UpdatedText, Is.Not.Null.And.Not.Empty);
+        Assert.That(result.UpdatedText, Is.Not.Empty);
         Assert.That(result.UpdatedText, Does.Contain("Check"), "Method name should be preserved in stub output");
     }
 }
