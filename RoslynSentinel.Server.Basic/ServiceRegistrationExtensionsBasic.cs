@@ -1141,6 +1141,14 @@ public static class RoslynSentinelServiceExtensionsBasic
                     if (legacySearchNotes is not null)
                         aliasNotes = aliasNotes is null ? legacySearchNotes : [.. aliasNotes, .. legacySearchNotes];
 
+                    // Value-translating rewrites (grep/Read-shaped arguments) run after the renaming passes above
+                    // and before the wrap/coerce passes. The solution root lets a text-mode Search path become a fileGlob.
+                    var solutionRoot = context.Server.Services?.GetService<PersistentWorkspaceManager>()?.GetSolutionRoot();
+                    var rewriteNotes = ToolArgumentValidator.ApplyArgumentRewrites(
+                        context.Server, context.Params?.Name, context.Params?.Arguments, solutionRoot);
+                    if (rewriteNotes is not null)
+                        aliasNotes = aliasNotes is null ? rewriteNotes : [.. aliasNotes, .. rewriteNotes];
+
                     var wrapNotes = ToolArgumentValidator.WrapFlatBatchParameters(
                         context.Server, context.Params?.Name, context.Params?.Arguments);
                     if (wrapNotes is not null)
@@ -1161,7 +1169,10 @@ public static class RoslynSentinelServiceExtensionsBasic
                             Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = validationError }],
                             IsError = true,
                         };
-                        AppendAliasNotes(rejection, aliasNotes);
+                        // The notes describe corrections made to the arguments, but nothing ran: say so before them.
+                        AppendAliasNotes(rejection, aliasNotes is { Count: > 0 }
+                            ? ["The notes below describe corrections already made to your call. The call did not run because of the unknown parameter(s) above; resend it with the corrected names.", .. aliasNotes]
+                            : aliasNotes);
                         return rejection;
                     }
                 }

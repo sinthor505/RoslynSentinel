@@ -32,8 +32,10 @@ public class WorkspaceReadNavigationTools
     public Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSourceTool(
         [Description(ToolParams.Reason)] ToolCallReason reason,
         [Consumes(DataTag.SourceFilepath, required: true)] string filePath, [Consumes(DataTag.MethodName, required: true)] string methodName,
+        // Optional on purpose: every existing call names a method that is unique in its file and passes no container.
+        [Consumes(DataTag.SymbolName, required: false)][Description("Optional. Narrows the search to the type that declares the method (generic arguments optional: 'Box' or 'Box<T>'; 'Outer.Inner' means Inner). A name that is still declared more than once returns an Ambiguous error listing every candidate; the first match is never returned.")] string? containerName = null,
         CancellationToken cancellationToken = default)
-        => _impl.GetMethodSource(reason, filePath, methodName, cancellationToken);
+        => _impl.GetMethodSource(reason, filePath, methodName, containerName, cancellationToken);
 
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "GetFileOutline")]

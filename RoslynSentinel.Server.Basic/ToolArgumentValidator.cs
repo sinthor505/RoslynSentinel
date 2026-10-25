@@ -165,6 +165,271 @@ public static class ToolArgumentValidator
         return bestDistance <= tolerance ? best : null;
     }
 
+    /// <summary>
+    /// Builds the suggestion sentence for one unknown parameter name, or null when nothing is worth suggesting.
+    /// Tried in order: (1) the alias tables (<see cref="ParameterAliases"/> for this tool, then
+    /// <see cref="GlobalParameterAliases"/>) when the target is declared; if the call already passes the target, the
+    /// sentence says to remove the unknown name instead of suggesting the name the caller already used; (2) the
+    /// Levenshtein-nearest declared name that the call does not already supply (so <c>reason2</c> next to
+    /// <c>reason</c> is not told to mean <c>reason</c>); (3) a strictly unique best camelCase/underscore token overlap
+    /// (<c>testFilterExpressionX</c> -> <c>filter</c>); (4) a unique substring containment either way for names of at
+    /// least four characters. Every sentence ends with a trailing space so the caller can append more text.
+    /// </summary>
+    private static string? SuggestForUnknown(
+        string toolName,
+        string unknown,
+        System.Collections.Generic.IEnumerable<string> declared,
+        System.Collections.Generic.ICollection<string> supplied)
+    {
+        var declaredList = declared.ToList();
+
+        // 1. Alias tables, with the same lookup order and case rules as ApplyParameterAliases.
+        string? target = null;
+        if (ParameterAliases.TryGetValue(toolName, out var toolAliases) && toolAliases.TryGetValue(unknown, out var perToolTarget))
+            target = perToolTarget;
+        else if (GlobalParameterAliases.TryGetValue(unknown, out var globalTarget))
+            target = globalTarget;
+
+        if (target is not null && declaredList.Contains(target))
+        {
+            return supplied.Contains(target)
+                ? $"'{unknown}' means '{target}', which this call already passes; remove '{unknown}'. "
+                : $"Did you mean '{target}' instead of '{unknown}'? ";
+        }
+
+        // Names the call already passes are never a useful suggestion for a different name.
+        var open = declaredList.Where(d => !supplied.Contains(d)).ToList();
+
+        // 2. Nearest by edit distance.
+        var closest = SuggestClosest(unknown, open);
+        if (closest is not null)
+            return $"Did you mean '{closest}' instead of '{unknown}'? ";
+
+        // 3. Token overlap with a strictly unique best candidate.
+        var unknownTokens = NameTokens(unknown);
+        if (unknownTokens.Count > 0)
+        {
+            string? bestByTokens = null;
+            var bestScore = 0;
+            var tied = false;
+            foreach (var candidate in open)
+            {
+                var score = NameTokens(candidate).Count(unknownTokens.Contains);
+                if (score > bestScore)
+                {
+                    bestByTokens = candidate;
+                    bestScore = score;
+                    tied = false;
+                }
+                else if (score == bestScore && score > 0)
+                {
+                    tied = true;
+                }
+            }
+
+            if (bestByTokens is not null && !tied)
+                return $"Did you mean '{bestByTokens}' instead of '{unknown}'? ";
+        }
+
+        // 4. Substring containment either way, for names long enough that a hit is not coincidence.
+        if (unknown.Length >= 4)
+        {
+            var contained = open
+                .Where(c => c.Length >= 4
+                    && (c.Contains(unknown, StringComparison.OrdinalIgnoreCase)
+                        || unknown.Contains(c, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+            if (contained.Count == 1)
+                return $"Did you mean '{contained[0]}' instead of '{unknown}'? ";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Splits a parameter name into lower-case tokens at underscores, case humps and letter/digit boundaries
+    /// (<c>testFilterExpressionX</c> -> test, filter, expression). Drops one-letter tokens, digit-only tokens and the
+    /// generic tokens <c>name</c>, <c>value</c> and <c>id</c>, which would make unrelated names look alike.
+    /// </summary>
+    private static System.Collections.Generic.HashSet<string> NameTokens(string name)
+    {
+        var tokens = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var stopTokens = new[] { "name", "value", "id" };
+        var current = new System.Text.StringBuilder();
+
+        void Flush()
+        {
+            if (current.Length >= 2 && !char.IsDigit(current[0]) && Array.IndexOf(stopTokens, current.ToString().ToLowerInvariant()) < 0)
+                tokens.Add(current.ToString());
+            current.Clear();
+        }
+
+        for (var i = 0; i < name.Length; i++)
+        {
+            var ch = name[i];
+            if (!char.IsLetterOrDigit(ch))
+            {
+                Flush();
+                continue;
+            }
+
+            if (current.Length > 0)
+            {
+                var previous = current[^1];
+                var humpStart = char.IsUpper(ch) && !char.IsUpper(previous);
+                var digitBoundary = char.IsDigit(ch) != char.IsDigit(previous);
+                if (humpStart || digitBoundary)
+                    Flush();
+            }
+
+            current.Append(ch);
+        }
+
+        Flush();
+        return tokens;
+    }
+
+    /// <summary>
+    /// What a hint in <see cref="UnknownParameterHints"/> may use to build its text: the scalar values the call
+    /// supplied (rendered, at most 40 characters, looked up by parameter name) and whether a tool is registered
+    /// right now. The registration check is evaluated at reject time so on-demand toolsets are respected.
+    /// </summary>
+    private readonly record struct UnknownParameterContext(
+        System.Collections.Generic.IReadOnlyDictionary<string, string> Values,
+        System.Func<string, bool> IsToolRegistered)
+    {
+        /// <summary>The caller's rendered value for <paramref name="parameter"/>, or <paramref name="placeholder"/> when it was not supplied.</summary>
+        public string ValueOr(string parameter, string placeholder) =>
+            Values.TryGetValue(parameter, out var value) ? value : placeholder;
+    }
+
+    /// <summary>
+    /// Builds <see cref="UnknownParameterHints"/>: one short corrective sentence per (tool, unknown parameter) pair that
+    /// models repeatedly supply, naming a call that exists. A function returning an empty string means "no hint for this
+    /// value". Only names the rewrite and ignore layers left alone reach <see cref="Validate"/>, so these never repeat
+    /// something already handled.
+    /// </summary>
+    private static System.Collections.Generic.Dictionary<string, System.Func<UnknownParameterContext, string>> BuildUnknownParameterHints()
+    {
+        System.Func<UnknownParameterContext, string> lineRange = ctx =>
+            $"For a line range use ReadFile(filePath: {ctx.ValueOr("filePath", "<filePath>")}, startLine: ..., endLine: ...).";
+        System.Func<UnknownParameterContext, string> textPathUnmappable = _ =>
+            "The value could not be turned into a fileGlob (it must be a file or folder inside the solution, without '..'). In text mode restrict files with fileGlob ('Foo.cs', or 'MyProject/**').";
+        System.Func<UnknownParameterContext, string> textPathFilter = _ =>
+            "In text mode restrict files with fileGlob (bare filename 'Foo.cs', or 'MyProject/**'); filePath only pins symbol resolution.";
+        System.Func<UnknownParameterContext, string> previewsOnly = _ =>
+            "Search returns one-line previews and searches C# only. For surrounding lines use ReadFile(filePath: ..., startLine: ..., endLine: ...).";
+        System.Func<UnknownParameterContext, string> renameByDocCommentId = ctx =>
+            $"RenameSymbol targets a symbol by docCommentId. Get it with Search(mode: symbol, query: {ctx.ValueOr("symbolName", "<name>")}) and pass docCommentId, projectName, newName.";
+
+        return new System.Collections.Generic.Dictionary<string, System.Func<UnknownParameterContext, string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["CreateFile.content"] = ctx => "CreateFile only creates a seeded file and takes no content. " +
+                (ctx.IsToolRegistered("WriteFile")
+                    ? $"To create it with its full content use WriteFile(operation: CreateFile, filePath: {ctx.ValueOr("filePath", "<filePath>")}, content: ...)."
+                    : $"Create it with CreateFile, then add members with Member(operation: addMember, containerName: {ctx.ValueOr("typeName", "<typeName>")}, newMemberSource: ...)."),
+            ["GetMethodSource.maxLines"] = lineRange,
+            ["GetMethodSource.startLine"] = lineRange,
+            ["GetMethodSource.endLine"] = lineRange,
+            ["Search.path"] = textPathUnmappable,
+            ["Search.filePath"] = textPathUnmappable,
+            ["Search.filePathFilter"] = textPathFilter,
+            ["Search.pathFilter"] = textPathFilter,
+            ["Search.projectFilter"] = _ => "Use projectName for symbol/attribute/declaration modes; in text mode use fileGlob 'MyProject/**'.",
+            ["Search.contextLines"] = previewsOnly,
+            ["Search.type"] = previewsOnly,
+            ["RunTest.timeout"] = _ => "Use timeoutSeconds (seconds, not milliseconds).",
+            // fullBuild: true is rewritten to level: fullBuild; only false reaches here.
+            ["Build.fullBuild"] = ctx => ctx.Values.TryGetValue("fullBuild", out var value) && string.Equals(value, "false", StringComparison.OrdinalIgnoreCase)
+                ? "Build(level: fullBuild) writes the shared bin/; the default level fullBuildThrowaway builds without it."
+                : string.Empty,
+            ["RenameSymbol.symbolName"] = renameByDocCommentId,
+            ["RenameSymbol.filePath"] = renameByDocCommentId,
+            ["RenameSymbol.contextSnippet"] = renameByDocCommentId,
+        };
+    }
+
+    /// <summary>
+    /// Per-(tool, parameter) corrective text for unknown parameters, keyed <c>"Tool.param"</c> (case-insensitive).
+    /// Appended by <see cref="Validate"/> after the suggestion; see <see cref="GetUnknownParameterHint"/>.
+    /// </summary>
+    private static readonly System.Collections.Generic.Dictionary<string, System.Func<UnknownParameterContext, string>> UnknownParameterHints =
+        BuildUnknownParameterHints();
+
+    /// <summary>
+    /// True when the server's tool collection lists <paramref name="toolName"/> right now (the same lookup
+    /// <see cref="TryGetSchemaParameters"/> uses, deliberately not cached so on-demand toolsets are respected).
+    /// False when the server or collection is unavailable.
+    /// </summary>
+    private static bool IsToolRegistered(ModelContextProtocol.Server.McpServer? server, string toolName)
+    {
+        try
+        {
+            var tools = server?.ServerOptions?.ToolCollection;
+            if (tools is null)
+                return false;
+
+            foreach (var candidate in tools)
+            {
+                if (string.Equals(candidate.ProtocolTool.Name, toolName, StringComparison.Ordinal))
+                    return true;
+            }
+        }
+        catch (Exception)
+        {
+            // A hint is a convenience: treat any failure as "not registered".
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Returns the corrective hint for an unknown parameter, or null when the (tool, parameter) pair has none or the
+    /// hint does not apply to the supplied value. Scalar argument values are rendered (strings as-is, numbers and
+    /// booleans as JSON text) and truncated to 40 characters before a hint may quote them. Never throws.
+    /// </summary>
+    /// <param name="toolName">Tool being called.</param>
+    /// <param name="unknown">The unknown parameter name.</param>
+    /// <param name="arguments">The call's arguments (values are read, never changed).</param>
+    /// <param name="isToolRegistered">Whether a tool name is registered right now; lets a hint name only calls that exist.</param>
+    public static string? GetUnknownParameterHint(
+        string? toolName,
+        string unknown,
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments,
+        System.Func<string, bool> isToolRegistered)
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(toolName) || !UnknownParameterHints.TryGetValue($"{toolName}.{unknown}", out var hint))
+                return null;
+
+            var values = new System.Collections.Generic.Dictionary<string, string>(StringComparer.Ordinal);
+            if (arguments is not null)
+            {
+                foreach (var (key, element) in arguments)
+                {
+                    string? rendered = element.ValueKind switch
+                    {
+                        System.Text.Json.JsonValueKind.String => element.GetString(),
+                        System.Text.Json.JsonValueKind.Number or System.Text.Json.JsonValueKind.True or System.Text.Json.JsonValueKind.False => element.GetRawText(),
+                        _ => null,
+                    };
+                    if (rendered is null)
+                        continue;
+
+                    values[key] = rendered.Length > 40 ? rendered[..40] + "..." : rendered;
+                }
+            }
+
+            var text = hint(new UnknownParameterContext(values, isToolRegistered));
+            return string.IsNullOrEmpty(text) ? null : text;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Standard iterative two-row Levenshtein edit distance.</summary>
     private static int LevenshteinDistance(string a, string b)
     {
@@ -335,6 +600,11 @@ public static class ToolArgumentValidator
                 ["target"] = "ref",
                 ["commitHash"] = "ref",
                 ["branchName"] = "ref",
+                ["path"] = "paths",
+                ["filePath"] = "paths",
+                ["filePaths"] = "paths",
+                ["limit"] = "count",
+                ["commitish"] = "ref",
                 ["files"] = "paths",
             },
             ["GitRemote"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -349,6 +619,7 @@ public static class ToolArgumentValidator
                 ["newText"] = "newMemberSource",
                 ["newMemberCode"] = "newMemberSource",
                 ["memberSource"] = "newMemberSource",
+                ["memberCode"] = "newMemberSource",
                 ["className"] = "containerName",
             },
             ["TypedMember"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -392,6 +663,7 @@ public static class ToolArgumentValidator
                 ["maxItems"] = "limit",
                 ["maxRecords"] = "limit",
                 ["pageSize"] = "limit",
+                ["fullResultsId"] = "resultId",
             },
             ["Build"] = new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -407,7 +679,23 @@ public static class ToolArgumentValidator
             {
                 ["oldSnippet"] = "oldContent",
                 ["newSnippet"] = "newContent",
+                ["oldString"] = "oldContent",
+                ["newString"] = "newContent",
             },
+        };
+
+    /// <summary>
+    /// Aliases that apply to every tool that declares the target, for names that no tool declares and
+    /// a model supplies by habit (<c>file_path</c> is the built-in Read/Edit/Write habit). Same bar as
+    /// <see cref="ParameterAliases"/>: only names measured in real rejections (scripts/Get-UnknownParameterReport.ps1,
+    /// SquashesToDeclared column), and only when the target means the same thing on every tool that declares it.
+    /// A per-tool entry in <see cref="ParameterAliases"/> for the same key wins. The skip rules live in
+    /// <see cref="ApplyParameterAliases"/>: a tool that does not declare the target is never renamed.
+    /// </summary>
+    public static readonly System.Collections.Generic.IReadOnlyDictionary<string, string> GlobalParameterAliases =
+        new System.Collections.Generic.Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["file_path"] = "filePath",
         };
 
     /// <summary>
@@ -499,7 +787,8 @@ public static class ToolArgumentValidator
 
     /// <summary>
     /// Rewrites <paramref name="arguments"/> in place, renaming each key listed in
-    /// <see cref="ParameterAliases"/> for this tool to its declared parameter, and returns one
+    /// <see cref="ParameterAliases"/> for this tool (or in <see cref="GlobalParameterAliases"/>,
+    /// which applies to every tool) to its declared parameter, and returns one
     /// short note per rename (or <see langword="null"/> when nothing changed) so the caller can tell
     /// the model which name is the real one.
     /// <para>
@@ -519,8 +808,8 @@ public static class ToolArgumentValidator
         if (arguments is null || arguments.Count == 0 || string.IsNullOrEmpty(toolName))
             return null;
 
-        if (!ParameterAliases.TryGetValue(toolName, out var aliases))
-            return null;
+        // Per-tool aliases are optional: a tool with none can still take a global alias such as file_path.
+        ParameterAliases.TryGetValue(toolName, out var aliases);
 
         var schema = TryGetSchemaParameters(server, toolName);
         if (schema is null)
@@ -532,7 +821,11 @@ public static class ToolArgumentValidator
         System.Collections.Generic.List<(string From, string To)>? renames = null;
         foreach (var key in arguments.Keys)
         {
-            if (declared.Contains(key) || !aliases.TryGetValue(key, out var canonical))
+            // Per-tool entry first, then the global table; a key in neither is not an alias.
+            var canonical = aliases is not null && aliases.TryGetValue(key, out var perToolCanonical) ? perToolCanonical
+                : GlobalParameterAliases.TryGetValue(key, out var globalCanonical) ? globalCanonical
+                : null;
+            if (declared.Contains(key) || canonical is null)
                 continue;
 
             if (!declared.Contains(canonical) || arguments.ContainsKey(canonical))
@@ -621,6 +914,38 @@ public static class ToolArgumentValidator
         {
             $"Note: 'referencesKind' is no longer a parameter of Search; mode 'references' with referencesKind '{kindValue}' was treated as mode '{mapped}'. Use mode '{mapped}' in future calls.",
         };
+    }
+
+    /// <summary>
+    /// Runs the value-translating rewrite engine (<see cref="ToolArgumentRewrites.Apply"/>) against the
+    /// tool's emitted schema: drops benign-ignorable undeclared arguments and translates grep/Read-shaped
+    /// ones (<c>head_limit</c>, <c>offset</c>/<c>limit</c>, text-mode <c>path</c>, ...) so the call can run.
+    /// Returns one note per change, or <see langword="null"/> when nothing changed, the tool or schema cannot
+    /// be resolved, or anything throws: a throw here would skip <see cref="Validate"/> in the filter, so this
+    /// never throws.
+    /// </summary>
+    public static System.Collections.Generic.IReadOnlyList<string>? ApplyArgumentRewrites(
+        ModelContextProtocol.Server.McpServer? server,
+        string? toolName,
+        System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement>? arguments,
+        string? solutionRoot)
+    {
+        try
+        {
+            if (arguments is null)
+                return null;
+
+            var schema = TryGetSchemaParameters(server, toolName);
+            if (schema is null)
+                return null;
+
+            return ToolArgumentRewrites.Apply(toolName, arguments, schema.Value.All, schema.Value.Properties, solutionRoot);
+        }
+        catch (Exception)
+        {
+            // A rewrite is a convenience, never a gate: on any failure leave the call to Validate.
+            return null;
+        }
     }
 
     /// <summary>
@@ -918,11 +1243,19 @@ public static class ToolArgumentValidator
                 builder.Append(string.Join(", ", unknown.Select(u => $"'{u}'")));
                 builder.Append(" for tool '").Append(toolName).Append("'. ");
 
+                var appendedHints = new System.Collections.Generic.HashSet<string>(StringComparer.Ordinal);
                 foreach (var name in unknown)
                 {
-                    var suggestion = SuggestClosest(name, declared);
-                    if (suggestion is not null)
-                        builder.Append($"Did you mean '{suggestion}' instead of '{name}'? ");
+                    // 'arguments.Keys' is the set of names the call already passes: a suggestion must not be one of them.
+                    var suggestionText = SuggestForUnknown(toolName ?? string.Empty, name, declared, arguments.Keys);
+                    if (suggestionText is not null)
+                        builder.Append(suggestionText);
+
+                    // A (tool, parameter) hint with a corrected call; names a tool only when it is registered right now.
+                    // Two unknown names can share one hint text (startLine/endLine): say it once.
+                    var hint = GetUnknownParameterHint(toolName, name, arguments, tool => IsToolRegistered(server, tool));
+                    if (hint is not null && appendedHints.Add(hint))
+                        builder.Append(hint).Append(' ');
                 }
 
                 builder.Append("This tool accepts only: ")

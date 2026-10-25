@@ -127,6 +127,150 @@ public static class SyntaxTargetResolver
     }
 
     /// <summary>
+    /// Returns the text after the last '.' that is outside angle brackets, so <c>Outer&lt;T&gt;.Inner&lt;U&gt;</c>
+    /// yields <c>Inner&lt;U&gt;</c>. Returns the whole trimmed name when there is no such dot, and an empty
+    /// string for a trailing dot.
+    /// </summary>
+    private static string LastSegment(string name)
+    {
+        var trimmed = name.Trim();
+        var depth = 0;
+        for (var i = trimmed.Length - 1; i >= 0; i--)
+        {
+            switch (trimmed[i])
+            {
+                case '>':
+                    depth++;
+                    break;
+                case '<':
+                    depth--;
+                    break;
+                case '.' when depth == 0:
+                    return trimmed[(i + 1)..];
+            }
+        }
+
+        return trimmed;
+    }
+
+    /// <summary>
+    /// Strict container match: true when <paramref name="actualTypeName"/> equals the last segment of
+    /// <paramref name="requestedContainer"/>, ignoring case and type-argument spelling.
+    /// </summary>
+    /// <remarks>
+    /// A dotted request is compared by its last segment only, so <c>Outer.Inner</c> matches a type named
+    /// <c>Inner</c>; the qualifier is not verified. A top-level declaration (null actual name) matches no container.
+    /// </remarks>
+    public static bool ContainingTypeMatches(string? actualTypeName, string requestedContainer)
+    {
+        var requested = LastSegment(requestedContainer);
+        if (actualTypeName is null || requested.Length == 0)
+        {
+            return false;
+        }
+
+        return NormalizeTypeName(actualTypeName).Equals(NormalizeTypeName(requested), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Narrows candidates to those whose containing type matches <paramref name="containerName"/> strictly.
+    /// A null or whitespace container returns the input unchanged.
+    /// </summary>
+    public static List<SyntaxNodeCandidate> FilterByContainingTypeStrict(List<SyntaxNodeCandidate> candidates, string? containerName)
+    {
+        if (string.IsNullOrWhiteSpace(containerName))
+        {
+            return candidates;
+        }
+
+        // Deliberate deviation from FilterByContainingType: this never falls back to the unfiltered
+        // candidates. A container the caller named must match, or the result is empty.
+        return candidates.Where(c => ContainingTypeMatches(c.ContainingTypeName, containerName)).ToList();
+    }
+
+    /// <summary>
+    /// Explains a strict container miss: names the types the file declares, where the member lives,
+    /// and a retry call per container, plus the exact line range to read.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="retryCallTemplate"/> is the whole call to retry, with placeholders <c>{file}</c>,
+    /// <c>{member}</c> and <c>{container}</c>. A top-level declaration drops its container argument.
+    /// Never throws for a bad <paramref name="containerName"/>.
+    /// </remarks>
+    public static (string Message, IReadOnlyList<AmbiguousCandidate> Candidates) BuildContainerMissDetail(
+        SyntaxNode root, SourceText sourceText, string memberName, string containerName, string filePath,
+        string retryCallTemplate, bool methodsOnly, bool includeTypeKinds = false)
+    {
+        var containerExists = root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>()
+            .Any(t => ContainingTypeMatches(t.Identifier.Text, containerName));
+
+        var listed = PreferNonInterfaceMember(ResolveCandidates(root, sourceText, memberName));
+        if (!includeTypeKinds)
+        {
+            listed = listed.Where(c => c.Kind is not (CandidateKind.Class or CandidateKind.Interface or CandidateKind.Struct or CandidateKind.Record or CandidateKind.Enum)).ToList();
+        }
+
+        if (methodsOnly)
+        {
+            listed = listed.Where(c => c.Kind is CandidateKind.Method or CandidateKind.Constructor).ToList();
+        }
+
+        var kindWord = methodsOnly ? "method or constructor" : includeTypeKinds ? "declaration" : "member";
+        var parts = new List<string>
+        {
+            containerExists
+                ? $"Type '{containerName}' declares no {kindWord} named '{memberName}' (searched the whole file '{filePath}'; type arguments optional, case ignored)."
+                : BuildContainerNotFoundMessage(root, containerName),
+        };
+
+        if (listed.Count > 0)
+        {
+            var entries = listed.Take(10).Select((c, i) =>
+            {
+                var label = c.ContainingTypeName is null ? $"(top level) {c.Preview}" : $"{c.ContainingTypeName}.{c.Preview}";
+                return $"{i + 1}. {label} - lines {c.StartLine}-{c.EndLine}";
+            });
+            var more = listed.Count > 10 ? $" (+{listed.Count - 10} more)" : string.Empty;
+            parts.Add($"'{memberName}' is declared in: {string.Join("; ", entries)}{more}.");
+        }
+        else
+        {
+            parts.Add($"No type in this file declares '{memberName}'; list the file's members with GetFileOutline(filePath: '{filePath}').");
+        }
+
+        string Expand(string container, bool topLevel)
+        {
+            var text = topLevel
+                ? System.Text.RegularExpressions.Regex.Replace(retryCallTemplate, @", \w+: '\{container\}'", string.Empty)
+                : retryCallTemplate;
+            return text.Replace("{file}", filePath).Replace("{member}", memberName).Replace("{container}", container);
+        }
+
+        if (listed.Count > 0)
+        {
+            var retries = listed
+                .Where(c => c.ContainingTypeName is not null)
+                .GroupBy(c => c.ContainingTypeName!)
+                .Where(g => g.Count() == 1)
+                .Take(3);
+            foreach (var group in retries)
+            {
+                parts.Add($"Retry {Expand(group.Key, false)}.");
+            }
+
+            var topLevel = listed.Where(c => c.ContainingTypeName is null).ToList();
+            if (topLevel.Count == 1)
+            {
+                parts.Add($"Retry {Expand(string.Empty, true)}; the declaration is top level, so omit the container.");
+            }
+
+            parts.Add($"To read exact lines: ReadFile(filePath: '{filePath}', startLine: {listed[0].StartLine}, endLine: {listed[0].EndLine}).");
+        }
+
+        return (string.Join(" ", parts), BuildDeclarationCandidates(listed, sourceText, filePath));
+    }
+
+    /// <summary>
     /// The one formatter for hint messages over a list of <see cref="SyntaxNodeCandidate"/> records,
     /// for every member, type and enum-member lookup. Reads the precomputed
     /// <see cref="SyntaxNodeCandidate.StartLine"/> and <see cref="SyntaxNodeCandidate.Preview"/> rather

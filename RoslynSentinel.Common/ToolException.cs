@@ -66,11 +66,14 @@ public sealed class ToolNotFoundException : ToolException
 {
     public override string ErrorCode => ToolErrorCode.NotFound;
 
-    public ToolNotFoundException(string message, string? missingTargetKind = null, string? missingTargetName = null, SnippetMatching.SnippetFailureDetail? snippet = null) : base(message)
+    /// <summary>Builds a not-found error; <paramref name="candidates"/> carries same-named candidates for structured retry hints when the throw site has them.</summary>
+    /// <param name="candidates">Candidates that made the lookup fail to pick one (for example same-named declarations); null when the throw site did not supply them.</param>
+    public ToolNotFoundException(string message, string? missingTargetKind = null, string? missingTargetName = null, SnippetMatching.SnippetFailureDetail? snippet = null, IReadOnlyList<AmbiguousCandidate>? candidates = null) : base(message)
     {
         MissingTargetKind = missingTargetKind;
         MissingTargetName = missingTargetName;
         Snippet = snippet;
+        Candidates = candidates;
     }
 
     /// <summary>What kind of target was not found ("document", "class", "interface", "member", ...); null when the throw site did not say.</summary>
@@ -79,11 +82,23 @@ public sealed class ToolNotFoundException : ToolException
     /// <summary>The name the caller supplied that did not resolve; null when the throw site did not supply it.</summary>
     public string? MissingTargetName { get; }
 
+    /// <summary>Candidates that made the lookup fail to pick one, for structured retry hints; null when the throw site did not supply them.</summary>
+    public IReadOnlyList<AmbiguousCandidate>? Candidates { get; }
+
     /// <summary>Set when the not-found cause is a snippet that did not match; null otherwise.</summary>
     public SnippetMatching.SnippetFailureDetail? Snippet { get; }
 
-    /// <summary>Snippet detail as the single structured-detail object; null when the not-found cause is not a snippet.</summary>
-    public override IReadOnlyList<object>? StructuredDetail => Snippet is null ? null : new object[] { Snippet };
+    /// <summary>Candidates (when set) followed by snippet detail (when set) as structured-detail objects; null when neither is set.</summary>
+    public override IReadOnlyList<object>? StructuredDetail
+    {
+        get
+        {
+            var detail = ToolErrorMapper.ToStructuredDetail(Candidates)?.ToList() ?? new List<object>();
+            if (Snippet is not null)
+                detail.Add(Snippet);
+            return detail.Count == 0 ? null : detail;
+        }
+    }
 }
 
 /// <summary>

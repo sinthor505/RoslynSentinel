@@ -11,6 +11,20 @@
   Results are de-duplicated by tool_use_id (a transcript line repeats the text in content and
   toolUseResult, and resumed sessions can repeat whole lines).
 
+  Matching: a tool_result with is_error true whose text contains either the singular form
+  "Unknown parameter 'x' for tool 'T'." or the plural form "Unknown parameters 'a', 'b' for tool 'T'."
+  (the match is anywhere in the text, so the echo-wrapped {"message": ...} form counts too). Lines are
+  pre-filtered with a cheap IndexOf before ConvertFrom-Json. A rejected call is counted once (by
+  tool_use_id); each unknown name is one token in the name table.
+
+  Baseline (docs/current/plans/plan_unknown_parameter_rejection_reduction.md, Problem and Evidence,
+  measured 2026-10-24 with -Since 2026-09-16 -Until 2026-10-25 -Weekly -ByAgentType -NoSchema):
+    388 distinct rejected calls (a few more after 2026-10-24 21:30 UTC), 276 from subagent transcripts,
+    142 at/after the 2026-10-05 cutover (102 of them subagent), 499 unknown-name tokens (plan figures).
+    Weekly (Sunday start): 09-27 184 (no journal); 10-04 45 / 5455 = 0.82%; 10-11 37 / 9096 = 0.41%;
+    10-18 68 / 15749 = 0.43%.
+    SquashesToDeclared is true only for file_path (15 tokens) in the baseline window.
+
   The suggestion is a heuristic, in decreasing confidence:
     server   - the server's own "Did you mean" text named it
     case     - differs only by case
@@ -37,6 +51,11 @@
 .PARAMETER NoSchema      Report against the historical "accepts only" lists in the transcripts.
 .PARAMETER CsvPath       Also write the grouped report to this CSV.
 .PARAMETER Detail        Also list every individual occurrence (session file, timestamp, tool_use_id).
+.PARAMETER Until         Only rejections and notes timestamped on or before this UTC date (inclusive).
+.PARAMETER Weekly        Sunday-start week table: rejected calls, journal mcp calls (kind = mcp), rate, subagent share.
+.PARAMETER ByAgentType   Rejected calls per agent type (subagent transcripts: agentType from the sibling agent-*.meta.json).
+.PARAMETER Cutover       Date that splits the pre/post counts. Default 2026-10-05.
+.PARAMETER NoteRepeats   Count "Note: ... is not a parameter of ... it was treated as" results per session; report repeats.
 
 .EXAMPLE
   .\scripts\Get-UnknownParameterReport.ps1
@@ -52,7 +71,12 @@ param(
     [string]$SchemaPath,
     [switch]$NoSchema,
     [string]$CsvPath,
-    [switch]$Detail
+    [switch]$Detail,
+    [datetime]$Until,
+    [switch]$Weekly,
+    [switch]$ByAgentType,
+    [datetime]$Cutover = [datetime]'2026-10-05',
+    [switch]$NoteRepeats
 )
 
 $ErrorActionPreference = 'Stop'
@@ -125,32 +149,103 @@ if (-not (Test-Path $ProjectsRoot)) { throw "Transcript root not found: $Project
 $files = Get-ChildItem -Path $ProjectsRoot -Recurse -Filter *.jsonl -File
 if ($Since) { $files = $files | Where-Object { $_.LastWriteTime -ge $Since } }
 
-$rx = [regex]"Unknown parameter '(?<p>[^']+)' for tool '(?<t>[^']+)'\.(?: Did you mean '(?<s>[^']+)' instead of '[^']+'\?)? This tool accepts only: (?<a>[^.]*?)\."
-$idRx = [regex]'"tool_use_id":"(?<id>[^"]+)"'
-$tsRx = [regex]'"timestamp":"(?<ts>[^"]+)"'
+# Rejection text: "Unknown parameter 'x' for tool 'T'." or the plural "Unknown parameters 'a', 'b' for tool 'T'.".
+# Matched anywhere inside a tool_result text (is_error true), so the echo-wrapped {"message": ...} form matches too.
+$rejectRx = [regex]"Unknown parameters? (?<list>(?:'[^']+'(?:,\s*)?)+) for tool '(?<t>[^']+)'\."
+$nameRx   = [regex]"'(?<n>[^']+)'"
+$acceptRx = [regex]'This tool accepts only: (?<a>[^.]*?)\.'
+$hintRx   = [regex]"Did you mean '(?<s>[^']+)' instead of '(?<u>[^']+)'\?"
+$noteRx   = [regex]"Note: '(?<x>[^']+)' is not a parameter of (?<t>[A-Za-z0-9_]+); it was treated as (?<y>[^\r\n]{1,120}?)(?:\.\s|\s\(|\.$|$)"
+$untilStr = if ($Until) { $Until.ToString('yyyy-MM-dd') } else { $null }
+$cutStr   = $Cutover.ToString('yyyy-MM-dd')
 
-$hits = [System.Collections.Generic.Dictionary[string, object]]::new()
+function Get-ResultText($item) {
+    # tool_result content is a plain string or an array of blocks; keep the text blocks.
+    $c = $item.content
+    if ($c -is [string]) { return $c }
+    return (@($c) | Where-Object { $_.type -eq 'text' } | ForEach-Object { $_.text }) -join "`n"
+}
+
+function Get-WeekStart([string]$ts) {
+    # Sunday-start week of a UTC ISO timestamp as yyyy-MM-dd; $null when it does not parse.
+    try {
+        $d = [datetime]::Parse($ts, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AdjustToUniversal)
+        return $d.Date.AddDays(-[int]$d.DayOfWeek).ToString('yyyy-MM-dd')
+    } catch { return $null }
+}
+
+$hits  = [System.Collections.Generic.Dictionary[string, object]]::new()
+$notes = [System.Collections.Generic.Dictionary[string, object]]::new()
 Write-Host "Scanning $($files.Count) transcript file(s)..." -ForegroundColor DarkGray
 
 foreach ($f in $files) {
-    foreach ($m in (Select-String -Path $f.FullName -Pattern "Unknown parameter '" -SimpleMatch)) {
-        $line = $m.Line
-        if ($line -notmatch '"type":"tool_result"') { continue }   # skip prose that merely quotes the message
-        $r = $rx.Match($line)
-        if (-not $r.Success) { continue }
-        $id = $idRx.Match($line).Groups['id'].Value
-        $key = if ($id) { "$id|$($r.Groups['p'].Value)" } else { "$($f.Name):$($m.LineNumber)" }
-        if ($hits.ContainsKey($key)) { continue }
-        $hits[$key] = [pscustomobject]@{
-            Tool     = $r.Groups['t'].Value
-            Unknown  = $r.Groups['p'].Value
-            Accepted = @($r.Groups['a'].Value -split ',\s*' | Where-Object { $_ })
-            Hint     = $r.Groups['s'].Value
-            ToolUse  = $id
-            File     = $f.FullName
-            Session  = $f.BaseName
-            Time     = $tsRx.Match($line).Groups['ts'].Value
-            Supplied = $null
+    # Subagent transcripts: agentType comes from the sibling agent-*.meta.json; the parent session is the folder above subagents.
+    $agentType = 'main'
+    $parentSession = $f.BaseName
+    if ($f.FullName -match '\\([^\\]+)\\subagents\\agent-[^\\]+\.jsonl$') {
+        $parentSession = $Matches[1]
+        $agentType = 'subagent (no meta)'
+        $metaPath = $f.FullName -replace '\.jsonl$', '.meta.json'
+        if (Test-Path -LiteralPath $metaPath) {
+            try { $meta = Get-Content -LiteralPath $metaPath -Raw | ConvertFrom-Json; if ($meta.agentType) { $agentType = [string]$meta.agentType } } catch { }
+        }
+    }
+
+    $lineNo = 0
+    foreach ($line in [IO.File]::ReadLines($f.FullName)) {
+        $lineNo++
+        $maybeReject = $line.IndexOf('Unknown parameter', [StringComparison]::Ordinal) -ge 0
+        $maybeNote   = $line.IndexOf('is not a parameter of', [StringComparison]::Ordinal) -ge 0
+        if (-not $maybeReject -and -not $maybeNote) { continue }
+        try { $obj = $line | ConvertFrom-Json } catch { continue }
+        # ConvertFrom-Json turns ISO timestamps into DateTime (culture text); restore UTC ISO text for the date comparisons.
+        $ts = if ($obj.timestamp -is [datetime]) { $obj.timestamp.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [Globalization.CultureInfo]::InvariantCulture) } else { [string]$obj.timestamp }
+        if ($untilStr -and $ts.Length -ge 10 -and $ts.Substring(0, 10) -gt $untilStr) { continue }
+        foreach ($item in @($obj.message.content)) {
+            if ($item.type -ne 'tool_result') { continue }
+            $text = Get-ResultText $item
+            if (-not $text) { continue }
+            $id = [string]$item.tool_use_id
+            $where = if ($id) { $id } else { "$($f.Name):$lineNo" }
+
+            # Treated-as notes come only from successful results; a rejection that echoes the text is not a rewrite.
+            if ($maybeNote -and $item.is_error -ne $true -and $text.IndexOf('is not a parameter of', [StringComparison]::Ordinal) -ge 0) {
+                foreach ($nm in $noteRx.Matches($text)) {
+                    $nKey = "$where|$($nm.Groups['x'].Value)|$($nm.Groups['t'].Value)|$($nm.Groups['y'].Value)"
+                    if (-not $notes.ContainsKey($nKey)) {
+                        $notes[$nKey] = [pscustomobject]@{
+                            Note    = "'$($nm.Groups['x'].Value)' -> $($nm.Groups['t'].Value): $($nm.Groups['y'].Value)"
+                            Session = $parentSession
+                        }
+                    }
+                }
+            }
+
+            if ($maybeReject -and $item.is_error -eq $true) {
+                $rm = $rejectRx.Match($text)
+                if (-not $rm.Success) { continue }
+                $hintMap = @{}
+                foreach ($hm in $hintRx.Matches($text)) { $hintMap[$hm.Groups['u'].Value] = $hm.Groups['s'].Value }
+                $acc = $acceptRx.Match($text)
+                $accepted = if ($acc.Success) { @($acc.Groups['a'].Value -split ',\s*' | Where-Object { $_ }) } else { @() }
+                foreach ($nm in $nameRx.Matches($rm.Groups['list'].Value)) {
+                    $p = $nm.Groups['n'].Value
+                    $key = "$where|$p"
+                    if ($hits.ContainsKey($key)) { continue }
+                    $hits[$key] = [pscustomobject]@{
+                        Tool      = $rm.Groups['t'].Value
+                        Unknown   = $p
+                        Accepted  = $accepted
+                        Hint      = [string]$hintMap[$p]
+                        ToolUse   = $id
+                        File      = $f.FullName
+                        Session   = $f.BaseName
+                        AgentType = $agentType
+                        Time      = $ts
+                        Supplied  = $null
+                    }
+                }
+            }
         }
     }
 }
@@ -214,8 +309,13 @@ $rows = foreach ($h in $hits.Values) {
     }
     $cands = if ($h.Supplied) { @($h.Accepted | Where-Object { $h.Supplied -notcontains $_ }) } else { $h.Accepted }
     $s = Get-Suggestion $h.Unknown $cands $h.Hint
+    # SquashesToDeclared: the name contains a separator and, with _ and - removed, equals a declared name (case-insensitive).
+    # Case-only variants (filepath) are NormalizeParameterCase's job and do not count here.
+    $squash = ($h.Unknown -match '[_\-]') -and (@($h.Accepted | Where-Object { $_ -ieq ($h.Unknown -replace '[_\-]', '') }).Count -gt 0)
+    $callKey = if ($h.ToolUse) { $h.ToolUse } else { "$($h.File)|$($h.Time)|$($h.Unknown)" }
     [pscustomobject]@{
-        Tool = $h.Tool; Unknown = $h.Unknown; Suggested = $s.Name; Basis = $s.Kind
+        Tool = $h.Tool; Unknown = $h.Unknown; Suggested = $s.Name; Basis = $s.Kind; Squash = [bool]$squash
+        CallKey = $callKey; Post = ($h.Time.Length -ge 10 -and $h.Time.Substring(0, 10) -ge $cutStr)
         Hit = $h; Accepted = ($h.Accepted -join ', ')
     }
 }
@@ -233,16 +333,86 @@ $report = $rows | Group-Object Tool, Unknown | ForEach-Object {
         Suggested = if ($pick) { $pick.Name } else { '' }
         Basis     = $basis
         Accepted  = $first.Accepted
+        SquashesToDeclared = [bool](@($_.Group | Where-Object Squash).Count)
     }
 } | Where-Object Count -ge $MinCount | Sort-Object @{ e = 'Count'; Descending = $true }, Tool, Unknown
 
 if ($current) { "`nDropped vs current schema: $($dropped.Retired) call(s) to tools that no longer exist, $($dropped.NowValid) call(s) whose parameter is valid now." }
-"`nUnknown-parameter rejections: $(@($rows).Count) unique call(s), $(@($report).Count) distinct tool/parameter pair(s)"
-$report | Format-Table Tool, Unknown, Count, Sessions, Suggested, Basis -AutoSize
+$callKeys = @($rows | Select-Object -ExpandProperty CallKey -Unique)
+$subKeys  = @($rows | Where-Object { $_.Hit.AgentType -ne 'main' } | Select-Object -ExpandProperty CallKey -Unique)
+$postKeys = @($rows | Where-Object Post | Select-Object -ExpandProperty CallKey -Unique)
+"`nUnknown-parameter rejections: $($callKeys.Count) distinct rejected call(s) ($(@($rows).Count) unknown-name token(s)), $(@($report).Count) distinct tool/parameter pair(s)"
+"  from subagent transcripts: $($subKeys.Count); from main sessions: $($callKeys.Count - $subKeys.Count)"
+"  at/after cutover ${cutStr}: $($postKeys.Count); before cutover: $($callKeys.Count - $postKeys.Count)"
+$report | Format-Table Tool, Unknown, Count, Sessions, Suggested, Basis, SquashesToDeclared -AutoSize
 
 "By tool:"
 $report | Group-Object Tool | ForEach-Object { [pscustomobject]@{ Tool = $_.Name; Pairs = $_.Count; Calls = [int]($_.Group | Measure-Object Count -Sum).Sum } } |
     Sort-Object Calls -Descending | Format-Table -AutoSize
+
+if ($ByAgentType) {
+    "`nRejected calls by agent type (subagent type from the sibling agent-*.meta.json):"
+    $rows | Group-Object { $_.Hit.AgentType } | ForEach-Object {
+        [pscustomobject]@{ AgentType = $_.Name; Calls = @($_.Group | Select-Object -ExpandProperty CallKey -Unique).Count }
+    } | Sort-Object Calls -Descending | Format-Table -AutoSize
+}
+
+if ($Weekly) {
+    # Denominator: .claude/journal/*.calls.jsonl rows with kind = mcp (rejections are logged there as ok:false calls).
+    $journal = Join-Path $PSScriptRoot '..\.claude\journal'
+    $mcp = @{}
+    if (Test-Path -LiteralPath $journal) {
+        foreach ($jf in (Get-ChildItem -LiteralPath $journal -Filter *.calls.jsonl -File)) {
+            foreach ($jl in [IO.File]::ReadLines($jf.FullName)) {
+                if ($jl.IndexOf('"kind":"mcp"', [StringComparison]::Ordinal) -lt 0) { continue }
+                try { $jo = $jl | ConvertFrom-Json } catch { continue }
+                # ConvertFrom-Json turns ISO timestamps into DateTime (culture text); restore UTC ISO text for the date comparisons.
+                $jts = if ($jo.ts -is [datetime]) { $jo.ts.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss.fffZ', [Globalization.CultureInfo]::InvariantCulture) } else { [string]$jo.ts }
+                if ($jts.Length -lt 10) { continue }
+                $jd = $jts.Substring(0, 10)
+                if (($untilStr -and $jd -gt $untilStr) -or ($Since -and $jd -lt $Since.ToString('yyyy-MM-dd'))) { continue }
+                $w = Get-WeekStart $jts
+                if ($w) { $mcp[$w] = 1 + [int]$mcp[$w] }
+            }
+        }
+    }
+    $calls = @{}; $subCalls = @{}
+    foreach ($c in @($rows | Group-Object CallKey | ForEach-Object { $_.Group[0] })) {
+        $w = Get-WeekStart $c.Hit.Time
+        if (-not $w) { continue }
+        $calls[$w] = 1 + [int]$calls[$w]
+        if ($c.Hit.AgentType -ne 'main') { $subCalls[$w] = 1 + [int]$subCalls[$w] }
+    }
+    "`nWeekly (Sunday-start weeks, UTC; rate = rejected calls / journal mcp calls):"
+    @(@($calls.Keys) + @($mcp.Keys) | Sort-Object -Unique) | ForEach-Object {
+        $w = $_
+        $rej = [int]$calls[$w]; $m = [int]$mcp[$w]; $sub = [int]$subCalls[$w]
+        [pscustomobject]@{
+            Week          = $w
+            Rejections    = $rej
+            McpCalls      = $(if ($m) { $m } else { '-' })
+            RatePct       = $(if ($m) { '{0:N2}%' -f (100 * $rej / $m) } else { '-' })
+            SubagentShare = $(if ($rej) { '{0:N0}%' -f (100 * $sub / $rej) } else { '-' })
+        }
+    } | Format-Table -AutoSize
+}
+
+if ($NoteRepeats) {
+    $noteRows = @($notes.Values)
+    "`nTreated-as notes in successful results (one per distinct tool_use_id): $($noteRows.Count) occurrence(s)"
+    $noteRows | Group-Object Note | ForEach-Object {
+        $perSession = @($_.Group | Group-Object Session)
+        [pscustomobject]@{
+            Note               = $_.Name
+            Occurrences        = $_.Count
+            Sessions           = $perSession.Count
+            RepeatedInSessions = @($perSession | Where-Object Count -gt 1).Count
+        }
+    } | Sort-Object Occurrences -Descending | Format-Table -AutoSize
+    $allSessions    = @($noteRows | Select-Object -ExpandProperty Session -Unique).Count
+    $repeatSessions = @($noteRows | Group-Object Session, Note | Where-Object Count -gt 1 | ForEach-Object { $_.Group[0].Session } | Select-Object -Unique).Count
+    "Sessions with a treated-as note: $allSessions; sessions that saw the same note more than once: $repeatSessions"
+}
 
 if ($Detail) {
     $rows | Sort-Object Tool, Unknown, { $_.Hit.Time } |

@@ -407,4 +407,189 @@ public class ReadFileTests
         Assert.That(message, Does.Not.Contain("Exception"));
         Assert.That(message, Does.Not.Contain("   at "));
     }
+
+    [Test]
+    public async Task ReadFile_ContainerHoldsNoSuchMember_SingleCandidateElsewhere_RefusesWithTheTypeThatDeclaresItAsync()
+    {
+        UseDocumentSource("public class First\n{\n    public int Value() => 1;\n}\n\npublic class Second\n{\n    public int Other() => 2;\n}\n");
+
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Value", containerName: "Second");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.SuccessData, Is.Null);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain("Second"));
+        Assert.That(message, Does.Contain("declares no member named 'Value'"));
+        Assert.That(message, Does.Contain("First."));
+        Assert.That(message, Does.Contain("lines"));
+        Assert.That(message, Does.Contain("ReadFile(filePath:"));
+        Assert.That(message, Does.Contain("containerName: 'First'"));
+        Assert.That(result.ErrorData!.StructuredDetail, Has.Count.EqualTo(1));
+        var candidate = result.ErrorData!.StructuredDetail!.Cast<AmbiguousCandidate>().Single();
+        Assert.That(candidate.ContainingType, Is.EqualTo("First"));
+        Assert.That(candidate.Line, Is.EqualTo(3));
+    }
+
+    [Test]
+    public async Task ReadFile_RefusalRetryHints_BothWorkAsync()
+    {
+        UseDocumentSource("public class First\n{\n    public int Value() => 1;\n}\n\npublic class Second\n{\n    public int Other() => 2;\n}\n");
+
+        var refusal = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Value", containerName: "Second");
+        Assert.That(refusal.IsError, Is.True);
+        var match = System.Text.RegularExpressions.Regex.Match(refusal.ErrorData!.Message, @"lines (\d+)(?:-(\d+))?");
+        Assert.That(match.Success, Is.True, refusal.ErrorData!.Message);
+        var start = int.Parse(match.Groups[1].Value);
+        var end = match.Groups[2].Success ? int.Parse(match.Groups[2].Value) : start;
+
+        var memberRetry = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Value", containerName: "First");
+        Assert.That(memberRetry.IsError, Is.False);
+        var view = (MemberSourceViewResult)memberRetry.SuccessData!;
+        Assert.That(view.Member.Source, Does.Contain("=> 1"));
+
+        var rangeRetry = await _tools.ReadFileTool(reason: "test message", _documentPath, startLine: start, endLine: end);
+        Assert.That(rangeRetry.IsError, Is.False);
+        Assert.That(rangeRetry.SuccessData!.ToString(), Does.Contain("Value()"));
+    }
+
+    [Test]
+    public async Task ReadFile_MemberInTwoOtherTypes_RefusalListsBothWithARetryEachAsync()
+    {
+        UseDocumentSource(
+            "public class First\n{\n    public int Value() => 1;\n}\n\n" +
+            "public class Second\n{\n    public int Other() => 2;\n}\n\n" +
+            "public class Third\n{\n    public int Value() => 3;\n}\n");
+
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Value", containerName: "Second");
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain("First"));
+        Assert.That(message, Does.Contain("Third"));
+        Assert.That(message, Does.Contain("containerName: 'First'"));
+        Assert.That(message, Does.Contain("containerName: 'Third'"));
+        Assert.That(result.ErrorData!.StructuredDetail, Has.Count.EqualTo(2));
+        var candidates = result.ErrorData!.StructuredDetail!.Cast<AmbiguousCandidate>().ToList();
+        Assert.That(candidates.Select(c => c.ContainingType), Is.EquivalentTo(new[] { "First", "Third" }));
+        Assert.That(candidates.Select(c => c.Line), Is.EquivalentTo(new[] { 3, 13 }));
+    }
+
+    [Test]
+    public async Task ReadFile_ContainerNotInFile_RefusesAndListsDeclaredTypesAsync()
+    {
+        UseDocumentSource("public class First\n{\n    public int Value() => 1;\n}\n");
+
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Value", containerName: "Nope");
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain("No type named 'Nope'"));
+        Assert.That(message, Does.Contain("Types declared here"));
+    }
+
+    [Test]
+    public async Task ReadFile_MemberDeclaredNowhere_WithContainer_PointsAtGetFileOutlineAsync()
+    {
+        UseDocumentSource("public class First\n{\n    public int Value() => 1;\n}\n");
+
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Missing", containerName: "First");
+
+        Assert.That(result.IsError, Is.True);
+        var message = result.ErrorData!.Message;
+        Assert.That(message, Does.Contain("No type in this file declares 'Missing'"));
+        Assert.That(message, Does.Contain("GetFileOutline"));
+        Assert.That(message, Does.Not.Contain("Exception"));
+        Assert.That(message, Does.Not.Contain("   at "));
+    }
+
+    [Test]
+    public async Task ReadFile_GenericContainerSpellings_BothResolveAsync()
+    {
+        UseDocumentSource("public class Box<T>\n{\n    public T Get() => default!;\n}\n\npublic class Other\n{\n    public int Get() => 1;\n}\n");
+
+        var plain = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Get", containerName: "Box");
+        Assert.That(plain.IsError, Is.False);
+        var plainView = (MemberSourceViewResult)plain.SuccessData!;
+        Assert.That(plainView.Member.Source, Does.Contain("default!"));
+
+        var spelled = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Get", containerName: "Box<T>");
+        Assert.That(spelled.IsError, Is.False);
+        var spelledView = (MemberSourceViewResult)spelled.SuccessData!;
+        Assert.That(spelledView.Member.Source, Does.Contain("default!"));
+        Assert.That(spelledView.Member.Source, Does.Not.Contain("=> 1"));
+    }
+
+    [Test]
+    public async Task ReadFile_ContainerNameCaseDiffers_ResolvesAsync()
+    {
+        UseDocumentSource(
+            "public class First\n{\n    public int Value() => 1;\n}\n\n" +
+            "public class Second\n{\n    public int Value() => 2;\n}\n");
+
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Value", containerName: "second");
+
+        Assert.That(result.IsError, Is.False);
+        var view = (MemberSourceViewResult)result.SuccessData!;
+        Assert.That(view.Member.Source, Does.Contain("=> 2"));
+        Assert.That(view.Member.Source, Does.Not.Contain("=> 1"));
+    }
+
+    [Test]
+    public async Task ReadFile_OverloadsInsideTheNamedContainer_StillAmbiguousAsync()
+    {
+        UseDocumentSource("public class A\n{\n    public void Run(int x) { }\n    public void Run(string s) { }\n}\n");
+
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Run", containerName: "A");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+    }
+
+    [Test]
+    public async Task ReadFile_DottedContainer_ResolvesByLastSegmentAsync()
+    {
+        UseDocumentSource(
+            "public class Outer\n{\n    public class Inner\n    {\n        public int Value() => 1;\n    }\n}\n\n" +
+            "public class Other\n{\n    public int Value() => 2;\n}\n");
+
+        var dotted = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Value", containerName: "Outer.Inner");
+        Assert.That(dotted.IsError, Is.False);
+        Assert.That(((MemberSourceViewResult)dotted.SuccessData!).Member.Source, Does.Contain("=> 1"));
+
+        var plain = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Value", containerName: "Inner");
+        Assert.That(plain.IsError, Is.False);
+        Assert.That(((MemberSourceViewResult)plain.SuccessData!).Member.Source, Does.Contain("=> 1"));
+    }
+
+    [Test]
+    public async Task ReadFile_WrongDottedContainer_RefusesAsync()
+    {
+        UseDocumentSource(
+            "public class Outer\n{\n    public class Inner\n    {\n        public int Value() => 1;\n    }\n}\n\n" +
+            "public class Other\n{\n    public int Value() => 2;\n}\n");
+
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Value", containerName: "Outer.Missing");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.SuccessData, Is.Null);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.NotFound));
+        Assert.That(result.ErrorData!.Message, Does.Contain("Types declared here"));
+        var candidates = result.ErrorData!.StructuredDetail!.Cast<AmbiguousCandidate>().ToList();
+        Assert.That(candidates, Has.Count.EqualTo(2));
+        Assert.That(candidates.Select(c => c.Line), Is.EquivalentTo(new[] { 5, 11 }));
+    }
+
+    [Test]
+    public async Task ReadFile_ContainerNotInFile_StillWorksWithoutContainerAsync()
+    {
+        UseDocumentSource(
+            "public class Outer\n{\n    public class Inner\n    {\n        public int Value() => 1;\n    }\n}\n\n" +
+            "public class Other\n{\n    public int Value() => 2;\n}\n");
+
+        var result = await _tools.ReadFileTool(reason: "test message", _documentPath, memberName: "Value");
+
+        Assert.That(result.IsError, Is.True);
+        Assert.That(result.ErrorData!.ErrorCode, Is.EqualTo(ToolErrorCode.Ambiguous));
+    }
 }

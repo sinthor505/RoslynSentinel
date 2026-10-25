@@ -566,8 +566,8 @@ public class WorkspaceTools
     // ── Phase 1 -> Low-level fallback tools ──────────────────────────────────
     // Non-tool delegator: the GetMethodSource [McpServerTool] lives on WorkspaceReadNavigationTools.
     public Task<SentinelCallToolResult<MethodSourceResult, ResultError>> GetMethodSourceTool(
-        ToolCallReason reason, string filePath, string methodName, CancellationToken cancellationToken = default)
-        => _readNavTools.GetMethodSourceTool(reason, filePath, methodName, cancellationToken);
+        ToolCallReason reason, string filePath, string methodName, string? containerName = null, CancellationToken cancellationToken = default)
+        => _readNavTools.GetMethodSourceTool(reason, filePath, methodName, containerName, cancellationToken);
 
     [UnrecoverableBreaker(UnrecoverableBreakerAccess.Allowed)]
     [McpServerTool(Name = "ReadFile")]

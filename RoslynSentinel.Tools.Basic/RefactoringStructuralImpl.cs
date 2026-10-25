@@ -550,7 +550,8 @@ public class RefactoringStructuralImpl
             {
                 if (!string.IsNullOrEmpty(memberName))
                 {
-                    var (sourceOutcome, sourceMessage, sourceErrorCode, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, cancellationToken);
+                    // TODO Member(view) keeps the lenient container fallback; Step 5e of plan_unknown_parameter_rejection_reduction flips the flag to true and removes this
+                    var (sourceOutcome, sourceMessage, sourceErrorCode, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, contextSnippet, lineBefore, lineAfter, false, cancellationToken);
                     if (sourceOutcome != EditOutcome.Modified || source is null)
                         return new SentinelCallToolResult<object>() { IsError = true, ErrorData = new ResultError(sourceErrorCode ?? RefactoringToolHelpers.ErrorCodeFor(sourceOutcome), $"Member: {sourceMessage}") };
                     return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source) };

@@ -23,10 +23,10 @@ namespace RoslynSentinel.Tests.Server;
 public class ClaudeLeanSchemaBudgetTests
 {
     // Measured on 2026-10-18 (core claude-lean surface, after the trim in proposal_trim_claude_lean_core_surface.md):
-    // Advanced and Basic both 19 tools, 27752 chars total on 2026-10-18, now about 28117 after the RunTest environment parameter (TODO #39); largest tool Git at 4157 chars. Each constant is the
+    // Advanced and Basic both 19 tools, 27752 chars total on 2026-10-18, now about 28117 after the RunTest environment parameter (TODO #39); largest tool Git at 4157 chars. Raised to 29000 on 2026-10-24: measured 28868 after the optional GetMethodSource containerName parameter (~330 chars; plan_unknown_parameter_rejection_reduction.md Step 4) on top of other additions since 2026-10-18. Each constant is the
     // measurement rounded up to the next 500. Raise a constant only when the growth is intended.
-    private const int AdvancedTotalBudget = 28500;
-    private const int BasicTotalBudget = 28500;
+    private const int AdvancedTotalBudget = 29000;
+    private const int BasicTotalBudget = 29000;
     private const int AdvancedMaxToolBudget = 4500;
     private const int BasicMaxToolBudget = 4500;
 

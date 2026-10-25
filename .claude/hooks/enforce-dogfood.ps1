@@ -258,6 +258,8 @@ C# is read through the RoslynSentinel MCP tools:
   GetMethodSource  - one method
   Search           - symbols (mode: symbol), callers (mode: references)
 
+Read(file_path, offset, limit) -> ReadFile(filePath: ..., startLine: offset, endLine: offset+limit-1); one method: GetMethodSource(filePath, methodName[, containerName]); a name declared more than once returns a candidate list, never a guess.
+
 If the right MCP tool is broken, unreachable, or has no equivalent operation,
 that is a BLOCKING finding: stop, write docs/current/blockers/blocking_error_<slug>.md,
 and end the turn. If your agent has no MCP tools, report that as the finding.
@@ -350,6 +352,8 @@ was being asked to approximate:
   Search(mode: "symbol",           query: "$pattern")   # find a type/method/field by name
   Search(mode: "callers",          query: "$pattern")   # callers of a symbol (also: implementations, attribute)
   Search(mode: "declaration-kind", query: "$pattern")   # find declarations of a given kind
+
+Grep options: path/glob -> fileGlob ('Foo.cs' or 'MyProject/**'); head_limit -> maxResults; output_mode, -n, -i, type are not needed (text mode is case-insensitive and always returns file, line and preview).
 
 If the pattern above names a specific method or type, GetMethodSource or
 GetFileOutline is probably a more direct route than any Search mode.

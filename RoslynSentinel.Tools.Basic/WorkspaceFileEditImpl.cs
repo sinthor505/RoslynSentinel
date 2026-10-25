@@ -315,7 +315,7 @@ public class WorkspaceFileEditImpl
             try
             {
                 // GetMemberSourceAsync throws on failure and returns Modified with a non-null source.
-                var (_, _, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, null, null, null, cancellationToken);
+                var (_, _, _, source) = await _symbolNavigationEngine.GetMemberSourceAsync(filePathResolved, memberName, containerName, null, null, null, true, cancellationToken);
                 return new SentinelCallToolResult<object>() { IsError = false, SuccessData = new MemberSourceViewResult(source!) };
             }
             catch (Exception ex)

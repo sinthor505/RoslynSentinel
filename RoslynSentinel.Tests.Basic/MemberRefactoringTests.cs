@@ -282,6 +282,33 @@ public enum ToolScope
     }
 
     [Test]
+    [Category("MemberSourceInfo")]
+    [Category("SymbolNavigationEngine")]
+    // Pins Member(view) as unchanged: a containerName that does not hold the member still falls back to it.
+    // Replaced by GetMemberSource_WrongContainerWithStrictFlag_RefusesAsync in Step 5e of plan_unknown_parameter_rejection_reduction.
+    public async Task GetMemberSource_WrongContainerWithoutStrictFlag_StillFallsBack()
+    {
+        var source = """
+            public class Holder
+            {
+                public int Add(int a, int b)
+                {
+                    var sum = a + b;
+                    return sum;
+                }
+            }
+            """;
+        SetSource(source, "MemberSourceWrongContainer.cs");
+
+        var (outcome, message, _, info) = await _symbolNavigationEngine.GetMemberSourceAsync(
+            "MemberSourceWrongContainer.cs", "Add", "Missing", null, null, null, false);
+
+        Assert.That(outcome, Is.EqualTo(EditOutcome.Modified), message);
+        Assert.That(info!.Kind, Is.EqualTo("method"));
+        Assert.That(info.Source, Does.Contain("var sum = a + b;"));
+    }
+
+    [Test]
     [Category("SymbolNavigationEngine")] // sentinel:auto-category
     public async Task GetMemberSource_MissingMember_ReturnsTargetNotFoundWithNotFoundCode()
     {

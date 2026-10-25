@@ -205,7 +205,7 @@ and fix the map.
 ## Verification
 
 Rebuilding does not change the running server; it is stale until restarted. After changing server
-source, run `Build(fullBuild)` and restart your own instance
+source, run `Build(level: fullBuild)` and restart your own instance
 (`McpServerControl(operation: StopServer, confirmServerStop: ConfirmServerStop)`, then `LoadSolution`)
 with no subagent mid-operation. `"isServerBinaryStale": true` in a response means a newer DLL exists.
 `LoadSolution` changes which files are analyzed, not which binary runs. `Build` defaults to a throwaway
